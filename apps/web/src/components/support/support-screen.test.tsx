@@ -44,7 +44,7 @@ describe('SupportScreen', () => {
   // --- State 1: signed out --------------------------------------------------
 
   it('asks a signed-out visitor for an address, and says why it is asking', () => {
-    render(<SupportScreen accountEmail={null} errorContext={null} />);
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     expect(screen.getByLabelText('Your email')).toBeDefined();
     expect(screen.getByText("The only address we'll use, and only to answer this.")).toBeDefined();
@@ -54,7 +54,9 @@ describe('SupportScreen', () => {
   // --- State 2: signed in ---------------------------------------------------
 
   it('names the account it will reply to, and offers no email field', () => {
-    render(<SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} />);
+    render(
+      <SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} bookingContext={null} />,
+    );
 
     // A statement, not an input: changing where replies go means changing the
     // account, so there is nothing here to type into and no typo to make.
@@ -67,7 +69,13 @@ describe('SupportScreen', () => {
   // --- State 3: prefilled from an error -------------------------------------
 
   it('attaches the reference as context rather than as a field, and preselects the topic', () => {
-    render(<SupportScreen accountEmail="ana@nandakumar.co" errorContext={ERROR_CONTEXT} />);
+    render(
+      <SupportScreen
+        accountEmail="ana@nandakumar.co"
+        errorContext={ERROR_CONTEXT}
+        bookingContext={null}
+      />,
+    );
 
     expect(screen.getByText('Attached automatically')).toBeDefined();
 
@@ -83,14 +91,14 @@ describe('SupportScreen', () => {
   });
 
   it('leaves the topic unchosen when no reference is attached', () => {
-    render(<SupportScreen accountEmail={null} errorContext={null} />);
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     expect(screen.getByRole('button', { name: 'Topic' }).textContent).toBe('Choose a topic');
   });
 
   it('offers the five topics, and only those five', async () => {
     const user = userEvent.setup();
-    render(<SupportScreen accountEmail={null} errorContext={null} />);
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     await user.click(screen.getByRole('button', { name: 'Topic' }));
 
@@ -106,7 +114,7 @@ describe('SupportScreen', () => {
    * by typing rather than reported after a round trip.
    */
   it("caps the message at the API's own limit", () => {
-    render(<SupportScreen accountEmail={null} errorContext={null} />);
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     expect(screen.getByLabelText('Message').getAttribute('maxlength')).toBe(
       String(MAX_SUPPORT_MESSAGE_LENGTH),
@@ -115,7 +123,7 @@ describe('SupportScreen', () => {
 
   it('holds the button shut until there is something to send', async () => {
     const user = userEvent.setup();
-    render(<SupportScreen accountEmail={null} errorContext={null} />);
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     const button = screen.getByRole('button', { name: 'Send message' });
     expect(button.hasAttribute('disabled')).toBe(true);
@@ -133,7 +141,13 @@ describe('SupportScreen', () => {
 
   it('sends the topic, message and attached context the screen is holding', async () => {
     request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
-    render(<SupportScreen accountEmail="ana@nandakumar.co" errorContext={ERROR_CONTEXT} />);
+    render(
+      <SupportScreen
+        accountEmail="ana@nandakumar.co"
+        errorContext={ERROR_CONTEXT}
+        bookingContext={null}
+      />,
+    );
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText('Message'), MESSAGE);
@@ -159,7 +173,7 @@ describe('SupportScreen', () => {
   it('uses one loading idiom: the button works, the fields lock, nothing else moves', async () => {
     // Never settles, so the screen stays in state 4 for the assertions below.
     request.mockImplementation(() => new Promise(() => undefined));
-    render(<SupportScreen accountEmail={null} errorContext={null} />);
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     await sendAsVisitor();
 
@@ -183,7 +197,9 @@ describe('SupportScreen', () => {
 
   it('hands back the message id, and says there is nothing to check back on', async () => {
     request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
-    render(<SupportScreen accountEmail={null} errorContext={ERROR_CONTEXT} />);
+    render(
+      <SupportScreen accountEmail={null} errorContext={ERROR_CONTEXT} bookingContext={null} />,
+    );
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText('Your email'), 'visitor@example.com');
@@ -213,7 +229,9 @@ describe('SupportScreen', () => {
   it('copies the reference, and says so when the browser will not', async () => {
     request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
 
-    render(<SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} />);
+    render(
+      <SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} bookingContext={null} />,
+    );
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Topic' }));
@@ -252,7 +270,9 @@ describe('SupportScreen', () => {
   it('reports a successful copy', async () => {
     request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
 
-    render(<SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} />);
+    render(
+      <SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} bookingContext={null} />,
+    );
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Topic' }));
@@ -284,7 +304,7 @@ describe('SupportScreen', () => {
         reference: 'ORL-4K7Q-P2',
       }),
     );
-    render(<SupportScreen accountEmail={null} errorContext={null} />);
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     await sendAsVisitor();
 
@@ -317,7 +337,7 @@ describe('SupportScreen', () => {
     // A network failure never reached the API, so no reference was ever
     // issued. The cause is still transport and the action is still retry.
     request.mockRejectedValue(new TypeError('Failed to fetch'));
-    render(<SupportScreen accountEmail={null} errorContext={null} />);
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     await sendAsVisitor();
 
@@ -331,7 +351,7 @@ describe('SupportScreen', () => {
     request
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
       .mockResolvedValueOnce({ reference: 'ORL-8M2X-QD' });
-    render(<SupportScreen accountEmail={null} errorContext={null} />);
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     await sendAsVisitor();
     await screen.findByRole('button', { name: 'Try again' });
@@ -366,7 +386,7 @@ describe('SupportScreen', () => {
       [401, 'Session token is invalid or expired', 'Session token is invalid or expired'],
     ])('shows a %s as a field refusal, not as state 6', async (status, apiMessage, shown) => {
       request.mockRejectedValue(new ApiClientError(status, 'VALIDATION_ERROR', apiMessage));
-      render(<SupportScreen accountEmail={null} errorContext={null} />);
+      render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
       await sendAsVisitor();
 
@@ -387,7 +407,7 @@ describe('SupportScreen', () => {
      */
     it('will not send to an address the answer could never reach', async () => {
       const user = userEvent.setup();
-      render(<SupportScreen accountEmail={null} errorContext={null} />);
+      render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
       await user.click(screen.getByRole('button', { name: 'Topic' }));
       await user.click(await screen.findByRole('option', { name: 'Something else' }));
@@ -415,7 +435,7 @@ describe('SupportScreen', () => {
    */
   it('refuses a second submit while the first is in flight', async () => {
     request.mockImplementation(() => new Promise(() => undefined));
-    render(<SupportScreen accountEmail={null} errorContext={null} />);
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     await sendAsVisitor();
 
@@ -431,11 +451,99 @@ describe('SupportScreen', () => {
   // --- The scope line -------------------------------------------------------
 
   it('promises no thread, no status and no attachment', () => {
-    render(<SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} />);
+    render(
+      <SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} bookingContext={null} />,
+    );
 
     expect(screen.getByText(/doesn't open a chat thread here/)).toBeDefined();
     expect(screen.getByText('One email, no ticket to track.')).toBeDefined();
     // Not a helpdesk: there is nothing here to attach a file with.
     expect(document.querySelectorAll('input[type="file"]')).toHaveLength(0);
+  });
+  // --- State 3, with a booking: the report that holds a payout (#425) -------
+
+  describe('a booking report', () => {
+    const BOOKING = {
+      id: '9c3c2a51-1f0e-4b6a-8f2d-6c1b0a4e7d55',
+      eventDate: '2026-06-15',
+      totalAmountCents: 145_000,
+      venue: 'Barr Mansion',
+    };
+
+    function renderReport(): void {
+      render(
+        <SupportScreen
+          accountEmail="ana@nandakumar.co"
+          errorContext={null}
+          bookingContext={BOOKING}
+        />,
+      );
+    }
+
+    /* The ticket is explicit: `A booking or payment`, not `Something broke`. */
+    it('preselects the topic that is about money', () => {
+      renderReport();
+
+      expect(screen.getByRole('button', { name: 'Topic' }).textContent).toBe(
+        SUPPORT_TOPIC_LABELS['booking-or-payment'],
+      );
+    });
+
+    it('attaches the booking as context, with nothing to edit or clear', () => {
+      renderReport();
+
+      expect(screen.getByText('Attached automatically')).toBeDefined();
+      expect(screen.getByText(BOOKING.id)).toBeDefined();
+      expect(screen.getByText(/Jun 15, 2026 · \$1,450 · Barr Mansion/)).toBeDefined();
+      // No input chrome and no clear affordance: two fields, and neither is this.
+      expect(screen.queryByRole('button', { name: /clear/i })).toBeNull();
+      expect(screen.getAllByRole('textbox')).toHaveLength(1);
+    });
+
+    /* The consequence is stated before the click, not discovered after it. */
+    it('says that sending holds the payment', () => {
+      renderReport();
+
+      expect(screen.getByText(/puts the vendor's payment for this booking on hold/)).toBeDefined();
+    });
+
+    it('sends the booking id, which is what places the hold', async () => {
+      request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
+      renderReport();
+
+      const user = userEvent.setup();
+      await user.type(screen.getByLabelText('Message'), MESSAGE);
+      await user.click(screen.getByRole('button', { name: 'Send message' }));
+
+      await waitFor(() => expect(request).toHaveBeenCalled());
+      expect(request.mock.calls[0]?.[1]?.body).toMatchObject({
+        topic: 'booking-or-payment',
+        message: MESSAGE,
+        bookingId: BOOKING.id,
+      });
+    });
+
+    it('tells the customer the payment is held once it has sent', async () => {
+      request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
+      renderReport();
+
+      const user = userEvent.setup();
+      await user.type(screen.getByLabelText('Message'), MESSAGE);
+      await user.click(screen.getByRole('button', { name: 'Send message' }));
+
+      expect(await screen.findByText('Message sent')).toBeDefined();
+      expect(screen.getByText(/payment for this booking is on hold/)).toBeDefined();
+    });
+
+    /* An ordinary send carries no booking, so it holds nothing. */
+    it('sends no booking id when there is no booking attached', async () => {
+      request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
+      render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
+
+      await sendAsVisitor();
+
+      await waitFor(() => expect(request).toHaveBeenCalled());
+      expect(request.mock.calls[0]?.[1]?.body).not.toHaveProperty('bookingId');
+    });
   });
 });

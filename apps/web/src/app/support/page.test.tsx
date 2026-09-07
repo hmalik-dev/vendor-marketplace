@@ -1,8 +1,11 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const readIdentityForSupport = vi.fn();
 vi.mock('@/lib/current-user', () => ({ readIdentityForSupport }));
+
+const readOwnBookingForSupport = vi.fn().mockResolvedValue(null);
+vi.mock('@/lib/customer-data', () => ({ readOwnBookingForSupport }));
 vi.mock('@/lib/use-api', () => ({ useApi: () => vi.fn() }));
 
 const { default: SupportPage } = await import('./page');
@@ -16,7 +19,7 @@ const VALID = {
 /** Renders the route with the given query, signed out unless told otherwise. */
 async function renderPage(
   params: Record<string, string | string[] | undefined>,
-  user: { email: string } | null = null,
+  user: { email: string; role?: string } | null = null,
 ): Promise<void> {
   readIdentityForSupport.mockResolvedValue(user);
   render(await SupportPage({ searchParams: Promise.resolve(params) }));
@@ -85,5 +88,99 @@ describe('/support', () => {
     // what a `new Date()` or an `Intl` formatter on an unvalidated value does.
     expect(screen.getByRole('heading', { name: 'Tell us what happened' })).toBeDefined();
     expect(screen.queryByText('Attached automatically')).toBeNull();
+  });
+
+  // --- The booking a `Report a problem` names (#425) -------------------------
+
+  describe('a booking report', () => {
+    const BOOKING_ID = '9c3c2a51-1f0e-4b6a-8f2d-6c1b0a4e7d55';
+    const BOOKING = {
+      id: BOOKING_ID,
+      status: 'confirmed',
+      eventDate: '2026-06-15',
+      totalAmountCents: 145_000,
+      eventLocation: 'Barr Mansion',
+      payoutReleasedAt: null,
+    };
+    /** Inside the window: the event has happened, the payout has not moved. */
+    const INSIDE = new Date('2026-06-16T12:00:00Z');
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(INSIDE);
+      readOwnBookingForSupport.mockResolvedValue(BOOKING);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      readOwnBookingForSupport.mockReset();
+    });
+
+    it('attaches the booking for the customer who owns it', async () => {
+      await renderPage({ booking: BOOKING_ID }, { email: 'ana@nandakumar.co', role: 'customer' });
+
+      expect(readOwnBookingForSupport).toHaveBeenCalledWith(BOOKING_ID);
+      expect(screen.getByText('Attached automatically')).toBeDefined();
+      expect(screen.getByText(BOOKING_ID)).toBeDefined();
+      expect(screen.getByText(/Jun 15, 2026 · \$1,450 · Barr Mansion/)).toBeDefined();
+    });
+
+    /**
+     * Acceptance 6. The API refuses a vendor too, but a public page has no
+     * business making an authenticated read for somebody who cannot use the
+     * answer — so the role decides first and nothing is fetched at all.
+     */
+    it.each([
+      ['the vendor on the booking', { email: 'grace@example.com', role: 'vendor' }],
+      ['an admin', { email: 'ada@example.com', role: 'admin' }],
+      ['a signed-out visitor', null],
+    ])('attaches nothing for %s, and reads nothing', async (_who, user) => {
+      await renderPage({ booking: BOOKING_ID }, user);
+
+      expect(screen.getByRole('heading', { name: 'Tell us what happened' })).toBeDefined();
+      expect(screen.queryByText('Attached automatically')).toBeNull();
+      expect(readOwnBookingForSupport).not.toHaveBeenCalled();
+    });
+
+    /* Another customer's booking answers 404, which arrives here as `null`. */
+    it('attaches nothing for a booking another customer owns', async () => {
+      readOwnBookingForSupport.mockResolvedValue(null);
+
+      await renderPage({ booking: BOOKING_ID }, { email: 'ana@nandakumar.co', role: 'customer' });
+
+      expect(screen.queryByText('Attached automatically')).toBeNull();
+    });
+
+    /*
+     * `searchParams` is attacker-controlled here as much as the error context
+     * is, so a junk id is driven rather than reasoned about: the page renders,
+     * it does not throw, it attaches nothing, and it makes no read at all.
+     */
+    it.each([
+      ['an id that is not a uuid', 'not-a-uuid'],
+      ['an id carrying markup', '<script>alert(1)</script>'],
+      ['a repeated parameter, which arrives as an array', ['a', 'b']],
+      ['an empty value', ''],
+    ])('renders the screen with nothing attached for %s', async (_name, booking) => {
+      await renderPage({ booking }, { email: 'ana@nandakumar.co', role: 'customer' });
+
+      expect(screen.getByRole('heading', { name: 'Tell us what happened' })).toBeDefined();
+      expect(screen.queryByText('Attached automatically')).toBeNull();
+      expect(readOwnBookingForSupport).not.toHaveBeenCalled();
+    });
+
+    /* Outside the window the API refuses the hold, so nothing is offered. */
+    it.each([
+      ['a report is already open', { ...BOOKING, status: 'disputed' }],
+      ['the booking was cancelled', { ...BOOKING, status: 'cancelled' }],
+      ['the payout has already gone out', { ...BOOKING, payoutReleasedAt: INSIDE }],
+      ['the event has not happened yet', { ...BOOKING, eventDate: '2026-12-01' }],
+    ])('attaches nothing when %s', async (_name, booking) => {
+      readOwnBookingForSupport.mockResolvedValue(booking);
+
+      await renderPage({ booking: BOOKING_ID }, { email: 'ana@nandakumar.co', role: 'customer' });
+
+      expect(screen.queryByText('Attached automatically')).toBeNull();
+    });
   });
 });

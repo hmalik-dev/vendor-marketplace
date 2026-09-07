@@ -8,10 +8,23 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { addDays, payoutReleaseAt, toDateString } from '@vendor-marketplace/shared';
+import {
+  addDays,
+  payoutReleaseAt,
+  SUPPORT_REFERENCE_PATTERN,
+  SUPPORT_TOPIC_LABELS,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { EmailMessage } from '../../lib/email.js';
+import {
+  bearer,
+  createTestHarness,
+  TEST_ENV,
+  type TestHarness,
+} from '../../testing/test-server.js';
+import { liftDisputeHold } from './payments.service.js';
 import { releaseDuePayouts } from './payouts.service.js';
 
 const VENDOR = 'user_vendor';
@@ -67,6 +80,57 @@ describe('payouts', () => {
       { db: harness.database.db, stripe: harness.stripe, log: harness.app.log },
       now,
     );
+  }
+
+  const REPORT = 'The photographer never turned up, and nobody answered the phone all day.';
+
+  /**
+   * One report, sent the way the support screen sends it — and **the only way
+   * the product places a hold** (#425).
+   *
+   * Every case that needs a held booking goes through this, including #423's
+   * own, because the hold has exactly one entry point now: a `PUT` that froze a
+   * payout without filing a complaint would leave an operator a hold with
+   * nothing to act on, which is the half of acceptance 4 a second route made
+   * reachable.
+   */
+  async function report(
+    bookingId: string,
+    actor: string | null,
+    message = REPORT,
+  ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
+    return inject('POST', '/support/messages', actor, {
+      topic: 'booking-or-payment',
+      message,
+      bookingId,
+    });
+  }
+
+  /** The message addressed to the support inbox, if one was sent. */
+  function reportEmail(): EmailMessage | undefined {
+    return harness.email.sent.find((message) => message.to === TEST_ENV.SUPPORT_EMAIL_TO);
+  }
+
+  /**
+   * Whether the vendor has been told a problem was reported.
+   *
+   * Scoped to that one title rather than the whole list: the booking flow sends
+   * the vendor several notices of its own on the way to a paid booking, and a
+   * test that asserted on all of them would be asserting on the fixture.
+   */
+  async function reportNotices(): Promise<string[]> {
+    const rows = await harness.database.db
+      .select({ title: notifications.title, userId: notifications.userId })
+      .from(notifications);
+    const vendorUser = await harness.database.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.clerkUserId, VENDOR));
+
+    return rows
+      .filter((row) => row.userId === vendorUser[0]?.id)
+      .map((row) => row.title)
+      .filter((title) => title === 'A customer reported a problem');
   }
 
   async function currentBooking(): Promise<typeof bookings.$inferSelect> {
@@ -503,12 +567,9 @@ describe('payouts', () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
 
-      const response = await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {
-        reason: 'The photographer never arrived.',
-      });
+      const response = await report(paid.id, CUSTOMER, 'The photographer never arrived.');
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().status).toBe('disputed');
 
       const row = await currentBooking();
       expect(row.status).toBe('disputed');
@@ -518,7 +579,7 @@ describe('payouts', () => {
     it('refuses a report before the event, where cancelling is the right move', async () => {
       const paid = await paidBooking();
 
-      const response = await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {});
+      const response = await report(paid.id, CUSTOMER);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toBe(
@@ -530,9 +591,7 @@ describe('payouts', () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
 
-      expect(
-        (await inject('PUT', `/customer/bookings/${paid.id}/dispute`, VENDOR, {})).statusCode,
-      ).toBe(403);
+      expect((await report(paid.id, VENDOR)).statusCode).toBe(403);
     });
 
     /* A stranger walking ids learns nothing about which of them exist. */
@@ -540,16 +599,14 @@ describe('payouts', () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
 
-      expect(
-        (await inject('PUT', `/customer/bookings/${paid.id}/dispute`, OUTSIDER, {})).statusCode,
-      ).toBe(404);
+      expect((await report(paid.id, OUTSIDER)).statusCode).toBe(404);
     });
 
     /* #423 acceptance 9 — and with no time limit that would release it. */
     it('skips a disputed booking for as long as it is disputed', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
-      await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {});
+      await report(paid.id, CUSTOMER);
 
       clockNow = AFTER_RELEASE;
       expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
@@ -564,7 +621,7 @@ describe('payouts', () => {
     it('releases on the next run once a dispute is resolved for the vendor', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
-      await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {});
+      await report(paid.id, CUSTOMER);
       clockNow = AFTER_RELEASE;
 
       await signInAsAdmin();
@@ -591,7 +648,7 @@ describe('payouts', () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
       await inject('PUT', `/vendor/bookings/${paid.id}/complete`, VENDOR);
-      await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {});
+      await report(paid.id, CUSTOMER);
 
       await signInAsAdmin();
       const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
@@ -605,7 +662,7 @@ describe('payouts', () => {
     it('refunds in full and transfers nothing when the report is upheld', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
-      await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {});
+      await report(paid.id, CUSTOMER);
       clockNow = AFTER_RELEASE;
 
       await signInAsAdmin();
@@ -663,12 +720,7 @@ describe('payouts', () => {
     it('refuses a report on a booking that has already been paid out', async () => {
       const released = await releasedBooking();
 
-      const response = await inject(
-        'PUT',
-        `/customer/bookings/${released.id}/dispute`,
-        CUSTOMER,
-        {},
-      );
+      const response = await report(released.id, CUSTOMER);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toBe(
@@ -681,9 +733,9 @@ describe('payouts', () => {
     it('refuses a second report on a booking already under one', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
-      await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {});
+      await report(paid.id, CUSTOMER);
 
-      const response = await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {});
+      const response = await report(paid.id, CUSTOMER);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toBe('You have already reported a problem with this booking');
@@ -693,7 +745,7 @@ describe('payouts', () => {
     it('tells the vendor a disputed booking is on hold rather than calling it cancelled', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
-      await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {});
+      await report(paid.id, CUSTOMER);
 
       const response = await inject('PUT', `/vendor/bookings/${paid.id}/complete`, VENDOR);
 
@@ -701,6 +753,321 @@ describe('payouts', () => {
       expect(response.json().message).toBe(
         'The customer has raised a problem with this booking, so it is on hold until that is resolved',
       );
+    });
+  });
+
+  /**
+   * #425 — the customer's way into the hold above, and the reason it is not
+   * only a link.
+   *
+   * The report is submitted through `/support/messages`, which is the screen
+   * frame `29` draws and the one #421 already built the prefill for. Carrying a
+   * `bookingId` is what makes that send more than an email: it places the hold
+   * in the same request, and **the two land together or neither does**.
+   */
+  describe('the report that places the hold', () => {
+    /*
+     * The recorder is not cleared between cases in this file, and every case
+     * here asserts on whether a support message exists — so a leftover from the
+     * case before would answer for this one.
+     */
+    beforeEach(() => {
+      harness.email.sent.length = 0;
+    });
+
+    /* Acceptance 4 and 7: both writes, and an email a human can act on. */
+    it('sends the report and holds the payout in one request', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+
+      const response = await report(paid.id, CUSTOMER);
+      await harness.flushEmail();
+
+      /* The vendor is told, once the report has actually gone. */
+      expect(await reportNotices()).toEqual(['A customer reported a problem']);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().reference).toMatch(SUPPORT_REFERENCE_PATTERN);
+
+      const row = await currentBooking();
+      expect(row.status).toBe('disputed');
+      expect(row.disputeReason).toBe(REPORT);
+
+      const sent = reportEmail();
+      expect(sent).toBeDefined();
+      // The booking, so a human can act without asking which one it was.
+      expect(sent!.text).toContain(paid.id);
+      expect(sent!.text).toContain('Payout held on this booking');
+      expect(sent!.text).toContain(REPORT);
+      expect(sent!.subject).toContain(SUPPORT_TOPIC_LABELS['booking-or-payment']);
+    });
+
+    /**
+     * The first end of acceptance 4. A mail service that refused the report
+     * must not leave the booking frozen with nothing to explain why it is:
+     * `disputed` with no complaint behind it is a payout stopped by a bug.
+     */
+    it('leaves no hold behind when the report cannot be sent', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+      harness.email.failNext = true;
+
+      const response = await report(paid.id, CUSTOMER);
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(502);
+
+      const row = await currentBooking();
+      expect(row.status).toBe('confirmed');
+      expect(row.disputeReason).toBeNull();
+      expect(reportEmail()).toBeUndefined();
+
+      /*
+       * And the vendor was never told. The notice comes after the send for this
+       * reason and no other: one alarmed about a payout freeze that was
+       * withdrawn before they read it has been told something that is not true.
+       */
+      expect(await reportNotices()).toEqual([]);
+
+      // And the money is free to move again, which is the fact that matters.
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+    });
+
+    /**
+     * The other end. A refused hold must not put a message in the inbox saying
+     * a report was filed — the reader would act on a complaint against a
+     * booking whose money is still running.
+     */
+    it('sends nothing when the hold is refused', async () => {
+      const paid = await paidBooking();
+
+      // Before the event: `placeDisputeHold` refuses, and it refuses first.
+      const response = await report(paid.id, CUSTOMER);
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe(
+        'That event has not happened yet — cancel the booking instead',
+      );
+      expect((await currentBooking()).status).toBe('confirmed');
+      expect(reportEmail()).toBeUndefined();
+    });
+
+    /**
+     * The unwind lifts **its own** hold, and not whichever one is current.
+     *
+     * The interleaving a status-only guard loses: a report's mail send stalls,
+     * an operator resolves that complaint, the customer files a second report
+     * that lands — and only then does the first send fail. Compensating on
+     * `status = 'disputed'` alone would lift the *second* hold, releasing a
+     * payout against a complaint already in the support inbox and clearing the
+     * text that explained it.
+     *
+     * Driven at the service boundary rather than through two overlapping HTTP
+     * requests: what has to be pinned is which row the lift matches, and a
+     * fixture that has to win a race to express that is a fixture that will
+     * pass when the guard is gone.
+     */
+    it('refuses to lift a hold that is no longer the one it placed', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+      await signInAsAdmin();
+
+      expect((await report(paid.id, CUSTOMER, 'The first report.')).statusCode).toBe(200);
+      const first = await currentBooking();
+      expect(first.status).toBe('disputed');
+
+      /* The operator settles it, and the customer reports again. */
+      expect(
+        (await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, { outcome: 'vendor' }))
+          .statusCode,
+      ).toBe(200);
+      expect((await report(paid.id, CUSTOMER, 'The second report.')).statusCode).toBe(200);
+
+      const second = await currentBooking();
+      expect(second.status).toBe('disputed');
+      expect(second.updatedAt).not.toEqual(first.updatedAt);
+
+      const context = {
+        db: harness.database.db,
+        stripe: harness.stripe,
+        hub: harness.app.events,
+        log: harness.app.log,
+        mail: {
+          db: harness.database.db,
+          email: harness.email,
+          log: harness.app.log,
+          webOrigin: 'http://localhost:3000',
+          background: harness.app.background,
+        },
+      };
+
+      /* The first report's late unwind finds a row it did not write, and stops. */
+      expect(await liftDisputeHold(context, first, first.updatedAt)).toBeNull();
+
+      const after = await currentBooking();
+      expect(after.status).toBe('disputed');
+      expect(after.disputeReason).toBe('The second report.');
+
+      /* And the money is still held, which is the fact that matters. */
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+
+      /* The hold that *is* current still lifts, so the guard is not a wall. */
+      expect(await liftDisputeHold(context, second, second.updatedAt)).not.toBeNull();
+      expect((await currentBooking()).status).toBe('confirmed');
+    });
+
+    /* Acceptance 5: one open report, not two. */
+    it('refuses a second report while one is open, and sends no second message', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+      expect((await report(paid.id, CUSTOMER)).statusCode).toBe(200);
+      await harness.flushEmail();
+      harness.email.sent.length = 0;
+
+      const response = await report(paid.id, CUSTOMER);
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe('You have already reported a problem with this booking');
+      expect(reportEmail()).toBeUndefined();
+    });
+
+    /* Acceptance 2, the far bound: the money is gone, so a hold cannot hold. */
+    it('refuses a report once the payout has been released', async () => {
+      const released = await releasedBooking();
+
+      const response = await report(released.id, CUSTOMER);
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(409);
+      expect((await currentBooking()).status).toBe('confirmed');
+      expect(reportEmail()).toBeUndefined();
+    });
+
+    /**
+     * Acceptance 1 and 6, one case per role.
+     *
+     * A vendor is refused on the booking they are the vendor on — 403, because
+     * `participantIn` already placed them on it and pretending otherwise would
+     * be a lie they can disprove. Everybody else gets 404: whether a booking
+     * exists is not something a stranger learns by walking ids. **None of them
+     * puts an email in the inbox**, which is the half a status code alone would
+     * not catch.
+     */
+    it.each([
+      ['the vendor on the booking', () => VENDOR, 403],
+      ['another customer', () => OUTSIDER, 404],
+      ['an admin', () => ADMIN, 404],
+    ])('refuses a report from %s', async (_who, actor, expected) => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+      if (expected === 404 && actor() === ADMIN) {
+        await signInAsAdmin();
+      }
+
+      const response = await report(paid.id, actor());
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(expected);
+      expect((await currentBooking()).status).toBe('confirmed');
+      expect(reportEmail()).toBeUndefined();
+    });
+
+    /**
+     * Signed out, which only this route can be asked: `/support/messages` is
+     * public by design — the visitor most likely to need it is the one who
+     * cannot get in — so a booking report is the one payload on it that has to
+     * insist on a session.
+     */
+    it('refuses a booking report from a signed-out visitor', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+
+      const response = await inject('POST', '/support/messages', null, {
+        topic: 'booking-or-payment',
+        email: 'stranger@example.com',
+        message: REPORT,
+        bookingId: paid.id,
+      });
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(401);
+      expect((await currentBooking()).status).toBe('confirmed');
+      expect(reportEmail()).toBeUndefined();
+    });
+
+    /**
+     * The read the report surface makes before it offers anything (#425).
+     *
+     * Same ownership rule as the send it precedes, and the same 404 for
+     * everybody else — a stranger walking ids learns nothing, and the vendor is
+     * not handed a control that is the customer's.
+     */
+    describe('the booking the surface reads', () => {
+      it('answers the customer with the booking, and the release column', async () => {
+        const paid = await paidBooking();
+
+        const response = await inject('GET', `/customer/bookings/${paid.id}`, CUSTOMER);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({
+          id: paid.id,
+          status: 'confirmed',
+          eventDate: EVENT_DATE,
+          totalAmountCents: PRICE_CENTS,
+          payoutReleasedAt: null,
+        });
+        /* The split and the Stripe ids stay out of it (#407). */
+        expect(response.payload).not.toContain(String(EXPECTED_PAYOUT_CENTS));
+      });
+
+      /*
+       * The whole point of shipping the column: the surface can tell "the sweep
+       * may run" from "the money has gone", and only the second shuts the door.
+       */
+      it('reports the release once the sweep has actually moved the money', async () => {
+        const released = await releasedBooking();
+
+        const response = await inject('GET', `/customer/bookings/${released.id}`, CUSTOMER);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().payoutReleasedAt).not.toBeNull();
+      });
+
+      it.each([
+        ['the vendor on the booking', () => VENDOR],
+        ['another customer', () => OUTSIDER],
+      ])('answers 404 to %s', async (_who, actor) => {
+        const paid = await paidBooking();
+
+        expect((await inject('GET', `/customer/bookings/${paid.id}`, actor())).statusCode).toBe(
+          404,
+        );
+      });
+
+      it('answers 401 to a signed-out visitor', async () => {
+        const paid = await paidBooking();
+
+        expect((await inject('GET', `/customer/bookings/${paid.id}`, null)).statusCode).toBe(401);
+      });
+    });
+
+    /**
+     * The loop closes. This is the assertion the whole ticket is for: a report
+     * that does not stop the money is the only way it can fail silently.
+     */
+    it('stops the release sweep on the booking it held', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+      expect((await report(paid.id, CUSTOMER)).statusCode).toBe(200);
+
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toEqual([]);
+      expect((await currentBooking()).payoutReleasedAt).toBeNull();
     });
   });
 
@@ -899,7 +1266,7 @@ describe('payouts', () => {
     it('says a payout is held rather than pending while a report is open', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
-      await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {});
+      await report(paid.id, CUSTOMER);
 
       const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
 

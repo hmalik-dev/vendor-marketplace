@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { pageTitle, uuidSchema } from '@vendor-marketplace/shared';
 import { AcceptedRequest } from '@/components/bookings/accepted-request';
 import { QuoteReview } from '@/components/bookings/quote-review';
+import { ReportProblem } from '@/components/bookings/report-problem';
 import { getBookingForRequest, getOwnBookingRequest } from '@/lib/customer-data';
 import { requireRole } from '@/lib/current-user';
 
@@ -96,6 +97,21 @@ export default async function BookingRequestPage({
       ) : (
         <QuoteReview request={request} />
       )}
+
+      {/*
+        The way into #423's payout hold, and the only one in the product (#425).
+
+        A sibling of the card rather than a control inside it, because
+        `AcceptedRequest` is a client component and this decides its window from
+        a clock: rendered here it is the *server's* clock, which is the one
+        `placeDisputeHold` refuses on. It appears only once there is a booking —
+        a request with no payment behind it has no payout to hold.
+      */}
+      {booking ? (
+        <div className="mt-4">
+          <ReportProblem booking={booking} vendorName={request.vendor.businessName} />
+        </div>
+      ) : null}
     </div>
   );
 }

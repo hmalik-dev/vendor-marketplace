@@ -571,6 +571,27 @@ export async function findVendorUserId(db: AppDatabase, vendorId: string): Promi
   return rows?.[0]?.userId ?? null;
 }
 
+/**
+ * The vendor's account and the name a person reads, in one lookup.
+ *
+ * Two callers want this row for two reasons — a notification needs the account,
+ * a support email needs the business name — and asking twice was two round
+ * trips on the same primary key. Projected rather than `select()`: the profile
+ * carries a bio and a description this has no use for.
+ */
+export async function findVendorContact(
+  db: AppDatabase,
+  vendorId: string,
+): Promise<{ userId: string; businessName: string } | null> {
+  const rows = await db
+    .select({ userId: vendorProfiles.userId, businessName: vendorProfiles.businessName })
+    .from(vendorProfiles)
+    .where(eq(vendorProfiles.id, vendorId))
+    .limit(1);
+
+  return rows?.[0] ?? null;
+}
+
 export interface BookingWithContextRow {
   booking: typeof bookings.$inferSelect;
   eventType: string | null;

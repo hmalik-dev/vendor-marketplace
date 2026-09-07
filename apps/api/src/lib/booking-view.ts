@@ -39,6 +39,7 @@ export function toBookingView(booking: BookingRow): Booking {
     cancellationReason: booking.cancellationReason,
     cancelledBy: booking.cancelledBy,
     refundAmountCents: booking.refundAmountCents,
+    payoutReleasedAt: booking.payoutReleasedAt,
     createdAt: booking.createdAt,
     updatedAt: booking.updatedAt,
   };

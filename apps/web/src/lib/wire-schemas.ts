@@ -226,15 +226,28 @@ export const wireBookingSchema = bookingWithContextSchema.extend({
   paidAt: z.coerce.date().nullable(),
   completedAt: z.coerce.date().nullable(),
   cancelledAt: z.coerce.date().nullable(),
+  /* #425. A `z.date()` on the API side needs its coercion here or the parse
+     rejects the string the server really sent — and this one is `null` on every
+     unreleased booking, so a fixture without a released payout proves nothing.
+     `wire-schemas.test.ts` parses one that carries a value. */
+  payoutReleasedAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
 export type WireBooking = z.infer<typeof wireBookingSchema>;
 export const wireBookingListSchema = z.array(wireBookingSchema);
 
+/**
+ * A booking with no request context — what the action routes and the report
+ * read answer. Derived from the schema above rather than restated, so the date
+ * coercions are declared once (#425).
+ */
+export const wireBookingViewSchema = wireBookingSchema.omit({ eventType: true, venue: true });
+export type WireBookingView = z.infer<typeof wireBookingViewSchema>;
+
 /** What a cancellation answers: the booking as it now stands, and the refund. */
 export const cancelledBookingWireSchema = cancelledBookingSchema.extend({
-  booking: wireBookingSchema.omit({ eventType: true, venue: true }),
+  booking: wireBookingViewSchema,
 });
 export type WireCancelledBooking = z.infer<typeof cancelledBookingWireSchema>;
 

@@ -8,10 +8,12 @@ import {
   wireBookingRequestListSchema,
   wireBookingRequestSchema,
   wireBookingSchema,
+  wireBookingViewSchema,
   wireCheckoutIntentSchema,
   wireCustomerReviewListSchema,
   type WireBooking,
   type WireBookingRequest,
+  type WireBookingView,
   type WireCheckoutIntent,
   type WireCustomerReview,
 } from './wire-schemas';
@@ -224,6 +226,36 @@ export async function getOwnBookings(): Promise<WireBooking[]> {
   const token = await customerToken();
 
   return degradeToEmpty(() => apiRequest('/bookings', { schema: wireBookingListSchema, token }));
+}
+
+/**
+ * One booking of the signed-in customer's own, for a page that **must never
+ * redirect** (#425).
+ *
+ * `/support` is public by design — the visitor most likely to need it is the one
+ * who cannot sign in — so this cannot be one of the reads above: `customerToken`
+ * redirects to sign-in when there is no session, and this page is reached with
+ * an expired one all the time. Every failure degrades to `null`, which the
+ * caller reads as "no booking to attach" and renders as the plain support
+ * screen. A vendor, an admin and another customer all reach that same `null`,
+ * because the API answers each of them 404.
+ */
+export async function readOwnBookingForSupport(bookingId: string): Promise<WireBookingView | null> {
+  const { getToken } = await auth();
+  const token = await getToken();
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    return await apiRequest(`/customer/bookings/${bookingId}`, {
+      schema: wireBookingViewSchema,
+      token,
+    });
+  } catch {
+    return null;
+  }
 }
 
 /** What vendors have said about working with this customer. */

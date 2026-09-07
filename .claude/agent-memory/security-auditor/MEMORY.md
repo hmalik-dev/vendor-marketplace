@@ -58,3 +58,4 @@
 - [The payout sweep is a second money mover](payout-sweep-is-a-second-money-mover.md) — it takes a row lock the cancel and dispute paths do not, and their guards key on `status` alone
 - [`payoutOwedClauses` is shared with the sweep](payout-owed-clauses-is-shared-with-the-sweep.md) — since #424 one predicate serves the vendor's read and the `FOR UPDATE` claim that transfers; widening it widens Stripe
 - [Legacy destination rows are guarded in one place](legacy-destination-rows-guarded-in-one-place.md) — `refundAndUnwind` refuses them; the ban unwind and the deploy window do not
+- [The support form is a public route that moves money](support-report-is-a-public-route-that-moves-money.md) — a `bookingId` on the unauthenticated send freezes a payout; the guards are in `placeDisputeHold`, not the route

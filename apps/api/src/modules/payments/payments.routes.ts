@@ -4,7 +4,6 @@ import {
   cancelBookingSchema,
   cancelledBookingSchema,
   checkoutIntentSchema,
-  disputeBookingSchema,
   uuidSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
@@ -12,10 +11,11 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { authenticated, requireAuth } from '../../lib/guards.js';
 import { notFound } from '../../lib/errors.js';
 import {
+  bookingContextFor,
   cancelBooking,
   completeBooking,
+  findOwnBookingForReport,
   openCheckout,
-  raiseDispute,
   reconcileBooking,
   type PaymentContext,
 } from './payments.service.js';
@@ -32,17 +32,7 @@ export interface PaymentRoutesOptions {
 
 export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async (app, options) => {
   const contextFor = (log: PaymentContext['log']): PaymentContext => ({
-    db: app.db,
-    stripe: app.stripe,
-    hub: app.events,
-    log,
-    mail: {
-      db: app.db,
-      email: app.email,
-      log,
-      webOrigin: options.webOrigin,
-      background: app.background,
-    },
+    ...bookingContextFor(app, log, options.webOrigin),
     platformFeeRate: options.platformFeeRate,
   });
 
@@ -92,6 +82,29 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
     },
   );
 
+  /**
+   * One booking of the customer's own, read by its id (#425).
+   *
+   * `/support?booking=<id>` is a URL anyone can paste, and the screen has to
+   * decide from the row whether a report can still place a hold. A point read
+   * rather than a filter over the customer's list: the list is paginated, so a
+   * booking past its first page resolved to nothing, and a pasted id belonging
+   * to nobody cost a full list fan-out on a public route.
+   */
+  app.get(
+    '/customer/bookings/:bookingId',
+    {
+      preHandler: requireAuth,
+      schema: { params: bookingParamsSchema, response: { 200: bookingSchema } },
+    },
+    async (request) =>
+      findOwnBookingForReport(
+        contextFor(request.log),
+        authenticated(request.auth),
+        request.params.bookingId,
+      ),
+  );
+
   /** An action on an existing booking, so 200 rather than 201. */
   app.put(
     '/vendor/bookings/:bookingId/complete',
@@ -104,34 +117,6 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
         contextFor(request.log),
         authenticated(request.auth),
         request.params.bookingId,
-        app.clock(),
-      ),
-  );
-
-  /**
-   * The customer reports a problem, which holds the payout (#423).
-   *
-   * `PUT` and not `POST`: it moves an existing booking into the hold state and
-   * repeating it is refused as a conflict rather than opening a second report,
-   * so there is no collection here for a `POST` to append to. **#425 builds the
-   * surface** that calls this; the hold and its guards are this ticket's.
-   */
-  app.put(
-    '/customer/bookings/:bookingId/dispute',
-    {
-      preHandler: requireAuth,
-      schema: {
-        params: bookingParamsSchema,
-        body: disputeBookingSchema,
-        response: { 200: bookingSchema },
-      },
-    },
-    async (request) =>
-      raiseDispute(
-        contextFor(request.log),
-        authenticated(request.auth),
-        request.params.bookingId,
-        request.body.reason,
         app.clock(),
       ),
   );
