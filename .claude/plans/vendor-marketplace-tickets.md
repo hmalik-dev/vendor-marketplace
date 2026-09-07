@@ -254,14 +254,17 @@ storefront, each of which tells the reader something untrue. |
 | **438** | **Data rights: export, account closure, and the legal acceptance record** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Neither privacy-policy promise is backed by anything: the text says *"ask us for a copy of what we hold"* and *"to close your account, ask us through Contact support"*, and there is no export endpoint, no admin-initiated deletion, and no screen. Deletion happens only if the user deletes themselves in Clerk. Separately, `legal_acceptances` is the platform's evidence a vendor agreed to the 12% and the 72-hour hold — immutable, IP and UA captured, three DB triggers — and no operator can read it. |
 | **439** | **Transactional email delivery is invisible** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Fourteen notification types fire and forget; failures are logged and dropped at `notification-email.ts:200`. The `notifications` table records the in-app bell only — no `sentAt`, no failure reason, no provider id. *"Was the customer actually told their booking was cancelled?"* is unanswerable from the console, from the database, or from anywhere but a log search. |
 | **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
-| **441** | **The site footer against the newer frame, and the ink-ground text ramp used as a border** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #430's parity pass**, which measured the footer against `design/delta-band/Orla-Closing-Band.html` — a frame #428 never saw, so none of this is a regression. **Nine layout, style and font deviations**: inner padding `py-14` (56px) where the frame draws 40px top and bottom; the column grid is four equal quarters where the frame draws `1.5fr 1fr 1fr 1fr` (419/280/280/280), which puts `Browse` at x=390 against the frame's ≈493; gap 40px vs 34px; the footer wordmark at 32px vs 25px, and its logo mark `29x20` with **unequal** circles (20px filled, 22px outer) where the frame draws `26x17` with two equal 17px circles — so `logo.tsx:50`'s comment that `marketingFooter` is *"absent from every frame"* is now stale, this frame draws it twice; `Contact support` renders `#B8AF9F`/400 where the frame singles it out at `#F8F5EF`/600; link columns 13.5px vs 13px; tagline 13.5px/1.6 vs 13px/1.5; micro-labels at 600 weight and .05em vs 500 and .07em. **And the mechanism #430 fixed in the band, in the two places it survives**: the legal row's hairline is `border-stone-0/10` where the frame draws `rgba(248,245,239,.1)` — `stone-50`, the other end of the ramp — and **`admin-header.tsx:64`** sets `text-stone-400` as text on frame `13`'s inverted `#23201C` ground. `stone-400` is a **border** value: it is drawn on a light ground at thirty-nine sites across the frames and as text on ink at none. `stone-480` (`#d8d0c2`) was added to the ink-ground text ramp in `aac9b3b` and is the token both should read. That is the only admin instance, which is why it rides here rather than in #431–#440 — the ramp is the defect, not the surface. **One access finding with no other checker**: the footer logo link is `88x32`, twelve pixels under `04-laws.md`'s 44px minimum; its `aria-label` is present and correct. **Not in scope**: the `Florals` mismatch in the Browse column is the ruled #419 override, and the band itself is done (#430, `aac9b3b`). |
 | **442** | **A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder: does a second acceptance of a version already held mean one row or two?** | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. The obvious fix — a unique index on `(accepted_by_user_id, document, version)` — **overturns #427's ruling** that a second acceptance of a held version *is* a second row, on the grounds that *"I accepted it twice"* is a true statement about what happened; `legal-acceptance-immutability.test.ts` asserts exactly that today. So the race cannot be closed without first deciding what the record is claiming, which is a product question, not a lane's. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
 | **443** | **Frame `13`'s parity residue, including two access findings nothing else checks** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 from #433's parity pass**, which returned MATCH on all six axes for its own change and correctly declined to attribute these six to itself. **Two are access findings** — the search field has an `aria-label` but no visible `<label>`, and the row checkbox is `22x44` against `04-laws.md`'s 44px minimum — and the parity pass is the **only** gate on the accessibility laws and the contrast table, so an unfiled access finding is not caught later, it evaporates. The other four: the header is 1px short, the wordmark renders 24px against 23px, the four filter dropdowns carry a 2px padding asymmetry left over from the caret D25 removed (**correct the padding, do not restore the caret**), and the filtered empty state offers no way out where every other console empty state does. Batched by surface per the filing convention rather than filed as six rows. D30 binds: corroborate each transcribed number against the neighbouring widths before building it. |
 | **444** | **An unwind declines the accepted request behind a completed booking** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #438**, which tripped over it building account closure, verified it was pre-existing rather than its own, and pinned current behaviour in a test rather than widening scope. Confirmed independently before filing. `declineOpenRequests` (`admin.dao.ts:484`) sets `status: 'declined'` where status is in `['pending','quoted','accepted']` — **unconditionally**. But `accepted` is exactly the status a request holds *after checkout*, so an unwind flips the accepted request behind an **already-completed** booking to `declined`: the event happened, the vendor was paid, and the customer's requests screen now says it was declined. That is rewriting history, not unwinding it. **Reachable from any ban**, so it predates #433 and #438 both. The neighbouring `findConfirmedBookingsToUnwind` gets it right and is the model — it bounds on `event_date > today`; the request decline has no equivalent bound. Do **not** simply drop `accepted`: a request accepted but never paid for is a real open commitment. |
 | **445** | **A failed query logs every bound parameter, and the redact list cannot reach it** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 after two lanes hit it independently** — #431's security pass and #439's review — which makes it a shape rather than an incident. Drizzle 0.45.2's `DrizzleQueryError` puts the statement's bound parameters in its `message` **and** in an own enumerable `params` property; pino's `err` serialiser copies own properties, so any `log.*({ err })` on a failed query writes every bound value into the log stream. **`server.ts`'s redact list is path-based on `req.headers.*` and never reaches it.** Caller-triggerable, which is why it is P0: `freeText()` does not strip `U+0000`, Postgres refuses it with `22021`, and the insert is on the **public unauthenticated** `POST /support/messages` — so a stranger picks when the write fails, six times an hour, and up to 4,000 characters of what they typed plus their reply-to address is logged. **Fix the sink, not the source**: a custom pino `err` serialiser covers every existing and future call site, where narrowing `freeText()` closes one trigger and leaves the class open. Two lanes have already written per-call-site guards; a third would make it a habit rather than a law. |
+| **446** | **The app declares no body text size, so every unsized block renders at 16px** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's parity pass, which hit it as a worked example.** `globals.css` sets `line-height` on `html` and its own comment explains why a per-call-site fix cannot close that class — *"an element with no text utility at all still inherits, so the per-site route cannot close the class"* — and then **stops one property short**. Nothing declares `font-size`, so every block element carrying no `text-*` utility inherits the browser's **16px**, which is `--text-lg`, not the 13.5px `--text-base` body step. **The worked example**: #441 set the footer's 13px on the `<a>`, and each `<li>`'s own line box stayed 16px because an inline child does not shrink its block. Rows measured 31px against the frame's 27, the footer was **25px taller** than it draws, and the legal row's copyright sat 1.5px off the links' baseline. #441 fixed the footer by moving the size onto the `<ul>`; the class is still open everywhere else. **Scope is the fix *plus* the sweep, not the fix with a caveat.** `body { font-size: var(--text-base) }` in the same `@layer base` block — on `body`, never `html`, which would rescale every rem-based spacing utility in the product — rescales **every currently-unsized block** from 16px to 13.5px. Anyone picking this up needs to know that before they start rather than discover it: it wants a parity pass over every frame-carrying screen, and it may well surface sites that were silently relying on the 16px. |
+| **447** | **A border or surface token used as text on ink — four instances, three per-call-site guards, no law** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441, which was the third instance.** The recurring mistake is not "a border token used as text" but ***the nearest hex is not the right role***, and it has now bitten four times: `stone-400` as text on ink twice (#430's closing band, #441's admin header), `stone-0` as a border on ink once (#441's legal hairline), and the 78%-alpha-of-`stone-50` that `theme.css` records as the defect which minted the ink-ground ramp in the first place. Three of those now carry **three separately hand-written per-call-site guards** — `page.test.tsx` for the band, `admin-header.test.tsx` and `site-footer.test.tsx` for #441 — and no law. A fourth guard would make it a habit. **#441 looked for the cheap guard and reports that there is not one**, which is the part that should stop the next person rediscovering it: a blanket ban on `text-stone-400` needs **four legitimate exemptions** (`ui/empty-state.tsx`, `vendors/profile/review-form.tsx`, and two in `packages/package-manager.tsx` — all decorative glyphs on a light ground), and a file-level "this file has an ink ground" rule matches **14 files**, most of which use `bg-stone-900` for a scrim, a chip or one button variant. So the guard has to know the *ground an element renders on*, which no source scan can see. Options worth weighing: extend `theme-tokens.test.ts`'s contrast table into a role table naming which tokens may be `text-*` at all; or assert it in the browser during the parity pass, where the ground **is** observable. |
+| **448** | **Lane env tooling hands web-side children the wrong API origin, silently** | INFRA | M-OPS | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 — both halves found the same day, by #435 and #441.** `renderLaneEnv` in `packages/preflight/src/lane/env.ts` writes `NEXT_PUBLIC_API_URL` and **not** `API_URL`. They are different variables: `API_URL` is what `apps/web/src/lib/api-client.ts:13` reads for every **Server Component** fetch, while `NEXT_PUBLIC_API_URL` is inlined into the browser bundle at build time. With no lane value the root `.env`'s `API_URL=http://localhost:4000` wins, so **every lane's server-side renders read another checkout's database**. Confirmed in lane 441: `.env.lane` carried no `API_URL`, and something *was* listening on 4000 and answering 200 — so nothing failed, nothing 500'd, and pages rendered. **The second half is `PORT`.** `lane:exec` exports the lane's `PORT` — the **API's** port — to *every* child, so `next start` serves the **web app on 4021**. `next dev` escapes only because Turborepo's dev task passes the port explicitly, which is an accident of one task definition rather than a property of the lane: *"use `next dev` and you are fine"* is the wrong lesson. Both directions are silent — the lane's web port refuses the connection and reads as a broken app, while the API port renders the app correctly. **Fix**: `renderLaneEnv` writes `API_URL`, and `lane:exec` stops exporting the API's `PORT` to non-API children. Setting `PORT` over the lane env is the workaround a lane can apply today; those two are the actual fix. **Add the preflight assertion #435 asks for** — *"the lane's web app resolves the lane's API"* — on **both** axes, because the build-time half is independent: a build not made through `lane:exec` bakes `localhost:4000` into the bundle and the CSP whatever the server env says, and #441 measured exactly that (`connect-src` naming 4000 while SSR correctly resolved 4021). The CSP half is one `curl -sI`. **A lane env written before this fix is stale** and needs `lane:down && lane:up`, which drops the lane database — re-seed after. |
+| **449** | **The screens document is content-box and every delta bundle is border-box, so the logo mark paints 19px where the frame draws 17** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's `diff-reviewer` pass, and it overturns a standing assumption rather than finding drift.** `design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing` hits are inline opt-ins — which is what #250 measured when it ruled `box-content` for the logo mark. **Every delta bundle opens with `* { box-sizing: border-box; }`**: `delta-band`, `delta-legal` and `contact-support` all do. So the closing-band frame draws the footer mark as two **equal footprints** — a 17px outline circle with its 1.3px stroke inside, beside a 17px disc — where `logo.tsx` paints a **19px** outline circle at x=7.64, 2px larger than the disc and 2px low. Measured in Chromium against the frame's own markup under its own reset. **#441 deliberately did not fix it**: `box-content` is #250's ruling, taken from the screens document and measured there, and overturning it moves the mark on the desktop header, the auth panel, the favicon and the app icon on one bundle's authority. That is a design adjudication. It is written up at the `box-content` comment in `logo.tsx`, and `logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at D=17 — a diameter taken from a border-box frame — so the two guards in that file read the same contract two incompatible ways until this is settled. **A `delta-band` parity read measuring 19-against-17 is looking at this ruling, not at drift.** |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #433 landed: 13 rows — 10 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`) and #433 (`ad1b179`) have both landed** — so **#431**, **#432**, **#435**, **#436**, **#437**, **#438**, **#439**, **#441** and **#442** are startable unattended today. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #441 landed: 16 rows — 13 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`) and #433 (`ad1b179`) have both landed** — so **#431**, **#432**, **#435**, **#436**, **#437**, **#438**, **#439** and **#442** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -2041,20 +2044,6 @@ row (#434), and notifying both parties.
 implemented against a guessed policy is the one kind of code in this repository
 that cannot be corrected by a later ticket.
 
-### #441: The site footer against the newer frame, and the ink-ground text ramp used as a border
-
-**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
-**Blocked by:** None
-
-**Filed 2026-09-07 by the parity pass on #430**, which compared the closing band
-_and_ the footer against `design/delta-band/Orla-Closing-Band.html`. The band is
-done (`aac9b3b`, PR #134). Everything below is the footer, and **none of it is a
-regression**: these are #428-era values measured against a frame #428 never saw.
-#430 deliberately left them rather than widening a revision into a restyle.
-
-Two different mechanisms live here, and they are one ticket because a single lane
-opens the same two files for both.
-
 ### #442: A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race
 
 **Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
@@ -2364,3 +2353,210 @@ defence-in-depth extra, worth doing second.
       value bound into the failing statement, rather than by inspecting keys.
 - [ ] Acceptance 4 driven end to end through the public route, not by calling
       the DAO.
+
+### #446: The app declares no body text size, so every unsized block renders at 16px
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 by #441's parity pass**, which hit it as a worked example
+rather than as an audit finding.
+
+#### The root cause
+
+`globals.css` sets `line-height` on `html`, and the comment beside it explains
+exactly why that had to be a document-level declaration: *"an element with no
+text utility at all still inherits, so the per-site route cannot close the
+class."* It then **stops one property short**. Nothing declares `font-size`, so
+every block element carrying no `text-*` utility inherits the browser default of
+**16px** — which is `--text-lg`, not the 13.5px `--text-base` the design system
+calls its body step.
+
+#### The worked example
+
+#441 set the footer's link columns to 13px on the `<a>`. Each `<li>`'s own line
+box stayed **16px**, because a smaller inline child does not shrink the block
+that holds it. Rows measured 31px pitch against the frame's 27, the footer stood
+**25px taller** than the frame draws it, and the legal row's copyright sat 1.5px
+off the links' baseline. #441 closed it for the footer by moving the size onto
+the `<ul>`, where the frame sets it. Every other unsized block in the product
+still has it.
+
+#### Scope: the fix **and** the sweep
+
+`body { font-size: var(--text-base) }` in the same `@layer base` block. On
+`body`, **never** `html` — `html` would rescale every rem-based Tailwind spacing
+utility in the product.
+
+That one line rescales **every currently-unsized block** from 16px to 13.5px, so
+this ticket is the change plus a parity pass over every frame-carrying screen.
+That is scope, not a caveat: anyone picking it up needs to know before they
+start rather than discover it halfway. Expect it to surface sites that were
+silently relying on the 16px, and treat each as a decision rather than a
+regression.
+
+---
+
+### #447: A border or surface token used as text on ink — four instances, three per-call-site guards, no law
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 by #441, which was the third instance.**
+
+#### The shape
+
+The recurring mistake is not "a border token used as text". It is ***the nearest
+hex is not the right role***, and it has now bitten four times:
+
+- `stone-400` as text on ink — the closing band's pitch (#430) and
+  `admin-header.tsx` (#441).
+- `stone-0` as a border on ink — the footer's legal hairline (#441).
+- A 78% alpha of `stone-50` standing in for a value the frames name outright,
+  which `theme.css` records as the defect that minted the ink-ground ramp in the
+  first place.
+
+Three of those now carry **three separately hand-written per-call-site guards**
+— `page.test.tsx` for the band, `admin-header.test.tsx` and
+`site-footer.test.tsx` for #441 — and there is no law. A fourth guard would make
+it a habit rather than a rule.
+
+#### Why the cheap guard does not exist
+
+#441 looked, and this is the part that should stop the next person rediscovering
+it:
+
+- **A blanket ban on `text-stone-400` needs four legitimate exemptions** —
+  `ui/empty-state.tsx`, `vendors/profile/review-form.tsx` and two in
+  `packages/package-manager.tsx`. All four are decorative glyphs on a *light*
+  ground, where `stone-400` is exactly right.
+- **A file-level "this file has an ink ground" rule matches 14 files**, most of
+  which use `bg-stone-900` for a scrim, a chip, or one button variant while
+  carrying ordinary light-ground text elsewhere.
+
+The rule needs to know the **ground a given element renders on**, and no source
+scan can see that.
+
+#### Two options worth weighing
+
+1. Extend `theme-tokens.test.ts`'s contrast table into a **role** table: which
+   tokens may appear as `text-*` at all, which only as `border-*`, and on which
+   grounds. It already owns the token vocabulary.
+2. Assert it in the **browser**, during the parity pass, where the computed
+   ground *is* observable — `parity-checker` already reads both colours and
+   would only need the ramp membership rule.
+
+---
+
+### #448: Lane env tooling hands web-side children the wrong API origin, silently
+
+**Milestone:** M-OPS | **Phase:** INFRA | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07.** Two independent halves of one defect, found the same day
+by #435 and #441, in one file.
+
+#### Half one — `API_URL` is never written (runtime, hits SSR)
+
+`renderLaneEnv` in `packages/preflight/src/lane/env.ts` writes
+`NEXT_PUBLIC_API_URL` and **not** `API_URL`. They are different variables:
+
+- `API_URL` is what `apps/web/src/lib/api-client.ts:13` reads for every **Server
+  Component** fetch.
+- `NEXT_PUBLIC_API_URL` is inlined into the **browser bundle** at build time.
+
+With no lane value, the root `.env`'s `API_URL=http://localhost:4000` wins, so
+every lane's server-side renders resolve to whatever is on 4000.
+
+**Confirmed in lane 441**: `.env.lane` listed `DATABASE_URL`,
+`NEXT_PUBLIC_API_URL`, `PORT`, `WEB_PORT` and `WEB_URL` — no `API_URL` — and
+something **was** listening on 4000 and answering 200. So nothing errored,
+nothing 500'd, pages rendered, and the lane was reading another checkout's
+database the whole time.
+
+#### Half two — `PORT` is the API's, and every child gets it
+
+`lane:exec` exports the lane's `PORT` — the **API's** port — to *every* child,
+so `next start` serves the **web app on 4021**. `next dev` escapes only because
+Turborepo's dev task passes the port explicitly, which is an accident of one
+task definition rather than a property of the lane. *"Use `next dev` and you are
+fine"* is the wrong lesson to leave behind.
+
+**Both directions are silent.** The lane's web port refuses the connection and
+reads as a broken app; the lane's API port renders the app correctly. Neither
+says anything is wrong. This is the exact shape the collision-free port
+allocation exists to prevent — browser verification passing against the wrong
+process.
+
+#### Fix, and the workaround
+
+- `renderLaneEnv` writes `API_URL` alongside `NEXT_PUBLIC_API_URL`.
+- `lane:exec` stops exporting the API's `PORT` to non-API children.
+
+Setting `PORT` over the lane env is the workaround a lane can apply today; those
+two are the actual fix.
+
+#### The preflight assertion, on both axes
+
+#435's suggestion, and it is the right home: *"the lane's web app resolves the
+lane's API"* is exactly the class of thing `preflight` exists to assert. It must
+check **both** axes, because the build-time half is independent — a build not
+made through `lane:exec` bakes `localhost:4000` into the bundle and the CSP
+whatever the server env says. #441 measured precisely that: `connect-src` naming
+4000 while SSR correctly resolved 4021. The CSP half is one `curl -sI`.
+
+A discriminating probe is required, not a liveness check. #435's first attempt
+proved nothing because both checkouts run `seed-demo` with deterministic ids, so
+the same vendor exists at the same rating in both databases — a check that
+passes on both sides of the question it was asked. The probe has to be an answer
+only one database can give.
+
+#### Note for anyone regenerating
+
+A lane env written before this fix is **stale** and needs
+`pnpm lane:down <n> && pnpm lane:up <n>`, which drops the lane database —
+re-seed after.
+
+---
+
+### #449: The screens document is content-box and every delta bundle is border-box
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 by #441's `diff-reviewer` pass.** This overturns a standing
+assumption rather than finding drift, which is why it is a ticket and not a fix.
+
+#### What is actually true
+
+`design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing`
+hits are inline opt-ins. That is what #250 measured when it ruled `box-content`
+for the logo mark, and it is correct for that document.
+
+**Every delta bundle opens with `* { box-sizing: border-box; }`** —
+`delta-band`, `delta-legal` and `contact-support` alike. So the closing-band
+frame draws the footer mark as two **equal footprints**: a 17px outline circle
+with its 1.3px stroke *inside*, beside a 17px disc.
+
+Measured in Chromium, frame markup under its own reset versus what `logo.tsx`
+emits at D=17:
+
+| | outline circle | ink right edge | box |
+| --- | --- | --- | --- |
+| frame | 17.00 x 17.00 @ x=8 | 25.00 | 26 x 17 |
+| component | **19.00 x 19.00** @ x=7.64 | 26.64 | 24.64 x 17 |
+
+#### Why #441 did not fix it
+
+`box-content` is #250's ruling, taken from the screens document and measured
+there. Overturning it moves the mark on the desktop header, the auth panel, the
+favicon and the app icon — on the authority of one bundle. That is a design
+adjudication, not a parity fix.
+
+It is written up at the `box-content` comment in `logo.tsx`. Note that
+`logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at **D=17**,
+a diameter taken from a border-box frame, so the two guards in that file read
+the same contract two incompatible ways until this is settled.
+
+**A `delta-band` parity read measuring 19-against-17 is looking at this ruling,
+not at drift.**
