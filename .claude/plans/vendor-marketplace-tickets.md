@@ -247,7 +247,6 @@ the silent-submit work #388 closed:
   restores focus — a keyboard user t |
 storefront, each of which tells the reader something untrue. |
 | **429** | **Legal acceptance is vendor-only and records a version, not the document — close both** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 on the account holder's instruction**, after auditing what #427 shipped: *"it is essential that we have an appropriate tracker of ToS and any other vendor agreement tracked."* **The table is good and is not the problem** — `legal_acceptances` is immutable by a database trigger (not a DAO convention), copies `accepted_by_name` and `business_name` so a later rename cannot rewrite history, captures `ip`, `user_agent` and a timezone-aware `accepted_at`, and its immutability is proven by attempting the update and delete. **Three holes.** (1) **`vendor_id` is `NOT NULL`**, so only a vendor can be recorded — a customer accepting the Terms of Service at sign-up has nowhere to go, and `terms_of_service` sits in the enum with **nothing anywhere writing it**, exactly as `disputed` did before #425. (2) **Nothing records what the document said** — only a version string, while the copy is placeholder markdown explicitly planned for replacement, so editing `terms.md` without bumping the version silently makes every existing row attest to text that no longer exists. (3) **Nothing is affirmatively accepted** — the flow is browsewrap, so the row attests to a `Continue` press. Ruled 2026-09-07: *"explicit checkbox"* and SHA-256 to pin the version. Because `sign-up-form.tsx` renders Clerk's prebuilt `<SignUp>`, the clickwrap gate goes **after** authentication — a first-sign-in interstitial on `/after-sign-in`, which every account traverses however it was created, writing the `users` row and the acceptance in one transaction. **Not in scope, already built:** the stale-version blocker (`hasCurrentVendorAgreement`) and the privacy disclosure of the IP capture |
-| **430** | **Closing band and footer: stack the band, and drop both centred measures** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 with a design revision.** `design/delta-band/` — `CLOSING-BAND-PROMPT.md` and `Orla-Closing-Band.html`. **This revises what #428 shipped rather than replacing it**: the band is already vendor-only, already signed-out-only, already free of pricing figures, and already points both controls at one destination. **What changes is the composition.** The band becomes **stacked, not columned** — the pitch spans a top line and the three steps run full-width beneath as `repeat(3, 1fr)` — and **both the band and the footer stop centring an inner measure and sit flush to the page's 40px gutter**. #428 deliberately chose `max-w-[1160px] mx-auto` and left a comment defending it as *"the frame's own measure"*; **that reasoning is now overruled by a newer frame** and the comment must be corrected rather than left contradicting the code. Also: serif 33px→35px, the vertical rule between columns becomes a full-width horizontal one, the button moves after the link so the strongest element sits at the outer edge, and the footer's compensating `border-top` goes because the `#1C1916` ground replaces it |
 | **431** | **Operations case console: every dispute, however it arrives, and its resolution** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` `email` | **Filed 2026-09-07 by the admin-panel investigation.** `PUT /admin/bookings/:bookingId/dispute` is the only way to lift a payout hold and **has no UI whatsoever** — `admin-data.ts` is nine GETs and nothing else, so an operator resolves disputes with curl while the vendor's money sits frozen. The complaint that justifies the hold is never stored: `POST /support/messages` sends one email and keeps no row, so the reason lives in an inbox and the hold lives in `bookings.dispute_reason`, which no admin schema exposes. `charge.dispute.*` is not among the handled Stripe events, so a chargeback never reaches the booking at all. |
 | **432** | **Payout health: failed transfers, retries, and why Stripe stopped a vendor** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** `payouts.dao.ts:213` writes `payout_attempts` and `payout_failure_reason` on every failed transfer and **nothing anywhere reads either column** — not admin, not the vendor dashboard. `adminPaymentRowSchema` carries no payout state at all, so a vendor owed money by a transfer that keeps failing generates no signal. `stripe_onboarded` is a boolean with no reason behind it: when Stripe revokes a capability the operator sees only "No payouts yet" in a filter. |
 | **433** | **A deleted account keeps a live, bookable storefront** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation. This is a defect, not a gap.** `softDeleteUserByClerkId` sets `users.deleted_at` and stops. `vendor_profiles.is_deleted` is read as a visibility filter by four DAOs and **written by nothing outside seed scripts** — so a vendor who deletes their Clerk identity keeps a published profile that stays searchable, bookable and payable. The ban flow unpublishes; deletion does not. |
@@ -258,9 +257,10 @@ storefront, each of which tells the reader something untrue. |
 | **438** | **Data rights: export, account closure, and the legal acceptance record** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#434** (closure and export are logged actions) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Neither privacy-policy promise is backed by anything: the text says *"ask us for a copy of what we hold"* and *"to close your account, ask us through Contact support"*, and there is no export endpoint, no admin-initiated deletion, and no screen. Deletion happens only if the user deletes themselves in Clerk. Separately, `legal_acceptances` is the platform's evidence a vendor agreed to the 12% and the 72-hour hold — immutable, IP and UA captured, three DB triggers — and no operator can read it. |
 | **439** | **Transactional email delivery is invisible** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Fourteen notification types fire and forget; failures are logged and dropped at `notification-email.ts:200`. The `notifications` table records the in-app bell only — no `sentAt`, no failure reason, no provider id. *"Was the customer actually told their booking was cancelled?"* is unanswerable from the console, from the database, or from anywhere but a log search. |
 | **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
+| **441** | **The site footer against the newer frame, and the ink-ground text ramp used as a border** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #430's parity pass**, which measured the footer against `design/delta-band/Orla-Closing-Band.html` — a frame #428 never saw, so none of this is a regression. **Nine layout, style and font deviations**: inner padding `py-14` (56px) where the frame draws 40px top and bottom; the column grid is four equal quarters where the frame draws `1.5fr 1fr 1fr 1fr` (419/280/280/280), which puts `Browse` at x=390 against the frame's ≈493; gap 40px vs 34px; the footer wordmark at 32px vs 25px, and its logo mark `29x20` with **unequal** circles (20px filled, 22px outer) where the frame draws `26x17` with two equal 17px circles — so `logo.tsx:50`'s comment that `marketingFooter` is *"absent from every frame"* is now stale, this frame draws it twice; `Contact support` renders `#B8AF9F`/400 where the frame singles it out at `#F8F5EF`/600; link columns 13.5px vs 13px; tagline 13.5px/1.6 vs 13px/1.5; micro-labels at 600 weight and .05em vs 500 and .07em. **And the mechanism #430 fixed in the band, in the two places it survives**: the legal row's hairline is `border-stone-0/10` where the frame draws `rgba(248,245,239,.1)` — `stone-50`, the other end of the ramp — and **`admin-header.tsx:64`** sets `text-stone-400` as text on frame `13`'s inverted `#23201C` ground. `stone-400` is a **border** value: it is drawn on a light ground at thirty-nine sites across the frames and as text on ink at none. `stone-480` (`#d8d0c2`) was added to the ink-ground text ramp in `aac9b3b` and is the token both should read. That is the only admin instance, which is why it rides here rather than in #431–#440 — the ramp is the defect, not the surface. **One access finding with no other checker**: the footer logo link is `88x32`, twelve pixels under `04-laws.md`'s 44px minimum; its `aria-label` is present and correct. **Not in scope**: the `Florals` mismatch in the Browse column is the ruled #419 override, and the band itself is done (#430, `aac9b3b`). |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after the Admin Panel section was filed: 15 rows — 12 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and nine of the ten are startable unattended today (**#431**, **#432**, **#433**, **#434**, **#435**, **#437**, **#439** with no blocker, **#436** and **#438** behind **#434**), alongside **#429** and **#430**. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **The board is no longer waiting on a human before it can use another lane** — that was true on 2026-09-07 morning with 5 rows and is not true now. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #430 landed and #441 was filed: 15 rows — 12 Backlog and 3 `Deferred — needs a human`.** **#430 is closed** — the closing band stacks, both centred measures are gone and the row went with it (`aac9b3b`, PR #134). The board tripled earlier the same day: **#431–#440** are the admin-panel investigation, and nine of the ten are startable unattended today (**#431**, **#432**, **#433**, **#434**, **#435**, **#437**, **#439** with no blocker, **#436** and **#438** behind **#434**), alongside **#429** and the new **#441**. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **The board is not waiting on a human before it can use another lane.** **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1200,100 +1200,6 @@ The operative legal wording (**#374**), the stale-version blocker and the privac
 disclosure — all three already exist or belong elsewhere. This ticket is about
 **what is recorded**, not what the documents say.
 
-### #430: Closing band and footer — stack the band, and drop both centred measures
-
-**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
-**Blocked by:** None
-
-**Filed 2026-09-07 with a design revision** supplied by the account holder:
-`design/delta-band/CLOSING-BAND-PROMPT.md` and `Orla-Closing-Band.html`, drawn
-at 1440.
-
-#### This is a revision of #428, not a rebuild — read what is already true
-
-**Do not redo any of this.** #428 (`bc3948a`) already shipped, and the new prompt
-restates it because it was written as a standalone brief:
-
-- the band is already **vendor-only** — the two-audience fork is gone;
-- it already renders for **signed-out visitors only**;
-- it already carries **no pricing figures**;
-- both controls already share **one destination** (`VENDOR_ENTRY_PATH`), so
-  neither can drift from the other;
-- the footer already has its **legal row** and its `#1C1916` ground;
-- the footer's **Account column is already right in both states** — signed out is
-  `Sign in` · `Sign up` with `Dashboard` deliberately absent, and the reasoning is
-  written above `site-footer.tsx:66`. The prompt restates it because it is a
-  standalone brief; it is not a change;
-- a signed-in vendor is already redirected off `/`.
-
-Re-implementing any of that is how a revision becomes a regression.
-
-#### What actually changes
-
-**1. The band stacks.** Today it is two columns — a pitch on the left capped at
-`max-w-110`, and the steps in a right-hand column separated by a vertical
-`sm:border-l`. It becomes:
-
-- a **top line** (`flex`, `align-items: flex-end`, `justify-content:
-  space-between`): the pitch on the left at `max-width: 600px`, and on the right
-  the text link **then** the button — button last, so the strongest element sits
-  at the band's outer edge;
-- a **full-width horizontal rule**, `1px rgba(248,245,239,.14)`, `38px` above and
-  `32px` below — replacing the vertical divider;
-- the three steps beneath as `grid-template-columns: repeat(3, 1fr)`, `gap: 52px`.
-
-Stated reason, worth keeping: a two-column version left roughly 500px of dead ink
-on the right.
-
-**2. Both centred measures go.** This is the part that contradicts a recorded
-decision, so take it deliberately:
-
-- The band currently wraps its contents in `mx-auto ... max-w-[1160px]`, and
-  `page.tsx` carries a comment defending it — the two blocks *"left uncapped sit
-  at opposite edges with 300px of ink between them and stop reading as one
-  band. 1160 is the frame's own measure."*
-- The footer does the same with `mx-auto w-full max-w-[1440px]`.
-
-**The newer frame overrules both**: contents sit **flush to the page's 40px
-gutter**, because every block above the band is left-aligned to that gutter and a
-centred column here reads as an unexplained shift. **Correct that comment rather
-than leaving it** — a comment that argues against the code it sits above is worse
-than none, and this one is specific and persuasive enough to get the change
-reverted by the next reader. Note the stacked layout also removes the condition
-the old reasoning described: there are no longer two blocks to hold together.
-
-**3. Measured values.** Serif `33px → 35px/1.12`; body `14px/1.7`; step circles
-`22px → 23px` with a `1px rgba(248,245,239,.28)` border and JetBrains Mono `11px`;
-step title `14.5px/600`, body `13px/1.65`. Take these off the frame, not off this
-list — and per `web-design-parity.md`, corroborate any value against the widths
-either side before building it.
-
-**4. The footer's compensating `border-top` goes.** It existed to separate two
-masses of the same ink; the `#1C1916` ground now does that job. **The legal row
-keeps its own `border-t`** — that is a different rule and stays.
-
-#### Acceptance
-
-1. The band is stacked: pitch and controls on one line, a full-width rule, then
-   three steps in a 3-column grid.
-2. The link precedes the button, and the button is the outermost element.
-3. Neither the band nor the footer centres an inner measure; both are flush to
-   the 40px gutter, and this holds at every width in `30-responsive.md`.
-4. The `page.tsx` comment defending `1160` is corrected, not orphaned.
-5. The footer's compensating `border-top` is gone and the legal row's own border
-   remains.
-6. Still vendor-only, still signed-out-only, still no pricing figure — asserted,
-   because these are the properties a recomposition is most likely to drop.
-7. Matches `Orla-Closing-Band.html` on all six axes at 1440x900.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] **Acceptance 6 asserted against a signed-in customer and a signed-out
-      visitor**, not just the default — the regression this ticket could cause is
-      showing a vendor pitch to someone who cannot act on it.
-- [ ] The no-pricing-figure check searches rendered output, not source.
-
 ## Admin Panel — filed 2026-09-07
 
 Ten tickets from one investigation of the operations console, end to end: what
@@ -1656,6 +1562,38 @@ suite that touches an admin route.
 body does, because it carries the #408 best-effort rule and the content
 prohibition asserted over the whole serialised row. Two writers with different
 guarantees is the drift the table exists to prevent.
+
+**And this ticket owns the table outright — ruled 2026-09-07 after both lanes
+were found declaring it.** Column naming did not settle the collision: 434 and
+435 each emitted `CREATE TYPE "public"."admin_action"` and `CREATE TABLE
+"admin_actions"`, with **near-disjoint** enum members — only `review_deleted`
+shared on `admin_action`, only `review` on `admin_action_subject`. Whichever
+landed second would have failed outright on `CREATE TYPE`, and an idempotent
+guard would have left the type missing half its values. It is a repo-law problem
+as much as a migration one: `.claude/rules/shared-contracts.md` allows exactly
+one `as const` array per domain enum in `packages/shared`, with `pgEnum` and
+`z.enum` derived from it.
+
+So **this ticket creates the table and both enums, carrying the union**, and
+lands before 435, which creates neither and imports the constants:
+
+- `ADMIN_ACTIONS`, 13 values — `user_banned`, `user_unbanned`, `review_deleted`,
+  `tag_updated`, `tag_suggestion_resolved`, `dispute_resolved`,
+  `vendor_unpublished`, `vendor_republished`, `review_hidden`,
+  `review_unhidden`, `package_deactivated`, `package_reactivated`,
+  `portfolio_item_removed`.
+- `ADMIN_ACTION_SUBJECTS`, 8 values — `user`, `review`, `tag`,
+  `tag_suggestion`, `booking`, `vendor_profile`, `service_package`,
+  `portfolio_item`.
+
+Seven action values and three subject values are therefore declared that **no
+route in this ticket writes**. That is deliberate — they belong to #435, landing
+immediately behind — and the migration should say so. Do not assert that every
+enum member is reachable from this ticket's six routes; it is not true by
+design. **And do not let a later reader delete them as dead values** — an enum
+member nothing writes reads exactly like dead code, and removing these is what
+breaks #435. The reason is pinned here as well as in a code comment precisely
+because the code comment is the thing a cleanup pass deletes first.
 
 **So this ticket extends; it does not create.** Do not write a `CREATE TABLE`
 migration, and do not build a parallel table — reconcile 435's column shape and
@@ -2260,3 +2198,111 @@ row (#434), and notifying both parties.
 **Do not build any part of this before the decision exists.** A money path
 implemented against a guessed policy is the one kind of code in this repository
 that cannot be corrected by a later ticket.
+
+## Filed 2026-09-07 — #430's parity pass
+
+### #441: The site footer against the newer frame, and the ink-ground text ramp used as a border
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 by the parity pass on #430**, which compared the closing band
+_and_ the footer against `design/delta-band/Orla-Closing-Band.html`. The band is
+done (`aac9b3b`, PR #134). Everything below is the footer, and **none of it is a
+regression**: these are #428-era values measured against a frame #428 never saw.
+#430 deliberately left them rather than widening a revision into a restyle.
+
+Two different mechanisms live here, and they are one ticket because a single lane
+opens the same two files for both.
+
+#### 1. The footer's composition, style and type — nine measured deviations
+
+All read at 1440x900, signed out, against the first `.frame` block of the delta
+frame. Re-measure before fixing; a measurement in prose is a claim.
+
+| # | Element | Frame | App |
+| --- | --- | --- | --- |
+| 1 | Inner padding | `40px` on all four sides | `40px` sides, **`56px`** top and bottom (`py-14`) |
+| 2 | Column grid | `1.5fr 1fr 1fr 1fr` → `419 / 280 / 280 / 280` | four equal **`310px`** quarters |
+| 3 | Column gap | `34px` | `40px` |
+| 4 | Footer wordmark | Instrument Serif `25px` | **`32px`** (`LOGO_SIZES.marketingFooter`) |
+| 5 | Footer logo mark | `26x17` box, **two equal `17px` circles**, `1.3px` stroke | `29x20` box, `20px` filled circle, **`22px`** outer on the outline — the two are unequal |
+| 6 | `Contact support` | `#F8F5EF` at `600` — the frame singles it out | `#B8AF9F` at `400`, same as every other link |
+| 7 | Link columns | `13px` | `13.5px` |
+| 8 | Tagline | `13px/1.5` (19.5px) | `13.5px/1.6` (21.6px) |
+| 9 | Column micro-labels | `500` weight, `letter-spacing: .07em` (0.735px) | `600` weight, `.05em` (0.525px) |
+
+Deviations 1–3 compound: `Browse` starts at `x=390`, `Company` at `740` and
+`Account` at `1090`, where the frame puts them at roughly `493 / 807 / 1120`.
+
+**`logo.tsx:50` is now stale and must be corrected in the same pass.** It asserts
+that `D=20` (`marketingFooter`) is _"absent from every frame and is left to the
+ratio"_. This frame draws the footer mark at 17px beside a 25px wordmark, in
+**both** auth states. A comment that argues from a premise the contract has since
+contradicted is how a corrected value gets reverted by the next reader — the same
+failure #430 fixed in `page.tsx`.
+
+#### 2. `stone-400` is a border value, and it is set as text on ink in two places
+
+This is the mechanism #430 fixed in the closing band, in the two sites where it
+survives.
+
+- **The legal row's hairline** is `border-stone-0/10` → `rgba(255,253,249,.1)`.
+  The frame draws `rgba(248,245,239,.1)` — `stone-50`, the other end of the ramp.
+- **`apps/web/src/components/admin/admin-header.tsx:64`** sets `text-stone-400` on a
+  `truncate text-action` string, over frame `13`'s inverted `#23201C` ground.
+
+`stone-400` (`#d5cec2`) is defined in `01-foundations.md` as _"stronger borders,
+unchecked controls"_, and the evidence is one-sided: it appears **39 times**
+across `design/` and is a border or stroke on a light ground every single time —
+dashed placeholder frames, checkbox and radio outlines, avatar rings, one
+`border-bottom` — with **zero** text nodes and zero uses on ink. The ink-ground
+_text_ family the frames actually use is `#D8D0C2` → `#B8AF9F` → `#A79D8C` →
+`#8C8375`. Its lightest step was missing from the ramp until `aac9b3b` added
+**`--color-stone-480: #d8d0c2`**; that is the token both sites should read.
+
+The admin header is the **only** instance in the whole admin surface, which is
+why it rides here rather than in any of #431–#440 — none of those is about
+tokens, and the ramp is the defect rather than the surface.
+
+#### 3. One access finding, with no other checker
+
+The footer's logo link measures **`88x32`** — twelve pixels under the `44x44`
+minimum in `04-laws.md`. Its accessible name is present and correct (the
+`role="img"` span carries `aria-label`), so this is the hit area alone. Nothing
+else in the repository verifies this law; the parity pass is its only gate.
+
+#### Explicitly not in scope
+
+- **The `Florals` mismatch in the Browse column is not a finding.** #419 folded
+  Florals into Decor and the override is recorded in
+  `.claude/rules/web-design-parity.md`. Do not re-file it.
+- **The band is done.** `#for-vendors` matched the frame on all six axes at
+  1440x900 under #430. Do not reopen it.
+- **The focus ring is a separate concern.** Every control resolves
+  `ring-clay-400/40` where `04-laws.md` says `/30` — app-wide, in
+  `globals.css:191, 250, 387`, already guarded by `focus-ring-guard.test.ts`
+  against its current value. It is not a footer defect and not this ticket.
+
+#### Acceptance
+
+1. Each of the nine deviations is re-measured first, then either fixed or
+   recorded as an accepted deviation with its reason — not silently either.
+2. The footer matches the delta frame at 1440x900 on all six axes.
+3. `logo.tsx:50`'s comment is corrected rather than left contradicting the frame.
+4. Neither the footer's legal hairline nor `admin-header.tsx:64` reads a border
+   token as text on ink.
+5. The footer's logo link clears `44x44`, or the deviation is ruled and recorded.
+6. Nothing above 1440 regresses: the footer keeps `max-w-[1440px]`, which is the
+   page measure (see `page.tsx`'s `CONTAINER`), not an inner one. #430 measured
+   the alternative at 1728 — removing it drops the footer grid to `x=40` while
+   the band stays at `184`.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] A guard that no component sets `text-stone-400` on an ink ground, so the
+      third instance cannot arrive quietly. The band, the footer and the admin
+      header are all the same mistake; a grep-shaped guard is what stops the next
+      one.
+- [ ] The `44x44` check asserts extent, not a property on a zero-sized box.
