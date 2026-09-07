@@ -35,3 +35,4 @@
 - [plpgsql trigger without SET search_path](review-checklist-plpgsql-trigger-without-search-path.md) — a shadow `evil.users` flips the discriminator and every "immutable" row deletes; TRUNCATE never fires a row trigger
 - [Gate redirect in a shared client helper](review-checklist-gate-redirect-in-shared-client-helper.md) — a push inside `useApi` fires from the always-mounted header bell, bouncing the reader off `/terms` and `/support`; list the chrome, then the routes it renders on
 - [Repo-wide source guards fire on new files](review-checklist-repo-wide-source-guards-fire-on-new-files.md) — a new `app/` route is red in the parity ledger, the apostrophe scan and the truncate scan; run the whole web suite, the diff cannot show you
+- [Build-time output keyed on a passThrough env](review-checklist-build-time-output-keyed-on-passthrough-env.md) — headers() bakes into routes-manifest, but WEB_URL is not in turbo's cache key; same hash, FULL TURBO replays stale headers
