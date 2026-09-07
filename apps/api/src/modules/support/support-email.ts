@@ -257,3 +257,59 @@ export function renderSupportConfirmation(fields: SupportEmailFields): RenderedE
 
   return { subject, html, text };
 }
+
+/**
+ * An in-product report, addressed to the same inbox and rendered in the same
+ * wrapper (#436).
+ *
+ * **Here rather than in `modules/reports/`**, because this file is where the
+ * markup the support inbox receives lives, and a second copy of
+ * `WRAPPER_OPEN`, `referenceBlock` and `paragraphs` in another module is the
+ * near-duplicate the standards forbid — two builders drift apart one at a time
+ * and only one of them is ever noticed, which is what `attachedBlock` above
+ * already says about itself.
+ *
+ * The subject line leads with the reason rather than a topic, for the reason
+ * `supportSubject` leads with one: the routing key has to be the part that
+ * survives a truncated subject line in a list view, and for a report that is
+ * what was wrong rather than that somebody reported something.
+ */
+export interface ReportNoticeFields {
+  reference: string;
+  /** `Review`, `Message thread` — what was reported. */
+  subjectLabel: string;
+  /** `Harassment or abuse` — why, from the reporter's short list. */
+  reasonLabel: string;
+  /** Whose storefront it sits on, read from the row and never from the payload. */
+  vendorBusinessName: string;
+  /** The composed case message: the platform's account, then the reporter's. */
+  message: string;
+  /** The reporter's account address, resolved from their user row. */
+  replyTo: string;
+}
+
+export function renderReportNotice(fields: ReportNoticeFields): RenderedEmail {
+  const heading = `${fields.reasonLabel} · ${fields.subjectLabel}`;
+  const context = `On ${fields.vendorBusinessName} · reported by ${fields.replyTo}`;
+
+  const html = [
+    WRAPPER_OPEN,
+    `<p style="margin:0 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6B6459;">${escapeHtml(BRAND_NAME)} trust and safety</p>`,
+    `<h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;color:#23201C;">${escapeHtml(heading)}</h1>`,
+    referenceBlock(fields.reference),
+    `<p style="margin:0 0 16px;font-size:13px;color:#6B6459;">${escapeHtml(context)}</p>`,
+    paragraphs(fields.message),
+    WRAPPER_CLOSE,
+  ].join('');
+
+  const text = [
+    `${BRAND_NAME} trust and safety`,
+    heading,
+    `Reference ${fields.reference}`,
+    context,
+    '',
+    fields.message,
+  ].join('\n');
+
+  return { subject: `${heading} · ${fields.reference}`, html, text };
+}

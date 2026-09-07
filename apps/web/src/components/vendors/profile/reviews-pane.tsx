@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ReportDialog } from '@/components/reports/report-dialog';
 import { ApiClientError } from '@/lib/api-client';
 import { useApi } from '@/lib/use-api';
 import { cn } from '@/lib/utils';
@@ -80,6 +81,8 @@ export interface ReviewsPaneProps {
   reviewCount: number;
   /** The first page, read on the server; `null` when that read failed. */
   initial: WireVendorReviewsPage | null;
+  /** Reporting is authenticated, so a signed-out reader is sent to sign-in. */
+  signedIn: boolean;
 }
 
 /**
@@ -102,6 +105,7 @@ export function ReviewsPane({
   businessName,
   reviewCount,
   initial,
+  signedIn,
 }: ReviewsPaneProps): React.ReactElement {
   const request = useApi();
   const router = useRouter();
@@ -308,6 +312,20 @@ export function ReviewsPane({
               <p className="mt-1 text-base leading-prose break-words text-stone-700">
                 {review.content}
               </p>
+              {/*
+                Per review rather than one control for the tab: a report names
+                a row, and asking the reader which of twenty they meant after
+                they have already pointed at one is a question the interface
+                can answer for them.
+              */}
+              <div className="mt-2">
+                <ReportDialog
+                  subjectType="review"
+                  subjectId={review.id}
+                  subjectNoun="this review"
+                  signedIn={signedIn}
+                />
+              </div>
             </li>
           );
         })}

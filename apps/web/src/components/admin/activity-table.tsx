@@ -61,6 +61,7 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   package_deactivated: 'Deactivated a package',
   package_reactivated: 'Reactivated a package',
   portfolio_item_removed: 'Removed a portfolio photo',
+  conversation_messages_read: 'Read a reported thread',
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */
@@ -74,6 +75,7 @@ const SUBJECT_LABELS: Record<AdminActionSubject, string> = {
   vendor_profile: 'Storefront',
   service_package: 'Package',
   portfolio_item: 'Photo',
+  conversation: 'Thread',
 };
 
 /**

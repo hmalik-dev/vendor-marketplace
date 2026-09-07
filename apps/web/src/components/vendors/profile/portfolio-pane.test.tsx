@@ -31,7 +31,7 @@ function items(count: number): WirePortfolioItem[] {
 }
 
 function pane(count = 3): void {
-  render(<PortfolioPane items={items(count)} businessName="Kessler & Co." />);
+  render(<PortfolioPane items={items(count)} businessName="Kessler & Co." signedIn />);
 }
 
 /** The dialog, once open. */
@@ -177,7 +177,9 @@ describe('PortfolioPane image failure', () => {
   });
 
   it('replaces a tile whose photograph 404s with a tone block that has extent', () => {
-    const { container } = render(<PortfolioPane items={items(3)} businessName="Kessler & Co." />);
+    const { container } = render(
+      <PortfolioPane items={items(3)} businessName="Kessler & Co." signedIn />,
+    );
 
     fireEvent.error(container.querySelector('img[src*="1-thumb.jpg"]')!);
 
@@ -193,7 +195,7 @@ describe('PortfolioPane image failure', () => {
   });
 
   it('replaces a lightbox photograph that fails with a block of stated extent', async () => {
-    render(<PortfolioPane items={items(1)} businessName="Kessler & Co." />);
+    render(<PortfolioPane items={items(1)} businessName="Kessler & Co." signedIn />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Photograph 1' }));
 

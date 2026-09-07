@@ -16,6 +16,8 @@ import {
   PAYOUT_MODELS,
   PRICE_TYPES,
   REVIEW_TYPES,
+  REPORT_REASONS,
+  REPORT_SUBJECTS,
   SUPPORT_CASE_ORIGINS,
   SUPPORT_CASE_STATUSES,
   SUPPORT_TOPICS,
@@ -86,6 +88,8 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'support_case_origin', values: SUPPORT_CASE_ORIGINS },
     { enumName: 'support_case_status', values: SUPPORT_CASE_STATUSES },
     { enumName: 'support_topic', values: SUPPORT_TOPICS },
+    { enumName: 'report_subject', values: REPORT_SUBJECTS },
+    { enumName: 'report_reason', values: REPORT_REASONS },
   ];
 
   it.each(cases)(

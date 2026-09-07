@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FallbackImage } from '@/components/ui/fallback-image';
+import { ReportDialog } from '@/components/reports/report-dialog';
 
 export interface PortfolioPaneProps {
   /*
@@ -14,6 +15,8 @@ export interface PortfolioPaneProps {
    */
   items: readonly WirePortfolioItem[];
   businessName: string;
+  /** Reporting is authenticated, so a signed-out reader is sent to sign-in. */
+  signedIn: boolean;
 }
 
 /**
@@ -24,7 +27,11 @@ export interface PortfolioPaneProps {
  * returned to the thumbnail that opened it so a keyboard user is not dropped at
  * the top of the page.
  */
-export function PortfolioPane({ items, businessName }: PortfolioPaneProps): React.ReactElement {
+export function PortfolioPane({
+  items,
+  businessName,
+  signedIn,
+}: PortfolioPaneProps): React.ReactElement {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const dialog = useRef<HTMLDivElement>(null);
   /*
@@ -193,6 +200,21 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
                 fallbackClassName="aspect-[4/3]"
               />
             </button>
+            {/*
+              Under the tile rather than inside the lightbox (#436). The
+              lightbox runs its own focus trap and its own Escape handler, and
+              a second modal opened inside it would have two components
+              fighting over both — a report control that closed the photograph
+              it was reporting.
+            */}
+            <div className="mt-1.5">
+              <ReportDialog
+                subjectType="portfolio_item"
+                subjectId={item.id}
+                subjectNoun="this photo"
+                signedIn={signedIn}
+              />
+            </div>
           </li>
         ))}
       </ul>

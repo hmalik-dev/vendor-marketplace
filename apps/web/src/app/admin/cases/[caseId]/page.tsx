@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { formatPrice, uuidSchema } from '@vendor-marketplace/shared';
+import { formatPrice, REPORT_SUBJECT_LABELS, uuidSchema } from '@vendor-marketplace/shared';
+import { CaseConversation } from '@/components/admin/case-conversation';
 import { CaseResolution } from '@/components/admin/case-resolution';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
 import { getAdminCase } from '@/lib/admin-data';
-import { CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
+import { CASE_ARRIVAL, CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
 import type { WireAdminCaseBooking } from '@/lib/wire-schemas';
 
 const FILED = new Intl.DateTimeFormat('en-US', {
@@ -145,15 +146,25 @@ export default async function AdminCasePage({
               label="Reply to"
               value={supportCase.senderEmail ?? <span className="text-stone-600">—</span>}
             />
-            <Field
-              label="Arrived by"
-              value={supportCase.origin === 'chargeback' ? 'Stripe webhook' : 'Contact support'}
-            />
+            <Field label="Arrived by" value={CASE_ARRIVAL[supportCase.origin]} />
           </div>
 
           {supportCase.emailFailedAt ? (
             <p role="alert" className="mt-3 text-sm text-error-500">
-              This report never reached the support inbox — the mail service refused it on{' '}
+              {/*
+                Two sentences, because the same column means two different
+                things depending on the door (#436).
+
+                A support message *is* the email, so a refused send means the
+                complaint reached nobody. An in-product report is this case row
+                — an operator works it from the queue whether or not any mail
+                went out — so what failed is the notice, and telling an operator
+                the report never arrived while they are reading it would be
+                plainly false.
+              */}
+              {supportCase.origin === 'user_report'
+                ? 'This report is filed, but the notice telling us to look at it was refused by the mail service on '
+                : 'This report never reached the support inbox — the mail service refused it on '}
               {FILED.format(supportCase.emailFailedAt)} UTC.{' '}
               {/*
                 Three states, and the first one is why this is not two.
@@ -174,7 +185,14 @@ export default async function AdminCasePage({
                 : booking.payoutStatus === 'held'
                   ? 'The payout is still on hold — the withdrawal did not go through, so rule on it below.'
                   : 'The payout hold was withdrawn, so nothing is frozen.'}{' '}
-              Answer the sender from here.
+              {/*
+                A report has no sender to answer — `/reports` deliberately sends
+                the reporter no receipt, so there is no correspondence to
+                continue. What it has is a subject to act on.
+              */}
+              {supportCase.origin === 'user_report'
+                ? 'Work it from here as usual.'
+                : 'Answer the sender from here.'}
             </p>
           ) : null}
           {supportCase.holdRefusal ? (
@@ -183,6 +201,28 @@ export default async function AdminCasePage({
             </p>
           ) : null}
         </Card>
+
+        {supportCase.subjectType && supportCase.subjectId ? (
+          <Card title="What was reported">
+            <Field
+              label={REPORT_SUBJECT_LABELS[supportCase.subjectType]}
+              value={supportCase.subjectId}
+              mono
+            />
+            {/*
+              The thread's own card, and only for a thread. The other three
+              subjects are already public — a storefront, a review, a published
+              photograph — and the case links nothing an operator cannot
+              already open. A conversation is the one that needs a grant, so it
+              is the one that gets a control.
+            */}
+            {supportCase.subjectType === 'conversation' ? (
+              <div className="mt-3.5">
+                <CaseConversation conversationId={supportCase.subjectId} />
+              </div>
+            ) : null}
+          </Card>
+        ) : null}
 
         {supportCase.stripeDisputeId ? (
           <Card title="The chargeback">

@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm';
 import { index, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import {
+  REPORT_REASONS,
+  REPORT_SUBJECTS,
   SUPPORT_CASE_ORIGINS,
   SUPPORT_CASE_STATUSES,
   SUPPORT_TOPICS,
@@ -11,6 +13,8 @@ import { users } from './users.js';
 export const supportCaseOriginEnum = pgEnum('support_case_origin', SUPPORT_CASE_ORIGINS);
 export const supportCaseStatusEnum = pgEnum('support_case_status', SUPPORT_CASE_STATUSES);
 export const supportTopicEnum = pgEnum('support_topic', SUPPORT_TOPICS);
+export const reportSubjectEnum = pgEnum('report_subject', REPORT_SUBJECTS);
+export const reportReasonEnum = pgEnum('report_reason', REPORT_REASONS);
 
 /**
  * Every dispute the platform has to answer, however it arrived (#431).
@@ -91,6 +95,32 @@ export const supportCases = pgTable(
      */
     stripeDisputeId: text('stripe_dispute_id').unique(),
     /**
+     * What an in-product report is *about* (#436) — `null` on every other
+     * origin, because a typed support message and a card network's chargeback
+     * are about a booking or about nothing.
+     *
+     * **The type has to be stored**: a bare uuid does not say which table it
+     * came from, which is the same reasoning `admin_actions` states for its own
+     * `(subject_type, subject_id)` pair.
+     */
+    subjectType: reportSubjectEnum('subject_type'),
+    /**
+     * The row reported, and **deliberately carrying no foreign key**.
+     *
+     * A report has to outlive its subject. The review that a report gets
+     * deleted would otherwise cascade away with the only record of why it was
+     * deleted, and a `set null` would leave a case naming nothing. Same shape,
+     * same reason, as `admin_actions.subject_id`.
+     *
+     * The pair is also the key `GET /admin/conversations/:id/messages` reads:
+     * an operator may open a thread only where an **open** case names it, so
+     * this column is what turns a report into a scoped grant rather than a
+     * free browse of every thread in the marketplace.
+     */
+    subjectId: uuid('subject_id'),
+    /** Why, from the reporter's short list. `null` on every other origin. */
+    reportReason: reportReasonEnum('report_reason'),
+    /**
      * Why the hold could not be placed, where a chargeback's could not.
      *
      * `placeDisputeHold` refuses a released payout and a future event. Both
@@ -141,6 +171,14 @@ export const supportCases = pgTable(
     index('support_cases_status_created_at_idx').on(table.status, table.createdAt),
     /* "Is there already a case about this booking" — asked on every chargeback. */
     index('support_cases_booking_idx').on(table.bookingId),
+    /*
+     * "Is there an open case naming this thread" — asked on every admin message
+     * read, which is the only route in the console that reads private content.
+     * The status leads because the question is always about an *open* case: a
+     * resolved one is not a grant, and matching the subject first would make
+     * the index answer the wrong question quickly.
+     */
+    index('support_cases_subject_idx').on(table.status, table.subjectType, table.subjectId),
   ],
 );
 

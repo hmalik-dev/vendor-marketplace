@@ -9,6 +9,7 @@ import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Textarea } from '@/components/ui/textarea';
+import { ReportDialog } from '@/components/reports/report-dialog';
 import { reportSwallowedError } from '@/lib/report-error';
 import { useApi } from '@/lib/use-api';
 import { userFacingError } from '@/lib/user-facing-error';
@@ -781,6 +782,18 @@ export function MessagesScreen({
                   </p>
                 ) : null}
               </div>
+              {/*
+                Reporting the thread, from the thread (#436). Anyone reading
+                this screen is signed in — the route is behind the auth
+                boundary — so the control never renders its sign-in form.
+              */}
+              <ReportDialog
+                subjectType="conversation"
+                subjectId={active.id}
+                subjectNoun="this conversation"
+                signedIn
+                className="shrink-0"
+              />
             </div>
 
             {/*
