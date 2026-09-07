@@ -78,3 +78,20 @@ principle applied to the lane's environment rather than to the assertion.
 Related: [[lane-auth-state-arrives-expired]],
 [[guard-a-delegated-browser-pass-with-a-liveness-watch]],
 [[vercel-deploy-check-always-fails]].
+
+## The data variant: an empty state compares nothing
+
+Lane 435, 2026-09-07. Frame `13` is drawn with the **saved filter on**, so
+`00-README.md` records `/admin/vendors?status=review` as the comparable route.
+That lane's database had **zero vendors in `review`**, so the route rendered the
+filtered empty state — and a parity pass against it *would have completed and
+reported*, having compared nothing at all.
+
+It seeded six vendors into `review` first, and reverted the fixture with a reseed
+before committing.
+
+**So a parity or browser pass needs its data precondition checked as
+deliberately as its environment.** "The page rendered" and "the page rendered the
+state the frame draws" are different claims, and only the second is a
+measurement. Before comparing, confirm the surface is showing rows rather than an
+empty state — an empty table matches an empty table on all six axes.
