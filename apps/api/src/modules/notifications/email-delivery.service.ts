@@ -7,10 +7,35 @@ import { applyDeliveryEvent, type DeliveryEventOutcome } from './email-delivery.
 /**
  * What the handler did, in one word, for the log line and the response body.
  *
- * `ignored` is the service's own fourth value rather than the DAO's: an event
- * type that changes no record never reaches the DAO at all.
+ * `ignored` is the service's own value rather than the DAO's: an event type
+ * that changes no record never reaches the DAO at all. `unmatched` splits the
+ * DAO's `unknown` in two — see `DELIVERY_EVENT_RETRY_WINDOW_MS`.
  */
-export type ResendEventOutcome = DeliveryEventOutcome | 'ignored';
+export type ResendEventOutcome = Exclude<DeliveryEventOutcome, 'unknown'> | 'ignored' | 'unmatched';
+
+/**
+ * How long an event naming no record is treated as one that has **outrun its
+ * row**, rather than one that was never ours.
+ *
+ * The two look identical and need opposite answers. The attempt row is written
+ * after Resend accepts the message, so a delivery event can genuinely arrive
+ * first — a slow insert behind a saturated pool, a redeploy in between — and
+ * that one must be refused so Resend redelivers, or a real bounce is lost for
+ * ever. But this platform also sends mail through the same Resend account that
+ * this table deliberately does not record: `support.service.ts`'s report is
+ * written *by* a visitor and read by us, so it has no recipient row to hang off
+ * (see the `email_deliveries` schema). Every support submission therefore
+ * produces a delivery event that can never match — and refusing those for
+ * Resend's full multi-hour backoff would drive the endpoint's failure rate up
+ * until the provider disables it, silently ending the bounce recording this
+ * whole feature exists for.
+ *
+ * The window separates them, because the race is a matter of seconds and a
+ * foreign event is unmatched for ever. Two minutes spans Resend's first couple
+ * of retries, so a racing event is recovered on the redelivery that follows its
+ * row, and a foreign one costs two refusals rather than a day of them.
+ */
+export const DELIVERY_EVENT_RETRY_WINDOW_MS = 2 * 60 * 1000;
 
 /**
  * The events that change a record, and the outcome each writes.
@@ -41,6 +66,20 @@ const EVENT_OUTCOMES: Readonly<Record<string, EmailDeliveryOutcome>> = {
   'email.failed': 'failed',
   'email.suppressed': 'failed',
 };
+
+/**
+ * The lookup, with the prototype chain out of scope.
+ *
+ * `EVENT_OUTCOMES[event.type]` on a plain object literal answers a `Function`
+ * for `toString`, `constructor` and `valueOf` — which walks straight past an
+ * `=== undefined` guard and puts a function where an enum value belongs, 500ing
+ * the route and putting the provider into a retry loop instead of returning a
+ * clean `ignored`. `type` is a free string on a signed payload, so the guard is
+ * cheap insurance rather than a live exploit.
+ */
+function outcomeFor(type: string): EmailDeliveryOutcome | undefined {
+  return Object.hasOwn(EVENT_OUTCOMES, type) ? EVENT_OUTCOMES[type] : undefined;
+}
 
 /** The events whose reason is worth storing. Only a bounce carries a diagnostic. */
 const REASON_EVENTS: ReadonlySet<string> = new Set(['email.bounced']);
@@ -122,16 +161,31 @@ export async function applyResendDeliveryEvent(
   event: ResendEvent,
   now: Clock,
 ): Promise<ResendEventOutcome> {
-  const outcome = EVENT_OUTCOMES[event.type];
+  const outcome = outcomeFor(event.type);
 
   if (outcome === undefined) {
     return 'ignored';
   }
 
-  return applyDeliveryEvent(db, {
+  const happenedAt = occurredAt(event, now);
+
+  const applied = await applyDeliveryEvent(db, {
     providerMessageId: event.data.email_id,
     outcome,
     failureReason: REASON_EVENTS.has(event.type) ? bounceReason(event) : null,
-    occurredAt: occurredAt(event, now),
+    occurredAt: happenedAt,
   });
+
+  if (applied !== 'unknown') {
+    return applied;
+  }
+
+  /*
+   * No row, and the age decides which kind of "no row" it is. A negative age —
+   * an event stamped in the future by clock skew — counts as recent, which errs
+   * towards asking for the redelivery that can still succeed.
+   */
+  const age = now().getTime() - happenedAt.getTime();
+
+  return age <= DELIVERY_EVENT_RETRY_WINDOW_MS ? 'unmatched' : 'ignored';
 }

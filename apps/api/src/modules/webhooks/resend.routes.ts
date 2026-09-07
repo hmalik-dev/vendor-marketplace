@@ -58,27 +58,25 @@ export const resendWebhookRoutes: FastifyPluginAsyncZod<ResendWebhookRoutesOptio
       const outcome = await applyResendDeliveryEvent(app.db, event.data, app.clock);
 
       /*
-       * An event naming a message with no record, answered **404 so Resend
-       * retries** — and the retry is the point.
+       * A **recent** event naming no record, answered 404 so Resend redelivers.
        *
-       * The attempt row is written *after* the provider accepts the message,
-       * so there is a real window in which a delivery event can arrive before
-       * its row is committed: a slow insert behind a saturated pool, or a
-       * redeploy between the accept and the write. Answering 200 there would
-       * discard the outcome permanently and leave the row reading `sent` for a
-       * message that bounced — silently, and precisely the failure this table
+       * The attempt row is written after the provider accepts the message, so
+       * a delivery event can arrive before its row is committed — a slow insert
+       * behind a saturated pool, a redeploy in between. Answering 200 there
+       * would discard the outcome permanently and leave the row reading `sent`
+       * for a message that bounced, which is precisely the failure this table
        * exists to surface.
        *
-       * The cost of the other case is small and self-limiting. An event that
-       * genuinely is not ours — another product on the same Resend account, a
-       * restore from backup — is retried on Resend's backoff for a bounded
-       * spell and then abandoned, which is a handful of 404s in a log against
-       * the alternative of losing real bounces.
+       * An **older** one is answered 200 as `ignored` instead, because it is
+       * not ours and never will be — this platform's own support report is
+       * sent through the same Resend account and deliberately writes no row.
+       * `DELIVERY_EVENT_RETRY_WINDOW_MS` carries the whole argument, including
+       * why refusing those indefinitely would get the endpoint disabled.
        */
-      if (outcome === 'unknown') {
+      if (outcome === 'unmatched') {
         request.log.warn(
           { resendEvent: event.data.type, providerMessageId: event.data.data.email_id },
-          'No delivery record matches this Resend message yet; asking for a retry',
+          'No delivery record matches this Resend message yet; asking for a redelivery',
         );
         throw notFound('No delivery record matches this message');
       }

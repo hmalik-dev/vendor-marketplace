@@ -17,7 +17,11 @@ import type { AppDatabase } from '../../lib/database.js';
  * as "never supersedes". Computed once at module load, and it makes the guard
  * an ordinary `IN (…)` rather than a hand-built SQL `CASE` with a cast.
  */
-const SUPERSEDABLE: Readonly<Record<EmailDeliveryOutcome, EmailDeliveryOutcome[]>> =
+const SUPERSEDABLE: Readonly<Record<EmailDeliveryOutcome, EmailDeliveryOutcome[]>> = Object.assign(
+  // Null-prototype, so a lookup can never answer `Object.prototype.toString`
+  // for an outcome that does not exist. The keys here are enum values rather
+  // than free strings, but the table is indexed by one and the guard is free.
+  Object.create(null) as Record<EmailDeliveryOutcome, EmailDeliveryOutcome[]>,
   Object.fromEntries(
     EMAIL_DELIVERY_OUTCOMES.map((incoming) => [
       incoming,
@@ -25,7 +29,8 @@ const SUPERSEDABLE: Readonly<Record<EmailDeliveryOutcome, EmailDeliveryOutcome[]
         (current) => EMAIL_DELIVERY_OUTCOME_RANK[current] < EMAIL_DELIVERY_OUTCOME_RANK[incoming],
       ),
     ]),
-  ) as Record<EmailDeliveryOutcome, EmailDeliveryOutcome[]>;
+  ) as Record<EmailDeliveryOutcome, EmailDeliveryOutcome[]>,
+);
 
 /**
  * A provider diagnostic, cut to what the column holds.

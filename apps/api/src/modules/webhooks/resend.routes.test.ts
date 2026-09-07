@@ -1,5 +1,6 @@
 import { desc, eq } from 'drizzle-orm';
 import { MAX_EMAIL_FAILURE_REASON_LENGTH } from '@vendor-marketplace/shared';
+import { DELIVERY_EVENT_RETRY_WINDOW_MS } from '../notifications/email-delivery.service.js';
 import { emailDeliveries, users, type EmailDeliveryRow } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { SVIX_HEADERS, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -122,7 +123,12 @@ describe('POST /webhooks/resend', () => {
   }
 
   beforeAll(async () => {
-    harness = await createTestHarness();
+    /*
+     * "Now" is pinned to the event instant, so "recent" and "old" are inputs
+     * rather than however long ago `EVENT_AT` happens to be when the suite runs
+     * — the retry window is measured against this clock.
+     */
+    harness = await createTestHarness({ clock: () => new Date(EVENT_AT) });
 
     const user = await syncUserFromClerk(harness.database.db, {
       clerkUserId: CLERK_ID,
@@ -418,12 +424,53 @@ describe('POST /webhooks/resend', () => {
    * 200 here would discard a real bounce for ever. Resend redelivers on a 404
    * and the second attempt finds the row.
    */
-  it('refuses an event for a message it has no record of, so it is redelivered', async () => {
+  it('refuses a recent event for a message it has no record of, so it is redelivered', async () => {
     const response = await post(deliveryEvent('email.delivered', 'resend-not-ours'));
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toMatchObject({ error: 'NOT_FOUND' });
   });
+
+  /*
+   * The other side of that window, and the reason it exists: this platform's
+   * own support report goes through the same Resend account and deliberately
+   * writes no row, so its delivery events can never match. Refusing them for
+   * Resend's full backoff would drive the endpoint's failure rate up until the
+   * provider disabled it — ending the bounce recording the table is for.
+   */
+  it('acknowledges an old event for a message it has no record of, so retries stop', async () => {
+    const longAgo = new Date(Date.parse(EVENT_AT) - DELIVERY_EVENT_RETRY_WINDOW_MS - 1_000);
+
+    const response = await post(
+      JSON.stringify({
+        type: 'email.delivered',
+        created_at: longAgo.toISOString(),
+        data: { email_id: 'resend-support-report', created_at: longAgo.toISOString() },
+      }),
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ received: true, outcome: 'ignored' });
+  });
+
+  /*
+   * `EVENT_OUTCOMES` is indexed by a free string off a signed payload, and a
+   * plain object literal answers `toString` with a function — which walks past
+   * an `=== undefined` guard and 500s the route instead of ignoring the event.
+   */
+  it.each(['toString', 'constructor', 'valueOf', 'hasOwnProperty'])(
+    'ignores an event type named %s rather than reaching through the prototype',
+    async (type) => {
+      const row = await send('11111111-1111-4111-8111-111111111131');
+      const messageId = row.providerMessageId ?? '';
+
+      const response = await post(deliveryEvent(type, messageId));
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ received: true, outcome: 'ignored' });
+      expect((await rowFor(messageId))?.outcome).toBe('sent');
+    },
+  );
 
   /*
    * The timestamp the record is meant to hold. Resend retries for hours, so the
