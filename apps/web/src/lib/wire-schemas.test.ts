@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   toImageSrc,
   wireBookingRequestSchema,
+  wireBookingViewSchema,
   wireCategoryListSchema,
   wireTagListSchema,
   wireUserSchema,
@@ -185,5 +186,52 @@ describe('wireBookingRequestSchema resolves the nested vendor avatar', () => {
 
   it('leaves a vendor without a photo null', () => {
     expect(avatarUrl.parse(null)).toBeNull();
+  });
+});
+
+/**
+ * #425's `payoutReleasedAt`, exercised with a value rather than with `null`.
+ *
+ * `web-route-boundaries.md` asks for exactly this: a `z.date()` on the API side
+ * needs a `z.coerce.date()` here, the whole local gate is blind to a missing
+ * one — `tsc` infers `Date` on both sides and the route suites read the
+ * response object rather than its JSON — and **the failure is conditional on
+ * data**. This column is `null` on every unreleased booking, so a fixture that
+ * omits it proves nothing, and the three ways it breaks are all quiet: the
+ * customer's bookings hub degrades to empty, the request detail 500s, and the
+ * report surface silently stops offering anything.
+ */
+describe('wireBookingViewSchema carries the payout release back as a Date', () => {
+  const BOOKING = {
+    id: UUID,
+    requestId: UUID,
+    customerId: UUID,
+    vendorId: UUID,
+    eventDate: '2026-06-15',
+    eventLocation: 'Barr Mansion',
+    totalAmountCents: 145_000,
+    status: 'confirmed',
+    paidAt: ISO,
+    completedAt: null,
+    cancelledAt: null,
+    cancellationReason: null,
+    cancelledBy: null,
+    refundAmountCents: null,
+    payoutReleasedAt: null,
+    createdAt: ISO,
+    updatedAt: ISO,
+  };
+
+  it('coerces the timestamp a released payout really sends', () => {
+    const released = '2026-06-18T00:00:00.000Z';
+
+    const parsed = wireBookingViewSchema.parse({ ...BOOKING, payoutReleasedAt: released });
+
+    expect(parsed.payoutReleasedAt).toBeInstanceOf(Date);
+    expect(parsed.payoutReleasedAt?.toISOString()).toBe(released);
+  });
+
+  it('leaves a booking whose payout is still held null', () => {
+    expect(wireBookingViewSchema.parse(BOOKING).payoutReleasedAt).toBeNull();
   });
 });

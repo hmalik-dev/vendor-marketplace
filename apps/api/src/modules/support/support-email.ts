@@ -1,5 +1,6 @@
 import {
   BRAND_NAME,
+  formatPrice,
   SUPPORT_TOPIC_LABELS,
   type SupportErrorContext,
   type SupportTopic,
@@ -24,8 +25,27 @@ export interface SupportEmailFields {
   /** Where the reply goes: the account's address, or the one they typed. */
   replyTo: string;
   errorContext?: SupportErrorContext;
+  /**
+   * The booking this report holds the payout on (#425), read from the row
+   * rather than from the sender.
+   *
+   * Present only on a report that placed a hold, which is why the block it
+   * renders says so in words: whoever opens this has to know the money has
+   * already stopped, because the next thing they do decides whether it starts
+   * again. Acceptance 7 — a human can act on this without asking which booking
+   * it was.
+   */
+  booking?: SupportBookingFields;
   /** Whether the sender proved who they are, which changes how we read it. */
   signedIn: boolean;
+}
+
+/** The booking columns a support report quotes. Nothing the sender chose. */
+export interface SupportBookingFields {
+  id: string;
+  eventDate: string;
+  totalAmountCents: number;
+  vendorBusinessName: string | null;
 }
 
 export interface RenderedEmail {
@@ -77,20 +97,47 @@ function paragraphs(message: string): string {
     .join('');
 }
 
-/** The error reference, when the visitor arrived from the 500 screen. */
-function errorBlock(context: SupportErrorContext): string {
+/**
+ * The `Attached automatically` treatment, and the one place its markup lives.
+ *
+ * The error reference and the held booking are the same shape — an uppercase
+ * label, a mono identifier, a muted line under it — and were the same shape
+ * written twice, with the inline styles copied character for character. The
+ * plain-text half is beside it for the same reason: two builders drift apart
+ * one at a time, and only one of them is ever noticed.
+ */
+function attachedBlock(label: string, reference: string, meta: string): string {
   return [
-    '<p style="margin:20px 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6B6459;">Attached automatically</p>',
+    `<p style="margin:20px 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6B6459;">${escapeHtml(label)}</p>`,
     '<p style="margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#23201C;">',
-    `${escapeHtml(context.digest)}</p>`,
-    `<p style="margin:2px 0 0;font-size:12px;color:#6B6459;">${escapeHtml(context.occurredAt)} · ${escapeHtml(context.route)}</p>`,
+    `${escapeHtml(reference)}</p>`,
+    `<p style="margin:2px 0 0;font-size:12px;color:#6B6459;">${escapeHtml(meta)}</p>`,
   ].join('');
 }
 
-/** The plain-text half of the error reference, in the same order. */
-function errorLines(context: SupportErrorContext): readonly string[] {
-  return ['Attached automatically', context.digest, `${context.occurredAt} · ${context.route}`, ''];
+/** The same block as plain text, in the same order. */
+function attachedLines(label: string, reference: string, meta: string): readonly string[] {
+  return [label, reference, meta, ''];
 }
+
+/** Which booking the payout was held on, and what it is worth. */
+function bookingMeta(booking: SupportBookingFields): string {
+  const parts = [booking.eventDate, formatPrice(booking.totalAmountCents)];
+
+  if (booking.vendorBusinessName) {
+    parts.push(booking.vendorBusinessName);
+  }
+
+  return parts.join(' · ');
+}
+
+/** How the error reference reads: the moment, then the route it happened on. */
+function errorMeta(context: SupportErrorContext): string {
+  return `${context.occurredAt} · ${context.route}`;
+}
+
+const HELD_LABEL = 'Payout held on this booking';
+const ATTACHED_LABEL = 'Attached automatically';
 
 /**
  * The report, addressed to whoever reads the support inbox.
@@ -112,7 +159,10 @@ export function renderSupportReport(fields: SupportEmailFields): RenderedEmail {
     referenceBlock(fields.reference),
     `<p style="margin:0 0 16px;font-size:13px;color:#6B6459;">From ${escapeHtml(identity)}</p>`,
     paragraphs(fields.message),
-    fields.errorContext ? errorBlock(fields.errorContext) : '',
+    fields.booking ? attachedBlock(HELD_LABEL, fields.booking.id, bookingMeta(fields.booking)) : '',
+    fields.errorContext
+      ? attachedBlock(ATTACHED_LABEL, fields.errorContext.digest, errorMeta(fields.errorContext))
+      : '',
     WRAPPER_CLOSE,
   ].join('');
 
@@ -124,7 +174,12 @@ export function renderSupportReport(fields: SupportEmailFields): RenderedEmail {
     '',
     fields.message,
     '',
-    ...(fields.errorContext ? errorLines(fields.errorContext) : []),
+    ...(fields.booking
+      ? attachedLines(HELD_LABEL, fields.booking.id, bookingMeta(fields.booking))
+      : []),
+    ...(fields.errorContext
+      ? attachedLines(ATTACHED_LABEL, fields.errorContext.digest, errorMeta(fields.errorContext))
+      : []),
   ].join('\n');
 
   return { subject: supportSubject(fields), html, text };
@@ -158,12 +213,29 @@ export function renderSupportConfirmation(fields: SupportEmailFields): RenderedE
    */
   const echo = fields.signedIn;
 
+  /*
+   * The one thing this receipt says that the report does not: the money has
+   * stopped. A customer who reported a problem and got back a receipt reading
+   * only "we'll reply within one business day" has no written record that the
+   * payout is held, and the hold is the whole reason the report exists.
+   *
+   * The interval is deliberately absent. `payoutReleaseAt` is the only place
+   * the release window is stated, and a sentence in an email repeating it as a
+   * number is the copy that goes stale the day the constant moves (D16).
+   */
+  const held = fields.booking
+    ? "We've put the vendor's payout for this booking on hold while we look into it."
+    : null;
+
   const html = [
     WRAPPER_OPEN,
     `<p style="margin:0 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6B6459;">${escapeHtml(BRAND_NAME)}</p>`,
     '<h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;color:#23201C;">We got your message</h1>',
     '<p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#4A443C;">',
     "We'll reply to this address, usually within one business day. There's nothing to check back on &mdash; the answer comes to your inbox.</p>",
+    held === null
+      ? ''
+      : `<p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#4A443C;">${escapeHtml(held)}</p>`,
     referenceBlock(fields.reference),
     '<p style="margin:0 0 12px;font-size:13px;color:#6B6459;">Quote this if you follow up.',
     echo ? ' Here is what you sent:</p>' : '</p>',
@@ -176,6 +248,7 @@ export function renderSupportConfirmation(fields: SupportEmailFields): RenderedE
     'We got your message',
     '',
     "We'll reply to this address, usually within one business day. There's nothing to check back on — the answer comes to your inbox.",
+    ...(held === null ? [] : ['', held]),
     '',
     `Reference ${fields.reference}`,
     echo ? 'Quote this if you follow up. Here is what you sent:' : 'Quote this if you follow up.',

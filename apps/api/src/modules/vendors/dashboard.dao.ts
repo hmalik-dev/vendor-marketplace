@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lt, notInArray, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -6,8 +6,13 @@ import {
   users,
   vendorCategories,
 } from '@vendor-marketplace/db/schema';
-import type { AvailabilityStatus, BookingStatus } from '@vendor-marketplace/shared';
+import {
+  HELD_PAYOUT_STATUSES,
+  type AvailabilityStatus,
+  type BookingStatus,
+} from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { RELEASABLE_STATUSES, payoutOwedClauses } from '../payments/payouts.dao.js';
 
 /**
  * A booking that was paid for and kept — the shape both dashboard figures
@@ -21,7 +26,7 @@ import type { AppDatabase } from '../../lib/database.js';
  * are not any more.
  *
  * `admin.dao.ts`'s `PAID_AND_KEPT` says the same thing for the operator's
- * revenue figure, and `findNextPayout` filters `confirmed` for the same reason.
+ * revenue figure, and `owedPayout` below filters for the same reason.
  * The vendor's own two numbers were the pair left unguarded.
  */
 const NOT_CANCELLED = sql`${bookings.status} <> 'cancelled'`;
@@ -156,31 +161,110 @@ export async function findCalendarBetween(
     );
 }
 
-export interface NextPayoutRow {
-  bookingId: string;
-  eventDate: string;
-  customerFirstName: string;
-  vendorPayoutCents: number;
-  /**
-   * The three columns `payoutStatusOf` decides the payout state from, selected
-   * together because that helper takes the booking rather than a status string.
-   *
-   * `payoutReleasedAt` is always null here — the query filters on it — and is
-   * carried anyway rather than passed as a literal `null`: the moment a caller
-   * starts supplying a field the row does not really have, the helper is
-   * answering a question about something that is not this booking.
-   */
+/**
+ * The statuses a vendor can still be owed money under — **the release sweep's
+ * own list, plus the hold it excludes**.
+ *
+ * Both halves are spread from their owners rather than re-spelled here.
+ * `RELEASABLE_STATUSES` belongs to the sweep and `HELD_PAYOUT_STATUSES` to
+ * `payoutStatusOf`, so a status added to either reaches this selection in the
+ * same edit. That matters more for the held half than it looks: a hold status
+ * the classifier knows and this query does not would drop those rows out of
+ * the vendor's owed figure altogether — the money would stop being mentioned,
+ * which is worse than being mislabelled.
+ */
+const OWED_PAYOUT_STATUSES = [...RELEASABLE_STATUSES, ...HELD_PAYOUT_STATUSES];
+
+/**
+ * `findDuePayoutBookingIds`'s predicate, scoped to one vendor and without its
+ * date bound.
+ *
+ * The three clauses that decide whether money is owed come from
+ * `payoutOwedClauses` in the module that owns them, so this is a composition of
+ * the sweep's predicate rather than a fourth transcription of it. That is what
+ * makes #424 acceptance 7 structural instead of a promise: the dashboard cannot
+ * come to name a different set of rows than the transfer does.
+ *
+ * The date bound is the one clause deliberately dropped: a payout whose window
+ * has not closed is still owed, and is precisely the one a vendor opens this
+ * screen to see.
+ */
+function owedPayout(vendorId: string) {
+  return and(
+    eq(bookings.vendorId, vendorId),
+    inArray(bookings.status, OWED_PAYOUT_STATUSES),
+    ...payoutOwedClauses(),
+  );
+}
+
+export interface OwedPayoutTotalRow {
   status: BookingStatus;
-  payoutReleasedAt: Date | null;
-  stripeTransferId: string | null;
+  cents: number;
+  count: number;
+  /** Earliest event date in this group — the input to `payoutReleaseAt`. */
+  earliestEventDate: string;
 }
 
 /**
- * The soonest payout this vendor is still owed — the earliest event whose money
- * has not yet been transferred.
+ * What the vendor is owed, summed per booking status.
  *
- * **Three things about the predicate changed with #423, and each was a claim
- * that stopped being true when the release moved off the destination charge.**
+ * **Per status rather than pre-split into pending and held.** Deciding which of
+ * those a row is in belongs to `payoutStatusOf` and nowhere else: a
+ * `status = 'disputed'` test written into this SQL would be a second copy of
+ * the inference #423 acceptance 16 exists to prevent, and the copy a future
+ * status would be missed in.
+ *
+ * Aggregated in the database rather than by reading the rows — a vendor's owed
+ * set has no upper bound and the dashboard wants four numbers off it.
+ *
+ * **`bookings_payout_due_idx` does not serve this**, despite matching every
+ * clause but one: it is keyed on `event_date` with no `vendor_id`, because the
+ * sweep scans due payouts across the whole platform. This query is served by
+ * `bookings_vendor_idx` with the payout clauses applied as a heap filter, which
+ * is the right shape here — the scan is bounded by one vendor's lifetime
+ * bookings, not by the platform's. A vendor-leading partial index would be the
+ * fix if that ever stops being small; it is not worth a migration today.
+ *
+ * `::int` on the sum matches `sumPayoutsBetween` above and carries the same
+ * ceiling: int4 overflows at ~$21.4M, which one vendor reaches only with a few
+ * hundred simultaneously unreleased bookings at the maximum package price. The
+ * failure would be a 500 rather than a wrong figure, and every such row needs a
+ * settled Stripe charge behind it, so it is not a state a caller can provoke.
+ * Widening it is a change to both figures or neither.
+ *
+ * `min(event_date)::text` casts explicitly. `event_date` is a `DATE`, and
+ * outside a Drizzle column the driver's own parser hands back a `Date` built in
+ * the process's local zone — a value a day out for half the planet, on the
+ * input to a money date. #409 is the precedent.
+ */
+export async function findOwedPayoutTotals(
+  db: AppDatabase,
+  vendorId: string,
+): Promise<OwedPayoutTotalRow[]> {
+  return db
+    .select({
+      status: bookings.status,
+      cents: sql<number>`coalesce(sum(${bookings.vendorPayoutCents}), 0)::int`,
+      count: sql<number>`count(*)::int`,
+      earliestEventDate: sql<string>`min(${bookings.eventDate})::text`,
+    })
+    .from(bookings)
+    .where(owedPayout(vendorId))
+    .groupBy(bookings.status);
+}
+
+export interface NextPendingPayoutRow {
+  eventDate: string;
+  customerFirstName: string;
+  vendorPayoutCents: number;
+}
+
+/**
+ * The soonest payout this vendor is **pending** on — the earliest event whose
+ * money has not been transferred and is not held.
+ *
+ * **Three things about the predicate changed with #423**, and each was a claim
+ * that stopped being true when the release moved off the destination charge.
  *
  * `completed` is included. It used to be excluded because "a `completed`
  * booking has already paid out" — true of a destination charge, where Stripe
@@ -189,43 +273,46 @@ export interface NextPayoutRow {
  * payout window is precisely a payout that is owed, and omitting it would show
  * a vendor nothing where they are due a transfer.
  *
- * `disputed` is included, and it is the reason this returns a status at all. A
- * held payout is money the vendor is still owed and cannot yet have, and
- * showing them nothing would be the same screen as having nothing owed. The
- * surface says which it is (#423 acceptance 16).
- *
  * The event-date floor is gone. Whether a payout has been sent is
  * `payout_released_at`, not whether the event is in the future — a booking whose
  * event was last week and whose window has not closed is the *most* imminent
  * payout there is, and a date floor hid exactly those.
  *
- * `cancelled` remains excluded: that money is not coming, and naming it would
- * overstate what is owed, which is the one direction a money figure must never
- * err in.
+ * **`cancelled` stopped being excluded with D37**, a reversal of what this
+ * comment said one ticket ago and worth stating as one. The exclusion read
+ * "that money is not coming, and naming it would overstate what is owed".
+ * `vendor_payout_cents` no longer means what was agreed; it means what is still
+ * owed, and a cancellation inside D3's cutoff rewrites it down to the share the
+ * vendor keeps for a date they held and lost (D31). The sweep pays that share
+ * on the original schedule, so omitting it now *understates* what is owed and
+ * hides a real transfer. A full refund writes `0` and is excluded by
+ * `vendor_payout_cents > 0` — by the amount, which is the claim being made,
+ * rather than by the status, which is not.
+ *
+ * **`disputed` is the one exclusion, and that is #424's change.** #423 included
+ * it here so the card could say the money was held, carrying a `status` for the
+ * surface to read. The card now reports held money as its own figure out of
+ * `findOwedPayoutTotals`, so what this row has to be is the payout that is
+ * actually next — a held booking with an earlier event has no release date and
+ * cannot be it. `notInArray` over `HELD_PAYOUT_STATUSES` rather than a literal,
+ * so this and `payoutStatusOf` cannot come to disagree about what a hold is.
+ *
+ * Everything else is `owedPayout`'s, so this row and the summed figure beside
+ * it cannot come from different sets.
  */
-export async function findNextPayout(
+export async function findNextPendingPayout(
   db: AppDatabase,
   vendorId: string,
-): Promise<NextPayoutRow | null> {
+): Promise<NextPendingPayoutRow | null> {
   const rows = await db
     .select({
-      bookingId: bookings.id,
       eventDate: bookings.eventDate,
       customerFirstName: users.firstName,
       vendorPayoutCents: bookings.vendorPayoutCents,
-      status: bookings.status,
-      payoutReleasedAt: bookings.payoutReleasedAt,
-      stripeTransferId: bookings.stripeTransferId,
     })
     .from(bookings)
     .innerJoin(users, eq(bookings.customerId, users.id))
-    .where(
-      and(
-        eq(bookings.vendorId, vendorId),
-        inArray(bookings.status, ['confirmed', 'completed', 'disputed']),
-        isNull(bookings.payoutReleasedAt),
-      ),
-    )
+    .where(and(owedPayout(vendorId), notInArray(bookings.status, [...HELD_PAYOUT_STATUSES])))
     .orderBy(asc(bookings.eventDate))
     .limit(1);
 

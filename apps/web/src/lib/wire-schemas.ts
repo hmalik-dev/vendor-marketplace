@@ -227,15 +227,28 @@ export const wireBookingSchema = bookingWithContextSchema.extend({
   paidAt: z.coerce.date().nullable(),
   completedAt: z.coerce.date().nullable(),
   cancelledAt: z.coerce.date().nullable(),
+  /* #425. A `z.date()` on the API side needs its coercion here or the parse
+     rejects the string the server really sent — and this one is `null` on every
+     unreleased booking, so a fixture without a released payout proves nothing.
+     `wire-schemas.test.ts` parses one that carries a value. */
+  payoutReleasedAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
 export type WireBooking = z.infer<typeof wireBookingSchema>;
 export const wireBookingListSchema = z.array(wireBookingSchema);
 
+/**
+ * A booking with no request context — what the action routes and the report
+ * read answer. Derived from the schema above rather than restated, so the date
+ * coercions are declared once (#425).
+ */
+export const wireBookingViewSchema = wireBookingSchema.omit({ eventType: true, venue: true });
+export type WireBookingView = z.infer<typeof wireBookingViewSchema>;
+
 /** What a cancellation answers: the booking as it now stands, and the refund. */
 export const cancelledBookingWireSchema = cancelledBookingSchema.extend({
-  booking: wireBookingSchema.omit({ eventType: true, venue: true }),
+  booking: wireBookingViewSchema,
 });
 export type WireCancelledBooking = z.infer<typeof cancelledBookingWireSchema>;
 
@@ -269,12 +282,21 @@ export type WireCustomerProfile = z.infer<typeof wireCustomerProfileSchema>;
  * than its JSON.
  */
 export const wireVendorDashboardSchema = vendorDashboardSchema.extend({
-  nextPayout: vendorDashboardSchema.shape.nextPayout
-    .unwrap()
-    .extend({
-      releaseAt: z.coerce.date(),
-    })
-    .nullable(),
+  /*
+   * `nextReleaseAt` is a `z.date()` on the wire, so it arrives as an ISO string
+   * and must be coerced back here. #423 shipped the same trap one field over:
+   * the dashboard 500'd for every vendor who was owed a payout and rendered
+   * fine for everyone else, with the whole local gate green, because the only
+   * fixture exercising it had the field absent. `.claude/rules/
+   * web-route-boundaries.md` carries the rule; the tests below it carry a
+   * fixture that has money in it.
+   */
+  payouts: vendorDashboardSchema.shape.payouts.extend({
+    next: vendorDashboardSchema.shape.payouts.shape.next
+      .unwrap()
+      .extend({ releaseAt: z.coerce.date() })
+      .nullable(),
+  }),
 });
 export type WireVendorDashboard = z.infer<typeof wireVendorDashboardSchema>;
 

@@ -15,6 +15,19 @@ export const SUPPORT_ERROR_DIGEST_PARAM = 'digest';
 export const SUPPORT_ERROR_ROUTE_PARAM = 'from';
 export const SUPPORT_ERROR_AT_PARAM = 'at';
 
+/**
+ * The booking a `Report a problem` carries (#425).
+ *
+ * **An id, and nothing else.** The error context above travels as three values
+ * because there is no server-side record to look them up in — a digest is a
+ * hash of something already logged. A booking is a row, so everything the
+ * screen shows and everything the email quotes is read from it, under the same
+ * ownership check that decides whether this visitor may report it at all. A
+ * vendor name or an amount in the query string would be text the sender chose,
+ * rendered as fact beside their own complaint.
+ */
+export const SUPPORT_BOOKING_PARAM = 'booking';
+
 export interface SupportLinkContext {
   /** Next's `error.digest`. Absent for an error thrown while rendering. */
   digest?: string;
@@ -83,6 +96,21 @@ export function supportLink(context?: SupportLinkContext): string {
     [SUPPORT_ERROR_ROUTE_PARAM]: context.route,
     [SUPPORT_ERROR_AT_PARAM]: context.occurredAt,
   });
+
+  return `${SUPPORT_PATH}?${query.toString()}`;
+}
+
+/**
+ * `/support`, carrying the booking a customer is reporting a problem with.
+ *
+ * Built here rather than interpolated at the call site for the reason the
+ * header gives: the writer and the reader are in different halves of the app,
+ * and a rename that touched one would leave the form looking exactly as it does
+ * for a visitor arriving from the footer — a report that quietly stopped
+ * holding the payout.
+ */
+export function supportBookingLink(bookingId: string): string {
+  const query = new URLSearchParams({ [SUPPORT_BOOKING_PARAM]: bookingId });
 
   return `${SUPPORT_PATH}?${query.toString()}`;
 }

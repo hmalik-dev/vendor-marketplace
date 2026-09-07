@@ -3,9 +3,11 @@
 import {
   BRAND_NAME,
   emailSchema,
+  formatPrice,
   MAX_SUPPORT_MESSAGE_LENGTH,
   SUPPORT_TOPICS,
   SUPPORT_TOPIC_LABELS,
+  SUPPORT_TOPIC_WITH_BOOKING,
   SUPPORT_TOPIC_WITH_REFERENCE,
   supportMessageReceiptSchema,
   supportSendFailureDetailsSchema,
@@ -20,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiClientError } from '@/lib/api-client';
+import type { SupportBookingContext } from '@/lib/booking-report';
 import { FIELD_FOCUS } from '@/lib/focus';
 import { useApi } from '@/lib/use-api';
 import { userFacingError } from '@/lib/user-facing-error';
@@ -57,6 +60,17 @@ export interface SupportScreenProps {
    * log line that does not exist.
    */
   errorContext: SupportErrorContext | null;
+  /**
+   * The booking a `Report a problem` handed over — state 3 with different
+   * context (#425).
+   *
+   * Already resolved by the page against this customer's own bookings, and
+   * `null` for anyone who is not the customer on a reportable one. **It is what
+   * makes this send more than an email**: with it, submitting places #423's
+   * payout hold in the same request, and the two land together or neither
+   * does.
+   */
+  bookingContext: SupportBookingContext | null;
 }
 
 /** The four phases the screen moves through. States 1-3 are all `editing`. */
@@ -145,17 +159,87 @@ function ReferenceBlock({ reference }: { reference: string }): React.ReactElemen
   );
 }
 
+/** `Jun 15, 2026` — the event's own day, in UTC as every date here is. */
+const EVENT_DAY = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/**
+ * The `Attached automatically` card — frame `29` state 3.
+ *
+ * One component and not two, because the two things it carries are the same
+ * kind of thing: a reference this screen attached on the visitor's behalf. Mono
+ * type, no input chrome, no clear affordance — there is nothing to copy and no
+ * field to accidentally empty. Written twice, the treatment had already drifted
+ * on its first use.
+ */
+function AttachedBlock({
+  reference,
+  meta,
+  note,
+}: {
+  reference: string;
+  meta: string;
+  note: string;
+}): React.ReactElement {
+  return (
+    <div className="mt-5.5 rounded-[12px] border border-stone-300 bg-stone-150 px-3.75 py-3.5">
+      <div className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="flex size-3.75 items-center justify-center rounded-[4px] bg-stone-200"
+        >
+          <span className="h-[1.6px] w-1.75 rotate-[-45deg] rounded-[2px] bg-stone-600" />
+        </span>
+        <p className="text-label font-semibold tracking-[.06em] text-stone-600 uppercase">
+          Attached automatically
+        </p>
+      </div>
+
+      <div className="mt-2 flex items-baseline justify-between gap-3">
+        <span className="font-mono text-[13px] break-all text-stone-900">{reference}</span>
+        <span className="shrink-0 text-[11.5px] text-stone-600">{meta}</span>
+      </div>
+
+      <p className="mt-2 text-[11.5px] leading-[1.5] text-stone-600">{note}</p>
+    </div>
+  );
+}
+
+/** `Jun 15, 2026 - $1,450 - Barr Mansion`: which booking, in one line. */
+function bookingMeta(booking: SupportBookingContext): string {
+  return [
+    EVENT_DAY.format(new Date(`${booking.eventDate}T00:00:00Z`)),
+    formatPrice(booking.totalAmountCents),
+    booking.venue,
+  ]
+    .filter((part) => part !== null)
+    .join(' · ');
+}
+
 export function SupportScreen({
   accountEmail,
   errorContext,
+  bookingContext,
 }: SupportScreenProps): React.ReactElement {
   const fieldId = useId();
   const request = useApi();
 
   const [topic, setTopic] = useState<SupportTopic | ''>(
-    // Preselected only when a reference is attached — the visitor already said
-    // what happened by arriving from the error screen.
-    errorContext ? SUPPORT_TOPIC_WITH_REFERENCE : '',
+    /*
+     * Preselected only when something is attached — the visitor already said
+     * what happened by arriving from the screen that attached it.
+     *
+     * A booking takes `A booking or payment` and never `Something broke`: this
+     * is not a bug report, it is the one topic on the list that is about money,
+     * and it is the routing key the human triaging the inbox reads first.
+     * The booking wins over an error reference on the impossible case where
+     * both arrive, because only one of the two holds a payout.
+     */
+    bookingContext ? SUPPORT_TOPIC_WITH_BOOKING : errorContext ? SUPPORT_TOPIC_WITH_REFERENCE : '',
   );
   const [topicOpen, setTopicOpen] = useState(false);
   const [email, setEmail] = useState('');
@@ -221,6 +305,7 @@ export function SupportScreen({
           message,
           ...(accountEmail === null ? { email } : {}),
           ...(errorContext ? { errorContext } : {}),
+          ...(bookingContext ? { bookingId: bookingContext.id } : {}),
         },
       });
 
@@ -271,6 +356,19 @@ export function SupportScreen({
           We&apos;ll reply to <strong className="font-semibold text-stone-900">{replyTo}</strong>,
           usually within one business day.
         </p>
+
+        {/*
+          The other half of what just happened, and the half the frame's sent
+          state was never asked to carry: the money has stopped. It is stated
+          without a deadline — `payoutReleaseAt` is the only place the release
+          window is written down, and a sentence here repeating it as a number
+          is the copy that goes stale the day the constant moves (D16).
+        */}
+        {bookingContext === null ? null : (
+          <p className="mt-2.25 max-w-[290px] text-[13px] leading-[1.6] text-stone-700">
+            The payment for this booking is on hold while we look into it.
+          </p>
+        )}
 
         <div className="mt-4.5 flex justify-center">
           <ReferenceBlock reference={reference} />
@@ -333,38 +431,33 @@ export function SupportScreen({
       ) : null}
 
       {/*
+        State 3, with a booking as the context instead of a digest (#425). The
+        same card for the same reason — it is the same kind of thing: a
+        reference the screen attached on the visitor's behalf, which they
+        neither typed nor can empty.
+
+        The note the error block does not need is the one about the money.
+        Submitting this holds the vendor's payment, and a control whose
+        consequence is only discovered afterwards has been described too late.
+      */}
+      {bookingContext ? (
+        <AttachedBlock
+          reference={bookingContext.id}
+          meta={bookingMeta(bookingContext)}
+          note="Sending this puts the vendor's payment for this booking on hold while we look into it. Nothing to copy, and no field to accidentally clear."
+        />
+      ) : null}
+
+      {/*
         State 3. Stone block, mono type, no input chrome and no clear
         affordance: there is nothing to copy and no field to accidentally empty.
       */}
       {errorContext ? (
-        <div className="mt-5.5 rounded-[12px] border border-stone-300 bg-stone-150 px-3.75 py-3.5">
-          <div className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="flex size-3.75 items-center justify-center rounded-[4px] bg-stone-200"
-            >
-              <span className="h-[1.6px] w-1.75 rotate-[-45deg] rounded-[2px] bg-stone-600" />
-            </span>
-            <p className="text-label font-semibold tracking-[.06em] text-stone-600 uppercase">
-              Attached automatically
-            </p>
-          </div>
-
-          <div className="mt-2 flex items-baseline justify-between gap-3">
-            <span className="font-mono text-[13px] break-all text-stone-900">
-              {errorContext.digest}
-            </span>
-            <span className="shrink-0 text-[11.5px] text-stone-600">
-              {MOMENT.format(new Date(errorContext.occurredAt))} · {errorContext.route}
-            </span>
-          </div>
-
-          <p className="mt-2 text-[11.5px] leading-[1.5] text-stone-600">
-            The reference from the page you came from. It points at the exact entry in our server
-            log, so we can look before we ask you anything. Nothing to copy, and no field to
-            accidentally clear.
-          </p>
-        </div>
+        <AttachedBlock
+          reference={errorContext.digest}
+          meta={`${MOMENT.format(new Date(errorContext.occurredAt))} · ${errorContext.route}`}
+          note="The reference from the page you came from. It points at the exact entry in our server log, so we can look before we ask you anything. Nothing to copy, and no field to accidentally clear."
+        />
       ) : null}
 
       <div className="mt-4">

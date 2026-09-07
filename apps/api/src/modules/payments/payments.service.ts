@@ -31,7 +31,11 @@ import {
   type StripeConnectGateway,
 } from '../../lib/stripe.js';
 import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
-import { findVendorByUserId, findVendorUserId } from '../booking-requests/booking-requests.dao.js';
+import {
+  findVendorByUserId,
+  findVendorContact,
+  findVendorUserId,
+} from '../booking-requests/booking-requests.dao.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import {
@@ -67,6 +71,37 @@ export interface BookingContext {
    * drifted, and threading them separately is how that happens.
    */
   mail: NotificationEmailDeps;
+}
+
+/**
+ * The one place a `BookingContext` is assembled.
+ *
+ * It was a literal copied into each plugin that needed one, defended by a
+ * comment saying the copies must not diverge — which is the argument for
+ * building it once. A field added to `BookingContext` or to the mail deps now
+ * reaches every caller, instead of reaching the ones somebody remembered.
+ */
+export function bookingContextFor(
+  app: BookingContextSource,
+  log: FastifyBaseLogger,
+  webOrigin: string,
+): BookingContext {
+  return {
+    db: app.db,
+    stripe: app.stripe,
+    hub: app.events,
+    log,
+    mail: { db: app.db, email: app.email, log, webOrigin, background: app.background },
+  };
+}
+
+/** The app decorators the context is built from. */
+export interface BookingContextSource {
+  db: AppDatabase;
+  stripe: StripeConnectGateway;
+  events: EventHub;
+  email: NotificationEmailDeps['email'];
+  background: NotificationEmailDeps['background'];
 }
 
 /** A booking action that also has to price a charge. */
@@ -992,6 +1027,33 @@ export async function cancelBooking(
 }
 
 /**
+ * One booking of the customer's own, by its id (#425).
+ *
+ * The report surface is reached by a URL anyone can paste, and it has to decide
+ * from the row whether a hold is still possible — so it needs the booking, and
+ * it needs the same 404 a stranger gets. `participantIn` gives both; the extra
+ * refusal is that a **vendor** is not offered a control that is the customer's,
+ * which is the rule `placeDisputeHold` applies to the send this read precedes.
+ *
+ * A point read and not the customer's booking list: the list is paginated, so a
+ * booking past its first page resolved to nothing, and a pasted id that belongs
+ * to nobody cost a full list fan-out on a public route.
+ */
+export async function findOwnBookingForReport(
+  context: BookingContext,
+  user: AuthenticatedUser,
+  bookingId: string,
+): Promise<Booking> {
+  const { booking, side } = await participantIn(context, user, bookingId);
+
+  if (side !== 'customer') {
+    throw notFound('That booking does not exist');
+  }
+
+  return toBookingView(booking);
+}
+
+/**
  * The customer reports a problem, which **holds the payout** (#423).
  *
  * `disputed` was already in `BOOKING_STATUSES` and unused; nothing anywhere
@@ -1006,21 +1068,31 @@ export async function cancelBooking(
  *   the same universally-future test `completeBooking` uses, so a customer east
  *   of UTC is not told their event has not happened when it has.
  * - **After the release**, the money is already with the vendor and a hold has
- *   nothing left to hold. Acceptance 11 offered a choice here and this takes
- *   the refusal: routing it into the post-release refund path would let a
+ *   nothing left to hold. #423 acceptance 11 offered a choice here and this
+ *   takes the refusal: routing it into the post-release refund path would let a
  *   self-serve button claw a third party's balance negative on one party's
  *   say-so, which is an operator's judgement rather than a customer's. They are
  *   sent to support, where a human can still unwind it.
  * - **On a booking that is not theirs**, `participantIn` answers 404 — the same
  *   rule every read here applies, so a stranger walking ids learns nothing.
+ *
+ * **It is not an HTTP route, and deliberately (#425).** #423 shipped
+ * `PUT /customer/bookings/:bookingId/dispute` for #425's surface to call; #425
+ * routed the report through `/support/messages` instead, because the hold and
+ * the complaint have to be one act. Leaving that route standing left a second
+ * way to freeze a vendor's payout that filed no complaint at all — a hold an
+ * operator finds with nothing to act on, and the exact half of acceptance 4
+ * that must not be able to land alone. So the hold is a primitive now, with one
+ * orchestrator: `sendSupportMessage`, which places it, sends the report, and
+ * takes the hold back if it cannot.
  */
-export async function raiseDispute(
+export async function placeDisputeHold(
   context: BookingContext,
   user: AuthenticatedUser,
   bookingId: string,
   reason: string | undefined,
   now: Date,
-): Promise<Booking> {
+): Promise<BookingRow> {
   const { booking, side } = await participantIn(context, user, bookingId);
 
   if (side !== 'customer') {
@@ -1068,25 +1140,103 @@ export async function raiseDispute(
     throw conflict('That booking changed while you were reporting it');
   }
 
-  const vendorUserId = await findVendorUserId(context.db, held.vendorId);
+  return held;
+}
 
-  if (vendorUserId) {
-    await bestEffortNotice(context, { bookingId: held.id }, () =>
-      notify(
-        context,
-        vendorUserId,
-        'booking_cancelled',
-        {
-          title: 'A customer reported a problem',
-          body: 'Your payout for this booking is on hold until we have looked into it.',
-          bookingId: held.id,
-        },
-        'vendor',
-      ),
-    );
+/**
+ * Takes a booking back out of `disputed`, whoever is lifting the hold.
+ *
+ * **The prior status is derived, never remembered.** The vendor either marked
+ * the booking complete before the hold or they did not, and that fact is
+ * already written down in `completed_at` — a `previousStatus` carried through
+ * the caller would be a second copy of it, free to disagree. `resolveDispute`
+ * settled that reasoning; this is the same lift, so it is the same function.
+ *
+ * `false` means the booking moved underneath us and the hold is no longer ours
+ * to lift.
+ */
+export async function liftDisputeHold(
+  context: BookingContext,
+  booking: Pick<BookingRow, 'id' | 'completedAt'>,
+  /**
+   * `updated_at` as the caller last saw it, for a caller lifting **its own**
+   * hold rather than whichever one is current.
+   *
+   * `resolveDispute` passes nothing, and should: an operator's ruling settles
+   * the complaint that is open now. #425's unwind passes the row it wrote,
+   * because between its hold and its failure an operator could have resolved
+   * that complaint and the customer filed a second one — and lifting *that*
+   * would release a payout against a report already in the inbox.
+   */
+  updatedBefore?: Date,
+): Promise<BookingRow | null> {
+  return applyBookingTransition(
+    context.db,
+    booking.id,
+    'disputed',
+    { status: booking.completedAt ? 'completed' : 'confirmed', disputeReason: null },
+    undefined,
+    updatedBefore,
+  );
+}
+
+/** Who a hold has to be announced to, read once for the two things it feeds. */
+export interface DisputeHoldAudience {
+  bookingId: string;
+  /** `null` for a vendor profile deleted since the booking. */
+  vendorUserId: string | null;
+  vendorBusinessName: string | null;
+}
+
+/**
+ * The vendor behind a held booking, in one read.
+ *
+ * Both callers want the same row for two different reasons — the notification
+ * needs the account, and #425's support report names the business in the email
+ * a human triages — and asking twice was two round trips on the money path for
+ * one primary-key lookup.
+ */
+export async function disputeHoldAudience(
+  context: BookingContext,
+  held: BookingRow,
+): Promise<DisputeHoldAudience> {
+  const vendor = await findVendorContact(context.db, held.vendorId);
+
+  return {
+    bookingId: held.id,
+    vendorUserId: vendor?.userId ?? null,
+    vendorBusinessName: vendor?.businessName ?? null,
+  };
+}
+
+/**
+ * The vendor is told their payout is frozen. Best effort, as every notice here
+ * is — the hold is already written, and a bell that did not ring must not undo
+ * money that did move.
+ */
+export async function announceDisputeHold(
+  context: BookingContext,
+  audience: DisputeHoldAudience,
+): Promise<void> {
+  const { bookingId, vendorUserId } = audience;
+
+  if (!vendorUserId) {
+    return;
   }
 
-  return toBookingView(held);
+  await bestEffortNotice(context, { bookingId }, () =>
+    notify(
+      context,
+      vendorUserId,
+      'booking_cancelled',
+      {
+        title: 'A customer reported a problem',
+        body: 'Your payout for this booking is on hold until we have looked into it.',
+        bookingId,
+      },
+      'vendor',
+    ),
+  );
 }
 
 /**
@@ -1132,10 +1282,7 @@ export async function resolveDispute(
      * down. A column holding "the status before the dispute" would be a second
      * copy of it, free to disagree.
      */
-    const restored = await applyBookingTransition(context.db, bookingId, 'disputed', {
-      status: booking.completedAt ? 'completed' : 'confirmed',
-      disputeReason: null,
-    });
+    const restored = await liftDisputeHold(context, booking);
 
     if (!restored) {
       throw conflict('That booking changed while you were resolving it');

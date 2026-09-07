@@ -1599,6 +1599,10 @@ describe('/booking-requests', () => {
           'eventType',
           'id',
           'paidAt',
+          // *When* the payout went out, never how much of it (#425). The date
+          // is what the report control reads to know whether a hold is still
+          // possible; the split beside it in the row stays out.
+          'payoutReleasedAt',
           'refundAmountCents',
           'requestId',
           'status',

@@ -990,19 +990,6 @@ export const cancelBookingSchema = z.object({
 });
 export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 
-/**
- * What a customer sends to report a problem with a booking (#423).
- *
- * The same shape as a cancellation's, and deliberately not richer: the report
- * exists to **place the payout hold**, not to open a case-management product.
- * #425 builds the surface that sends it, routed through the support form the
- * error page already uses, so the free text is the whole payload.
- */
-export const disputeBookingSchema = z.object({
-  reason: freeText().max(1_000).optional(),
-});
-export type DisputeBookingInput = z.infer<typeof disputeBookingSchema>;
-
 export const resolveDisputeSchema = z.object({
   /**
    * `vendor` lifts the hold and lets the payout run on the next sweep;
@@ -1023,7 +1010,7 @@ export type ResolveDisputeInput = z.infer<typeof resolveDisputeSchema>;
  * customer, and `payments.service.ts` already states that the platform's
  * commission "is none of the customer's business". Nothing on either hub
  * renders them — the vendor's own payout figure comes from
- * `vendorDashboardSchema.nextPayout`, which only a vendor can reach — so the
+ * `vendorDashboardSchema.payouts`, which only a vendor can reach — so the
  * fields are dropped from the read model rather than branched on the caller's
  * role. A route that genuinely needs them declares its own schema, the way
  * `adminPaymentRowSchema` does.
@@ -1050,6 +1037,21 @@ export const bookingSchema = z.object({
   cancelledBy: bookingCancelledBySchema.nullable(),
   /** What Stripe actually sent back, in cents. `null` until a refund moves. */
   refundAmountCents: z.int().nullable(),
+  /**
+   * When the vendor's share was actually transferred, or `null` while it is
+   * still held (#425).
+   *
+   * **The fact, not the prediction.** `payoutReleaseAt(eventDate)` says when the
+   * sweep *may* move the money; this says whether it has. A surface that decides
+   * "the payout is gone" from the calendar is wrong for as long as the sweep
+   * takes to get there, and the report control is the case where being wrong
+   * costs the customer the only hold they can place. `payoutStatusOf` reads this
+   * column, and it is the one derivation every surface asks.
+   *
+   * The amount is deliberately still absent: the split is the platform's and the
+   * vendor's business, and `booking-view.ts` keeps it that way.
+   */
+  payoutReleasedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -1246,6 +1248,79 @@ export const stripeOnboardingLinkSchema = z.object({
 export type StripeOnboardingLink = z.infer<typeof stripeOnboardingLinkSchema>;
 
 /**
+ * What a vendor is owed: the next transfer, the total behind it, and the money
+ * a dispute is holding.
+ *
+ * **`next.cents` is one booking's and `pendingCents` is every booking's, and
+ * they are separate fields because only the first one has a date.** A card
+ * printing the total above the earliest release date would tell a vendor that
+ * $9,500 arrives on the 18th when $500 does and the rest a month later — a
+ * figure disagreeing with what Stripe moves, which is the failure #424
+ * acceptance 7 exists to make impossible. `next` carries its own amount so the
+ * amount and the date under it always describe the same row.
+ *
+ * `pending` and `held` must never be added together either. Money on its way
+ * and money a dispute has stopped are different claims, and one total would say
+ * a payout is coming while it is frozen — #423 acceptance 16's failure, one
+ * level up from the individual booking.
+ *
+ * **There is no `status` field, because no surface has to infer one.** #423 put
+ * the payout state on the booking so a screen would not have to read "the money
+ * is stuck" out of `BOOKING_STATUSES`. Here the server has already applied
+ * `payoutStatusOf` and split the two apart, so the screen is handed the answer
+ * instead of the question.
+ */
+export const vendorPayoutSummarySchema = z.object({
+  /**
+   * Summed `vendor_payout_cents` over exactly the rows the sweep will send.
+   *
+   * Read from the stored column, never recomputed. Under D37 that column means
+   * *what is still owed*, not what was agreed: a cancellation rewrites it down
+   * to the share the vendor keeps for a date they held and lost, and the row
+   * stays owed while it is above zero. A full refund writes `0` and drops out
+   * by amount rather than by status. A surface that recomputed the fee would
+   * reprice every old booking the moment the commission rate moved.
+   */
+  pendingCents: z.int().min(0),
+  pendingCount: z.int().min(0),
+  /**
+   * The soonest pending payout, alone — the one frame `27` draws.
+   *
+   * `null` when nothing is pending, rather than a date carried over from money
+   * already sent or a zero a vendor would read as a balance.
+   */
+  next: z
+    .object({
+      /** This booking's stored payout — not the total beside it. */
+      cents: z.int().min(0),
+      customerFirstName: trimmedString(MAX_NAME_LENGTH, 0),
+      /**
+       * D35's release date, derived on read by `payoutReleaseAt` — the same
+       * helper the sweep pays on, so the date shown and the date paid cannot
+       * drift. Never stored twice.
+       */
+      releaseAt: z.date(),
+      /**
+       * True once `releaseAt` has passed, from `isPayoutDue` against the
+       * server's clock.
+       *
+       * The screen cannot answer this for itself. A transfer that keeps failing
+       * is retried every quarter of an hour and stays `pending` by design
+       * (#423), so its release date recedes into the past while the card still
+       * points at it — "pays out" beside a date three weeks gone. The card says
+       * the money is moving instead, which is what is actually true.
+       */
+      isDue: z.boolean(),
+    })
+    .nullable(),
+  /** The same sum over the rows a dispute is holding. No release date exists. */
+  heldCents: z.int().min(0),
+  heldCount: z.int().min(0),
+});
+
+export type VendorPayoutSummary = z.infer<typeof vendorPayoutSummarySchema>;
+
+/**
  * The vendor's own numbers, on their own private surface.
  *
  * Every figure here is a query result over the vendor's own rows — none is a
@@ -1304,42 +1379,45 @@ export const vendorDashboardSchema = z.object({
     )
     .length(BOOKING_WEEK_WINDOW_DAYS),
   /**
-   * The soonest payout this vendor is still owed, for the rail's second card.
+   * Everything this vendor is owed, split into the money that is moving and the
+   * money a dispute is holding (#424).
    *
-   * **Every field is read off the booking row, and none of it is recomputed**
-   * (#423 acceptance 15). The amount is that booking's `vendor_payout_cents`,
-   * settled at the rate in force when the card succeeded — a surface that
-   * recomputed the fee would silently reprice old bookings the moment the rate
-   * moved. `releaseAt` is `payoutReleaseAt(eventDate)`, the same helper the
-   * payout sweep pays on, so the date a vendor is shown and the date they are
-   * paid cannot drift. `status` says which of the three states it is in.
+   * **`pendingCents` is the figure the release sweep will transfer**, not a
+   * figure that resembles it. The two are held together by the predicate rather
+   * than by review: the dashboard query selects on `RELEASABLE_STATUSES`, the
+   * same list `findDuePayoutBookingIds` selects on, plus the same
+   * `payout_released_at is null`, `payout_model = 'separate'` and
+   * `vendor_payout_cents > 0`. The only clause the dashboard drops is the date
+   * bound, because a payout whose window has not closed is still owed. A number
+   * a vendor plans around that disagrees with what arrives is worse than no
+   * number, which is why acceptance 7 makes the reconciliation a test rather
+   * than an intention.
    *
-   * **There is now a payout schedule to read a date from, which there was not.**
-   * `MONEY_COPY.vendorPayout` is the dateless sentence #308 had to ship in its
-   * place, and frame `08`'s `Next payout Jun 18` stopped being an invented
-   * number the moment #423 created the schedule behind it. Rendering it is
-   * #424's, not this schema's.
+   * **The amount is summed from stored `vendor_payout_cents` and never
+   * recomputed.** Under D37 that column means *what is still owed*, not what
+   * was agreed: a cancellation inside D3's cutoff rewrites it down to the share
+   * the vendor keeps for a date they held and lost, and the row stays owed
+   * while it is above zero. So a cancelled booking legitimately still carries
+   * money, a fully refunded one carries `0` and is excluded by the amount
+   * rather than by its status, and a surface that recomputed the fee would
+   * reprice every old booking the moment the commission rate moved.
    *
-   * `null` when nothing is owed.
+   * `next` is the soonest **pending** payout, with its own amount and D35's
+   * release date derived on read rather than stored twice. Held rows cannot
+   * supply that date — a dispute has no known one — so they are reported
+   * through `heldCents` and `heldCount` instead, which is the whole reason the
+   * two halves are separate figures.
+   *
+   * **This replaced `nextPayout`, which #423 landed one ticket earlier.** That
+   * field described the soonest owed booking, and keeping it beside `payouts`
+   * would have left the response carrying two independently derived payout
+   * amounts and two release dates with nothing reconciling them — on the read
+   * whose entire acceptance is that its figure cannot disagree with the
+   * transfer. `payoutStatusOf` still does the pending/held split; it now does
+   * it in `toPayoutSummary` rather than on a field the browser had to
+   * interpret.
    */
-  nextPayout: z
-    .object({
-      bookingId: uuidSchema,
-      eventDate: calendarDateSchema,
-      customerFirstName: trimmedString(MAX_NAME_LENGTH, 0),
-      vendorPayoutCents: z.int().min(0),
-      /** When the transfer is due, derived from the event date. */
-      releaseAt: z.date(),
-      /**
-       * `held` is the dispute hold, and it is a **field rather than something a
-       * surface infers from `status`** — acceptance 16. A screen that had to
-       * know which member of `BOOKING_STATUSES` means "money is stuck" would be
-       * one enum change away from telling a vendor a payout is on its way while
-       * it is frozen.
-       */
-      status: payoutStatusSchema,
-    })
-    .nullable(),
+  payouts: vendorPayoutSummarySchema,
 });
 export type VendorDashboard = z.infer<typeof vendorDashboardSchema>;
 
@@ -2004,6 +2082,18 @@ export const supportMessageSchema = z.object({
     .min(1, 'Tell us what happened, and what you expected instead')
     .max(MAX_SUPPORT_MESSAGE_LENGTH),
   errorContext: supportErrorContextSchema.optional(),
+  /**
+   * The booking this report is about (#425), and **the reason this send is not
+   * only an email**: a message carrying one places #423's payout hold on that
+   * booking in the same request, or it is not sent at all.
+   *
+   * An id and nothing else. The event date, the amount and the vendor are read
+   * from the row on the server, because a report that quoted figures out of the
+   * sender's own query string would be a support inbox reading whatever the
+   * sender chose to put there — and it is the same read that decides whether
+   * this caller may report the booking in the first place.
+   */
+  bookingId: uuidSchema.optional(),
 });
 export type SupportMessageInput = z.infer<typeof supportMessageSchema>;
 

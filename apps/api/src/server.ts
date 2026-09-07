@@ -217,7 +217,10 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(bookingRequestRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(messagingRoutes, { allowedOrigins: allowedOrigins(env) });
   await app.register(uploadRoutes);
-  await app.register(supportRoutes, { supportEmailTo: env.SUPPORT_EMAIL_TO });
+  await app.register(supportRoutes, {
+    supportEmailTo: env.SUPPORT_EMAIL_TO,
+    webOrigin: canonicalWebOrigin(env),
+  });
   await app.register(clerkWebhookRoutes, {
     signingSecret: env.CLERK_WEBHOOK_SECRET,
     ...options.webhooks,

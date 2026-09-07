@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, lt, ne, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -279,6 +279,34 @@ export async function applyBookingTransition(
    * would otherwise be written onto a booking that had just been paid out.
    */
   releasedBefore?: Date | null,
+  /**
+   * The row this caller read, when it must be writing to *that* row.
+   *
+   * `status = 'disputed'` says a hold is open; it does not say it is the one
+   * you placed. #425's compensating unwind is the caller that cares: an admin
+   * resolving the first report and the customer filing a second one, in the
+   * window a stalled mail send leaves open, both put the row back at
+   * `disputed` — and a status-only guard would then lift the *second* hold, on
+   * a complaint that had been delivered, and clear the text explaining it.
+   *
+   * **Matched as the millisecond it truncates to, and that is not a rounding
+   * convenience.** `updated_at` is a `timestamptz`, which Postgres keeps to the
+   * microsecond; the driver hands it back as a JavaScript `Date`, which cannot
+   * hold one. So the value a caller read is already truncated, and a plain
+   * equality against the stored column matches **nothing** — the guard would
+   * refuse every unwind, and refusing to unwind leaves a payout frozen behind a
+   * complaint that was never filed, which is worse than the race it closes.
+   *
+   * A half-open millisecond range rather than a `date_trunc` on the column: it
+   * is the same predicate, it stays sargable on the index, and both bounds are
+   * ordinary `Date` parameters instead of a raw fragment the driver has to be
+   * told the type of.
+   *
+   * PGlite does not reproduce the truncation — its timestamps round-trip, so
+   * the PGlite suite was green while the Docker Postgres refused every unwind.
+   * `dispute-hold.contention.test.ts` is where this is pinned.
+   */
+  updatedBefore?: Date,
 ): Promise<BookingRow | null> {
   return db.transaction(async (tx) => {
     const updated = await tx
@@ -293,6 +321,10 @@ export async function applyBookingTransition(
             : releasedBefore === null
               ? isNull(bookings.payoutReleasedAt)
               : eq(bookings.payoutReleasedAt, releasedBefore),
+          updatedBefore === undefined ? undefined : gte(bookings.updatedAt, updatedBefore),
+          updatedBefore === undefined
+            ? undefined
+            : lt(bookings.updatedAt, new Date(updatedBefore.getTime() + 1)),
         ),
       )
       .returning();

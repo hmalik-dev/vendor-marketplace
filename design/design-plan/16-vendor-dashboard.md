@@ -107,18 +107,48 @@ one-shell drift #372 ruled against for the bookings hub. **One shell; the column
 swaps.** Frame `08` is the frame that yields, and correcting it belongs to #372,
 which owns it.
 
-### The payout date is the event's — a recorded frame deviation
+### The payout date is real now — the deviation is closed
 
-Frame `27` writes the second card's line as `Anjali N. · pays out Jun 15`. **Do
-not build that.** There is no payout schedule to read a date from until #10, so
-the date could only be invented, on the one surface where the vendor can tell —
-the same objection that deleted the reply-time median above.
+**This section used to say "do not build that".** Frame `27` writes the second
+card's line as `Anjali N. · pays out Jun 15`, and until #423 there was no payout
+schedule to read that date from, so it could only be invented — on the one
+surface where the vendor can tell. What shipped instead was the event date and
+the mechanism: `Anjali N. · after the event on Jun 15`.
 
-What ships instead states the real event date and the mechanism that connects
-it to the money: `Anjali N. · after the event on Jun 15`. The **amount** is not
-a deviation — `vendor_payout_cents` is settled at payment, so it is exactly what
-will arrive. When #10 lands, the payout date replaces the event date here and
-this note is deleted.
+#423 created the schedule and #424 renders it, so the frame's own line is what
+ships: the date is `payoutReleaseAt` of the earliest event still **pending**,
+the same derivation the release sweep pays on, so what the vendor is shown and
+what they are paid cannot drift apart. Frame `08`'s `Next payout Jun 18` is the
+same derivation on the earnings stat.
+
+**The two frames disagree about the date, and `08` is right.** For the same
+booking, frame `27` writes `pays out Jun 15` and frame `08` writes
+`Next payout Jun 18`. Jun 15 is the _event_ date — `27` labelled it as a payout
+date at a time when no payout schedule existed, so there was no other date to
+draw. Jun 18 is the release date D35 actually produces. A parity pass over
+frame `27`'s Text axis reads `Jun 15` against a shipped `Jun 18`: that is this
+recorded override, not drift. `27`'s `Anjali N.` is the same kind of artefact —
+the product holds a customer's first name and prints `Anjali`.
+
+Three things the frames do not draw, all required by the money rules:
+
+- **The big figure is the next payout's own amount, not the total owed.** They
+  are different numbers as soon as a vendor has two bookings, and only the first
+  has the date printed under it — `$9,500 · pays out Jun 18` when $500 pays out
+  then is the figure-versus-transfer disagreement the whole chain exists to
+  prevent. The total gets its own undated line, and only when there is more than
+  one payout to total.
+- **Money a dispute is holding is a separate line, in gold, added to neither
+  figure.** `40-states.md` rules gold as waiting on someone and red as failure,
+  and a hold is waiting. A held payout has no known release date and supplies
+  none.
+- **A release window that has already closed says `paying out now`.** A transfer
+  that keeps failing stays pending by design (#423), so its date recedes into
+  the past; pointing forwards at it would be the card asserting a future that
+  has gone.
+
+The **amount** was never a deviation — `vendor_payout_cents` is settled at
+payment, so it is exactly what will arrive.
 
 ### One value in the week strip cannot be built
 

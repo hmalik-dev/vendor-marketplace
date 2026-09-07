@@ -21,8 +21,19 @@ against a booking the sweep transferred a moment later.
 **Why:** before #423 the money moved once, at charge time, on the request path.
 The timer is the first background writer on the money path.
 
+**The hold half is now closed; the lift half is not.** `applyBookingTransition`
+grew an optional `releasedBefore` argument, and `placeDisputeHold` passes the
+`payout_released_at` it decided on, so a hold can no longer land on a booking
+the sweep paid out mid-request. `liftDisputeHold` (`payments.service.ts:1155`,
+shared by `resolveDispute` and #425's compensating unwind) still keys on
+`status = 'disputed'` and nothing else, so it lifts _whichever_ hold is current
+rather than the one its caller placed. Audited 2026-09-06; the reachable
+interleaving needs an admin resolve between the hold and its unwind.
+
 **How to apply:** any new booking write that reasons about
 `payout_released_at` / `stripe_transfer_id` must carry those columns into its
 guarded update's `where`, or take the row lock the sweep respects. A status-only
-guard is not enough any more. Related:
-[[refund-proportionality-is-now-ours-to-state]].
+guard is not enough any more — and on a _compensating_ write, the status is not
+even identity: guard on the row version too. Related:
+[[refund-proportionality-is-now-ours-to-state]],
+[[support-report-is-a-public-route-that-moves-money]].

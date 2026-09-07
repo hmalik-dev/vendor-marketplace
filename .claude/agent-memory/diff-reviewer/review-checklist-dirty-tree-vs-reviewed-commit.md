@@ -56,5 +56,16 @@ it either. **Reading a file is a probe.** Quote line numbers from
 `git show <sha>:<path>`, not from the working tree, and re-run `git status`
 before writing the report.
 
+**A peer lane can be fixing your finding while you probe it (#425).** The tree
+was clean-but-staged at the first call. Four minutes of mutation runs later a
+security-auditor lane had written unstaged edits into `payments.dao.ts`,
+`payments.service.ts` and `payouts.routes.test.ts` — files I had not touched —
+and the api suite's total moved 1049 → 1050. **The test count is the cheap
+tripwire:** if `Tests N passed (N)` changes between two runs you did not cause,
+stop and re-read `git status` before trusting either number. Their edit was a
+real fix to a real defect in the staged diff (an ABA race in the compensating
+unwind), so the right report is "this is in the staged diff, and an unstaged fix
+for it is already in the tree" — not silence, and not a claim it is unaddressed.
+
 Related: [[review-checklist-source-grep-substring-collisions]],
 [[review-checklist-controlled-index-drops-the-selection-seed]]

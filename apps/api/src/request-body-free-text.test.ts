@@ -215,9 +215,12 @@ describe('free text on a request body', () => {
     // Pinned, not a floor: a change that halved discovery would pass a floor.
     // 19 since #405 removed `PUT /vendor/tags` and its `setVendorTagsSchema`;
     // 20 since #421 added `supportMessageSchema`; 22 since #423 added
-    // `disputeBookingSchema` and `resolveDisputeSchema`; 23 since #427 added
-    // `acceptVendorAgreementSchema`.
-    expect(names).toHaveLength(23);
+    // `disputeBookingSchema` and `resolveDisputeSchema`; 21 since #425 removed
+    // `disputeBookingSchema` with the second entry point to the payout hold —
+    // the customer's free text now reaches `dispute_reason` through
+    // `supportMessageSchema.message`, which is still counted here; 22 since
+    // #427 added `acceptVendorAgreementSchema`.
+    expect(names).toHaveLength(22);
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
 

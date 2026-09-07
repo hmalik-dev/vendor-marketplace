@@ -732,6 +732,16 @@ export async function seedDemoData<
       totalAmountCents: fees.totalCents,
       platformFeeCents: fees.platformFeeCents,
       vendorPayoutCents: fees.vendorPayoutCents,
+      /*
+       * `'separate'`, never the column's `'destination'` default. That default
+       * marks the pre-#423 charge that split the money as the card succeeded,
+       * and the payout predicate excludes it — so a seeded booking taking the
+       * default is a row the sweep will never transfer and the vendor dashboard
+       * will never name. Every seeded vendor's payout card read `—` until this
+       * was set. It is also a state production cannot hold: an unreleased
+       * `destination` row is what `isLegacyDestinationPayout` says cannot exist.
+       */
+      payoutModel: 'separate' as const,
       status: entry.bookingStatus as BookingStatus,
       stripePaymentIntentId: `pi_demo_${entry.key.replaceAll('-', '_')}`,
       stripeTransferId:
@@ -758,6 +768,7 @@ export async function seedDemoData<
         totalAmountCents: sql`excluded.total_amount_cents`,
         platformFeeCents: sql`excluded.platform_fee_cents`,
         vendorPayoutCents: sql`excluded.vendor_payout_cents`,
+        payoutModel: sql`excluded.payout_model`,
         status: sql`excluded.status`,
         stripePaymentIntentId: sql`excluded.stripe_payment_intent_id`,
         stripeTransferId: sql`excluded.stripe_transfer_id`,
