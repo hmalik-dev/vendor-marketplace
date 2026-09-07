@@ -7,7 +7,7 @@ import { CaseResolution } from '@/components/admin/case-resolution';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
 import { getAdminCase } from '@/lib/admin-data';
-import { CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
+import { CASE_ARRIVAL, CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
 import type { WireAdminCaseBooking } from '@/lib/wire-schemas';
 
 const FILED = new Intl.DateTimeFormat('en-US', {
@@ -146,10 +146,7 @@ export default async function AdminCasePage({
               label="Reply to"
               value={supportCase.senderEmail ?? <span className="text-stone-600">—</span>}
             />
-            <Field
-              label="Arrived by"
-              value={supportCase.origin === 'chargeback' ? 'Stripe webhook' : 'Contact support'}
-            />
+            <Field label="Arrived by" value={CASE_ARRIVAL[supportCase.origin]} />
           </div>
 
           {supportCase.emailFailedAt ? (

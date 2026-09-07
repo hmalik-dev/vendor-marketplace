@@ -54,6 +54,23 @@ export function caseSubject(supportCase: {
 }
 
 /**
+ * Which door the case came through, in the operator's words.
+ *
+ * A `Record` keyed by the enum rather than the ternary this replaced. That
+ * ternary read `origin === 'chargeback' ? 'Stripe webhook' : 'Contact support'`
+ * — a two-way branch on a three-member enum — so #436's in-product reports fell
+ * through the else and told an operator they arrived by a door they did not,
+ * on the one screen where somebody weighs how much the account of events is
+ * worth. Keyed by the enum, a fourth origin is a type error here rather than a
+ * wrong sentence on a case.
+ */
+export const CASE_ARRIVAL: Record<SupportCaseOrigin, string> = {
+  support_message: 'Contact support',
+  chargeback: 'Stripe webhook',
+  user_report: 'Reported in the product',
+};
+
+/**
  * The pill.
  *
  * `40-states.md`'s colour law: **gold is waiting on someone** and **sage is

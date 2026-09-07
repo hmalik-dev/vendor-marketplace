@@ -69,5 +69,6 @@
 - [Webhook payload text bypasses the bidi strip](provider-payload-text-bypasses-the-bidi-strip.md) — a hand-`safeParse`d schema is invisible to the free-text guard; the Resend bounce diagnostic is chosen by the recipient's own MTA
 - [The Resend secret's absence is refusal](resend-webhook-absence-is-refusal.md) — optional on every target is correct here; `requiresExplicitValue` + the `.optional()` branch are what hold it, and no route exists without a secret
 - [`support_cases` is the first durable copy of a complaint](support-cases-is-the-first-durable-copy-of-a-complaint.md) — the admin routes are gated and the chargeback actor is sound; audit the public writer's failure branch
+- [The staff read of a private thread is one `support_cases` row](conversation-read-grant-is-an-open-case-row.md) — the admin guard is settled; audit any new writer of `subject_type='conversation'`, since no FK or CHECK constrains it
 - [`freeText()` lets NUL through](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — Postgres raises 22021, so a caller picks when a user-text insert fails and which branch runs
 - [A browser parse failure is reader-visible copy](client-parse-failures-are-shown-verbatim.md) — `ApiClientError` carries the 200, so `userFacingError`'s 5xx filter never fires and a landed transfer reports as failed

@@ -328,6 +328,27 @@ describe('reporting and message visibility (#436)', () => {
   });
 
   /*
+   * The **vendor** arm of the participant check, and it needs its own test
+   * because it fails closed and silently.
+   *
+   * `restrictedTo` is compared against `users.id`, but a conversation stores
+   * the vendor's *profile* id — two id spaces that never collide. Read the
+   * wrong one and every vendor reporting their own thread gets the 404 above,
+   * indistinguishable from a deleted thread, while the customer arm keeps
+   * passing. The party most likely to be reporting harassment is the one that
+   * would go quiet.
+   */
+  it('lets the vendor on a thread report it, not only the customer', async () => {
+    const fixture = await seed();
+
+    const response = await report(VENDOR, 'conversation', fixture.conversationId);
+
+    expect(response.statusCode).toBe(200);
+    const [filed] = await casesFor(fixture.conversationId);
+    expect(filed?.senderUserId).toBe(fixture.vendorUserId);
+  });
+
+  /*
    * A thread is private to its two parties. Somebody outside it gets the same
    * 404 a missing thread gets — a 403 would confirm the id is a real thread.
    */

@@ -396,15 +396,6 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   );
 
   /**
-   * Closes a case that has no money riding on it.
-   *
-   * **Not the dispute control.** A case whose booking is still `disputed` is
-   * refused here with a 409 naming the right lever, because closing the
-   * complaint while the payout it froze stays frozen is the exact state this
-   * ticket exists to end. `PUT /admin/bookings/:bookingId/dispute` above is the
-   * one that moves money, and it closes the case as part of the ruling.
-   */
-  /**
    * The messages on a reported thread (#436).
    *
    * **A read, scoped by a case, and logged.** `readCaseConversation` refuses
@@ -439,6 +430,15 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       ),
   );
 
+  /**
+   * Closes a case that has no money riding on it.
+   *
+   * **Not the dispute control.** A case whose booking is still `disputed` is
+   * refused here with a 409 naming the right lever, because closing the
+   * complaint while the payout it froze stays frozen is the exact state this
+   * ticket exists to end. `PUT /admin/bookings/:bookingId/dispute` above is the
+   * one that moves money, and it closes the case as part of the ruling.
+   */
   app.put(
     '/admin/cases/:caseId/resolve',
     {

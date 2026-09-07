@@ -288,20 +288,6 @@ export async function insertSupportCase(
 }
 
 /**
- * Is this booking's hold one the customer did **not** place?
- *
- * The question `sendSupportMessage` has to answer before refusing a second
- * report. #425 refuses one deliberately — a duplicate complaint about a dispute
- * already open is a second email a human triages for nothing — and that rule is
- * right for the case it was written for, when the customer's own report was the
- * only thing that could set `disputed`.
- *
- * #431 broke that premise: a chargeback sets it too, and then the refusal tells
- * somebody who filed nothing *"you have already reported a problem"* and sends
- * their message nowhere. This is the narrowest signal that separates the two,
- * so the original rule survives untouched for the case it was written for.
- */
-/**
  * The **open** case that authorises reading one conversation (#436).
  *
  * This one query is the whole of the scope on `GET /admin/conversations/:id/messages`:
@@ -338,6 +324,20 @@ export async function findOpenCaseForConversation(
   return rows[0] ?? null;
 }
 
+/**
+ * Is this booking's hold one the customer did **not** place?
+ *
+ * The question `sendSupportMessage` has to answer before refusing a second
+ * report. #425 refuses one deliberately — a duplicate complaint about a dispute
+ * already open is a second email a human triages for nothing — and that rule is
+ * right for the case it was written for, when the customer's own report was the
+ * only thing that could set `disputed`.
+ *
+ * #431 broke that premise: a chargeback sets it too, and then the refusal tells
+ * somebody who filed nothing *"you have already reported a problem"* and sends
+ * their message nowhere. This is the narrowest signal that separates the two,
+ * so the original rule survives untouched for the case it was written for.
+ */
 export async function findOpenChargebackCase(
   db: AppDatabase,
   bookingId: string,
