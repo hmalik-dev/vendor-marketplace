@@ -1667,7 +1667,7 @@ outside a clipping ancestor that cannot scroll to reveal it. That second check f
 **0px** of horizontal slack and painted entirely outside the list. Same class as the vendor
 card in #73, and invisible to every class-list assertion in the repository.
 
-### D32: The Payout Hold Is 72 Hours After the Event — *2026-09-06*
+### D35: The Payout Hold Is 72 Hours After the Event — *2026-09-06*
 
 **`PAYOUT_RELEASE_HOURS = 72`.** The account holder asked for a hold long enough
 that a customer can dispute and pause the release, and delegated the number:
@@ -1737,7 +1737,7 @@ four-terms panel, the accepted-state strip, and `/terms` section 4 (#427) — pl
 the release job and the vendor dashboard's pending-payout date (#423, #424).
 **No surface hardcodes the interval.**
 
-### D33: An Idempotency Key Is Versioned by the Attempt, Not Just the Subject — *2026-09-06*
+### D36: An Idempotency Key Is Versioned by the Attempt, Not Just the Subject — *2026-09-06*
 
 **Stripe caches the result of an idempotent request for 24 hours, and that
 includes failures.** Found by #423's lane while driving a real transfer, not
@@ -1786,6 +1786,45 @@ fake `createRefund` was more permissive than the gateway and a broken refund
 shipped for months.
 
 **Production exposure is low but the guard stays.** A charge happens weeks before
-its event and release is 72 hours after it (**D32**), so funds are long settled
+its event and release is 72 hours after it (**D35**), so funds are long settled
 and `balance_insufficient` is not the realistic trigger; a genuine outage is. It
 self-heals now either way.
+
+### D37: Under Separate Charges, Every Proportional Split Must Be Written Down — *2026-09-06*
+
+**Found by #423's review round, and it is the worst defect that ticket
+produced.** Recorded because the general form is not obvious and will catch the
+next person the same way.
+
+**D31** says a cancellation puts all three parties back proportionally. Under the
+**destination charge** that needed no code at all: the vendor's share was already
+sitting in their own connected-account balance, and Stripe reversed only the
+refunded part of the transfer. The proportional split was *held by Stripe*, in
+two places, and the arithmetic took care of itself.
+
+Under **separate charges and transfers (#423), nobody holds that share but
+Orla** — and a cancelled booking is one the payout sweep skips. So a 50%-tier
+cancellation refunded half to the customer and **silently left the vendor's
+remaining ~45% with the platform.** Not a rounding error, and in the one
+direction a money bug must never go.
+
+**The fix, and the meaning change that carries it:** `vendor_payout_cents` stops
+meaning *"what was agreed"* and starts meaning **"what is still owed"**. A
+cancellation rewrites it to the retained share; `cancelled` becomes releasable
+while that figure is above zero; and the sweep pays it on the original schedule.
+
+**The general rule:** *under separate charges and transfers, every proportional
+split D31 describes has to be written down, because there is no longer a second
+party holding their half of it.* Anywhere the destination-charge design let
+Stripe hold one side of a split, that side is now Orla's to record and to pay.
+
+**#424 reads that column and must know it can change.** A dashboard that treats
+`vendor_payout_cents` as immutable-at-booking will show a cancelled booking's
+original figure rather than what is still owed.
+
+**Why the local gate did not catch it:** the split was correct in every test that
+cancelled a booking and asserted the customer's refund — which is what the tier
+tests assert. Nothing asserted **what the vendor ends up with**, because under
+the old design nothing had to. When a mechanism moves, the tests that pinned its
+*outputs* survive while the ones that would have pinned its *new* obligations
+never existed.
