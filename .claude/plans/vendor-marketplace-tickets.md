@@ -248,13 +248,13 @@ the silent-submit work #388 closed:
 storefront, each of which tells the reader something untrue. |
 | **437** | **Admin detail views, and the entities the console cannot see** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #435 landed 2026-09-07 (`d83d374b`) and the Pattern B detail frame this row was held for arrived the same day in `design/delta-admin/` (#454) | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Seven list screens, zero detail screens, against a design plan that specifies *"detail views: card-based groupings with prominent actions"* (`22-admin.md`). Consequence: `refund_amount_cents`, `cancellation_reason`, `dispute_reason`, `cancelled_by`, `payout_released_at` and `banned_at` appear on no row schema and no screen. Whole entities are absent — `booking_requests` (the entire pre-payment funnel), `service_packages`, `portfolio_items`, `availability`, `notifications`, `categories` — several of which the plan's own authorization matrix (§7) already grants admin. |
 | **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
-| **442** | **A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder: does a second acceptance of a version already held mean one row or two?** | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. The obvious fix — a unique index on `(accepted_by_user_id, document, version)` — **overturns #427's ruling** that a second acceptance of a held version *is* a second row, on the grounds that *"I accepted it twice"* is a true statement about what happened; `legal-acceptance-immutability.test.ts` asserts exactly that today. So the race cannot be closed without first deciding what the record is claiming, which is a product question, not a lane's. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
+| **442** | **A repeat Terms acceptance can write two permanent rows — the read has no index behind it** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — the product question this row invented was false, corrected 2026-09-07 | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. **There is no product question and this row was wrong to claim one.** Both writers already refuse a repeat — `acceptTerms` and `acceptVendorAgreement` each return early under the comment *"Already held: answer, do not write"*, and `terms.routes.test.ts` asserts it twice. The cited `legal-acceptance-immutability.test.ts:248` **inserts directly into the table**, so it asserts a schema fact — *"there is no unique key to collide on"* — and not a ruling that the product permits two acceptances. A test that writes past the code cannot say what the code decided. So the intent is already one row per person, per document, per version, and the service's early return is merely **advisory**: nothing at the database level holds it. Add the unique index and let the losing insert of a race lose harmlessly. Check three things first — existing duplicates would block the index in a table the trigger will not let you tidy; `vendor_id` is left out of the key, which is safe only if one user can never hold two vendor profiles; and both writers must be covered. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
 | **443** | **Frame `13`'s parity residue, including two access findings nothing else checks** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 from #433's parity pass**, which returned MATCH on all six axes for its own change and correctly declined to attribute these six to itself. **Two are access findings** — the search field has an `aria-label` but no visible `<label>`, and the row checkbox is `22x44` against `04-laws.md`'s 44px minimum — and the parity pass is the **only** gate on the accessibility laws and the contrast table, so an unfiled access finding is not caught later, it evaporates. The other four: the header is 1px short, the wordmark renders 24px against 23px, the four filter dropdowns carry a 2px padding asymmetry left over from the caret D25 removed (**correct the padding, do not restore the caret**), and the filtered empty state offers no way out where every other console empty state does. Batched by surface per the filing convention rather than filed as six rows. D30 binds: corroborate each transcribed number against the neighbouring widths before building it. |
 | **444** | **An unwind declines the accepted request behind a completed booking** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #438**, which tripped over it building account closure, verified it was pre-existing rather than its own, and pinned current behaviour in a test rather than widening scope. Confirmed independently before filing. `declineOpenRequests` (`admin.dao.ts:484`) sets `status: 'declined'` where status is in `['pending','quoted','accepted']` — **unconditionally**. But `accepted` is exactly the status a request holds *after checkout*, so an unwind flips the accepted request behind an **already-completed** booking to `declined`: the event happened, the vendor was paid, and the customer's requests screen now says it was declined. That is rewriting history, not unwinding it. **Reachable from any ban**, so it predates #433 and #438 both. The neighbouring `findConfirmedBookingsToUnwind` gets it right and is the model — it bounds on `event_date > today`; the request decline has no equivalent bound. Do **not** simply drop `accepted`: a request accepted but never paid for is a real open commitment. |
 | **445** | **A failed query logs every bound parameter, and the redact list cannot reach it** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 after two lanes hit it independently** — #431's security pass and #439's review — which makes it a shape rather than an incident. Drizzle 0.45.2's `DrizzleQueryError` puts the statement's bound parameters in its `message` **and** in an own enumerable `params` property; pino's `err` serialiser copies own properties, so any `log.*({ err })` on a failed query writes every bound value into the log stream. **`server.ts`'s redact list is path-based on `req.headers.*` and never reaches it.** Caller-triggerable, which is why it is P0: `freeText()` does not strip `U+0000`, Postgres refuses it with `22021`, and the insert is on the **public unauthenticated** `POST /support/messages` — so a stranger picks when the write fails, six times an hour, and up to 4,000 characters of what they typed plus their reply-to address is logged. **Fix the sink, not the source**: a custom pino `err` serialiser covers every existing and future call site, where narrowing `freeText()` closes one trigger and leaves the class open. Two lanes have already written per-call-site guards; a third would make it a habit rather than a law. |
 | **446** | **The app declares no body text size, so every unsized block renders at 16px** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's parity pass, which hit it as a worked example.** `globals.css` sets `line-height` on `html` and its own comment explains why a per-call-site fix cannot close that class — *"an element with no text utility at all still inherits, so the per-site route cannot close the class"* — and then **stops one property short**. Nothing declares `font-size`, so every block element carrying no `text-*` utility inherits the browser's **16px**, which is `--text-lg`, not the 13.5px `--text-base` body step. **The worked example**: #441 set the footer's 13px on the `<a>`, and each `<li>`'s own line box stayed 16px because an inline child does not shrink its block. Rows measured 31px against the frame's 27, the footer was **25px taller** than it draws, and the legal row's copyright sat 1.5px off the links' baseline. #441 fixed the footer by moving the size onto the `<ul>`; the class is still open everywhere else. **Scope is the fix *plus* the sweep, not the fix with a caveat.** `body { font-size: var(--text-base) }` in the same `@layer base` block — on `body`, never `html`, which would rescale every rem-based spacing utility in the product — rescales **every currently-unsized block** from 16px to 13.5px. Anyone picking this up needs to know that before they start rather than discover it: it wants a parity pass over every frame-carrying screen, and it may well surface sites that were silently relying on the 16px. |
 | **447** | **A border or surface token used as text on ink — four instances, three per-call-site guards, no law** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441, which was the third instance.** The recurring mistake is not "a border token used as text" but ***the nearest hex is not the right role***, and it has now bitten four times: `stone-400` as text on ink twice (#430's closing band, #441's admin header), `stone-0` as a border on ink once (#441's legal hairline), and the 78%-alpha-of-`stone-50` that `theme.css` records as the defect which minted the ink-ground ramp in the first place. Three of those now carry **three separately hand-written per-call-site guards** — `page.test.tsx` for the band, `admin-header.test.tsx` and `site-footer.test.tsx` for #441 — and no law. A fourth guard would make it a habit. **#441 looked for the cheap guard and reports that there is not one**, which is the part that should stop the next person rediscovering it: a blanket ban on `text-stone-400` needs **four legitimate exemptions** (`ui/empty-state.tsx`, `vendors/profile/review-form.tsx`, and two in `packages/package-manager.tsx` — all decorative glyphs on a light ground), and a file-level "this file has an ink ground" rule matches **14 files**, most of which use `bg-stone-900` for a scrim, a chip or one button variant. So the guard has to know the *ground an element renders on*, which no source scan can see. Options worth weighing: extend `theme-tokens.test.ts`'s contrast table into a role table naming which tokens may be `text-*` at all; or assert it in the browser during the parity pass, where the ground **is** observable. |
-| **449** | **The screens document is content-box and every delta bundle is border-box, so the logo mark paints 19px where the frame draws 17** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's `diff-reviewer` pass, and it overturns a standing assumption rather than finding drift.** `design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing` hits are inline opt-ins — which is what #250 measured when it ruled `box-content` for the logo mark. **Every delta bundle opens with `* { box-sizing: border-box; }`**: `delta-band`, `delta-legal` and `contact-support` all do. So the closing-band frame draws the footer mark as two **equal footprints** — a 17px outline circle with its 1.3px stroke inside, beside a 17px disc — where `logo.tsx` paints a **19px** outline circle at x=7.64, 2px larger than the disc and 2px low. Measured in Chromium against the frame's own markup under its own reset. **#441 deliberately did not fix it**: `box-content` is #250's ruling, taken from the screens document and measured there, and overturning it moves the mark on the desktop header, the auth panel, the favicon and the app icon on one bundle's authority. That is a design adjudication. It is written up at the `box-content` comment in `logo.tsx`, and `logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at D=17 — a diameter taken from a border-box frame — so the two guards in that file read the same contract two incompatible ways until this is settled. **A `delta-band` parity read measuring 19-against-17 is looking at this ruling, not at drift.** |
+| **449** | **The screens document is content-box and every delta bundle is border-box, so the logo mark paints 19px where the frame draws 17** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's `diff-reviewer` pass, and it overturns a standing assumption rather than finding drift.** `design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing` hits are inline opt-ins — which is what #250 measured when it ruled `box-content` for the logo mark. **Every delta bundle opens with `* { box-sizing: border-box; }`**: `delta-band`, `delta-legal` and `contact-support` all do. So the closing-band frame draws the footer mark as two **equal footprints** — a 17px outline circle with its 1.3px stroke inside, beside a 17px disc — where `logo.tsx` paints a **19px** outline circle at x=7.64, 2px larger than the disc and 2px low. Measured in Chromium against the frame's own markup under its own reset. **#441 deliberately did not fix it**: `box-content` is #250's ruling, taken from the screens document and measured there, and overturning it moves the mark on the desktop header, the auth panel, the favicon and the app icon on one bundle's authority. That is a design adjudication. It is written up at the `box-content` comment in `logo.tsx`, and `logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at D=17 — a diameter taken from a border-box frame — so the two guards in that file read the same contract two incompatible ways until this is settled. **RULED 2026-09-07: `box-content` stands and #250 is upheld** — the screens document is the primary contract and the bundles are supplements, so nothing moves on the header, the auth panel, the favicon or the app icon. The corroboration was closer than the filing implied: `design/delta-admin/` arrived the same day shipping **no `*` reset** either, making it **two content-box documents against three border-box bundles**. What remains open is the contradiction *inside* `logo.test.tsx` — a `box-content` guard pinned at a diameter transcribed from a border-box frame — plus recording the ruling in `web-design-parity.md` and at the `logo.tsx` call site. **A `delta-band` parity read measuring 19-against-17 is looking at this ruling, not at drift.** |
 | **450** | **A closed account vanishes from the only screen it can be reached from** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #438 landed 2026-09-07 (`c7228e77`) | `core` `auth` | **Filed 2026-09-07 by lane #438's `diff-reviewer`**, which correctly declined to fix it in scope: the defect is in an **existing** surface's query. `/admin/customers` filters `deleted_at is null` (`admin.dao.ts:490`) and closure sets `deleted_at` — while `/admin/users/[userId]`, the data-rights page carrying the export, the retained counts and the legal acceptance record, is reachable **from that table and by direct URL and nowhere else**. So closing an account removes the page needed to audit the closure. **It is worst exactly when it matters**: a subject-access request, a regulator, or a dispute about whether closure did what was promised all arrive *after* the closure and none come with the uuid in hand. Fix with a deliberate way to ask for closed accounts — not by dropping the predicate, which correctly makes live accounts the default. |
 | **451** | **Closing an account leaves its Clerk identity live, and its email locked** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #438 landed 2026-09-07 (`c7228e77`) | `core` `auth` | **Filed 2026-09-07 by lane #438's `/code-review high`**, held out of scope correctly: closure soft-deleting is the ruled behaviour and revoking a Clerk session is a new integration call. Two defects from one omission. **The person stays signed in to an application that refuses them** — `clerk-auth.ts:164` 401s a request whose local row is retired, but the Clerk session is still valid, so the browser renders **signed-in header chrome over a signed-out application** indefinitely, with no sign-out prompt because nothing knows to show one. **And their email is locked under the retired row** — `users_email_key` does not care about `deleted_at`, so a re-registration with the same address collides on insert. That is the same state `CLAUDE.md` already warns about for the E2E seed; closure creates it deliberately. **RULED 2026-09-07: release the address.** The unique index becomes partial (`WHERE deleted_at IS NULL`) so a closed account’s address frees up, and closure therefore **deletes the Clerk user** rather than only revoking its sessions — revoking alone would leave the identity holding the address at Clerk’s end while ours had released it. That fires `user.deleted` back at our own webhook, so the handler must be **asserted** idempotent against a retirement it just performed; #433’s replay guard already provides it. The address is not burned, so nothing reaches the privacy text and #374’s wording gate is not on this path. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
@@ -1508,11 +1508,12 @@ that cannot be corrected by a later ticket.
 ### #442: A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race
 
 **Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** The account holder — see the ruling below
+**Blocked by:** None. **Unblocked 2026-09-07 — the product question was a false
+one, and the row was wrong.**
 
-**Filed 2026-09-07** from #429's `security-auditor` pass. The lane found it,
-wrote it up as **D38**, and deliberately left it open, which was the right call:
-the fix decides a product question.
+**Filed 2026-09-07** from #429's `security-auditor` pass, which found the race
+and wrote it up as **D38**. The lane was right to leave the race open. This row
+was wrong about *why*.
 
 #### What is wrong
 
@@ -1527,27 +1528,69 @@ no update, no delete. So a duplicate is not a row someone can tidy up later. It
 is permanent, and it sits in the one table whose entire purpose is to be
 evidence.
 
-#### Why it was not simply fixed
+#### There is no product question. This row invented one — read this before working it
 
-The obvious remedy is a unique index on `(accepted_by_user_id, document,
-version)`. That **overturns a ruling #427 made deliberately**: a second
-acceptance of a version already held *is* a second row, because *"I accepted it
-twice"* is a true statement about what happened, and a record built to say what
-happened should not silently collapse two acts into one.
-`packages/db/src/legal-acceptance-immutability.test.ts` asserts that behaviour
-directly, so the index and the test cannot both stand.
+The account holder asked the obvious question — *"why is a user able to accept
+the terms twice if it's the same terms?"* — and the answer is that **they are
+not, and never were.** Verified in the shipped code on 2026-09-07:
 
-**The question for the account holder, stated plainly:** when the same person
-accepts the same version of the same document twice, should the record show one
-acceptance or two?
+- `acceptTerms` (`terms.service.ts`) reads the held version and, under the
+  comment *"Already held: answer, do not write"*, **returns the status without
+  inserting**.
+- `acceptVendorAgreement` (`legal-agreement.service.ts`) does the same, under
+  the same comment, with the reasoning spelled out: *"the second acceptance of a
+  version already held adds no answer to it. A **new** version still adds its
+  row."*
+- `terms.routes.test.ts` asserts it twice — *"records the acceptance against the
+  existing account, without a second one"* (`:196`) and *"signing in again is not
+  accepting again"* (`:350`).
 
-- **One row** — the record answers *"what is this person bound by"*. Add the
-  unique index, let the second insert lose harmlessly, and amend #427's test.
-- **Two rows** — the record answers *"what did this person do, and when"*.
-  Keep the current meaning and close the race a different way: a transaction
-  with the right isolation, or an advisory lock keyed to the user and document,
-  so a genuine repeat acceptance minutes apart still records two rows while two
-  submissions of one click record one.
+So the intent is unambiguous and already implemented: **one row per person, per
+document, per version.** A repeat submission is refused at the service layer.
+
+**This row previously claimed #427 ruled the opposite** — that a second
+acceptance *is* a second row — and cited
+`packages/db/src/legal-acceptance-immutability.test.ts:248` as asserting it.
+That citation was misread, and the misreading is worth naming because it is a
+recurring one: **that test inserts directly into the table**, bypassing both
+services. It asserts a *schema* fact — *"there is no unique key to collide on and
+no upsert path"* — which is a true description of the database as it stands
+today and **not** a ruling that the product permits two acceptances. A test that
+writes past the code cannot tell you what the code decided.
+
+**So the fix is not a policy change, it is enforcement of a policy that already
+exists.** The service's early return is advisory: nothing at the database level
+holds it, so two requests racing from one session both read *not held* and both
+insert into a table a trigger makes permanent.
+
+#### What to build
+
+Add the **unique index** — `(accepted_by_user_id, document, version)` — and let
+the losing insert of a race lose harmlessly rather than surfacing as a 500. The
+index turns the existing early return from a courtesy into a guarantee, which is
+what the two service comments already believe they have.
+
+**Three things to check before writing the migration, none of them optional:**
+
+1. **Existing duplicates block the index.** A `CREATE UNIQUE INDEX` fails if the
+   table already holds a colliding pair, and this table cannot be tidied — the
+   trigger refuses deletes. Query for duplicates first and say in the ticket what
+   you found; if any exist, the repair is a decision, not a migration.
+2. **`vendor_id` is deliberately not in the key, and you must confirm that is
+   safe.** A `vendor_agreement` row carries `vendor_id`; the proposed key does
+   not. That is correct **only if** one user can never hold two vendor profiles.
+   Verify it against the schema rather than assuming — if it is not true, the key
+   needs `vendor_id` and the Terms rows (which carry `null`) still behave, since
+   Postgres treats nulls as distinct in a unique index, which is a second thing
+   to check rather than assume.
+3. **Both writers must be covered**, because the identical shape has been live on
+   the vendor agreement since #427. One index covers both; make sure the
+   duplicate-key handling does too, so the vendor path does not 500 where the
+   Terms path no-ops.
+
+**The window is small but it reopens at every version bump**, and the rows are
+permanent, which is the whole reason a P1 sits on a race that closes in
+milliseconds.
 
 Either is defensible. What is not defensible is leaving a race open in an
 append-only evidence table because the question was never asked.
@@ -1913,6 +1956,50 @@ scan can see that.
 
 **Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
 **Blocked by:** None
+
+#### RULED 2026-09-07 by the account holder: `box-content` stands. #250 is upheld
+
+**The screens document wins.** `design/Orla - Screens.dc.html` is the primary
+contract and the delta bundles are supplements to it, so the 19-against-17
+reading is an artefact of a supplement's own reset rather than drift in the app.
+`logo.tsx` does not change, and **the mark does not move on the desktop header,
+the auth panel, the favicon or the app icon.**
+
+**The corroboration is closer than the original filing suggested**, and it is
+worth recording because it would otherwise look like the ruling went against the
+weight of evidence. `design/delta-admin/` arrived on 2026-09-07 and ships **no
+`*` reset** either — grepped and confirmed, zero `box-sizing` declarations. So
+the split is **two content-box documents** (the screens document and
+`delta-admin`) against **three border-box bundles** (`delta-band`,
+`delta-legal`, `contact-support`), not one against three. That does not decide
+it — primacy does — but it removes the "one frame against three corroborating
+siblings" reading of D30 that made the other answer look obvious.
+
+#### What this ticket now is
+
+**Not a re-measurement. The scope is the contradiction inside `logo.test.tsx`,
+which is real and still open.** That file holds two guards reading the same
+contract incompatibly: `it.each(EVERY_SIZE)` pins `box-content` at **D=17**, a
+diameter transcribed from a **border-box** frame. So the assertion is correct
+about the box model and wrong about where its number came from, and the next
+reader cannot tell which half to trust.
+
+1. **Correct the D=17 guard** so its diameter is taken from a content-box source
+   — the screens document, which is what #250 measured — or, if 17 is genuinely
+   the right number under content-box, say so at the assertion with the
+   measurement that establishes it. Do not leave a number whose provenance
+   contradicts the rule it is pinning.
+2. **Record the ruling in `.claude/rules/web-design-parity.md`** beside the
+   existing #449 paragraph, replacing *"not yet ruled"* with the outcome and the
+   two-against-three count. The existing instruction — *grep `box-sizing` in the
+   specific bundle a pass is reading before arguing about any bordered box in
+   it* — stays, and now applies in both directions.
+3. **Leave the `box-content` comment in `logo.tsx` in place**, and extend it to
+   name the ruling, so the next `delta-band` parity read measuring 19-against-17
+   is told at the call site that it is reading a decision.
+
+**A parity pass reporting the footer mark as 2px large is looking at this
+ruling.** It is an accepted deviation from that bundle, permanently.
 
 **Filed 2026-09-07 by #441's `diff-reviewer` pass.** This overturns a standing
 assumption rather than finding drift, which is why it is a ticket and not a fix.
