@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import type { NextConfig } from 'next';
-import { assertWebEnv } from './src/config/env';
+import { assertWebEnv, servesOverTls } from './src/config/env';
 import { securityHeaders, shouldEnforceCsp } from './src/config/security-headers';
 
 // Next.js only reads `.env` files beside the app, but the file developers edit
@@ -40,6 +40,16 @@ const apiOrigin = webEnv.NEXT_PUBLIC_API_URL;
  * console report rather than a broken page.
  */
 const isProduction = process.env.NODE_ENV === 'production';
+
+/*
+ * Whether to advertise TLS — HSTS and the CSP's `upgrade-insecure-requests`.
+ * Read from this app's own public origin rather than from `NODE_ENV`, which
+ * `next start` sets on a laptop as readily as on a release; see
+ * `servesOverTls` for the round trip that cost. Distinct from `isProduction`
+ * above, which still decides the things that really are about the build:
+ * `distDir` and webpack's `unsafe-eval`.
+ */
+const servesTls = servesOverTls();
 
 const nextConfig: NextConfig = {
   /*
@@ -82,7 +92,7 @@ const nextConfig: NextConfig = {
             cspEnforce: process.env.CSP_ENFORCE,
             nodeEnv: process.env.NODE_ENV,
           }),
-          https: isProduction,
+          https: servesTls,
         }),
       },
     ];

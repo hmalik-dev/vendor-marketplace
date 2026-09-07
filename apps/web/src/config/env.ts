@@ -1,4 +1,5 @@
 import {
+  deploymentOrigin,
   deploymentPlatform,
   isDeployedBuild,
   registrySchemaShape,
@@ -90,4 +91,61 @@ export function siteOrigin(source: NodeJS.ProcessEnv = process.env): string {
   }
 
   return configured || deployed || LOCAL_WEB_ORIGIN;
+}
+
+/**
+ * Whether this origin is **actually served over TLS** — the question HSTS and
+ * the CSP's `upgrade-insecure-requests` are both really asking.
+ *
+ * `NODE_ENV` cannot answer it, and answering it with `NODE_ENV` is the defect
+ * #452 measured. `next start` runs a laptop with `NODE_ENV=production`, so a
+ * plain `http://localhost:<port>` origin advertised both headers — and while
+ * Chromium exempts a potentially-trustworthy host like `localhost` from
+ * `upgrade-insecure-requests` for the *initial* request, it applies the
+ * directive to a **redirect target** regardless. So every 3xx that a `fetch`
+ * followed was retried against `https://localhost:<port>`, failed
+ * `ERR_SSL_PROTOCOL_ERROR` and fell back to http: one dead round trip and a
+ * standing console error behind every role bounce, from a redirect whose own
+ * `Location` was correct. Measured directly — HSTS, sent over the same plain
+ * origin, is ignored by the browser and changes nothing.
+ *
+ * **Read only from what the platform announces**, never from `WEB_URL`, and
+ * that restriction is load-bearing twice over.
+ *
+ * *It is what keeps the answer cacheable.* `headers()` is evaluated by
+ * `next build` and frozen into `routes-manifest.json`, so whatever decides it
+ * has to be part of what Turborepo's cache key describes. `PLATFORM_ENV_KEYS`
+ * are in `globalEnv` (hashed) for exactly that reason; `WEB_URL` is in
+ * `globalPassThroughEnv` (unhashed). Deciding on `WEB_URL` left the hash
+ * identical for an `http://localhost` build and an `https://` one — measured —
+ * so a warm cache replayed the wrong manifest **in both directions**: #452's
+ * own defect served again from cache with the fix in the tree, and a TLS
+ * deployment shipped with no HSTS. `CSP_ENFORCE` was moved into the hashed set
+ * in #396 for the identical reason; this reaches the same end without a
+ * registry change.
+ *
+ * *It is also what leaves one authority.* `WEB_URL` and the announced origin
+ * can disagree, and letting both speak needs a rule about which wins — which is
+ * the scheme being decided twice and agreeing by luck. The platform's answer is
+ * the only one, and an operator who declares `DEPLOYMENT_ORIGIN=http://…` is
+ * believed: a proxy-terminated deployment's public origin is `https://`, and
+ * declaring it is how it says so.
+ *
+ * A **deployed build** that announces no TLS origin throws rather than quietly
+ * baking an artefact with no HSTS in it — `deployment.ts`'s own instruction,
+ * *derive it from something the platform sets, or throw*. `isDeployedBuild`,
+ * not `isDeployedRuntime`, which is true for `pnpm build` on a laptop and would
+ * refuse the very case this exists to allow.
+ */
+export function servesOverTls(source: NodeJS.ProcessEnv = process.env): boolean {
+  const servesTls = deploymentOrigin(source)?.startsWith('https://') === true;
+
+  if (!servesTls && isDeployedBuild(source)) {
+    throw new Error(
+      'This deployment announced no https origin, so it would ship without HSTS. ' +
+        'Set DEPLOYMENT_ORIGIN to the origin it is served at.',
+    );
+  }
+
+  return servesTls;
 }
