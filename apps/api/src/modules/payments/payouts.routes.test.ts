@@ -210,6 +210,7 @@ describe('payouts', () => {
     harness.stripe.transfers.length = 0;
     harness.stripe.reversals.length = 0;
     harness.stripe.transfersToRefuse.clear();
+    harness.stripe.failedTransferKeys.clear();
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -448,6 +449,7 @@ describe('payouts', () => {
       clockNow = AFTER_RELEASE;
       const orphan = await harness.stripe.createTransfer({
         bookingId: 'a-run-whose-commit-was-lost',
+        attempt: 0,
         amountCents: EXPECTED_PAYOUT_CENTS,
         destinationAccountId: VENDOR_ACCOUNT,
         transferGroup: `booking_${paid.requestId}`,

@@ -284,6 +284,15 @@ export interface FakeStripe extends StripeConnectGateway {
    * it from a test.
    */
   transfersToRefuse: Set<string>;
+  /**
+   * Idempotency keys whose result was a **failure**, replayed as Stripe does.
+   *
+   * Exposed so a suite can clear it between tests alongside `transfers`. Booking
+   * ids are fresh uuids so a stale entry cannot currently collide, but a fake
+   * that remembers a refusal across tests is exactly the kind of coupling that
+   * produces an unexplainable red one day.
+   */
+  failedTransferKeys: Map<string, string>;
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
 }
@@ -315,6 +324,7 @@ function createFakeStripe(): FakeStripe {
     transfers,
     reversals,
     transfersToRefuse,
+    failedTransferKeys,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
 
     succeed: (paymentIntentId) => {

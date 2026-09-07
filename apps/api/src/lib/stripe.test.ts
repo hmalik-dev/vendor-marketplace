@@ -120,6 +120,7 @@ describe('transferParams', () => {
     amountCents: 127_600,
     destinationAccountId: 'acct_vendor',
     transferGroup: 'booking_req_one',
+    attempt: 0,
   } as const;
 
   it('sends the stored payout to the vendor account, tagged with its group', () => {
