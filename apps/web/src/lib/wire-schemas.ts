@@ -29,6 +29,7 @@ import {
   adminBookingRowSchema,
   adminCaseBookingSchema,
   adminCaseDetailSchema,
+  adminConversationMessagesSchema,
   adminCaseRowSchema,
   adminCloseAccountResultSchema,
   adminUserDataRightsSchema,
@@ -510,6 +511,28 @@ export const wireAdminCaseDetailSchema = adminCaseDetailSchema.extend({
   booking: wireAdminCaseBookingSchema.nullable(),
 });
 export type WireAdminCaseDetail = z.infer<typeof wireAdminCaseDetailSchema>;
+
+/**
+ * A reported thread as the console reads it (#436).
+ *
+ * `readAt` earns its coercion as much as `createdAt` does: "they saw it and
+ * kept going" is a different complaint from "they never opened it", and it is
+ * the fact a harassment report turns on that the message text does not carry.
+ */
+export const wireAdminConversationMessagesSchema = adminConversationMessagesSchema.extend({
+  messages: z.object({
+    items: z.array(
+      adminConversationMessagesSchema.shape.messages.shape.items.element.extend({
+        readAt: z.coerce.date().nullable(),
+        createdAt: z.coerce.date(),
+      }),
+    ),
+    total: z.int().min(0),
+    page: z.int().min(1),
+    pageSize: z.int().min(1),
+  }),
+});
+export type WireAdminConversationMessages = z.infer<typeof wireAdminConversationMessagesSchema>;
 
 /** No dates on the wire: every series point is already a `YYYY-MM-DD` string. */
 export const wireAdminMetricsSchema = adminMetricsSchema;

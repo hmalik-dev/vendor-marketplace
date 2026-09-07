@@ -2,17 +2,21 @@ import {
   formatPrice,
   pageWindow,
   payoutStatusOf,
+  REPORT_CASE_TOPIC,
   type AdminCaseBooking,
   type AdminCaseDetail,
   type AdminCasePage,
   type AdminCaseQuery,
+  type AdminConversationMessages,
+  type ReportReason,
+  type ReportSubject,
   type SupportTopic,
 } from '@vendor-marketplace/shared';
 import type { SupportCaseRow } from '@vendor-marketplace/db/schema';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
 import type { StripeDisputeSnapshot } from '../../lib/stripe.js';
-import { AppError, conflict, notFound } from '../../lib/errors.js';
+import { AppError, conflict, forbidden, notFound } from '../../lib/errors.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
 import { fullName } from '../admin/admin.service.js';
 import {
@@ -22,12 +26,15 @@ import {
   StaleBookingError,
   type BookingContext,
 } from '../payments/payments.service.js';
+import { countMessages, findMessages } from '../messaging/messaging.dao.js';
+import { findConversationParties } from '../reports/reports.dao.js';
 import {
   countSupportCases,
   findBookingForDispute,
   findCaseBooking,
   findCaseByStripeDisputeId,
   findCaseResolutionState,
+  findOpenCaseForConversation,
   findOpenChargebackCase,
   findSupportCaseById,
   findSupportCases,
@@ -167,6 +174,55 @@ export async function openSupportCase(
         bookingId: input.bookingId,
       }),
     'A support message was sent but its case row could not be written',
+  );
+}
+
+export interface OpenReportCaseInput {
+  reference: string;
+  message: string;
+  senderUserId: string;
+  senderEmail: string;
+  subjectType: ReportSubject;
+  subjectId: string;
+  reason: ReportReason;
+}
+
+/**
+ * The third door: a report raised from inside the product (#436).
+ *
+ * Best-effort by the same rule as `openSupportCase`, and the rule holds for the
+ * same reason — the caller has already sent, or is about to send, the email
+ * that is the actual delivery, and a row that could not be written must not
+ * cost it. What is different is what it does *not* do: no hold is placed
+ * anywhere on this path, so there is no frozen payout for a failed row to
+ * strand, and no vendor notice that would be announcing a freeze that never
+ * happened.
+ *
+ * `topic` is filled in with `REPORT_CASE_TOPIC` rather than left null. A
+ * chargeback's topic is null because nobody typed one; a report's is known by
+ * construction, and filling it is what puts these cases in front of an operator
+ * filtering the queue for trust and safety.
+ */
+export async function openReportCase(
+  deps: CaseDeps,
+  input: OpenReportCaseInput,
+): Promise<SupportCaseRow | null> {
+  return bestEffort(
+    deps.log,
+    { reference: input.reference },
+    () =>
+      insertSupportCase(deps.db, {
+        reference: input.reference,
+        origin: 'user_report',
+        topic: REPORT_CASE_TOPIC,
+        message: input.message,
+        senderUserId: input.senderUserId,
+        senderEmail: input.senderEmail,
+        subjectType: input.subjectType,
+        subjectId: input.subjectId,
+        reportReason: input.reason,
+      }),
+    'A report was filed but its case row could not be written',
   );
 }
 
@@ -468,6 +524,9 @@ function toCaseRow(row: SupportCaseProjection) {
     senderName: senderName(row),
     senderEmail: row.senderEmail,
     bookingId: row.bookingId,
+    subjectType: row.subjectType,
+    subjectId: row.subjectId,
+    reportReason: row.reportReason,
     createdAt: row.createdAt,
   };
 }
@@ -611,4 +670,105 @@ export async function resolveCase(
   }
 
   return readCase(deps.db, caseId);
+}
+
+// --- What the console reads under a case's authority -----------------------
+
+/**
+ * The messages on a reported thread, read **only from the case that names it**
+ * and **never without a row saying who read it** (#436).
+ *
+ * Three constraints, and each one is an acceptance rather than a nicety.
+ *
+ * 1. **Scoped, not a browse.** The grant is looked up from the conversation —
+ *    `findOpenCaseForConversation` — so a caller holding a case id cannot pair
+ *    it with a conversation id of their choosing. No open case, no read; and a
+ *    **resolved** case is not a grant either, or every report ever filed would
+ *    leave a permanent key to that thread behind it.
+ * 2. **Logged, and the log is not best-effort.** `recordAdminActionBestEffort`
+ *    exists for operations that have already committed something irreversible
+ *    outside Postgres. A read has committed nothing, so the action row rides the
+ *    same transaction as the select: a read that could not be logged did not
+ *    happen, and the operator simply asks again. Logging afterwards, or
+ *    swallowing the failure, is how the console comes to have read messages it
+ *    has no record of reading — which is the entire reason #434 was this
+ *    ticket's prerequisite.
+ * 3. **Read only.** There is no counterpart that writes into a thread, and there
+ *    is not meant to be: the operator reads, then acts through moderation or
+ *    through support. A message from the platform inside a private conversation
+ *    would make the marketplace a party to it.
+ */
+export async function readCaseConversation(
+  deps: CaseDeps,
+  actorId: string,
+  conversationId: string,
+  page: number,
+  pageSize: number,
+): Promise<AdminConversationMessages> {
+  const grant = await findOpenCaseForConversation(deps.db, conversationId);
+
+  if (!grant) {
+    throw forbidden(
+      'No open case names this conversation. Threads are readable from the report that ' +
+        'raised them, and only while that case is open.',
+    );
+  }
+
+  const parties = await findConversationParties(deps.db, conversationId);
+
+  if (!parties) {
+    /*
+     * A case can outlive its subject — `subject_id` carries no foreign key on
+     * purpose — so the grant existing does not prove the thread still does.
+     */
+    throw notFound('That conversation no longer exists');
+  }
+
+  const customerName = fullName(parties.customerFirstName, parties.customerLastName);
+
+  const { rows, total } = await deps.db.transaction(async (tx) => {
+    await insertAdminAction(tx, {
+      actorId,
+      action: 'conversation_messages_read',
+      subjectType: 'conversation',
+      subjectId: conversationId,
+      /*
+       * The case it was read under and how much of the thread was pulled —
+       * never a line of what was said. The audit log records what happened and
+       * not the content of what was moderated, which is what the table's own
+       * doc comment calls the difference between a log and a second copy.
+       */
+      detail: { caseId: grant.id, reference: grant.reference, page, pageSize },
+    });
+
+    const [found, counted] = await Promise.all([
+      findMessages(tx, conversationId, pageSize, (page - 1) * pageSize),
+      countMessages(tx, conversationId),
+    ]);
+
+    return { rows: found, total: counted };
+  });
+
+  return {
+    conversationId,
+    caseId: grant.id,
+    caseReference: grant.reference,
+    customerName,
+    vendorName: parties.vendorBusinessName,
+    messages: {
+      items: rows.map((row) => ({
+        id: row.id,
+        senderId: row.senderId,
+        senderName: row.senderId === parties.customerId ? customerName : parties.vendorBusinessName,
+        senderSide:
+          row.senderId === parties.customerId ? ('customer' as const) : ('vendor' as const),
+        content: row.content,
+        readAt: row.readAt,
+        createdAt: row.createdAt,
+      })),
+      total,
+      page,
+      pageSize,
+    },
+  };
 }

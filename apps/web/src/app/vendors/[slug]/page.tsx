@@ -291,13 +291,19 @@ export default async function VendorProfilePage({
                 serviceRadiusKm={vendor.serviceRadiusKm}
                 packages={vendor.packages}
                 onSeePackagesHref={`/vendors/${vendor.slug}?tab=packages`}
+                vendorProfileId={vendor.id}
+                signedIn={viewerRole !== null}
               />
             ),
             packages: (
               <PackagesPane packages={vendor.packages} businessName={vendor.businessName} />
             ),
             portfolio: (
-              <PortfolioPane items={vendor.portfolio} businessName={vendor.businessName} />
+              <PortfolioPane
+                items={vendor.portfolio}
+                businessName={vendor.businessName}
+                signedIn={viewerRole !== null}
+              />
             ),
             reviews: (
               <ReviewsPane
@@ -307,6 +313,7 @@ export default async function VendorProfilePage({
                    "we couldn't load them" when its own read fails. */
                 reviewCount={vendor.reviewCount}
                 initial={reviews}
+                signedIn={viewerRole !== null}
               />
             ),
             availability: (

@@ -41,6 +41,7 @@ import { healthRoutes } from './modules/health/health.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
 import { reviewRoutes } from './modules/reviews/reviews.routes.js';
+import { reportRoutes } from './modules/reports/reports.routes.js';
 import { supportRoutes } from './modules/support/support.routes.js';
 import { tagRoutes } from './modules/tags/tags.routes.js';
 import { uploadRoutes } from './modules/uploads/uploads.routes.js';
@@ -252,6 +253,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     supportEmailTo: env.SUPPORT_EMAIL_TO,
     webOrigin: canonicalWebOrigin(env),
   });
+  await app.register(reportRoutes, { supportEmailTo: env.SUPPORT_EMAIL_TO });
   await app.register(clerkWebhookRoutes, {
     signingSecret: env.CLERK_WEBHOOK_SECRET,
     webOrigin: canonicalWebOrigin(env),

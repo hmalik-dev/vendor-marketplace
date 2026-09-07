@@ -92,6 +92,15 @@ Connect onboarding expects them.
 - [ ] State the cancellation and refund policy the product actually enforces:
       **100% refund over 48h, 50% under 48h** (decision D3), platform commission
       **12%** (D4).
+- [ ] **Have a lawyer read the staff-message-access clause in `privacy.md`
+      (#436).** It is under _Who else sees it_ and it is the only paragraph in
+      the corpus asserting that staff can read a user's private messages, so it
+      is the one most likely to be legally load-bearing rather than filler. It
+      was written to describe what the code does — scoped to a reported thread,
+      only while the report is open, every read logged, no staff writes — and
+      **not** to be binding wording anybody has reviewed. Reword it or keep it,
+      but decide deliberately: the rest of this corpus is placeholder nobody has
+      relied on, and a claim about reading messages is not.
 
 ---
 
@@ -259,7 +268,8 @@ tracker for detail.
 
 ## 7. Legal and business
 
-- [ ] ToS, privacy policy, cookie notice (§1.5)
+- [ ] ToS, privacy policy, cookie notice (§1.5) — including the
+      staff-message-access clause #436 added to the privacy policy
 - [ ] Stripe Connect terms accepted; platform account fully verified
 - [ ] Vendor agreement covering the 12% commission and payout timing
 - [ ] Refund and cancellation policy shown before payment, matching what the

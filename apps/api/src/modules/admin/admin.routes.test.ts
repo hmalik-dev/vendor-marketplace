@@ -243,6 +243,12 @@ describe('admin routes', () => {
       { method: 'PUT', url: `/admin/reviews/${NIL}/visibility` },
       { method: 'PUT', url: `/admin/packages/${NIL}/active` },
       { method: 'DELETE', url: `/admin/portfolio-items/${NIL}` },
+      /*
+       * #436. The most privileged read in the console: two people's private
+       * messages. It is scoped by an open case on top of this guard, but the
+       * guard is what stops a stranger reaching the scope check at all.
+       */
+      { method: 'GET', url: `/admin/conversations/${NIL}/messages` },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {

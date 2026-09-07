@@ -267,6 +267,13 @@
       "when": 1788817735654,
       "tag": "0037_silky_colossus",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788819594576,
+      "tag": "0038_last_purple_man",
+      "breakpoints": true
     }
   ]
 }

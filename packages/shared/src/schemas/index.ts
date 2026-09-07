@@ -48,6 +48,7 @@ import {
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
   MESSAGE_MAX_LENGTH,
+  MESSAGE_PAGE_SIZE,
   MIN_BOOKING_AMOUNT_CENTS,
   NOTIFICATION_TYPES,
   PAYOUT_STATUSES,
@@ -71,9 +72,12 @@ import {
 import { LEGAL_ACCEPTANCE_DOCUMENTS, LEGAL_ACCEPTANCE_METHODS } from '../constants/legal.js';
 import { LEGAL_DOCUMENT_SHA256_LENGTH } from '../constants/legal-manifest.js';
 import {
+  MAX_REPORT_DETAIL_LENGTH,
   MAX_SUPPORT_ERROR_DIGEST_LENGTH,
   MAX_SUPPORT_ERROR_ROUTE_LENGTH,
   MAX_SUPPORT_MESSAGE_LENGTH,
+  REPORT_REASONS,
+  REPORT_SUBJECTS,
   SUPPORT_ERROR_DIGEST_PATTERN,
   SUPPORT_CASE_ORIGINS,
   SUPPORT_CASE_STATUSES,
@@ -2163,6 +2167,45 @@ export type SupportMessageReceipt = z.infer<typeof supportMessageReceiptSchema>;
 export const supportSendFailureDetailsSchema = supportMessageReceiptSchema;
 export type SupportSendFailureDetails = z.infer<typeof supportSendFailureDetailsSchema>;
 
+// --- In-product reporting (#436) -------------------------------------------
+
+export const reportSubjectSchema = z.enum(REPORT_SUBJECTS);
+export const reportReasonSchema = z.enum(REPORT_REASONS);
+
+/**
+ * One report, as the dialog sends it.
+ *
+ * **Two ids and no prose about who.** The subject is named by type and id and
+ * everything else the operator reads — whose profile, which vendor, who is in
+ * the thread — is resolved from those on the server. A report that quoted the
+ * subject's own name out of the reporter's payload would be a queue reading
+ * whatever the reporter chose to put in it, which is the same rule
+ * `supportMessageSchema` states for a booking's figures.
+ *
+ * The reporter is the session. There is no field for them here for the reason
+ * there is no `email` on a signed-in support send: an address or an id chosen
+ * by whoever holds the form is not an identity.
+ */
+export const createReportSchema = z.object({
+  subjectType: reportSubjectSchema,
+  subjectId: uuidSchema,
+  reason: reportReasonSchema,
+  /** Optional context. The enums carry the triage; this carries the sentence. */
+  detail: freeText().max(MAX_REPORT_DETAIL_LENGTH).optional(),
+});
+export type CreateReportInput = z.infer<typeof createReportSchema>;
+
+/**
+ * What a report hands back: the reference, and nothing else.
+ *
+ * Deliberately the same shape as a support send's receipt. There is no status
+ * to poll and no case the reporter can open — the queue is the operator's
+ * screen — so the reference is the whole of what they are given, and the
+ * dialog says so in words.
+ */
+export const reportReceiptSchema = supportMessageReceiptSchema;
+export type ReportReceipt = z.infer<typeof reportReceiptSchema>;
+
 // --- Errors ----------------------------------------------------------------
 
 export const apiErrorSchema = z.object({
@@ -2845,6 +2888,18 @@ export const adminCaseRowSchema = z.object({
   /** Where a reply goes. `null` on a chargeback, which has nobody to answer. */
   senderEmail: z.string().nullable(),
   bookingId: uuidSchema.nullable(),
+  /**
+   * What an in-product report is about, `null` on the other two origins (#436).
+   *
+   * On the **row** rather than only on the detail, because the queue's job is
+   * to be triaged without opening anything: `Review` beside a `user_report`
+   * tells an operator what they are about to work, and a queue that made them
+   * click to find out is a queue worked one case at a time.
+   */
+  subjectType: reportSubjectSchema.nullable(),
+  subjectId: uuidSchema.nullable(),
+  /** The reporter's reason. `null` on the other two origins. */
+  reportReason: reportReasonSchema.nullable(),
   createdAt: z.date(),
 });
 export type AdminCaseRow = z.infer<typeof adminCaseRowSchema>;
@@ -3223,3 +3278,65 @@ export const adminUserDataRightsSchema = z.object({
   legalAcceptances: z.array(legalAcceptanceRecordSchema),
 });
 export type AdminUserDataRights = z.infer<typeof adminUserDataRightsSchema>;
+/**
+ * One message as the console renders it (#436).
+ *
+ * The sender's **name and side**, resolved on the server, rather than a bare
+ * `senderId` the operator would have to look up twice per thread. `senderId`
+ * stays because it is what the row is keyed on and what an action row would
+ * name.
+ *
+ * `readAt` is here and is not decoration: "they saw it and kept going" is a
+ * different complaint from "they never opened it", and it is the one fact a
+ * harassment report turns on that the message text does not carry.
+ */
+export const adminConversationMessageSchema = z.object({
+  id: uuidSchema,
+  senderId: uuidSchema,
+  senderName: z.string(),
+  /** Which side of the thread said it, so a name is not the only signal. */
+  senderSide: z.enum(['customer', 'vendor']),
+  content: z.string(),
+  readAt: z.date().nullable(),
+  createdAt: z.date(),
+});
+export type AdminConversationMessage = z.infer<typeof adminConversationMessageSchema>;
+
+/**
+ * A reported thread, **and the case that authorises reading it**.
+ *
+ * The case is in the response rather than assumed by the caller because the
+ * grant is the point: this route refuses every conversation no open case
+ * names, so the screen states which case it is reading under, and the operator
+ * sees the same scope the server enforced. It is also what the `admin_actions`
+ * row records, so the screen and the log cannot disagree about why the thread
+ * was opened.
+ *
+ * **There is no write half.** An operator reads here and then acts through
+ * moderation or through support; nothing in the console posts into a thread,
+ * because a participant is a party to the conversation and an operator is not.
+ */
+/**
+ * The page window for a reported thread.
+ *
+ * `paginationQueryShape` with the thread's own page size rather than
+ * `adminPaginationShape`: this is a conversation and it is read in bulk like
+ * every other conversation. An operator reading a thread twenty rows at a time
+ * would write four audit rows to read one argument.
+ */
+export const adminConversationQuerySchema = z.object({
+  ...paginationQueryShape,
+  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(MESSAGE_PAGE_SIZE),
+});
+export type AdminConversationQuery = z.infer<typeof adminConversationQuerySchema>;
+
+export const adminConversationMessagesSchema = z.object({
+  conversationId: uuidSchema,
+  /** The open case this read was granted by. */
+  caseId: uuidSchema,
+  caseReference: z.string().regex(SUPPORT_REFERENCE_PATTERN),
+  customerName: z.string(),
+  vendorName: z.string(),
+  messages: paginatedSchema(adminConversationMessageSchema),
+});
+export type AdminConversationMessages = z.infer<typeof adminConversationMessagesSchema>;

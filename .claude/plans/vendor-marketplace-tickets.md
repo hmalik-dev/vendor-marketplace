@@ -257,15 +257,14 @@ storefront, each of which tells the reader something untrue. |
 | **447** | **A border or surface token used as text on ink — four instances, three per-call-site guards, no law** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441, which was the third instance.** The recurring mistake is not "a border token used as text" but ***the nearest hex is not the right role***, and it has now bitten four times: `stone-400` as text on ink twice (#430's closing band, #441's admin header), `stone-0` as a border on ink once (#441's legal hairline), and the 78%-alpha-of-`stone-50` that `theme.css` records as the defect which minted the ink-ground ramp in the first place. Three of those now carry **three separately hand-written per-call-site guards** — `page.test.tsx` for the band, `admin-header.test.tsx` and `site-footer.test.tsx` for #441 — and no law. A fourth guard would make it a habit. **#441 looked for the cheap guard and reports that there is not one**, which is the part that should stop the next person rediscovering it: a blanket ban on `text-stone-400` needs **four legitimate exemptions** (`ui/empty-state.tsx`, `vendors/profile/review-form.tsx`, and two in `packages/package-manager.tsx` — all decorative glyphs on a light ground), and a file-level "this file has an ink ground" rule matches **14 files**, most of which use `bg-stone-900` for a scrim, a chip or one button variant. So the guard has to know the *ground an element renders on*, which no source scan can see. Options worth weighing: extend `theme-tokens.test.ts`'s contrast table into a role table naming which tokens may be `text-*` at all; or assert it in the browser during the parity pass, where the ground **is** observable. |
 | **449** | **The screens document is content-box and every delta bundle is border-box, so the logo mark paints 19px where the frame draws 17** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's `diff-reviewer` pass, and it overturns a standing assumption rather than finding drift.** `design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing` hits are inline opt-ins — which is what #250 measured when it ruled `box-content` for the logo mark. **Every delta bundle opens with `* { box-sizing: border-box; }`**: `delta-band`, `delta-legal` and `contact-support` all do. So the closing-band frame draws the footer mark as two **equal footprints** — a 17px outline circle with its 1.3px stroke inside, beside a 17px disc — where `logo.tsx` paints a **19px** outline circle at x=7.64, 2px larger than the disc and 2px low. Measured in Chromium against the frame's own markup under its own reset. **#441 deliberately did not fix it**: `box-content` is #250's ruling, taken from the screens document and measured there, and overturning it moves the mark on the desktop header, the auth panel, the favicon and the app icon on one bundle's authority. That is a design adjudication. It is written up at the `box-content` comment in `logo.tsx`, and `logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at D=17 — a diameter taken from a border-box frame — so the two guards in that file read the same contract two incompatible ways until this is settled. **A `delta-band` parity read measuring 19-against-17 is looking at this ruling, not at drift.** |
 | **450** | **A closed account vanishes from the only screen it can be reached from** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #438 landed 2026-09-07 (`c7228e77`) | `core` `auth` | **Filed 2026-09-07 by lane #438's `diff-reviewer`**, which correctly declined to fix it in scope: the defect is in an **existing** surface's query. `/admin/customers` filters `deleted_at is null` (`admin.dao.ts:490`) and closure sets `deleted_at` — while `/admin/users/[userId]`, the data-rights page carrying the export, the retained counts and the legal acceptance record, is reachable **from that table and by direct URL and nowhere else**. So closing an account removes the page needed to audit the closure. **It is worst exactly when it matters**: a subject-access request, a regulator, or a dispute about whether closure did what was promised all arrive *after* the closure and none come with the uuid in hand. Fix with a deliberate way to ask for closed accounts — not by dropping the predicate, which correctly makes live accounts the default. |
-| **451** | **Closing an account leaves its Clerk identity live, and its email locked** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #438 landed 2026-09-07 (`c7228e77`) | `core` `auth` | **Filed 2026-09-07 by lane #438's `/code-review high`**, held out of scope correctly: closure soft-deleting is the ruled behaviour and revoking a Clerk session is a new integration call. Two defects from one omission. **The person stays signed in to an application that refuses them** — `clerk-auth.ts:164` 401s a request whose local row is retired, but the Clerk session is still valid, so the browser renders **signed-in header chrome over a signed-out application** indefinitely, with no sign-out prompt because nothing knows to show one. **And their email is locked under the retired row** — `users_email_key` does not care about `deleted_at`, so a re-registration with the same address collides on insert. That is the same state `CLAUDE.md` already warns about for the E2E seed; closure creates it deliberately. Decide *and state* whether the address is burned — the privacy policy says an account can be closed, not that the address is gone. |
+| **451** | **Closing an account leaves its Clerk identity live, and its email locked** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #438 landed 2026-09-07 (`c7228e77`) | `core` `auth` | **Filed 2026-09-07 by lane #438's `/code-review high`**, held out of scope correctly: closure soft-deleting is the ruled behaviour and revoking a Clerk session is a new integration call. Two defects from one omission. **The person stays signed in to an application that refuses them** — `clerk-auth.ts:164` 401s a request whose local row is retired, but the Clerk session is still valid, so the browser renders **signed-in header chrome over a signed-out application** indefinitely, with no sign-out prompt because nothing knows to show one. **And their email is locked under the retired row** — `users_email_key` does not care about `deleted_at`, so a re-registration with the same address collides on insert. That is the same state `CLAUDE.md` already warns about for the E2E seed; closure creates it deliberately. **RULED 2026-09-07: release the address.** The unique index becomes partial (`WHERE deleted_at IS NULL`) so a closed account’s address frees up, and closure therefore **deletes the Clerk user** rather than only revoking its sessions — revoking alone would leave the identity holding the address at Clerk’s end while ours had released it. That fires `user.deleted` back at our own webhook, so the handler must be **asserted** idempotent against a retirement it just performed; #433’s replay guard already provides it. The address is not burned, so nothing reaches the privacy text and #374’s wording gate is not on this path. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
-| **452** | **Every role bounce off `/admin` costs a failed `https` request** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #432's browser pass.** A customer or vendor sent to `/admin` lands correctly on their own dashboard, but the browser first logs `GET https://localhost:3016/bookings :: net::ERR_SSL_PROTOCOL_ERROR` and `Failed to load resource` before falling back to `http`. `current-user.ts:111` issues a **relative** `redirect(DASHBOARD_PATH_BY_ROLE[user.role])`, so the scheme is being inferred downstream rather than chosen. The outcome is right, which is why nobody has noticed: the cost is one wasted round trip and a console error on every denial, and a console that is never clean is one nobody reads. Neither `current-user.ts` nor `middleware.ts` was touched by #432. |
-| **454** | **Land the admin design delta — the drawn frames for every unframed console screen** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — the frames arrived 2026-09-07 and this row is what consumes them | `core` `auth` | **Filed 2026-09-07. The account holder supplied `design/delta-admin/` in answer to #453**, which asked for frames and per `design-is-a-contract-not-code` deliberately did not attempt them — so **#453 is closed by that delivery**, not by this row. The bundle is **three patterns, two drawn frames and one ruling**: **A** rules that the four list routes reuse frame `13`'s table verbatim and gives their column grids, defaults, colour and empty behaviour; **B** draws one detail frame on `/admin/vendors/[id]` settling card order, label/value typography, long-field wrapping and where destructive actions may sit; **C** draws `/admin/cases/[caseId]` in full, including the two-position resolve control and its `ConfirmAction`. **This row takes the surfaces already on `main`** — the rail order, `/admin/activity`, `/admin/cases`, and a parity pass over `/admin/cases/[caseId]` and `/admin/users/[userId]` — plus the contract reconciliation and the **filtered-empty pattern**, which is a new shared component and closes one of #443's six findings. **#437 is unblocked by this filing** and builds the five routes that do not exist yet against Pattern B. **The rail change is an *order* change, not a count change** — the bundle reasons from a stale brief of eight rows, but `22-admin.md` already gave Cases a row (#431) and the app renders nine; what actually moves is Cases, from between `Payments` and `Reviews` to directly after `Bookings`, overturning #431. **Three design questions must be answered before the parts that depend on them are built**, and the third is about money: the drawn Actions card says `Suspend vendor` **holds payouts** where the implementation **refunds in full** per D31/#416, and a frame in the repository saying one thing beside code doing the other will be read by the next lane as the spec. |
+| **454** | **Land the admin design delta — the drawn frames for every unframed console screen** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — the frames arrived 2026-09-07 and this row is what consumes them | `core` `auth` | **Filed 2026-09-07. The account holder supplied `design/delta-admin/` in answer to #453**, which asked for frames and per `design-is-a-contract-not-code` deliberately did not attempt them — so **#453 is closed by that delivery**, not by this row. The bundle is **three patterns, two drawn frames and one ruling**: **A** rules that the four list routes reuse frame `13`'s table verbatim and gives their column grids, defaults, colour and empty behaviour; **B** draws one detail frame on `/admin/vendors/[id]` settling card order, label/value typography, long-field wrapping and where destructive actions may sit; **C** draws `/admin/cases/[caseId]` in full, including the two-position resolve control and its `ConfirmAction`. **This row takes the surfaces already on `main`** — the rail order, `/admin/activity`, `/admin/cases`, and a parity pass over `/admin/cases/[caseId]` and `/admin/users/[userId]` — plus the contract reconciliation and the **filtered-empty pattern**, which is a new shared component and closes one of #443's six findings. **#437 is unblocked by this filing** and builds the five routes that do not exist yet against Pattern B. **The rail change is an *order* change, not a count change** — the bundle reasons from a stale brief of eight rows, but `22-admin.md` already gave Cases a row (#431) and the app renders nine; what actually moves is Cases, from between `Payments` and `Reviews` to directly after `Bookings`, overturning #431. **All three design questions were answered by the account holder on 2026-09-07 and nothing is open** — the money one settled that `Suspend vendor` **keeps refunding in full** per D31/#416 and the frame’s *"holds payouts"* is loose copy to be corrected, `/admin/activity` **keeps** its `What changed` column for five in total, and the route stays `/admin/tags`. All three corrections edit the **bundle**, in the design pass’s own commit. |
 | **455** | **The `Apply filters` button clears the filter it should apply, and no pointer can reach it** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #435's browser pass, reproduced twice.** On `/admin/reviews` the Direction select auto-applies on change (`?type=vendor_to_customer`, 14 rows, all "The customer"). Activating the `sr-only` submit **navigates to `/admin/reviews` with no query at all** — 15 rows, mixed directions — so the control named "Apply filters" is the one control that discards them. It is also pointer-intercepted by the Direction combobox, so a mouse cannot reach it. That button exists for the keyboard and no-JS path, which means it fails **precisely** the users it was added for and nobody else, and they have no workaround because the auto-apply it shadows is a JS change event. Not cosmetic: the filter bar is the only way to narrow six admin tables. |
 | **456** | **Two moderation labels disagree with the frame that now draws them** | P3 | M6 | **P2 Medium** | **Backlog** | — | **#454** (the frames land with it) | `core` `auth` | **Filed 2026-09-07 by #435, against its own surface.** #435 shipped `Unpublish storefront` and `Suspend account` before any frame drew the vendor detail view; `design/delta-admin/Orla-Admin-Views.html` then arrived naming them **`Unpublish profile`** and **`Suspend vendor`** in the Actions card. `web-design-parity.md` is explicit that "same composition with reworded copy has failed too", so this is a text-parity defect rather than a preference. The *descriptions* already agree — both say existing bookings stand and the vendor keeps their dashboard — so this is two labels, in `vendor-table.tsx` and their four assertions. **Do not fix before #454 lands** or the frame is not yet in the repository to match. See design question 3 in #454 before touching the suspend copy: the card also says suspend "holds payouts" where the code refunds in full, and that is unresolved. |
 | **457** | **A moderation hold the moderated vendor cannot lift** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#454** (the vendor detail Actions card is where the control lives) | `core` `auth` | **Filed 2026-09-07 by #435's security audit.** #435 shipped unpublish and package deactivation, and both write columns **the vendor also writes**: `PUT /vendor/profile` accepts `isPublished: true` checking only `publishBlockers`, and `PUT /vendor/packages/:id` accepts `isActive`. There is no hold column on `vendor_profiles` or `service_packages`, so an operator takes a storefront down for a policy violation and the vendor puts it back from their own dashboard seconds later — no block, no notification, nothing but an `admin_actions` row. #435's acceptance 1 was corrected to say it is advisory; **ban remains the only enforcing lever until this lands.** Review hiding and portfolio removal are unaffected and do hold. Carries the unapproved review-moderation copy as a dependency: `Hide review` / `Unhide review` / `Delete review` appear in no frame and in no voice file — the admin delta covers the vendor detail card and says nothing about reviews. |
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #448 landed and #455–#457 were filed: 20 rows — 17 Backlog and 3 `Deferred — needs a human`.** #438's and #448's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`) and #448 (`36683a21`) have all landed** — so **#436**, **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 is closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07; **#454** is the row that consumes them, and it is what unblocked **#437**, whose second hold was the missing detail frame. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #452 landed: 19 rows — 16 Backlog and 3 `Deferred — needs a human`.** #438's, #448's and #452's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`) and #452 (`46a85a52`) have all landed** — so **#436**, **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 is closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07; **#454** is the row that consumes them, and it is what unblocked **#437**, whose second hold was the missing detail frame. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
 
 **#448 landed a bigger finding than either half it was filed for, and that finding is the one to carry forward.** The filed halves were `renderLaneEnv` not writing `API_URL` and `lane:exec` handing every child the API's `PORT`; the first had already landed inside #432 (`1e899ae1`) before the lane branched, which is the board's own rule about trusting the repository over the ticket, arriving again. The real defect was **`laneEnvAgreesWith` comparing a subset of what `renderLaneEnv` writes** — it checked the two ports and `NEXT_PUBLIC_API_URL` and nothing else, so a `.env.lane` written before `API_URL` existed still *agreed* with its manifest, was never rewritten, and every long-running lane resumed onto the stale file for ever while `lane:up` printed ✓ over it. **A check that cannot fail for the state it exists to detect is worse than no check**, because it is also the thing that stops anyone else looking. It now compares every origin the file writes, and that is what makes **`pnpm lane:up <n>` the repair for a stale lane env — in place, database kept.** Do not tell a lane to `lane:down` for this. `pnpm preflight` now also fails a lane whose `.env.lane` omits `API_URL` **and** one whose `apps/web` build was made outside `lane:exec` — the second read out of `routes-manifest.json` rather than by curling the web port, because preflight runs *before* the dev servers, so a request probe finds nothing listening in the very flow it gates and cannot tell that from a server still cold-compiling. It would have to pass both, reproducing #448's own defect inside #448's fix.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
@@ -1309,68 +1308,6 @@ cancellation is a full unwind), **D35** (the 72-hour payout hold is fixed). Any
 ticket that finds itself wanting an exception to one of those has found #440,
 not a licence.
 
-### #452: Every role bounce off `/admin` costs a failed `https` request
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** None
-
-#### What was seen
-
-Driving the role matrix for #432 on a plain-http dev server, every denial off an
-admin route produced two console errors before landing correctly:
-
-```
-GET https://localhost:3016/bookings :: net::ERR_SSL_PROTOCOL_ERROR
-Failed to load resource: net::ERR_SSL_PROTOCOL_ERROR
-```
-
-Then the browser fell back and landed on `http://localhost:3016/bookings`, which
-is the right destination. Reproduced for both a customer and a vendor session, on
-`/admin`, `/admin/payments`, `/admin/payments?flag=payout-failing` and
-`/admin/vendors` — eight bounces, eight pairs of errors.
-
-#### Where it comes from
-
-`apps/web/src/lib/current-user.ts:111` issues a **relative** redirect:
-
-```ts
-redirect(DASHBOARD_PATH_BY_ROLE[user.role]);
-```
-
-Nothing there names a scheme, so one is being inferred further down — by Next's
-redirect handling, by the proxy, or by a forwarded-proto header that says
-`https` on a server that is not serving it. **Finding which is the first task**,
-because the fix differs: an inferred `x-forwarded-proto` is configuration, and a
-redirect resolved against a canonical origin is code.
-
-#### Why it is worth fixing despite the outcome being right
-
-The user-visible behaviour is correct, so this is not a defect anyone will
-report. It costs one failed request per denial and it puts a permanent error in
-the console — and a console with a standing error in it is one nobody reads,
-which is what this repository has spent the day learning to care about. It also
-means the redirect's scheme is decided by something other than the application,
-which will be wrong in the other direction the first time a deployment terminates
-TLS somewhere unexpected.
-
-#### Acceptance
-
-1. A customer and a vendor bounced off every `/admin/*` route land on their own
-   dashboard with **no** `net::ERR_SSL_PROTOCOL_ERROR` and no failed request.
-2. The same holds on a deployment serving `https`, so the fix is not "hardcode
-   `http`" — whatever chooses the scheme is derived from the environment, per
-   `packages/shared/src/env/deployment.ts`, or the redirect stays relative and
-   the thing inferring the scheme is corrected instead.
-3. The scheme is not decided in two places. Whichever layer owns it, the other
-   defers rather than agreeing by coincidence.
-
-#### Tests (required)
-
-- [ ] A test that fails before and passes after, asserting the redirect's
-      `Location` for a role-denied request on a plain-http origin.
-- [ ] The deployed branch asserted too — a redirect that is right on a laptop
-      and wrong behind TLS is the same bug facing the other way.
-
 ### #436: Reporting and message visibility for trust and safety
 
 **Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `email`
@@ -2188,18 +2125,27 @@ Decide and state which:
   our own webhook — so the handler must be idempotent against a retirement it
   just performed, which #433's replay guard already provides.
 
-**Then decide what the email index should mean.** Options, and this is a product
-decision as much as a technical one:
+**RULED 2026-09-07 by the account holder: release the address on closure.**
+Both halves are settled and neither is the lane's to reopen.
 
-- keep the address held forever (current behaviour, no change, but say so
-  deliberately rather than by omission);
-- release it on closure, which means the unique index becomes partial
-  (`WHERE deleted_at IS NULL`) and two rows can share an address across time;
-- keep it held but give the operator a way to release it.
+- **The unique index becomes partial** — `UNIQUE (email) WHERE deleted_at IS
+  NULL` — so a closed account's address frees up and that person can sign up
+  again with it. Two rows sharing an address across time is the correct record
+  of what happened, not a collision.
+- **Closure therefore deletes the Clerk user**, not merely its sessions. That is
+  the half that follows from the first: revoking sessions alone would end the
+  ghost session but leave the identity holding the address at Clerk's end while
+  ours had released it, which is the two systems disagreeing about the same
+  person. Deleting fires `user.deleted` back at our own webhook, so **the
+  handler must be idempotent against a retirement it just performed** —
+  #433's replay guard already provides that, and this must be asserted rather
+  than assumed.
 
-**Do not pick silently.** The privacy policy says an account can be closed; it
-does not say the address is burned. If the answer is that it is, that belongs in
-the policy text, and #374's account-holder wording gate covers it.
+The privacy policy consequence disappears with the ruling: the address is not
+burned, so there is nothing to add to the policy text and #374's wording gate is
+not on this path. Say in the schema comment **why** the index is partial, since
+a bare `WHERE deleted_at IS NULL` reads as an optimisation rather than a
+decision about people.
 
 #### Acceptance
 
@@ -2207,10 +2153,11 @@ the policy text, and #374's account-holder wording gate covers it.
    somewhere coherent rather than on signed-in chrome over a dead application.
 2. Whichever Clerk call is used, our own `user.deleted` handler is idempotent
    against a retirement already performed.
-3. The email-index behaviour is **stated** — in the schema comment and in the
-   policy text if it burns the address.
-4. If the address is released, a re-registration with a closed account's email
-   succeeds and does not resurrect or collide with the retired row.
+3. The email index is **partial** (`WHERE deleted_at IS NULL`) and the schema
+   comment says why, in terms of the person rather than the query plan.
+4. A re-registration with a closed account's email **succeeds**, creating a new
+   row rather than resurrecting or colliding with the retired one, and the
+   retired row stays retired and readable.
 5. Asserted end to end through #438's closure route.
 
 #### Tests (required)
@@ -2218,8 +2165,9 @@ the policy text, and #374's account-holder wording gate covers it.
 - [ ] A test per acceptance, watched failing first.
 - [ ] Acceptance 2 asserted by replaying the webhook after a closure — a double
       retirement must not double-refund, which is #433's guard doing its job.
-- [ ] Acceptance 4, if taken, asserted against the real unique index rather than
-      a mocked insert.
+- [ ] Acceptance 4 asserted **against the real partial index** rather than a
+      mocked insert — a mock cannot distinguish a partial index from a full one,
+      which is the entire content of the change.
 
 
 ### #454: Land the admin design delta — the drawn frames for every unframed console screen
@@ -2402,9 +2350,46 @@ Neither is a rebuild. Both were built to a convention and now have a contract.
   **"Keep the case open"** — because "Cancel" on this screen is a verb about
   money.
 
-#### Design questions — ask before building, do not decide in the lane
+#### Design questions — ALL THREE ANSWERED 2026-09-07 by the account holder
 
-Two, and both are cheap to answer and expensive to guess:
+**Nothing here is open. Build the rulings; do not re-ask.** The questions are
+kept with their answers because each one records what was overturned, and a lane
+that finds the frame disagreeing with the code needs to know which way it was
+settled rather than rediscovering the conflict.
+
+**1. `Suspend vendor` keeps refunding in full — the frame's copy is loose.**
+The drawn Actions card says a suspension *"holds payouts"*. It does not, and it
+must not start to: D31 (#416) ruled that the unwind refunds every future
+confirmed booking in full and reverses the vendor's share out of their Stripe
+balance, which can leave it negative — and being told that was the point of the
+dialog. **Correct the bundle's description to say what suspension does**, and
+record it in `.claude/rules/web-design-parity.md` as transcription drift under
+D30, the same direction every other frame-versus-ruling disagreement has gone.
+`account-unwind.ts` is untouched by this ticket. **A later pass reading
+"holds payouts" in the bundle is reading the record of a correction, not a
+finding** — which is exactly the failure this answer exists to prevent, because
+a frame in the repository saying one thing beside code doing another gets
+implemented by whoever reads the frame first.
+
+**2. `/admin/activity` keeps its `What changed` column — five columns, not
+four.** Pattern A lists four and the built screen has five. The fifth stays: the
+same Pattern A paragraph forbids rounding a timestamp on the grounds that *an
+audit trail that rounds is not an audit trail*, and a trail recording that
+something changed but not what fails that test harder. Take the rest of Pattern
+A's ruling — the `Actor · Action · Subject · When` ordering, Subject as type +
+id in one cell, absolute timestamps — and fit `What changed` after `Subject`,
+keeping its existing `1.7fr`. Correct the bundle to draw five.
+
+**3. The route stays `/admin/tags`.** The bundle calls it `/admin/categories`;
+nothing drawn depends on the path, and a rename breaks operator bookmarks and
+any `admin_actions` subject link already written against the old one. Correct
+the bundle's route name. The rail label `Categories & tags` is unchanged.
+
+Each of the three corrections above edits the **bundle**, which is a design
+pass, and they belong in the same commit as the `22-admin.md` reconciliation in
+step 1 — not scattered through the code commits.
+
+#### The three questions as they were asked
 
 1. **Does `/admin/activity` lose its `What changed` column?** Pattern A lists
    four columns and does not include it; the built screen has five, and
@@ -2476,6 +2461,12 @@ Two, and both are cheap to answer and expensive to guess:
     `Unpublish profile` / `Suspend vendor`.
 11. `.claude/rules/web-design-parity.md` records that this bundle is
     **content-box**, beside the #449 paragraph that turns on it.
+12. The bundle's `Suspend vendor` description says what a suspension does — a
+    full refund under D31 — and `web-design-parity.md` records the correction as
+    a live override so no later pass re-finds it.
+13. `/admin/activity` renders **five** columns with `What changed` after
+    `Subject`, and the bundle draws five.
+14. The category route is still `/admin/tags`, and the bundle names it that.
 
 #### Tests (required)
 
