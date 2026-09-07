@@ -110,6 +110,42 @@ upcoming events" counts rows rather than naming a window, and the payout gate's
 "about five minutes" is an estimate of Stripe's onboarding, not a deadline this
 codebase enforces.
 
+## Admin console action copy — drawn 2026-09-07
+
+The admin delta (`design/delta-admin/`) is the first frame to draw the
+console's destructive controls, so the labels below are approved strings, not
+conventions a lane picked. Recorded here because a label that exists only in a
+frame gets reworded by the next person who touches the component.
+
+| Control                            | Label                  | Consequence line                                                                                                                                           |
+| ---------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Take a storefront off search       | **Unpublish profile**  | Removes it from search and browse. Existing bookings stand; the vendor keeps their dashboard.                                                              |
+| Moderate a vendor off the platform | **Suspend vendor**     | Declines their open requests and cancels every future confirmed booking, refunded in full — which reverses the vendor's share out of their Stripe balance. |
+| Dismiss a resolve confirm          | **Keep the case open** | —                                                                                                                                                          |
+
+**`Unpublish profile` and `Suspend vendor` replace `Unpublish storefront` and
+`Suspend account` (#454, correcting #435).** #435 shipped the older pair before
+any frame drew this surface, so this is a text-parity correction against a
+frame rather than a preference: `web-design-parity.md` is explicit that "same
+composition with reworded copy has failed too". The _descriptions_ were already
+right and are unchanged — both already said existing bookings stand and the
+vendor keeps their dashboard.
+
+**The suspend line says `refunded in full`, and that is the ruled behaviour, not
+the frame's.** The drawn card read "holds payouts"; that was loose copy about an
+action it was summarising and has been corrected in the bundle. D31 (#416) is
+unchanged and the shipped dialog already stated it at length — being told is the
+ruled requirement, because the refund can leave a vendor's Stripe balance
+negative. A hold is reversible and leaves the customer's money where it is; a
+full refund is neither, so the two are not interchangeable wordings.
+
+**"Cancel" is not a dismissal word on a screen about money.** The case-detail
+confirm dismisses with **Keep the case open**, naming the state you return to —
+the same rule that made the booking dialog dismiss with "Keep booking" rather
+than "Cancel". Both resolve confirms name the field that will be written
+(`cancelled_by = admin`) and the payout sweep date by name, because restating is
+what makes a confirm a safeguard rather than a speed bump.
+
 ## Headline system
 
 The landing H1 is two lines: a plain first line in ink, an italic second line in

@@ -7,16 +7,33 @@ Scannability beats airiness; the whitespace moves to the gutters.
 
 The header inverts to `stone-900` with a translucent "Admin" chip — an
 unmistakable signal you're on the ops side of the product. Sidebar 210px:
-Overview · Vendors · Customers · Bookings · Payments · Cases (count) ·
+Overview · Vendors · Customers · Bookings · Cases (count) · Payments ·
 Reviews (count) · Categories & tags · Activity.
 
 **Cases is a ninth row and carries the second count — ruled 2026-09-07
-(#431).** It sits between `Payments` and `Reviews`, in the order an operator
-works: it is money, and it is the only row on the rail where the platform owes
-somebody an answer. The count is open cases, and it earns the badge for a
-sharper reason than Reviews does — an unreviewed review is somebody waiting for
-an opinion, an open case is somebody's payout frozen. Read the same cheap way,
-`pageSize=1` for the `total`, never through `/admin/metrics`.
+(#431).** The count is open cases, and it earns the badge for a sharper reason
+than Reviews does — an unreviewed review is somebody waiting for an opinion, an
+open case is somebody's payout frozen. Read the same cheap way, `pageSize=1` for
+the `total`, never through `/admin/metrics`.
+
+**Cases sits directly after `Bookings` — moved 2026-09-07 by the admin delta
+(#454), overturning #431's position between `Payments` and `Reviews`.** The
+reason is the one the bundle gives: a case is always _about_ a booking, so the
+rail reads in the order the work arrives rather than in the order the money
+does. #431's argument — that Cases is money and belongs beside `Payments` — is
+recorded here as what was overturned, not as a live position; do not restore it
+from this paragraph.
+
+**This is an order change, not a count change.** The bundle's own preamble
+reasons from a stale brief of eight rows and concludes the rail "needs nine so
+Cases can carry a badge"; #431 had already given Cases its row and the app
+already renders nine. A reader who takes the bundle's preamble literally adds a
+tenth. Nine rows, and the only thing that moved is where Cases sits.
+
+**`/admin/requests` gets no rail row.** The delta rules it a tab inside
+Bookings (`Bookings · Requests`), because a request is a booking before it
+exists and an operator reaches it while looking at bookings. That surface does
+not exist yet; it is #437's.
 
 **Activity is an eighth row and frame `13` draws seven — ruled 2026-09-07
 (#434).** The frame yields, the same direction D30 settled: this file is the
@@ -85,15 +102,19 @@ order would put exactly that row on the last page. One inbox for both doors — 
 customer's report and a card network's chargeback — because an operator working
 two queues works neither.
 
-**Detail views** — card-based groupings with the actions prominent. Every
-destructive action goes through an AlertDialog naming the consequence.
+**Detail views are specified by Pattern B of
+`design/delta-admin/ADMIN-VIEWS-PROMPT.md`, drawn on `/admin/vendors/[id]` in
+`Orla-Admin-Views.html`.** That is the spec — card order, label/value
+typography, long-field wrapping, and where a destructive action may sit. Read it
+there rather than a paraphrase here; the sentence this replaces was one line,
+and five screens would have been invented from it.
 
-The case detail is the worked example: the message in full, the sender, the
-chargeback's Stripe id and network outcome where there is one, and the booking
-with every money field the list rows omit — total, fee, payout, refund, paid-at,
-payout-released-at and the hold's reason. Then the two-position control, each
-side of it naming its consequence **in money**: "$1,200 goes back to the
-customer and the booking is cancelled", never "Are you sure?".
+**`/admin/cases/[caseId]` is Pattern C**, drawn in full: three numbered regions
+read in the order an operator must read them, with the two-position resolve
+control last and its `ConfirmAction` restating rather than summarising. Each
+side of the control names its consequence **in money** and names what the other
+party gets — "$1,200 goes back to the customer and the booking is cancelled",
+never "Are you sure?".
 
 ## Acceptance
 
