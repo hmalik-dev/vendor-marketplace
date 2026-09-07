@@ -2434,6 +2434,15 @@ export const adminReviewRowSchema = z.object({
   authorName: z.string(),
   vendorName: z.string(),
   vendorSlug: z.string(),
+  /**
+   * `false` once an operator has hidden it (#435).
+   *
+   * The console is the one surface that reads hidden reviews — every public
+   * read filters them out — so the row has to carry the flag or the only
+   * control that can unhide a review would have no way to know which reviews
+   * are hidden.
+   */
+  isPublic: z.boolean(),
   createdAt: z.date(),
 });
 export type AdminReviewRow = z.infer<typeof adminReviewRowSchema>;
@@ -2563,6 +2572,81 @@ export const adminBanResultSchema = z.object({
   profileUnpublished: z.boolean(),
 });
 export type AdminBanResult = z.infer<typeof adminBanResultSchema>;
+
+/*
+ * Graduated moderation (#435) — the levers between "nothing" and a ban.
+ *
+ * Every request body here is a **state**, not a verb: `{ isPublished: false }`
+ * rather than an `/unpublish` route. Two operators acting on the same row then
+ * converge on the state they both asked for instead of toggling past each
+ * other, and the same route reinstates what it took down, which is what makes
+ * the action reversible in the API rather than only in the UI.
+ */
+
+/** `PUT /admin/vendors/:vendorId/publish`. */
+export const setVendorPublishedSchema = z.object({ isPublished: z.boolean() });
+export type SetVendorPublished = z.infer<typeof setVendorPublishedSchema>;
+
+/**
+ * What taking a storefront down actually did — and, as importantly, what it
+ * did not.
+ *
+ * The counts a ban reports have no counterpart here by design: unpublishing
+ * declines nothing, cancels nothing and refunds nothing. `status` comes back so
+ * the table's pill can move without a second read.
+ */
+export const adminVendorPublishResultSchema = z.object({
+  vendorId: uuidSchema,
+  isPublished: z.boolean(),
+  status: adminVendorStatusSchema,
+});
+export type AdminVendorPublishResult = z.infer<typeof adminVendorPublishResultSchema>;
+
+/** `PUT /admin/reviews/:reviewId/visibility`. */
+export const setReviewVisibilitySchema = z.object({ isPublic: z.boolean() });
+export type SetReviewVisibility = z.infer<typeof setReviewVisibilitySchema>;
+
+/**
+ * The hidden review, and the rating it is no longer counted in.
+ *
+ * The recomputed aggregate is returned rather than left for the caller to read
+ * back: hiding a review is only meaningfully different from deleting one if the
+ * operator can see that the rating moved the same way, and a second request to
+ * find that out is a second chance for the two numbers to disagree.
+ *
+ * Never nullable: the lever applies only to `customer_to_vendor` rows, so a
+ * response of this shape always describes a storefront rating that moved. A
+ * `vendor_to_customer` row is refused before it gets here — its `is_public` is
+ * the author's own choice about who may read their note, not a moderation
+ * state, and treating the two as one column is how an operator would have
+ * published a private note.
+ */
+export const adminReviewVisibilityResultSchema = z.object({
+  reviewId: uuidSchema,
+  isPublic: z.boolean(),
+  vendorAvgRating: z.string(),
+  vendorReviewCount: z.int(),
+});
+export type AdminReviewVisibilityResult = z.infer<typeof adminReviewVisibilityResultSchema>;
+
+/** `PUT /admin/packages/:packageId/active`. */
+export const setPackageActiveSchema = z.object({ isActive: z.boolean() });
+export type SetPackageActive = z.infer<typeof setPackageActiveSchema>;
+
+/**
+ * The package's new state, and whether it took the storefront with it.
+ *
+ * Publishing requires one bookable package, so deactivating the last one
+ * unpublishes the profile — the same rule the vendor's own editor already
+ * enforces. The operator has to be told: they asked to remove one service and
+ * a business went off the marketplace.
+ */
+export const adminPackageActiveResultSchema = z.object({
+  packageId: uuidSchema,
+  isActive: z.boolean(),
+  vendorUnpublished: z.boolean(),
+});
+export type AdminPackageActiveResult = z.infer<typeof adminPackageActiveResultSchema>;
 
 /** The real cities and categories the Vendors filter bar offers — no invented options. */
 export const adminVendorFacetsSchema = z.object({

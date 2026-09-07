@@ -6,8 +6,32 @@ import { Button } from '@/components/ui/button';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 
 export interface ConfirmActionProps {
-  /** The control that opens the dialog — an overflow-menu item or a row button. */
-  trigger: ReactNode;
+  /**
+   * The control that opens the dialog — a row button.
+   *
+   * Omitted when the dialog is opened from an **overflow menu** instead. Radix
+   * unmounts a menu's content when the menu closes, so a dialog rendered as a
+   * menu item's child is torn down by the very click meant to open it. The menu
+   * therefore sets `open` on a dialog rendered as its sibling, and this prop is
+   * what distinguishes the two mounts.
+   */
+  trigger?: ReactNode;
+  /** Set to drive the dialog from outside — see `trigger`. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /**
+   * Where focus goes when the dialog closes.
+   *
+   * Radix restores focus on close to whatever was focused when the dialog
+   * opened. For a dialog opened from an **overflow menu** that element is a menu
+   * item which has already unmounted, so the restore lands on `document.body` —
+   * a keyboard operator who cancels is dropped at the top of the document, about
+   * twenty tab stops from their row. Calling `focus()` from `onOpenChange` does
+   * not fix it: that runs *before* Radix's own restore, which then overwrites
+   * it. `onCloseAutoFocus` is the documented seam, and preventing its default is
+   * what stops the overwrite.
+   */
+  restoreFocus?: () => void;
   title: string;
   /**
    * What this will do, in the operator's terms and naming the consequence:
@@ -31,15 +55,24 @@ export interface ConfirmActionProps {
  */
 export function ConfirmAction({
   trigger,
+  open: controlledOpen,
+  onOpenChange,
+  restoreFocus,
   title,
   description,
   confirmLabel,
   destructive = false,
   onConfirm,
 }: ConfirmActionProps): React.ReactElement {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const open = controlledOpen ?? uncontrolledOpen;
+
+  function setOpen(next: boolean): void {
+    setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  }
 
   async function confirm(): Promise<void> {
     setBusy(true);
@@ -76,10 +109,20 @@ export function ConfirmAction({
         }
       }}
     >
-      <AlertDialog.Trigger asChild>{trigger}</AlertDialog.Trigger>
+      {trigger ? <AlertDialog.Trigger asChild>{trigger}</AlertDialog.Trigger> : null}
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 z-50 bg-stone-900/20" />
-        <AlertDialog.Content className="fixed top-1/2 left-1/2 z-50 w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-stone-300 bg-stone-0 p-6 shadow-lg">
+        <AlertDialog.Content
+          onCloseAutoFocus={(event) => {
+            if (!restoreFocus) {
+              return;
+            }
+
+            event.preventDefault();
+            restoreFocus();
+          }}
+          className="fixed top-1/2 left-1/2 z-50 w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-stone-300 bg-stone-0 p-6 shadow-lg"
+        >
           <AlertDialog.Title className="display-heading text-display-sm text-stone-900">
             {title}
           </AlertDialog.Title>

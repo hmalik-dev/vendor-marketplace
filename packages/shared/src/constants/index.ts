@@ -1141,6 +1141,22 @@ export const ADMIN_ACTIONS = [
    * suspend"* uncountable.
    */
   'user_closed',
+  /*
+   * Graduated moderation (#435) — the levers that are not a ban.
+   *
+   * Each names the *state that was reached*, not the button that was pressed, so
+   * a row still reads correctly once the control that wrote it has moved.
+   * `review_deleted` is deliberately absent from this group: it is already above,
+   * because deletion is the escalation these step up to rather than a seventh
+   * lever, and one member serving both is the point.
+   */
+  'vendor_unpublished',
+  'vendor_republished',
+  'review_hidden',
+  'review_unhidden',
+  'package_deactivated',
+  'package_reactivated',
+  'portfolio_item_removed',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -1161,6 +1177,10 @@ export const ADMIN_ACTION_SUBJECTS = [
   'tag_suggestion',
   'booking',
   'support_case',
+  /* What #435's levers act on. `review` is already above and serves both. */
+  'vendor_profile',
+  'service_package',
+  'portfolio_item',
 ] as const;
 export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
 

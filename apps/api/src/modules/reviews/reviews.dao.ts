@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import {
   REVIEW_RATINGS,
   type CreateReviewInput,
@@ -150,6 +150,24 @@ const reviewerDisplayName = sql<string>`
   )
 `;
 
+/**
+ * The predicate for "a review the public may see about this vendor" (#435).
+ *
+ * One expression, used by the list, by the summary and by the recompute that
+ * writes `vendor_profiles.avg_rating` — because those three have to agree. Hiding
+ * a review that still counted toward the headline number, or that vanished from
+ * the list while the distribution bar kept it, is the failure this exists to make
+ * unrepresentable: `is_public` was honoured in exactly one place before this, and
+ * that place was the *customer* surface.
+ */
+function publicVendorReviews(vendorId: string): SQL | undefined {
+  return and(
+    eq(reviews.vendorId, vendorId),
+    eq(reviews.type, 'customer_to_vendor'),
+    eq(reviews.isPublic, true),
+  );
+}
+
 /** One appended page of a vendor's public reviews, newest first. */
 export async function findPublicVendorReviews(
   db: AppDatabase,
@@ -180,7 +198,7 @@ export async function findPublicVendorReviews(
     .innerJoin(users, eq(users.id, reviews.reviewerId))
     .leftJoin(bookings, eq(bookings.id, reviews.bookingId))
     .leftJoin(bookingRequests, eq(bookingRequests.id, bookings.requestId))
-    .where(and(eq(reviews.vendorId, vendorId), eq(reviews.type, 'customer_to_vendor')))
+    .where(publicVendorReviews(vendorId))
     .orderBy(desc(reviews.createdAt), desc(reviews.id))
     .limit(limit)
     .offset(offset);
@@ -213,7 +231,7 @@ export async function findVendorReviewSummary(
   const rows = await db
     .select({ rating: reviews.rating, count: sql<number>`count(*)::int` })
     .from(reviews)
-    .where(and(eq(reviews.vendorId, vendorId), eq(reviews.type, 'customer_to_vendor')))
+    .where(publicVendorReviews(vendorId))
     .groupBy(reviews.rating);
 
   if (rows.length === 0) {
@@ -284,7 +302,10 @@ async function lockForRecompute(
  * Zero remaining reviews leaves `0`, not `NULL`: both columns are `NOT NULL`,
  * and every surface reads `review_count` to tell an absent score from a bad one.
  */
-async function recalculateVendorRating(tx: AppDatabase, vendorId: string): Promise<void> {
+async function recalculateVendorRating(
+  tx: AppDatabase,
+  vendorId: string,
+): Promise<{ avgRating: string; reviewCount: number }> {
   await lockForRecompute(tx, vendorProfiles, vendorId);
 
   const totals = await tx
@@ -293,18 +314,30 @@ async function recalculateVendorRating(tx: AppDatabase, vendorId: string): Promi
       reviewCount: sql<number>`count(*)::int`,
     })
     .from(reviews)
-    .where(and(eq(reviews.vendorId, vendorId), eq(reviews.type, 'customer_to_vendor')));
+    .where(publicVendorReviews(vendorId));
 
-  await tx
-    .update(vendorProfiles)
-    .set({
-      avgRating: totals[0]?.avgRating ?? '0',
-      reviewCount: totals[0]?.reviewCount ?? 0,
-    })
-    .where(eq(vendorProfiles.id, vendorId));
+  const derived = {
+    avgRating: totals[0]?.avgRating ?? '0',
+    reviewCount: totals[0]?.reviewCount ?? 0,
+  };
+
+  await tx.update(vendorProfiles).set(derived).where(eq(vendorProfiles.id, vendorId));
+
+  return derived;
 }
 
-/** The same derivation, and the same lock, for the private direction. */
+/**
+ * The same derivation, and the same lock, for the private direction.
+ *
+ * **`is_public` deliberately does not gate this one.** It is tempting to filter
+ * it here for symmetry with `publicVendorReviews`, and #435 briefly did — but
+ * the column means different things in the two directions. On a
+ * `vendor_to_customer` row it records whether the *author* lets other vendors
+ * read their note, not whether a moderator hid it, and a vendor choosing to
+ * keep a note to themselves is not a reason to stop counting the rating they
+ * gave. Filtering here silently rewrote every seeded customer's rating, since
+ * `seed-demo` writes those rows private.
+ */
 async function recalculateCustomerRating(tx: AppDatabase, customerId: string): Promise<void> {
   await lockForRecompute(tx, users, customerId);
 
@@ -394,6 +427,113 @@ export async function insertReviewAndRecalculate(
       .returning();
 
     return { review: row, notification: notified[0] ?? null };
+  });
+}
+
+/**
+ * What hiding or unhiding a review did, for the response and for the 409.
+ *
+ * `unchanged` rather than a silent success: an operator who is told "hidden"
+ * about a review a colleague hid an hour ago learns nothing about the state of
+ * the queue, and the same reasoning already makes a repeated ban a conflict.
+ */
+export type ReviewVisibilityOutcome =
+  | { outcome: 'missing' }
+  /** A `vendor_to_customer` row: its `is_public` is the author's, not a moderator's. */
+  | { outcome: 'not_applicable' }
+  | { outcome: 'unchanged'; isPublic: boolean }
+  | {
+      outcome: 'updated';
+      isPublic: boolean;
+      vendorAvgRating: string;
+      vendorReviewCount: number;
+    };
+
+/**
+ * Hides or reinstates a review and re-derives the rating it counts toward.
+ *
+ * **The same transaction, the same lock and the same derivation as
+ * `deleteReviewAndRecalculate`** — which is the point of the ticket that added
+ * it (#435). Hiding is meant to be deletion's reversible twin, and a twin that
+ * computes the rating a second way is one release from disagreeing with it.
+ * `recalculateVendorRating` filters `is_public`, so the two paths reach the same
+ * number for the same set by construction rather than by both being careful.
+ *
+ * **The audit row is the caller's, not this function's** (#434 owns the writer).
+ * The admin service opens the transaction, hands it in here, and writes the row
+ * beside the change so the two commit or roll back together — the same shape
+ * `deleteReview` uses. A DAO that reached for `insertAdminAction` itself would
+ * be a second writer with its own guarantees, which is precisely what one
+ * writer exists to prevent.
+ */
+export async function setReviewVisibilityAndRecalculate(
+  db: AppDatabase,
+  reviewId: string,
+  isPublic: boolean,
+): Promise<ReviewVisibilityOutcome> {
+  if (!reviewId) {
+    return { outcome: 'missing' };
+  }
+
+  return db.transaction(async (tx): Promise<ReviewVisibilityOutcome> => {
+    /*
+     * Locked, not merely read. Two operators reaching the same review — one
+     * hiding, one unhiding — would otherwise both see the old value, both
+     * recompute from their own snapshot, and leave the stored rating agreeing
+     * with neither. Same failure the recompute lock above was written for.
+     *
+     * Read by id alone, and the state compared here rather than in the `WHERE`:
+     * the type has to be checked before the state, or a private note that is
+     * already `is_public = false` is refused as "already hidden" — which is a
+     * sentence about moderation, and this row was never moderated.
+     */
+    const existing = await tx
+      .select({ isPublic: reviews.isPublic, type: reviews.type, vendorId: reviews.vendorId })
+      .from(reviews)
+      .where(eq(reviews.id, reviewId))
+      .for('update')
+      .limit(1);
+    const row = existing[0];
+
+    if (!row) {
+      return { outcome: 'missing' };
+    }
+
+    /*
+     * **`is_public` means two different things, and only one of them is
+     * moderation.**
+     *
+     * On a `customer_to_vendor` row it is this ticket's hide flag. On a
+     * `vendor_to_customer` row it is the vendor's own choice about whether
+     * other vendors may read their note about a customer — see
+     * `customers.dao.ts`. They share a column and nothing distinguishes them
+     * but `type`, so a console that offered one lever over both would let an
+     * operator "unhide" a note its author deliberately kept private and publish
+     * it to every other vendor. `seed-demo` writes every note that way, so that
+     * was reachable on any demo database.
+     *
+     * This ticket's lever is the moderation one. The other direction is not a
+     * lever an operator should have at all, and refusing it here — rather than
+     * only in the console — is what makes that true of the API as well.
+     */
+    if (row.type !== 'customer_to_vendor') {
+      return { outcome: 'not_applicable' };
+    }
+
+    if (row.isPublic === isPublic) {
+      return { outcome: 'unchanged', isPublic: row.isPublic };
+    }
+
+    await tx.update(reviews).set({ isPublic }).where(eq(reviews.id, reviewId));
+
+    const derived = await recalculateVendorRating(tx, row.vendorId);
+
+    return {
+      outcome: 'updated',
+      isPublic,
+      vendorAvgRating: derived.avgRating,
+      vendorReviewCount: derived.reviewCount,
+    };
   });
 }
 

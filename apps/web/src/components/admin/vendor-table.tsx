@@ -6,10 +6,11 @@ import { useState } from 'react';
 import {
   ADMIN_VENDOR_STATUS_LABELS,
   adminBanResultSchema,
+  adminVendorPublishResultSchema,
   type AdminVendorStatus,
 } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
-import { RowTrigger } from '@/components/admin/row-trigger';
+import { RowMenu } from '@/components/admin/row-menu';
 import { DataTable } from '@/components/admin/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
@@ -68,6 +69,52 @@ export function SuspensionConsequence({ subject }: { subject: string }): React.R
       <strong className="font-semibold">refunded in full</strong>, which reverses the vendor&apos;s
       share out of their Stripe balance and can leave it negative. {subject} comes down. Suspension
       can be lifted, but the bookings are not restored.
+    </>
+  );
+}
+
+/**
+ * What unpublishing does — and, at length, what it does not.
+ *
+ * **This dialog exists to be impossible to confuse with the suspension one**
+ * (#435, acceptance 3). The two controls sit in the same menu, on the same row,
+ * and one of them destroys a business: an operator who reads this and acts as
+ * though they had suspended the account has been misled by the copy, not by the
+ * API. So it names the three unwinds a ban performs and says none of them
+ * happens here, in the same register the suspension copy uses.
+ */
+export function UnpublishConsequence({ subject }: { subject: string }): React.ReactElement {
+  return (
+    <>
+      {subject} comes off search and its page stops loading.{' '}
+      <strong className="font-semibold">Nothing is cancelled and no money moves</strong>: open
+      requests stand, confirmed bookings stand, and no refund is issued. They can still sign in and
+      run the bookings they have. Publish it again from this menu whenever you like.
+    </>
+  );
+}
+
+/**
+ * The other direction, its one condition, and the thing the row cannot tell you.
+ *
+ * **`is_published` records that a storefront is down, never who put it down.**
+ * An operator moderating it and a vendor pausing their own trading write the
+ * same column, and nothing on the row distinguishes them — so "Publish" on an
+ * unpublished row may be undoing your colleague's moderation or overriding the
+ * owner's own choice, and the console cannot say which. Naming that is the
+ * honest thing available until an action log makes it answerable; silently
+ * offering it as though it were always an undo is not.
+ */
+export function RepublishConsequence({ subject }: { subject: string }): React.ReactElement {
+  return (
+    <>
+      {subject} goes back on search and its page loads again. Their profile has to be complete
+      enough to publish — a category, a bio, a reply time and one bookable package — or this is
+      refused and says what is missing.{' '}
+      <strong className="font-semibold">
+        Check why it came down first: a vendor can unpublish their own storefront, and this puts it
+        back whether it was moderated or paused by its owner.
+      </strong>
     </>
   );
 }
@@ -340,70 +387,155 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
             // where the frame draws it — a 44px button centred in a 70px cell
             // put the dots 20px left of the frame's.
             className: 'flex justify-end overflow-visible',
-            cell: (row) => {
-              /*
-                One control, two decisions. The branch is over the props rather
-                than over two near-identical elements — the consequence copy is
-                the part that must not drift, and it had already drifted once
-                between here and the bulk bar above.
-              */
-              /*
-                A retired account has no third decision, so it gets no control
-                (#433). Its owner deleted their Clerk identity, its bookings
-                were unwound and refunded when they did, and there is nothing
-                a suspension or a reinstatement could reach. Offering the
-                button would put a destructive dialog in front of an operator
-                for an action the API answers 404 — `setUserBanned` looks the
-                target up with `findUserById`, which filters `deleted_at`.
-
-                **This is a deliberate composition difference from frame `13`,
-                which draws the `···` in all fifteen rows.** The frame cannot
-                arbitrate it: `retired` postdates the frame, so there is no
-                drawn state to match, and matching the frame here would mean
-                drawing a control that cannot do anything. Recorded rather than
-                left for a parity pass to re-find and file.
-              */
-              if (row.status === 'retired') {
-                return null;
-              }
-
-              const flagged = row.status === 'flagged';
-
-              return (
-                <ConfirmAction
-                  destructive={!flagged}
-                  trigger={
-                    <RowTrigger
-                      label={
-                        flagged
-                          ? `Lift the suspension on ${row.businessName}`
-                          : `Suspend ${row.businessName}`
-                      }
-                    />
-                  }
-                  title={
-                    flagged
-                      ? `Lift the suspension on ${row.businessName}?`
-                      : `Suspend ${row.businessName}?`
-                  }
-                  description={
-                    flagged ? (
-                      'They can sign in again straight away. Their storefront stays unpublished until they publish it themselves, and the bookings cancelled by the suspension are not restored.'
-                    ) : (
-                      <SuspensionConsequence subject="Their storefront" />
-                    )
-                  }
-                  confirmLabel={flagged ? 'Lift suspension' : 'Suspend account'}
-                  onConfirm={async () => {
-                    reportStuckRefunds(await setBanned(row.userId, !flagged), 1);
-                    router.refresh();
-                  }}
-                />
-              );
-            },
+            cell: (row) => (
+              <VendorRowActions
+                row={row}
+                onBan={async (banned) => reportStuckRefunds(await setBanned(row.userId, banned), 1)}
+                onDone={() => router.refresh()}
+              />
+            ),
           },
         ]}
       />
     </div>
+  );
+}
+
+/**
+ * The two levers a vendor row offers, and the menu that keeps them apart.
+ *
+ * A component rather than an inline cell because each row now holds **state** —
+ * which of its dialogs is open — and because the whole risk of this ticket is
+ * an operator reaching for the wrong one. Suspension is red and irreversible in
+ * substance; unpublishing is neither, and they sit two items apart.
+ *
+ * A suspended account is offered only the lift: `PUT .../publish` answers 409
+ * for one, and ban already took the storefront down.
+ */
+function VendorRowActions({
+  row,
+  onBan,
+  onDone,
+}: {
+  row: WireAdminVendorRow;
+  onBan: (banned: boolean) => Promise<void>;
+  onDone: () => void;
+}): React.ReactElement | null {
+  const call = useApi();
+  const [open, setOpen] = useState<'ban' | 'publish' | null>(null);
+
+  /*
+    A retired account gets no control at all (#433), and #435 does not give it
+    one back. Its owner deleted their Clerk identity, its bookings were unwound
+    and refunded when they did, and there is nothing left for a suspension, a
+    reinstatement **or a publish** to reach: `setUserBanned` and
+    `setVendorPublished` both look the account up through `findUserById`, which
+    filters `deleted_at`, so every item this menu could offer answers 404 or
+    409. Opening a menu of dead actions is worse than opening none.
+
+    **This is a deliberate composition difference from frame `13`, which draws
+    the `···` in all fifteen rows.** The frame cannot arbitrate it — `retired`
+    postdates it — and matching the frame here would mean drawing a control that
+    cannot do anything. Recorded so a parity pass does not re-find and file it.
+  */
+  if (row.status === 'retired') {
+    return null;
+  }
+
+  const flagged = row.status === 'flagged';
+  const published = row.status === 'live';
+
+  async function setPublished(isPublished: boolean): Promise<void> {
+    await call(`/admin/vendors/${row.id}/publish`, {
+      method: 'PUT',
+      body: { isPublished },
+      schema: adminVendorPublishResultSchema,
+    });
+  }
+
+  const items = flagged
+    ? [{ key: 'ban', label: 'Lift suspension', onSelect: () => setOpen('ban') }]
+    : [
+        {
+          key: 'publish',
+          label: published ? 'Unpublish storefront' : 'Publish storefront',
+          onSelect: () => setOpen('publish'),
+        },
+        {
+          key: 'ban',
+          label: 'Suspend account',
+          destructive: true,
+          onSelect: () => setOpen('ban'),
+        },
+      ];
+
+  /*
+    Mounted only while open, not rendered alongside the menu and hidden.
+    `DataTable` calls every `cell` twice — once for the grid, once for the card
+    list — so a page of fifteen rows carrying two always-mounted `AlertDialog`
+    roots apiece is sixty portals and focus traps for a screen where at most one
+    dialog can be open. The `open` prop is what drives the mount either way.
+  */
+  return (
+    <RowMenu label={`Actions for ${row.businessName}`} items={items}>
+      {(restoreFocus) => (
+        <>
+          {open === 'ban' ? (
+            <ConfirmAction
+              destructive={!flagged}
+              open
+              onOpenChange={(next) => setOpen(next ? 'ban' : null)}
+              restoreFocus={restoreFocus}
+              title={
+                flagged
+                  ? `Lift the suspension on ${row.businessName}?`
+                  : `Suspend ${row.businessName}?`
+              }
+              description={
+                flagged ? (
+                  'They can sign in again straight away. Their storefront stays unpublished until they publish it themselves, and the bookings cancelled by the suspension are not restored.'
+                ) : (
+                  <SuspensionConsequence subject="Their storefront" />
+                )
+              }
+              confirmLabel={flagged ? 'Lift suspension' : 'Suspend account'}
+              onConfirm={async () => {
+                await onBan(!flagged);
+                onDone();
+              }}
+            />
+          ) : null}
+          {/*
+        Never `destructive`. The red fill is reserved for the actions that
+        cannot be undone, and this one is undone by the item above it — dressing
+        it in the same red is how the two become interchangeable at a glance.
+      */}
+          {open === 'publish' ? (
+            <ConfirmAction
+              open
+              onOpenChange={(next) => setOpen(next ? 'publish' : null)}
+              restoreFocus={restoreFocus}
+              title={
+                published
+                  ? `Unpublish ${row.businessName}'s storefront?`
+                  : `Publish ${row.businessName}'s storefront?`
+              }
+              description={
+                published ? (
+                  <UnpublishConsequence subject="Their storefront" />
+                ) : (
+                  <RepublishConsequence subject="Their storefront" />
+                )
+              }
+              confirmLabel={published ? 'Unpublish storefront' : 'Publish storefront'}
+              onConfirm={async () => {
+                await setPublished(!published);
+                onDone();
+              }}
+            />
+          ) : null}
+        </>
+      )}
+    </RowMenu>
   );
 }
