@@ -1,5 +1,9 @@
 import { bookings, categories, vendorProfiles } from '@vendor-marketplace/db/schema';
-import { addDays, toDateString } from '@vendor-marketplace/shared';
+import {
+  addDays,
+  CURRENT_VENDOR_AGREEMENT_VERSION,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -133,6 +137,16 @@ describe('withdrawing a dispute hold, against a real Postgres', () => {
       .update(vendorProfiles)
       .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
       .where(eq(vendorProfiles.id, profile.json().id));
+
+    /*
+     * A vendor cannot take payment until they hold the current vendor
+     * agreement (#427), and this fixture reaches checkout — so without this the
+     * booking under test never exists and there is nothing to hold.
+     */
+    const agreed = await inject('POST', '/vendor/agreement/accept', VENDOR, {
+      version: CURRENT_VENDOR_AGREEMENT_VERSION,
+    });
+    expect(agreed.statusCode).toBe(200);
 
     const request = await inject('POST', '/booking-requests', CUSTOMER, {
       vendorId: profile.json().id,

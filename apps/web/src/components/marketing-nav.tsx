@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { LEGAL_PATHS } from '@vendor-marketplace/shared';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 import type { NavDrawerLink } from '@/components/nav-drawer';
 import { cn } from '@/lib/utils';
@@ -9,10 +10,16 @@ import { cn } from '@/lib/utils';
 /**
  * The three links frame `01 Landing` draws beside the wordmark.
  *
- * They exist on the landing header and nowhere else: frame `02 Search` fills
- * the same space with the compact search bar, and every signed-in frame fills
- * it with Dashboard / Messages / Bookings. Rendering them everywhere would
- * contradict two frames to satisfy one, so the nav is scoped to `/`.
+ * They exist on the landing header and on the legal pages, and nowhere else:
+ * frame `02 Search` fills the same space with the compact search bar, and every
+ * signed-in frame fills it with Dashboard / Messages / Bookings. Rendering them
+ * everywhere would contradict two frames to satisfy one, so the nav is scoped.
+ *
+ * **Frame `31` is the case that ruling did not have.** The legal pages draw the
+ * signed-out header *with* these three links, and they are the one public
+ * surface that puts nothing else in that space — so carrying the nav there
+ * satisfies a third frame without contradicting either of the two the original
+ * scoping protected.
  *
  * "For vendors" is the vendor door. The header carries a single **Sign up**
  * pill for both account types, so this is where a vendor gets a path that
@@ -36,10 +43,13 @@ export const MARKETING_LINKS: readonly NavDrawerLink[] = [
   { label: 'For vendors', href: '/sign-up?role=vendor' },
 ];
 
+/** The three reading pages, as a set, so the check is not a chain of `||`. */
+const LEGAL_PATH_SET = new Set<string>(Object.values(LEGAL_PATHS));
+
 export function MarketingNav(): React.ReactElement | null {
   const pathname = usePathname();
 
-  if (pathname !== '/') {
+  if (pathname !== '/' && !LEGAL_PATH_SET.has(pathname)) {
     return null;
   }
 

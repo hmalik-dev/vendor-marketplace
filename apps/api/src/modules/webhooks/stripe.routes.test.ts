@@ -1,4 +1,5 @@
 import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { CURRENT_VENDOR_AGREEMENT_VERSION } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -29,6 +30,19 @@ describe('POST /webhooks/stripe', () => {
       },
     });
     expect(created.statusCode).toBe(201);
+
+    /*
+     * Step 3 before step 4 (#427): Connect refuses a vendor who has not
+     * accepted the current agreement, so this fixture has to walk the same
+     * order a real vendor does before it can reach the webhook it is testing.
+     */
+    const agreed = await harness.app.inject({
+      method: 'POST',
+      url: '/vendor/agreement/accept',
+      headers: bearer('vendor_a'),
+      payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
+    });
+    expect(agreed.statusCode).toBe(200);
 
     const connected = await harness.app.inject({
       method: 'POST',

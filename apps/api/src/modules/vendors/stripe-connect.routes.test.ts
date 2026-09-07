@@ -1,4 +1,5 @@
 import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { CURRENT_VENDOR_AGREEMENT_VERSION } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
@@ -13,7 +14,11 @@ describe('vendor Stripe Connect onboarding', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  async function seedVendorProfile(user: string, businessName = 'First Light'): Promise<void> {
+  async function seedVendorProfile(
+    user: string,
+    businessName = 'First Light',
+    acceptsAgreement = true,
+  ): Promise<void> {
     const created = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
@@ -28,6 +33,22 @@ describe('vendor Stripe Connect onboarding', () => {
       },
     });
     expect(created.statusCode).toBe(201);
+
+    /*
+     * Step 3 before step 4 (#427): Connect refuses a vendor who has not
+     * accepted the agreement, so a fixture that skips this is a vendor the
+     * onboarding order correctly turns away. Optional, so the refusal has a
+     * fixture of its own.
+     */
+    if (acceptsAgreement) {
+      const accepted = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/agreement/accept',
+        headers: bearer(user),
+        payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
+      });
+      expect(accepted.statusCode).toBe(200);
+    }
   }
 
   function connect(user: string) {
@@ -83,6 +104,27 @@ describe('vendor Stripe Connect onboarding', () => {
   });
 
   describe('POST /vendor/stripe/connect', () => {
+    /**
+     * Step 3 before step 4, and the reason the order exists (#427, frame `32`).
+     *
+     * The agreement is where the commission and the payout timing are agreed,
+     * and it is agreed **before** a payout rail exists to implement them.
+     * Without this refusal the order was a rail drawn on a screen: a vendor
+     * could hand Stripe their bank details without having been told what the
+     * platform keeps, and a refusal afterwards would leave a verified account
+     * attached to a listing nobody can pay.
+     */
+    it('refuses a vendor who has not accepted the agreement, and creates no account', async () => {
+      await seedVendorProfile('vendor_a', 'First Light', false);
+
+      const response = await connect('vendor_a');
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toContain('vendor agreement');
+      expect(harness.stripe.createdAccounts).toHaveLength(0);
+      expect(harness.stripe.createdLinks).toHaveLength(0);
+    });
+
     it('creates the connected account on the first call and stores its id', async () => {
       await seedVendorProfile('vendor_a');
 

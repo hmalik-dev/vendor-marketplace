@@ -1,16 +1,19 @@
 'use client';
 
 import {
-  FULL_REFUND_CUTOFF_HOURS,
+  BRAND_NAME,
   formatDurationHours,
   formatPrice,
-  LATE_CANCELLATION_REFUND_RATE,
+  LEGAL_PATHS,
+  payoutReleaseAt,
 } from '@vendor-marketplace/shared';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe, type Appearance, type StripeElementsOptions } from '@stripe/stripe-js';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
+import { RefundScheduleBlock } from '@/components/checkout/refund-schedule-block';
 import { publicEnv } from '@/config/public-env';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -248,42 +251,35 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
               Declined by your bank · code <span className="font-mono">{decline.code}</span>
             </p>
           ) : null}
-
-          {/*
-            The last real objection, answered above the fold and in sentences
-            rather than behind a policy link — frame `05`.
-          */}
-          <div className="mt-0.5 rounded-panel border border-stone-300 bg-stone-0 px-4 py-3.5">
-            <h2 className="mb-1.75 text-action font-semibold text-stone-900">If plans change</h2>
-            {/*
-              `leading-prose` is 1.6, the ratio the frames set on body copy.
-              `01-foundations.md` names `relaxed` (1.625) as explicitly not it.
-            */}
-            <p className="text-sm leading-prose text-stone-700">
-              Cancel more than {FULL_REFUND_CUTOFF_HOURS} hours before {SHORT_DAY.format(event)} and
-              you&apos;re refunded in full. Inside {FULL_REFUND_CUTOFF_HOURS} hours,{' '}
-              {LATE_CANCELLATION_REFUND_RATE === 0.5
-                ? 'half'
-                : `${LATE_CANCELLATION_REFUND_RATE * 100}%`}{' '}
-              is refunded and {checkout.vendor.businessName} keeps the rest for the held date.
-            </p>
-          </div>
         </form>
       </div>
 
-      <SummaryRail
-        checkout={checkout}
-        event={event}
-        actions={
-          <SummaryActions
-            checkout={checkout}
-            paying={paying}
-            ready={Boolean(stripe && elements)}
-            event={event}
-            decline={decline}
-          />
-        }
-      />
+      {/*
+        Frame `33`'s composition: the summary card, then the schedule, then the
+        pay button — the rail is the column that carries the commitments, and
+        the schedule is one of them. 16px either side, per the frame.
+
+        The `If plans change` panel this replaces used to sit in the left column
+        under the card fields, as two sentences quoting the constants. It is one
+        block rather than two copies on purpose: two statements of one
+        cancellation policy on one screen is exactly the drift `/terms`
+        section 5 refuses to introduce.
+      */}
+      <aside aria-label="Your booking" className="flex flex-col gap-4 pb-5">
+        <SummaryRail checkout={checkout} event={event} />
+        <RefundScheduleBlock
+          totalCents={checkout.amountCents + checkout.customerFeeCents}
+          eventDate={checkout.eventDate}
+          vendorName={checkout.vendor.businessName}
+        />
+        <SummaryActions
+          checkout={checkout}
+          paying={paying}
+          ready={Boolean(stripe && elements)}
+          event={event}
+          decline={decline}
+        />
+      </aside>
     </div>
   );
 }
@@ -345,7 +341,7 @@ function SummaryActions({
   decline: Decline | null;
 }): React.ReactElement {
   return (
-    <div className="flex flex-col gap-2.5 px-4.5 py-3.5">
+    <div className="flex flex-col gap-2.5">
       {/*
         The button names the amount *and* the outcome. "Pay" alone tells the
         customer what the button does to them rather than what they get.
@@ -378,9 +374,26 @@ function SummaryActions({
           `${decline ? 'Try this payment again' : `Pay ${formatPrice(checkout.amountCents)}`} — confirm ${SHORT_DAY.format(event)}`
         )}
       </Button>
+      {/*
+        The subline references the block **above it**, not a page — frame `33`.
+        Linking the whole promise to `/terms` would ask a customer to leave the
+        pay composition to find out what they are agreeing to.
+
+        It no longer says the money is held by Stripe. Since #423 the charge
+        lands in this platform's own balance and the vendor's share is
+        transferred a fixed window after the event, so "held by Stripe" named
+        the wrong holder — the kind of sentence `/terms` section 4 now has to
+        agree with.
+      */}
       <p className="flex items-center justify-center gap-1.75 text-helper text-stone-600">
         <span aria-hidden="true" className={SAGE_DOT} />
-        Held by Stripe until the event is complete
+        <span>
+          By paying you accept the{' '}
+          <Link href={LEGAL_PATHS.terms} className="font-semibold text-clay-500 hover:underline">
+            Terms
+          </Link>{' '}
+          and the refund schedule above.
+        </span>
       </p>
     </div>
   );
@@ -389,17 +402,28 @@ function SummaryActions({
 function SummaryRail({
   checkout,
   event,
-  actions,
 }: {
   checkout: WireCheckoutIntent;
   event: Date;
-  /** The pay block — the card's fourth section. See `SummaryActions`. */
-  actions: React.ReactNode;
 }): React.ReactElement {
   const servicePackage = checkout.servicePackage;
+  /*
+   * Derived, never restated. `payoutReleaseAt` is the one place the release
+   * date comes from — the same function the schedule block's release row and
+   * the vendor's own surfaces read — so this line and that row cannot name two
+   * different days for one payment.
+   */
+  const releaseAt = payoutReleaseAt(checkout.eventDate);
 
   return (
-    <aside aria-label="Your booking" className="pb-5">
+    /*
+     * The card ends at the total. The pay block used to be its fourth section;
+     * frame `33` puts the refund schedule between the two, so the button is a
+     * sibling of this card in the rail rather than a section inside it — which
+     * is also what lets the schedule sit above it without being drawn inside
+     * the summary it is not part of.
+     */
+    <div>
       <div className="overflow-hidden rounded-2xl bg-stone-0 shadow-sm">
         <div className="flex items-center gap-3 border-b border-stone-200 px-4.5 py-4">
           {/*
@@ -462,11 +486,30 @@ function SummaryRail({
               {formatPrice(checkout.amountCents + checkout.customerFeeCents)}
             </span>
           </div>
-        </div>
+          {/*
+            Frame `33` draws this line under the total, and it names the wrong
+            holder: since #423 the charge lands in this platform's balance and
+            the vendor's share is transferred a fixed window after the event, so
+            the money is held by {BRAND_NAME}, not by Stripe.
 
-        {actions}
+            **It also has to name the right day.** The release is keyed to the
+            event date, but it fires `PAYOUT_RELEASE_HOURS` *after* it (D35) —
+            so "held until the event, then released" would state a release the
+            schedule two elements below dates three days later, and two release
+            dates for one payment on one screen is exactly the drift this whole
+            ticket is about. `payoutReleaseAt` is the one place that date is
+            derived, and this reads it rather than restating the interval.
+          */}
+          <p className="text-helper leading-normal text-stone-600">
+            Held by {BRAND_NAME} until {SHORT_DAY.format(event)}
+            {releaseAt === null
+              ? ''
+              : `, then released to ${checkout.vendor.businessName} on ${SHORT_DAY.format(releaseAt)}`}
+            .
+          </p>
+        </div>
       </div>
-    </aside>
+    </div>
   );
 }
 

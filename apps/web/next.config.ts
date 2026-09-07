@@ -51,6 +51,15 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.resolve(process.cwd(), '../..'),
 
   /*
+   * The legal copy is read off disk at build time, and file tracing cannot see
+   * a `readFileSync` behind a `path.join`. Without this the three pages build
+   * locally and throw on the deployment, which is the worst place to find out:
+   * the footer links to them from every page and Stripe Connect onboarding asks
+   * for two of the URLs.
+   */
+  outputFileTracingIncludes: { '/**': ['./content/legal/**/*'] },
+
+  /*
    * `next dev` and `next build` both write `.next`, so a build run against a
    * live dev server leaves it serving a half-replaced manifest and failing
    * with `Cannot find module for page: /_document`. Giving dev its own

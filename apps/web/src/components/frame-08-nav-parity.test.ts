@@ -111,12 +111,14 @@ describe('frame 08 — the vendor rail', () => {
   });
 
   /*
-   * `Portfolio` is the reverse: a live route no frame draws. A rail that omits
-   * a real surface strands it, so it ships — beside `Edit profile`, because it
-   * is part of the same storefront.
+   * `Portfolio` and `Legal` are the reverse: live routes no frame draws. A rail
+   * that omits a real surface strands it, so both ship — `Portfolio` beside
+   * `Edit profile` because it is part of the same storefront, and `Legal`
+   * because the vendor agreement it leads to is what gates the vendor's
+   * payments (#427, frame `32`). Frame `08` predates both surfaces.
    */
-  it('adds only Portfolio, which is a real route the frame predates', () => {
-    expect(built.filter((label) => !drawn.includes(label))).toEqual(['Portfolio']);
+  it('adds only the two routes the frame predates', () => {
+    expect(built.filter((label) => !drawn.includes(label))).toEqual(['Portfolio', 'Legal']);
   });
 
   it('places Portfolio directly after Edit profile', () => {

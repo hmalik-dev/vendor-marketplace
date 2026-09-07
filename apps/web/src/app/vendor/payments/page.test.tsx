@@ -1,15 +1,20 @@
-import type { WireVendorPayoutStatus } from '@/lib/wire-schemas';
+import { CURRENT_VENDOR_AGREEMENT_VERSION } from '@vendor-marketplace/shared';
+import type { WireVendorAgreementStatus, WireVendorPayoutStatus } from '@/lib/wire-schemas';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const requireRole = vi.fn<() => Promise<void>>();
 const getPayoutStatus = vi.fn<() => Promise<WireVendorPayoutStatus | null>>();
+const getAgreementStatus = vi.fn<() => Promise<WireVendorAgreementStatus | null>>();
 const redirect = vi.fn((path: string) => {
   throw new Error(`REDIRECT:${path}`);
 });
 
 vi.mock('@/lib/current-user', () => ({ requireRole: () => requireRole() }));
-vi.mock('@/lib/vendor-data', () => ({ getPayoutStatus: () => getPayoutStatus() }));
+vi.mock('@/lib/vendor-data', () => ({
+  getPayoutStatus: () => getPayoutStatus(),
+  getAgreementStatus: () => getAgreementStatus(),
+}));
 vi.mock('next/navigation', () => ({ redirect: (path: string) => redirect(path) }));
 vi.mock('@/components/vendor/connect-payouts-form', () => ({
   ConnectPayoutsForm: ({ isResuming }: { isResuming: boolean }) => (
@@ -18,6 +23,17 @@ vi.mock('@/components/vendor/connect-payouts-form', () => ({
 }));
 
 const { default: VendorPaymentsPage } = await import('./page');
+
+/** A vendor holding the current agreement — step 3 done, so step 4 renders. */
+function accepted(isCurrent = true): WireVendorAgreementStatus {
+  return {
+    current: CURRENT_VENDOR_AGREEMENT_VERSION,
+    businessName: 'First Light',
+    accepted: null,
+    isCurrent,
+    history: [],
+  };
+}
 
 async function renderPage(
   status: WireVendorPayoutStatus | null,
@@ -37,6 +53,8 @@ describe('VendorPaymentsPage', () => {
     requireRole.mockReset();
     requireRole.mockResolvedValue(undefined);
     getPayoutStatus.mockReset();
+    getAgreementStatus.mockReset();
+    getAgreementStatus.mockResolvedValue(accepted());
     redirect.mockClear();
   });
 
@@ -51,6 +69,22 @@ describe('VendorPaymentsPage', () => {
       'REDIRECT:/vendor/profile/edit',
     );
     expect(redirect).toHaveBeenCalledWith('/vendor/profile/edit');
+  });
+
+  /**
+   * Step 3 before step 4 (#427, frame `32`). The commission and the payout
+   * timing are agreed before there is a payout rail to implement them, so a
+   * vendor who has not accepted goes back rather than handing Stripe their
+   * bank details first. `POST /vendor/stripe/connect` refuses for the same
+   * reason, which is what makes this a signpost rather than the enforcement.
+   */
+  it('sends a vendor who has not accepted the agreement to step 3 first', async () => {
+    getPayoutStatus.mockResolvedValue({ stripeAccountId: null, stripeOnboarded: false });
+    getAgreementStatus.mockResolvedValue(accepted(false));
+
+    await expect(VendorPaymentsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'REDIRECT:/vendor/agreement',
+    );
   });
 
   it('states the payout gate in the approved words, in gold', async () => {

@@ -218,8 +218,9 @@ describe('free text on a request body', () => {
     // `disputeBookingSchema` and `resolveDisputeSchema`; 21 since #425 removed
     // `disputeBookingSchema` with the second entry point to the payout hold —
     // the customer's free text now reaches `dispute_reason` through
-    // `supportMessageSchema.message`, which is still counted here.
-    expect(names).toHaveLength(21);
+    // `supportMessageSchema.message`, which is still counted here; 22 since
+    // #427 added `acceptVendorAgreementSchema`.
+    expect(names).toHaveLength(22);
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
 
@@ -258,6 +259,12 @@ describe('free text on a request body', () => {
    */
   it('leaves only the format-constrained fields untested', () => {
     expect(probeRequestBodies().skipped).toEqual([
+      /*
+       * #427's agreement version. Not prose either: `v1.0`, pinned by a
+       * pattern, and the service refuses anything but the version in force. A
+       * bidi control cannot survive the regex, let alone reach the record.
+       */
+      'acceptVendorAgreementSchema.version',
       'createBookingRequestSchema.eventDate',
       'createBookingRequestSchema.eventStartTime',
       /*

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
@@ -192,11 +192,52 @@ for (const attribute of frameHtml.matchAll(/style="([^"]*)"/g)) {
   }
 }
 
-/** Every ratio the frames use anywhere, inline or in the stylesheet. */
+/**
+ * The ratios the **delta bundles** use — design that ships beside the screens
+ * file rather than inside it.
+ *
+ * `design/delta-legal/` carries frames `31`–`33`, which the screens bundle ends
+ * before: it stops at `28 Dropdown variants`. Those frames set the legal
+ * pages' prose at `15px/1.85`, a ratio the screens file never uses, so a theme
+ * token for it would fail `keeps only ratios the frames actually use` against a
+ * contract that simply does not contain that screen.
+ *
+ * **Additive, and only to the allowlist.** `modalRatio` still counts the
+ * screens file alone, because the measure a token like `--leading-prose` takes
+ * is "what the frames give body copy across screens", and three long-form
+ * reading pages would outvote the app on a question that is not about them.
+ * Widening the allowlist says a ratio drawn in a delta bundle is a ratio the
+ * design contract draws; it does not let a delta bundle move an existing token.
+ *
+ * Read with a plain scan rather than by unpacking the bundle: the markup is
+ * JSON-encoded inside a `<script type="__bundler/template">`, which escapes the
+ * quotes around a `style` attribute but leaves `15px/1.85` and
+ * `line-height:1.06` exactly as written.
+ */
+const DELTA_RATIOS = ((): string[] => {
+  const deltaDirectory = join(process.cwd(), '..', '..', 'design', 'delta-legal');
+  const ratios = new Set<string>();
+
+  for (const entry of readdirSync(deltaDirectory).filter((name) => name.endsWith('.html'))) {
+    const markup = readFileSync(join(deltaDirectory, entry), 'utf8');
+
+    for (const match of markup.matchAll(/line-height:\s*([\d.]+)/g)) {
+      ratios.add(match[1] as string);
+    }
+    for (const match of markup.matchAll(/font:[^;\\]*?[\d.]+px\s*\/\s*([\d.]+)/g)) {
+      ratios.add(match[1] as string);
+    }
+  }
+
+  return [...ratios];
+})();
+
+/** Every ratio the design contract uses anywhere, inline or in a stylesheet. */
 const FRAME_RATIOS = [
   ...new Set([
     ...INLINE_TYPE.map((type) => type.lineHeight),
     ...[...FRAME_LINE_HEIGHTS.values()].filter((value) => value !== 'normal'),
+    ...DELTA_RATIOS,
   ]),
 ];
 

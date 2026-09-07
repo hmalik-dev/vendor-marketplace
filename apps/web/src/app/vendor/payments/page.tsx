@@ -1,11 +1,11 @@
-import { BRAND_NAME, pageTitle } from '@vendor-marketplace/shared';
+import { BRAND_NAME, pageTitle, VENDOR_AGREEMENT_PATH } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Banner } from '@/components/ui/banner';
 import { VendorSurface } from '@/components/vendor-surface';
 import { ConnectPayoutsForm } from '@/components/vendor/connect-payouts-form';
 import { requireRole } from '@/lib/current-user';
-import { getPayoutStatus } from '@/lib/vendor-data';
+import { getAgreementStatus, getPayoutStatus } from '@/lib/vendor-data';
 
 export const metadata: Metadata = { title: pageTitle('Payments') };
 
@@ -28,14 +28,28 @@ export default async function VendorPaymentsPage({
    * `null` — so the redirect below is the same guard the other vendor surfaces
    * make with a second round trip.
    */
-  const [, status, params] = await Promise.all([
+  const [, status, agreement, params] = await Promise.all([
     requireRole('vendor'),
     getPayoutStatus(),
+    getAgreementStatus(),
     searchParams,
   ]);
 
   if (!status) {
     redirect(PROFILE_EDIT_PATH);
+  }
+
+  /*
+   * Step 3 before step 4 (#427, frame `32`). The agreement is where the
+   * commission and the payout timing are agreed, and it is agreed *before* a
+   * payout rail exists to implement them — so a vendor who arrives here without
+   * it goes there first rather than handing Stripe their bank details without
+   * having been told what the platform keeps. `POST /vendor/stripe/connect`
+   * refuses for the same reason, which is what makes this a signpost rather
+   * than the enforcement.
+   */
+  if (agreement && !agreement.isCurrent) {
+    redirect(VENDOR_AGREEMENT_PATH);
   }
 
   const hasStarted = Boolean(status.stripeAccountId);

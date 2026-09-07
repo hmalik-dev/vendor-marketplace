@@ -260,6 +260,18 @@
   --leading-prose: 1.6; /* body copy, descriptions, review and message bodies */
 
   /*
+   * Long-form legal prose, and nowhere else in the product.
+   *
+   * Frames `31`–`33` in `design/delta-legal/` set the legal pages' prose at
+   * `15px/1.85` and say so explicitly: the app's 13.5px/1.6 is unreadable at
+   * the length of a Terms of Service. That is a second ratio for a second
+   * reading task rather than a second opinion about the first one, so it is
+   * named here beside `prose` instead of appearing as an arbitrary
+   * `leading-[1.85]` at three call sites.
+   */
+  --leading-legal: 1.85; /* `/terms`, `/privacy`, `/cookies` — the reading layout */
+
+  /*
    * Tracking is named for the role, never bolted onto a size step: the frames
    * hold `.h2` at `-.01em` across six different sizes, and give eight inline
    * serif spans at 26px no tracking at all. A `--text-*--letter-spacing`

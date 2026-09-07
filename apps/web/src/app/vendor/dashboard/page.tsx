@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { VENDOR_PAYMENTS_PATH, pageTitle, toDateString } from '@vendor-marketplace/shared';
 import { DashboardStats } from '@/components/vendor/dashboard-stats';
 import { PublishBlockerBanner } from '@/components/vendor/publish-blocker-banner';
+import { AgreementBlockerBanner } from '@/components/vendor/agreement-blocker-banner';
 import { PublishChecklist } from '@/components/vendor/publish-checklist';
 import { PublishedRail } from '@/components/vendor/published-rail';
 import { RequestRow } from '@/components/vendor/request-row';
@@ -189,6 +190,15 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
           blockers={dashboard.publishBlockers}
           isPublished={dashboard.isPublished}
         />
+
+        {/*
+          The agreement gate (#427). Above the payout one because it comes
+          first in onboarding: the commission and the payout timing are agreed
+          before there is a rail to implement them, so a vendor sent to Stripe
+          without having accepted would be connecting a rail to terms they have
+          not read. Renders nothing once the vendor holds the current version.
+        */}
+        <AgreementBlockerBanner />
 
         {/*
           The payout gate. Gold rather than red because nothing has failed —
