@@ -441,6 +441,16 @@ async function seedReviewHistory<
         totalAmountCents: fees.totalCents,
         platformFeeCents: fees.platformFeeCents,
         vendorPayoutCents: fees.vendorPayoutCents,
+        /*
+         * `'separate'`, never the column's `'destination'` default. That default
+         * marks the pre-#423 charge that split the money as the card succeeded,
+         * and the payout predicate excludes it — so a seeded booking taking the
+         * default is a row the sweep will never transfer and the vendor dashboard
+         * will never name. Every seeded vendor's payout card read `—` until this
+         * was set. It is also a state production cannot hold: an unreleased
+         * `destination` row is what `isLegacyDestinationPayout` says cannot exist.
+         */
+        payoutModel: 'separate' as const,
         status: 'completed' as const,
       };
     });

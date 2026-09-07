@@ -1,6 +1,7 @@
 import {
   BOOKING_WEEK_WINDOW_DAYS,
   addDays,
+  isPayoutDue,
   parseDateString,
   payoutReleaseAt,
   payoutStatusOf,
@@ -16,9 +17,11 @@ import {
   countResponses,
   findCalendarBetween,
   findCategoryIds,
-  findNextPayout,
+  findNextPendingPayout,
+  findOwedPayoutTotals,
   sumPayoutsBetween,
-  type NextPayoutRow,
+  type NextPendingPayoutRow,
+  type OwedPayoutTotalRow,
 } from './dashboard.dao.js';
 import { publishBlockers, requireOwnVendorProfile } from './vendors.service.js';
 
@@ -126,7 +129,8 @@ export async function getVendorDashboard(
     responses,
     earningsThisMonthCents,
     calendar,
-    nextPayout,
+    nextPendingPayout,
+    owedPayoutTotals,
     categoryIds,
     activePackageCount,
   ] = await Promise.all([
@@ -141,7 +145,8 @@ export async function getVendorDashboard(
       new Date(`${next}T00:00:00.000Z`),
     ),
     findCalendarBetween(db, vendor.id, windowDays[0] ?? today, windowEnd),
-    findNextPayout(db, vendor.id),
+    findNextPendingPayout(db, vendor.id),
+    findOwedPayoutTotals(db, vendor.id),
     findCategoryIds(db, vendor.id),
     countActivePackages(db, vendor.id),
   ]);
@@ -171,22 +176,78 @@ export async function getVendorDashboard(
       date,
       status: byDate.get(date) ?? ('available' as AvailabilityStatus),
     })),
-    nextPayout: toNextPayout(nextPayout),
+    payouts: toPayoutSummary(owedPayoutTotals, nextPendingPayout, now),
   };
 }
 
 /**
- * The payout card's three facts, derived where the booking row is the only
- * source: the stored amount, the date `payoutReleaseAt` gives, and which of the
- * payout states it is in (#423 acceptance 15).
+ * What a vendor is owed, folded out of the per-status totals and the soonest
+ * pending row.
  *
- * Nothing here recomputes a fee and nothing invents a date. `releaseAt` cannot
- * be null in practice — the row's `event_date` came out of a `DATE` column —
- * but the helper's contract allows it, and a payout card is the wrong place to
- * assert past a `null`: showing no card is honest, and showing one built on a
- * date that failed to parse is not.
+ * **Which figure a group lands in is `payoutStatusOf`'s answer, not this
+ * function's.** Writing `status === 'disputed'` here would be a second copy of
+ * an inference #423 acceptance 16 exists to keep at one, and the copy that
+ * silently keeps saying "on its way" after a further hold status is added.
+ *
+ * `payoutReleasedAt: null` and `stripeTransferId: null` are passed because the
+ * query's own predicate asserts them for every row in every group — the sweep
+ * has sent none of this money. This is an aggregate of rows the predicate has
+ * already filtered, not one booking being described by fields it does not have.
+ *
+ * **`next` carries its own amount rather than being paired with the total.**
+ * `pendingCents` is every pending booking and `next.cents` is the one that pays
+ * first, and printing the former above the latter's date would tell a vendor
+ * that $9,500 arrives on the 18th when $500 does — the disagreement between the
+ * shown figure and the transfer that acceptance 7 exists to make impossible.
+ *
+ * `isDue` is answered here because only the server has a clock worth trusting
+ * for it. A transfer that keeps failing stays `pending` by design (#423), so
+ * its release date slides into the past while the row is still owed; the card
+ * needs to know to stop pointing forwards at it. `isPayoutDue` is the same
+ * predicate the sweep pays on, read from the same event date.
+ *
+ * The empty answers are `null` and zero rather than a carried-over date: a
+ * vendor owed nothing is owed nothing, undated (acceptance 4).
  */
-function toNextPayout(row: NextPayoutRow | null): VendorDashboard['nextPayout'] {
+function toPayoutSummary(
+  rows: OwedPayoutTotalRow[],
+  soonest: NextPendingPayoutRow | null,
+  now: Date,
+): VendorDashboard['payouts'] {
+  const summary = { pendingCents: 0, pendingCount: 0, heldCents: 0, heldCount: 0 };
+
+  for (const row of rows) {
+    const state = payoutStatusOf({
+      status: row.status,
+      payoutReleasedAt: null,
+      stripeTransferId: null,
+    });
+
+    if (state === 'held') {
+      summary.heldCents += row.cents;
+      summary.heldCount += row.count;
+      continue;
+    }
+
+    summary.pendingCents += row.cents;
+    summary.pendingCount += row.count;
+  }
+
+  return { ...summary, next: toNextPending(soonest, now) };
+}
+
+/**
+ * The soonest pending payout as the card states it.
+ *
+ * `releaseAt` cannot be `null` in practice — the row's `event_date` came out of
+ * a `DATE` column — but `payoutReleaseAt`'s contract allows it, and a payout
+ * card is the wrong place to assert past one: showing no card is honest, and
+ * showing one built on a date that failed to parse is not.
+ */
+function toNextPending(
+  row: NextPendingPayoutRow | null,
+  now: Date,
+): VendorDashboard['payouts']['next'] {
   if (!row) {
     return null;
   }
@@ -198,17 +259,15 @@ function toNextPayout(row: NextPayoutRow | null): VendorDashboard['nextPayout'] 
   }
 
   return {
-    bookingId: row.bookingId,
-    eventDate: row.eventDate,
-    customerFirstName: row.customerFirstName,
-    vendorPayoutCents: row.vendorPayoutCents,
-    releaseAt,
+    cents: row.vendorPayoutCents,
     /*
-     * Through `payoutStatusOf`, not an inline `status === 'disputed'` here.
-     * Acceptance 16's point is that no surface should infer "the money is
-     * stuck" from `BOOKING_STATUSES`, and writing that inference once in this
-     * file would leave #424 and #425 each writing their own.
+     * Blank becomes absent. `users.first_name` is written as `firstName ?? ''`
+     * at both Clerk entry points, so a customer who signed up without one
+     * yields an empty string — and the card would render an orphan separator,
+     * ` · pays out Jun 18`, rather than dropping the name.
      */
-    status: payoutStatusOf(row),
+    customerFirstName: row.customerFirstName.trim(),
+    releaseAt,
+    isDue: isPayoutDue(row.eventDate, now),
   };
 }

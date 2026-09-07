@@ -16,12 +16,76 @@ function dashboard(overrides: Partial<WireVendorDashboard> = {}): WireVendorDash
     reviewCount: 127,
     earningsThisMonthCents: 894000,
     bookingWindow: [],
-    nextPayout: null,
+    payouts: { pendingCents: 0, pendingCount: 0, next: null, heldCents: 0, heldCount: 0 },
     ...overrides,
   } as WireVendorDashboard;
 }
 
 describe('DashboardStats', () => {
+  /*
+   * Frame `08` draws `Next payout Jun 18` under the earnings figure. #308
+   * shipped `Paid out after each event` in its place because there was no
+   * payout schedule to read a date from; #423 built one, so the frame's own
+   * line is now a derivation rather than an invention.
+   */
+  it('dates the next payout under the earnings figure', () => {
+    render(
+      <DashboardStats
+        dashboard={dashboard({
+          payouts: {
+            pendingCents: 175_000,
+            pendingCount: 1,
+            next: {
+              cents: 175_000,
+              customerFirstName: 'Anjali',
+              releaseAt: new Date('2026-06-18T00:00:00.000Z'),
+              isDue: false,
+            },
+            heldCents: 0,
+            heldCount: 0,
+          },
+        })}
+        today="2026-06-15"
+      />,
+    );
+
+    expect(screen.getByText('Next payout Jun 18')).toBeDefined();
+  });
+
+  /* Nothing owed has no date, and the mechanism is still true — so it is what
+   * the line falls back to rather than `Next payout —`. */
+  it('states the mechanism when there is no next payout to date', () => {
+    render(<DashboardStats dashboard={dashboard()} today="2026-06-15" />);
+
+    expect(screen.getByText('Paid out after each event')).toBeDefined();
+  });
+
+  /* A release window already closed points at no future date — the same
+   * reasoning as the rail card's. */
+  it('says the money is moving once the release date is behind us', () => {
+    render(
+      <DashboardStats
+        dashboard={dashboard({
+          payouts: {
+            pendingCents: 175_000,
+            pendingCount: 1,
+            next: {
+              cents: 175_000,
+              customerFirstName: 'Anjali',
+              releaseAt: new Date('2026-06-18T00:00:00.000Z'),
+              isDue: true,
+            },
+            heldCents: 0,
+            heldCount: 0,
+          },
+        })}
+        today="2026-09-06"
+      />,
+    );
+
+    expect(screen.getByText('Paying out now')).toBeDefined();
+  });
+
   it('draws the stat cards at the frame’s 12px radius, not `rounded-xl`', () => {
     const { container } = render(<DashboardStats dashboard={dashboard()} today="2026-08-29" />);
 

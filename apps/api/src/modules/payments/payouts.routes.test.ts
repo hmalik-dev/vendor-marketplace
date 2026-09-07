@@ -862,43 +862,52 @@ describe('payouts', () => {
   describe('what the vendor dashboard can read', () => {
     /* #423 acceptance 15. */
     it('names the stored amount and the release date the sweep will pay on', async () => {
-      const paid = await paidBooking();
+      await paidBooking();
 
       const response = await inject('GET', '/vendor/dashboard', VENDOR);
 
       expect(response.statusCode).toBe(200);
-      const payout = response.json().nextPayout;
-      expect(payout).toMatchObject({
-        bookingId: paid.id,
-        eventDate: EVENT_DATE,
+      const { next, pendingCents } = response.json().payouts;
+      expect(next).toMatchObject({
         // The stored figure, not a recomputed fee.
-        vendorPayoutCents: EXPECTED_PAYOUT_CENTS,
-        status: 'pending',
+        cents: EXPECTED_PAYOUT_CENTS,
+        isDue: false,
       });
+      // One owed booking, so the next payout and the total are the same money.
+      expect(pendingCents).toBe(EXPECTED_PAYOUT_CENTS);
       /*
        * The same helper the sweep pays on, so the date a vendor is shown and
        * the date they are paid cannot drift. The suite derives it rather than
        * hard-coding a day, because a hard-coded one would keep passing if the
        * two ever came apart.
        */
-      expect(new Date(payout.releaseAt as string).toISOString()).toBe(
+      expect(new Date(next.releaseAt as string).toISOString()).toBe(
         payoutReleaseAt(EVENT_DATE)!.toISOString(),
       );
     });
 
-    /* #423 acceptance 16 — held is distinguishable from pending, in the data. */
+    /**
+     * #423 acceptance 16 — held is distinguishable from pending, in the data.
+     *
+     * **#424 moved where that distinction is stated.** It was a `status` field
+     * on the one booking the dashboard named, which left the surface reading it
+     * to decide what to draw; it is now two figures the server has already
+     * split with `payoutStatusOf`, so held money is reported as held money and
+     * cannot be mistaken for a payout on its way. The acceptance is the same
+     * and this asserts it in the shape that shipped.
+     */
     it('says a payout is held rather than pending while a report is open', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
       await inject('PUT', `/customer/bookings/${paid.id}/dispute`, CUSTOMER, {});
 
-      const response = await inject('GET', '/vendor/dashboard', VENDOR);
+      const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
 
-      expect(response.json().nextPayout).toMatchObject({
-        bookingId: paid.id,
-        vendorPayoutCents: EXPECTED_PAYOUT_CENTS,
-        status: 'held',
-      });
+      expect(payouts.heldCents).toBe(EXPECTED_PAYOUT_CENTS);
+      expect(payouts.heldCount).toBe(1);
+      // Held money is owed, but it is not on its way and it has no date.
+      expect(payouts.pendingCents).toBe(0);
+      expect(payouts.next).toBeNull();
     });
 
     /**
@@ -911,16 +920,19 @@ describe('payouts', () => {
       clockNow = JUST_AFTER_EVENT;
       await inject('PUT', `/vendor/bookings/${paid.id}/complete`, VENDOR);
 
-      expect((await inject('GET', '/vendor/dashboard', VENDOR)).json().nextPayout).toMatchObject({
-        bookingId: paid.id,
-        status: 'pending',
+      expect((await inject('GET', '/vendor/dashboard', VENDOR)).json().payouts).toMatchObject({
+        pendingCents: EXPECTED_PAYOUT_CENTS,
+        pendingCount: 1,
+        heldCents: 0,
       });
     });
 
     it('names nothing once the payout has gone out', async () => {
       await releasedBooking();
 
-      expect((await inject('GET', '/vendor/dashboard', VENDOR)).json().nextPayout).toBeNull();
+      const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
+      expect(payouts.next).toBeNull();
+      expect(payouts.pendingCents).toBe(0);
     });
   });
 });

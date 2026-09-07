@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lte, sql, type SQL } from 'drizzle-orm';
 import { bookings, vendorProfiles } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 
@@ -25,6 +25,37 @@ import type { AppDatabase } from '../../lib/database.js';
  * `disputed` is the one exclusion: it is the hold.
  */
 export const RELEASABLE_STATUSES = ['confirmed', 'completed', 'cancelled'] as const;
+
+/**
+ * What makes a payout **owed**, as clauses — everything except the status list
+ * and the date bound.
+ *
+ * The three of them were written out by hand in three places before #424: both
+ * queries below, and the vendor dashboard's own read of the same rows. Three
+ * hand-synced copies of a money predicate is how the figure a vendor is shown
+ * comes to name a different set of rows than the transfer does, and that
+ * divergence is silent — nothing fails, the number is simply wrong. Composing
+ * them from here is what makes the dashboard's reconciliation structural rather
+ * than a test that happens to pass today.
+ *
+ * The status list is **not** in here, because the two callers legitimately
+ * differ: the sweep releases `RELEASABLE_STATUSES` and the dashboard also has
+ * to report `HELD_PAYOUT_STATUSES` as held. Folding the difference in would
+ * make this a predicate neither caller actually wants.
+ *
+ * - `payout_released_at is null` — the money has not been sent.
+ * - `payout_model = 'separate'` — a destination charge split the money as the
+ *   card succeeded, so the vendor already holds their share.
+ * - `vendor_payout_cents > 0` — under D37 a full refund writes `0`, and a zero
+ *   payout is excluded by the amount rather than by the status.
+ */
+export function payoutOwedClauses(): SQL[] {
+  return [
+    isNull(bookings.payoutReleasedAt),
+    eq(bookings.payoutModel, 'separate'),
+    gt(bookings.vendorPayoutCents, 0),
+  ];
+}
 
 /**
  * A booking that is owed its transfer, with the account the money goes to.
@@ -73,9 +104,7 @@ export async function findDuePayoutBookingIds(
     .where(
       and(
         inArray(bookings.status, [...RELEASABLE_STATUSES]),
-        isNull(bookings.payoutReleasedAt),
-        eq(bookings.payoutModel, 'separate'),
-        gt(bookings.vendorPayoutCents, 0),
+        ...payoutOwedClauses(),
         lte(bookings.eventDate, dueThroughDate),
       ),
     )
@@ -138,9 +167,7 @@ export async function claimReleasableBooking(
       and(
         eq(bookings.id, bookingId),
         inArray(bookings.status, [...RELEASABLE_STATUSES]),
-        isNull(bookings.payoutReleasedAt),
-        eq(bookings.payoutModel, 'separate'),
-        gt(bookings.vendorPayoutCents, 0),
+        ...payoutOwedClauses(),
         lte(bookings.eventDate, dueThroughDate),
       ),
     )

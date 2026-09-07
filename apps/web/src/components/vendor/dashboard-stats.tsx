@@ -1,4 +1,5 @@
 import { MONEY_COPY, formatPrice } from '@vendor-marketplace/shared';
+import { formatPayoutDate } from '@/lib/payout-date';
 import type { WireVendorDashboard } from '@/lib/wire-schemas';
 
 interface StatProps {
@@ -33,6 +34,30 @@ function Stat({ label, value, delta, isPositive = false }: StatProps): React.Rea
 }
 
 const MONTH = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' });
+
+/**
+ * The line under the earnings figure, which frame `08` draws as
+ * `Next payout Jun 18`.
+ *
+ * It could not say that until #423: there was no payout schedule to read a date
+ * from, so `MONEY_COPY.vendorPayout` stated the mechanism instead. There is one
+ * now, and the date is `payoutReleaseAt` of the earliest event still owed — the
+ * same derivation the sweep pays on.
+ *
+ * The dateless sentence stays as the fallback rather than being deleted: a
+ * vendor owed nothing has no next payout, and `Next payout —` would be a worse
+ * answer than a mechanism that is still true. `Paying out now` is the third
+ * case, for a release window that has already closed — see `NextPayout`.
+ */
+function payoutDelta(payouts: WireVendorDashboard['payouts'], today: string): string {
+  if (payouts.next === null) {
+    return MONEY_COPY.vendorPayout;
+  }
+
+  return payouts.next.isDue
+    ? 'Paying out now'
+    : `Next payout ${formatPayoutDate(payouts.next.releaseAt, today)}`;
+}
 
 export interface DashboardStatsProps {
   dashboard: WireVendorDashboard;
@@ -107,9 +132,7 @@ export function DashboardStats({ dashboard, today }: DashboardStatsProps): React
       <Stat
         label="Earnings this month"
         value={formatPrice(dashboard.earningsThisMonthCents)}
-        // Payout scheduling is #9/#10; naming a date before it exists would be
-        // a promise nothing keeps.
-        delta={MONEY_COPY.vendorPayout}
+        delta={payoutDelta(dashboard.payouts, today)}
       />
     </ul>
   );
