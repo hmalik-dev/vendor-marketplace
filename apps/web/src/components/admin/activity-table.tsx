@@ -42,6 +42,8 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   dispute_resolved: 'Resolved a report',
   support_case_resolved: 'Closed a case',
   payout_retried: 'Retried a payout',
+  user_data_exported: 'Exported an account record',
+  user_closed: 'Closed an account',
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */

@@ -473,3 +473,29 @@ export const DELETION_UNWIND = unwindCopy(
   'closed',
   'account-holder',
 );
+
+/**
+ * An operator closed the account on its holder's request (#438).
+ *
+ * `account-holder`, though an operator typed it. The word names **whose
+ * decision** the closure is, not whose hands were on the keyboard, and that is
+ * what licenses or refuses the full refund above: the person leaving is the one
+ * who paid, so pricing their own future bookings is the unpriced decision D39
+ * refuses to make.
+ *
+ * On this path the branch it selects should never fire at all — `closeAccount`
+ * refuses the closure with a 409 while any future confirmed booking exists. It
+ * matters for the row that slips between that read and this loop: a booking
+ * confirmed in the gap is then **left standing and reported**, rather than
+ * refunded in full by a route whose whole premise is that it refunds nothing.
+ *
+ * Its own `refundKeyPrefix` for the reason the field exists: a vendor who is
+ * banned and then closed is two decisions about the same booking, and a shared
+ * key would make the second silently return the first one's result.
+ */
+export const CLOSURE_UNWIND = unwindCopy(
+  'closure',
+  'close-refund:direct',
+  'closed',
+  'account-holder',
+);

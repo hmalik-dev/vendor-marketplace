@@ -68,7 +68,7 @@ import {
   VENDOR_SORT_OPTIONS,
   PUBLISH_BLOCKER_KEYS,
 } from '../constants/index.js';
-import { LEGAL_ACCEPTANCE_DOCUMENTS } from '../constants/legal.js';
+import { LEGAL_ACCEPTANCE_DOCUMENTS, LEGAL_ACCEPTANCE_METHODS } from '../constants/legal.js';
 import { LEGAL_DOCUMENT_SHA256_LENGTH } from '../constants/legal-manifest.js';
 import {
   MAX_SUPPORT_ERROR_DIGEST_LENGTH,
@@ -2857,3 +2857,285 @@ export type AdminCaseQuery = z.infer<typeof adminCaseQuerySchema>;
 
 export const adminCasePageSchema = paginatedSchema(adminCaseRowSchema);
 export type AdminCasePage = z.infer<typeof adminCasePageSchema>;
+
+// --- Data rights: export, closure, legal record (#438) ----------------------
+
+/**
+ * One acceptance as an **operator** reads it, which is the public
+ * `legalAcceptanceSchema` plus the evidence fields.
+ *
+ * Read-only by construction rather than by convention: `legal_acceptances`
+ * carries three triggers that refuse UPDATE, DELETE and TRUNCATE, so there is
+ * deliberately no write counterpart to this schema anywhere. The console says
+ * so on the surface rather than leaving an operator to discover it by trying.
+ */
+export const legalAcceptanceRecordSchema = legalAcceptanceSchema.extend({
+  id: uuidSchema,
+  /** The bytes that were shown, not only the label they carried. */
+  documentSha256: z.string(),
+  acceptanceMethod: z.enum(LEGAL_ACCEPTANCE_METHODS),
+  acceptedByUserId: uuidSchema,
+  ip: z.string().nullable(),
+  userAgent: z.string().nullable(),
+});
+export type LegalAcceptanceRecord = z.infer<typeof legalAcceptanceRecordSchema>;
+
+/**
+ * The other party to something the subject did, named once rather than repeated
+ * on every row that mentions them.
+ *
+ * One list is what makes the redaction rule checkable. Spread across booking,
+ * request, review and message rows, "the counterparty's contact details are not
+ * the subject's data" is a rule that has to hold in eight places and will hold
+ * in seven. Here it holds by there being no `email` or `phone` key for a future
+ * writer to populate.
+ */
+export const adminExportCounterpartySchema = z.object({
+  id: uuidSchema,
+  /**
+   * A vendor's business name, or a customer's name — in both cases exactly what
+   * the subject already saw on their own bookings screen.
+   */
+  name: z.string(),
+  role: z.enum(['customer', 'vendor']),
+});
+
+/** What the export left out, and why, said inside the export itself. */
+export const adminExportWithholdingSchema = z.object({
+  /** The section of the archive it applies to — `counterparties`, `subject`. */
+  section: z.string(),
+  fields: z.array(z.string()),
+  reason: z.string(),
+});
+
+export const adminExportBookingRequestSchema = z.object({
+  id: uuidSchema,
+  counterpartyId: uuidSchema,
+  eventDate: z.string(),
+  eventType: z.string().nullable(),
+  eventLocation: z.string().nullable(),
+  guestCount: z.int().nullable(),
+  customDetails: z.string().nullable(),
+  status: z.string(),
+  quotedPriceCents: z.int().nullable(),
+  finalPriceCents: z.int().nullable(),
+  createdAt: z.coerce.date(),
+});
+
+export const adminExportBookingSchema = z.object({
+  id: uuidSchema,
+  counterpartyId: uuidSchema,
+  eventDate: z.string(),
+  eventLocation: z.string().nullable(),
+  status: z.string(),
+  totalAmountCents: z.int(),
+  platformFeeCents: z.int(),
+  vendorPayoutCents: z.int(),
+  refundAmountCents: z.int().nullable(),
+  /**
+   * The Stripe **object** ids, which is what a payment record is.
+   *
+   * A `pi_` or `tr_` id names a transaction the subject is party to; it is not
+   * a credential and grants nothing. No key of any kind belongs in this
+   * archive, and the export suite asserts that of the serialized bytes rather
+   * than of this list.
+   */
+  stripePaymentIntentId: z.string().nullable(),
+  stripeTransferId: z.string().nullable(),
+  paidAt: z.coerce.date().nullable(),
+  cancelledAt: z.coerce.date().nullable(),
+  cancellationReason: z.string().nullable(),
+  createdAt: z.coerce.date(),
+});
+
+export const adminExportReviewSchema = z.object({
+  id: uuidSchema,
+  bookingId: uuidSchema,
+  counterpartyId: uuidSchema,
+  type: z.string(),
+  rating: z.int(),
+  title: z.string().nullable(),
+  content: z.string().nullable(),
+  isPublic: z.boolean(),
+  createdAt: z.coerce.date(),
+});
+
+export const adminExportMessageSchema = z.object({
+  id: uuidSchema,
+  conversationId: uuidSchema,
+  /** `false` where the counterparty wrote it — a conversation the subject read. */
+  sentBySubject: z.boolean(),
+  content: z.string(),
+  readAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+});
+
+export const adminExportNotificationSchema = z.object({
+  id: uuidSchema,
+  type: z.string(),
+  title: z.string(),
+  /** Nullable on the row, so nullable here — a title-only bell entry is valid. */
+  body: z.string().nullable(),
+  readAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+});
+
+/**
+ * Everything the platform holds about one person, in one machine-readable
+ * object (#438).
+ *
+ * The privacy policy says *"ask us for a copy of what we hold"* and that
+ * requests go through Contact support, so this is what the operator hands back.
+ * JSON rather than a folder of CSVs because the shape is a graph — bookings
+ * point at counterparties, messages at conversations — and flattening it to
+ * columns would lose the part a subject actually asked for.
+ */
+export const adminUserExportSchema = z.object({
+  generatedAt: z.coerce.date(),
+  subject: z.object({
+    id: uuidSchema,
+    email: z.string(),
+    role: z.string(),
+    firstName: z.string(),
+    lastName: z.string(),
+    phone: z.string().nullable(),
+    city: z.string().nullable(),
+    state: z.string().nullable(),
+    bio: z.string().nullable(),
+    avatarUrl: z.string().nullable(),
+    /**
+     * The Stripe **customer** id, which is the subject's own payment record and
+     * therefore theirs. `clerk_user_id` is deliberately absent: it is the
+     * platform's join key into another system, not a fact about the person.
+     */
+    stripeCustomerId: z.string().nullable(),
+    isBanned: z.boolean(),
+    /** Set where the account was closed; the row is retained, never erased. */
+    deletedAt: z.coerce.date().nullable(),
+    createdAt: z.coerce.date(),
+  }),
+  vendorProfile: z
+    .object({
+      id: uuidSchema,
+      businessName: z.string(),
+      slug: z.string(),
+      tagline: z.string().nullable(),
+      bio: z.string().nullable(),
+      address: z.string().nullable(),
+      /**
+       * Nullable, because the column is. A profile created before the location
+       * step is a real row, and an export that refused to serialize it would
+       * fail on exactly the account least able to fix it.
+       */
+      city: z.string().nullable(),
+      state: z.string().nullable(),
+      stripeAccountId: z.string().nullable(),
+      isPublished: z.boolean(),
+      isDeleted: z.boolean(),
+      createdAt: z.coerce.date(),
+    })
+    .nullable(),
+  counterparties: z.array(adminExportCounterpartySchema),
+  bookingRequests: z.array(adminExportBookingRequestSchema),
+  bookings: z.array(adminExportBookingSchema),
+  reviewsWritten: z.array(adminExportReviewSchema),
+  reviewsReceived: z.array(adminExportReviewSchema),
+  messages: z.array(adminExportMessageSchema),
+  notifications: z.array(adminExportNotificationSchema),
+  legalAcceptances: z.array(legalAcceptanceRecordSchema),
+  withheld: z.array(adminExportWithholdingSchema),
+});
+export type AdminUserExport = z.infer<typeof adminUserExportSchema>;
+
+/**
+ * A booking the account still holds, named in the 409 that refuses to close it
+ * (D39).
+ *
+ * The refusal has to say *what* to cancel or it is an instruction nobody can
+ * follow. The customer cancels these through the booking screens they already
+ * have, which routes them through D3's tiers — which is the whole reason D39
+ * refuses rather than prices.
+ */
+export const adminCloseBlockerSchema = z.object({
+  bookingId: uuidSchema,
+  eventDate: z.string(),
+  counterpartyName: z.string(),
+});
+export type AdminCloseBlocker = z.infer<typeof adminCloseBlockerSchema>;
+
+/** What closing an account actually did. */
+export const adminCloseAccountResultSchema = z.object({
+  userId: uuidSchema,
+  closedAt: z.coerce.date(),
+  requestsDeclined: z.int(),
+  /**
+   * Always `0` on a closure that ran, and reported rather than assumed.
+   *
+   * D39 refuses the closure while any future confirmed booking exists, so this
+   * path is not supposed to cancel one. The field exists because the shared
+   * unwind can still report one — a booking confirmed between the precondition
+   * read and the unwind — and a closure that silently cancelled a booking is
+   * exactly the money decision D39 refuses to make.
+   */
+  bookingsCancelled: z.int(),
+  /** Confirmed bookings the unwind deliberately left for a human (D39). */
+  bookingsLeftForReview: z.int(),
+  /** Refunds that actually issued — the vendor side of a closure (D39). */
+  refundsIssued: z.int(),
+  /**
+   * Bookings whose refund Stripe refused, or which the unwind declined to
+   * price, and which are therefore **still confirmed** on a closed account.
+   *
+   * The same field `adminBanResultSchema` carries for the same reason (#400):
+   * without it the console shows a closure that succeeded while the money is
+   * still at Stripe, the customer has not been told, and the vendor's date is
+   * still held. A closure with a non-zero count here needs a human.
+   */
+  refundsFailed: z.int(),
+  profileRetired: z.boolean(),
+});
+export type AdminCloseAccountResult = z.infer<typeof adminCloseAccountResultSchema>;
+
+/**
+ * What the console shows about one account's record, closed or not.
+ *
+ * The privacy policy promises records are **kept**, so a closed account's page
+ * has to show what is still held rather than an empty screen implying the
+ * person is gone. It is the answer the export gives, counted instead of
+ * enumerated.
+ */
+export const adminUserDataRightsSchema = z.object({
+  userId: uuidSchema,
+  email: z.string(),
+  name: z.string(),
+  role: z.string(),
+  isBanned: z.boolean(),
+  closedAt: z.coerce.date().nullable(),
+  vendorProfileId: uuidSchema.nullable(),
+  vendorSlug: z.string().nullable(),
+  retained: z.object({
+    bookingRequests: z.int(),
+    bookings: z.int(),
+    reviewsWritten: z.int(),
+    reviewsReceived: z.int(),
+    messages: z.int(),
+    notifications: z.int(),
+    legalAcceptances: z.int(),
+  }),
+  /** Future confirmed bookings that would refuse a closure right now (D39). */
+  closeBlockers: z.array(adminCloseBlockerSchema),
+  /**
+   * Future confirmed bookings this account holds **as the vendor**, which a
+   * closure cancels and refunds in full (D39).
+   *
+   * The other half of the same ruling, and the half that moves money. A
+   * customer's own forward bookings refuse the closure; a vendor's are
+   * refunded to their customers with the payout written to zero, because the
+   * vendor walked away and the customer did nothing wrong. The console shows
+   * the count so an operator confirming a closure is told what it will do
+   * rather than the opposite.
+   */
+  bookingsRefundedOnClose: z.int(),
+  legalAcceptances: z.array(legalAcceptanceRecordSchema),
+});
+export type AdminUserDataRights = z.infer<typeof adminUserDataRightsSchema>;
