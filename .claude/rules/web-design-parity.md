@@ -162,13 +162,41 @@ twice. All three of these are decisions, not drift:
   meaning changed. The wider class is **#447**.
 
 **The logo mark paints a 19px outline circle where a delta frame draws 17
-(#449, filed 2026-09-07).** Not yet ruled — but **do not re-file it**. The
-screens document ships no `*` reset, so it is content-box, which is what #250
-measured; every delta bundle sets `* { box-sizing: border-box; }`, so those draw
-the mark as two equal footprints. `logo.tsx` follows #250. Overturning that moves
-the mark on the desktop header, the auth panel, the favicon and the app icon, so
-it is a design adjudication rather than a parity fix. **Grep `box-sizing` in the
-specific bundle a pass is reading before arguing about any bordered box in it.**
+(#449, ruled 2026-09-07).** `box-content` stands and **#250 is upheld** — the
+screens document is the primary contract and the delta bundles are supplements
+to it, so `logo.tsx` does not change and the mark does not move on the desktop
+header, the auth panel, the favicon or the app icon. **A `delta-band` parity read
+measuring 19-against-17 is looking at this ruling. Do not re-file it.**
+
+The mechanism, which still governs every bordered box: `Orla - Screens.dc.html`
+ships no `*` reset, so it is content-box, which is what #250 measured;
+`delta-band`, `delta-legal` and `contact-support` each set
+`* { box-sizing: border-box; }`, so those draw the mark as two equal footprints.
+**`delta-admin` ships no reset either** (confirmed 2026-09-07: zero `box-sizing`
+declarations), so the split is **two content-box documents against three
+border-box bundles**, not one against three — which is why D30's
+one-frame-against-corroborating-siblings reading does not decide this and primacy
+does. **Grep `box-sizing` in the specific bundle a pass is reading before arguing
+about any bordered box in it**, in both directions.
+
+**A border or surface token used as text on an ink ground is machine-checked
+(#447, 2026-09-07).** `apps/web/src/testing/token-roles.ts` holds `STONE_ROLES`,
+the declared role of every `--color-stone-*` step, and is the source of truth for
+which steps may be `text-*` at all; `token-role-guard.test.ts` walks the JSX
+subtree of every element carrying a **bare** ink fill (`bg-stone-900` /
+`bg-stone-950` with no alpha — an alpha is a scrim, not a ground) and resolves
+hoisted `const NAME = '…'` class strings, which is what makes it reach the
+footer's `LINK_CLASS`. `theme-tokens.test.ts` refuses a step with no declared
+role and spreads the contrast table's ink half from the same table rather than
+hand-listing it.
+
+So a parity pass finding `stone-400` as text on ink should expect the suite to
+have caught it already. **Treat a miss as a gap in the guard and widen it, rather
+than filing a fifth instance** — the four historical ones (#430's closing band,
+#441's admin header, #441's legal hairline, and the 78%-alpha-of-`stone-50` that
+minted the ink ramp) are fixtures in that suite. The three per-call-site guards
+stay: each also pins the exact token its frame names, which is a parity
+assertion the law cannot make.
 
 **The Florals category no longer exists (#419, ruled 2026-09-06).** It was
 folded into `Decor`, so the taxonomy is ten categories and three frames now
