@@ -67,3 +67,52 @@ export function parseLaneEnv(contents: string): Record<string, string> {
 export function childEnv(base: NodeJS.ProcessEnv, contents: string): NodeJS.ProcessEnv {
   return { ...base, ...parseLaneEnv(contents) };
 }
+
+/** Whether a command names one of the two apps, however it selects it. */
+function names(command: readonly string[], app: 'web' | 'api'): boolean {
+  return command.some(
+    (token) => token.includes(`apps/${app}`) || token.includes(`@vendor-marketplace/${app}`),
+  );
+}
+
+/**
+ * Whether this command, and nothing else in it, serves the web app.
+ *
+ * `next` in any position covers the direct invocations — `next start`,
+ * `npx next start`, `node_modules/.bin/next start` — which is the shape that
+ * has no package name in it at all.
+ *
+ * A command naming **both** apps is not web-only: the fan-out's only reader of
+ * `PORT` is the API, so moving it there would put the API on the web port,
+ * which is the same defect in the other direction.
+ */
+export function servesWebApp(command: readonly string[]): boolean {
+  const web = names(command, 'web') || command.some((token) => token.split('/').pop() === 'next');
+
+  return web && !names(command, 'api');
+}
+
+/**
+ * The environment a `lane:exec` child runs in.
+ *
+ * `PORT` in the lane file is the **API's** port, and handing it to every child
+ * put `next start` on the API port: the lane's web port refused connections and
+ * read as a broken app, while its API port served the app and read as a correct
+ * one. `next dev` escaped only because `apps/web`'s dev script passes
+ * `--port $WEB_PORT` explicitly — a property of one script, not of the lane, so
+ * "use `next dev` and you are fine" was never the lesson.
+ *
+ * The fix is scoped to the child that is only ever the web app; everything else
+ * keeps the API's port, which is what `pnpm dev`, the migrations and the test
+ * runs all want.
+ */
+export function laneChildEnv(
+  base: NodeJS.ProcessEnv,
+  contents: string,
+  command: readonly string[],
+): NodeJS.ProcessEnv {
+  const values = parseLaneEnv(contents);
+  const merged: NodeJS.ProcessEnv = { ...base, ...values };
+
+  return servesWebApp(command) && values.WEB_PORT ? { ...merged, PORT: values.WEB_PORT } : merged;
+}
