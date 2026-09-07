@@ -13,3 +13,4 @@ export * from './legal-acceptances.js';
 export * from './admin-actions.js';
 export * from './notifications.js';
 export * from './us-cities.js';
+export * from './support-cases.js';

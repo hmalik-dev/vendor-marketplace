@@ -31,6 +31,7 @@ import type {
   UpdateTag,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { resolveCasesForBooking } from '../cases/cases.dao.js';
 import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
@@ -469,6 +470,40 @@ export async function resolveBookingDispute(
     },
   });
 
+  /*
+   * **The ruling closes the case, and it has to happen here** (#431).
+   *
+   * The complaint and the hold are one act — that is why `placeDisputeHold` has
+   * a single orchestrator — so the ruling and the case's disposition are one act
+   * too. Leaving the row `open` after the money moved would put the queue's
+   * oldest-open figure, which is the whole point of that screen, permanently
+   * wrong; and a resolution reached from the Bookings table rather than from the
+   * case has to close it just the same, which is why this is here and not in the
+   * case route.
+   *
+   * **After the audit write, not before**, because `recordAdminActionBestEffort`
+   * states that it is the last thing this function does and that a row therefore
+   * exists only where the change really happened. Ordering this ahead of it
+   * would have made that comment quietly false.
+   *
+   * Plural — a booking can carry a second report filed behind the first, and a
+   * chargeback beside a report. One ruling settles all of them: the money has
+   * moved one way or the other and there is nothing left for a second case to
+   * decide.
+   *
+   * Best-effort for the reason this whole function is: by the time it runs the
+   * hold has been lifted or the card refunded, and there is no retry that does
+   * either a second time safely.
+   */
+  await bestEffortNotice(
+    context,
+    { bookingId },
+    async () => {
+      await resolveCasesForBooking(context.db, bookingId, actorId, now);
+    },
+    'A dispute was resolved but its case could not be closed',
+  );
+
   return booking;
 }
 
@@ -485,8 +520,15 @@ export async function listCustomers(
   return { items: rows, total, page: query.page, pageSize: query.pageSize };
 }
 
-/** `First Last`, collapsed — the same shape every other admin surface prints. */
-function fullName(firstName: string, lastName: string): string {
+/**
+ * `First Last`, collapsed — the same shape every other admin surface prints.
+ *
+ * Exported since #431: the case console prints the same three names (the
+ * sender, the operator who ruled, the customer on the booking) and a private
+ * copy here meant `/admin/cases` and `/admin/bookings` could come to print one
+ * person differently.
+ */
+export function fullName(firstName: string, lastName: string): string {
   return `${firstName} ${lastName}`.trim();
 }
 

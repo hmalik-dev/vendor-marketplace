@@ -20,6 +20,7 @@ import type {
   PaymentIntentSnapshot,
   StripeAccountStatus,
   StripeConnectGateway,
+  StripeDisputeSnapshot,
   StripeEventNotification,
 } from '../lib/stripe.js';
 import {
@@ -361,6 +362,16 @@ export interface FakeStripe extends StripeConnectGateway {
    * produces an unexplainable red one day.
    */
   failedTransferKeys: Map<string, string>;
+  /**
+   * Disputes the fake knows about, keyed by id (#431).
+   *
+   * The chargeback handler **re-reads** the dispute rather than trusting the
+   * event body, exactly as the intent and account handlers do — so a suite
+   * that only set `nextEvent` would exercise a lookup with nothing behind it.
+   * A test puts the dispute here and then names its id in the event, which is
+   * the same two steps Stripe takes.
+   */
+  disputes: Map<string, StripeDisputeSnapshot>;
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
 }
@@ -379,6 +390,7 @@ function createFakeStripe(): FakeStripe {
   const transfersToRefuse = new Set<string>();
   /** Idempotency keys whose result was a failure, replayed as Stripe does. */
   const failedTransferKeys = new Map<string, string>();
+  const disputes = new Map<string, StripeDisputeSnapshot>();
 
   const fake: FakeStripe = {
     createdAccounts,
@@ -393,6 +405,7 @@ function createFakeStripe(): FakeStripe {
     reversals,
     transfersToRefuse,
     failedTransferKeys,
+    disputes,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
 
     succeed: (paymentIntentId) => {
@@ -471,6 +484,21 @@ function createFakeStripe(): FakeStripe {
       intentsByKey.set(key, id);
 
       return intent;
+    },
+
+    retrieveDispute: async (disputeId) => {
+      const dispute = disputes.get(disputeId);
+
+      /*
+       * Throws rather than answering a placeholder, because the real gateway
+       * does: a handler that quietly worked against an invented dispute would
+       * pass a suite and open a case for a chargeback nobody filed.
+       */
+      if (!dispute) {
+        throw new Error(`No fake dispute ${disputeId}`);
+      }
+
+      return dispute;
     },
 
     retrievePaymentIntent: async (paymentIntentId) => {

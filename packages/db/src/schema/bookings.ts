@@ -246,6 +246,17 @@ export const bookings = pgTable(
     // payment_intent.succeeded webhook, which may be delivered more than once.
     uniqueIndex('bookings_request_id_key').on(table.requestId),
     index('bookings_customer_idx').on(table.customerId),
+    /*
+     * "Which booking did Stripe just charge back?" (#431).
+     *
+     * The column has been written since the first payment and read by nothing
+     * that filters on it until now — `findBookingForDispute` is the first
+     * equality lookup, and it sits inside a webhook Stripe times out and
+     * retries. Without this the handler sequentially scans every booking the
+     * platform has ever taken, so the cost of answering a chargeback grows with
+     * lifetime volume rather than staying flat.
+     */
+    index('bookings_payment_intent_idx').on(table.stripePaymentIntentId),
     index('bookings_vendor_idx').on(table.vendorId),
     /*
      * Serves the payout sweep, which runs every quarter of an hour forever and

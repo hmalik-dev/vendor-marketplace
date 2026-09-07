@@ -75,6 +75,8 @@ import {
   MAX_SUPPORT_ERROR_ROUTE_LENGTH,
   MAX_SUPPORT_MESSAGE_LENGTH,
   SUPPORT_ERROR_DIGEST_PATTERN,
+  SUPPORT_CASE_ORIGINS,
+  SUPPORT_CASE_STATUSES,
   SUPPORT_REFERENCE_PATTERN,
   SUPPORT_TOPICS,
 } from '../constants/support.js';
@@ -2613,3 +2615,136 @@ export type AdminActivityQuery = z.infer<typeof adminActivityQuerySchema>;
 
 export const adminActivityPageSchema = paginatedSchema(adminActivityRowSchema);
 export type AdminActivityPage = z.infer<typeof adminActivityPageSchema>;
+
+// --- The operations case queue (#431) --------------------------------------
+
+export const supportCaseOriginSchema = z.enum(SUPPORT_CASE_ORIGINS);
+export const supportCaseStatusSchema = z.enum(SUPPORT_CASE_STATUSES);
+
+/**
+ * One row of `/admin/cases`.
+ *
+ * The queue answers one question — "what is waiting, and how long has it been
+ * waiting" — so the row carries the age's raw material (`createdAt`) and the
+ * handle a sender can quote (`reference`), and nothing an operator would have
+ * to open the case to act on. The body is deliberately absent: a table of
+ * 4,000-character messages is not scannable, and it would put user-written text
+ * on a screen that exists to be skimmed.
+ */
+export const adminCaseRowSchema = z.object({
+  id: uuidSchema,
+  /** `ORL-4K7Q-P2` — the same handle the sender was shown, reused as the case id. */
+  reference: z.string().regex(SUPPORT_REFERENCE_PATTERN),
+  origin: supportCaseOriginSchema,
+  status: supportCaseStatusSchema,
+  /**
+   * The sender's topic, or `null` on a chargeback — which nobody typed.
+   *
+   * Nullable rather than defaulted to a member: a chargeback has no topic, and
+   * picking one for it would file network events under a heading a human chose
+   * for a different purpose.
+   */
+  topic: z.enum(SUPPORT_TOPICS).nullable(),
+  /** The signed-in sender, or `null` for a signed-out one and for a chargeback. */
+  senderUserId: uuidSchema.nullable(),
+  /** Their name where the sender is an account; `null` otherwise. */
+  senderName: z.string().nullable(),
+  /** Where a reply goes. `null` on a chargeback, which has nobody to answer. */
+  senderEmail: z.string().nullable(),
+  bookingId: uuidSchema.nullable(),
+  createdAt: z.date(),
+});
+export type AdminCaseRow = z.infer<typeof adminCaseRowSchema>;
+
+/**
+ * The linked booking, with **everything `adminBookingRowSchema` omits**.
+ *
+ * A separate shape rather than a widened booking row, because this is the one
+ * screen where an operator decides who keeps the money and deciding it needs
+ * the split, the refund and the payout state. Every other console surface is a
+ * list, and putting the money internals on a list row would spread them across
+ * five screens with no use for them — which is what `bookingSchema` says about
+ * the customer's own read, for the same reason.
+ */
+export const adminCaseBookingSchema = z.object({
+  id: uuidSchema,
+  status: bookingStatusSchema,
+  eventDate: calendarDateSchema,
+  customerName: z.string(),
+  vendorName: z.string(),
+  vendorSlug: z.string(),
+  totalAmountCents: z.int(),
+  platformFeeCents: z.int(),
+  vendorPayoutCents: z.int(),
+  refundAmountCents: z.int().nullable(),
+  paidAt: z.date().nullable(),
+  payoutReleasedAt: z.date().nullable(),
+  /** `payoutStatusOf`'s answer, derived once on the server — never a fourth copy. */
+  payoutStatus: payoutStatusSchema,
+  /** What the customer wrote when the hold was placed. */
+  disputeReason: z.string().nullable(),
+  cancelledBy: bookingCancelledBySchema.nullable(),
+  stripePaymentIntentId: z.string().nullable(),
+});
+export type AdminCaseBooking = z.infer<typeof adminCaseBookingSchema>;
+
+/** The case itself: the row, the message in full, and what the money is doing. */
+export const adminCaseDetailSchema = adminCaseRowSchema.extend({
+  message: z.string(),
+  /**
+   * Why a chargeback could not freeze the payout, where it could not.
+   *
+   * `placeDisputeHold` refuses a booking whose payout has already been released
+   * and one whose event has not happened — right for a customer's report, and
+   * not something a card network's decision can be turned away by. So the hold
+   * is attempted and its refusal is recorded here rather than swallowed: a
+   * chargeback case sitting on a `completed` booking otherwise reads as an
+   * operator error rather than as money that had already left.
+   */
+  holdRefusal: z.string().nullable(),
+  /** Set when the report reached nobody, so the operator knows to chase it. */
+  emailFailedAt: z.date().nullable(),
+  /**
+   * Stripe's own word for how the network closed it — `won`, `lost`,
+   * `warning_closed`. **Their vocabulary, not ours**, which is why it is a
+   * string rather than an enum of this platform's: enumerating it here would
+   * claim ownership of a list Stripe changes, and a member we had not heard of
+   * would fail the response schema on a screen an operator needs.
+   */
+  networkOutcome: z.string().nullable(),
+  /** The dispute in Stripe, for the operator who has to open the Dashboard. */
+  stripeDisputeId: z.string().nullable(),
+  resolvedByName: z.string().nullable(),
+  resolvedAt: z.date().nullable(),
+  booking: adminCaseBookingSchema.nullable(),
+});
+export type AdminCaseDetail = z.infer<typeof adminCaseDetailSchema>;
+
+/**
+ * The queue's second filter.
+ *
+ * `with | without` rather than a boolean: a query string carries strings, and
+ * `?booking=false` reads as "no filter" to one parser and "only those without"
+ * to another. The vocabulary makes the absent case unambiguous.
+ */
+export const ADMIN_CASE_BOOKING_FILTERS = ['with', 'without'] as const;
+export const adminCaseBookingFilterSchema = z.enum(ADMIN_CASE_BOOKING_FILTERS);
+export type AdminCaseBookingFilter = (typeof ADMIN_CASE_BOOKING_FILTERS)[number];
+
+export const adminCaseQuerySchema = z.object({
+  ...adminPaginationShape,
+  /**
+   * Defaulted to `open`, and the default is the feature.
+   *
+   * The number that matters is the age of the oldest open case, because it is
+   * money somebody is not being paid — so the screen an operator lands on is
+   * the one that shows it. A queue that opens on everything ever filed buries
+   * that behind a click.
+   */
+  status: supportCaseStatusSchema.default('open'),
+  booking: adminCaseBookingFilterSchema.optional(),
+});
+export type AdminCaseQuery = z.infer<typeof adminCaseQuerySchema>;
+
+export const adminCasePageSchema = paginatedSchema(adminCaseRowSchema);
+export type AdminCasePage = z.infer<typeof adminCasePageSchema>;

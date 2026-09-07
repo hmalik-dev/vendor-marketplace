@@ -4,11 +4,16 @@ import { BRAND_NAME } from './brand.js';
  * Contact support — frame `29 Contact support`, which lives in
  * `design/contact-support/` rather than in `Orla - Screens.dc.html`.
  *
- * The screen is a form that sends **one email** and says so. It is not a
- * helpdesk: no threads, no in-app replies, no ticket status, no attachments,
- * no triage queue. Everything here is the vocabulary both apps read from, so
- * the topic a visitor picks and the topic a human reads in the subject line
- * cannot drift apart.
+ * The screen is a form that sends **one email** and says so. It is still not a
+ * helpdesk: no threads, no in-app replies, no ticket status the sender can poll,
+ * no attachments. What #431 added is on the **operator's** side of the wall — a
+ * case row in `/admin/cases`, because a report that freezes a vendor's payout
+ * has to be findable by the person who has to unfreeze it. Nothing about the
+ * sender's experience changed, and the reference is still the only handle they
+ * are given.
+ *
+ * Everything here is the vocabulary both apps read from, so the topic a visitor
+ * picks and the topic a human reads in the subject line cannot drift apart.
  */
 
 /** Where every `Contact support` affordance in the product leads. */
@@ -106,3 +111,28 @@ export const SUPPORT_REFERENCE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
 export const SUPPORT_REFERENCE_PATTERN = new RegExp(
   `^${SUPPORT_REFERENCE_PREFIX}-[${SUPPORT_REFERENCE_ALPHABET}]{4}-[${SUPPORT_REFERENCE_ALPHABET}]{2}$`,
 );
+
+/**
+ * How a case reached the queue (#431).
+ *
+ * **One inbox, two doors.** A report a customer typed and a chargeback a card
+ * network opened are the same object to the operator working them — both freeze
+ * a payout, both need a ruling — so the origin is a column rather than a second
+ * table. The alternative was two queues, and an operator working two queues
+ * works neither.
+ */
+export const SUPPORT_CASE_ORIGINS = ['support_message', 'chargeback'] as const;
+export type SupportCaseOrigin = (typeof SUPPORT_CASE_ORIGINS)[number];
+
+/**
+ * The platform's disposition, and **only** the platform's.
+ *
+ * Deliberately two members and not four. A chargeback also has a *network*
+ * outcome — Stripe's `won`, `lost`, `warning_closed` — and folding those in here
+ * would make one column answer two different questions: what the card network
+ * decided, and what we decided to do about it. They routinely disagree, and the
+ * reconciliation between them is the operator's job, so the network's answer
+ * lives in its own nullable column and this one stays the console's.
+ */
+export const SUPPORT_CASE_STATUSES = ['open', 'resolved'] as const;
+export type SupportCaseStatus = (typeof SUPPORT_CASE_STATUSES)[number];
