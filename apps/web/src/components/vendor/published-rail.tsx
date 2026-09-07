@@ -30,7 +30,7 @@ export function PublishedRail({ dashboard, serverToday }: PublishedRailProps): R
       className="hidden w-[300px] shrink-0 flex-col gap-3 overflow-y-auto lg:flex min-[90rem]:w-[340px]"
     >
       <WeekStrip days={dashboard.bookingWindow} serverToday={serverToday} />
-      <NextPayout payout={dashboard.nextPayout} />
+      <NextPayout payouts={dashboard.payouts} serverToday={serverToday} />
     </aside>
   );
 }

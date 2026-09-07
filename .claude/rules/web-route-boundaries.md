@@ -100,3 +100,11 @@ carries the new field"**. When adding a date to a response schema:
 1. Add the `z.coerce.date()` counterpart in the same commit.
 2. Exercise it with a fixture that **has** the value, not one that omits it — an
    optional field absent from the payload proves nothing about the parse.
+
+**For the vendor dashboard this is now a test, not a rule to remember.**
+`apps/web/src/lib/wire-dashboard.test.ts` walks `vendorDashboardSchema` for every
+reachable `z.date()`, parses a JSON payload built from a vendor who **is** owed
+money, and fails naming the field that came back a string. Written for #424,
+because the fixture that would have caught #423 is written by whoever forgot the
+coercion. Extend that walker to the next response schema this bites rather than
+adding a paragraph here.

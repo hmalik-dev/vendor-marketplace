@@ -56,4 +56,5 @@
 - [The public vendor card is the widest anonymous projection](public-vendor-card-is-the-widest-anonymous-projection.md) — the Zod serializer strips unmapped columns and 500s on a missing one; `isNew`'s recency disclosure is settled
 - [D31's proportional split is now our arithmetic](refund-proportionality-is-now-ours-to-state.md) — Stripe used to state the vendor's retained half; the pre-release cancel path states nobody's
 - [The payout sweep is a second money mover](payout-sweep-is-a-second-money-mover.md) — it takes a row lock the cancel and dispute paths do not, and their guards key on `status` alone
+- [`payoutOwedClauses` is shared with the sweep](payout-owed-clauses-is-shared-with-the-sweep.md) — since #424 one predicate serves the vendor's read and the `FOR UPDATE` claim that transfers; widening it widens Stripe
 - [Legacy destination rows are guarded in one place](legacy-destination-rows-guarded-in-one-place.md) — `refundAndUnwind` refuses them; the ban unwind and the deploy window do not
