@@ -39,3 +39,15 @@ secret. As of #408 the four new catch sites (`bestEffortAnnouncement`,
 fail on `notifications` inserts, whose params are a user id, a title and a body
 naming a business or first name — no credential. Check what the _statement_
 binds before escalating, not the fact that `{ err }` is logged.
+
+**The first statement that crossed that line: #439's `email_deliveries`
+insert.** `recordDelivery` in
+`apps/api/src/modules/notifications/notification-email.ts` binds
+`recipient_email` — a raw customer address — and catches its own failure with
+`log.error({ err: error })`. Reported as a blocker on 2026-09-07 because the
+same diff states the opposite invariant twice in prose ("no recipient address
+can reach a log", "the column holds it; the log stream does not"). The webhook's
+`UPDATE` in `email-delivery.dao.ts` binds the bounce diagnostic, which quotes the
+recipient address back verbatim, and reaches the same serializer through
+`error-handler.ts` on any 500. A stated invariant broken on the error path is a
+finding even where the bare pattern is accepted.

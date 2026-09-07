@@ -72,6 +72,21 @@ export const TEST_ENV: ApiEnv = {
    * Nothing here reaches the network regardless: the suites inject a fake.
    */
   RESEND_API_KEY: ['re', 'not', 'used', 'by', 'the', 'suites'].join('_'),
+  /*
+   * Set, so `POST /webhooks/resend` is registered for every suite that needs
+   * it. The value is never verified — the harness injects the same fake svix
+   * verifier both webhooks use — so nothing here reaches svix or Resend.
+   *
+   * Joined rather than written out for `RESEND_API_KEY`'s reason: a signing
+   * secret's prefix followed by anything is what the credential hook and the
+   * secret scanner exist to stop, and teaching either to ignore this file is
+   * worse than not writing the pattern.
+   *
+   * A suite whose subject is the **unconfigured** deployment overrides this
+   * key with `undefined` through `env`, which is the state the registry row is
+   * declared optional for.
+   */
+  RESEND_WEBHOOK_SECRET: ['whsec', 'not', 'used', 'by', 'the', 'suites'].join('_'),
   EMAIL_FROM: 'noreply@test.invalid',
   SUPPORT_EMAIL_TO: 'support@test.invalid',
 };
@@ -211,13 +226,16 @@ export interface FakeEmail extends EmailGateway {
   /** Every message the service asked to send, in order. */
   sent: EmailMessage[];
   /**
-   * Idempotency keys already delivered.
+   * Provider message ids already minted, by idempotency key.
    *
-   * The real provider deduplicates on this header, so a fake that simply
+   * The real provider deduplicates on that header, so a fake that simply
    * appended would let a double-send pass a green suite — the same trap
-   * `FakeStripe.intentsByKey` exists to close for a double-charge.
+   * `FakeStripe.intentsByKey` exists to close for a double-charge. It is a map
+   * rather than a set since #439 because a deduplicated send still answers
+   * with the *original* message id, and a fake that returned nothing there
+   * would make a replay look like a send Resend gave no id for.
    */
-  deliveredKeys: Set<string>;
+  messageIdsByKey: Map<string, string>;
   /**
    * Makes the next send throw, for the "a failed email never fails the
    * operation" case. Cleared once it has fired.
@@ -227,11 +245,11 @@ export interface FakeEmail extends EmailGateway {
 
 function createFakeEmail(): FakeEmail {
   const sent: EmailMessage[] = [];
-  const deliveredKeys = new Set<string>();
+  const messageIdsByKey = new Map<string, string>();
 
   const fake: FakeEmail = {
     sent,
-    deliveredKeys,
+    messageIdsByKey,
     failNext: false,
     send: async (message) => {
       if (fake.failNext) {
@@ -239,13 +257,23 @@ function createFakeEmail(): FakeEmail {
         throw new Error('Resend refused the send (500)');
       }
 
-      // Modelled, not assumed: a replayed key is accepted and delivers once.
-      if (deliveredKeys.has(message.idempotencyKey)) {
-        return;
+      // Modelled, not assumed: a replayed key is accepted, delivers once, and
+      // answers with the id the first send was given.
+      const existing = messageIdsByKey.get(message.idempotencyKey);
+      if (existing !== undefined) {
+        return { providerMessageId: existing };
       }
 
-      deliveredKeys.add(message.idempotencyKey);
+      /*
+       * Derived from the idempotency key rather than random, so a suite can
+       * name the id a delivery webhook should carry without first reading it
+       * back — and so a re-run asserts the same string.
+       */
+      const providerMessageId = `resend-${message.idempotencyKey}`;
+      messageIdsByKey.set(message.idempotencyKey, providerMessageId);
       sent.push(message);
+
+      return { providerMessageId };
     },
   };
 

@@ -54,6 +54,7 @@ import {
   clerkWebhookRoutes,
   type ClerkWebhookRoutesOptions,
 } from './modules/webhooks/clerk.routes.js';
+import { resendWebhookRoutes } from './modules/webhooks/resend.routes.js';
 
 /*
  * @fastify/cors defaults to GET, HEAD, and POST only, which silently blocks
@@ -77,6 +78,10 @@ export interface BuildServerOptions {
   clock?: Clock;
   /** Test seams; production wiring uses the real Clerk and svix clients. */
   auth?: Pick<ClerkAuthPluginOptions, 'verifySessionToken' | 'loadClerkUser'>;
+  /**
+   * The svix seam, shared by both webhooks that use it — Clerk's and Resend's.
+   * One verifier because it stands in for one library.
+   */
   webhooks?: Pick<ClerkWebhookRoutesOptions, 'verifySignature'>;
   /** Stripe Connect seam; the plugin builds the real gateway from the secrets. */
   stripe?: StripeConnectGateway;
@@ -228,6 +233,29 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     webOrigin: canonicalWebOrigin(env),
     ...options.webhooks,
   });
+  /*
+   * The one route this API registers conditionally, and the condition is an
+   * environment fact rather than a plugin's business — so it is decided here,
+   * beside every other env-driven wiring choice, and the plugin keeps the same
+   * `signingSecret: string` contract the Clerk one has.
+   *
+   * No secret means **no endpoint**, not a handler that answers 503: there is
+   * then no code path in which an unsigned delivery event can reach the record,
+   * because there is nothing for one to reach. Sending and recording attempts
+   * are untouched either way — only the provider's later account of what
+   * happened is missing. See the `RESEND_WEBHOOK_SECRET` registry row, which is
+   * optional on every target for exactly this reason (#439).
+   */
+  if (env.RESEND_WEBHOOK_SECRET === undefined) {
+    app.log.warn(
+      'The Resend webhook is not configured, so POST /webhooks/resend is not registered; email delivery records will hold send attempts only',
+    );
+  } else {
+    await app.register(resendWebhookRoutes, {
+      signingSecret: env.RESEND_WEBHOOK_SECRET,
+      ...options.webhooks,
+    });
+  }
   await app.register(paymentRoutes, {
     platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
     webOrigin: canonicalWebOrigin(env),

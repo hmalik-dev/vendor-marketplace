@@ -28,13 +28,24 @@ export interface SchemaShapeOptions<
 }
 
 /**
- * A row with a default parses from `undefined`; one without does not. The type
- * describes the baseline target, where a default always applies — a narrower
- * target only ever narrows what is accepted, never what the value is.
+ * A row with a default parses from `undefined`; one that is `optionalFor` this
+ * target parses from `undefined` to `undefined`; anything else is required. The
+ * type describes the baseline target, where a default always applies — a
+ * narrower target only ever narrows what is accepted, never what the value is —
+ * so the optional branch checks for `baseline` explicitly rather than for any
+ * exemption at all.
+ *
+ * The two are ordered rather than combined because they cannot both apply: a
+ * row with a default has nothing to be optional about, and `.default()` already
+ * makes absence legal.
  */
 type FieldFor<TEntry> = TEntry extends { readonly defaultValue: string }
   ? z.ZodDefault<z.ZodString>
-  : z.ZodString;
+  : TEntry extends { readonly optionalFor: readonly (infer TTargets)[] }
+    ? 'baseline' extends TTargets
+      ? z.ZodOptional<z.ZodString>
+      : z.ZodString
+    : z.ZodString;
 
 /** The Zod shape a consumer's rows contribute, keyed by their literal keys. */
 export type RegistryShape<TConsumer extends Consumer, TCapability extends Capability> = {
@@ -92,9 +103,31 @@ function schemaFor(variable: EnvVariable, target: ShapeTarget): z.ZodTypeAny {
         })
       : field;
 
-  return explicit || variable.defaultValue === undefined
+  if (variable.defaultValue !== undefined) {
+    return explicit ? checked : checked.default(variable.defaultValue);
+  }
+
+  /*
+   * A row with no default that this target excuses is genuinely absent-able,
+   * and until #439 no such row was read by an app — `DATABASE_URL_UNPOOLED`
+   * and `NEON_BRANCH` are `tooling` only. Without this branch
+   * `RESEND_WEBHOOK_SECRET` would be *required* by the API despite being
+   * declared optional everywhere, which is the whole point of that row: a
+   * deployment whose account holder has not configured the Resend webhook must
+   * still boot and must still record what it attempted to send.
+   *
+   * **Empty is absent**, and that is the half a plain `.optional()` gets wrong.
+   * `''` would otherwise fail both `min(1)` and the row's shape and refuse the
+   * whole boot — for a variable declared in a hosting dashboard with the box
+   * left blank, a `.env` line with nothing after the `=`, or a `cp
+   * .env.example .env` where only the used rows were filled in. Preflight
+   * already treats empty and unset as one thing (`environment.ts` checks
+   * `length === 0`), so the two agreeing is what keeps a green preflight from
+   * preceding a server that will not start.
+   */
+  return explicit
     ? checked
-    : checked.default(variable.defaultValue);
+    : z.preprocess((value) => (value === '' ? undefined : value), checked.optional());
 }
 
 function rowsFor<TConsumer extends Consumer, TCapability extends Capability>(

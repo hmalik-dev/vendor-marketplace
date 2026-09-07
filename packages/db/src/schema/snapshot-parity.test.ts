@@ -9,6 +9,8 @@ import {
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
+  EMAIL_DELIVERY_ENTITIES,
+  EMAIL_DELIVERY_OUTCOMES,
   LEGAL_ACCEPTANCE_DOCUMENTS,
   LEGAL_ACCEPTANCE_METHODS,
   PAYOUT_MODELS,
@@ -75,6 +77,8 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'admin_action', values: ADMIN_ACTIONS },
     { enumName: 'admin_action_subject', values: ADMIN_ACTION_SUBJECTS },
     { enumName: 'legal_acceptance_method', values: LEGAL_ACCEPTANCE_METHODS },
+    { enumName: 'email_delivery_outcome', values: EMAIL_DELIVERY_OUTCOMES },
+    { enumName: 'email_delivery_entity', values: EMAIL_DELIVERY_ENTITIES },
     { enumName: 'us_state', values: US_STATE_CODES },
   ];
 
