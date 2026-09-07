@@ -251,16 +251,15 @@ storefront, each of which tells the reader something untrue. |
 | **431** | **Operations case console: every dispute, however it arrives, and its resolution** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` `email` | **Filed 2026-09-07 by the admin-panel investigation.** `PUT /admin/bookings/:bookingId/dispute` is the only way to lift a payout hold and **has no UI whatsoever** — `admin-data.ts` is nine GETs and nothing else, so an operator resolves disputes with curl while the vendor's money sits frozen. The complaint that justifies the hold is never stored: `POST /support/messages` sends one email and keeps no row, so the reason lives in an inbox and the hold lives in `bookings.dispute_reason`, which no admin schema exposes. `charge.dispute.*` is not among the handled Stripe events, so a chargeback never reaches the booking at all. |
 | **432** | **Payout health: failed transfers, retries, and why Stripe stopped a vendor** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** `payouts.dao.ts:213` writes `payout_attempts` and `payout_failure_reason` on every failed transfer and **nothing anywhere reads either column** — not admin, not the vendor dashboard. `adminPaymentRowSchema` carries no payout state at all, so a vendor owed money by a transfer that keeps failing generates no signal. `stripe_onboarded` is a boolean with no reason behind it: when Stripe revokes a capability the operator sees only "No payouts yet" in a filter. |
 | **433** | **A deleted account keeps a live, bookable storefront** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation. This is a defect, not a gap.** `softDeleteUserByClerkId` sets `users.deleted_at` and stops. `vendor_profiles.is_deleted` is read as a visibility filter by four DAOs and **written by nothing outside seed scripts** — so a vendor who deletes their Clerk identity keeps a published profile that stays searchable, bookable and payable. The ban flow unpublishes; deletion does not. |
-| **434** | **Admin action log: every mutation records who did it** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** There is no audit table. Two `log.info` lines exist — `admin.service.ts:235` for ban, `:629` for review deletion — and the other three mutating routes are never passed the acting admin's id at all: `updateTag(app.db, …)`, `resolveTagSuggestion(context(), …)` and `resolveDispute(context(), …)` all take no actor. A surface whose entire purpose is acting on other people's accounts and money keeps no queryable record of who did what. A precondition for #435, #438 and #440. |
 | **435** | **Graduated moderation: unpublish, hide and reinstate without banning** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Ban is the only moderation action and it is nuclear — it declines every open request, cancels and **fully refunds** every confirmed booking, and unpublishes the storefront. There is no lever between "nothing" and that: `vendor_profiles.is_published` has no admin writer, and `reviews.is_public` exists, defaults `true` and is written by **nothing but seed scripts**, so a review can only be permanently deleted. `reviews.service.ts` says so itself — *"there is nowhere to queue to until #15 builds admin"* — and #15 shipped without the queue. |
-| **436** | **Reporting and message visibility for trust and safety** | P3 | M6 | **P1 High** | **Backlog** | — | **#434** (an action log to write reads and dispositions to) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Nothing in the product can report anything — no listing report, no message report, no photo report, no user report; grepping report/flag/abuse across the API returns nothing. The only inbound channel is a rate-limited public email form. And `/conversations` is participant-only with no admin read, so a harassment complaint arrives by email naming a thread the operator cannot open. |
+| **436** | **Reporting and message visibility for trust and safety** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Nothing in the product can report anything — no listing report, no message report, no photo report, no user report; grepping report/flag/abuse across the API returns nothing. The only inbound channel is a rate-limited public email form. And `/conversations` is participant-only with no admin read, so a harassment complaint arrives by email naming a thread the operator cannot open. |
 | **437** | **Admin detail views, and the entities the console cannot see** | P3 | M6 | **P1 High** | **Backlog** | — | **#435** — the two share six files (`admin.routes.ts`, `admin.service.ts`, `admin.dao.ts`, `vendor-table.tsx`, `admin-data.ts`, `schemas/index.ts`) and this one reads the states #435 writes | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Seven list screens, zero detail screens, against a design plan that specifies *"detail views: card-based groupings with prominent actions"* (`22-admin.md`). Consequence: `refund_amount_cents`, `cancellation_reason`, `dispute_reason`, `cancelled_by`, `payout_released_at` and `banned_at` appear on no row schema and no screen. Whole entities are absent — `booking_requests` (the entire pre-payment funnel), `service_packages`, `portfolio_items`, `availability`, `notifications`, `categories` — several of which the plan's own authorization matrix (§7) already grants admin. |
-| **438** | **Data rights: export, account closure, and the legal acceptance record** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#434** (closure and export are logged actions) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Neither privacy-policy promise is backed by anything: the text says *"ask us for a copy of what we hold"* and *"to close your account, ask us through Contact support"*, and there is no export endpoint, no admin-initiated deletion, and no screen. Deletion happens only if the user deletes themselves in Clerk. Separately, `legal_acceptances` is the platform's evidence a vendor agreed to the 12% and the 72-hour hold — immutable, IP and UA captured, three DB triggers — and no operator can read it. |
+| **438** | **Data rights: export, account closure, and the legal acceptance record** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Neither privacy-policy promise is backed by anything: the text says *"ask us for a copy of what we hold"* and *"to close your account, ask us through Contact support"*, and there is no export endpoint, no admin-initiated deletion, and no screen. Deletion happens only if the user deletes themselves in Clerk. Separately, `legal_acceptances` is the platform's evidence a vendor agreed to the 12% and the 72-hour hold — immutable, IP and UA captured, three DB triggers — and no operator can read it. |
 | **439** | **Transactional email delivery is invisible** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Fourteen notification types fire and forget; failures are logged and dropped at `notification-email.ts:200`. The `notifications` table records the in-app bell only — no `sentAt`, no failure reason, no provider id. *"Was the customer actually told their booking was cancelled?"* is unanswerable from the console, from the database, or from anywhere but a log search. |
 | **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after the Admin Panel section was filed: 15 rows — 12 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and nine of the ten are startable unattended today (**#431**, **#432**, **#433**, **#434**, **#435**, **#437**, **#439** with no blocker, **#436** and **#438** behind **#434**), alongside **#429** and **#430**. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **The board is no longer waiting on a human before it can use another lane** — that was true on 2026-09-07 morning with 5 rows and is not true now. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #434 landed: 14 rows — 11 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 landed 2026-09-07 (`1f8011a`), which cleared the only blocker inside the section** — so **#431**, **#432**, **#433**, **#435**, **#436**, **#437**, **#438** and **#439** are all startable unattended today, alongside **#429** and **#430**. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **The board is no longer waiting on a human before it can use another lane** — that was true on 2026-09-07 morning with 5 rows and is not true now. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1599,85 +1598,6 @@ it.
 - [ ] The replay asserted, because a double refund is the way this fix hurts.
 - [ ] Verified with a differently shaped check than a grep for `is_deleted`: a
       driven read of the public profile route, not a source scan.
-
-### #434: Admin action log — every mutation records who did it
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** None
-
-#### The state today
-
-There is no audit table. The whole record of operator action is two log lines:
-
-- `admin.service.ts:235` — `{ actorId, targetId, isBanned }`, "Admin changed an
-  account's ban state"
-- `admin.service.ts:629` — `{ actorId, reviewId }`, "Admin deleted a review"
-
-and the comment beside the first says the quiet part: *"A log line is not an
-audit table."*
-
-The other three mutating routes never learn who called them.
-`updateTag(app.db, request.params.tagId, request.body)` takes a database handle.
-`resolveTagSuggestion(context(), …)` and `resolveDispute(context(), …)` take a
-context with no actor in it. The route handlers have `request.auth` in scope and
-throw it away.
-
-For a plugin whose own docstring says *"these read and write other people's
-accounts by design"*, that is the accountability gap under everything else in
-this section — #435 adds reversible moderation, #438 adds data deletion and
-export, #440 may add money movement, and none of them should ship into a surface
-with no record of who acted.
-
-#### What to build
-
-**1. An append-only `admin_actions` table.** Actor user id, action (a narrow
-enum, not free text), subject type and id, a JSON detail payload for what
-actually changed, and `createdAt`. **Immutable the way `legal_acceptances` is
-immutable** — `0029_sad_storm.sql` already establishes the pattern with
-`no_update` / `no_delete` / `no_truncate` triggers, and this table wants the same
-three for the same reason. Copy the pattern, do not invent a second one.
-
-**2. Every mutating admin route writes one.** Ban, unban, review deletion, tag
-update, tag-suggestion resolution, dispute resolution. `resolveDispute`,
-`updateTag` and `resolveTagSuggestion` all need the actor threaded in —
-`assertRole(request.auth, ['admin']).id` is what the ban routes already pass, so
-the shape exists.
-
-**3. It is written in the same transaction as the change where the change is
-transactional, and never swallows it where it is not.** A ban has already moved
-money by the time it finishes; the file's `bestEffortAnnouncement` rule
-(#408) exists for exactly this and the log write must follow it — a failed audit
-write must not 500 an operation the operator cannot repeat. Log the failure
-loudly instead.
-
-**4. A read surface.** `/admin/activity` — actor, action, subject, when, with a
-filter by actor and by subject. It is also the answer to "what did the console
-do to this account", so a subject filter is what makes it useful rather than a
-firehose.
-
-**5. What must not be logged.** No message bodies, no review content beyond an
-id, no email addresses beyond the ids that resolve to them, no card or Stripe
-secrets. The detail payload records *what changed*, not the content of what was
-moderated — a moderation log that quotes the abuse is a second copy of it.
-
-#### Acceptance
-
-1. All six mutating admin routes write exactly one action row on success and
-   none on a refused call.
-2. The table refuses `UPDATE`, `DELETE` and `TRUNCATE` at the database level.
-3. A failed log write never fails the operation that had already committed, and
-   is logged as an error.
-4. `/admin/activity` filters by actor and by subject.
-5. No row contains a message body, review text, or any credential.
-6. Non-admins get 403 before validation.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] The immutability asserted against the real Postgres, not PGlite, if the
-      triggers need it — `pnpm test:contention` is the precedent for a test that
-      needs the Docker database.
-- [ ] A test that a refused mutation (409, 403) writes no row.
 
 ### #435: Graduated moderation — unpublish, hide and reinstate without banning
 
