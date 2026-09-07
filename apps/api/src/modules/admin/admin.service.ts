@@ -14,11 +14,13 @@ import type {
   AdminCustomerPage,
   AdminCustomerQuery,
   AdminMetrics,
+  AdminPackageActiveResult,
   AdminPaymentPage,
   AdminPaymentQuery,
   AdminPayoutRetryResult,
   AdminReviewPage,
   AdminReviewQuery,
+  AdminReviewVisibilityResult,
   AdminTagList,
   AdminTagRow,
   AdminTagSuggestionPage,
@@ -27,6 +29,7 @@ import type {
   AdminTagSuggestionRow,
   AdminVendorFacets,
   AdminVendorPage,
+  AdminVendorPublishResult,
   AdminVendorQuery,
   AdminVendorRow,
   AdminVendorStatus,
@@ -49,7 +52,20 @@ import {
   type AdminContext,
 } from './account-unwind.js';
 
-import { deleteReviewAndRecalculate } from '../reviews/reviews.dao.js';
+import type { ObjectStorage } from '../../lib/storage.js';
+import { countActivePackages, updatePackageById } from '../packages/packages.dao.js';
+import { deletePortfolioItemById } from '../portfolio/portfolio.dao.js';
+import { reapObjects } from '../portfolio/portfolio.service.js';
+import {
+  deleteReviewAndRecalculate,
+  setReviewVisibilityAndRecalculate,
+} from '../reviews/reviews.dao.js';
+import {
+  findVendorCategoryIds,
+  findVendorProfileById,
+  updateVendorProfileById,
+} from '../vendors/vendors.dao.js';
+import { publishBlockers, unpublishForMissingPackages } from '../vendors/vendors.service.js';
 import { normalizeTagName } from '../tags/tags.service.js';
 import { resolveDispute } from '../payments/payments.service.js';
 import { retryPayoutRelease } from '../payments/payouts.service.js';
@@ -74,6 +90,8 @@ import {
   findAdminTagSuggestions,
   findAdminTags,
   findAdminVendors,
+  findPortfolioItemForModeration,
+  findServicePackageForModeration,
   findTagByCategoryAndName,
   findTagById,
   findTagBySlug,
@@ -84,6 +102,7 @@ import {
   findVendorProfileIdByUserId,
   insertAdminAction,
   insertTag,
+  lockVendorProfile,
   resolveTagSuggestionRow,
   setBanned,
   updateTagRow,
@@ -143,7 +162,7 @@ function offsetOf(query: { page: number; pageSize: number }): number {
  * same try/catch-and-log body forty lines apart, which is precisely how #408's
  * rule became a special case the first time.
  */
-async function recordAdminActionBestEffort(
+export async function recordAdminActionBestEffort(
   context: AdminContext,
   record: AdminActionRecord,
 ): Promise<void> {
@@ -696,6 +715,7 @@ export async function listReviews(
       authorName: fullName(row.authorFirstName, row.authorLastName),
       vendorName: row.vendorName,
       vendorSlug: row.vendorSlug,
+      isPublic: row.isPublic,
       createdAt: row.createdAt,
     })),
     total,
@@ -750,6 +770,356 @@ export async function deleteReview(
 
   // Greppable while it happens; the row above is the record that survives.
   context.log.info({ actorId, reviewId }, 'Admin deleted a review');
+}
+
+// --- Graduated moderation (#435) -------------------------------------------
+
+/*
+ * The levers between doing nothing and banning an account.
+ *
+ * **None of these is a ban, and the difference is the point of them.** A ban
+ * declines every open request, cancels and fully refunds every confirmed
+ * booking, and unpublishes the storefront — an irreversible response to a
+ * reversible problem, which is what an operator was left with when a vendor had
+ * one bad photo or an unverified claim in a bio. Everything in this section
+ * changes what the public can see and **nothing else**: no request is declined,
+ * no booking is cancelled, no money moves.
+ *
+ * Each writes an `admin_actions` row in the same transaction as the state it
+ * changed, because a reversible action nobody can see the history of is not
+ * reversible in practice.
+ */
+
+/**
+ * Takes a storefront off the marketplace, or puts it back.
+ *
+ * Republishing runs the **same `publishBlockers` the vendor's own editor runs**.
+ * An operator reinstating a listing is undoing their own earlier decision, not
+ * overriding the rule that a profile without a category or a bookable package
+ * cannot be public — and a storefront republished past that rule is one a
+ * customer can reach and cannot book.
+ *
+ * A suspended account is refused outright. Ban already unpublished them, and
+ * republishing a banned vendor's storefront would put a business back on the
+ * marketplace whose owner cannot sign in to run it.
+ */
+export async function setVendorPublished(
+  context: AdminContext,
+  actorId: string,
+  vendorId: string,
+  isPublished: boolean,
+): Promise<AdminVendorPublishResult> {
+  return context.db.transaction(async (tx) => {
+    /*
+     * Locked before it is read, and before `setPackageActive` can reach it.
+     *
+     * Both transactions decide whether the storefront may be published from a
+     * count of its active packages, and both then write. Unlocked, they
+     * interleave into the state `publishBlockers` exists to make impossible:
+     * this one reads one active package and republishes while the other commits
+     * the deactivation of that package and finds `is_published` still false, so
+     * `unpublishForMissingPackages` declines — leaving a live storefront with
+     * nothing bookable on it. Two operators unpublishing at once would likewise
+     * both pass the state check and both append an audit row where one is owed
+     * a 409.
+     */
+    await lockVendorProfile(tx, vendorId);
+
+    const vendor = await findVendorProfileById(tx, vendorId);
+
+    if (!vendor) {
+      throw notFound('No storefront with that id');
+    }
+
+    const owner = await findUserById(tx, vendor.userId);
+
+    if (vendor.isPublished === isPublished) {
+      throw conflict(
+        isPublished
+          ? 'That storefront is already published'
+          : 'That storefront is already unpublished',
+      );
+    }
+
+    if (isPublished) {
+      /*
+       * A missing owner is unverifiable, not unbanned.
+       *
+       * `findUserById` excludes soft-deleted accounts, and the Clerk webhook
+       * soft-deletes the user while leaving the vendor profile behind — so
+       * `owner?.isBanned` read as `false` for an account that no longer exists,
+       * and republished a storefront that would take booking requests nobody
+       * can answer. Taking one **down** never needs this check: that is the
+       * safe direction, and refusing it would strand the listing.
+       */
+      if (!owner) {
+        throw conflict('That storefront has no active owner account to publish it for');
+      }
+
+      if (owner.isBanned) {
+        throw conflict('Lift the suspension on this account before republishing its storefront');
+      }
+
+      /*
+       * Sequential, not `Promise.all`. Both reads run on the transaction's own
+       * connection, and firing them concurrently at one connection is how a
+       * transaction ends up interleaving statements it was opened to serialise.
+       */
+      const categoryIds = await findVendorCategoryIds(tx, vendor.id);
+      const activePackages = await countActivePackages(tx, vendor.id);
+      const blockers = publishBlockers(vendor, categoryIds, activePackages);
+
+      if (blockers.length > 0) {
+        throw validationFailed('This storefront is not complete enough to publish.', { blockers });
+      }
+    }
+
+    const updated = await updateVendorProfileById(tx, vendor.id, { isPublished });
+
+    if (!updated) {
+      throw notFound('No storefront with that id');
+    }
+
+    await insertAdminAction(tx, {
+      actorId,
+      action: isPublished ? 'vendor_republished' : 'vendor_unpublished',
+      subjectType: 'vendor_profile',
+      subjectId: vendor.id,
+      /* Ids resolve the rest; the log keeps no copy of vendor-authored text. */
+      detail: {},
+    });
+
+    return {
+      vendorId: vendor.id,
+      isPublished,
+      /*
+       * `isRetired` is **derived, not assumed**. An earlier draft hard-coded
+       * `false` on the reasoning that a retired vendor cannot reach this line,
+       * and that reasoning was wrong in one direction: `findVendorProfileById`
+       * filters `vendor_profiles.is_deleted`, but the console's `retired` is
+       * that **or** `users.deleted_at`, and the unpublish branch deliberately
+       * skips the owner check. So unpublishing a storefront whose owner had
+       * deleted their account answered `status: 'review'` for a row the Vendors
+       * table renders as `Retired`.
+       *
+       * `owner` is exactly the missing half: `findUserById` excludes
+       * soft-deleted accounts, so no row means the account is gone.
+       */
+      status: deriveVendorStatus({
+        isRetired: !owner,
+        isBanned: owner?.isBanned ?? false,
+        isPublished,
+        stripeOnboarded: vendor.stripeOnboarded,
+      }),
+    };
+  });
+}
+
+/**
+ * Hides a review from every public surface, or puts it back.
+ *
+ * The recompute is `reviews.dao`'s, reached rather than repeated — the same
+ * reason `deleteReview` reaches for its deletion. Hiding is deletion's
+ * reversible twin and has to reach the same rating for the same set.
+ */
+export async function setReviewVisibility(
+  context: AdminContext,
+  actorId: string,
+  reviewId: string,
+  isPublic: boolean,
+): Promise<AdminReviewVisibilityResult> {
+  /*
+   * The visibility change and its audit row commit together, the same shape
+   * `deleteReview` uses: nothing outside Postgres happens on this path, so the
+   * best-effort rule does not apply and the row rides the transaction.
+   * `setReviewVisibilityAndRecalculate` opens one of its own to take the review
+   * lock and re-derive the rating; passing this one in nests it as a savepoint.
+   */
+  const result = await context.db.transaction(async (tx) => {
+    const outcome = await setReviewVisibilityAndRecalculate(tx, reviewId, isPublic);
+
+    if (outcome.outcome === 'updated') {
+      await insertAdminAction(tx, {
+        actorId,
+        action: isPublic ? 'review_unhidden' : 'review_hidden',
+        subjectType: 'review',
+        subjectId: reviewId,
+        /* Never the review's text — that is the thing a moderation log must not copy. */
+        detail: {},
+      });
+    }
+
+    return outcome;
+  });
+
+  if (result.outcome === 'missing') {
+    throw notFound('No review with that id');
+  }
+
+  /*
+   * A vendor's private note about a customer. Its `is_public` is the author's
+   * own choice, not a moderation state, so this lever does not apply to it —
+   * refused here as well as hidden in the console, because the console is not
+   * the only caller this route will ever have.
+   */
+  if (result.outcome === 'not_applicable') {
+    throw conflict(
+      "Only a review of a vendor can be hidden or shown. This is a vendor's private note about a customer — delete it if it has to go.",
+    );
+  }
+
+  if (result.outcome === 'unchanged') {
+    throw conflict(isPublic ? 'That review is already visible' : 'That review is already hidden');
+  }
+
+  context.log.info({ actorId, reviewId, isPublic }, "Admin changed a review's visibility");
+
+  return {
+    reviewId,
+    isPublic: result.isPublic,
+    vendorAvgRating: result.vendorAvgRating,
+    vendorReviewCount: result.vendorReviewCount,
+  };
+}
+
+/**
+ * Switches one service package off the storefront, or back on.
+ *
+ * Deactivating the vendor's **last** bookable package unpublishes the profile,
+ * through the same `unpublishForMissingPackages` the vendor's own editor calls:
+ * publishing requires a package, so a live profile with none sends customers to
+ * a storefront they cannot book. The result says whether that happened, because
+ * an operator who removed one service and took a business off the marketplace
+ * has to be told which of those two things they did.
+ */
+export async function setPackageActive(
+  context: AdminContext,
+  actorId: string,
+  packageId: string,
+  isActive: boolean,
+): Promise<AdminPackageActiveResult> {
+  return context.db.transaction(async (tx) => {
+    const owning = await findServicePackageForModeration(tx, packageId);
+
+    if (!owning) {
+      throw notFound('No package with that id');
+    }
+
+    /*
+     * The vendor row is the lock both this and `setVendorPublished` take, for
+     * the reason that one gives: the publish decision is derived from a count
+     * of active packages, so the two writers have to serialise on something,
+     * and the vendor is the only row they share. The package is then **re-read
+     * under that lock** — an unlocked first read is only how the vendor is
+     * found, and two operators deactivating the same package would otherwise
+     * both see it active.
+     */
+    await lockVendorProfile(tx, owning.vendorId);
+
+    const servicePackage = await findServicePackageForModeration(tx, packageId);
+
+    if (!servicePackage) {
+      throw notFound('No package with that id');
+    }
+
+    if (servicePackage.isActive === isActive) {
+      throw conflict(
+        isActive ? 'That package is already active' : 'That package is already deactivated',
+      );
+    }
+
+    const updated = await updatePackageById(tx, servicePackage.vendorId, packageId, { isActive });
+
+    if (!updated) {
+      throw notFound('No package with that id');
+    }
+
+    await insertAdminAction(tx, {
+      actorId,
+      action: isActive ? 'package_reactivated' : 'package_deactivated',
+      subjectType: 'service_package',
+      subjectId: packageId,
+      detail: { vendorId: servicePackage.vendorId },
+    });
+
+    if (isActive) {
+      return { packageId, isActive, vendorUnpublished: false };
+    }
+
+    const vendor = await findVendorProfileById(tx, servicePackage.vendorId);
+    const vendorUnpublished = vendor ? await unpublishForMissingPackages(tx, vendor) : false;
+
+    if (vendorUnpublished) {
+      await insertAdminAction(tx, {
+        actorId,
+        action: 'vendor_unpublished',
+        subjectType: 'vendor_profile',
+        subjectId: servicePackage.vendorId,
+        detail: { reason: 'last_active_package_deactivated', packageId },
+      });
+    }
+
+    return { packageId, isActive, vendorUnpublished };
+  });
+}
+
+/**
+ * Removes one portfolio photo, permanently.
+ *
+ * The only irreversible action in this section, and deliberately so: an image
+ * that must not be on the platform must leave the bucket as well as the page.
+ * It reuses the vendor-side delete whole — the row commits first and the objects
+ * are reaped after, never inside the transaction — so an operator's removal
+ * promotes the next cover and reaps exactly what a vendor's own removal would.
+ *
+ * `reapObjects` is given the **vendor's** user id, not the operator's: it
+ * refuses any key whose owner segment does not match, and an operator's id would
+ * fail that check on every object and silently leave the photo in the bucket.
+ */
+export async function removePortfolioItemAsAdmin(
+  context: AdminContext,
+  storage: ObjectStorage,
+  actorId: string,
+  itemId: string,
+): Promise<void> {
+  const item = await findPortfolioItemForModeration(context.db, itemId);
+
+  if (!item) {
+    throw notFound('No portfolio photo with that id');
+  }
+
+  /*
+   * The row delete and its audit row commit together; the **reap happens after**
+   * and deliberately outside, because an object store round trip inside a
+   * transaction holds it open across a network call. `deletePortfolioItemById`
+   * opens a transaction of its own to promote the next cover, so passing this
+   * one in nests it as a savepoint.
+   */
+  const deleted = await context.db.transaction(async (tx) => {
+    const removed = await deletePortfolioItemById(tx, item.vendorId, itemId);
+
+    if (!removed) {
+      throw notFound('No portfolio photo with that id');
+    }
+
+    await insertAdminAction(tx, {
+      actorId,
+      action: 'portfolio_item_removed',
+      subjectType: 'portfolio_item',
+      subjectId: itemId,
+      detail: { vendorId: item.vendorId },
+    });
+
+    return removed;
+  });
+
+  await reapObjects(
+    context.db,
+    storage,
+    item.vendorUserId,
+    [deleted.imageUrl, deleted.thumbnailUrl],
+    context.log,
+  );
 }
 
 // --- Tag moderation --------------------------------------------------------

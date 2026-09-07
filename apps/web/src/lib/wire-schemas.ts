@@ -31,6 +31,9 @@ import {
   adminCaseDetailSchema,
   adminConversationMessagesSchema,
   adminCaseRowSchema,
+  adminCloseAccountResultSchema,
+  adminUserDataRightsSchema,
+  adminUserExportSchema,
   adminCustomerRowSchema,
   adminMetricsSchema,
   adminPaymentRowSchema,
@@ -547,3 +550,23 @@ export const wireAdminTagSuggestionResultSchema = adminTagSuggestionResultSchema
   tag: wireTagSchema.nullable(),
 });
 export type WireAdminTagSuggestionResult = z.infer<typeof wireAdminTagSuggestionResultSchema>;
+
+/**
+ * The data-rights surfaces (#438).
+ *
+ * No `.extend` with a coerced date on any of the three: every date in these
+ * schemas is already `z.coerce.date()` at the source, because they are read by
+ * an operator's browser as well as by the API's own response validator and a
+ * `z.date()` would reject the ISO string the wire actually carries.
+ */
+export const wireAdminUserDataRightsSchema = adminUserDataRightsSchema;
+export type WireAdminUserDataRights = z.infer<typeof wireAdminUserDataRightsSchema>;
+
+/** One row of the refusal, named on the page before the API has to make it. */
+export type WireAdminCloseBlocker = WireAdminUserDataRights['closeBlockers'][number];
+
+export const wireAdminUserExportSchema = adminUserExportSchema;
+export type WireAdminUserExport = z.infer<typeof wireAdminUserExportSchema>;
+
+export const wireAdminCloseAccountResultSchema = adminCloseAccountResultSchema;
+export type WireAdminCloseAccountResult = z.infer<typeof wireAdminCloseAccountResultSchema>;

@@ -220,9 +220,16 @@ describe('free text on a request body', () => {
     // the customer's free text now reaches `dispute_reason` through
     // `supportMessageSchema.message`, which is still counted here; 22 since
     // #427 added `acceptVendorAgreementSchema`; 23 since #429 added
-    // `acceptTermsSchema`; 24 since #436 added `createReportSchema`, whose
-    // `detail` is free text a stranger types about somebody else.
-    expect(names).toHaveLength(24);
+    // `acceptTermsSchema`; 26 since #435 added `setVendorPublishedSchema`,
+    // `setReviewVisibilitySchema` and `setPackageActiveSchema` — three booleans
+    // with no free text between them, which is exactly the case this count
+    // exists to keep visible rather than let a future prose field slip in
+    // beside one; 27 since #436 added `createReportSchema`, whose `detail` is
+    // free text a stranger types about somebody else.
+    //
+    // A merge is where this number goes wrong: two lanes each add to 23 and a
+    // both-sides union keeps one of the answers rather than the sum.
+    expect(names).toHaveLength(27);
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
 

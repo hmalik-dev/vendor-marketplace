@@ -15,7 +15,12 @@ import {
   vendorTags,
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  signInAs,
+  type TestHarness,
+} from '../../testing/test-server.js';
 
 const ADMIN = 'user_admin';
 const OTHER_ADMIN = 'user_admin_two';
@@ -29,33 +34,15 @@ describe('admin routes', () => {
   let seededTagIds: string[];
 
   /**
-   * `normalizeRole` refuses `admin` from Clerk metadata on purpose, so an admin
-   * cannot be minted through sync. Sign in to create the row, then promote it —
-   * the same recipe `uploads.routes.test.ts` uses.
+   * Sign in, then promote — `normalizeRole` refuses `admin` from Clerk metadata
+   * on purpose, so an admin cannot be minted through sync.
+   *
+   * The recipe moved to `test-server.ts` when #435 added the third suite that
+   * needed it. Kept as a local alias so this file's several hundred call sites
+   * read as they did.
    */
-  async function signIn(clerkUserId: string, promoteToAdmin = false): Promise<string> {
-    const response = await harness.app.inject({
-      method: 'GET',
-      url: '/users/me',
-      headers: bearer(clerkUserId),
-    });
-    expect(response.statusCode).toBe(200);
-
-    if (promoteToAdmin) {
-      await harness.database.db
-        .update(users)
-        .set({ role: 'admin' })
-        .where(eq(users.clerkUserId, clerkUserId));
-    }
-
-    const rows = await harness.database.db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.clerkUserId, clerkUserId))
-      .limit(1);
-
-    return rows[0]!.id;
-  }
+  const signIn = (clerkUserId: string, promoteToAdmin = false): Promise<string> =>
+    signInAs(harness, clerkUserId, promoteToAdmin);
 
   async function createVendorProfile(
     overrides: { isPublished?: boolean; stripeOnboarded?: boolean } = {},
@@ -223,6 +210,9 @@ describe('admin routes', () => {
       { method: 'PUT', url: `/admin/tags/${NIL}` },
       { method: 'PUT', url: `/admin/users/${NIL}/ban` },
       { method: 'PUT', url: `/admin/users/${NIL}/unban` },
+      { method: 'GET', url: `/admin/users/${NIL}/data-rights` },
+      { method: 'POST', url: `/admin/users/${NIL}/export` },
+      { method: 'POST', url: `/admin/users/${NIL}/close` },
       /*
        * #423. A dispute resolution decides who keeps the money, so a stranger
        * or either party reaching it would let one side of the disagreement
@@ -244,6 +234,15 @@ describe('admin routes', () => {
        * write, not a refresh — and the operator who pressed it is recorded.
        */
       { method: 'PUT', url: `/admin/bookings/${NIL}/payout/retry` },
+      /*
+       * #435. Graduated moderation acts on other people's storefronts, reviews
+       * and photos without banning anyone — which makes an unguarded one a
+       * stranger who can unpublish a business, not merely read about it.
+       */
+      { method: 'PUT', url: `/admin/vendors/${NIL}/publish` },
+      { method: 'PUT', url: `/admin/reviews/${NIL}/visibility` },
+      { method: 'PUT', url: `/admin/packages/${NIL}/active` },
+      { method: 'DELETE', url: `/admin/portfolio-items/${NIL}` },
       /*
        * #436. The most privileged read in the console: two people's private
        * messages. It is scoped by an open case on top of this guard, but the

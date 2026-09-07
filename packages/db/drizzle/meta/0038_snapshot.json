@@ -1,6 +1,6 @@
 {
-  "id": "4a46a53c-4273-4c72-b7c6-307079417d81",
-  "prevId": "f7dde19d-3bef-49ad-b61c-bbc7906f78e9",
+  "id": "c136ca4e-d369-4442-af73-7399d4147da7",
+  "prevId": "be221bea-fab7-4526-ad01-620f66ee819e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3130,6 +3130,26 @@
           "primaryKey": false,
           "notNull": false
         },
+        "subject_type": {
+          "name": "subject_type",
+          "type": "report_subject",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "report_reason": {
+          "name": "report_reason",
+          "type": "report_reason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
         "hold_refusal": {
           "name": "hold_refusal",
           "type": "text",
@@ -3202,6 +3222,33 @@
           "columns": [
             {
               "expression": "booking_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "support_cases_subject_idx": {
+          "name": "support_cases_subject_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "subject_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "subject_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3466,7 +3513,15 @@
         "support_case_resolved",
         "payout_retried",
         "user_data_exported",
-        "user_closed"
+        "user_closed",
+        "vendor_unpublished",
+        "vendor_republished",
+        "review_hidden",
+        "review_unhidden",
+        "package_deactivated",
+        "package_reactivated",
+        "portfolio_item_removed",
+        "conversation_messages_read"
       ]
     },
     "public.admin_action_subject": {
@@ -3478,7 +3533,11 @@
         "tag",
         "tag_suggestion",
         "booking",
-        "support_case"
+        "support_case",
+        "vendor_profile",
+        "service_package",
+        "portfolio_item",
+        "conversation"
       ]
     },
     "public.email_delivery_entity": {
@@ -3500,12 +3559,35 @@
         "complained"
       ]
     },
+    "public.report_reason": {
+      "name": "report_reason",
+      "schema": "public",
+      "values": [
+        "spam-or-scam",
+        "off-platform-payment",
+        "harassment",
+        "inappropriate-content",
+        "misleading-information",
+        "something-else"
+      ]
+    },
+    "public.report_subject": {
+      "name": "report_subject",
+      "schema": "public",
+      "values": [
+        "vendor_profile",
+        "review",
+        "conversation",
+        "portfolio_item"
+      ]
+    },
     "public.support_case_origin": {
       "name": "support_case_origin",
       "schema": "public",
       "values": [
         "support_message",
-        "chargeback"
+        "chargeback",
+        "user_report"
       ]
     },
     "public.support_case_status": {

@@ -106,3 +106,14 @@ means the content landed. Only then force the delete.
 `-D` on a lane whose PR was **dequeued** rather than merged destroys the only
 copy of that work, which is why the check has to be the one that can fail.
 
+**Read the DIRECTION of the scoped diff, not just whether it is empty —
+2026-09-07.** Lane 438's `git diff --stat origin/main worktree-438 -- apps
+packages` showed two files, and that was **fine**: `main` was *ahead* by a
+registry entry another ticket had filed, not the branch carrying unmerged work.
+Non-empty is not the answer; *which side the hunks are on* is. Confirm the actual
+hunks before deleting.
+
+**And `git worktree remove` refuses on the session's own lock.** `ExitWorktree`
+with `keep` leaves `lock reason: claude session <n>` behind, so the last teardown
+step needs an explicit `git worktree unlock` first. **Do not reach for `-f -f`** —
+the other lanes' locks in that list are theirs and must stay.
