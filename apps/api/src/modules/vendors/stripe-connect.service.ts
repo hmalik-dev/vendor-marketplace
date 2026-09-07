@@ -190,13 +190,14 @@ export async function applyAccountStatusChange(
    * `unchanged` and drop the reason on the floor, leaving the console showing
    * yesterday's answer with nothing to say it was stale.
    */
+  const flagChanged = onboarded !== vendor.stripeOnboarded;
   const reasonChanged = (status.disabledReason ?? null) !== vendor.stripeDisabledReason;
   const requirementsChanged = !sameRequirements(
     status.requirementsDue,
     vendor.stripeRequirementsDue,
   );
 
-  if (onboarded === vendor.stripeOnboarded && !reasonChanged && !requirementsChanged) {
+  if (!flagChanged && !reasonChanged && !requirementsChanged) {
     return 'unchanged';
   }
 
@@ -212,7 +213,7 @@ export async function applyAccountStatusChange(
    * vendor's payout gate turns on. A reason-only change is `unchanged` from
    * that vantage point and is still persisted above.
    */
-  if (onboarded === vendor.stripeOnboarded) {
+  if (!flagChanged) {
     return 'unchanged';
   }
 

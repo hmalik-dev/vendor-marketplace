@@ -6,10 +6,12 @@ import { useState } from 'react';
 import {
   adminPayoutRetryResultSchema,
   formatPrice,
+  type AdminPayoutRetryResult,
   type PayoutStatus,
 } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { DataTable } from '@/components/admin/data-table';
+import { Banner, type BannerStatus } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
@@ -41,6 +43,39 @@ const PAYOUT_PILLS: Record<PayoutStatus, { tone: StatusTone; label: string }> = 
 /** The one flag's words, so the filter option and the row pill cannot drift. */
 export const PAYOUT_FAILING_LABEL = 'Transfer failing';
 
+/**
+ * What a retry answered, in the operator's words — and in the banner tone the
+ * outcome earns, rather than one neutral grey for all three.
+ *
+ * A `failed` retry is a successful *request*: the attempt was made, recorded and
+ * counted. The outcome is the whole point of pressing the button, so it is
+ * reported rather than swallowed — an operator shown a closed dialog and an
+ * unchanged row has learned nothing, which is the state #432 opens with.
+ */
+function retryNotice(
+  row: WireAdminPaymentRow,
+  result: AdminPayoutRetryResult,
+): { status: BannerStatus; message: string } {
+  if (result.outcome === 'released') {
+    return {
+      status: 'settled',
+      message: `${row.vendorName} has been paid ${formatPrice(row.vendorPayoutCents)}.`,
+    };
+  }
+
+  if (result.outcome === 'busy') {
+    return {
+      status: 'informational',
+      message: 'The scheduled release is already working this payout. Check back in a few minutes.',
+    };
+  }
+
+  return {
+    status: 'failed',
+    message: `Stripe refused it again: ${result.payoutFailureReason ?? 'no reason given'}. That is attempt ${result.payoutAttempts}.`,
+  };
+}
+
 export interface PaymentTableProps {
   rows: readonly WireAdminPaymentRow[];
   empty: { headline: string; description: string };
@@ -58,7 +93,7 @@ export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactEle
   const router = useRouter();
   const call = useApi();
   /** What the last retry answered, so a `busy` or `failed` result is not silent. */
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<ReturnType<typeof retryNotice> | null>(null);
 
   async function retry(row: WireAdminPaymentRow): Promise<void> {
     const result = await call(`/admin/bookings/${row.bookingId}/payout/retry`, {
@@ -67,22 +102,11 @@ export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactEle
     });
 
     /*
-     * Reported above the table rather than thrown into `ConfirmAction`.
-     *
-     * A retry that failed again is a **successful request** — the attempt was
-     * made, recorded and counted — so throwing would hold the dialog open under
-     * a comment that says an open dialog means the action did nothing. The
-     * outcome is the point: an operator who presses this and is shown a closed
-     * dialog and an unchanged row has learned nothing, which is the state #432
-     * opens with.
+     * Reported above the table rather than thrown into `ConfirmAction`, which
+     * holds its dialog open on a throw under a comment saying that an open
+     * dialog means the action did nothing. This action did something.
      */
-    setNotice(
-      result.outcome === 'released'
-        ? `${row.vendorName} has been paid ${formatPrice(row.vendorPayoutCents)}.`
-        : result.outcome === 'busy'
-          ? `The scheduled release is already working this payout. Check back in a few minutes.`
-          : `Stripe refused it again: ${result.payoutFailureReason ?? 'no reason given'}. That is attempt ${result.payoutAttempts}.`,
-    );
+    setNotice(retryNotice(row, result));
 
     router.refresh();
   }
@@ -90,12 +114,9 @@ export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactEle
   return (
     <div className="h-full min-h-0">
       {notice ? (
-        <p
-          role="status"
-          className="mb-3 rounded-lg border border-stone-300 bg-stone-0 px-4 py-2.5 text-sm text-stone-900"
-        >
-          {notice}
-        </p>
+        <Banner status={notice.status} className="mb-3">
+          {notice.message}
+        </Banner>
       ) : null}
       <DataTable
         rows={rows}

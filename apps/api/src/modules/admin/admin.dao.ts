@@ -40,7 +40,7 @@ import { containsInsensitive } from '../../lib/like-pattern.js';
  * payout-health count has to name the same set of rows the transfer names, or
  * the number an operator acts on describes a set the sweep does not work.
  */
-import { payoutOwedClauses } from '../payments/payouts.dao.js';
+import { payoutFailingClauses, payoutOwedClauses } from '../payments/payouts.dao.js';
 
 /**
  * Every read and write the admin portal makes. Policy lives in the service; this
@@ -650,27 +650,6 @@ const vendorOwner = alias(users, 'vendor_owner');
  * and an `EXISTS` under an `or` is never pulled up into a semi-join, so it
  * would run once per candidate row instead of once.
  */
-/**
- * A transfer that has been tried and has not landed (#432).
- *
- * `payout_attempts > 0 and payout_released_at is null` — the pair the schema
- * already documents as the failed state, and the one thing about a payout that
- * `payoutStatusOf` deliberately does not answer: it omits `failed` because a
- * *vendor* should not be alarmed by something the sweep retries every quarter
- * of an hour. An operator is the reader who has to know, so the predicate lives
- * here as a flag beside that derivation rather than as a rival to it.
- *
- * Expressed in SQL rather than in the mapper because it is also the filter, and
- * a filter that selected on one definition while the rows displayed another is
- * the exact divergence this ticket exists to close.
- */
-function payoutFailing(): SQL<boolean> {
-  return sql<boolean>`(
-    ${bookings.payoutAttempts} > 0
-    and ${bookings.payoutReleasedAt} is null
-  )`;
-}
-
 function refundStuck(today: string): SQL<boolean> {
   /*
    * **Retired accounts as well as banned ones (#433).** This flag was written
@@ -820,11 +799,6 @@ export async function countAdminBookings(
  * so it filters to bookings that were actually paid and orders by when the
  * money moved. **There is no `payments` table** — see `adminPaymentRowSchema`.
  */
-/** The Payments table's row: the shared projection plus the flag it computes. */
-export interface AdminPaymentListProjection extends AdminBookingProjection {
-  payoutFailing: boolean;
-}
-
 /**
  * A payment is a booking whose money arrived, and the filter narrows to the
  * ones whose money then failed to leave again.
@@ -836,7 +810,7 @@ export interface AdminPaymentListProjection extends AdminBookingProjection {
 function paymentFilterCondition(flag: AdminPaymentFlag | undefined): SQL | undefined {
   return and(
     sql`${bookings.paidAt} is not null`,
-    flag === 'payout-failing' ? payoutFailing() : undefined,
+    ...(flag === 'payout-failing' ? payoutFailingClauses() : []),
   );
 }
 
@@ -845,9 +819,9 @@ export async function findAdminPayments(
   flag: AdminPaymentFlag | undefined,
   limit: number,
   offset: number,
-): Promise<AdminPaymentListProjection[]> {
+): Promise<AdminBookingProjection[]> {
   return db
-    .select({ ...bookingSelection(), payoutFailing: payoutFailing() })
+    .select(bookingSelection())
     .from(bookings)
     .innerJoin(users, eq(users.id, bookings.customerId))
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
@@ -1266,7 +1240,7 @@ export interface AdminMetricTotals {
 }
 
 export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetricTotals> {
-  const [bookingTotals, activeVendors, userRows, pending, reviewRows, payoutHealth] =
+  const [bookingTotals, activeVendors, userRows, pending, reviewRows, blocked, failing] =
     await Promise.all([
       /*
        * One scan of `bookings` for both numbers. They were two full scans of the
@@ -1299,23 +1273,31 @@ export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetri
         .where(eq(tagSuggestions.status, 'pending')),
       db.select({ total: sql<number>`count(*)::int` }).from(reviews),
       /*
-       * Both payout-health numbers from one scan of the outstanding transfers
-       * (#432), the same `FILTER` discipline the two booking totals above use.
+       * Vendors the platform owes money it cannot send (#432).
        *
-       * The set is bookings that are **owed a transfer**: the money is with the
-       * platform, the vendor has not been paid, and a full refund wrote zero.
-       * `blockedVendors` counts the distinct vendors among those whose account
-       * cannot receive it — a vendor who has never onboarded and never taken a
-       * booking is nobody's emergency and is deliberately not counted.
+       * The set is bookings **owed a transfer** — the money is with the
+       * platform, the vendor has not been paid, and a full refund wrote zero —
+       * narrowed to those whose account cannot receive it. A vendor who has
+       * never onboarded and never taken a booking is nobody's emergency and is
+       * deliberately not counted, which is why this counts distinct vendors
+       * over bookings rather than scanning `vendor_profiles`.
        */
       db
-        .select({
-          blockedVendors: sql<number>`count(distinct ${bookings.vendorId}) filter (where ${vendorProfiles.stripeOnboarded} = false)::int`,
-          failingBookings: sql<number>`count(*) filter (where ${bookings.payoutAttempts} > 0)::int`,
-        })
+        .select({ total: sql<number>`count(distinct ${bookings.vendorId})::int` })
         .from(bookings)
         .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
-        .where(and(...payoutOwedClauses())),
+        .where(and(...payoutOwedClauses(), eq(vendorProfiles.stripeOnboarded, false))),
+      /*
+       * Its own query rather than a second `FILTER` on the one above, because
+       * the two ask different predicates and folding them would silently scope
+       * this one to `payout_model` and `vendor_payout_cents` as well.
+       * `payoutFailingClauses` is the expression the Payments filter composes,
+       * so this card and the list it links to cannot name different sets.
+       */
+      db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(bookings)
+        .where(and(...payoutFailingClauses())),
     ]);
 
   return {
@@ -1325,8 +1307,8 @@ export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetri
     usersCount: userRows?.[0]?.total ?? 0,
     pendingTagSuggestionsCount: pending?.[0]?.total ?? 0,
     reviewsCount: reviewRows?.[0]?.total ?? 0,
-    payoutsBlockedVendorsCount: payoutHealth?.[0]?.blockedVendors ?? 0,
-    payoutsFailingBookingsCount: payoutHealth?.[0]?.failingBookings ?? 0,
+    payoutsBlockedVendorsCount: blocked?.[0]?.total ?? 0,
+    payoutsFailingBookingsCount: failing?.[0]?.total ?? 0,
   };
 }
 

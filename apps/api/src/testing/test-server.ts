@@ -283,7 +283,8 @@ function createFakeEmail(): FakeEmail {
 }
 
 /** What a suite may set on an account: the pair always, the reasons optionally. */
-export type FakeAccountStatus = StripeAccountCapabilities & Partial<StripeAccountStatus>;
+export type FakeAccountStatus = StripeAccountCapabilities &
+  Partial<Pick<StripeAccountStatus, 'disabledReason' | 'requirementsDue'>>;
 
 /**
  * The Stripe Connect boundary, recorded rather than called. Suites set the

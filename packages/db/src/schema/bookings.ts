@@ -281,6 +281,25 @@ export const bookings = pgTable(
       .where(
         sql`${table.payoutReleasedAt} is null and ${table.payoutModel} = 'separate' and ${table.vendorPayoutCents} > 0`,
       ),
+    /*
+     * Serves the console's failing-payout list and its Overview count (#432) —
+     * the two readers of `payoutFailingClauses`.
+     *
+     * Partial on the same predicate, for the same reason as the sweep's index
+     * above: a failing payout is a handful of rows against every booking the
+     * platform has ever taken, and both queries run on every view of the
+     * Payments screen. Without it each is a sequential scan plus a sort of the
+     * whole table, on the one screen an operator opens *because* money is
+     * stuck. Ordered by `paid_at desc` because that is the order the list
+     * renders in, so the sort comes off the index rather than out of memory.
+     *
+     * Deliberately not an index for the unfiltered list, which shares neither
+     * the predicate nor the selectivity — that one wants a plain `paid_at`
+     * index and is nothing this ticket changed.
+     */
+    index('bookings_payout_failing_idx')
+      .on(table.paidAt.desc())
+      .where(sql`${table.payoutReleasedAt} is null and ${table.payoutAttempts} > 0`),
   ],
 );
 

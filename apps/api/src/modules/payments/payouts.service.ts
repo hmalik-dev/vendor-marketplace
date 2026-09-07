@@ -1,19 +1,20 @@
 import {
   PAYOUT_RELEASE_HOURS,
   payoutDueThroughDate,
+  payoutStatusOf,
   type BookingStatus,
 } from '@vendor-marketplace/shared';
+import type { BookingRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import type { FastifyBaseLogger } from 'fastify';
 import { conflict, notFound } from '../../lib/errors.js';
 import { transferGroupFor, type StripeConnectGateway } from '../../lib/stripe.js';
+import { findBookingById } from './payments.dao.js';
 import {
   claimReleasableBooking,
   findDuePayoutBookingIds,
-  findPayoutRetrySubject,
   recordPayoutFailure,
   recordPayoutRelease,
-  type PayoutRetrySubjectRow,
 } from './payouts.dao.js';
 
 /**
@@ -135,7 +136,7 @@ export async function retryPayoutRelease(
   now: Date,
 ): Promise<PayoutRetryResult> {
   const dueThroughDate = payoutDueThroughDate(now);
-  const subject = await findPayoutRetrySubject(context.db, bookingId);
+  const subject = await findBookingById(context.db, bookingId);
 
   if (!subject) {
     throw notFound('No booking with that id');
@@ -144,7 +145,7 @@ export async function retryPayoutRelease(
   refusePayoutRetry(subject, dueThroughDate);
 
   const outcome = await releaseOnePayout(context, bookingId, dueThroughDate, now);
-  const after = await findPayoutRetrySubject(context.db, bookingId);
+  const after = await findBookingById(context.db, bookingId);
 
   if (!after) {
     throw notFound('No booking with that id');
@@ -180,12 +181,22 @@ export async function retryPayoutRelease(
  * *forcing* it on the one status where the amount owed was rewritten after the
  * fact, and the message says that rather than implying nothing is owed.
  */
-function refusePayoutRetry(subject: PayoutRetrySubjectRow, dueThroughDate: string): void {
-  if (subject.payoutReleasedAt) {
+function refusePayoutRetry(subject: BookingRow, dueThroughDate: string): void {
+  /*
+   * `payoutStatusOf` for the first two, rather than `payoutReleasedAt` and
+   * `status === 'disputed'` read by hand. That function's own comment forbids
+   * the literal: `HELD_PAYOUT_STATUSES` is what the vendor dashboard and the
+   * booking report test membership in, and a hold status added there but read
+   * as an equality here would leave the operator retry refusing on a set the
+   * rest of the product no longer agrees with.
+   */
+  const payoutStatus = payoutStatusOf(subject);
+
+  if (payoutStatus === 'released') {
     throw conflict('This payout has already been released, so there is nothing to retry');
   }
 
-  if (subject.status === 'disputed') {
+  if (payoutStatus === 'held') {
     throw conflict('This payout is on hold while the reported problem is being resolved');
   }
 

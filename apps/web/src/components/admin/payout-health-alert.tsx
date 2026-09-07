@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Banner } from '@/components/ui/banner';
 
 /** The two lists the numbers lead to — where each state is actually worked on. */
 const FAILING_PAYOUTS_PATH = '/admin/payments?flag=payout-failing';
@@ -30,34 +31,43 @@ export function PayoutHealthAlert({
   blockedVendors,
   failingBookings,
 }: PayoutHealthAlertProps): React.ReactElement | null {
-  if (blockedVendors === 0 && failingBookings === 0) {
+  /*
+   * Built as a list rather than as nested ternaries carrying their own commas.
+   * Punctuation held inside a branch couples the two clauses: the first one has
+   * to know whether the second exists in order to end its own sentence.
+   */
+  const clauses: React.ReactElement[] = [];
+
+  if (failingBookings > 0) {
+    clauses.push(
+      <Link key="failing" href={FAILING_PAYOUTS_PATH} className="font-semibold underline">
+        {failingBookings} {failingBookings === 1 ? 'transfer is' : 'transfers are'} failing
+      </Link>,
+    );
+  }
+
+  if (blockedVendors > 0) {
+    clauses.push(
+      <Link key="blocked" href={BLOCKED_VENDORS_PATH} className="font-semibold underline">
+        {blockedVendors} {blockedVendors === 1 ? 'vendor is' : 'vendors are'} owed money Stripe will
+        not let us send
+      </Link>,
+    );
+  }
+
+  if (clauses.length === 0) {
     return null;
   }
 
   return (
-    <p
-      role="status"
-      className="mb-4 rounded-xl border border-error-500 bg-stone-0 px-4 py-3 text-sm text-stone-900"
-    >
-      <span className="font-semibold text-error-500">Payouts need attention.</span>{' '}
-      {failingBookings > 0 ? (
-        <>
-          <Link href={FAILING_PAYOUTS_PATH} className="font-semibold underline">
-            {failingBookings} {failingBookings === 1 ? 'transfer is' : 'transfers are'} failing
-          </Link>
-          {blockedVendors > 0 ? ', and ' : '. '}
-        </>
-      ) : null}
-      {blockedVendors > 0 ? (
-        <>
-          <Link href={BLOCKED_VENDORS_PATH} className="font-semibold underline">
-            {blockedVendors} {blockedVendors === 1 ? 'vendor is' : 'vendors are'} owed money Stripe
-            will not let us send
-          </Link>
-          {'. '}
-        </>
-      ) : null}
-      The scheduled release keeps trying, so this clears itself once the accounts are in order.
-    </p>
+    <Banner status="failed" title="Payouts need attention" className="mb-4">
+      {clauses.map((clause, index) => (
+        <span key={clause.key}>
+          {index > 0 ? ', and ' : null}
+          {clause}
+        </span>
+      ))}
+      . The scheduled release keeps trying, so this clears itself once the accounts are in order.
+    </Banner>
   );
 }
