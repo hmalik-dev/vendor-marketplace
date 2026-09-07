@@ -9,16 +9,7 @@ import {
   vendorTags,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
-
-/**
- * The public read of one vendor, by slug.
- *
- * Only published, non-deleted vendors are ever visible — the same predicate the
- * search DAO uses, and for the same reason: an unpublished profile is a draft,
- * and a deleted one is gone. A visitor asking for either gets a 404, never a
- * partially rendered page.
- */
-const VISIBLE = and(eq(vendorProfiles.isPublished, true), eq(vendorProfiles.isDeleted, false));
+import { VENDOR_VISIBLE } from './vendor-visibility.js';
 
 /*
  * The two correlated subqueries below name their tables and columns literally,
@@ -90,7 +81,7 @@ export async function findPublicVendorBySlug(
       startingPriceCents: STARTING_PRICE_CENTS,
     })
     .from(vendorProfiles)
-    .where(and(VISIBLE, eq(vendorProfiles.slug, slug)))
+    .where(and(VENDOR_VISIBLE, eq(vendorProfiles.slug, slug)))
     .limit(1);
 
   return row ?? null;

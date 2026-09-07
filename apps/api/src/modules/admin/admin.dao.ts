@@ -52,6 +52,8 @@ export interface AdminVendorProjection {
   isPublished: boolean;
   stripeOnboarded: boolean;
   isBanned: boolean;
+  /** Whether the account is gone (#433), so the row can read `retired`. */
+  isRetired: boolean;
   createdAt: Date;
 }
 
@@ -64,24 +66,56 @@ export interface AdminVendorFilters {
 }
 
 /**
- * The four statuses are **derived**, not stored, so filtering by one has to be
+ * The account is gone — the console's `retired` (#433).
+ *
+ * The statuses are **derived**, not stored, so filtering by one has to be
  * expressed as the same conditions the derivation uses — see
  * `ADMIN_VENDOR_STATUSES` for the table and the reasoning. Writing it once here
  * and once in the service is how the two would drift, so the service derives the
  * label from this file's row and this file filters with these predicates; both
- * read the same three columns and nothing else.
+ * read the same columns and nothing else.
+ *
+ * **Either column, not just the tombstone.** `vendor_profiles.is_deleted` is
+ * what the retirement writes, but `users.deleted_at` is the canonical fact and
+ * it has been written since long before anything wrote the tombstone: every
+ * account deleted under the old `user.deleted` path carries one with
+ * `is_deleted` still `false`. Deriving from the tombstone alone would leave
+ * exactly those rows reading `review` in the console while `/vendors` 404s
+ * them — a legacy the corrected writer would otherwise strand, which is the
+ * trap `.claude/rules/db-schema.md` names. Reading both needs no backfill and
+ * no migration, and it makes the console agree with `VENDOR_VISIBLE`, which
+ * excludes on the same two columns.
+ *
+ * Rendered qualified, unlike `OWNER_NOT_DELETED`: this one is not inside a
+ * correlated subquery — `findAdminVendors` and `countAdminVendors` both join
+ * `users` — so Drizzle's column references resolve to the right tables.
  */
+const RETIRED = sql<boolean>`(${vendorProfiles.isDeleted} = true OR ${users.deletedAt} IS NOT NULL)`;
+const NOT_RETIRED = sql`(${vendorProfiles.isDeleted} = false AND ${users.deletedAt} IS NULL)`;
+
 function statusCondition(status: AdminVendorStatus) {
+  if (status === 'retired') {
+    return RETIRED;
+  }
+
+  /*
+   * Every other status excludes the retired rows, because `deriveVendorStatus`
+   * returns `retired` for them ahead of everything else. Without this a retired
+   * vendor would be filtered in as `flagged` and then labelled `Retired`, and
+   * the count above the table would describe a different set from the rows
+   * under it.
+   */
   if (status === 'flagged') {
-    return eq(users.isBanned, true);
+    return and(NOT_RETIRED, eq(users.isBanned, true));
   }
 
   if (status === 'live') {
-    return and(eq(users.isBanned, false), eq(vendorProfiles.isPublished, true));
+    return and(NOT_RETIRED, eq(users.isBanned, false), eq(vendorProfiles.isPublished, true));
   }
 
   if (status === 'paused') {
     return and(
+      NOT_RETIRED,
       eq(users.isBanned, false),
       eq(vendorProfiles.isPublished, false),
       eq(vendorProfiles.stripeOnboarded, true),
@@ -89,14 +123,26 @@ function statusCondition(status: AdminVendorStatus) {
   }
 
   return and(
+    NOT_RETIRED,
     eq(users.isBanned, false),
     eq(vendorProfiles.isPublished, false),
     eq(vendorProfiles.stripeOnboarded, false),
   );
 }
 
+/*
+ * Retired vendors are **listed**, not hidden (#433).
+ *
+ * This began `[eq(vendorProfiles.isDeleted, false)]`, which was right while
+ * nothing but a seed script could ever set the column: the only rows it
+ * excluded were fixtures. Now that deleting a Clerk identity retires the
+ * storefront, that same line would make every deleted vendor vanish from the
+ * one screen that has to answer "what happened to this account" — and it is
+ * `admin_actions` and the bookings they unwound that the operator is looking
+ * for. The `retired` status labels them and filters to them instead.
+ */
 function vendorFilterCondition(filters: AdminVendorFilters) {
-  const conditions = [eq(vendorProfiles.isDeleted, false)];
+  const conditions: SQL[] = [];
 
   if (filters.q) {
     /*
@@ -219,6 +265,7 @@ export async function findAdminVendors(
       isPublished: vendorProfiles.isPublished,
       stripeOnboarded: vendorProfiles.stripeOnboarded,
       isBanned: users.isBanned,
+      isRetired: RETIRED,
       createdAt: vendorProfiles.createdAt,
     })
     .from(vendorProfiles)
@@ -276,9 +323,15 @@ export async function findVendorFilterFacets(db: AppDatabase): Promise<{
 }> {
   const [cityRows, categoryRows] = await Promise.all([
     db
+      /*
+       * Every listed vendor's city, retired ones included (#433). The table
+       * lists them so an operator can answer "what happened to this account";
+       * excluding their city here left the only Austin vendor findable by
+       * status and not by the City control beside it.
+       */
       .selectDistinct({ city: vendorProfiles.city })
       .from(vendorProfiles)
-      .where(and(eq(vendorProfiles.isDeleted, false), sql`${vendorProfiles.city} is not null`))
+      .where(sql`${vendorProfiles.city} is not null`)
       .orderBy(asc(vendorProfiles.city)),
     db
       .select({ slug: categories.slug, name: categories.name })
@@ -581,10 +634,24 @@ const vendorOwner = alias(users, 'vendor_owner');
  * would run once per candidate row instead of once.
  */
 function refundStuck(today: string): SQL<boolean> {
+  /*
+   * **Retired accounts as well as banned ones (#433).** This flag was written
+   * for #415, when a ban was the only thing that unwound an account, so
+   * `is_banned` was the whole condition. Deleting a Clerk identity now runs the
+   * same unwind — and can strand a booking the same two ways, a refund Stripe
+   * refused or one this platform deliberately declines to price — but writes
+   * `deleted_at` and `is_deleted`, never `is_banned`. Keyed on the ban alone,
+   * the one surface built to find stranded money filtered out every booking a
+   * deletion stranded, and told the operator "No refunds are stuck" while a
+   * customer's payment sat at Stripe.
+   */
   return sql<boolean>`(
     ${bookings.status} = 'confirmed'
     and ${bookings.eventDate} > ${today}
-    and (${users.isBanned} or ${vendorOwner.isBanned})
+    and (
+      ${users.isBanned} or ${vendorOwner.isBanned}
+      or ${users.deletedAt} is not null or ${vendorOwner.deletedAt} is not null
+    )
   )`;
 }
 
@@ -1142,13 +1209,13 @@ export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetri
       .select({ total: sql<number>`count(*)::int` })
       .from(vendorProfiles)
       .innerJoin(users, eq(users.id, vendorProfiles.userId))
-      .where(
-        and(
-          eq(vendorProfiles.isDeleted, false),
-          eq(vendorProfiles.isPublished, true),
-          eq(users.isBanned, false),
-        ),
-      ),
+      /*
+       * `NOT_RETIRED` rather than `is_deleted` alone (#433), so the metric
+       * agrees with the status the table shows. An account deleted under the
+       * old `deleted_at`-only path has `is_deleted` false and was counted here
+       * as an active vendor while every public read already hid it.
+       */
+      .where(and(NOT_RETIRED, eq(vendorProfiles.isPublished, true), eq(users.isBanned, false))),
     db
       .select({ total: sql<number>`count(*)::int` })
       .from(users)

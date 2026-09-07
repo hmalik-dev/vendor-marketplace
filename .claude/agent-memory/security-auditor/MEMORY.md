@@ -64,3 +64,5 @@
 - [The no-cookie claim rests on one regex list](no-cookie-consent-claim-rests-on-a-source-scan.md) — the cookie-write scan matches a shape Next 15 makes impossible and misses the reachable ones
 - [The support form is a public route that moves money](support-report-is-a-public-route-that-moves-money.md) — a `bookingId` on the unauthenticated send freezes a payout; the guards are in `placeDisputeHold`, not the route
 - [The admin action log is trigger-immutable](admin-action-log-is-trigger-immutable.md) — UPDATE/DELETE/TRUNCATE all raise; the one cascade exception needs a hard `users` delete no product path performs
+- [The unwind's full refund is the ban's argument](account-unwind-full-refund-is-the-ban-argument.md) — superseded by D39: closure is now refused while a future confirmed booking exists, and the operator-settled path is the backstop
+- [The Clerk webhook is now a money mover](clerk-webhook-is-now-a-money-mover.md) — svix order is sound; the replay guard is a read that closes only after an unbounded Stripe loop

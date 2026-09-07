@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { unauthorized, validationFailed } from '../../lib/errors.js';
 import { applyClerkUserEvent } from './clerk.service.js';
+import { bookingContextFor } from '../payments/payments.service.js';
 import { clerkWebhookEventSchema } from './clerk.schemas.js';
 import { keepRawJsonBody, rawBodyOf } from './raw-body.js';
 
@@ -11,6 +12,13 @@ export type WebhookVerifier = (payload: string, headers: Record<string, string>)
 
 export interface ClerkWebhookRoutesOptions {
   signingSecret: string;
+  /**
+   * `canonicalWebOrigin(env)` — the origin every emailed link is built from.
+   *
+   * A webhook needs one because `user.deleted` unwinds the account's bookings
+   * and emails both counterparties about them (#433).
+   */
+  webOrigin: string;
   /** Overridden by the route suites so they need no real svix secret. */
   verifySignature?: WebhookVerifier;
 }
@@ -67,7 +75,16 @@ export const clerkWebhookRoutes: FastifyPluginAsyncZod<ClerkWebhookRoutesOptions
         throw validationFailed('Webhook payload has an unexpected shape', event.error.issues);
       }
 
-      const outcome = await applyClerkUserEvent(app.db, event.data);
+      /*
+       * The same context `adminRoutes` builds, from the same builder: a
+       * deletion runs the unwind a ban runs, and that path needs Stripe, the
+       * hub and the mailer.
+       */
+      const outcome = await applyClerkUserEvent(
+        bookingContextFor(app, app.log, options.webOrigin),
+        event.data,
+        app.clock(),
+      );
       request.log.info(
         { clerkEvent: event.data.type, outcome },
         'Applied a Clerk lifecycle webhook',

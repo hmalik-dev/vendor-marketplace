@@ -1,6 +1,6 @@
-import type { AppDatabase } from '../../lib/database.js';
 import { listLiveClerkIdentities } from '../users/users.dao.js';
 import { applyClerkUserEvent } from './clerk.service.js';
+import type { AdminContext } from '../admin/account-unwind.js';
 import type { ClerkWebhookUserData } from './clerk.schemas.js';
 
 /**
@@ -98,7 +98,16 @@ function asWebhookData(user: ClerkApiUser): ClerkWebhookUserData {
 }
 
 export async function reconcileClerkUsers(
-  db: AppDatabase,
+  /**
+   * The same context the live webhook carries (#433).
+   *
+   * A database handle was enough while retiring a user was one `UPDATE`. It is
+   * not any more: this pass hands a missed deletion to the very handler the
+   * event would have reached, and that handler now refunds bookings. Taking
+   * less than the handler needs is how the repair path and the live path come
+   * to behave differently, which is the one thing this file exists to prevent.
+   */
+  context: AdminContext,
   clerk: ClerkUserSource,
   /**
    * Reports what would change without writing anything.
@@ -108,7 +117,16 @@ export async function reconcileClerkUsers(
    * worth being able to answer before the answer is irreversible.
    */
   options: { dryRun?: boolean } = {},
+  /**
+   * One instant for the whole pass, supplied by the caller.
+   *
+   * Threaded rather than read here for the reason `plugins/clock.ts` exists:
+   * the deletion branch refunds and cancels bookings, and two "now"s inside one
+   * repair pass are two answers that do not have to agree.
+   */
+  now: Date = new Date(),
 ): Promise<ReconcileSummary> {
+  const db = context.db;
   const rows = await listLiveClerkIdentities(db);
   const local = rows.filter((row) => isClerkIdentity(row.clerkUserId));
   const summary: ReconcileSummary = {
@@ -152,10 +170,11 @@ export async function reconcileClerkUsers(
       }
 
       // The same path the event would have taken, so deletion behaves once.
-      const outcome = await applyClerkUserEvent(db, {
-        type: 'user.deleted',
-        data: { id: row.clerkUserId },
-      });
+      const outcome = await applyClerkUserEvent(
+        context,
+        { type: 'user.deleted', data: { id: row.clerkUserId } },
+        now,
+      );
 
       if (outcome === 'deleted') {
         summary.deleted += 1;
@@ -197,7 +216,7 @@ export async function reconcileClerkUsers(
       continue;
     }
 
-    const outcome = await applyClerkUserEvent(db, { type: 'user.updated', data });
+    const outcome = await applyClerkUserEvent(context, { type: 'user.updated', data }, now);
 
     if (outcome === 'updated') {
       summary.updated += 1;

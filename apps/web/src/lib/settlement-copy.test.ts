@@ -46,7 +46,7 @@ describe('cancellationNarrative', () => {
      */
     it('names the operator without claiming which account was suspended', () => {
       const unwound = settlement({ cancelledBy: 'admin' });
-      const sentence = `${BRAND_NAME} cancelled this booking on June 1, 2026, because an account involved was suspended.`;
+      const sentence = `${BRAND_NAME} cancelled this booking on June 1, 2026, because an account involved is no longer active.`;
 
       expect(cancellationNarrative(unwound, 'customer').what).toBe(sentence);
       expect(cancellationNarrative(unwound, 'vendor').what).toBe(sentence);
