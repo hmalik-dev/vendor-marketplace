@@ -72,3 +72,29 @@ problem — `.next` is poisoned. Rebuild, or serve the production build. Do not
 debug the page and do not go looking at data.
 
 A passing production build served 200 immediately.
+
+## Worse: a typecheck error naming a generated file, where clearing it does not help — 2026-09-07
+
+Lane 441 lost twenty minutes to this and it is a **nastier shape than the 500**,
+because the obvious remedy actively confirms the wrong diagnosis.
+
+After switching branches, `pnpm typecheck` failed with two
+`Type 'Route' does not satisfy the constraint 'never'` errors in
+`.next/types/validator.ts`. It survived `pnpm build --force` **and** a full
+`rm -rf apps/web/.next` plus rebuild. It looked exactly like a real regression
+in the branch. It was not: `pnpm typecheck --force` passed on pristine
+`origin/main`, and then on the branch too. The stale layer was **turbo's cache**,
+not `.next`.
+
+**The tell: clearing the thing the error names does not help.** Clearing `.next`
+is the *correct* fix for the poisoned-artefact case above, so when it fails the
+natural next thought is "then the error must be real" rather than "then I
+misdiagnosed which layer is stale".
+
+**The discriminating move is to change the reader, not the artefact** —
+`pnpm typecheck --force` — and it takes seconds. Run it before believing any
+typecheck error that names a generated file.
+
+Same family as the discriminating vendor slug in
+[[verify-with-a-differently-shaped-check]]: pick the probe only one explanation
+can survive.
