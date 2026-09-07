@@ -10,7 +10,7 @@
 - [Hand-rolled focus trap vs portals](review-checklist-handrolled-focus-trap-vs-portals.md) — Radix popover content lives at `<body>`, so `panel.contains(activeElement)` yanks focus on every Tab and Escape closes both layers
 - [Source-grep substring collisions](review-checklist-source-grep-substring-collisions.md) — `toContain('gap-2')` passes on `gap-2.5`, or on the file's own docstring; count the matches, then mutate the line
 - [Ring offset in the ground's own colour](review-checklist-ring-offset-same-as-ground.md) — the ring is already outside the border box; re-grounding the offset in the parent's colour deletes its only 3:1 edge. Scan pixels outward
-- [Frames render content-box](review-checklist-design-frames-are-content-box.md) — the .dc.html has no preflight, so a bordered div there is `D + 2×stroke`; measuring it under the app's CSS gives the wrong answer
+- [Frame box model is per-bundle](review-checklist-design-frames-are-content-box.md) — the screens .dc.html is content-box, every delta bundle is border-box; grep `box-sizing` in the file the diff cites
 - [Seeded rows vs the production writer](review-checklist-seeded-rows-vs-the-production-writer.md) — diff the seed's `values` against the service that owns that insert; a column the seed nulls is a null branch the UI renders for ever
 - [Recompute in a SET clause still races](review-checklist-recompute-in-set-clause-races.md) — "derived, never incremented" is not concurrency-safe; PGlite has one connection, so prove it on the Docker Postgres with two
 - [Dirty tree vs the reviewed commit](review-checklist-dirty-tree-vs-reviewed-commit.md) — `git status` before probing; the lane may already have fixed the defect you were asked to confirm

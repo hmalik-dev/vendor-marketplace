@@ -90,6 +90,37 @@ describe('icon-only controls carry the law’s hit area', () => {
   });
 
   /*
+   * #441. The footer's brand link wraps `Logo`, which is `role="img"` with an
+   * `aria-label` — so its accessible name comes from a label and not from text,
+   * which is what makes the law's "icon-only" clause reach it. At the frame's
+   * D=17 the lockup is 27px tall, well under the floor.
+   *
+   * Grown the way Clerk's trigger is: the target changes and the mark does not.
+   *
+   * Only the floor is asserted. How this markup pays for it — an inline flex, a
+   * negative margin that keeps the tagline where the frame draws it — is the
+   * call site's business, and pinning it here would fail any other correct way
+   * of reaching 44px under a test named for the law.
+   */
+  it('gives the footer brand link the law’s hit area', () => {
+    const footer = read('src/components/site-footer.tsx');
+    // Attribute order is the file's, not the law's, so it is not matched on.
+    const link = /<Link\b[^>]*href="\/"[^>]*>/.exec(footer);
+
+    expect(link, 'the footer no longer opens its brand link the way this reads it').not.toBeNull();
+
+    /*
+     * Both halves. The wordmark makes this link ~83px wide today, so the width
+     * floor changes nothing it renders — which is exactly why it was easy to
+     * leave off, and why the guard would have stayed green through a switch to
+     * `variant="mark"` that took the target to 27x44.
+     */
+    for (const axis of ['min-h-', 'min-w-']) {
+      expect(link?.[0]).toContain(HIT_AREA.replace('size-', axis));
+    }
+  });
+
+  /*
    * Clerk owns its trigger's markup, so the target is grown in CSS. The avatar
    * inside keeps its own size — the control still looks as the frames draw it.
    */
