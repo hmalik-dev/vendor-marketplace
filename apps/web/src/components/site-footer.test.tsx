@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ReactNode } from 'react';
 import {
+  BRAND_NAME,
   CATEGORY_SEEDS,
   LANDING_JUMP_CATEGORY_SLUGS,
   SUPPORT_PATH,
@@ -16,6 +17,12 @@ let authState: AuthState = 'signed-out';
 vi.mock('@clerk/nextjs', () => ({
   Show: ({ when, children }: { when: AuthState; children: ReactNode }) =>
     when === authState ? children : null,
+  /*
+   * Clerk's own control, rendered as the button it clones its child into. The
+   * session mutation behind it is Clerk's to test; what this file asserts is
+   * that the control is offered to the right reader and to nobody else.
+   */
+  SignOutButton: ({ children }: { children: ReactNode }) => children,
 }));
 
 /*
@@ -93,6 +100,14 @@ describe('SiteFooter', () => {
     expect(screen.queryByRole('link', { name: 'Florals' })).toBeNull();
   });
 
+  /*
+   * `Sign in` · `Sign up`, and **no `Dashboard`** — a visitor has no dashboard,
+   * and this column is the one place the footer could have offered them one.
+   *
+   * `Become a vendor` came off this column with #428: the vendor door is
+   * already in Company as `For vendors`, at the same destination, one column to
+   * the left. `/sign-up`'s role cards are the fork — 21-sign-up.md.
+   */
   it('offers the authentication routes to signed-out visitors', async () => {
     render(await SiteFooter());
 
@@ -100,11 +115,12 @@ describe('SiteFooter', () => {
       'href',
       'http://localhost:3000/sign-in',
     );
-    // The vendor door pre-selects the role — design/design-plan/21-sign-up.md.
-    expect(screen.getByRole('link', { name: 'Become a vendor' })).toHaveProperty(
+    expect(screen.getByRole('link', { name: 'Sign up' })).toHaveProperty(
       'href',
-      'http://localhost:3000/sign-up?role=vendor',
+      'http://localhost:3000/sign-up',
     );
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
   });
 
   it('hides the authentication routes once signed in', async () => {
@@ -114,7 +130,7 @@ describe('SiteFooter', () => {
     render(await SiteFooter());
 
     expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Become a vendor' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveProperty(
       'href',
       'http://localhost:3000/dashboard',
@@ -122,26 +138,141 @@ describe('SiteFooter', () => {
   });
 
   /*
-   * The account link is one control with three destinations, and the footer is
-   * its third rendering — after the header's bar and the drawer the bar hides it
-   * into. It read `Dashboard` for everyone, so a signed-in customer met both
-   * words on the same page: `Bookings` in the bar, `Dashboard` here, for one
-   * link. #372.
+   * Signed in, the Account column is the way back to your own things, and every
+   * label is the word the reader already meets on the surface it leads to —
+   * `My bookings` and `My profile` are the customer sidebar's own rows,
+   * `Dashboard` is the first row of the vendor's rail. A fourth word for a
+   * destination that already has one is how a control comes to be called two
+   * things (#372).
    */
   it.each([
-    ['customer' as const, 'Bookings'],
-    ['vendor' as const, 'Dashboard'],
-    ['admin' as const, 'Admin'],
-  ])('labels the account link for a %s account', async (role, label) => {
+    [
+      'customer' as const,
+      [
+        ['My bookings', '/bookings'],
+        ['Messages', '/messages'],
+        ['My profile', '/customer/profile'],
+      ],
+    ],
+    [
+      'vendor' as const,
+      [
+        ['Dashboard', '/dashboard'],
+        ['Messages', '/messages'],
+        ['Edit profile', '/vendor/profile/edit'],
+      ],
+    ],
+    /* An operator has neither messages nor a profile; a short column beats rows
+     * that bounce. */
+    ['admin' as const, [['Admin', '/dashboard']]],
+  ])('gives a %s account their own surfaces', async (role, expected) => {
     authState = 'signed-in';
     currentRole = role;
 
     render(await SiteFooter());
 
-    expect(screen.getByRole('link', { name: label })).toHaveProperty(
-      'href',
-      'http://localhost:3000/dashboard',
-    );
+    for (const [label, href] of expected) {
+      expect(screen.getByRole('link', { name: label as string }), label).toHaveProperty(
+        'href',
+        `http://localhost:3000${href as string}`,
+      );
+    }
+
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeDefined();
+  });
+
+  /*
+   * `How it works` is an anchor, and the footer renders on every route — so it
+   * is only a link for a reader whose `/` has the section to land on.
+   *
+   * A signed-in customer's does not, since #428 took it off their landing, and
+   * a vendor never reaches `/` at all. A signed-out visitor and an operator
+   * both render it. Both directions are asserted: the presence half alone
+   * passes on the broken version.
+   */
+  it.each([
+    [null, true],
+    ['admin' as const, true],
+    ['customer' as const, false],
+    ['vendor' as const, false],
+  ])('offers How it works to a %s only when the section exists for them', async (role, offered) => {
+    authState = role === null ? 'signed-out' : 'signed-in';
+    currentRole = role;
+
+    render(await SiteFooter());
+
+    const link = screen.queryByRole('link', { name: 'How it works' });
+
+    if (offered) {
+      expect(link).toHaveProperty('href', 'http://localhost:3000/#how-it-works');
+    } else {
+      expect(link).toBeNull();
+    }
+
+    // The rest of the column is unconditional either way.
+    expect(screen.getByRole('link', { name: 'For vendors' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Contact support' })).toBeDefined();
+  });
+
+  /*
+   * A row, never a fifth column — a column would give three links the same
+   * visual weight as Browse, which is the whole catalogue.
+   *
+   * **#427 adds the same row from the legal-pages side.** It is built here, so
+   * that ticket must leave it alone rather than build a second one: "exactly
+   * once" is what this asserts.
+   */
+  it('carries the legal row exactly once, in both auth states', async () => {
+    for (const state of ['signed-out', 'signed-in'] as const) {
+      authState = state;
+      currentRole = state === 'signed-in' ? 'customer' : null;
+      render(await SiteFooter());
+
+      for (const [label, href] of [
+        ['Terms', '/terms'],
+        ['Privacy', '/privacy'],
+        ['Cookies', '/cookies'],
+      ]) {
+        expect(screen.getAllByRole('link', { name: label as string }), label).toHaveLength(1);
+        expect(screen.getByRole('link', { name: label as string })).toHaveProperty(
+          'href',
+          `http://localhost:3000${href as string}`,
+        );
+      }
+
+      cleanup();
+    }
+  });
+
+  /*
+   * The year is resolved, not written out: a literal is wrong from the first of
+   * January and nothing fails when it becomes so. The name is read from
+   * `BRAND_NAME` for the same reason it is everywhere else.
+   */
+  it('dates the copyright notice from the clock and names the brand from the constant', async () => {
+    render(await SiteFooter());
+
+    expect(screen.getByText(`© ${BRAND_NAME} ${new Date().getFullYear()}`)).toBeDefined();
+  });
+
+  /*
+   * The footer's own ink, one step below the closing band's. Two masses of the
+   * same `stone-900` separated by a hairline read as one 400px dark region, so
+   * the value does the separating and the rule comes off with it.
+   *
+   * A class-level fact: jsdom computes no cascade, and the rendered colour is
+   * the parity pass's to confirm in a browser — see
+   * `.claude/rules/web-design-parity.md`.
+   */
+  it('grounds the footer one ink step below the band above it', async () => {
+    const { container } = render(await SiteFooter());
+
+    const footer = container.querySelector('[data-slot="site-footer"]');
+    const classes = footer?.className.split(/\s+/) ?? [];
+
+    expect(classes).toContain('bg-stone-950');
+    expect(classes).not.toContain('bg-stone-900');
+    expect(classes).not.toContain('border-t');
   });
 
   /*

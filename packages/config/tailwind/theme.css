@@ -32,6 +32,16 @@
   --color-sage-175: #c4d6a8; /* the `Vending` role label over a scrimmed photograph — #306 */
   --color-sage-200: #a8c08e; /* pale sage — decorative dots on an ink ground */
   --color-sage-300: #c9d3be; /* sage banner border */
+  /*
+   * The settled dot on a cream ground — frame `30`'s landing status strip.
+   *
+   * Neither neighbour can carry it: `200` is the pale dot for an *ink* ground
+   * and disappears on `stone-100`, and `400` is sage-as-a-colour, dark enough
+   * beside a gold dot to read as two different weights of signal rather than
+   * two signals. The value is the design plan's own — `01-foundations.md`
+   * records `#7A9468` as the sage the confirmed screen's gradient started from.
+   */
+  --color-sage-350: #7a9468; /* the settled dot, on a cream ground */
   --color-sage-400: #5e6b4f;
   --color-sage-600: #4b5940; /* sage as text */
 
@@ -64,10 +74,41 @@
   --color-stone-300: #e4ddd1; /* borders */
   --color-stone-400: #d5cec2; /* stronger borders, unchecked controls */
   --color-stone-500: #c9c1b5; /* disabled text ONLY — fails AA by design */
+  /*
+   * The three steps that carry **text on an ink ground** — the closing band and
+   * the footer, and nowhere else. Every other surface in the product sets type
+   * on cream, which is what `600`–`900` are for.
+   *
+   * They are tokens rather than an alpha of `stone-50` because an alpha cannot
+   * reach them: 78% of `stone-50` over `stone-950` lands at `#c7c2b6`, a step
+   * light and off-hue from the `#b8af9f` the frames draw. Both surfaces used
+   * exactly that alpha, which is the defect this replaces rather than a
+   * refinement of it.
+   *
+   * Read light to dark, and each is pinned to the ground it sits on: `520` is
+   * the footer's link columns, `540` the band's step bodies one value up on the
+   * lighter `stone-900`, and `560` the footer's micro-labels and its body copy.
+   * **`560` is the floor** — `#7a7266` was tried for the labels and fails
+   * contrast at their 10.5px size, which `theme-tokens.test.ts` records as a
+   * number so it cannot come back.
+   */
+  --color-stone-520: #b8af9f; /* footer link columns, on stone-950 */
+  --color-stone-540: #a79d8c; /* muted copy on the closing band, on stone-900 */
+  --color-stone-560: #8c8375; /* footer micro-labels and body, on stone-950 */
   --color-stone-600: #6b6459; /* MUTED TEXT — the minimum for any real label */
   --color-stone-700: #4a443c; /* body text */
   --color-stone-800: #3a342e; /* the admin header's hairline on a stone-900 ground */
   --color-stone-900: #23201c; /* headings, ink */
+  /*
+   * The footer ground, and one step below the ink everything else uses.
+   *
+   * The closing band above it is `stone-900`, and two masses of the same ink
+   * separated by a hairline read as one 400px dark region. The footer's job is
+   * to recede into chrome beneath the band, so the value does the separating
+   * that the hairline could not — see frame `30 Landing full page — signed in`.
+   * One new ink value, no new hue.
+   */
+  --color-stone-950: #1c1916; /* the footer ground, beneath the ink band */
 
   /*
    * Font stacks. The `--font-*-face` variables are emitted by `next/font` in
