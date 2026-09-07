@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { users } from '@vendor-marketplace/db/schema';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { bookingContextFor } from '../payments/payments.service.js';
 import { reconcileClerkUsers, type ClerkApiUser } from './clerk.reconcile.js';
 
 /**
@@ -43,6 +44,13 @@ describe('reconcileClerkUsers', () => {
     await harness.database.db.delete(users);
   });
 
+  /*
+   * The real context off the harness instance, not a hand-built stand-in (#433):
+   * retiring a user now refunds its bookings, and the pass has to be given
+   * exactly what the live webhook is given.
+   */
+  const context = () => bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000');
+
   async function seed(clerkUserId: string, overrides: Record<string, unknown> = {}) {
     await harness.database.db.insert(users).values({
       clerkUserId,
@@ -69,10 +77,7 @@ describe('reconcileClerkUsers', () => {
       lastName: 'Goble',
     });
 
-    const summary = await reconcileClerkUsers(
-      harness.database.db,
-      clerkHolding(clerkUser('user_a')),
-    );
+    const summary = await reconcileClerkUsers(context(), clerkHolding(clerkUser('user_a')));
 
     expect(summary).toMatchObject({ examined: 1, updated: 1, deleted: 0, unchanged: 0 });
 
@@ -85,7 +90,7 @@ describe('reconcileClerkUsers', () => {
     await seed('user_a', { email: 'old@example.com' });
 
     await reconcileClerkUsers(
-      harness.database.db,
+      context(),
       clerkHolding(
         clerkUser('user_a', {
           emailAddresses: [
@@ -107,7 +112,7 @@ describe('reconcileClerkUsers', () => {
       avatarUrl: 'https://img.clerk.com/old.png',
     });
 
-    await reconcileClerkUsers(harness.database.db, clerkHolding(clerkUser('user_a')));
+    await reconcileClerkUsers(context(), clerkHolding(clerkUser('user_a')));
 
     const [row] = await read('user_a');
     expect(row?.avatarUrl).toBe('https://img.clerk.com/katherine.png');
@@ -121,7 +126,7 @@ describe('reconcileClerkUsers', () => {
   it('retires a row whose Clerk identity no longer exists', async () => {
     await seed('user_gone');
 
-    const summary = await reconcileClerkUsers(harness.database.db, clerkHolding());
+    const summary = await reconcileClerkUsers(context(), clerkHolding());
 
     expect(summary).toMatchObject({ examined: 1, deleted: 1, updated: 0 });
 
@@ -138,7 +143,7 @@ describe('reconcileClerkUsers', () => {
     await seed('user_a');
 
     await reconcileClerkUsers(
-      harness.database.db,
+      context(),
       clerkHolding(clerkUser('user_a'), clerkUser('user_stranger')),
     );
 
@@ -151,15 +156,12 @@ describe('reconcileClerkUsers', () => {
     await seed('user_a', { email: 'katherine@example.com', firstName: 'Kathryn' });
     await seed('user_gone');
 
-    const first = await reconcileClerkUsers(harness.database.db, clerkHolding(clerkUser('user_a')));
+    const first = await reconcileClerkUsers(context(), clerkHolding(clerkUser('user_a')));
     expect(first).toMatchObject({ examined: 2, updated: 1, deleted: 1, unchanged: 0 });
 
     const [before] = await read('user_a');
 
-    const second = await reconcileClerkUsers(
-      harness.database.db,
-      clerkHolding(clerkUser('user_a')),
-    );
+    const second = await reconcileClerkUsers(context(), clerkHolding(clerkUser('user_a')));
 
     // The deleted row is gone from the live set, so only the corrected one remains.
     expect(second).toMatchObject({ examined: 1, updated: 0, deleted: 0, unchanged: 1 });
@@ -182,7 +184,7 @@ describe('reconcileClerkUsers', () => {
     });
 
     const summary = await reconcileClerkUsers(
-      harness.database.db,
+      context(),
       clerkHolding(clerkUser('user_a', { firstName: null, lastName: null })),
     );
 
@@ -196,7 +198,7 @@ describe('reconcileClerkUsers', () => {
   it('never rewrites the local role', async () => {
     await seed('user_a', { email: 'katherine@example.com', role: 'vendor', firstName: 'Kathryn' });
 
-    await reconcileClerkUsers(harness.database.db, clerkHolding(clerkUser('user_a')));
+    await reconcileClerkUsers(context(), clerkHolding(clerkUser('user_a')));
 
     const [row] = await read('user_a');
     expect(row?.role).toBe('vendor');
@@ -205,7 +207,7 @@ describe('reconcileClerkUsers', () => {
   it('ignores a row already retired, rather than deleting it twice', async () => {
     await seed('user_gone', { deletedAt: new Date() });
 
-    const summary = await reconcileClerkUsers(harness.database.db, clerkHolding());
+    const summary = await reconcileClerkUsers(context(), clerkHolding());
 
     expect(summary).toMatchObject({ examined: 0, deleted: 0 });
   });
@@ -221,7 +223,7 @@ describe('reconcileClerkUsers', () => {
     await seed('seed_mkt_customer_0');
 
     const clerk = clerkHolding();
-    const summary = await reconcileClerkUsers(harness.database.db, clerk);
+    const summary = await reconcileClerkUsers(context(), clerk);
 
     expect(summary).toMatchObject({ examined: 0, deleted: 0, skipped: 2 });
     expect(clerk.getUserList).not.toHaveBeenCalled();
@@ -234,10 +236,7 @@ describe('reconcileClerkUsers', () => {
     await seed('seed_mkt_customer_0');
     await seed('user_a', { email: 'katherine@example.com', firstName: 'Kathryn' });
 
-    const summary = await reconcileClerkUsers(
-      harness.database.db,
-      clerkHolding(clerkUser('user_a')),
-    );
+    const summary = await reconcileClerkUsers(context(), clerkHolding(clerkUser('user_a')));
 
     expect(summary).toMatchObject({ examined: 1, updated: 1, skipped: 1 });
   });
@@ -249,7 +248,7 @@ describe('reconcileClerkUsers', () => {
     }
     const clerk = clerkHolding();
 
-    await reconcileClerkUsers(harness.database.db, clerk);
+    await reconcileClerkUsers(context(), clerk);
 
     expect(clerk.getUserList).toHaveBeenCalledTimes(1);
     expect(clerk.getUserList.mock.calls[0]?.[0].userId).toHaveLength(5);
@@ -263,11 +262,9 @@ describe('reconcileClerkUsers', () => {
     await seed('user_a', { email: 'katherine@example.com', firstName: 'Kathryn' });
     await seed('user_gone');
 
-    const summary = await reconcileClerkUsers(
-      harness.database.db,
-      clerkHolding(clerkUser('user_a')),
-      { dryRun: true },
-    );
+    const summary = await reconcileClerkUsers(context(), clerkHolding(clerkUser('user_a')), {
+      dryRun: true,
+    });
 
     expect(summary).toMatchObject({ examined: 2, updated: 1, deleted: 1 });
 
@@ -280,7 +277,7 @@ describe('reconcileClerkUsers', () => {
   it('does nothing, and asks Clerk nothing, when there are no local rows', async () => {
     const clerk = clerkHolding();
 
-    const summary = await reconcileClerkUsers(harness.database.db, clerk);
+    const summary = await reconcileClerkUsers(context(), clerk);
 
     expect(summary).toEqual({ examined: 0, updated: 0, deleted: 0, unchanged: 0, skipped: 0 });
     expect(clerk.getUserList).not.toHaveBeenCalled();
@@ -290,7 +287,7 @@ describe('reconcileClerkUsers', () => {
   it('accepts either shape the Clerk client returns', async () => {
     await seed('user_a', { email: 'katherine@example.com', firstName: 'Kathryn' });
 
-    const summary = await reconcileClerkUsers(harness.database.db, {
+    const summary = await reconcileClerkUsers(context(), {
       getUserList: async () => [clerkUser('user_a')],
     });
 

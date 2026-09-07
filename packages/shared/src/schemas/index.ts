@@ -2215,9 +2215,35 @@ export const adminPaginationShape = {
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(ADMIN_PAGE_SIZE),
 };
 
-export const ADMIN_VENDOR_STATUSES = ['live', 'review', 'flagged', 'paused'] as const;
+/**
+ * `retired` is the account, not the listing (#433).
+ *
+ * The other four are all states a vendor can move between: a paused storefront
+ * publishes again, a flagged one is reinstated. `retired` is none of those — the
+ * owner deleted their Clerk identity, nothing in the product can undo it, and
+ * the operator's only useful question about the row is which of their bookings
+ * it unwound. Without it a deleted account read as `review`, which is the label
+ * for a vendor still waiting to be let in.
+ */
+export const ADMIN_VENDOR_STATUSES = ['live', 'review', 'flagged', 'paused', 'retired'] as const;
 export const adminVendorStatusSchema = z.enum(ADMIN_VENDOR_STATUSES);
 export type AdminVendorStatus = (typeof ADMIN_VENDOR_STATUSES)[number];
+
+/**
+ * What each status is called on screen — the pill in the table and the option in
+ * the filter, from one place.
+ *
+ * The two were about to be two lists: the pill map lives in a client component
+ * and the filter is built in a server one, so a status added to the enum could
+ * be labelled twice and differently. Here they cannot drift.
+ */
+export const ADMIN_VENDOR_STATUS_LABELS: Record<AdminVendorStatus, string> = {
+  live: 'Live',
+  review: 'Review',
+  flagged: 'Flagged',
+  paused: 'Paused',
+  retired: 'Retired',
+};
 
 /** Whether a vendor has finished Stripe onboarding — the frame's `Payouts` filter. */
 export const ADMIN_PAYOUT_FILTERS = ['connected', 'not-connected'] as const;

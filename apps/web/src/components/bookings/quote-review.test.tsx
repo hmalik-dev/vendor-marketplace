@@ -326,7 +326,7 @@ describe('QuoteReview', () => {
 
       expect(
         screen.getByText(
-          `${BRAND_NAME} cancelled this booking on June 1, 2026, because an account involved was suspended.`,
+          `${BRAND_NAME} cancelled this booking on June 1, 2026, because an account involved is no longer active.`,
         ),
       ).toBeDefined();
       expect(screen.queryByText(/you cancelled/i)).toBeNull();

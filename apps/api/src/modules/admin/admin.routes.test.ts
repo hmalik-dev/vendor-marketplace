@@ -341,7 +341,7 @@ describe('admin routes', () => {
   });
 
   describe('GET /admin/vendors', () => {
-    it('derives the four statuses from the columns that record state', async () => {
+    it('derives the five statuses from the columns that record state', async () => {
       await signIn(ADMIN, true);
       const vendor = await createVendorProfile({ isPublished: true });
 
@@ -392,6 +392,68 @@ describe('admin routes', () => {
         headers: bearer(ADMIN),
       });
       expect(flagged.json().items[0].status).toBe('flagged');
+
+      /*
+       * Retirement outranks the ban (#433). This row is *both* banned and
+       * retired, which is the case that decides the precedence: an account
+       * whose owner deleted their Clerk identity cannot be reinstated, so
+       * `flagged` would offer the operator a lever that does nothing.
+       */
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ isDeleted: true })
+        .where(eq(vendorProfiles.id, vendor.profileId));
+      const retired = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/vendors',
+        headers: bearer(ADMIN),
+      });
+      expect(retired.json().items[0].status).toBe('retired');
+    });
+
+    /*
+     * The console is the only place a retired account is visible at all, which
+     * is the point of listing them (#433): every public read hides them, so an
+     * operator asking "what happened to this vendor" has nowhere else to look.
+     */
+    it('lists a retired vendor and filters to it, and keeps it out of the other statuses', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await createVendorProfile({ isPublished: true });
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ isDeleted: true, isPublished: false })
+        .where(eq(vendorProfiles.id, vendor.profileId));
+
+      const unfiltered = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/vendors',
+        headers: bearer(ADMIN),
+      });
+      expect(unfiltered.json().items).toHaveLength(1);
+      expect(unfiltered.json().items[0].status).toBe('retired');
+
+      const filtered = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/vendors?status=retired',
+        headers: bearer(ADMIN),
+      });
+      expect(filtered.json().items).toHaveLength(1);
+      expect(filtered.json().total).toBe(1);
+
+      /*
+       * `review` is the label a retired account used to read as, because
+       * `deriveVendorStatus` knew nothing about the column and the row is
+       * unpublished with no Stripe account. The filter and the label have to
+       * agree, or the count above the table describes a different set from the
+       * rows under it.
+       */
+      const review = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/vendors?status=review',
+        headers: bearer(ADMIN),
+      });
+      expect(review.json().items).toHaveLength(0);
+      expect(review.json().total).toBe(0);
     });
 
     it('counts the awaiting-review badge over the unfiltered set, so it survives a status filter', async () => {
@@ -1124,6 +1186,48 @@ describe('admin routes', () => {
         headers: bearer(ADMIN),
       });
       expect(ban.json()).toMatchObject({ refundsFailed: 1, bookingsCancelled: 0 });
+
+      const listed = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/bookings?flag=refund-stuck',
+        headers: bearer(ADMIN),
+      });
+
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().total).toBe(1);
+      expect(listed.json().items[0]).toMatchObject({
+        id: stuck,
+        status: 'confirmed',
+        refundStuck: true,
+      });
+    });
+
+    /*
+     * The same list, for the other way an account goes away (#433).
+     *
+     * `refundStuck` was keyed on `is_banned` alone, because a ban was the only
+     * thing that unwound an account when #415 built it. A deletion strands a
+     * booking the same two ways and writes `deleted_at`, never `is_banned` — so
+     * the one surface built to find stranded money filtered out every booking a
+     * deletion stranded, and told the operator "No refunds are stuck" while a
+     * customer's payment sat at Stripe.
+     */
+    it('lists a confirmed booking left behind on a retired account', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const stuck = await createFutureBooking(customerId, vendor.profileId);
+
+      // Retired the way `retireUserByClerkId` retires: the user row and the
+      // storefront, and nothing touching `is_banned`.
+      await harness.database.db
+        .update(users)
+        .set({ deletedAt: new Date() })
+        .where(eq(users.id, vendor.userId));
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ isDeleted: true, isPublished: false })
+        .where(eq(vendorProfiles.id, vendor.profileId));
 
       const listed = await harness.app.inject({
         method: 'GET',

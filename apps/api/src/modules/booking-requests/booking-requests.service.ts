@@ -49,6 +49,7 @@ import {
   findPackagesByIds,
   findRequestById,
   findRequests,
+  findBookableVendorById,
   findVendorById,
   findVendorByUserId,
   findVendorUserId,
@@ -480,9 +481,16 @@ export async function createBookingRequest(
   now: Date = new Date(),
   mail?: NotificationEmailDeps,
 ): Promise<BookingRequestOutcome> {
-  const vendor = await findVendorById(db, input.vendorId);
+  /*
+   * The visibility test is the query, not three checks after it (#433). It used
+   * to read `isDeleted` and `isPublished` off a row fetched regardless of
+   * either, which meant it agreed with the public profile page on two columns
+   * and knew nothing of the third — a vendor whose owner had deleted their
+   * Clerk identity was unreachable everywhere and still bookable here.
+   */
+  const vendor = await findBookableVendorById(db, input.vendorId);
 
-  if (!vendor || vendor.isDeleted || !vendor.isPublished) {
+  if (!vendor) {
     throw notFound('That vendor is not taking requests');
   }
 

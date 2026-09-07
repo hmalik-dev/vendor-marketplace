@@ -67,16 +67,24 @@ function whatHappened(settlement: Settlement, audience: SettlementAudience): str
     /*
      * The same sentence to both, and deliberately not "the *other* account".
      *
-     * `cancelledBy: 'admin'` records who acted, not which side was suspended,
-     * and `setUserBanned` unwinds a booking whichever party it banned. Naming
-     * the other side reads as true only while the ban lasts — a ban is
-     * reversible, an unban does not revisit the rows it cancelled, and the
-     * reinstated account then opens its own booking and is told the
-     * counterparty was suspended. That is false about the reader and a
-     * fabricated moderation claim about a third party, from a column that
-     * never recorded the direction.
+     * `cancelledBy: 'admin'` records who acted, not which side was affected,
+     * and the unwind runs a booking whichever party it was about. Naming the
+     * other side reads as true only while the ban lasts — a ban is reversible,
+     * an unban does not revisit the rows it cancelled, and the reinstated
+     * account then opens its own booking and is told the counterparty was
+     * suspended. That is false about the reader and a fabricated moderation
+     * claim about a third party, from a column that never recorded the
+     * direction.
+     *
+     * **"no longer active", not "suspended" (#433).** The column no longer
+     * means only a ban: a vendor deleting their Clerk identity now runs the
+     * same unwind and writes the same `admin`, so the old sentence told a
+     * customer that an account had been *suspended* when nobody had moderated
+     * anything — the fabricated moderation claim this comment already argues
+     * against, arriving through the other door. The wording has to be true of
+     * both a suspension and a closure, and this is the phrase that is.
      */
-    return `${BRAND_NAME} cancelled this booking${when}, because an account involved was suspended.`;
+    return `${BRAND_NAME} cancelled this booking${when}, because an account involved is no longer active.`;
   }
 
   if (settlement.cancelledBy === 'customer') {

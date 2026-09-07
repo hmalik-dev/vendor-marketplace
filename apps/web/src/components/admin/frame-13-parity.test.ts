@@ -66,6 +66,13 @@ const header = read('src/components/admin/admin-header.tsx');
 const nav = read('src/components/admin/admin-nav.tsx');
 const surface = read('src/components/admin/admin-surface.tsx');
 const vendorsPage = read('src/app/admin/vendors/page.tsx');
+/*
+ * The labels moved out of the component and into the shared enum (#433), so the
+ * table's pill and the filter bar's options cannot be worded differently. The
+ * tone stays in the component, because it is a rendering decision; the word is a
+ * contract, so it is read from where the contract lives.
+ */
+const statusLabels = read('../../packages/shared/src/schemas/index.ts');
 
 describe('the inverted header (frame `13`)', () => {
   it('reads the ground and the hairline off the frame', () => {
@@ -414,8 +421,29 @@ describe('the status pills', () => {
       expect(themeCss, `${label} text`).toContain(textToken);
       expect(fillToken.toLowerCase(), `${label} fill`).toContain(fill.toLowerCase());
       expect(textToken.toLowerCase(), `${label} text`).toContain(text.toLowerCase());
-      expect(vendorTable, label).toContain(`{ tone: '${tone}', label: '${label}' }`);
+      /*
+       * Tone and word are asserted in the two places they now live. The needle
+       * carries its trailing comma so it matches the map entry and not a
+       * mention of the same word in the prose beside it.
+       */
+      const status = label.toLowerCase();
+      expect(vendorTable, label).toContain(`${status}: '${tone}',`);
+      expect(statusLabels, label).toContain(`${status}: '${label}',`);
     }
+  });
+
+  /*
+   * `Retired` is the one status the frame does not draw, because the state did
+   * not exist when frame `13` was cut (#433). It is asserted here rather than
+   * left to the frame loop above so that its absence from the frame reads as a
+   * recorded deviation instead of as a gap — and so that it cannot quietly
+   * acquire a colour the design never specified. It shares `Paused`'s `inert`:
+   * the frame's vocabulary for a storefront that is not trading.
+   */
+  it('gives the retired status no colour the frame did not already draw', () => {
+    expect(pillsInFrame().map(([label]) => label)).not.toContain('Retired');
+    expect(vendorTable).toContain("retired: 'inert',");
+    expect(statusLabels).toContain("retired: 'Retired',");
   });
 
   /*

@@ -14,6 +14,7 @@ import {
 } from '@vendor-marketplace/db/schema';
 import type { NotificationType } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
 
 export interface ConversationListRow {
   id: string;
@@ -368,8 +369,11 @@ export async function markConversationRead(
 }
 
 /**
- * The vendor a customer may open a thread with from their profile: published,
- * not deleted, and reachable by the slug in the URL they were reading.
+ * The vendor a customer may open a thread with from their profile: visible on
+ * the same terms the profile page itself is, and reachable by the slug in the
+ * URL they were reading. It shares `VENDOR_VISIBLE` with that page rather than
+ * spelling the predicate again — a thread opened against a storefront nobody
+ * can reach is a message nobody will answer.
  */
 export async function findOpenableVendor(
   db: AppDatabase,
@@ -382,13 +386,7 @@ export async function findOpenableVendor(
   const rows = await db
     .select({ id: vendorProfiles.id, userId: vendorProfiles.userId })
     .from(vendorProfiles)
-    .where(
-      and(
-        eq(vendorProfiles.slug, slug),
-        eq(vendorProfiles.isPublished, true),
-        eq(vendorProfiles.isDeleted, false),
-      ),
-    )
+    .where(and(eq(vendorProfiles.slug, slug), VENDOR_VISIBLE))
     .limit(1);
 
   return rows?.[0] ?? null;

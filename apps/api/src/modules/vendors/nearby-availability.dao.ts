@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { categories, vendorCategories, vendorProfiles } from '@vendor-marketplace/db/schema';
 import type { NearbyAvailabilityQuery, NearbyVendor } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { VENDOR_VISIBLE } from './vendor-visibility.js';
 import { isNewVendor } from './vendor-recency.js';
 
 /**
@@ -20,8 +21,6 @@ import { isNewVendor } from './vendor-recency.js';
  * correlated subquery resolves to the *inner* table and silently matches
  * nothing. Every value that varies is still a bound parameter.
  */
-
-const VISIBLE = and(eq(vendorProfiles.isPublished, true), eq(vendorProfiles.isDeleted, false));
 
 /**
  * The nearest day this vendor is free, as `YYYY-MM-DD`, or null.
@@ -102,7 +101,7 @@ export async function findVendorsFreeNearby(
    */
   now: Date,
 ): Promise<NearbyAvailabilityPage> {
-  const conditions = [VISIBLE, UNAVAILABLE_ON_TARGET(query.date)];
+  const conditions = [VENDOR_VISIBLE, UNAVAILABLE_ON_TARGET(query.date)];
 
   if (query.city) {
     conditions.push(sql`lower(${vendorProfiles.city}) = ${query.city.toLowerCase()}`);

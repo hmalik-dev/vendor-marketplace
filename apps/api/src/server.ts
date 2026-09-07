@@ -225,6 +225,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   });
   await app.register(clerkWebhookRoutes, {
     signingSecret: env.CLERK_WEBHOOK_SECRET,
+    webOrigin: canonicalWebOrigin(env),
     ...options.webhooks,
   });
   await app.register(paymentRoutes, {

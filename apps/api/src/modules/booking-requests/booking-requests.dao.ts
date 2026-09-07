@@ -35,6 +35,7 @@ import {
   type PageWindow,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
 
 /** Newest first — both hubs read a request queue, and the queue is a stack. */
 const newestFirst = [desc(bookingRequests.createdAt)];
@@ -321,6 +322,33 @@ export async function findVendorById(
     .select(vendorSummaryColumns)
     .from(vendorProfiles)
     .where(eq(vendorProfiles.id, vendorId))
+    .limit(1);
+
+  return rows?.[0] ?? null;
+}
+
+/**
+ * The vendor profile a customer may actually send a request to (#433).
+ *
+ * `findVendorById` above deliberately ignores publication state, because the
+ * flows that move an existing request must keep working on a storefront that
+ * has since come down. Creating a request is the opposite case, and it reads
+ * the same `VENDOR_VISIBLE` predicate the public profile page does — including
+ * the owner's `deleted_at`, so a retirement that failed to write `is_deleted`
+ * still cannot leave an unanswerable account bookable.
+ */
+export async function findBookableVendorById(
+  db: AppDatabase,
+  vendorId: string,
+): Promise<VendorSummaryRow | null> {
+  if (!vendorId) {
+    return null;
+  }
+
+  const rows = await db
+    .select(vendorSummaryColumns)
+    .from(vendorProfiles)
+    .where(and(eq(vendorProfiles.id, vendorId), VENDOR_VISIBLE))
     .limit(1);
 
   return rows?.[0] ?? null;

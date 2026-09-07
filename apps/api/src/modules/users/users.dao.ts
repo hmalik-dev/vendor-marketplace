@@ -2,6 +2,7 @@ import { and, eq, exists, isNull, sql } from 'drizzle-orm';
 import {
   legalAcceptances,
   users,
+  vendorProfiles,
   type NewUserRow,
   type UserRow,
 } from '@vendor-marketplace/db/schema';
@@ -168,10 +169,37 @@ export async function updateUserByClerkId(
 }
 
 /**
- * Retires the local row for a deleted Clerk identity. Bookings, reviews, and
- * messages reference this user, so the row stays for referential integrity.
+ * Retires the local row for a deleted Clerk identity, **and the storefront it
+ * owns** (#433). Bookings, reviews, and messages reference this user, so the row
+ * stays for referential integrity.
+ *
+ * One transaction, because the two halves are one fact. This used to set
+ * `deleted_at` and stop: `vendor_profiles.is_deleted` is the tombstone four
+ * public reads check, nothing outside the seed scripts ever wrote it, and no
+ * visibility predicate joined `users` — so a vendor who deleted their Clerk
+ * identity kept a published, searchable, bookable profile, and a customer could
+ * pay for a booking against an account that could never sign in to answer it.
+ *
+ * `is_published` comes down as well as `is_deleted`, not either: `is_deleted` is
+ * the tombstone the reads already check, and leaving `is_published` true would
+ * make any future un-delete republish the storefront silently.
+ *
+ * Returns `null` for an identity that was already retired, which is what makes a
+ * redelivered `user.deleted` a no-op rather than a second unwind — and what
+ * lets the caller use this as its claim on the event.
+ *
+ * **What happens to the rows written before this was corrected.** Accounts
+ * deleted under the old `deleted_at`-only path are not backfilled, and
+ * deliberately not: they keep `is_deleted = false`, so every read that matters
+ * already hides them — `OWNER_NOT_DELETED` on the public side, `RETIRED` on the
+ * console — without touching a row. What is **not** repaired is their money:
+ * those accounts still hold undeclined open requests and unrefunded confirmed
+ * future bookings, and nothing revisits them, because no second `user.deleted`
+ * will arrive. `/admin/bookings?flag=refund-stuck` lists them for an operator,
+ * which is the whole of the answer; it is a pre-launch database and there is no
+ * migration worth writing for it.
  */
-export async function softDeleteUserByClerkId(
+export async function retireUserByClerkId(
   db: AppDatabase,
   clerkUserId: string,
 ): Promise<UserRow | null> {
@@ -179,13 +207,26 @@ export async function softDeleteUserByClerkId(
     return null;
   }
 
-  const updated = await db
-    .update(users)
-    .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
-    .where(and(eq(users.clerkUserId, clerkUserId), notDeleted))
-    .returning();
+  return db.transaction(async (tx) => {
+    const updated = await tx
+      .update(users)
+      .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+      .where(and(eq(users.clerkUserId, clerkUserId), notDeleted))
+      .returning();
 
-  return updated?.[0] ?? null;
+    const row = updated?.[0];
+
+    if (!row) {
+      return null;
+    }
+
+    await tx
+      .update(vendorProfiles)
+      .set({ isDeleted: true, isPublished: false, updatedAt: sql`now()` })
+      .where(eq(vendorProfiles.userId, row.id));
+
+    return row;
+  });
 }
 
 /**
