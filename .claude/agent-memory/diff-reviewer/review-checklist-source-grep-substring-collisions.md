@@ -45,5 +45,17 @@ match `px-3.5` and `lg:border-r-2`. Widening the nav gutter to `px-3.5` kept all
 arithmetic, ask which assertion would have to fail if that number moved; a
 `toContain` next to a literal is decoration.**
 
+**The responsive-ladder variant (#426).** The colliding match is the _same_
+class under a breakpoint prefix. `category-select.test.tsx` pinned the caret's
+four-step ladder with `toContain('text-[11px]')`, `toContain('sm:text-[9px]')`,
+`toContain('lg:text-[10px]')` and `toContain('min-[90rem]:text-[11px]')` — but
+the base step `text-[11px]` is a substring of `min-[90rem]:text-[11px]`, so
+deleting the 390px step (a measured frame value) left 33/33 green. **In a
+mobile-first ladder the base step is the one that collides with every prefixed
+step, and it is also the one no larger breakpoint can cover for.** Assert it
+with an anchored regex (`/(?:^|\s)text-\[11px\](?:\s|$)/`), the way
+`refine-bar.test.tsx` already does for `gap-2`.
+
 Related: [[review-checklist-pseudo-element-hit-areas]],
-[[review-checklist-unpinned-safety-constants]].
+[[review-checklist-unpinned-safety-constants]],
+[[review-checklist-focus-opener-dead-when-already-focused]].

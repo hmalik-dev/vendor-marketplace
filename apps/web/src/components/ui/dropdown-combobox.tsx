@@ -678,12 +678,40 @@ export function ComboboxDropdown({
           onMouseDown={
             anchored
               ? (event) => {
-                  if ((event.target as HTMLElement).closest('input, button, label')) {
+                  /*
+                    Bounded by `currentTarget`, because `closest` does not stop
+                    at this box — it walks the whole ancestor chain. Nothing
+                    above the segment is a `label` or a `button` today, so the
+                    unbounded form is correct *by accident of the layout*: mount
+                    this field inside one and every click in the segment would
+                    short-circuit, including on the box itself, and click-to-
+                    focus would die with the padding test still green.
+                  */
+                  const control = (event.target as HTMLElement).closest('input, button, label');
+
+                  if (control && event.currentTarget.contains(control)) {
                     return;
                   }
 
                   event.preventDefault();
                   inputRef.current?.focus();
+
+                  /*
+                    **`focus()` is not enough**, and the input's own `onClick`
+                    above already says why: focus that is *already* in the field
+                    fires no `focus` event, so the opener no-ops. That is the
+                    ordinary state after `Escape` or a keyboard commit — the
+                    customer changing their mind about a category — and it left
+                    the caret, the one glyph in the segment that looks like the
+                    thing you click to open the list, doing nothing.
+
+                    Opens and never toggles, matching that handler exactly: a
+                    toggle here closed the panel on the click that placed the
+                    caret, which is why `triggerMode="anchor"` gave Radix's up.
+                  */
+                  if (openOnFocus) {
+                    setOpen(true);
+                  }
                 }
               : undefined
           }

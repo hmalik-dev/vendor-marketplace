@@ -682,19 +682,77 @@ describe('CategorySelect — the disclosure caret (#426)', () => {
     expect(caret().textContent).toBe('▴');
   });
 
+  /*
+   * **And when the field already holds focus**, which is the state a customer
+   * is in every time they change their mind about a category.
+   *
+   * The segment's mousedown opened the panel by calling `focus()`, and
+   * `focus()` on an already-focused element fires no `focus` event — so the
+   * opener no-opped and the caret was inert. It is the identical defect the
+   * input's own `onClick` exists to fix, and its comment says so: "after a
+   * keyboard commit focus is already in the field — so no focus event fires and
+   * clicking it did nothing at all, twice in a row." The caret is not inside
+   * the input, so that handler never ran for it.
+   *
+   * Two routes reach the state, and both are ordinary use.
+   */
+  it('reopens when the caret is clicked after Escape left focus in the field', async () => {
+    const user = userEvent.setup();
+    renderSelect('photography');
+
+    await user.click(trigger());
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('false'));
+    expect(document.activeElement).toBe(trigger());
+
+    await user.click(caret());
+
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
+    expect(caret().textContent).toBe('▴');
+  });
+
+  it('reopens when the caret is clicked after a keyboard commit', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    await user.click(trigger());
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
+
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('false'));
+
+    await user.click(caret());
+
+    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
+  });
+
+  /*
+   * The frames' size ladder, per density: hero 11px at 390, 9px at 768, 10px at
+   * 1024, 11px at 1440; compact 9px.
+   *
+   * **Asserted against the split class list, never with `toContain`.** A bare
+   * `toContain('text-[11px]')` is satisfied by the `min-[90rem]:text-[11px]` in
+   * the same string, so the 390 step — the one no larger breakpoint covers for
+   * — was pinned by nothing: deleting it left the suite green. `refine-bar.test.ts`
+   * hit the same collision and anchored its own check for the same reason.
+   */
+  const classes = (element: HTMLElement): string[] => element.className.split(/\s+/);
+
   it('carries the compact bar’s 9px, per frame `02`', () => {
     renderSelect('photography');
 
-    expect(caret().className).toContain('text-[9px]');
-    expect(caret().className).not.toContain('lg:text-[10px]');
+    expect(classes(caret())).toContain('text-[9px]');
+    expect(classes(caret())).not.toContain('lg:text-[10px]');
   });
 
   it('carries the hero ladder — 11 / 9 / 10 / 11 across the four widths', () => {
     renderSelect('photography', 'hero');
 
-    expect(caret().className).toContain('text-[11px]');
-    expect(caret().className).toContain('sm:text-[9px]');
-    expect(caret().className).toContain('lg:text-[10px]');
-    expect(caret().className).toContain('min-[90rem]:text-[11px]');
+    expect(classes(caret())).toContain('text-[11px]');
+    expect(classes(caret())).toContain('sm:text-[9px]');
+    expect(classes(caret())).toContain('lg:text-[10px]');
+    expect(classes(caret())).toContain('min-[90rem]:text-[11px]');
   });
 });

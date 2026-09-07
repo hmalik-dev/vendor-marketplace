@@ -140,21 +140,32 @@ describe('only the vendor-type trigger draws the unicode disclosure caret (D25, 
     }
 
     /*
-     * Every rendered occurrence is inside the `CARETS` map, and the element
-     * that prints it carries `aria-hidden` — D25 found two chips announcing
-     * "black down-pointing small triangle, button" because the glyph was in a
-     * template literal inside the control's own accessible name.
+     * And every occurrence is inside the `CARETS` declaration — nowhere else,
+     * and never inlined into JSX where it could land in a control's accessible
+     * name. D25 found two chips announcing "All categories black down-pointing
+     * small triangle, button" for exactly that reason.
+     *
+     * The declaration is **blanked by shape rather than matched by its exact
+     * text**, and deliberately: pinning the line verbatim would make this fail
+     * on a Prettier reflow, which is a formatting change reporting itself as a
+     * caret escaping. What is asserted is that nothing draws a glyph once the
+     * declaration is removed.
+     *
+     * That the caret element carries `aria-hidden` is asserted on the *rendered
+     * node* in `category-select.test.tsx` — a file-wide substring here would
+     * pass on any unrelated `aria-hidden` in the same file.
      */
-    expect(code).toContain("const CARETS = { closed: '▾', open: '▴' } as const;");
-    expect(code).toContain('aria-hidden="true"');
+    const declaration = /const CARETS\s*=[\s\S]*?as const;/.exec(code);
 
-    const lines = code.split('\n');
-    const carrying = lines.flatMap((line, index) =>
-      CARETS.some((caret) => line.includes(caret)) ? [index] : [],
-    );
-    const declaration = lines.findIndex((line) => line.includes('const CARETS ='));
+    expect(declaration, 'the glyphs should live in one named declaration').not.toBeNull();
 
-    expect(carrying).toEqual([declaration]);
+    const withoutDeclaration = code.replace((declaration as RegExpExecArray)[0], '');
+
+    for (const caret of CARETS) {
+      expect(withoutDeclaration, `${picker} should draw ${caret} only via CARETS`).not.toContain(
+        caret,
+      );
+    }
   });
 
   /*

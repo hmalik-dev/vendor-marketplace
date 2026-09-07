@@ -48,5 +48,13 @@ transaction wrapper and 70 lines of new tests I had not read, and one finding
   you own the tree. Keep a `cp` backup, and treat "my edit vanished" as evidence
   someone else committed, not as a tool failure.
 
+**It goes clean → dirty too (#426).** `git status` was clean at the first tool
+call; twenty minutes later the lane had written fixes for both findings into the
+tree, so `sed -n` on `category-select.tsx` and `dropdown-combobox.tsx` returned
+lines the reviewed commit does not contain, with line numbers that do not match
+it either. **Reading a file is a probe.** Quote line numbers from
+`git show <sha>:<path>`, not from the working tree, and re-run `git status`
+before writing the report.
+
 Related: [[review-checklist-source-grep-substring-collisions]],
 [[review-checklist-controlled-index-drops-the-selection-seed]]
