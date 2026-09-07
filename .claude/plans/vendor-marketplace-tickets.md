@@ -247,9 +247,14 @@ the silent-submit work #388 closed:
   restores focus — a keyboard user t |
 storefront, each of which tells the reader something untrue. |
 | **422** | **One image fallback, everywhere — a broken image must degrade the way an absent one does** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `storage` | **Filed 2026-09-06 on the account holder's instruction**, verbatim: *"there should always be a fallback image for a broken or blank image no matter where - card, profile pic, etc. anywhere pictures are used"*. **The design already exists and is ruled** — D17 and D18, drawn in frame `26 State library`: a **neutral tone block** at `stone-250 #ece6dc`, the image's exact dimensions and the container's radius, nothing inside it. The token is already minted. **What is missing is the failure half.** The app handles *absent* — a published vendor with no `coverImageUrl` gets the block — but **nothing anywhere handles a load failure**: `grep onError` across `avatar.tsx`, `stock-photo.tsx`, `vendor-card.tsx`, `profile-header.tsx` and `portfolio-pane.tsx` returns nothing. A URL that exists and 404s, a bucket that is down, or a category card whose file was never shipped all render a browser-broken-image glyph on a public page. **The hatch is not the answer** — `03-components.md` and D17 both forbid it on a live surface. One shared mechanism, applied at every site that renders an image |
+| **423** | **Hold the money until the event has happened — separate charges and transfers, a dated release, and a dispute hold** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-09-06 on the account holder's ruling.** Today checkout is a **destination charge**: `transfer_data.destination` splits the money the instant the card succeeds, so a vendor booked for an event in March is paid in January and `createRecipientAccount` sets no payout schedule. **Replaces it with separate charges and transfers**, the Airbnb model adapted to single-day events: the customer pays into **Orla's** balance, and a scheduled job transfers the vendor's share **a fixed window after the event date** — not when anyone clicks a button. **The release is keyed to the date, never to a party's action:** the vendor is the one who benefits from marking a booking complete, so it proves nothing, and a vendor who forgets would strand the money forever. **A customer complaint pauses the release** — `disputed` already exists in `BOOKING_STATUSES` and is unused. **This also simplifies refunds:** before release nothing has been transferred, so a cancellation is a plain refund with no `reverse_transfer` and no way to push a vendor negative, which is the consequence D31 had to accept. **This is the money path — the bar is that every test drives the real state machine, not a mock that agrees with itself.** #416 shipped a refund that had never once worked, for months, because the double was more permissive than the gateway |
+| **424** | **Vendor dashboard: a pending payout with a real date, and an honest held state** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **#423** — it owns the release date, the held state and the API read this surface renders | `core` `stripe` | **Filed 2026-09-06 on the account holder's instruction**, split out of #423 so the money mechanics and the surface that reports them are separate reviewable units. The dashboard's payout line reads **`Paid out after each event`** — a dateless sentence chosen in #308 precisely because there was no payout schedule to read a date from. **#423 creates one.** This ticket replaces the sentence with a real amount and a real date, and says so when a dispute is holding it. **Every number here is read from the booking row at request time** — the amount is the stored `vendorPayoutCents`, never a recomputed fee, and the date is derived from the event date and `PAYOUT_RELEASE_HOURS`. **A payout figure that disagrees with what Stripe moves is worse than no figure at all**, which is why this carries the same testing bar as #423 rather than a lighter one |
+| **425** | **A customer has no way to report a problem with a booking** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **#423** (owns the `disputed` hold and the release window a report has to land inside) | `core` | **Filed 2026-09-06 on the account holder's instruction.** Measured first: **nothing in the web app lets a customer raise anything about a booking** — no dispute control, no `Report a problem`, no route — and **nothing anywhere writes `disputed`**, which appears only in read predicates in `customers.dao.ts` and `dashboard.dao.ts`. So the status #423 uses as its payout hold has no way to be reached by the person it exists for. Adds the entry point on the customer's booking, routed to **`/support` prefilled with that booking's context** — the pattern #421 already built for frame `16`, where an error's digest travels in `searchParams` and renders as attached, non-editable context. **The report is what places the hold**, so this is on the money path and carries the same testing bar: a report that silently fails to hold a payout is worse than no button |
+| **426** | **Put the caret back on the vendor-type picker — landing and search only** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 on the account holder's instruction**, verbatim: *"lets add a caret to the vendor type per the design - both to landing and browser - i removed it before but want it back"*. **This partially reverses D25**, which is the account holder's own override from 2026-08-31 removing `▾` from fourteen trigger sites — so it is a ruling changing, not a parity finding, and the reversal has to be recorded as deliberately as the original was. Frames `01 Landing` and `02 Search` both draw the caret, so this restores frame fidelity on those two. **Scope is the vendor-type picker on those two surfaces only** — the other twelve sites keep the override. **`dropdown-caret.test.ts` will go red and must be NARROWED, not deleted**: it is the assertion that stopped the caret returning after it came back twice as #228 and #338, and deleting it would let the glyph creep back to all fourteen. **Also decide the open-state signal**: D25 gave three triggers `font-semibold text-clay-600` on the value *because* they lost the caret as their only visible open signal — with the caret back, keeping both may be doubled signalling |
+| **427** | **Legal and money surfaces — the three static pages, the vendor agreement step, and the refund schedule at checkout** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#423** for the two claims that depend on it: `/terms` section 4 describes the hold-until-event mechanism, and the payout interval must read #423's constant rather than a second one | `core` `auth` `stripe` | **Filed 2026-09-06 with a full design.** The account holder supplied `design/delta-legal/` — `Orla-Legal-Surfaces.html` (frames **31, 32, 33**) and `LEGAL-SURFACES-PROMPT.md` — and asked for one ticket. **Frames 31-33 are NOT in `Orla - Screens.dc.html`**, which ends at 28, so the parity gate reads the delta bundle. Builds: a `LegalPage` reading layout that does not exist yet (the page scrolls, not a pane; 660px measure; 15px/1.85 prose), `/terms`, `/privacy` and `/cookies`, a sticky jump rail, a footer legal line, the **vendor agreement as step 3 of 5 in onboarding** with an immutable acceptance record, and the **refund schedule resolved into real dates and amounts above the pay control**. **THE SCHEDULE IN THE DESIGN CONTRADICTS THE CODE and must not ship as drawn** — see the detail section; the design says so itself |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06 after the closed rows were deleted: 4 rows — 2 Backlog and 2 `Deferred — needs a human`.** **#422 is the only row a session can start**; #370 is blocked behind #362, and #362 and #374 both need the account holder. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06 after #426 and #427 were filed: 9 rows — 7 Backlog and 2 `Deferred — needs a human`.** Startable now: **#422**, **#423** and **#426**. #424, #425 and #427 all wait on #423 — it owns the release date, the `disputed` hold and the payout constant they read. #370 waits on #362; #362 and #374 need the account holder. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1084,3 +1089,624 @@ stock and category art) and plain `<img>` (bucket content, which skips
       `src` at something that 404s. The whole defect is that the two paths differ.
 - [ ] Assert extent alongside the fallback: a tone block on a zero-height box has
       passed on nothing (`web-design-parity.md`).
+
+### #423: Hold the money until the event has happened — separate charges and transfers, a dated release, and a dispute hold
+
+**Milestone:** M4.5 | **Phase:** P1.5 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Blocked by:** None
+
+**Filed 2026-09-06 on the account holder's ruling**, after comparing against
+Airbnb: *"lets steal that airbnb payment functionality - airbnb however service
+start/end doesnt matter here as much since stays are for days and vendors are
+typically for 1 day."*
+
+#### What happens today, read from the code
+
+`createPaymentIntent` (`apps/api/src/lib/stripe.ts:446`) builds a **destination
+charge**:
+
+```
+application_fee_amount: <12%>,
+transfer_data: { destination: <vendor connected account> },
+```
+
+Stripe splits that **at the moment the card succeeds**. The vendor's 88% lands
+in their connected-account balance immediately, and `createRecipientAccount`
+sets **no `payout_schedule`**, so Stripe's automatic payouts move it to their
+bank on the default rolling schedule. **A vendor booked for an event in March is
+paid in January.** The event date is not involved.
+
+`markComplete` (`payments.service.ts:535`) exists, is vendor-only, and correctly
+refuses while the event is still ahead everywhere on Earth — but it **moves no
+money**. It sets a status and sends a notification.
+
+#### The model this adopts
+
+Airbnb holds the guest's money and pays the host about 24 hours **after
+check-in** — keyed to a date, never to the host confirming anything. Adapted
+here, where an event is a single day rather than a multi-night stay:
+
+1. The customer pays into **Orla's** balance. No `transfer_data`, no
+   `application_fee_amount` on the intent.
+2. A scheduled job transfers the vendor's share **`PAYOUT_RELEASE_HOURS` after
+   the event date**, and Orla keeps its commission.
+3. A customer complaint inside that window **holds the transfer** until it is
+   resolved.
+
+**The release is keyed to the date, never to a party's action.** This is the
+central design decision and it is deliberate: the vendor is the party who
+benefits from pressing `Mark complete`, so it evidences nothing about whether
+the event happened, and a vendor who never presses it would strand the money
+with no owner. `markComplete` stays as a status signal and a review prompt. **It
+must not gate the transfer.**
+
+#### Why this also makes refunds safer
+
+D31 accepted a real consequence: a full unwind reverses the vendor's transfer,
+which can drive a vendor who has already been paid out to a **negative
+balance**. Under separate charges and transfers, **a cancellation before release
+has nothing to reverse** — the money never left Orla. So:
+
+- before release: a plain `refunds.create`, no `reverse_transfer`, no
+  `refund_application_fee`, no possibility of a negative vendor balance;
+- after release: the existing `REFUND_UNWIND` path, unchanged.
+
+**Both paths must exist and the boundary between them is the release.** Do not
+delete the unwind — a booking cancelled after release still needs it.
+
+#### What already exists and must be used, not rebuilt
+
+- `bookings.stripeTransferId` — a column that is **currently always null**,
+  because a destination charge's transfer is implicit. It becomes the record of
+  the real transfer.
+- `bookings.vendorPayoutCents` and `platformFeeCents` — already stored at the
+  rate in force when payment succeeded. **Transfer that stored figure, never a
+  freshly computed one**, or a fee-rate change silently repricks old bookings.
+- `bookings.completedAt`, `cancelledAt`, `refundAmountCents`, `cancelledBy`.
+- **`disputed` is already in `BOOKING_STATUSES` and is unused.** It is the hold
+  state; do not invent another.
+- `FULL_REFUND_CUTOFF_HOURS = 48` and `LATE_CANCELLATION_REFUND_RATE = 0.5`
+  (D3). **This ticket does not change the tiers**, only what a refund has to
+  reverse.
+
+#### What does not exist yet
+
+- **Any scheduler.** There is no cron in this repo — `railway.json` has only a
+  `preDeployCommand`, and the one `setInterval` is an SSE heartbeat. Decide the
+  mechanism and say why: a Railway cron service, or a loop in the API with a
+  database lock. **It must be safe to run twice.**
+- A **release state** on the booking. `status` cannot carry it — a booking is
+  `confirmed` both before and after release. Add an explicit column (a
+  `payout_released_at`, or a small enum) rather than inferring it from
+  `stripeTransferId` being non-null, so a failed transfer is distinguishable
+  from one never attempted.
+- `PAYOUT_RELEASE_HOURS` as a named constant beside the refund tiers. **D32
+  sets it to `72`** — three days after the event date, calendar hours not
+  business days. It is a constant so the release job, the dispute window, the
+  vendor agreement, `/terms` and the dashboard's pending date all move
+  together; **no surface hardcodes an interval**.
+
+#### Acceptance
+
+Every one of these is a test, and each must be driven through the real state
+machine rather than asserted against a mock.
+
+**Charge**
+
+1. A successful checkout creates an intent with **no `transfer_data`** and **no
+   `application_fee_amount`**; the full amount lands in the platform balance.
+2. The booking records `totalAmountCents`, `platformFeeCents` and
+   `vendorPayoutCents` exactly as it does today, and `stripeTransferId` is null.
+
+**Release**
+
+3. A booking whose event date is more than `PAYOUT_RELEASE_HOURS` in the past,
+   status `confirmed`, not released, gets exactly one transfer of
+   **`vendorPayoutCents`** — the stored figure — to the vendor's connected
+   account, and `stripeTransferId` and the release timestamp are written.
+4. A booking inside the window is **not** transferred.
+5. **Running the job twice transfers once.** Assert on the number of transfer
+   calls, not just the final row state.
+6. A booking the vendor never marked complete **still releases**. This is the
+   defining case: `markComplete` must not appear anywhere in the release
+   predicate.
+7. A transfer that fails leaves the booking releasable and records the failure;
+   the next run retries it. A failed transfer must never be indistinguishable
+   from a completed one.
+
+**Dispute hold**
+
+8. A customer can raise a dispute on a `confirmed` booking whose event date has
+   passed and which is **not yet released**.
+9. A `disputed` booking is **skipped** by the release job for as long as it is
+   disputed, with no time limit that would release it out from under an open
+   complaint.
+10. Resolving a dispute in the vendor's favour makes it releasable again on the
+    next run; resolving it in the customer's favour refunds without a transfer
+    ever having happened.
+11. A dispute raised **after** release is refused with a message saying so, or
+    routed to the existing post-release refund path — decide which, and say why
+    in the ticket notes.
+
+**Refund boundary**
+
+12. Cancelling **before** release issues a plain refund: no `reverse_transfer`,
+    no `refund_application_fee`, no transfer reversal, and the vendor's balance
+    is untouched.
+13. Cancelling **after** release uses the existing `REFUND_UNWIND` and still
+    passes every #416 assertion.
+14. The 48h / 50% tiers behave exactly as they do today on both sides of the
+    boundary. `refundAmountCents` records what actually moved.
+
+**Surfaces**
+
+15. Every value the vendor dashboard needs to show a pending payout is
+    **readable from the booking row** — the amount, the release date and
+    whether a dispute is holding it — without the surface recomputing a fee or
+    inferring a date. **Building that surface is #424**, filed separately at the
+    account holder's request; this ticket owes it a truthful source, and an API
+    read that exposes those three things.
+16. A held payout is distinguishable from a pending one **in the data**, not
+    only by inspecting `status`.
+
+#### Tests (required) — this is the money path
+
+- [ ] A test per acceptance, each **watched failing before and passing after**.
+- [ ] **The double must reject what Stripe rejects.** #416 shipped a refund that
+      had never once worked, for months, because `test-server.ts`'s fake
+      `createRefund` recorded the call instead of judging it. The transfer
+      double must refuse an invalid transfer the way the gateway does, and #416's
+      pattern — build the real params, throw Stripe's own message — is the model.
+- [ ] **Idempotency proved by call count**, not by end state. A second run that
+      no-ops because the row already changed is not the same as one that never
+      issues the second transfer.
+- [ ] **Concurrency covered in `*.contention.test.ts`**, on real Postgres. Two
+      release runs racing the same booking is exactly the shape PGlite cannot
+      tell apart — a single connection cannot distinguish a held row lock from
+      its absence. `pnpm test` alone is not evidence here.
+- [ ] A **browser pass** driving a real Stripe test-mode payment end to end, then
+      the release, then a cancellation on each side of the boundary.
+
+#### Deliberately out of scope
+
+- Changing the refund tiers (D3) or the commission rate.
+- Instalments, deposits or split payments — Post-MVP.
+- A dispute *resolution* UI beyond what the hold needs. Admin already has the
+  surfaces; do not build a case-management product.
+
+#### Rulings the account holder still owes, if they surface
+
+- ~~**`PAYOUT_RELEASE_HOURS`**~~ — **RULED 2026-09-06 as D32: `72`.** Not a
+  number to pick. Airbnb's ~24h is measured from *check-in* on a multi-night
+  stay, where the guest has had the service for days before the clock starts; a
+  single-day event has no such head start. 72 also guarantees a working weekday
+  between a Friday/Saturday/Sunday event and its release. **The reason it is not
+  48**: under D31 a dispute *after* release is a transfer reversal that can push
+  a vendor negative, and before release it is a clean refund — so the extra day
+  protects the vendor from the worst failure in this path, not just the
+  customer. Calendar hours, not business days. Read D32 before changing it.
+- **Whether Orla holding customer funds** raises a compliance question in the
+  jurisdictions it operates in. Separate charges and transfers is a standard,
+  supported Connect pattern, but the platform becomes responsible for negative
+  balances. **Still open — flag it; do not decide it in code.**
+
+### #424: Vendor dashboard — a pending payout with a real date, and an honest held state
+
+**Milestone:** M4.5 | **Phase:** P1.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `stripe`
+**Blocked by:** **#423** — it owns the release date, the held state, and the API read this renders.
+
+**Filed 2026-09-06 on the account holder's instruction**, split out of #423 so
+the money mechanics and the surface reporting them are separate reviewable
+units. **Do not start it before #423 lands**: every number here comes from
+columns that ticket creates.
+
+#### Why the current line says what it says
+
+The dashboard reads **`Paid out after each event`** — dateless, and deliberately
+so. `constants/index.ts` records the reasoning: frame `08` draws `Next payout
+Jun 18`, a real date, and #308 could not ship one *"because there is no payout
+schedule to read one from until #10, and a date the platform invents is exactly
+what the no-invented-numbers rule forbids."*
+
+**#423 creates the schedule.** So the frame's Text axis, open since #308, can
+finally be closed honestly rather than by inventing a date.
+
+#### What to show
+
+- The **amount**: the stored `vendorPayoutCents` for each unreleased booking.
+  **Never a recomputed fee** — the commission rate in force when payment
+  succeeded is already written to the row, and recomputing would silently
+  reprice old bookings if the rate ever changes.
+- The **date**: derived from the event date and `PAYOUT_RELEASE_HOURS`.
+- A **held** state when a dispute is holding a payout, saying that it is held.
+  Per `40-states.md`, **gold is waiting on someone; red is a failure.** A held
+  payout is waiting, not failed.
+
+#### Acceptance
+
+1. A vendor with unreleased bookings sees the summed pending amount and the next
+   release date, both read from booking rows at request time.
+2. The amount equals the sum of `vendorPayoutCents` for exactly the bookings that
+   are unreleased and not cancelled. Assert the figure, not that a figure exists.
+3. The date is the earliest release date among those bookings, derived — not
+   stored twice, and not invented when there are none.
+4. A vendor with nothing pending sees an empty state, not `$0` and not a stale
+   date.
+5. A booking held by a dispute is shown as held, in gold, and is **excluded from
+   the "next release" date** — it has no known date.
+6. A released booking leaves the pending figure on the next read.
+7. **The figure reconciles with Stripe.** A test asserts the dashboard number
+   equals what the release job would transfer for the same rows — the two must
+   not be able to disagree.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing first.
+- [ ] **Assert specific amounts and dates**, never `toBeTruthy()`. This is a
+      money figure a vendor will plan around.
+- [ ] A test covering the **rate-change case**: a booking written at one
+      commission rate still shows its stored payout after the rate changes.
+- [ ] Deterministic dates — no real clock. #409 is the precedent: the server's
+      UTC day is not the viewer's day.
+
+### #425: A customer has no way to report a problem with a booking
+
+**Milestone:** M4.5 | **Phase:** P1.5 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** **#423** — it owns the `disputed` hold and the release window a report must land inside.
+
+**Filed 2026-09-06 on the account holder's instruction:** *"allowing a customer
+to dispute (this can happen directly via clicking a dispute or have a problem
+from the booking as a customer - and maybe take them to the customer support
+page? prefilled with that bookings info?)"*
+
+#### Measured before filing
+
+- **Nothing in the web app lets a customer raise anything about a booking.** No
+  dispute control, no `Report a problem`, no route.
+- **Nothing anywhere writes `disputed`.** It appears in `BOOKING_STATUSES` and in
+  read predicates in `customers.dao.ts` and `dashboard.dao.ts`, and nothing sets
+  it.
+
+So the status #423 relies on as its payout hold is currently unreachable by the
+person it exists to protect.
+
+#### The shape
+
+Extend the mechanism **#421 already built**. `/support` reads `searchParams`,
+parses them *"only when the whole object parses: a half-valid reference reaches
+the"* screen as nothing, and renders the result as **attached, non-editable
+context** — the frame `29` state 3 treatment, mono type, no input chrome, no
+clear affordance.
+
+A booking report is the same shape with different context:
+
+- entry point on the customer's booking — `Report a problem`, wording to be taken
+  from `31-content-voice.md` rather than invented here;
+- routes to `/support` carrying the booking reference;
+- the booking's identity renders as attached context, the same way the error
+  digest does;
+- **`Something broke` is not the right preselected topic** — frame `29`'s topic
+  list has `A booking or payment`, and that is the one a booking report should
+  preselect.
+
+#### The part that is not just a link
+
+**Submitting the report is what places #423's hold.** A form that emails support
+without moving the booking to `disputed` would let the payout release while the
+complaint is open — which is the exact failure this whole chain exists to
+prevent. The two must happen together, or the report must not claim to have been
+made.
+
+#### Acceptance
+
+1. A customer sees a way to report a problem on a booking they own, and only on
+   bookings they own.
+2. It is offered when a report can still do something — after the event, before
+   release. Outside that window the surface says what to do instead rather than
+   offering a control that cannot act.
+3. Following it lands on `/support` with the booking attached as context,
+   non-editable, and `A booking or payment` preselected.
+4. Submitting **both** sends the support message and moves the booking to
+   `disputed`, atomically. Neither half can land without the other.
+5. A booking already `disputed` does not offer a second report; it says one is
+   open.
+6. A vendor cannot reach this for a booking they are the vendor on — it is the
+   customer's control.
+7. The support email carries the booking reference, so a human can act without
+   asking.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing first.
+- [ ] **The atomicity in AC 4 is tested from both ends**: a failing email must not
+      leave a `disputed` booking with no message, and a failing status write must
+      not send a message claiming a report was filed. This is the #405 failure
+      shape — two writes with no rollback — on the money path.
+- [ ] An authorisation test per role: customer-owner, customer-other, vendor,
+      admin, signed out.
+- [ ] A browser pass driving the entry point through to the placed hold, and a
+      check that #423's release job then skips that booking.
+
+### #426: Put the caret back on the vendor-type picker — landing and search only
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-06 on the account holder's instruction:** *"lets add a caret to
+the vendor type per the design - both to landing and browser - i removed it
+before but want it back."*
+
+#### This reverses a standing ruling, and that is the point
+
+**D25 (2026-08-31) is the account holder's own override** removing `▾` from
+fourteen trigger sites, against frames that draw it and against
+`42-dropdowns.md` which specifies it in writing. So this is **a ruling changing,
+not a parity finding**, and it must be recorded as deliberately as the original
+was — otherwise the next reader cannot tell which way the decision currently
+points.
+
+Frames `01 Landing` and `02 Search` both draw the caret, so on these two
+surfaces the reversal **restores frame fidelity** rather than departing from it.
+
+#### Scope — two surfaces, one control
+
+The **vendor-type picker** on the landing hero and on `/search`. Both mount the
+same `search-bar.tsx`, so this is one change reaching two pages — verified by
+import during #417.
+
+**The other twelve sites keep D25's override.** Do not sweep the caret back
+across the app.
+
+#### The guard must be narrowed, not deleted
+
+`apps/web/src/app/dropdown-caret.test.ts` asserts the absence of the two unicode
+glyphs **anywhere in rendered source**, and it will go red. It exists because the
+caret came back twice on its own — as **#228** and again as **#338** — when a
+parity pass read the frame, saw a caret the app did not draw, and correctly filed
+it.
+
+**Deleting that test would let the glyph creep back to all fourteen sites.**
+Narrow it to exempt the vendor-type trigger and keep it enforcing everywhere
+else. `frame-13-parity.test.ts` inverts its own `toContain('▾')` for the same
+reason — check whether it is affected.
+
+#### Decide the open-state signal
+
+D25 recorded a consequence this reversal reopens: three triggers — the hero's
+vendor-type and city segments, and the compact bar's date — **drew their open
+state through the caret alone**, and with it gone they rendered byte-identically
+open and closed. The sweep gave them `font-semibold text-clay-600` on the value
+instead.
+
+With the caret back on vendor-type, **keeping both may be doubled signalling.**
+Rule it: caret alone, clay value alone, or both. Say which and why. Note the city
+segment is *not* in this ticket's scope, so whatever is decided must not leave the
+two segments inconsistent with each other without saying so.
+
+#### Acceptance
+
+1. The vendor-type picker draws the caret on the landing hero and on `/search`,
+   matching frames `01` and `02`.
+2. No other trigger gains one.
+3. `dropdown-caret.test.ts` still fails if a caret appears on any of the twelve
+   sites D25 cleared.
+4. The open-state signal is ruled, applied, and recorded.
+5. The caret is `aria-hidden` and never part of an accessible name — D25 found
+   two chips announcing *"black down-pointing small triangle"*.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] **D25 amended in `vendor-marketplace-decisions.md`, and the override list in
+      `.claude/rules/web-design-parity.md` updated.** That file currently tells
+      every parity pass the caret is deliberately absent and has been re-filed
+      four times. Leaving it stale would make the next pass remove this work.
+
+### #427: Legal and money surfaces — three pages, the vendor agreement step, and the refund schedule at checkout
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
+**Blocked by:** **#423**, for the two claims that depend on it.
+
+**Filed 2026-09-06 with a full design**, supplied by the account holder, who
+asked for one ticket covering all of it.
+
+#### Where the design is
+
+`design/delta-legal/` — `Orla-Legal-Surfaces.html` (**frames 31, 32, 33**) and
+`LEGAL-SURFACES-PROMPT.md`, which is the spec and is unusually specific about
+measurements. **Frames 31-33 are not in `design/Orla - Screens.dc.html`**, which
+ends at `28 Dropdown variants`, so the parity gate for this ticket reads the
+delta bundle. Same six axes, same 1440x900, and the literal strings are the
+design.
+
+The prompt is written as three sequential prompts. **They are one ticket here at
+the account holder's request**, but the prompt's own ordering holds: the reading
+layout first, because it is the only part introducing new primitives.
+
+#### ⚠️ The refund schedule in the design contradicts the code
+
+**This is the one thing that must not ship as drawn.** The design's checkout block
+states: full refund 30+ days out · 50% in a middle window · **non-refundable**
+from a boundary date.
+
+The code enforces something different, and simpler:
+
+- `FULL_REFUND_CUTOFF_HOURS = 48` — full refund up to 48 hours before the event;
+- `LATE_CANCELLATION_REFUND_RATE = 0.5` — 50% inside that;
+- **there is no non-refundable tier at all.**
+
+`LEGAL-SURFACES-PROMPT.md` says so itself: *"The schedule itself is a guess. 30
+days / 50% / non-refundable is a plausible events-industry default, not something
+in the plan."*
+
+**#374 names this exact failure as the one that loses a dispute:** *"A policy that
+promises something the code does not do is the one failure mode here that creates
+a dispute the platform loses."* So either the constants change to match the
+design, or the block renders the constants. **Do not ship a checkout block whose
+numbers the refund code will not honour**, and do not resolve it by quietly
+editing the design.
+
+#### Dependencies on #423
+
+- `/terms` section 4 carries **the hold-until-event mechanism**. That mechanism is
+  #423's, and until it lands the section would describe behaviour the product does
+  not have.
+- **Payout timing must read one constant.** The design says *"Event + 2 days"* in
+  three places and asks for a single config value; #423 introduces
+  `PAYOUT_RELEASE_HOURS`. Use that one — do not add a second.
+
+#### What to build
+
+**1. `LegalPage` layout** — new, and unlike every other screen: **the page
+scrolls, not a pane.** 660px measure, 52px top padding, prose **15px/1.85** in
+`stone-800 #3A352E` (explicitly *not* the app's 13.5px body), numbered Instrument
+Serif 24px headings, a required last-updated line, `text-wrap: pretty`.
+**Section numbers are load-bearing** — Stripe, vendors and support cite them.
+
+**2. Jump rail** — 212px sticky column, `IntersectionObserver` for the active
+section, **rendered only at 6+ top-level sections**. `/terms` and `/privacy` get
+it; `/cookies` must not render an empty column. **Heading slugs are public URLs
+people paste into email** — stable, never counter-generated.
+
+**3. Three content blocks and no more** — emphasis panel, data table (reuse the
+admin idiom), sage note.
+
+**4. The three pages.** `/terms` 11 sections; `/privacy` with the data map table
+whose rows are the real stack (Stripe, Clerk, R2, Orla); `/cookies` deliberately
+thin. **No consent banner, modal or stored consent state** — I verified this
+independently on 2026-09-06: the tree sets no cookies of its own and loads no
+analytics, gtag, PostHog, Segment or Hotjar. A banner would be theatre.
+
+**5. Copy lives in `content/legal/*.md`** with the last-updated date in
+frontmatter, read by the page. **It is placeholder copy, not reviewed legal
+text** — ship it as such, trivially replaceable.
+
+**6. Footer** — a thin bottom line under the existing grid, `Terms · Privacy ·
+Cookies` left, `© Orla 2026` right. **Not a fifth column.**
+
+**7. Vendor agreement — step 3 of 5 in onboarding, not a page.** The order is
+deliberate: it precedes Stripe Connect so commission and payout timing are agreed
+before a payout rail exists. Four-terms display panel, full agreement clipped to
+150px with expand-in-place (**no modal, no navigation** — onboarding state must
+survive), accept checkbox **naming the business**, disabled until ticked.
+
+**8. Acceptance is an immutable record.** One row per acceptance —
+`vendor_id`, `document`, `version`, `accepted_at`, `accepted_by_user_id`,
+`accepted_by_name`, `business_name`, `ip`, `user_agent`. **No updates, no
+deletes.** A new version adds a row. The PDF renders the stored version, not the
+current one.
+
+**9. Refund schedule at checkout** — between the summary card and the pay button,
+**resolved into this booking's real dates and amounts**, not abstract percentages.
+Same component later reused on the confirmation screen and, in the customer hub,
+showing **only the row that applies today**.
+
+#### Acceptance
+
+1. `/terms`, `/privacy`, `/cookies` render under `LegalPage` and match frames
+   31-33 on all six axes at 1440x900.
+2. The jump rail appears on `/terms` and `/privacy` and **not** on `/cookies`,
+   which re-centres its measure rather than leaving an empty column.
+3. Heading ids are stable and derived from the heading text; a test pins at least
+   `#cancellations-and-refunds`.
+4. Copy is read from `content/legal/*.md` and the displayed date comes from
+   frontmatter — changing the date requires no JSX edit.
+5. The footer legal line appears on every page carrying the footer, as a line and
+   not a column.
+6. **No cookie consent mechanism exists anywhere** — asserted, not just absent.
+7. Vendor agreement is step 3 of 5, before Stripe Connect, with the step rail
+   showing `Step 3 of 5`.
+8. `Accept and continue` is disabled until the checkbox is ticked, and the
+   checkbox label names the business.
+9. Accepting writes exactly one immutable row; a second acceptance of the same
+   version does not overwrite the first.
+10. A vendor cannot take payments until accepted.
+11. An out-of-date accepted version raises the dashboard blocker banner.
+12. The checkout block renders **computed dates and amounts** from
+    `booking.eventDate` and the booking total — asserted on specific values.
+13. **The checkout block's tiers equal what `calculateRefund` would actually
+    return** for the same booking. This is the acceptance that prevents the
+    dispute #374 warns about.
+14. **No page, panel or email states a non-refundable window**, because none
+    exists. Asserted by searching the rendered copy, not by reading it.
+15. Every number in the legal copy — 12%, 48 hours, 50%, 7 days, the payout
+    interval — **resolves from the constant, not from a literal in the
+    markdown**. A test changes a constant and asserts the rendered page follows.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing before and passing after.
+- [ ] **AC 13 is the one that matters most**: assert the rendered schedule against
+      the refund function's own output, not against a hardcoded expectation. If
+      they can disagree, they eventually will.
+- [ ] **AC 15 is how the copy stays true after this ticket.** A page that hardcodes
+      "12%" in markdown is correct today and wrong the first time the rate moves.
+      The test that proves it: change the constant, re-render, assert the page
+      changed with it.
+- [ ] Immutability tested by attempting an update and a delete, not by inspecting
+      the schema.
+- [ ] Authorisation on the agreement step per role: the vendor it belongs to,
+      another vendor, a customer, admin, signed out.
+
+#### The copy is placeholder — these facts are not
+
+**Ruled 2026-09-06.** The account holder gave explicit authority to make the copy
+match the mechanics rather than ship the design's placeholder wording: *"the
+terms design text is currently a placeholder — what we discussed is the concrete
+and you have authority to ensure the text matches what we discussed."*
+
+**Still not reviewed legal text.** It ships from `content/legal/*.md` as
+replaceable placeholder, and that has not changed. What has changed is that
+**every factual claim in it must now be true of this codebase**, and a sentence
+that contradicts the table below is a defect, not a wording preference.
+
+| Claim the copy may make | Value | Source of truth |
+| --- | --- | --- |
+| Platform commission | **12%** | `DEFAULT_PLATFORM_FEE_RATE = 0.12` |
+| Full refund | cancel **48 hours or more** before the event | `FULL_REFUND_CUTOFF_HOURS = 48` |
+| Late cancellation | **50%** refunded | `LATE_CANCELLATION_REFUND_RATE = 0.5` |
+| Non-refundable window | **there is none** | no such tier exists in the code |
+| Vendor cancels | customer refunded in full, no commission retained | D31 |
+| Refund after payout release | full unwind — vendor returns their share, Orla returns its commission | D31 |
+| Money before the event | held by **Orla**, not the vendor | #423 |
+| Release trigger | a fixed window **after the event date** — never a vendor action | #423 |
+| Payout interval | **72 hours after the event date** — `PAYOUT_RELEASE_HOURS`, one constant, three render sites | **D32** |
+| Unanswered request | expires after **7 days** | `BOOKING_REQUEST_EXPIRY_DAYS = 7` |
+| A dispute | **pauses** the payout release | #423 / #425 |
+
+**Three of the design's open questions are now closed by that ruling:**
+
+1. **The refund schedule is the code's, not the design's.** `30 days / 50% /
+   non-refundable` does not ship. The tiers are **48 hours / 50%**, and there is
+   **no non-refundable window** — so the checkout block has three rows and a
+   vendor-cancels row, not four tiers ending in "non-refundable".
+2. **Platform-wide, not per-vendor.** The tiers are constants today and stay
+   constants. Per-vendor policy is Post-MVP: it would grow a profile field, need
+   referencing from the agreement, and belong on the search card.
+3. **The "non-refundable releases the full amount" question is moot** — there is
+   no non-refundable tier for it to be about.
+
+**Two remain genuinely open and must not be answered silently:**
+
+- ~~**`PAYOUT_RELEASE_HOURS` itself.**~~ **RULED 2026-09-06 as D32: `72` hours**
+  — three days, calendar not business. The design's *"Event + 2 days"* is
+  superseded; **every surface reads the constant** and none states an interval of
+  its own. The four-terms panel's `Event + 2 days` becomes the value D32 sets.
+- **Whether Orla holding customer funds** raises a compliance question in the
+  jurisdictions it operates in. Flag it; do not decide it in code.
+
+**Cut, not asked:** the design's *"repeated cancellations can end your listing"*.
+Nothing in the plan describes an enforcement process, and a threat that cannot be
+executed is worse than silence. Remove the sentence.
+
+#### Section-level consequences of the above
+
+- **`/terms` section 4** describes the hold: the customer pays Orla, Orla holds
+  the money, and the vendor is paid a fixed window after the event date. It states
+  the **12%**. It must not describe payment as reaching the vendor at checkout,
+  which is what happens today and what #423 changes.
+- **`/terms` section 5** defers the schedule to checkout by reference and
+  **restates no numbers** — that is already in the design and it is right, because
+  two copies drift.
+- **The vendor agreement's four-terms panel** takes its commission and payout
+  timing from the same constants, not from prose written beside them.

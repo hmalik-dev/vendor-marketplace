@@ -513,6 +513,11 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   420: [], // landing footer — placeholder support link and links at page parity
   421: ['auth', 'email'], // /support form: session identity, and one Resend send
   422: ['storage'], // one image fallback everywhere, including a failed load
+  423: ['stripe'], // funds held on the platform, released on a date, dispute can hold
+  424: ['stripe'], // vendor dashboard reads the pending payout and its release date
+  425: [], // customer reports a booking problem, which places the payout hold
+  426: [], // caret returns to the vendor-type picker on landing and search
+  427: ['auth', 'stripe'], // legal pages, vendor agreement step, refund schedule at checkout
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
