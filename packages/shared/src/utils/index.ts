@@ -480,7 +480,16 @@ export interface PayoutSubject {
  * From outside, a payout that has not arrived is `pending`, and the reason lives
  * in the log and in `payout_failure_reason`.
  */
-export function payoutStatusOf(booking: PayoutSubject): PayoutStatus {
+export function payoutStatusOf(
+  /*
+   * Only the two columns it actually reads. `PayoutSubject` names all three
+   * because `isLegacyDestinationCharge` beside it needs the transfer id — but a
+   * caller that has to supply a Stripe identifier it does not hold, to ask a
+   * question that never looks at one, either invents a value or ships the id to
+   * a screen with no use for it. #425's customer surface is that caller.
+   */
+  booking: Pick<PayoutSubject, 'status' | 'payoutReleasedAt'>,
+): PayoutStatus {
   if (booking.payoutReleasedAt) {
     return 'released';
   }

@@ -552,21 +552,22 @@ describe('payoutDueThroughDate', () => {
 });
 
 describe('payoutStatusOf', () => {
+  /*
+   * The two columns the answer is actually derived from, and no third. #425
+   * narrowed the parameter to exactly these, because a caller that had to
+   * supply a Stripe id to ask a question that never reads one would either
+   * invent a value or ship the id to a screen with no use for it.
+   */
   const PENDING = {
     status: 'confirmed',
     payoutReleasedAt: null,
-    stripeTransferId: null,
   } as const;
 
   it('is pending before the transfer and released after it', () => {
     expect(payoutStatusOf(PENDING)).toBe('pending');
-    expect(
-      payoutStatusOf({
-        ...PENDING,
-        payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
-        stripeTransferId: 'tr_one',
-      }),
-    ).toBe('released');
+    expect(payoutStatusOf({ ...PENDING, payoutReleasedAt: new Date('2026-06-18T00:00:00Z') })).toBe(
+      'released',
+    );
   });
 
   /* A vendor marking a booking complete moves no money and no payout state. */
@@ -590,7 +591,6 @@ describe('payoutStatusOf', () => {
       payoutStatusOf({
         status: 'disputed',
         payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
-        stripeTransferId: 'tr_one',
       }),
     ).toBe('released');
   });

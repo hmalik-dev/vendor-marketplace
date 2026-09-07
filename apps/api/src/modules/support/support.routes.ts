@@ -1,10 +1,16 @@
 import { supportMessageReceiptSchema, supportMessageSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { bookingContextFor } from '../payments/payments.service.js';
 import { sendSupportMessage } from './support.service.js';
 
 export interface SupportRoutesOptions {
   /** `SUPPORT_EMAIL_TO`. Threaded in so the service never reads `process.env`. */
   supportEmailTo: string;
+  /**
+   * `canonicalWebOrigin(env)` — the origin the vendor's hold notice links back
+   * from, threaded in exactly as `paymentRoutes` takes it (#425).
+   */
+  webOrigin: string;
 }
 
 /**
@@ -54,9 +60,16 @@ export const supportRoutes: FastifyPluginAsyncZod<SupportRoutesOptions> = async 
      */
     async (request) =>
       sendSupportMessage(
-        { db: app.db, email: app.email, log: request.log, to: supportEmailTo },
+        {
+          db: app.db,
+          email: app.email,
+          log: request.log,
+          to: supportEmailTo,
+          bookings: bookingContextFor(app, request.log, options.webOrigin),
+        },
         request.body,
         request.auth,
+        app.clock(),
       ),
   );
 };

@@ -48,6 +48,16 @@ export const SUPPORT_TOPIC_LABELS: Record<SupportTopic, string> = {
 export const SUPPORT_TOPIC_WITH_REFERENCE: SupportTopic = 'something-broke';
 
 /**
+ * Preselected when a **booking** is attached, and only then (#425).
+ *
+ * Not `SUPPORT_TOPIC_WITH_REFERENCE`. A customer who followed `Report a
+ * problem` off their own booking has already said which of the five this is,
+ * and `Something broke` would be the wrong one twice over: it reads as a bug
+ * report, and it is the topic a human triages away from the money.
+ */
+export const SUPPORT_TOPIC_WITH_BOOKING: SupportTopic = 'booking-or-payment';
+
+/**
  * The longest message the form accepts, at the schema **and** in the textarea.
  *
  * #408's rule: a value the schema accepts must fit whatever receives it. What

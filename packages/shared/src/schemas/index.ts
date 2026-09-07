@@ -989,19 +989,6 @@ export const cancelBookingSchema = z.object({
 });
 export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 
-/**
- * What a customer sends to report a problem with a booking (#423).
- *
- * The same shape as a cancellation's, and deliberately not richer: the report
- * exists to **place the payout hold**, not to open a case-management product.
- * #425 builds the surface that sends it, routed through the support form the
- * error page already uses, so the free text is the whole payload.
- */
-export const disputeBookingSchema = z.object({
-  reason: freeText().max(1_000).optional(),
-});
-export type DisputeBookingInput = z.infer<typeof disputeBookingSchema>;
-
 export const resolveDisputeSchema = z.object({
   /**
    * `vendor` lifts the hold and lets the payout run on the next sweep;
@@ -1049,6 +1036,21 @@ export const bookingSchema = z.object({
   cancelledBy: bookingCancelledBySchema.nullable(),
   /** What Stripe actually sent back, in cents. `null` until a refund moves. */
   refundAmountCents: z.int().nullable(),
+  /**
+   * When the vendor's share was actually transferred, or `null` while it is
+   * still held (#425).
+   *
+   * **The fact, not the prediction.** `payoutReleaseAt(eventDate)` says when the
+   * sweep *may* move the money; this says whether it has. A surface that decides
+   * "the payout is gone" from the calendar is wrong for as long as the sweep
+   * takes to get there, and the report control is the case where being wrong
+   * costs the customer the only hold they can place. `payoutStatusOf` reads this
+   * column, and it is the one derivation every surface asks.
+   *
+   * The amount is deliberately still absent: the split is the platform's and the
+   * vendor's business, and `booking-view.ts` keeps it that way.
+   */
+  payoutReleasedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -1943,6 +1945,18 @@ export const supportMessageSchema = z.object({
     .min(1, 'Tell us what happened, and what you expected instead')
     .max(MAX_SUPPORT_MESSAGE_LENGTH),
   errorContext: supportErrorContextSchema.optional(),
+  /**
+   * The booking this report is about (#425), and **the reason this send is not
+   * only an email**: a message carrying one places #423's payout hold on that
+   * booking in the same request, or it is not sent at all.
+   *
+   * An id and nothing else. The event date, the amount and the vendor are read
+   * from the row on the server, because a report that quoted figures out of the
+   * sender's own query string would be a support inbox reading whatever the
+   * sender chose to put there — and it is the same read that decides whether
+   * this caller may report the booking in the first place.
+   */
+  bookingId: uuidSchema.optional(),
 });
 export type SupportMessageInput = z.infer<typeof supportMessageSchema>;
 

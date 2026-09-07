@@ -1,16 +1,65 @@
 import {
   pageTitle,
   supportErrorContextSchema,
+  uuidSchema,
   type SupportErrorContext,
 } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import { SupportScreen } from '@/components/support/support-screen';
+import { reportWindowFor, type SupportBookingContext } from '@/lib/booking-report';
+import { readOwnBookingForSupport } from '@/lib/customer-data';
 import { readIdentityForSupport } from '@/lib/current-user';
 import {
+  SUPPORT_BOOKING_PARAM,
   SUPPORT_ERROR_AT_PARAM,
   SUPPORT_ERROR_DIGEST_PARAM,
   SUPPORT_ERROR_ROUTE_PARAM,
 } from '@/lib/support-link';
+import type { WireUser } from '@/lib/wire-schemas';
+
+/**
+ * The booking a `Report a problem` named, when this visitor is the customer on
+ * it and it can still be reported (#425).
+ *
+ * **Role first, and the role is `customer`.** Acceptance 6 says a vendor cannot
+ * reach this for a booking they are the vendor on. The API refuses them too —
+ * `findOwnBookingForReport` answers a vendor 404 — but checking here costs
+ * nothing and keeps a public page from making an authenticated read on behalf
+ * of somebody who cannot use the answer. A vendor, an admin and a signed-out
+ * visitor all take an early return and see the ordinary contact form.
+ *
+ * Outside the window the block is dropped whole, the treatment #421 chose for a
+ * half-valid error reference and for the same reason: a screen that rendered a
+ * booking it could not report would be offering a control the API is about to
+ * refuse.
+ */
+async function readBookingContext(
+  user: WireUser | null,
+  raw: string | string[] | undefined,
+): Promise<SupportBookingContext | null> {
+  if (user?.role !== 'customer') {
+    return null;
+  }
+
+  const parsed = uuidSchema.safeParse(raw);
+
+  if (!parsed.success) {
+    return null;
+  }
+
+  const booking = await readOwnBookingForSupport(parsed.data);
+
+  if (!booking || reportWindowFor(booking) !== 'open') {
+    return null;
+  }
+
+  return {
+    id: booking.id,
+    eventDate: booking.eventDate,
+    totalAmountCents: booking.totalAmountCents,
+    venue: booking.eventLocation,
+  };
+}
 
 export const metadata: Metadata = { title: pageTitle('Contact support') };
 
@@ -50,5 +99,13 @@ export default async function SupportPage({
 
   const errorContext: SupportErrorContext | null = parsed.success ? parsed.data : null;
 
-  return <SupportScreen accountEmail={user?.email ?? null} errorContext={errorContext} />;
+  const bookingContext = await readBookingContext(user, params[SUPPORT_BOOKING_PARAM]);
+
+  return (
+    <SupportScreen
+      accountEmail={user?.email ?? null}
+      errorContext={errorContext}
+      bookingContext={bookingContext}
+    />
+  );
 }
