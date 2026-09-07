@@ -79,3 +79,24 @@ for (const q of ['?date=not-a-date', '?date=2026-13-45', '?page=0', '?city=' + '
   expect(res.status).toBe(200);
 }
 ```
+
+## A `z.date()` on the wire needs a `z.coerce.date()` to receive it
+
+JSON has no date type. A response schema that declares `z.date()` on the API side
+must have a matching **`z.coerce.date()`** in `apps/web/src/lib/wire-schemas.ts`,
+or the web parse rejects the string the server actually sent and the page 500s.
+
+**This is invisible to the whole local gate**, which is why it is a rule and not
+a code comment. `tsc` infers `Date` on both sides and is satisfied. The route
+suites read the response _object_ rather than its JSON, so they never serialise.
+And the failure is **conditional on data**: #423 added `releaseAt` to
+`vendorDashboardSchema` and the dashboard 500'd for every vendor who was owed a
+payout, while rendering perfectly for anyone owed nothing. A browser pass on a
+fixture with no paid booking sees a working page.
+
+So the trigger is not "did it render" but **"did it render with a row that
+carries the new field"**. When adding a date to a response schema:
+
+1. Add the `z.coerce.date()` counterpart in the same commit.
+2. Exercise it with a fixture that **has** the value, not one that omits it — an
+   optional field absent from the payload proves nothing about the parse.
