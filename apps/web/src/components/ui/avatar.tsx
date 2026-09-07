@@ -1,3 +1,4 @@
+import { FallbackImage } from '@/components/ui/fallback-image';
 import { cn } from '@/lib/utils';
 
 /**
@@ -250,23 +251,7 @@ export function Avatar({
     ring && AVATAR_RINGS[ring],
   );
 
-  if (src) {
-    return (
-      // A vendor's own photograph, already sized by the caller — `next/image`
-      // would need a configured remote host per vendor bucket.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt={named ? name : ''}
-        width={pixels}
-        height={pixels}
-        className={cn(shared, 'object-cover', className)}
-        style={{ width: `${pixels}px`, height: `${pixels}px` }}
-      />
-    );
-  }
-
-  return (
+  const monogram = (
     <span
       // A decorative monogram is hidden outright rather than left as an unnamed
       // `img`, which a reader announces as "image" with nothing after it.
@@ -302,5 +287,33 @@ export function Avatar({
     >
       {initialsFor(name)}
     </span>
+  );
+
+  /*
+   * **The avatar's fallback is the monogram, not the tone block** (D24, #422).
+   *
+   * `FallbackImage` is the shared mechanism, and what it buys here is that an
+   * absent photograph and a *failed* one land in the same place: before this,
+   * a vendor whose stored avatar object was gone got the browser's broken-image
+   * glyph while a vendor who never uploaded one got these initials, and the
+   * person reading cannot tell those two situations apart.
+   *
+   * `Avatar` itself stays a Server Component: only the leaf that needs the
+   * `error` handler crosses the boundary, and `bookings-hub.tsx` still imports
+   * `avatarToneIndex` and `initialsFor` from here and calls them on the server.
+   *
+   * The size comes through `style` rather than the `width`/`height` attributes
+   * as well, which is what lets the monogram hold the photograph's exact box.
+   */
+  return (
+    <FallbackImage
+      src={src}
+      alt={named ? name : ''}
+      // A vendor's own photograph, already sized by the caller — `next/image`
+      // would need a configured remote host per vendor bucket.
+      className={cn(shared, 'object-cover', className)}
+      style={{ width: `${pixels}px`, height: `${pixels}px` }}
+      fallback={monogram}
+    />
   );
 }

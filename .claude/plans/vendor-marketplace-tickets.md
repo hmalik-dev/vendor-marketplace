@@ -1180,7 +1180,11 @@ delete the unwind — a booking cancelled after release still needs it.
   `payout_released_at`, or a small enum) rather than inferring it from
   `stripeTransferId` being non-null, so a failed transfer is distinguishable
   from one never attempted.
-- `PAYOUT_RELEASE_HOURS` as a named constant beside the refund tiers.
+- `PAYOUT_RELEASE_HOURS` as a named constant beside the refund tiers. **D32
+  sets it to `72`** — three days after the event date, calendar hours not
+  business days. It is a constant so the release job, the dispute window, the
+  vendor agreement, `/terms` and the dashboard's pending date all move
+  together; **no surface hardcodes an interval**.
 
 #### Acceptance
 
@@ -1272,11 +1276,19 @@ machine rather than asserted against a mock.
 
 #### Rulings the account holder still owes, if they surface
 
-- **`PAYOUT_RELEASE_HOURS`** — 24 or 48. Airbnb uses ~24 after check-in.
+- ~~**`PAYOUT_RELEASE_HOURS`**~~ — **RULED 2026-09-06 as D32: `72`.** Not a
+  number to pick. Airbnb's ~24h is measured from *check-in* on a multi-night
+  stay, where the guest has had the service for days before the clock starts; a
+  single-day event has no such head start. 72 also guarantees a working weekday
+  between a Friday/Saturday/Sunday event and its release. **The reason it is not
+  48**: under D31 a dispute *after* release is a transfer reversal that can push
+  a vendor negative, and before release it is a clean refund — so the extra day
+  protects the vendor from the worst failure in this path, not just the
+  customer. Calendar hours, not business days. Read D32 before changing it.
 - **Whether Orla holding customer funds** raises a compliance question in the
   jurisdictions it operates in. Separate charges and transfers is a standard,
   supported Connect pattern, but the platform becomes responsible for negative
-  balances. Flag it; do not decide it in code.
+  balances. **Still open — flag it; do not decide it in code.**
 
 ### #424: Vendor dashboard — a pending payout with a real date, and an honest held state
 
@@ -1615,6 +1627,11 @@ showing **only the row that applies today**.
 13. **The checkout block's tiers equal what `calculateRefund` would actually
     return** for the same booking. This is the acceptance that prevents the
     dispute #374 warns about.
+14. **No page, panel or email states a non-refundable window**, because none
+    exists. Asserted by searching the rendered copy, not by reading it.
+15. Every number in the legal copy — 12%, 48 hours, 50%, 7 days, the payout
+    interval — **resolves from the constant, not from a literal in the
+    markdown**. A test changes a constant and asserts the rendered page follows.
 
 #### Tests (required)
 
@@ -1622,18 +1639,74 @@ showing **only the row that applies today**.
 - [ ] **AC 13 is the one that matters most**: assert the rendered schedule against
       the refund function's own output, not against a hardcoded expectation. If
       they can disagree, they eventually will.
+- [ ] **AC 15 is how the copy stays true after this ticket.** A page that hardcodes
+      "12%" in markdown is correct today and wrong the first time the rate moves.
+      The test that proves it: change the constant, re-render, assert the page
+      changed with it.
 - [ ] Immutability tested by attempting an update and a delete, not by inspecting
       the schema.
 - [ ] Authorisation on the agreement step per role: the vendor it belongs to,
       another vendor, a customer, admin, signed out.
 
-#### Open questions the design itself raises — do not answer silently
+#### The copy is placeholder — these facts are not
 
-- **The refund schedule**: platform-wide or per-vendor? Per-vendor grows a field
-  on the profile editor, must be referenced by the agreement, and probably belongs
-  on the search card. This changes three screens.
-- **Does "non-refundable" release the full amount to the vendor**, or does Orla
-  waive commission on a cancelled booking? The 12% depends on the answer.
-- **Cancellation enforcement**: the design says *"repeated cancellations can end
-  your listing"*, which implies a process nothing in the plan describes. **Cut the
-  sentence rather than shipping a threat that cannot be executed.**
+**Ruled 2026-09-06.** The account holder gave explicit authority to make the copy
+match the mechanics rather than ship the design's placeholder wording: *"the
+terms design text is currently a placeholder — what we discussed is the concrete
+and you have authority to ensure the text matches what we discussed."*
+
+**Still not reviewed legal text.** It ships from `content/legal/*.md` as
+replaceable placeholder, and that has not changed. What has changed is that
+**every factual claim in it must now be true of this codebase**, and a sentence
+that contradicts the table below is a defect, not a wording preference.
+
+| Claim the copy may make | Value | Source of truth |
+| --- | --- | --- |
+| Platform commission | **12%** | `DEFAULT_PLATFORM_FEE_RATE = 0.12` |
+| Full refund | cancel **48 hours or more** before the event | `FULL_REFUND_CUTOFF_HOURS = 48` |
+| Late cancellation | **50%** refunded | `LATE_CANCELLATION_REFUND_RATE = 0.5` |
+| Non-refundable window | **there is none** | no such tier exists in the code |
+| Vendor cancels | customer refunded in full, no commission retained | D31 |
+| Refund after payout release | full unwind — vendor returns their share, Orla returns its commission | D31 |
+| Money before the event | held by **Orla**, not the vendor | #423 |
+| Release trigger | a fixed window **after the event date** — never a vendor action | #423 |
+| Payout interval | **72 hours after the event date** — `PAYOUT_RELEASE_HOURS`, one constant, three render sites | **D32** |
+| Unanswered request | expires after **7 days** | `BOOKING_REQUEST_EXPIRY_DAYS = 7` |
+| A dispute | **pauses** the payout release | #423 / #425 |
+
+**Three of the design's open questions are now closed by that ruling:**
+
+1. **The refund schedule is the code's, not the design's.** `30 days / 50% /
+   non-refundable` does not ship. The tiers are **48 hours / 50%**, and there is
+   **no non-refundable window** — so the checkout block has three rows and a
+   vendor-cancels row, not four tiers ending in "non-refundable".
+2. **Platform-wide, not per-vendor.** The tiers are constants today and stay
+   constants. Per-vendor policy is Post-MVP: it would grow a profile field, need
+   referencing from the agreement, and belong on the search card.
+3. **The "non-refundable releases the full amount" question is moot** — there is
+   no non-refundable tier for it to be about.
+
+**Two remain genuinely open and must not be answered silently:**
+
+- ~~**`PAYOUT_RELEASE_HOURS` itself.**~~ **RULED 2026-09-06 as D32: `72` hours**
+  — three days, calendar not business. The design's *"Event + 2 days"* is
+  superseded; **every surface reads the constant** and none states an interval of
+  its own. The four-terms panel's `Event + 2 days` becomes the value D32 sets.
+- **Whether Orla holding customer funds** raises a compliance question in the
+  jurisdictions it operates in. Flag it; do not decide it in code.
+
+**Cut, not asked:** the design's *"repeated cancellations can end your listing"*.
+Nothing in the plan describes an enforcement process, and a threat that cannot be
+executed is worse than silence. Remove the sentence.
+
+#### Section-level consequences of the above
+
+- **`/terms` section 4** describes the hold: the customer pays Orla, Orla holds
+  the money, and the vendor is paid a fixed window after the event date. It states
+  the **12%**. It must not describe payment as reaching the vendor at checkout,
+  which is what happens today and what #423 changes.
+- **`/terms` section 5** defers the schedule to checkout by reference and
+  **restates no numbers** — that is already in the design and it is right, because
+  two copies drift.
+- **The vendor agreement's four-terms panel** takes its commission and payout
+  timing from the same constants, not from prose written beside them.

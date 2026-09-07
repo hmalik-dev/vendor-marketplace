@@ -5,6 +5,7 @@ import {
   initialsFor,
 } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { FallbackImage } from '@/components/ui/fallback-image';
 import { EmptyStateGlyph } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { TodayLabel } from './today-label';
@@ -51,31 +52,40 @@ function BookingCard({ entry }: BookingCardProps): React.ReactElement {
   const body = (
     <>
       <div className="flex items-start justify-between">
-        {entry.vendorImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- vendor bucket is not in the image config (#47)
-          <img src={entry.vendorImageUrl} alt="" className="size-9.5 rounded-[9px] object-cover" />
-        ) : (
-          /*
-            A monogram, not a blank swatch. `40-states.md` is explicit that "a
-            generic grey box is a bug", and #81's second finding was this
-            rendering on all eleven cards while `/search` and `/messages`
-            already drew initials for the same vendors.
+        {/*
+          A monogram, not a blank swatch. `40-states.md` is explicit that "a
+          generic grey box is a bug", and #81's second finding was this
+          rendering on all eleven cards while `/search` and `/messages`
+          already drew initials for the same vendors.
 
-            Not the `Avatar` component itself: this tile is the card's 9px
-            squircle and `Avatar` is unconditionally `rounded-full`. The
-            initials and the tone come from `Avatar`'s own helpers, so a vendor
-            keeps one colour and one monogram everywhere they appear.
-          */
-          <span
-            aria-hidden="true"
-            className={cn(
-              'flex size-9.5 items-center justify-center rounded-[9px] text-[13px] font-semibold',
-              AVATAR_FALLBACK_TONES[avatarToneIndex(entry.vendorName)],
-            )}
-          >
-            {initialsFor(entry.vendorName)}
-          </span>
-        )}
+          Not the `Avatar` component itself: this tile is the card's 9px
+          squircle and `Avatar` is unconditionally `rounded-full`. The
+          initials and the tone come from `Avatar`'s own helpers, so a vendor
+          keeps one colour and one monogram everywhere they appear.
+
+          It is the *fallback* rather than a sibling branch (#422) so that a
+          vendor whose stored image has gone gets the same monogram as one who
+          never uploaded, instead of a broken-image glyph on every card at once
+          during an outage. The vendor bucket is not in the image config (#47),
+          so this stays a plain image.
+        */}
+        <FallbackImage
+          src={entry.vendorImageUrl}
+          alt=""
+          className="size-9.5 rounded-[9px]"
+          imageClassName="object-cover"
+          fallback={
+            <span
+              aria-hidden="true"
+              className={cn(
+                'flex size-9.5 items-center justify-center rounded-[9px] text-[13px] font-semibold',
+                AVATAR_FALLBACK_TONES[avatarToneIndex(entry.vendorName)],
+              )}
+            >
+              {initialsFor(entry.vendorName)}
+            </span>
+          }
+        />
         <StatusPill tone={entry.statusTone}>{entry.statusLabel}</StatusPill>
       </div>
       <p className="mt-2.5 truncate font-display text-[17px] text-stone-900">{entry.vendorName}</p>

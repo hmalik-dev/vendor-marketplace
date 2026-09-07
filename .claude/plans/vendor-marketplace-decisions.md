@@ -1666,3 +1666,55 @@ outside a clipping ancestor that cannot scroll to reveal it. That second check f
 `/messages` conversation rows: `w-full` inside a scrolling `<ul>`, so every row's ring had
 **0px** of horizontal slack and painted entirely outside the list. Same class as the vendor
 card in #73, and invisible to every class-list assertion in the repository.
+
+### D32: The Payout Hold Is 72 Hours After the Event — *2026-09-06*
+
+**`PAYOUT_RELEASE_HOURS = 72`.** The account holder asked for a hold long enough
+that a customer can dispute and pause the release, and delegated the number:
+*"i like the payout time that allows time for customers to potentially dispute
+and pause the release of payment till then. So factor that in into payout time -
+using your best recommended judgment."*
+
+**Airbnb releases about 24 hours after check-in, and that is not the right
+comparison.** An Airbnb guest is on-site for days — they have already had the
+service, and the chance to raise a problem, long before the payout runs. An Orla
+event is a **single day**. The customer's entire experience and the release
+window are the same short period, so the 24-hour equivalent here is far tighter
+than Airbnb's, not the same.
+
+**Three reasons for 72 rather than 48:**
+
+1. **Events cluster on weekends.** 48 hours after a Saturday evening event lands
+   on Monday evening; after a Sunday event, Tuesday evening. 72 guarantees a full
+   working weekday between the event and the release for a Friday, Saturday or
+   Sunday event, which is when a customer can actually reach anyone.
+2. **It protects the vendor, not only the customer** — this is the argument that
+   decided it. Under **D31** a dispute *after* release is a transfer reversal that
+   can push a vendor who has already been paid out into a **negative balance**.
+   Before release there is nothing to reverse and a refund is clean. So every
+   dispute the window pulls forward is one that cannot produce the ugliest
+   failure in the money path. A longer hold is not a cost to the vendor; it is
+   insurance for them.
+3. **It is still competitive.** Total customer-to-vendor exposure on a single-day
+   service at 72 hours is comparable to Airbnb's on a multi-night stay, where the
+   guest has already been on-site for days before the 24-hour clock starts.
+
+**Not 7 days.** Vendors are small businesses and cash flow is real. Beyond about
+three days the dispute rate stops improving materially and the delay becomes a
+competitive disadvantage rather than a safeguard.
+
+**Calendar hours, not business days.** One constant, no holiday calendar, no
+timezone arithmetic beyond what `#409` already settled. Business-day logic buys
+very little here and costs a class of bug the product has already been bitten by
+once.
+
+**What this does not fix, and no window would:** a deliverable that arrives after
+the event — a photographer's gallery weeks later. No release window covers that,
+because the event has genuinely happened and the vendor has genuinely turned up.
+That case is the dispute path's (#425), and a dispute raised after release uses
+D31's unwind. Stated here so nobody widens the window trying to solve it.
+
+**Where it is read:** one constant, three surfaces — the vendor agreement's
+four-terms panel, the accepted-state strip, and `/terms` section 4 (#427) — plus
+the release job and the vendor dashboard's pending-payout date (#423, #424).
+**No surface hardcodes the interval.**

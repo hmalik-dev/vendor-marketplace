@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BookingsHub } from './bookings-hub';
 import type { BookingEntry } from '@/lib/booking-entries';
@@ -622,5 +622,41 @@ describe('the vendor tile on a booking card', () => {
     );
 
     expect(tileFor(second.container)?.className).toBe(firstTone);
+  });
+});
+
+/*
+ * #422. The absent case already drew the monogram (#81). A vendor whose stored
+ * image was *gone* drew the browser's broken-image glyph instead — and during
+ * an outage that is every card on the page at once. Both now land on the same
+ * monogram, in the same 9px squircle.
+ */
+describe('BookingsHub vendor image failure', () => {
+  it('falls back to the vendor monogram when the image fails to load', () => {
+    const { container } = render(
+      <BookingsHub
+        entries={[entry({ vendorImageUrl: 'https://example.test/gone.jpg' })]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    fireEvent.error(container.querySelector('img[src*="gone.jpg"]')!);
+
+    const monogram = screen.getByText('KC');
+
+    expect(container.querySelector('img[src*="gone.jpg"]')).toBeNull();
+    expect(monogram.className).toContain('rounded-[9px]');
+    expect(monogram.className).toContain('size-9.5');
+    /* The vendor keeps one colour whether the image is absent or broken. */
+    expect(FALLBACK_TONES.some((tone) => monogram.className.includes(tone.split(' ')[0]))).toBe(
+      true,
+    );
+    /* Not the cover tone block: an avatar is ruled differently (D24). */
+    expect(container.querySelector('[data-slot="image-fallback"]')).toBeNull();
   });
 });
