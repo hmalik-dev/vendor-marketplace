@@ -180,11 +180,47 @@ export async function applyAccountStatusChange(
     );
   }
 
-  if (onboarded === vendor.stripeOnboarded) {
+  /*
+   * All three move together, and the early return has to test all three (#432).
+   *
+   * It used to compare the flag alone, which was right while the flag was the
+   * entire record. It is not any more: Stripe adds a requirement to an account
+   * that is *already* not onboarded — the ordinary case, since requirements are
+   * what keep it not onboarded — and comparing the flag would return
+   * `unchanged` and drop the reason on the floor, leaving the console showing
+   * yesterday's answer with nothing to say it was stale.
+   */
+  const flagChanged = onboarded !== vendor.stripeOnboarded;
+  const reasonChanged = (status.disabledReason ?? null) !== vendor.stripeDisabledReason;
+  const requirementsChanged = !sameRequirements(
+    status.requirementsDue,
+    vendor.stripeRequirementsDue,
+  );
+
+  if (!flagChanged && !reasonChanged && !requirementsChanged) {
     return 'unchanged';
   }
 
-  await updateVendorProfileById(deps.db, vendor.id, { stripeOnboarded: onboarded });
+  await updateVendorProfileById(deps.db, vendor.id, {
+    stripeOnboarded: onboarded,
+    stripeDisabledReason: status.disabledReason,
+    stripeRequirementsDue: status.requirementsDue,
+  });
+
+  /*
+   * The outcome still names what happened to the **flag**, because that is what
+   * the webhook's response and its log line have always meant and what the
+   * vendor's payout gate turns on. A reason-only change is `unchanged` from
+   * that vantage point and is still persisted above.
+   */
+  if (!flagChanged) {
+    return 'unchanged';
+  }
 
   return onboarded ? 'onboarded' : 'not-onboarded';
+}
+
+/** Order-sensitive comparison — Stripe returns the entries in a stable order. */
+function sameRequirements(next: readonly string[], current: readonly string[]): boolean {
+  return next.length === current.length && next.every((item, index) => item === current[index]);
 }

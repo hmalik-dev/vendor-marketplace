@@ -63,13 +63,19 @@ describe('POST /webhooks/stripe', () => {
     });
   }
 
-  async function readOnboarded(): Promise<boolean> {
+  async function readProfile(): Promise<typeof vendorProfiles.$inferSelect> {
     const rows = await harness.database.db
       .select()
       .from(vendorProfiles)
       .where(eq(vendorProfiles.businessName, 'First Light'));
 
-    return rows[0]!.stripeOnboarded;
+    expect(rows[0]).toBeDefined();
+
+    return rows[0]!;
+  }
+
+  async function readOnboarded(): Promise<boolean> {
+    return (await readProfile()).stripeOnboarded;
   }
 
   beforeAll(async () => {
@@ -159,6 +165,100 @@ describe('POST /webhooks/stripe', () => {
 
     expect(response.json()).toEqual({ received: true, outcome: 'not-onboarded' });
     expect(await readOnboarded()).toBe(false);
+  });
+
+  /* #432 acceptance 4 — the reason behind the boolean, and only ever derived. */
+  describe('the restriction Stripe reports', () => {
+    const RESTRICTED_REQUIREMENTS = ['individual.id_number', 'individual.verification.document'];
+
+    it('records the disabled reason and the outstanding requirements', async () => {
+      const accountId = await seedOnboardingVendor();
+      harness.stripe.accountStatuses.set(accountId, {
+        transfersActive: false,
+        payoutsActive: false,
+        disabledReason: 'requirements_past_due',
+        requirementsDue: RESTRICTED_REQUIREMENTS,
+      });
+      harness.stripe.nextEvent = { type: 'account.updated', accountId };
+
+      expect((await post()).statusCode).toBe(200);
+
+      const profile = await readProfile();
+      expect(profile.stripeOnboarded).toBe(false);
+      expect(profile.stripeDisabledReason).toBe('requirements_past_due');
+      expect(profile.stripeRequirementsDue).toEqual(RESTRICTED_REQUIREMENTS);
+    });
+
+    /**
+     * A vendor who never onboarded reads **differently** from a restricted one.
+     *
+     * That is the whole complaint #432 opens with: the console's filter said
+     * "No payouts yet" for both, and a boolean cannot separate them. Both are
+     * `stripeOnboarded = false`; only the reason tells them apart.
+     */
+    it('leaves a vendor who never connected with no reason and nothing outstanding', async () => {
+      await seedOnboardingVendor();
+
+      const profile = await readProfile();
+      expect(profile.stripeOnboarded).toBe(false);
+      expect(profile.stripeDisabledReason).toBeNull();
+      expect(profile.stripeRequirementsDue).toEqual([]);
+    });
+
+    /**
+     * The early return used to compare the flag alone, and a requirement added
+     * to an account that is *already* not onboarded — the ordinary case — would
+     * have been answered `unchanged` with the reason dropped on the floor.
+     */
+    it('persists a changed reason even though the flag did not move', async () => {
+      const accountId = await seedOnboardingVendor();
+      harness.stripe.accountStatuses.set(accountId, {
+        transfersActive: false,
+        payoutsActive: false,
+        disabledReason: 'requirements_pending_verification',
+        requirementsDue: [],
+      });
+      harness.stripe.nextEvent = { type: 'account.updated', accountId };
+      await post();
+
+      harness.stripe.accountStatuses.set(accountId, {
+        transfersActive: false,
+        payoutsActive: false,
+        disabledReason: 'requirements_past_due',
+        requirementsDue: RESTRICTED_REQUIREMENTS,
+      });
+      const response = await post();
+
+      // The outcome names what happened to the flag, and nothing happened to it.
+      expect(response.json()).toEqual({ received: true, outcome: 'unchanged' });
+
+      const profile = await readProfile();
+      expect(profile.stripeDisabledReason).toBe('requirements_past_due');
+      expect(profile.stripeRequirementsDue).toEqual(RESTRICTED_REQUIREMENTS);
+    });
+
+    /** Onboarding clears the record rather than leaving yesterday's reason up. */
+    it('clears the reason and the requirements once both capabilities are active', async () => {
+      const accountId = await seedOnboardingVendor();
+      harness.stripe.accountStatuses.set(accountId, {
+        transfersActive: false,
+        payoutsActive: false,
+        disabledReason: 'requirements_past_due',
+        requirementsDue: RESTRICTED_REQUIREMENTS,
+      });
+      harness.stripe.nextEvent = { type: 'account.updated', accountId };
+      await post();
+
+      harness.stripe.accountStatuses.set(accountId, {
+        transfersActive: true,
+        payoutsActive: true,
+      });
+      expect((await post()).json()).toEqual({ received: true, outcome: 'onboarded' });
+
+      const profile = await readProfile();
+      expect(profile.stripeDisabledReason).toBeNull();
+      expect(profile.stripeRequirementsDue).toEqual([]);
+    });
   });
 
   it('rejects an unsigned request without reading the account', async () => {

@@ -2268,6 +2268,20 @@ export const adminVendorRowSchema = z.object({
   bookingsCount: z.int(),
   status: adminVendorStatusSchema,
   stripeOnboarded: z.boolean(),
+  /**
+   * The connected account, so the console can link out to Stripe's dashboard
+   * for it — which is the **only** action offered on this state (#432).
+   *
+   * Null both for a vendor who never started onboarding and, by D29's
+   * constraint, for every row where `stripeOnboarded` is false without one.
+   * That is what separates "never connected" from "Stripe restricted them":
+   * `stripeOnboarded` is false on both, and only these three fields differ.
+   */
+  stripeAccountId: z.string().nullable(),
+  /** Stripe's own code for why a capability is off — never operator-written. */
+  stripeDisabledReason: z.string().nullable(),
+  /** What Stripe is still waiting on from the vendor. Empty when nothing is. */
+  stripeRequirementsDue: z.array(z.string()),
   createdAt: z.date(),
 });
 export type AdminVendorRow = z.infer<typeof adminVendorRowSchema>;
@@ -2370,8 +2384,43 @@ export const adminPaymentRowSchema = z.object({
   vendorPayoutCents: z.int(),
   stripePaymentIntentId: z.string().nullable(),
   vendorName: z.string(),
+  vendorSlug: z.string(),
   customerName: z.string(),
   paidAt: z.date().nullable(),
+  /**
+   * Which of the three payout states this booking is in, derived by
+   * `payoutStatusOf` and **not** by a fourth reading of the status enum (#432).
+   *
+   * The screen used to show a booking whose money reached the platform and
+   * never reached the vendor identically to one that settled, because the row
+   * carried no payout state at all. It carries the derivation's answer rather
+   * than the columns behind it so this surface cannot come to disagree with the
+   * vendor dashboard and the booking report about what `held` means —
+   * `dashboard.dao.ts` documents at length what that divergence costs.
+   */
+  payoutStatus: payoutStatusSchema,
+  payoutReleasedAt: z.date().nullable(),
+  payoutAttempts: z.int(),
+  payoutFailureReason: z.string().nullable(),
+  stripeTransferId: z.string().nullable(),
+  /**
+   * A transfer the sweep still owes and has already tried — `isPayoutFailing`.
+   *
+   * Deliberately **not** a fourth `PayoutStatus` member. `payoutStatusOf` omits
+   * `failed` on purpose — a failed transfer is retried every quarter of an hour
+   * and self-heals, so telling a *vendor* about it would alarm them about
+   * something already in hand. An operator is the one reader who has to know,
+   * so the fact lives here as a flag beside the shared status rather than as a
+   * private redefinition of it.
+   *
+   * "Still owed" is load-bearing: a booking whose transfer failed and was then
+   * fully refunded is not failing, it is finished, and a flag that read the
+   * attempt count alone would keep it here for ever.
+   *
+   * Carried on every row, not only inside the filter — the failure #415 fixed
+   * was precisely a state you had to already know about in order to find.
+   */
+  payoutFailing: z.boolean(),
 });
 export type AdminPaymentRow = z.infer<typeof adminPaymentRowSchema>;
 
@@ -2466,6 +2515,25 @@ export const adminMetricsSchema = z.object({
    * columns that already record something.
    */
   reviewsCount: z.int(),
+  /**
+   * Bookings the sweep still owes and has already tried — `payoutFailingClauses`,
+   * the same expression the Payments filter composes (#432).
+   */
+  payoutsFailingBookingsCount: z.int(),
+  /**
+   * How many **vendors** those bookings belong to: `count(distinct vendor_id)`
+   * over that same set, not a wider one.
+   *
+   * Two readings of one set, deliberately, so the alert and the list it links
+   * to cannot describe different rows. Counting blocked vendors over the whole
+   * *owed* set and pointing them at `Payouts: not connected` was the first
+   * shape of this and it lied by arithmetic — "1 vendor is owed money we cannot
+   * send", clicked, and every vendor who never finished onboarding, with
+   * nothing marking the one. A vendor whose money is genuinely stuck arrives
+   * here within a sweep interval anyway, because a blocked account is a failed
+   * transfer as soon as the sweep reaches it.
+   */
+  payoutsBlockedVendorsCount: z.int(),
   /** Colour-coded in the UI by meaning: revenue gold, bookings clay, users steel, completion sage. */
   revenueByDay: z.array(adminMetricPointSchema),
   bookingsByDay: z.array(adminMetricPointSchema),
@@ -2516,10 +2584,51 @@ export type AdminBookingQuery = z.infer<typeof adminBookingQuerySchema>;
 export const adminBookingPageSchema = paginatedSchema(adminBookingRowSchema);
 export type AdminBookingPage = z.infer<typeof adminBookingPageSchema>;
 
-export const adminPaymentQuerySchema = z.object({ ...adminPaginationShape });
+/**
+ * The Payments view's saved filter, shaped like the Bookings view's
+ * `refund-stuck` because it names the same kind of thing: a state that is
+ * derivable, invisible, and about money that stopped moving.
+ */
+export const ADMIN_PAYMENT_FLAGS = ['payout-failing'] as const;
+export const adminPaymentFlagSchema = z.enum(ADMIN_PAYMENT_FLAGS);
+export type AdminPaymentFlag = (typeof ADMIN_PAYMENT_FLAGS)[number];
+
+export const adminPaymentQuerySchema = z.object({
+  ...adminPaginationShape,
+  flag: adminPaymentFlagSchema.optional(),
+});
 export type AdminPaymentQuery = z.infer<typeof adminPaymentQuerySchema>;
 export const adminPaymentPageSchema = paginatedSchema(adminPaymentRowSchema);
 export type AdminPaymentPage = z.infer<typeof adminPaymentPageSchema>;
+
+/**
+ * What one operator-driven payout retry did.
+ *
+ * `busy` is the third answer and it is not padding: a retry that found the
+ * fifteen-minute sweep already holding the row lock attempted nothing, and
+ * reporting that as `failed` would put a refusal in front of an operator that
+ * Stripe never made.
+ */
+export const ADMIN_PAYOUT_RETRY_OUTCOMES = ['released', 'failed', 'busy'] as const;
+export const adminPayoutRetryOutcomeSchema = z.enum(ADMIN_PAYOUT_RETRY_OUTCOMES);
+export type AdminPayoutRetryOutcome = (typeof ADMIN_PAYOUT_RETRY_OUTCOMES)[number];
+
+/**
+ * The outcome plus the payout state it left behind, so the console redraws the
+ * row from the answer rather than from what it was showing when the operator
+ * pressed the button — including **today's** failure reason rather than the one
+ * they were reading.
+ */
+export const adminPayoutRetryResultSchema = z.object({
+  outcome: adminPayoutRetryOutcomeSchema,
+  payoutStatus: payoutStatusSchema,
+  payoutAttempts: z.int(),
+  payoutFailureReason: z.string().nullable(),
+  payoutReleasedAt: z.date().nullable(),
+  stripeTransferId: z.string().nullable(),
+  payoutFailing: z.boolean(),
+});
+export type AdminPayoutRetryResult = z.infer<typeof adminPayoutRetryResultSchema>;
 
 export const adminReviewQuerySchema = z.object({
   ...adminPaginationShape,

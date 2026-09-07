@@ -25,3 +25,16 @@ and check the field is coerced there. If the wire schema is a bare re-export
 (`export const wireXSchema = xSchema`), that is the bug. Prove it in one line:
 `z.object({ f: z.date() }).safeParse(JSON.parse(JSON.stringify({ f: new Date() })))`
 is `false`. Related: [[review-checklist-widened-write-schema-vs-response-schemas]].
+
+**The second shape, which has no wire schema to grep for (#432).** A _mutation_
+response schema is passed to `useApi` straight from `@vendor-marketplace/shared`
+— `call(path, { method: 'PUT', schema: adminPayoutRetryResultSchema })` — so
+there is no `wire*Schema` at all and the "did you extend it" question never gets
+asked. Grep the diff for `schema:` inside a client component and check whether
+the schema it names is a shared one carrying a `z.date()`. When the action moves
+money the misreport is the damage: `apiRequest` throws an `ApiClientError` with
+the **200** status, `userFacingError` only suppresses `>= 500`, and
+`ConfirmAction` holds its dialog open under a comment saying an open dialog
+means the action did nothing — so a transfer that landed is reported as a
+failure and `router.refresh()` never runs. The nullable case passes and the
+success case fails, so a suite that only drives the failure path stays green.

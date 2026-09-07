@@ -8,6 +8,7 @@ import {
   MAX_SLUG_LENGTH,
   PAYOUT_RELEASE_HOURS,
   type BookingStatus,
+  type PayoutModel,
   type PayoutStatus,
 } from '../constants/index.js';
 
@@ -594,6 +595,46 @@ export function payoutStatusOf(booking: PayoutStatusSubject): PayoutStatus {
    * not the other cannot happen.
    */
   return HELD_PAYOUT_STATUSES.some((held) => held === booking.status) ? 'held' : 'pending';
+}
+
+/** What `isPayoutFailing` needs, and nothing else. */
+export type PayoutFailureSubject = PayoutStatusSubject & {
+  payoutAttempts: number;
+  payoutModel: PayoutModel;
+  vendorPayoutCents: number;
+};
+
+/**
+ * A transfer the sweep still owes, and has already tried (#432).
+ *
+ * **Deliberately not a fourth `PayoutStatus`.** `payoutStatusOf` omits `failed`
+ * on purpose: a failed transfer is retried every quarter of an hour and
+ * self-heals, so surfacing it to a *vendor* would alarm them about something
+ * already in hand. An operator is the one reader who has to know, and this is
+ * the fact they need — beside the shared status rather than as a rival reading
+ * of it.
+ *
+ * **"Still owed" is half the definition, and leaving it out is a bug that never
+ * clears.** `payout_attempts > 0 and not released` looks like the whole answer
+ * and is not: a booking whose transfer failed once and was then *fully
+ * refunded* has `vendor_payout_cents` rewritten to `0` (D37), which drops it
+ * out of the sweep's own predicate for ever — so it would sit in the operator's
+ * failing list permanently, pinning an alert that says the scheduled release
+ * keeps trying, about a row the scheduled release will never touch again. A
+ * dispute filed after a failed attempt is the same shape: it is `held`, which
+ * is a different thing to say and the reason `payoutStatusOf` exists.
+ *
+ * So this is `payoutOwedClauses` plus an attempt, and the SQL twin in
+ * `payouts.dao.ts` composes exactly that. One rule, expressed once where it has
+ * to be a predicate and once where it has to be a boolean.
+ */
+export function isPayoutFailing(booking: PayoutFailureSubject): boolean {
+  return (
+    booking.payoutAttempts > 0 &&
+    payoutStatusOf(booking) === 'pending' &&
+    booking.payoutModel === 'separate' &&
+    booking.vendorPayoutCents > 0
+  );
 }
 
 /**

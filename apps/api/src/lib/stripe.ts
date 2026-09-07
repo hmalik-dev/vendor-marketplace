@@ -559,9 +559,32 @@ export interface CreateOnboardingLinkInput {
  * balance reach their bank. A vendor holding one but not the other cannot
  * complete a booking, so both are read and both are required.
  */
-export interface StripeAccountStatus {
+export interface StripeAccountCapabilities {
   transfersActive: boolean;
   payoutsActive: boolean;
+}
+
+/**
+ * The capability pair plus **why** it is what it is (#432).
+ *
+ * Split from `StripeAccountCapabilities` rather than folded into it because
+ * `isOnboarded` and `isMissingPayoutsOnly` answer questions about the pair
+ * alone: handing them a reason they never read would make every caller supply
+ * one, and a test asserting the conjunction would have to invent Stripe copy to
+ * do it.
+ */
+export interface StripeAccountStatus extends StripeAccountCapabilities {
+  /**
+   * Stripe's own code for why a capability is not active, or `null` when both
+   * are. `status_details` is documented as empty while a capability is
+   * `active`, so a non-null value here always accompanies a false flag.
+   */
+  disabledReason: string | null;
+  /**
+   * The requirement descriptions Stripe is still waiting on from the vendor,
+   * deduplicated and ordered as Stripe returned them.
+   */
+  requirementsDue: string[];
 }
 
 export interface StripeEventNotification {
@@ -585,7 +608,7 @@ export interface StripeEventNotification {
  * a transfer but cannot be paid out has money arriving in a balance they cannot
  * empty, which is worse than being told they are not set up yet.
  */
-export function isOnboarded(status: StripeAccountStatus): boolean {
+export function isOnboarded(status: StripeAccountCapabilities): boolean {
   return status.transfersActive && status.payoutsActive;
 }
 
@@ -598,7 +621,7 @@ export function isOnboarded(status: StripeAccountStatus): boolean {
  * are stuck behind the payment gate with nothing on any surface saying which of
  * the two is missing, which is a day of guessing unless the logs say it.
  */
-export function isMissingPayoutsOnly(status: StripeAccountStatus): boolean {
+export function isMissingPayoutsOnly(status: StripeAccountCapabilities): boolean {
   return status.transfersActive && !status.payoutsActive;
 }
 
@@ -655,12 +678,75 @@ export function describeAccountEvent(verified: unknown): StripeEventNotification
   return { type, accountId: objectId, objectId };
 }
 
-function readRecipientStatus(account: Stripe.V2.Core.Account): StripeAccountStatus {
+/**
+ * Requirement statuses that are actually outstanding.
+ *
+ * `eventually_due` is deliberately excluded: every account carries some of
+ * those from the moment it is created, so surfacing them would put a permanent
+ * list in front of an operator looking for the thing that is actually wrong.
+ */
+const OUTSTANDING_REQUIREMENT_STATUSES = new Set(['currently_due', 'past_due']);
+
+/**
+ * Why a capability is not active, in Stripe's vocabulary — the first
+ * `status_details` code on either capability, transfers before payouts.
+ *
+ * First rather than all of them because the codes are a small closed set and a
+ * restricted account almost always carries the same code on both capabilities;
+ * joining them would render `requirements_past_due · requirements_past_due` on
+ * the vendor row. The full picture is `requirementsDue`, which is the list that
+ * genuinely varies.
+ */
+function readDisabledReason(
+  balance: Stripe.V2.Core.Account.Configuration.Recipient.Capabilities.StripeBalance | undefined,
+): string | null {
+  const details = [
+    ...(balance?.stripe_transfers?.status_details ?? []),
+    ...(balance?.payouts?.status_details ?? []),
+  ];
+
+  return details[0]?.code ?? null;
+}
+
+/**
+ * What Stripe is still waiting on **from the vendor**.
+ *
+ * `awaiting_action_from === 'stripe'` is filtered out because there is nothing
+ * anyone here can do about it, and an operator handed a list they cannot act on
+ * will chase the vendor for a document Stripe is already verifying.
+ */
+function readRequirementsDue(account: Stripe.V2.Core.Account): string[] {
+  const entries = account.requirements?.entries ?? [];
+
+  const due = entries
+    .filter(
+      (entry) =>
+        entry.awaiting_action_from === 'user' &&
+        OUTSTANDING_REQUIREMENT_STATUSES.has(entry.minimum_deadline.status),
+    )
+    .map((entry) => entry.description);
+
+  return [...new Set(due)];
+}
+
+/**
+ * The whole answer read off one retrieved account — capabilities, reason and
+ * outstanding requirements.
+ *
+ * Exported so a test can hand it a **real `account.updated` payload shape**
+ * rather than a hand-built row, the same reason `transferParams` is exported
+ * (#432). Every field here is somewhere Stripe changed its mind about at least
+ * once, and a fixture shaped like our own interface would agree with itself and
+ * disagree with the gateway.
+ */
+export function readAccountStatusFrom(account: Stripe.V2.Core.Account): StripeAccountStatus {
   const balance = account.configuration?.recipient?.capabilities?.stripe_balance;
 
   return {
     transfersActive: balance?.stripe_transfers?.status === 'active',
     payoutsActive: balance?.payouts?.status === 'active',
+    disabledReason: readDisabledReason(balance),
+    requirementsDue: readRequirementsDue(account),
   };
 }
 
@@ -739,10 +825,16 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
 
     async readAccountStatus(accountId) {
       const account = await stripe.v2.core.accounts.retrieve(accountId, {
-        include: ['configuration.recipient'],
+        /*
+         * `requirements` as well as the capabilities, because the capability
+         * status says only *that* payouts are off and the requirement entries
+         * say what would turn them back on — which is the whole question an
+         * operator looking at a restricted vendor is asking (#432).
+         */
+        include: ['configuration.recipient', 'requirements'],
       });
 
-      return readRecipientStatus(account);
+      return readAccountStatusFrom(account);
     },
 
     parseEventNotification(payload, signature) {

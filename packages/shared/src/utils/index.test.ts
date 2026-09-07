@@ -21,6 +21,7 @@ import {
   parseDateString,
   payoutDueThroughDate,
   payoutReleaseAt,
+  isPayoutFailing,
   payoutStatusOf,
   replyDeadline,
   shortTimeAgo,
@@ -593,6 +594,60 @@ describe('payoutStatusOf', () => {
         payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
       }),
     ).toBe('released');
+  });
+});
+
+describe('isPayoutFailing', () => {
+  /** A transfer the sweep owes and has tried once — the state under test. */
+  const FAILING = {
+    status: 'confirmed',
+    payoutReleasedAt: null,
+    payoutAttempts: 1,
+    payoutModel: 'separate',
+    vendorPayoutCents: 127_600,
+  } as const;
+
+  it('is true only once a transfer has actually been attempted', () => {
+    expect(isPayoutFailing(FAILING)).toBe(true);
+    expect(isPayoutFailing({ ...FAILING, payoutAttempts: 0 })).toBe(false);
+  });
+
+  it('is false once the money has gone out', () => {
+    expect(
+      isPayoutFailing({ ...FAILING, payoutReleasedAt: new Date('2026-06-18T00:00:00Z') }),
+    ).toBe(false);
+  });
+
+  /*
+   * A dispute filed after a failed attempt is `held`, and that is a different
+   * thing to tell an operator — the distinction `payoutStatusOf` exists for.
+   */
+  it('is false while a reported problem holds the payout', () => {
+    expect(isPayoutFailing({ ...FAILING, status: 'disputed' })).toBe(false);
+  });
+
+  /**
+   * **The one that never clears if it is left out.**
+   *
+   * A full refund rewrites `vendor_payout_cents` to `0` (D37) and leaves the
+   * release null, so the sweep drops the row for ever. A flag reading the
+   * attempt count alone would keep it in the operator's failing list
+   * permanently, under an alert saying the scheduled release keeps trying.
+   */
+  it('is false for a failed transfer that was then fully refunded', () => {
+    expect(isPayoutFailing({ ...FAILING, status: 'cancelled', vendorPayoutCents: 0 })).toBe(false);
+  });
+
+  /* A cancellation that still owes a residual is genuinely still failing (D31). */
+  it('is true for a cancelled booking that still owes a residual', () => {
+    expect(isPayoutFailing({ ...FAILING, status: 'cancelled', vendorPayoutCents: 63_800 })).toBe(
+      true,
+    );
+  });
+
+  /* A destination charge split the money as the card succeeded; nothing is owed. */
+  it('is false under the legacy destination charge', () => {
+    expect(isPayoutFailing({ ...FAILING, payoutModel: 'destination' })).toBe(false);
   });
 });
 

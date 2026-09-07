@@ -57,3 +57,6 @@
 - [A clean rebase is not a compiling rebase](rebase-auto-merges-are-not-compile-checked.md) — git merges text, not signatures; re-run typecheck and the suites after every rebase
 - [A stale whole-file copy silently reverts](stale-whole-file-copy-silently-reverts.md) — a code PR carrying an old tracker/registry copy erases other lanes' filings; no conflict, and the contiguity guard passes the damage
 - [The payout sweep ticks under your test](the-payout-sweep-ticks-under-your-test.md) — it runs every 15 min on real rows; assert the count increased, never that it equals 9
+- [`rebase --continue` blames conflicts for unstaged changes](rebase-continue-blames-conflicts-for-unstaged-changes.md) — a review agent writing to `.claude/agent-memory/` mid-rebase stalls it with a message about conflicts that are not there
+- [`next dev` hits EMFILE with many lanes](next-dev-hits-emfile-with-many-lanes.md) — every page 500s while the API is fine; build and `next start` for a browser pass
+- [A lane web build must be made under the lane env](a-lane-web-build-must-be-made-under-the-lane-env.md) — `API_URL` server-side and `NEXT_PUBLIC_API_URL` inlined at build time; the CSP's port is the tell

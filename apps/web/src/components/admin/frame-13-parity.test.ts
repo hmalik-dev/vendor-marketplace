@@ -319,7 +319,8 @@ describe('the table', () => {
       'src/components/admin/vendor-table.tsx',
       'src/app/admin/bookings/page.tsx',
       'src/app/admin/customers/page.tsx',
-      'src/app/admin/payments/page.tsx',
+      // #432 moved the Payments columns into a client component with them.
+      'src/components/admin/payment-table.tsx',
     ];
     expect(columnSources).toHaveLength(7);
 
