@@ -40,6 +40,8 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   tag_updated: 'Edited a tag',
   tag_suggestion_resolved: 'Resolved a tag suggestion',
   dispute_resolved: 'Resolved a report',
+  user_data_exported: 'Exported an account record',
+  user_closed: 'Closed an account',
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */

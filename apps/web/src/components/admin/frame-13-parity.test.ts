@@ -320,8 +320,9 @@ describe('the table', () => {
       'src/app/admin/bookings/page.tsx',
       'src/app/admin/customers/page.tsx',
       'src/app/admin/payments/page.tsx',
+      'src/app/admin/users/[userId]/page.tsx',
     ];
-    expect(columnSources).toHaveLength(7);
+    expect(columnSources).toHaveLength(8);
 
     for (const path of columnSources) {
       // Comments discuss these classes by name; only the code declares them.

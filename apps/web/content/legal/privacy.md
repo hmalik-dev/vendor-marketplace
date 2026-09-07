@@ -33,11 +33,15 @@ A vendor sees the requests and bookings addressed to them, and the messages you 
 
 ## How long we keep it
 
-Messages and bookings stay for as long as the account does. Payment records outlive the account where the law requires it. Uploaded files are deleted when you delete them, and a closed account's profile stops being public immediately. Your record of accepting a legal document — including the address and browser it names — outlives the account too; see _Your rights_.
+Messages and bookings outlive a closed account, because the other party's copy of a conversation and a booking is theirs as much as it is yours. Payment records outlive it where the law requires it. Uploaded files are deleted when you delete them, and a closed account's profile stops being public immediately. Your record of accepting a legal document — including the address and browser it names — outlives the account too; see _Your rights_.
 
 ## Your rights
 
-Ask us for a copy of what we hold, ask us to correct it, or ask us to delete it. Two things survive that, and we would rather say so than pretend otherwise: the payment records the law makes us keep, and your record of having accepted a legal document. That record is deliberately not editable and not removable, because an agreement either side can change afterwards is worth nothing to either side — and **closing your account does not remove it**, including the address and browser it names. What closing does remove is everything else. Requests go through Contact support.
+Ask us for a copy of what we hold, ask us to correct it, or ask us to close your account. Requests go through Contact support and a person answers them. The copy is the whole record: your account, your bookings and the requests behind them, the messages in your threads, the reviews you wrote and the ones written about you, your notifications, your legal acceptances, and your payment records with the Stripe references that identify them. The other party's email address and phone number are left out, and the copy says so — those are their details, not yours.
+
+**Closing is refused while you hold an upcoming confirmed booking.** Cancel those first from your bookings, where the refund is priced the way every other cancellation on this platform is priced; closing an account prices nothing and refunds nothing. Once nothing is outstanding, closing retires your account, takes any storefront off the marketplace immediately, and declines the requests still open against you.
+
+Two things survive it, and we would rather say so than pretend otherwise: the payment and booking records the law and the other party's own copy make us keep, and your record of having accepted a legal document. That record is deliberately not editable and not removable, because an agreement either side can change afterwards is worth nothing to either side — and **closing your account does not remove it**, including the address and browser it names.
 
 ## Security
 

@@ -5,6 +5,7 @@ import {
   adminBanResultSchema,
   adminBookingPageSchema,
   adminBookingQuerySchema,
+  adminCloseAccountResultSchema,
   adminCustomerPageSchema,
   adminCustomerQuerySchema,
   adminMetricsSchema,
@@ -17,6 +18,8 @@ import {
   adminTagSuggestionPageSchema,
   adminTagSuggestionQuerySchema,
   adminTagSuggestionResultSchema,
+  adminUserDataRightsSchema,
+  adminUserExportSchema,
   adminVendorFacetsSchema,
   adminVendorPageSchema,
   adminVendorQuerySchema,
@@ -45,6 +48,7 @@ import {
   updateTag,
   type AdminContext,
 } from './admin.service.js';
+import { closeAccount, exportUserData, readUserDataRights } from './data-rights.service.js';
 import { bookingContextFor } from '../payments/payments.service.js';
 
 const userParamsSchema = z.object({ userId: z.uuid() });
@@ -128,6 +132,65 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
         assertRole(request.auth, ['admin']).id,
         request.params.userId,
         false,
+        app.clock(),
+      ),
+  );
+
+  /**
+   * The record one account leaves behind — what is still held, and the legal
+   * acceptances behind it (#438).
+   *
+   * Reads a **closed** account as well as a live one, which is the point: the
+   * privacy policy promises records are kept, so the console has to show what
+   * is still held rather than an empty screen implying the person is gone.
+   */
+  app.get(
+    '/admin/users/:userId/data-rights',
+    {
+      onRequest: adminOnly,
+      schema: { params: userParamsSchema, response: { 200: adminUserDataRightsSchema } },
+    },
+    async (request) => readUserDataRights(app.db, request.params.userId, app.clock()),
+  );
+
+  /**
+   * *"Ask us for a copy of what we hold"*, answered (#438).
+   *
+   * `POST` on a read, deliberately. It is an action rather than a resource: it
+   * hands a whole person's file to somebody and writes the audit row that says
+   * who asked for it, and a `GET` invites the caching, prefetching and
+   * link-sharing that a subject-access response must not get.
+   */
+  app.post(
+    '/admin/users/:userId/export',
+    {
+      onRequest: adminOnly,
+      schema: { params: userParamsSchema, response: { 200: adminUserExportSchema } },
+    },
+    async (request) =>
+      exportUserData(context(), assertRole(request.auth, ['admin']).id, request.params.userId),
+  );
+
+  /**
+   * *"To close your account, ask us through Contact support"*, answered — and
+   * refused where D39 says it must be (#438).
+   *
+   * The refusal is a 409 naming the upcoming confirmed bookings the customer
+   * has to cancel first, which routes them through D3's tiers. This route
+   * prices nothing and refunds nothing, and nothing that does either belongs on
+   * it.
+   */
+  app.post(
+    '/admin/users/:userId/close',
+    {
+      onRequest: adminOnly,
+      schema: { params: userParamsSchema, response: { 200: adminCloseAccountResultSchema } },
+    },
+    async (request) =>
+      closeAccount(
+        context(),
+        assertRole(request.auth, ['admin']).id,
+        request.params.userId,
         app.clock(),
       ),
   );

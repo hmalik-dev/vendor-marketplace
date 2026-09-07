@@ -11,6 +11,7 @@ import {
   LEGAL_JUMP_RAIL_MIN_SECTIONS,
   LEGAL_PATHS,
   PAYOUT_RELEASE_HOURS,
+  adminUserExportSchema,
   legalFactTokens,
 } from '@vendor-marketplace/shared';
 import { legalDocument, legalMarkdownSource } from './legal-content';
@@ -175,6 +176,79 @@ describe('the facts in the copy', () => {
       .join('');
 
     expect(text).toContain('not editable and not removable');
+  });
+
+  /**
+   * #438's acceptance 8, against the **rendered** document rather than the
+   * Markdown source.
+   *
+   * The policy made two promises the product could not keep — a copy of what we
+   * hold, and closure on request — and both are now routes in the operations
+   * console. These assertions are what stops the document and the product
+   * drifting apart again in either direction: a category the page promises has
+   * to be a key the export actually produces, and a refusal the API makes has
+   * to be a refusal the page warns about.
+   */
+  describe("the privacy policy's data-rights promises (#438)", () => {
+    function rightsText(): string {
+      const rights = legalDocument('privacy').sections.find(
+        (section) => section.title === 'Your rights',
+      );
+
+      return (rights?.blocks ?? [])
+        .flatMap((block) => (block.kind === 'paragraph' ? block.spans : []))
+        .map((span) => span.text)
+        .join('');
+    }
+
+    /**
+     * Each phrase the page promises, paired with the key of the export that
+     * keeps it. A promise with no key behind it is a claim the product cannot
+     * answer; a phrase that has left the page is a promise silently withdrawn.
+     */
+    const PROMISED_CATEGORIES = {
+      'your bookings': 'bookings',
+      'the requests behind them': 'bookingRequests',
+      'the messages in your threads': 'messages',
+      'the reviews you wrote': 'reviewsWritten',
+      'the ones written about you': 'reviewsReceived',
+      'your notifications': 'notifications',
+      'your legal acceptances': 'legalAcceptances',
+    } as const;
+
+    it('promises no category the export cannot produce', () => {
+      const text = rightsText();
+
+      for (const [phrase, key] of Object.entries(PROMISED_CATEGORIES)) {
+        expect([phrase, text.includes(phrase)]).toEqual([phrase, true]);
+        expect(Object.keys(adminUserExportSchema.shape)).toContain(key);
+      }
+    });
+
+    it('says the counterparty details are withheld, which the export declares', () => {
+      expect(rightsText()).toContain(
+        "The other party's email address and phone number are left out",
+      );
+      expect(Object.keys(adminUserExportSchema.shape)).toContain('withheld');
+    });
+
+    /**
+     * D39. The page used to say *"what closing does remove is everything
+     * else"*, which was untrue in both directions: closure is refused outright
+     * while an upcoming confirmed booking stands, and what it does then is
+     * retire the account rather than erase the record.
+     */
+    it('warns that closure is refused while an upcoming confirmed booking stands', () => {
+      const text = rightsText();
+
+      expect(text).toContain('Closing is refused while you hold an upcoming confirmed booking');
+      expect(text).toContain('closing an account prices nothing and refunds nothing');
+      expect(text).toContain('retires your account');
+    });
+
+    it('no longer claims closure removes everything else', () => {
+      expect(rightsText()).not.toContain('What closing does remove is everything else');
+    });
   });
 
   /** Ruled and cut: nothing in this product describes an enforcement process. */
