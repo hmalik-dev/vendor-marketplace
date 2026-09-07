@@ -420,8 +420,122 @@ Active tracker: `.claude/plans/vendor-marketplace-tickets.md`
 | **396** | **Production CSP blocks Stripe entirely — checkout cannot load on the deployed origin** | P1.5 | M4.5 | **P0 Critical** | **Done** | `main` | **None** | `core` `stripe` | **Filed 2026-08-31 from #387's browser pass, confirmed independently by two lanes.** `apps/web/src/config/security-headers.ts` names Stripe **exactly once in the whole file** — in a comment explaining why it is not needed. No Stripe host appears in any directive, so the deployed origin blocks the payment path **three** ways: `script-src` (`:96`) omits `js.stripe.com`, so `loadStripe` cannot inject; `frame-src` (`:115`) is `'self' ${CLERK_HOSTS}`, so the Elements iframe is refused; `connect-src` (`:114`) omits `api.stripe.com`/`r.stripe.com`. **A fourth, in the same file:** `Permissions-Policy: payment=()` (`:154`) is justified by a comment reading *"Stripe Checkout is a redirect, not an embedded Payment Request"* — false since the screen moved to embedded Elements (`checkout-screen.tsx:8-9`, `loadStripe` at `:25`, `confirmPayment` at `:147`), so Apple Pay and Google Pay stay dead **after** the three directives are fixed. Anyone who fixes only the CSP gets a working card form and wallets that silently never appear. **Invisible in dev by construction:** `next.config.ts:76` enforces only when `isProduction`, so locally the header is report-only and the violations read as console noise — #387's three passing payment runs went straight through 16 of them. **Reproducible locally with `CSP_ENFORCE=1`**, which flips it to enforcing on a dev server; that flag appears nowhere in `packages/shared/src/env` or `.env.example` and should be documented here too. **Guard:** `security-headers.test.ts` passes today with zero Stripe hosts because it asserts directives are *present*, not what they *permit* — the fix needs a test enumerating every origin the app loads from and asserting each appears in the enforced policy. Standalone rather than folded into #370, which is blocked on #362 for credentials this needs none of. **In Progress 2026-09-03 (autonomous QA run, on `main` directly per operator instruction).** Stripe's hosts added per Stripe's published CSP guidance for Stripe.js, the Payment Element and Link — including `*.js.stripe.com`, `*.stripe.com` (img) and `*.link.com`, which the ticket's "no wildcards" line is deliberately not followed on because Stripe documents them; `payment=(self "https://js.stripe.com" "https://*.js.stripe.com")`; `CSP_ENFORCE` registered and moved to turbo `globalEnv` (as a pass-through key the build hash was identical for 0 and 1); `shouldEnforceCsp` extracted and its production branch pinned. Code landed in `1908064`, reviewed by diff-reviewer and security-auditor. Acceptance 3 (checkout driven with `CSP_ENFORCE=1`, zero violations, screenshots) is pending on the shared browser and gates Done. **Done 2026-09-04** — landed on `main` in `1908064` (Stripe hosts per Stripe's CSP guidance, `payment=(self "https://js.stripe.com" "https://*.js.stripe.com")`, `CSP_ENFORCE` registered and moved to turbo `globalEnv`, `shouldEnforceCsp` pinned), plus `58722a2` (Clerk telemetry off — the one violation the enforced policy still produced). Browser-verified with `CSP_ENFORCE=1` on the dev server: the enforced header confirmed by curl; checkout rendered eight `js.stripe.com` frames; `js/api/m/r.stripe.com`, `m.stripe.network`, `b.stripecdn.com` all 200; `featurePolicy.allowsFeature('payment','https://js.stripe.com') === true`; card 4242 paid $1,450 (booking `8fd7842b…`, request `ac475f65…`) and landed on `/confirmed`; **zero** CSP violations on checkout and confirmed. Deviation recorded in the file: `*.js.stripe.com`, `*.stripe.com` (img) and `*.link.com` are kept because Stripe documents them. Not verified against a deployed origin (#370 blocks one). |
 | **388** | **Forms reject the first submit in silence** | P1 | M3 | **P1 High** | **Done** | `worktree-388` | **None** | `core` | **Filed 2026-08-31 by the pre-launch QA passthrough.** Two of the three form surfaces a vendor must clear reject a pristine submit with **no POST, no `aria-invalid`, no `role=alert`, no message anywhere on the page** — the button appears inert. Confirmed on **Add package** (`/vendor/packages`) and **Create profile** (`/vendor/profile/edit`, the screen every new vendor is funnelled to). Focus moves to the offending control, which is the only signal, and it is silent for a screen reader. A **second** submit does render the summary, so the machinery exists and the first pass does not reach it. The booking-request form validates correctly but never announces it either. Includes the Price filter, which discards non-numeric input with no message **Returned to Backlog 2026-09-03 by the autonomous QA run:** In Progress with no live session. Work is on worktree-388 (checkpointed `32b00b3`); resume from that branch rather than rebuilding. **Done 2026-09-04** — squash-merged from `worktree-388` as `7fc4469`, with the diff-reviewer's four findings applied (group targets take `tabIndex={-1}` so the focus move is not a no-op on the ordinary forgot-a-category path; a preset chosen after unreadable text clears the discard verdict it replaces; the form guard's opening-tag scan is brace-aware, since `=>` contains a `>`), then `4558485` for the one defect the browser pass itself found: the summary rail's brief carried `aria-invalid` with no `aria-describedby` and no message anywhere in the document. **Browser-verified at 1440x900** across both auth states: Add package (blank, then description-only) and Create profile both answer the first press with a counted `role="alert"`, per-field `aria-invalid` + resolving `aria-describedby`, focus on the first blocker (`#categories`, a `role="group"` with `tabindex="-1"`, identity-checked) and **no network call**; the booking request form announces and moves focus off the button; the Price filter says a bound it could not read was cleared, and says nothing when a preset supplies one. No CSP or telemetry lines, no horizontal overflow on any of seven pages, no database rows created. Recorded, not fixed: the booking request screen still has two message idioms (the shared card and a local `Field`), both correct — consolidation is not this ticket's. |
 | **386** | **Visual corrections read off the frames — four undefined ramp steps and the search skeleton** | P2 | M3 | **P2 Medium** | **Done** | `worktree-386` | **None** | `core` | **Filed 2026-08-31 by the fourth backlog consolidation. Merges #376 and #379.** Both are single-pass corrections whose value is read off a frame and then guarded; both are unblocked; and neither fills a lane on its own, while each would otherwise cost a worktree, a preflight, a PR and a merge. One browser session covers all three frames — `05 Checkout`, `06 Booking confirmed`, `17 Search loading`. The merged rows carry the measurements and are not restated **Returned to Backlog 2026-09-03 by the autonomous QA run:** In Progress with no live session. Work is on worktree-386 (checkpointed `4877d7a`); resume from that branch rather than rebuilding. **Done 2026-09-04** — squash-merged from `worktree-386` as `23e4cc2`. `KNOWN_UNDEFINED_STEPS` is **empty**: #387 deleted the two `bg-sage-500` checkout sites, this ticket deleted `text-sage-700` (→ `sage-600`, the darkest step the ramp defines, deviation from frame `06`'s `#3A4D33` recorded in `01-foundations.md`) and `hover:text-steel-700` (→ `stone-900`, since `steel` stops at 600). Both are pinned by tests, because the ratchet only proves a step exists. The reviewer's two blocking findings were applied: the scan now asserts a corpus floor (with the list empty, `toEqual([])` could no longer tell a clean scan from an empty one — a greedy comment stripper silently drops it from ~1220 matches to ~308), and `SKELETON_COUNT`'s doc no longer contradicts the correction below it. **parity-checker at 1440x900:** frame `17`'s skeleton is byte-for-byte the loaded card — 350.33px card, 127px body, 223.33px 3:2 cover, 16px radius, chip row present, shimmer `stone-200 → stone-100 → stone-200` at 1.5s linear; an independently shaped repo-wide scan confirms **zero** undefined ramp steps in production source. Two things it raised are **not** this ticket's and are filed: frame `06`'s own parity debt is **#413**, and frame `05` could not be measured at all because the only payable checkout an automated pass can reach 500s on a past-dated accepted request — which is **#401**. One deviation recorded and not fixed: the skeleton has no counterpart for the loaded card's 36px absolutely-positioned avatar disc, which costs no layout height and which frame `17` does not draw either. |
+| **434** | **Admin action log: every mutation records who did it** | P3 | M6 | **P0 Critical** | **Done** | `worktree-434` | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** There is no audit table. Two `log.info` lines exist — `admin.service.ts:235` for ban, `:629` for review deletion — and the other three mutating routes are never passed the acting admin's id at all: `updateTag(app.db, …)`, `resolveTagSuggestion(context(), …)` and `resolveDispute(context(), …)` all take no actor. A surface whose entire purpose is acting on other people's accounts and money keeps no queryable record of who did what. A precondition for #435, #438 and #440. **Landed 2026-09-07 — `1f8011a`, PR #135.** Six mutating routes write one `admin_actions` row each; the table refuses UPDATE, DELETE and TRUNCATE at the database level, proved against the real Postgres as well as PGlite. `/admin/activity` reads it, filtered by actor and by subject. **Enums shipped as six actions and five subjects, not the union** — #435 adds its own by `ALTER TYPE ... ADD VALUE`. This unblocks #436 and #438. |
 
 ## Closed ticket details
+
+### #434: Admin action log — every mutation records who did it
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Done | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+#### Landed 2026-09-07 — `1f8011a`, PR #135, branch `worktree-434`
+
+All six acceptance criteria met. Two decisions worth carrying forward:
+
+**The write mode is a test, not a judgement.** Best-effort if and only if the
+operation has already committed an irreversible effect outside Postgres;
+otherwise the audit row rides the transaction. Exactly two sites qualify — the
+ban, which has refunded cards, and the dispute, which has moved the money. The
+other four hand their own transaction to the insert, so a failed log write
+leaves an operation the operator can simply repeat rather than a change nobody
+is recorded as having made. Both halves are asserted by renaming the table out
+from under the insert against the real engine.
+
+**One deliberate departure from "one row per successful call":** a tag update
+that changes nothing writes no row, because nothing changed. Recording it would
+file a `tag_updated` row meaning "an operator opened the box and pressed save"
+into the one table whose value is that every row means something happened.
+
+**The enums shipped as this ticket's own six actions and five subjects, not the
+13/8 union** discussed while #435 was in flight. #435 adds its eight action
+values and three subject types by `ALTER TYPE ... ADD VALUE` on rebase.
+
+**`nulls last` is load-bearing on every read of this table.** Drizzle's index
+builder emits `DESC NULLS LAST` and its `desc()` expression emits bare `DESC`,
+which Postgres treats as a different pathkey even on a `NOT NULL` column — so
+without it no index on `admin_actions` is usable. Measured at 50k rows: the
+unfiltered page read 624 buffers as a top-N heapsort and 13 as an index scan.
+
+**This log is load-bearing beyond its own ticket.** An operator unpublishing a
+storefront is advisory — a vendor can republish from their own dashboard — so
+until #442 lands, the row written here is the only trace that the moderation
+action happened at all.
+
+#### The state before it landed
+
+There is no audit table. The whole record of operator action is two log lines:
+
+- `admin.service.ts:235` — `{ actorId, targetId, isBanned }`, "Admin changed an
+  account's ban state"
+- `admin.service.ts:629` — `{ actorId, reviewId }`, "Admin deleted a review"
+
+and the comment beside the first says the quiet part: *"A log line is not an
+audit table."*
+
+The other three mutating routes never learn who called them.
+`updateTag(app.db, request.params.tagId, request.body)` takes a database handle.
+`resolveTagSuggestion(context(), …)` and `resolveDispute(context(), …)` take a
+context with no actor in it. The route handlers have `request.auth` in scope and
+throw it away.
+
+For a plugin whose own docstring says *"these read and write other people's
+accounts by design"*, that is the accountability gap under everything else in
+this section — #435 adds reversible moderation, #438 adds data deletion and
+export, #440 may add money movement, and none of them should ship into a surface
+with no record of who acted.
+
+#### What to build
+
+**1. An append-only `admin_actions` table.** Actor user id, action (a narrow
+enum, not free text), subject type and id, a JSON detail payload for what
+actually changed, and `createdAt`. **Immutable the way `legal_acceptances` is
+immutable** — `0029_sad_storm.sql` already establishes the pattern with
+`no_update` / `no_delete` / `no_truncate` triggers, and this table wants the same
+three for the same reason. Copy the pattern, do not invent a second one.
+
+**2. Every mutating admin route writes one.** Ban, unban, review deletion, tag
+update, tag-suggestion resolution, dispute resolution. `resolveDispute`,
+`updateTag` and `resolveTagSuggestion` all need the actor threaded in —
+`assertRole(request.auth, ['admin']).id` is what the ban routes already pass, so
+the shape exists.
+
+**3. It is written in the same transaction as the change where the change is
+transactional, and never swallows it where it is not.** A ban has already moved
+money by the time it finishes; the file's `bestEffortAnnouncement` rule
+(#408) exists for exactly this and the log write must follow it — a failed audit
+write must not 500 an operation the operator cannot repeat. Log the failure
+loudly instead.
+
+**4. A read surface.** `/admin/activity` — actor, action, subject, when, with a
+filter by actor and by subject. It is also the answer to "what did the console
+do to this account", so a subject filter is what makes it useful rather than a
+firehose.
+
+**5. What must not be logged.** No message bodies, no review content beyond an
+id, no email addresses beyond the ids that resolve to them, no card or Stripe
+secrets. The detail payload records *what changed*, not the content of what was
+moderated — a moderation log that quotes the abuse is a second copy of it.
+
+#### Acceptance
+
+1. All six mutating admin routes write exactly one action row on success and
+   none on a refused call.
+2. The table refuses `UPDATE`, `DELETE` and `TRUNCATE` at the database level.
+3. A failed log write never fails the operation that had already committed, and
+   is logged as an error.
+4. `/admin/activity` filters by actor and by subject.
+5. No row contains a message body, review text, or any credential.
+6. Non-admins get 403 before validation.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] The immutability asserted against the real Postgres, not PGlite, if the
+      triggers need it — `pnpm test:contention` is the precedent for a test that
+      needs the Docker database.
+- [ ] A test that a refused mutation (409, 403) writes no row.
+
 
 ### #31: Shipped-Surface Defect Sweep — scaffold, copy & a11y
 
