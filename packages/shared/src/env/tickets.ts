@@ -543,6 +543,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   450: ['auth'], // a closed account leaves the only screen that reaches it
   451: ['auth'], // closure leaves the Clerk identity live and the email locked
   452: ['auth'], // reproducing it means signing in as each denied role
+  453: ['auth'], // frames for the nine unframed admin screens
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

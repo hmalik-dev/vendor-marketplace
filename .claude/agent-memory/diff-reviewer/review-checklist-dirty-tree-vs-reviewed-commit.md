@@ -76,5 +76,19 @@ early, and when it fires, check whether the offending path is in
 `git diff origin/main...HEAD --name-only` before reporting it as the lane's.
 Report it either way — it blocks their commit — but say whose it is.
 
+**A mid-write snapshot looks exactly like a real defect (#435).** The task named
+a saved `.diff` file; the lane was still editing the same worktree. `pnpm
+typecheck` failed with `TS2304: Cannot find name 'lockVendorProfile'` — the lane
+had written the _call sites_ in `admin.service.ts` seconds before it wrote the
+DAO function and the import. Re-running four minutes later was green. `ls -lT` on
+the changed files against `date` is the cheap check: a modification timestamp
+inside your own session window means you are reading a half-written file, and a
+compile error there is not a finding. Diff the saved `.diff` against a fresh
+`git diff HEAD` before writing the report, and say which revision you judged —
+here the lane had, mid-review, added the vendor-row lock, a missing-owner
+conflict, a new `vendor-publish.contention.test.ts`, and stripped user-supplied
+`businessName`/`name` out of the audit `detail`, all of which changed findings I
+had already drafted.
+
 Related: [[review-checklist-source-grep-substring-collisions]],
 [[review-checklist-controlled-index-drops-the-selection-seed]]

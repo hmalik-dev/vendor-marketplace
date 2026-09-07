@@ -12,6 +12,7 @@ import {
   wireAdminMetricsSchema,
   wireAdminPaymentPageSchema,
   wireAdminActivityPageSchema,
+  wireAdminUserDataRightsSchema,
   wireAdminReviewPageSchema,
   wireAdminTagListSchema,
   wireAdminTagSuggestionPageSchema,
@@ -24,6 +25,7 @@ import {
   type WireAdminMetrics,
   type WireAdminPaymentPage,
   type WireAdminActivityPage,
+  type WireAdminUserDataRights,
   type WireAdminReviewPage,
   type WireAdminTagList,
   type WireAdminTagSuggestionPage,
@@ -175,4 +177,16 @@ export async function getAdminActivity(query: string): Promise<WireAdminActivity
 
 export async function getAdminTags(): Promise<WireAdminTagList> {
   return adminRead('/admin/tags', wireAdminTagListSchema);
+}
+
+/**
+ * One account's retained record and its legal acceptances (#438).
+ *
+ * Reads a **closed** account as readily as a live one, which is the surface's
+ * whole point: the privacy policy promises records are kept, so the console has
+ * to be able to show what is still held rather than 404 on the person the
+ * promise was written for.
+ */
+export async function getAdminUserDataRights(userId: string): Promise<WireAdminUserDataRights> {
+  return adminRead(`/admin/users/${userId}/data-rights`, wireAdminUserDataRightsSchema);
 }

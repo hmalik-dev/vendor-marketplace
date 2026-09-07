@@ -53,3 +53,28 @@ about a row that cannot exist yet (the squash SHA); this one is about rows that
 
 Related: [[filing-a-ticket-is-a-three-file-change]],
 [[shared-checkout-working-tree-is-a-tripwire]].
+
+## The check must run against the MERGE BASE, not `origin/main` — 2026-09-07
+
+The obvious form of this check is wrong, and I gave it to several lanes before
+436 caught it:
+
+    git diff origin/main --stat -- .claude/plans/ packages/shared/src/env/   # WRONG
+
+Against `origin/main` that is non-empty for an **innocent** reason — it shows
+every tracker commit that landed *after* the branch was cut, which is somebody
+else's work, not the lane's. A reader who takes non-empty as "my branch carries
+a tracker diff" then goes hunting for something that is not there; worse, a
+reader who learns to expect noise stops reading it at all.
+
+**Run it against the merge base:**
+
+    git diff $(git merge-base origin/main HEAD) --stat -- .claude/plans/ packages/shared/src/env/
+
+Empty there means *this branch* introduced no tracker or registry change, which
+is the actual question.
+
+**This is the same trap as the scoped teardown diff** in
+[[diverged-lane-branch-needs-a-new-name]] — an unscoped or wrongly-based diff
+against `origin/main` answers a different question than the one being asked, and
+answers it confidently. Two different commands, one mistake.

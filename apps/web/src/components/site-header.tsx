@@ -194,6 +194,29 @@ export async function SiteHeader(): Promise<React.ReactElement> {
               <Link href="/dashboard">{dashboardLabel}</Link>
             </Button>
             <NotificationBell />
+            {/*
+              **This control is an unrefusable backstop, and #438 says so
+              rather than leaving it implied.**
+
+              `<UserButton />`'s account menu offers deletion at the identity
+              provider, and a Clerk deletion is *reactive*: by the time
+              `user.deleted` reaches the webhook the identity is already gone,
+              there is no request left to answer and no response to carry a
+              refusal. So D39's rule — an account holding a future confirmed
+              booking cannot be closed — is enforced on the product's own route,
+              `POST /admin/users/:userId/close`, which answers 409 and names the
+              bookings to cancel first.
+
+              Closing that gap means disabling self-serve deletion in the Clerk
+              instance, which is a setting in their dashboard and not a prop
+              here: Clerk exposes no way to hide the built-in Delete account
+              section from this component. Until it is turned off there, a
+              determined user reaches deletion in two clicks from this button,
+              and #433's fallback is what catches them — the booking is left
+              confirmed, payable and logged for a human, which decides nothing.
+              That is deliberately the weaker of the two answers, and it is the
+              one that applies here.
+            */}
             <UserButton />
             <SignedInDrawer dashboardLabel={dashboardLabel} />
           </Show>
