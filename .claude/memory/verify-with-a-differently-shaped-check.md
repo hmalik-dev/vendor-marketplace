@@ -45,3 +45,36 @@ of which were impossible if the file were missing. When a listing surprises you,
 from a known-absolute position (`--full-tree`, an absolute path, a fresh shell).
 
 Related: [[never-abort-a-rebase-you-did-not-start]], [[lead-dont-narrate]].
+
+## The environment variant: assert something only true when the environment is right
+
+Generalised by lane 441 on 2026-09-07 after three near-misses in one lane, all
+the same shape — **a check that could not fail**, where the pass completes, the
+silence is the environment rather than the app, and nothing says so.
+
+- **Expired `.auth/`.** A customer navigation landed on `/sign-in` and the
+  signed-in footer rendered its signed-out variant. Nothing errored. Caught only
+  by asserting the Account column's **contents**, not that the page loaded.
+- **A watcher matching any failing check.** It abandoned a live merge because a
+  rate-limited Vercel had gone red. The fix is to watch the required check **by
+  name** (`Typecheck, lint, build, test`), never "any red".
+- **A web server on the wrong port.** `lane:exec` exports the API's `PORT` to
+  every child, so `next start` binds the API port and serves the app there. A
+  pass pointed at the lane's *web* port gets connection-refused and reads as
+  "the app is broken"; one pointed at the *API* port renders the app and looks
+  correct. Both wrong, neither says so. (`next dev` escapes only because
+  Turborepo's dev task passes `--port` explicitly — an accident of one task
+  definition, not a property of the lane.)
+
+**The rule:** a browser or parity pass must assert something that is **only true
+when the environment is right** — the rendered contents of a signed-in-only
+element, the named check, a port that answers with the app you meant. Liveness,
+a 200, or "the page loaded" are all satisfied by the broken case.
+
+Same principle `web-design-parity.md` states as: *before trusting a check, ask
+what state would make it fail. If nothing would, it is not a check.* This is that
+principle applied to the lane's environment rather than to the assertion.
+
+Related: [[lane-auth-state-arrives-expired]],
+[[guard-a-delegated-browser-pass-with-a-liveness-watch]],
+[[vercel-deploy-check-always-fails]].
