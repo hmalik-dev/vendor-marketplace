@@ -61,5 +61,8 @@
 - [`next dev` hits EMFILE with many lanes](next-dev-hits-emfile-with-many-lanes.md) — every page 500s while the API is fine; build and `next start` for a browser pass
 - [A lane web build must be made under the lane env](a-lane-web-build-must-be-made-under-the-lane-env.md) — preflight asserts both axes now; a stale `.env.lane` is repaired by `lane:up` in place, never `lane:down`
 - [An idempotence check must compare everything it writes](an-idempotence-check-must-compare-everything-it-writes.md) — a "does it already agree?" guard that compares a subset cannot fail for the state it exists to detect
-- [The E2E seed tops up, it does not reset](e2e-seed-tops-up-it-does-not-reset.md) — after a destructive pass a lane needs lane:down + lane:up, not a re-seed
+- [The E2E seed tops up, it does not reset](e2e-seed-tops-up-it-does-not-reset.md) — after a pass that **destroyed data** a lane needs lane:down + lane:up, not a re-seed; a stale **env file** is a different case and repairs in place
 - [A test can pin a falsehood](a-test-pinning-copy-can-verify-a-falsehood.md) — narrow a rule to one party and the copy describing it goes false for the other; the test asserting it then verifies the lie
+- [One writer per worktree](one-writer-per-worktree.md) — a reviewer with Edit tools is a writer; mutation testing under a live browser pass silently invalidates the whole run
+- [Turbo serves a green you did not earn](turbo-serves-a-green-you-did-not-earn.md) — a fast green on inputs you just changed is not a green, and passThrough env vars are outside the cache key
+- [A failed command reads as a passing check](a-failed-command-reads-as-a-passing-check.md) — `grep -c` on a command that errored prints a confident zero; make the check print what it found
