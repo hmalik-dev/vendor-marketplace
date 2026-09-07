@@ -210,6 +210,9 @@ describe('admin routes', () => {
       { method: 'PUT', url: `/admin/tags/${NIL}` },
       { method: 'PUT', url: `/admin/users/${NIL}/ban` },
       { method: 'PUT', url: `/admin/users/${NIL}/unban` },
+      { method: 'GET', url: `/admin/users/${NIL}/data-rights` },
+      { method: 'POST', url: `/admin/users/${NIL}/export` },
+      { method: 'POST', url: `/admin/users/${NIL}/close` },
       /*
        * #423. A dispute resolution decides who keeps the money, so a stranger
        * or either party reaching it would let one side of the disagreement

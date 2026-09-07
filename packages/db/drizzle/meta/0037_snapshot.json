@@ -1,6 +1,6 @@
 {
-  "id": "4a46a53c-4273-4c72-b7c6-307079417d81",
-  "prevId": "f7dde19d-3bef-49ad-b61c-bbc7906f78e9",
+  "id": "be221bea-fab7-4526-ad01-620f66ee819e",
+  "prevId": "4a46a53c-4273-4c72-b7c6-307079417d81",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3466,7 +3466,14 @@
         "support_case_resolved",
         "payout_retried",
         "user_data_exported",
-        "user_closed"
+        "user_closed",
+        "vendor_unpublished",
+        "vendor_republished",
+        "review_hidden",
+        "review_unhidden",
+        "package_deactivated",
+        "package_reactivated",
+        "portfolio_item_removed"
       ]
     },
     "public.admin_action_subject": {
@@ -3478,7 +3485,10 @@
         "tag",
         "tag_suggestion",
         "booking",
-        "support_case"
+        "support_case",
+        "vendor_profile",
+        "service_package",
+        "portfolio_item"
       ]
     },
     "public.email_delivery_entity": {

@@ -42,6 +42,8 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   dispute_resolved: 'Resolved a report',
   support_case_resolved: 'Closed a case',
   payout_retried: 'Retried a payout',
+  user_data_exported: 'Exported an account record',
+  user_closed: 'Closed an account',
   /*
    * Graduated moderation (#435). Written in the same register as the seven above
    * — what the operator did, past tense — and deliberately **not** using the

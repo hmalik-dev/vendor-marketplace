@@ -1,4 +1,4 @@
-import { and, eq, exists, isNull, sql } from 'drizzle-orm';
+import { and, eq, exists, isNull, sql, type SQL } from 'drizzle-orm';
 import {
   legalAcceptances,
   users,
@@ -207,11 +207,53 @@ export async function retireUserByClerkId(
     return null;
   }
 
+  const retired = await retireUserWhere(db, and(eq(users.clerkUserId, clerkUserId), notDeleted));
+
+  return retired?.user ?? null;
+}
+
+/**
+ * The same retirement, addressed by the **local** id (#438).
+ *
+ * An operator closing an account on its holder's request has a `users.id` and
+ * not necessarily a usable Clerk identity, so it needs this door — but it must
+ * not be a second implementation of the retirement. A closure requested through
+ * the product and one that arrives as `user.deleted` have to leave the database
+ * in the same state, or the product's own route becomes the lenient one and the
+ * Clerk backstop the strict one, which is exactly backwards.
+ *
+ * It reports whether a storefront actually came down, which the Clerk path has
+ * no response to put anywhere and the console's does.
+ */
+export async function retireUserById(
+  db: AppDatabase,
+  userId: string,
+): Promise<{ user: UserRow; profileRetired: boolean } | null> {
+  if (!userId) {
+    return null;
+  }
+
+  return retireUserWhere(db, and(eq(users.id, userId), notDeleted));
+}
+
+/**
+ * The retirement itself, once: `deleted_at` on the account and the storefront
+ * down with it, in one transaction.
+ *
+ * `notDeleted` is in every caller's predicate rather than here, and it is the
+ * claim as well as a filter — two concurrent closures both read a live account,
+ * and only the one whose UPDATE matches a row does the work. That is what makes
+ * a redelivered `user.deleted` a no-op rather than a second unwind.
+ */
+async function retireUserWhere(
+  db: AppDatabase,
+  where: SQL | undefined,
+): Promise<{ user: UserRow; profileRetired: boolean } | null> {
   return db.transaction(async (tx) => {
     const updated = await tx
       .update(users)
       .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
-      .where(and(eq(users.clerkUserId, clerkUserId), notDeleted))
+      .where(where)
       .returning();
 
     const row = updated?.[0];
@@ -220,12 +262,13 @@ export async function retireUserByClerkId(
       return null;
     }
 
-    await tx
+    const profiles = await tx
       .update(vendorProfiles)
       .set({ isDeleted: true, isPublished: false, updatedAt: sql`now()` })
-      .where(eq(vendorProfiles.userId, row.id));
+      .where(eq(vendorProfiles.userId, row.id))
+      .returning({ id: vendorProfiles.id });
 
-    return row;
+    return { user: row, profileRetired: profiles.length > 0 };
   });
 }
 

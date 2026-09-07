@@ -1121,6 +1121,26 @@ export const ADMIN_ACTIONS = [
   'dispute_resolved',
   'support_case_resolved',
   'payout_retried',
+  /**
+   * An operator produced a copy of everything the platform holds for one
+   * person (#438), answering the privacy policy's *"ask us for a copy of what
+   * we hold"*.
+   *
+   * A read, and logged anyway. It is the one read in the console that hands a
+   * whole person's record to somebody, so *"who asked for Ada's file, and
+   * when"* has to be answerable — and it is the question a subject-access
+   * request is most likely to be followed by.
+   */
+  'user_data_exported',
+  /**
+   * An operator closed an account on its holder's request (#438).
+   *
+   * Distinct from `user_banned`: a ban is a moderation decision the operator
+   * made and can reverse, and this is one the account holder asked for and
+   * nobody can. Collapsing them would make *"how many accounts did we
+   * suspend"* uncountable.
+   */
+  'user_closed',
   /*
    * Graduated moderation (#435) — the levers that are not a ban.
    *

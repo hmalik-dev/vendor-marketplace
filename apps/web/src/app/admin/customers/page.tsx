@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar } from '@/components/admin/filter-bar';
@@ -58,7 +59,17 @@ export default async function AdminCustomersPage({
             width: '1.4fr',
             header: 'Name',
             className: 'font-semibold text-stone-900',
-            cell: (row) => `${row.firstName} ${row.lastName}`.trim(),
+            /*
+             * The way into the data-rights page (#438). A subject-access or
+             * closure request arrives naming a person, and this table is where
+             * an operator finds them — so the name is the link rather than a
+             * second control in a column nobody would look in.
+             */
+            cell: (row) => (
+              <Link href={`/admin/users/${row.id}`} className="hover:underline">
+                {`${row.firstName} ${row.lastName}`.trim() || row.email}
+              </Link>
+            ),
           },
           { key: 'email', width: '1.6fr', header: 'Email', cell: (row) => row.email },
           {

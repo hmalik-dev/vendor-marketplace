@@ -162,7 +162,7 @@ function offsetOf(query: { page: number; pageSize: number }): number {
  * same try/catch-and-log body forty lines apart, which is precisely how #408's
  * rule became a special case the first time.
  */
-async function recordAdminActionBestEffort(
+export async function recordAdminActionBestEffort(
   context: AdminContext,
   record: AdminActionRecord,
 ): Promise<void> {
