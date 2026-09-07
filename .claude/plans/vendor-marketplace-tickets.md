@@ -1956,6 +1956,16 @@ read it. (#429 is open and orthogonal: acceptances are vendor-only, and no
 customer terms acceptance is recorded at all. **Do not implement #429 here** —
 this ticket surfaces what the record holds, whatever #429 makes it hold.)
 
+**The post-#429 shape, supplied by that lane on 2026-09-07 while it was in
+flight — read this table as #429 leaves it, not as it stands today.**
+`vendor_id` becomes **nullable** (a customer's Terms acceptance has no vendor),
+and two columns arrive: **`document_sha256`**, which is what makes a stale
+version detectable, and **`acceptance_method`**. A first-sign-in clickwrap
+interstitial lands on `/after-sign-in`. So the console's read must not assume a
+vendor on every row, must show the method, and should surface the hash rather
+than only the version string — a row whose hash no longer matches the shipped
+document is the single most useful thing this surface can tell an operator.
+
 #### What to build
 
 **1. Export.** `POST /admin/users/:userId/export`, admin-only, producing a
