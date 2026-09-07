@@ -1736,3 +1736,56 @@ D31's unwind. Stated here so nobody widens the window trying to solve it.
 four-terms panel, the accepted-state strip, and `/terms` section 4 (#427) — plus
 the release job and the vendor dashboard's pending-payout date (#423, #424).
 **No surface hardcodes the interval.**
+
+### D33: An Idempotency Key Is Versioned by the Attempt, Not Just the Subject — *2026-09-06*
+
+**Stripe caches the result of an idempotent request for 24 hours, and that
+includes failures.** Found by #423's lane while driving a real transfer, not
+inferred from the documentation.
+
+The release sweep's first transfer was refused `balance_insufficient` — test-mode
+funds still pending — and **every later attempt came back with the identical
+error**, carrying the original request's `request_log_url`, which is the tell
+that a cached response is being replayed rather than a new call refused. Funding
+the platform balance changed nothing. A fresh idempotency key succeeded
+immediately on the same parameters.
+
+So a key fixed at `payout_<bookingId>` meant **one transient refusal froze that
+payout for 24 hours** while the sweep dutifully asked for the same cached "no"
+every fifteen minutes. The row was releasable and the retry logic was correct;
+Stripe was answering from cache. *"A failed transfer leaves the booking
+releasable and the next run retries it"* was true of the database and false of
+the gateway.
+
+**The rule:** wherever a retry is expected to **succeed after a transient
+failure**, the idempotency key must carry the attempt —
+`payout_<bookingId>_<attempt>`, read from a persisted counter — not the subject
+alone.
+
+**Nothing is given up by versioning it.** The duplicate-suppression the fixed key
+appeared to provide was already provided by two stronger things: only one sweep
+can work a booking at a time under `FOR UPDATE SKIP LOCKED`, so there is no
+concurrent caller for the key to catch; and the case a fixed key genuinely
+protects — a write that reached Stripe under a transaction that never committed —
+**still replays under the same key**, because a rolled-back transaction never
+incremented the counter. `findTransfer` is the durable guard behind both and has
+no expiry.
+
+**Where this does and does not apply.** It applies to any retried Stripe *write*.
+It does **not** apply to the refund path: that key is per cancellation and a retry
+there is *meant* to return the first refund rather than issue a second — the
+behaviour #416 relies on. The distinction is whether a repeat is a **retry of a
+failure** or a **replay of a success**, and only the first wants the attempt in
+the key.
+
+**Test it the way it was found.** #423's in-process double now replays a cached
+failure the same way Stripe does, so removing `attempt` turns the suite red
+rather than silently stranding a payout. A double that returns a fresh error on
+each call cannot see this class of bug — the same lesson as **#416**, where the
+fake `createRefund` was more permissive than the gateway and a broken refund
+shipped for months.
+
+**Production exposure is low but the guard stays.** A charge happens weeks before
+its event and release is 72 hours after it (**D32**), so funds are long settled
+and `balance_insufficient` is not the realistic trigger; a genuine outage is. It
+self-heals now either way.
