@@ -542,6 +542,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   449: [], // screens doc is content-box, every delta bundle is border-box
   450: ['auth'], // a closed account leaves the only screen that reaches it
   451: ['auth'], // closure leaves the Clerk identity live and the email locked
+  452: ['auth'], // reproducing it means signing in as each denied role
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

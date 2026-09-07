@@ -16574,5 +16574,105 @@ the frame's 6 merely illustrative.
       `design-tokens.test.ts`
 - [ ] A test asserting the skeleton and the loaded card share a radius token, so the two
       cannot drift apart again
+| **432** | **Payout health: failed transfers, retries, and why Stripe stopped a vendor** | P3 | M6 | **P0 Critical** | **Done** | `worktree-432` | **None** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** `payouts.dao.ts:213` writes `payout_attempts` and `payout_failure_reason` on every failed transfer and **nothing anywhere reads either column** — not admin, not the vendor dashboard. `adminPaymentRowSchema` carries no payout state at all, so a vendor owed money by a transfer that keeps failing generates no signal. `stripe_onboarded` is a boolean with no reason behind it: when Stripe revokes a capability the operator sees only "No payouts yet" in a filter. **Landed 2026-09-07 as `1e899ae1`, PR #145.** The payment row carries the payout state `payoutStatusOf` derives, plus a `payoutFailing` flag that is `payoutOwedClauses` **plus an attempt** — the two-column reading the ticket proposed never clears for a transfer that failed and was then fully refunded, which would have pinned a red Overview banner for ever over a row the sweep had permanently dropped. `PUT /admin/bookings/:id/payout/retry` re-enters the sweep rather than reimplementing the transfer, so D36 holds structurally; it refuses released, disputed and cancelled bookings, and writes a `payout_retried` audit row. `vendor_profiles` records Stripe's disabled reason and outstanding requirements, written only by the account webhook — asserted by a source guard that the admin module holds no `.set({…})` for any of the three, with a planted-writer test proving the guard can fail. **Acceptance 4 shipped data-complete, view deferred to #437** (ruled `b4bce68a`). Three defects were caught by review rather than by the suites: the retry reported a *completed* transfer as failed, because the client parsed a `z.date()` that JSON sends as a string and only the success path carries a value; an index emitted `DESC NULLS LAST` against a query Postgres reads as `NULLS FIRST`, so it would have sorted in memory while still serving the filter and looking correct; and the Overview's vendor count was taken over a wider set than the list it linked to. **Left behind:** at 1024 the Fee and Payout cells hold seven characters, so a real `$1,450.50` would clip — a consequence of this screen growing an eighth column, filed rather than guessed at. Also fixed the lane harness, which never wrote `API_URL`: every lane's pages were rendering against another checkout's API. |
 
+### #432: Payout health — failed transfers, retries, and why Stripe stopped a vendor
 
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
+**Blocked by:** None
+
+#### The state today
+
+**Two columns are written and read by nothing.** The release sweep
+(`payouts.service.ts`, every 15 minutes) increments
+`bookings.payout_attempts` and writes `bookings.payout_failure_reason` on every
+failed transfer (`payouts.dao.ts:213`), clearing the reason on success. Grep
+both across the repo: the only readers are the sweep's own ordering
+(`orderBy(asc(bookings.payoutAttempts), …)`) and its logger. **No screen, no
+API response, and no alert reads either.** A vendor whose transfer fails on
+every one of ninety-six daily attempts is owed money that nobody is told about.
+
+`adminPaymentRowSchema` carries `totalAmountCents`, `platformFeeCents`,
+`vendorPayoutCents`, `stripePaymentIntentId`, `paidAt` and `status` — and no
+payout state at all. The Payments screen therefore shows a booking whose money
+reached the platform and never reached the vendor identically to one that
+settled.
+
+**And the vendor-side story is a boolean.** `vendor_profiles.stripe_onboarded`
+is set by `isOnboarded(status)` — true iff `stripe_transfers` **and** `payouts`
+capabilities are both active. When Stripe revokes one, `applyAccountStatusChange`
+flips it false and that is the entire record. `isMissingPayoutsOnly` already
+distinguishes the half-restricted case and only logs a warning. The operator's
+filter says "No payouts yet" for a vendor who has never onboarded and for one
+Stripe restricted this morning, with no reason and nowhere to go.
+
+#### What to build
+
+**1. Payout state on the payments surface.** Add to the admin payment row:
+`payoutReleasedAt`, `payoutAttempts`, `payoutFailureReason`, `stripeTransferId`,
+and a derived payout state. **Derive it with `payoutStatusOf`** — the one
+derivation #423 wrote for exactly this, already used by `booking-report.ts` and
+`dashboard.service.ts`. A fourth copy of "what is held" is how these come to
+disagree; that is written down twice in `dashboard.dao.ts` already.
+
+**2. A failing-payout filter and a row flag**, shaped like the `refund-stuck`
+flag the Bookings screen already carries — marked on every row, not only inside
+the filter, because the failure #415 fixed was precisely a state you had to know
+about to find. A payout is failing when `payout_attempts > 0` and
+`payout_released_at is null`.
+
+**3. A retry.** `PUT /admin/bookings/:bookingId/payout/retry`, admin-only,
+which re-enters the **existing** sweep path for one booking rather than
+reimplementing the transfer. **D36 binds: the idempotency key is versioned by
+the attempt**, so a retry increments `payout_attempts` and mints a new key —
+reusing the key replays Stripe's cached failure and the operator learns nothing.
+Refuse on a booking that is `cancelled`, `disputed`, or already released, and say
+which.
+
+**4. Stripe account state, with the reason.** Persist what the webhook already
+reads: the disabled reason and the outstanding requirements from the connected
+account, alongside `stripe_onboarded`. Surface them on the vendor row's detail
+(#437 builds the view; this ticket supplies the data and may land its own
+panel first). **Read-only.** An operator must not be able to flip
+`stripe_onboarded` by hand — D29's constraint (`stripe_onboarded = false OR
+stripe_account_id IS NOT NULL`) and the capability read are what make the column
+true, and a manual override makes it a guess. Link out to the Stripe Dashboard
+for the account instead.
+
+**5. A Live-vendor payout alert on the Overview.** One count — vendors whose
+payouts are blocked, and bookings whose transfers are failing — sitting where
+the four metric cards already are. A number that leads to the filtered list;
+`page.tsx` already documents that a card leading nowhere is furniture.
+
+#### Acceptance
+
+1. The admin payment row carries payout state derived by `payoutStatusOf`, not
+   by a new local test.
+2. A booking with `payout_attempts > 0` and no release is flagged on its row and
+   findable by filter.
+3. The retry mints a new idempotency key versioned by the attempt (D36) and is
+   refused with a specific message on cancelled, disputed and released bookings.
+4. **Ruled 2026-09-07: data-complete here, view deferred to #437.** The Vendors
+   table is frame `13`'s seven columns and `frame-13-parity.test.ts` asserts the
+   grid template, so an eighth column would break the parity gate #392 owns —
+   a design-contract change, which a ticket may not make. So this ticket
+   **supplies and tests** `stripeAccountId`, `stripeDisabledReason` and
+   `stripeRequirementsDue` on `adminVendorRowSchema`, written only by the
+   account webhook, and #437 draws them on the vendor detail view. A vendor
+   Stripe has restricted must be distinguishable in the *data* from one who
+   never onboarded; that distinction becoming visible is #437's acceptance, not
+   this one's. (Same call #438 made in declining to add a vendor-table link for
+   the same reason.)
+5. Nothing in the console writes `stripe_onboarded`.
+6. The Overview carries a payout-health count that links to the filtered list.
+7. Every new number is a query result at request time — the no-invented-numbers
+   law.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] The retry asserted against a Stripe failure that is **cached** under the
+      old key — the D36 regression is invisible to a test that only asserts a
+      success.
+- [ ] A restricted account asserted through the real `account.updated` webhook
+      payload shape, not a hand-built row.
