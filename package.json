@@ -18,6 +18,7 @@
     "smoke": "pnpm --filter @vendor-marketplace/preflight run smoke",
     "reconcile:clerk": "pnpm --filter @vendor-marketplace/api run reconcile:clerk",
     "env:example": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run env:example",
+    "legal:manifest": "turbo run build --filter=@vendor-marketplace/shared && node scripts/legal-manifest.mjs",
     "start": "pnpm install && docker compose up -d && docker compose up -d --wait postgres storage && pnpm db:migrate && pnpm db:seed && pnpm dev",
     "dev": "turbo run dev",
     "test": "turbo run test",

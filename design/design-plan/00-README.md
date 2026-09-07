@@ -88,6 +88,7 @@ forward. That is the actual finding — not which five.
 | `/admin/payments`         | **Exempt — derived.** As `/admin/customers`.                                                                                                                                                                                                                                                               |
 | `/admin/reviews`          | **Exempt — derived.** As `/admin/customers`.                                                                                                                                                                                                                                                               |
 | `/admin/tags`             | **Exempt — derived.** The moderation queue is a card list rather than a table, because each decision carries a note field and three actions and a 44px row is not where a form goes. `22-admin.md`'s "detail views — card-based groupings with the actions prominent" is the rule it is built to.          |
+| `/accept-terms`           | **Exempt — derived.** The first-sign-in acceptance gate (`#429`). Frame `32`'s unaccepted state without the step rail or the four-terms panel — same clipped document card, same unticked checkbox, same disabled primary.                                                                                 |
 
 Four exempt, four to draw, one already framed and mis-recorded — plus, since
 `#15`, the seven console routes above: one framed by `13 Admin` and six

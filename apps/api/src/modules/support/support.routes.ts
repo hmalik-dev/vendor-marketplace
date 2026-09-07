@@ -69,6 +69,7 @@ export const supportRoutes: FastifyPluginAsyncZod<SupportRoutesOptions> = async 
         },
         request.body,
         request.auth,
+        request.termsRequired,
         app.clock(),
       ),
   );

@@ -1828,3 +1828,122 @@ tests assert. Nothing asserted **what the vendor ends up with**, because under
 the old design nothing had to. When a mechanism moves, the tests that pinned its
 *outputs* survive while the ones that would have pinned its *new* obligations
 never existed.
+
+### D38: The Acceptance Gate Is an API Refusal, and an Account Is Created by Accepting — *2026-09-07*
+
+**#429.** `legal_acceptances` (#427) recorded only vendors, only a version
+string, and only a `Continue` press. Closing all three moved the row's anchor
+from the vendor profile to the **user**, and that move forced four rulings that
+are project law from here.
+
+**1. The gate lives in the API, not in middleware.** Every route guard —
+`requireAuth`, `requireRole`, and both `BeforeValidation` variants — refuses a
+session whose account does not hold `CURRENT_TERMS_VERSION` with a **403
+`TERMS_REQUIRED`**, and the frontend turns that refusal into a redirect to
+`/accept-terms`. `middleware.ts` already records why a path matcher is the wrong
+place: a matcher can diverge from how Next actually routes a request and leave a
+protected resource reachable. A refusal raised by the guard every protected route
+already runs cannot diverge from anything, and it holds for a direct API call as
+well as for a page.
+
+**`TERMS_REQUIRED` is its own error code and must stay one.** It and `FORBIDDEN`
+are both 403 and they are opposite instructions to the frontend: `FORBIDDEN`
+sends the reader to `/suspended`, which is terminal, while this is a gate cleared
+in one click. Answering the gate as a plain 403 puts every new account on the
+suspended screen.
+
+**2. The account row is created by the acceptance, in one transaction — and the
+invariant that buys is narrower than it looks.** The auth plugin no longer
+creates a `users` row lazily, and `POST /legal/terms/accept` is the only writer
+on the product path; it inserts the account and its acceptance together, so a
+failure part-way leaves neither.
+
+**What holds is "no account is *usable* without an acceptance", not "a `users`
+row implies an acceptance row".** The `user.created` webhook still writes bare
+rows, so the second is simply false — and it is worth saying plainly, because
+the transaction reads like a guarantee of it. The invariant is enforced by the
+gate reading `legal_acceptances` on every request, not by the transaction: a
+webhook row with no acceptance is held at the interstitial exactly like an
+account with no row at all. The transaction's job is atomicity on the
+first-sign-in path, and that is all.
+
+A consequence to keep: a session whose local row is **retired** (Clerk deleted
+the identity) must be told 401, not offered the gate — otherwise an erased
+account is invited to bring itself back, and `insertUserIfAbsent` collides on
+`clerk_user_id`. `findUserByClerkIdIncludingRetired` exists for that one branch.
+
+**3. The immutability rule follows the anchor.** `0029` allowed one delete, keyed
+on `NOT EXISTS (the vendor named by OLD.vendor_id)`. A null names no vendor, so
+the moment `vendor_id` became nullable that predicate was true for **every** Terms
+row — making every customer's acceptance freely deletable as a silent side effect
+of a column changing. `0030` asks the question the row is now about: the accepting
+user is gone, **or** the row names a vendor profile and that profile is gone.
+
+**The general rule: when a table's subject moves, its enforcement predicate is
+part of the move.** A trigger written against the old anchor does not fail
+loudly under the new one — it quietly permits.
+
+**4. The hash is of the markdown source, and drift fails in the suite.** A row
+stores `document_sha256` beside the version: the version says *which* document,
+the hash proves *which bytes*. It hashes the **source as committed**, never the
+rendered HTML — rendering is a function of the renderer, so a Markdown or
+Tailwind upgrade would move a rendered hash for text nobody edited and every
+acceptance row would read as drift. `LEGAL_DOCUMENT_MANIFEST` pins it,
+`apps/web/src/lib/legal-manifest.test.ts` asserts each entry against the file it
+names, and `pnpm legal:manifest` **refuses** to repin bytes under a version
+already pinned. Editing `terms.md` without bumping the version therefore fails
+`pnpm test` naming the document rather than silently invalidating everybody's
+record. The version is a string a human chooses and is never derived from the
+hash: a typo fix nobody needs to re-accept would otherwise put every signed-in
+account back through the gate.
+
+The manifest lives in `packages/shared` rather than beside the documents because
+`apps/api` writes the hash and the dependency direction is one-way.
+
+**Two things the security pass raised and this ticket deliberately did not
+change.**
+
+*The published retention promise was corrected rather than the code.*
+`privacy.md` said closing your account removes the acceptance record. It does
+not and must not: closure is a soft delete, the trigger's only reachable delete
+branch for a Terms row needs the `users` row physically gone, and there is no
+update path — so the record, **including the address and browser it names**,
+outlives the account. #429 widened that record from vendors to every user, so
+the sentence became a false claim about everybody. The page now says what the
+code does.
+
+*The check-then-insert race is left open, on purpose.* `acceptTerms` reads
+"already accepted" and then inserts, with no unique index behind it, so
+simultaneous submissions from one session can each write a row. Closing it means
+a unique index on `(accepted_by_user_id, document, version)` — which would
+**overturn #427's ruling** that a second acceptance of a version already held is
+a second row, because "I accepted it twice" is a true statement about what
+happened, and `legal-acceptance-immutability.test.ts` asserts exactly that. That
+is a product decision about what the record means, not a lane's to make. The
+window is small (it closes on the first commit), rate-limited, and identical in
+shape to the vendor agreement, which shipped in #427 — but it reopens at every
+version bump and the rows are permanent, so it is worth a ticket rather than a
+shrug.
+
+**5. Acceptance is an unticked box, and the record says so.** `acceptance_method`
+distinguishes `clickwrap_checkbox` from `seed_fixture`, because a seeded row
+labelled as a person's act would put a fabricated fact in the one table whose
+value is that it is not fabricated. The `ip` and `user_agent` recorded are the
+ones on the request that **carried the tick** — validated with `net.isIP`, so
+what is not an address is recorded as no address rather than as a string somebody
+chose.
+
+**What this cost elsewhere:** every API route suite now needs an account that has
+accepted, so `createTestHarness` gives a registered identity both rows by default
+and takes `acceptTerms: false` for the suites whose subject is the gate. It rides
+on the fake `verifySessionToken` because that is the earliest seam available —
+the gate has already decided by the time any harness-registered hook could run.
+
+**Two things about that were argued and settled rather than overlooked.** It is
+a harness-wide boolean, so a suite cannot hold one identity gated and another
+accepted; the shape that would allow it is `harness.registerUser(id, snapshot,
+{ accepted })` replacing the raw `clerkUsers` Map at 43 call sites, and it is
+worth doing the day a suite needs mixed state. And the provisioning **must not**
+be memoised per identity: many suites clear `users` in `afterEach`, so "already
+provisioned" is not a fact that survives the test that established it — memoising
+it broke 20 suites and was reverted.

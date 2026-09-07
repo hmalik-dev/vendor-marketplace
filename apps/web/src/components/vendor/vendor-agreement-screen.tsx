@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
-import { LegalBlocks } from '@/components/legal/legal-blocks';
+import { ExpandableDocumentCard } from '@/components/legal/expandable-document-card';
 import { OnboardingSteps } from '@/components/vendor/onboarding-steps';
 import type { LegalDocument } from '@/lib/legal-markdown';
 import { useApi } from '@/lib/use-api';
@@ -99,7 +99,6 @@ function UnacceptedStep({
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const terms = vendorAgreementTerms();
   const isNewVersion = status.accepted !== null;
 
@@ -188,68 +187,26 @@ function UnacceptedStep({
         The full agreement, clipped and expanded **in place**. Not a modal and
         not a navigation: onboarding state has to survive reading it, and a
         vendor who loses their place is a vendor who does not finish.
+
+        `meta` is frame `32`'s header strip: `11 sections · v1.0 · 4 Jun 2026`.
+        The date is formatted rather than printed as the frontmatter's ISO
+        string — `2026-06-04` on a card a vendor is asked to accept reads as a
+        system value that escaped.
       */}
-      <section
-        aria-labelledby="full-agreement"
-        className="mt-6 overflow-hidden rounded-panel border border-stone-300"
-      >
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-stone-300 bg-stone-50 px-4.5 py-3">
-          <h2 id="full-agreement" className="text-cta font-semibold text-stone-900">
-            Full agreement
-          </h2>
-          {/*
-            Frame `32`'s header strip: `11 sections · v1.0 · 4 Jun 2026`. The
-            date is formatted rather than printed as the frontmatter's ISO
-            string — `2026-06-04` on a card a vendor is asked to accept reads
-            as a system value that escaped.
-          */}
-          <p className="text-meta text-stone-600">
+      <ExpandableDocumentCard
+        document={agreement}
+        heading="Full agreement"
+        headingId="full-agreement"
+        bodyId="agreement-body"
+        meta={
+          <>
             {agreement.sections.length} sections · {status.current} ·{' '}
             {ACCEPTED_DAY.format(new Date(`${agreement.lastUpdated}T00:00:00Z`))}
-          </p>
-        </div>
-        <div className="relative px-4.5 pt-4">
-          {/*
-            Clipped visually and **not** hidden from assistive technology. The
-            first 150px are on screen either way, so `aria-hidden` would hide
-            content a sighted vendor can already read — and a screen-reader user
-            getting the whole agreement rather than a truncated one is the
-            better outcome, not a worse one. `aria-expanded` on the control
-            below still says which state the box is in.
-          */}
-          <div id="agreement-body" className={expanded ? '' : 'max-h-[150px] overflow-hidden'}>
-            {agreement.sections.map((section) => (
-              <section key={section.id} className="mb-6">
-                <h3 className="mb-2.5 font-display text-[19px] text-stone-900">
-                  {section.number}&nbsp;&nbsp;{section.title}
-                </h3>
-                <LegalBlocks blocks={section.blocks} />
-              </section>
-            ))}
-          </div>
-          {/* The 56px fade to the card fill, drawn only while the body is clipped. */}
-          {expanded ? null : (
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-linear-to-b from-transparent to-stone-0"
-            />
-          )}
-        </div>
-        <div className="px-4.5 pt-2 pb-4">
-          <button
-            type="button"
-            aria-expanded={expanded}
-            aria-controls="agreement-body"
-            onClick={() => setExpanded((open) => !open)}
-            className="cursor-pointer text-action font-semibold text-clay-500 underline-offset-4 hover:underline"
-          >
-            {expanded ? 'Collapse the agreement' : `Read all ${agreement.sections.length} sections`}
-          </button>
-          <p className="mt-1 text-helper text-stone-600">
-            Opens in this step — you don&apos;t lose your place.
-          </p>
-        </div>
-      </section>
+          </>
+        }
+        collapseLabel="Collapse the agreement"
+        helper="Opens in this step — you don't lose your place."
+      />
 
       {/*
         `noValidate`, because this form owns its own submit: the browser's

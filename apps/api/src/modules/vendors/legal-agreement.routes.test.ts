@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { categories, legalAcceptances, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { CURRENT_VENDOR_AGREEMENT_VERSION } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -14,6 +15,21 @@ import { bearer, createTestHarness, type TestHarness } from '../../testing/test-
 describe('the vendor agreement', () => {
   let harness: TestHarness;
   let photographyId: string;
+
+  /**
+   * The **agreement** rows only.
+   *
+   * Every signed-in account in the suite also holds a Terms of Service
+   * acceptance — the harness writes it, because since #429 an account that has
+   * not accepted the Terms cannot reach any guarded route at all. Selecting the
+   * whole table here would count those too and say nothing about the agreement.
+   */
+  function agreementRows() {
+    return harness.database.db
+      .select()
+      .from(legalAcceptances)
+      .where(eq(legalAcceptances.document, 'vendor_agreement'));
+  }
 
   async function seedVendorProfile(user: string, businessName: string): Promise<void> {
     const created = await harness.app.inject({
@@ -99,8 +115,17 @@ describe('the vendor agreement', () => {
         businessName: 'June Harlow Photography',
         accepted: null,
         isCurrent: false,
-        history: [],
       });
+      /*
+       * The Terms row, and only it. `history` is the agreements table on frame
+       * `32`, which lists *every* document the vendor has accepted — and since
+       * #429 the Terms of Service accepted at first sign-in is one of them.
+       * Before it, `terms_of_service` was an enum value nothing ever wrote and
+       * the table could only ever show one row.
+       */
+      expect(response.json().history.map((row: { document: string }) => row.document)).toEqual([
+        'terms_of_service',
+      ]);
     });
 
     it('answers 404 for a vendor with no profile yet', async () => {
@@ -134,7 +159,12 @@ describe('the vendor agreement', () => {
           businessName: 'June Harlow Photography',
         },
       });
-      expect(response.json().history).toHaveLength(1);
+      expect(
+        response
+          .json()
+          .history.map((row: { document: string }) => row.document)
+          .sort(),
+      ).toEqual(['terms_of_service', 'vendor_agreement']);
     });
 
     /**
@@ -146,7 +176,7 @@ describe('the vendor agreement', () => {
       await seedVendorProfile('vendor_a', 'June Harlow Photography');
       await accept('vendor_a');
 
-      const [row] = await harness.database.db.select().from(legalAcceptances);
+      const [row] = await agreementRows();
 
       expect({
         name: row!.acceptedByName,
@@ -177,12 +207,16 @@ describe('the vendor agreement', () => {
       const second = await accept('vendor_a');
 
       expect(second.statusCode).toBe(200);
-      expect(second.json().history).toHaveLength(1);
+      expect(
+        second
+          .json()
+          .history.filter((row: { document: string }) => row.document === 'vendor_agreement'),
+      ).toHaveLength(1);
       // The original row, untouched — same instant, not a rewritten one.
       expect(new Date(second.json().accepted.acceptedAt).toISOString()).toBe(
         new Date(first.json().accepted.acceptedAt).toISOString(),
       );
-      expect(await harness.database.db.select().from(legalAcceptances)).toHaveLength(1);
+      expect(await agreementRows()).toHaveLength(1);
     });
 
     /**
@@ -195,7 +229,7 @@ describe('the vendor agreement', () => {
       await seedVendorProfile('vendor_a', 'June Harlow Photography');
       await accept('vendor_a');
 
-      const superseded = await harness.database.db.select().from(legalAcceptances);
+      const superseded = await agreementRows();
 
       /*
        * The insert is the same code path with a different current version, so
@@ -207,12 +241,14 @@ describe('the vendor agreement', () => {
         vendorId: superseded[0]!.vendorId,
         document: 'vendor_agreement',
         version: 'v2.0',
+        documentSha256: superseded[0]!.documentSha256,
+        acceptanceMethod: 'clickwrap_checkbox',
         acceptedByUserId: superseded[0]!.acceptedByUserId,
         acceptedByName: superseded[0]!.acceptedByName,
         businessName: superseded[0]!.businessName,
       });
 
-      const rows = await harness.database.db.select().from(legalAcceptances);
+      const rows = await agreementRows();
 
       expect(rows.map((row) => row.version).sort()).toEqual(['v1.0', 'v2.0']);
     });
@@ -224,7 +260,7 @@ describe('the vendor agreement', () => {
       const response = await accept('vendor_a', 'v0.9');
 
       expect(response.statusCode).toBe(409);
-      expect(await harness.database.db.select().from(legalAcceptances)).toHaveLength(0);
+      expect(await agreementRows()).toHaveLength(0);
     });
 
     it('refuses a customer, an admin and a signed-out caller', async () => {
@@ -233,7 +269,7 @@ describe('the vendor agreement', () => {
       expect((await accept('customer_a')).statusCode).toBe(403);
       expect((await accept('admin_a')).statusCode).toBe(403);
       expect((await accept(undefined)).statusCode).toBe(401);
-      expect(await harness.database.db.select().from(legalAcceptances)).toHaveLength(0);
+      expect(await agreementRows()).toHaveLength(0);
     });
 
     /**
@@ -247,11 +283,12 @@ describe('the vendor agreement', () => {
       await accept('vendor_a');
 
       expect((await read('vendor_a')).json().isCurrent).toBe(true);
-      expect((await read('vendor_b')).json()).toMatchObject({
-        businessName: 'Second Light Studio',
-        isCurrent: false,
-        history: [],
-      });
+      const other = (await read('vendor_b')).json();
+
+      expect(other).toMatchObject({ businessName: 'Second Light Studio', isCurrent: false });
+      expect(other.history.map((row: { document: string }) => row.document)).toEqual([
+        'terms_of_service',
+      ]);
     });
   });
 });

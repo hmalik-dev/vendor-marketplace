@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { ApiClientError } from '@/lib/api-client';
 import { getCurrentUser } from '@/lib/current-user';
 import { signInPathReturningTo } from '@/lib/return-path';
 import { DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
+import { signedInFailurePath } from '@/lib/terms-gate';
 
 /**
  * "Take me to my dashboard" — the header's signed-in link, which cannot know
@@ -30,11 +30,20 @@ export async function GET(request: Request): Promise<NextResponse> {
      */
     target = user ? DASHBOARD_PATH_BY_ROLE[user.role] : signInPathReturningTo('/dashboard');
   } catch (error) {
-    if (error instanceof ApiClientError && error.statusCode === 403) {
-      target = '/suspended';
-    } else {
+    /*
+     * The two refusals a signed-in caller can meet, in the order that
+     * distinguishes them: the acceptance gate is a 403 too, and it is not a
+     * suspension — it is cleared in one click, and this handler must not tell a
+     * new account it has been banned. The destination travels with it, so the
+     * link still lands where it was pointed once the box is ticked.
+     */
+    const refused = signedInFailurePath(error, '/dashboard');
+
+    if (refused === null) {
       throw error;
     }
+
+    target = refused;
   }
 
   return NextResponse.redirect(new URL(target, request.url));

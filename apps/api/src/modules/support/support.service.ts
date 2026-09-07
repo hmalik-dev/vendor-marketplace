@@ -10,7 +10,7 @@ import type { BookingRow } from '@vendor-marketplace/db/schema';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
 import type { EmailGateway } from '../../lib/email.js';
-import { AppError, unauthorized, validationFailed } from '../../lib/errors.js';
+import { AppError, termsRequiredError, unauthorized, validationFailed } from '../../lib/errors.js';
 import { findUserEmail } from '../notifications/notification-email.dao.js';
 import {
   announceDisputeHold,
@@ -141,6 +141,7 @@ async function placeReportHold(
   deps: SupportDeps,
   input: SupportMessageInput,
   auth: AuthenticatedUser | null,
+  gated: boolean,
   now: Date,
 ): Promise<BookingRow | null> {
   if (input.bookingId === undefined) {
@@ -148,7 +149,15 @@ async function placeReportHold(
   }
 
   if (!auth) {
-    throw unauthorized('Sign in to report a problem with a booking');
+    /*
+     * `auth` is null for two reasons since #429, and telling somebody who is
+     * demonstrably signed in to sign in is the wrong one. `/support` is
+     * deliberately reachable from behind the acceptance gate — the person most
+     * likely to need it is the one who cannot get through — so this is the one
+     * surface where a gated caller meets a refusal and has to be told which
+     * refusal it is.
+     */
+    throw gated ? termsRequiredError() : unauthorized('Sign in to report a problem with a booking');
   }
 
   return placeDisputeHold(deps.bookings, auth, input.bookingId, input.message, now);
@@ -233,6 +242,8 @@ export async function sendSupportMessage(
   deps: SupportDeps,
   input: SupportMessageInput,
   auth: AuthenticatedUser | null,
+  /** True when the caller is signed in but held at the acceptance gate (#429). */
+  gated: boolean,
   now: Date,
 ): Promise<SupportMessageReceipt> {
   const reference = generateSupportReference();
@@ -250,7 +261,7 @@ export async function sendSupportMessage(
    * anything that fails after it is unwound by `unwindReportHold` below, so
    * neither half can stand alone. #405's two-writes-with-no-rollback shape, on money.
    */
-  const held = await placeReportHold(deps, input, auth, now);
+  const held = await placeReportHold(deps, input, auth, gated, now);
 
   const audience = await readAudience(deps, held, reference);
 

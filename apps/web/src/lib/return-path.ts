@@ -103,9 +103,20 @@ export function safeReturnPath(value: string | null | undefined): string | null 
   return normalized;
 }
 
-/** `/sign-in` carrying the destination, when there is a safe one to carry. */
-export function signInPathReturningTo(returnTo: string | null | undefined): string {
+/**
+ * `base` carrying the destination, when there is a safe one to carry.
+ *
+ * The validate-then-encode order is the open-redirect boundary, so it is spelled
+ * once and every interruption in the product — sign-in, and since #429 the Terms
+ * acceptance gate — routes through it rather than reproducing it.
+ */
+export function pathReturningTo(base: string, returnTo: string | null | undefined): string {
   const safe = safeReturnPath(returnTo);
 
-  return safe ? `/sign-in?${RETURN_PATH_PARAM}=${encodeURIComponent(safe)}` : '/sign-in';
+  return safe ? `${base}?${RETURN_PATH_PARAM}=${encodeURIComponent(safe)}` : base;
+}
+
+/** `/sign-in` carrying the destination, when there is a safe one to carry. */
+export function signInPathReturningTo(returnTo: string | null | undefined): string {
+  return pathReturningTo('/sign-in', returnTo);
 }

@@ -6,6 +6,7 @@ import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { requestedPath } from './requested-path';
 import { RETURN_PATH_PARAM, safeReturnPath, signInPathReturningTo } from './return-path';
+import { redirectIfTermsRequired } from './terms-gate';
 /*
  * The role→route tables live in `role-routes.ts`, beside the table saying which
  * roles each route renders for: one place computes a role's destination, and a
@@ -80,6 +81,14 @@ async function getCurrentUserOrSuspend(): Promise<WireUser | null> {
   try {
     return await getCurrentUser();
   } catch (error) {
+    /*
+     * The acceptance gate is a 403 too, and it is a different instruction: an
+     * account that has not accepted the current Terms is one tick from usable,
+     * while a suspension is terminal. Answering both with `/suspended` would
+     * tell every new account it had been banned. Checked first, because the
+     * status alone cannot tell them apart — only the code can.
+     */
+    await redirectIfTermsRequired(error);
     if (error instanceof ApiClientError && error.statusCode === 403) {
       redirect('/suspended');
     }

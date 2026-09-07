@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import type { z } from 'zod';
 import { ApiClientError, apiRequest } from './api-client';
+import { redirectIfTermsRequired } from './terms-gate';
 import { signInPathReturningHere } from './requested-path';
 import {
   wireAdminBookingPageSchema,
@@ -62,7 +63,7 @@ async function adminSession(): Promise<AdminSession> {
  * those before any read runs, so a 403 reaching here is the narrow case of a
  * role changing mid-render — `/` is the honest destination for both.
  */
-function rethrowUnlessSessionFailure(error: unknown, signInPath: string): never {
+async function rethrowUnlessSessionFailure(error: unknown, signInPath: string): Promise<never> {
   if (!(error instanceof ApiClientError)) {
     throw error;
   }
@@ -70,6 +71,13 @@ function rethrowUnlessSessionFailure(error: unknown, signInPath: string): never 
   if (error.statusCode === 401) {
     redirect(signInPath);
   }
+  /*
+   * The acceptance gate (#429) is a 403 too, and it is a different
+   * instruction: an account that has not accepted the current Terms is one
+   * tick from usable, while a suspension is terminal. Checked first, because
+   * the status alone cannot tell them apart — only the code can.
+   */
+  await redirectIfTermsRequired(error);
   if (error.statusCode === 403) {
     redirect('/');
   }
@@ -83,7 +91,7 @@ async function adminRead<T>(path: string, schema: z.ZodType<T>): Promise<T> {
   try {
     return await apiRequest(path, { schema, token });
   } catch (error) {
-    rethrowUnlessSessionFailure(error, signInPath);
+    throw await rethrowUnlessSessionFailure(error, signInPath);
   }
 }
 

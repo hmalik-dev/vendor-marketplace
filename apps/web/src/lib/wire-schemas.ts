@@ -12,6 +12,7 @@ import {
   paginatedSchema,
   sendMessageResultSchema,
   vendorDashboardSchema,
+  termsAcceptanceStatusSchema,
   vendorAgreementStatusSchema,
   vendorPayoutStatusSchema,
   portfolioItemSchema,
@@ -314,6 +315,15 @@ export type WireVendorPayoutStatus = z.infer<typeof wireVendorPayoutStatusSchema
  */
 export const wireVendorAgreementStatusSchema = vendorAgreementStatusSchema;
 export type WireVendorAgreementStatus = z.infer<typeof wireVendorAgreementStatusSchema>;
+
+/**
+ * The first-sign-in acceptance gate's state, for the same reason: its
+ * `acceptedAt` is already `z.coerce.date()` on the shared schema, so the JSON
+ * string the API actually sends parses rather than 500ing the one screen a new
+ * account cannot get past.
+ */
+export const wireTermsAcceptanceStatusSchema = termsAcceptanceStatusSchema;
+export type WireTermsAcceptanceStatus = z.infer<typeof wireTermsAcceptanceStatusSchema>;
 
 /** Messaging, as JSON — every timestamp coerced back at the boundary. */
 export const wireConversationSchema = conversationSummarySchema.extend({
