@@ -1,6 +1,6 @@
 {
-  "id": "2c03203a-a8d7-478a-b7b8-86cad7d296d8",
-  "prevId": "a74e1a95-c2b5-4357-8dce-4192d963ec81",
+  "id": "b866a01c-a476-499a-a0d9-c9be06f85e86",
+  "prevId": "2c03203a-a8d7-478a-b7b8-86cad7d296d8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1824,6 +1824,21 @@
           "method": "btree",
           "with": {}
         },
+        "bookings_payment_intent_idx": {
+          "name": "bookings_payment_intent_idx",
+          "columns": [
+            {
+              "expression": "stripe_payment_intent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "bookings_vendor_idx": {
           "name": "bookings_vendor_idx",
           "columns": [
@@ -3016,6 +3031,220 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+    },
+    "public.support_cases": {
+      "name": "support_cases",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "origin": {
+          "name": "origin",
+          "type": "support_case_origin",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "support_case_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "topic": {
+          "name": "topic",
+          "type": "support_topic",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sender_user_id": {
+          "name": "sender_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sender_email": {
+          "name": "sender_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "booking_id": {
+          "name": "booking_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stripe_dispute_id": {
+          "name": "stripe_dispute_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hold_refusal": {
+          "name": "hold_refusal",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email_failed_at": {
+          "name": "email_failed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "network_outcome": {
+          "name": "network_outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_by": {
+          "name": "resolved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "support_cases_status_created_at_idx": {
+          "name": "support_cases_status_created_at_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "support_cases_booking_idx": {
+          "name": "support_cases_booking_idx",
+          "columns": [
+            {
+              "expression": "booking_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "support_cases_sender_user_id_users_id_fk": {
+          "name": "support_cases_sender_user_id_users_id_fk",
+          "tableFrom": "support_cases",
+          "tableTo": "users",
+          "columnsFrom": [
+            "sender_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "support_cases_booking_id_bookings_id_fk": {
+          "name": "support_cases_booking_id_bookings_id_fk",
+          "tableFrom": "support_cases",
+          "tableTo": "bookings",
+          "columnsFrom": [
+            "booking_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "support_cases_resolved_by_users_id_fk": {
+          "name": "support_cases_resolved_by_users_id_fk",
+          "tableFrom": "support_cases",
+          "tableTo": "users",
+          "columnsFrom": [
+            "resolved_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "support_cases_reference_unique": {
+          "name": "support_cases_reference_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "reference"
+          ]
+        },
+        "support_cases_stripe_dispute_id_unique": {
+          "name": "support_cases_stripe_dispute_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "stripe_dispute_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -3204,7 +3433,8 @@
         "review_deleted",
         "tag_updated",
         "tag_suggestion_resolved",
-        "dispute_resolved"
+        "dispute_resolved",
+        "support_case_resolved"
       ]
     },
     "public.admin_action_subject": {
@@ -3215,7 +3445,8 @@
         "review",
         "tag",
         "tag_suggestion",
-        "booking"
+        "booking",
+        "support_case"
       ]
     },
     "public.email_delivery_entity": {
@@ -3235,6 +3466,33 @@
         "delivered",
         "bounced",
         "complained"
+      ]
+    },
+    "public.support_case_origin": {
+      "name": "support_case_origin",
+      "schema": "public",
+      "values": [
+        "support_message",
+        "chargeback"
+      ]
+    },
+    "public.support_case_status": {
+      "name": "support_case_status",
+      "schema": "public",
+      "values": [
+        "open",
+        "resolved"
+      ]
+    },
+    "public.support_topic": {
+      "name": "support_topic",
+      "schema": "public",
+      "values": [
+        "something-broke",
+        "booking-or-payment",
+        "vendor-profile",
+        "trust-and-safety",
+        "something-else"
       ]
     }
   },

@@ -1,11 +1,18 @@
-import { BRAND_NAME, type NotificationType } from '@vendor-marketplace/shared';
+import {
+  BRAND_NAME,
+  uuidSchema,
+  type EmailDeliveryEntity,
+  type EmailDeliveryOutcome,
+  type NotificationType,
+} from '@vendor-marketplace/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import type { NotificationRow } from '@vendor-marketplace/db';
 import type { AppDatabase } from '../../lib/database.js';
 import { notificationHref } from '../messaging/messaging.service.js';
-import type { EmailGateway } from '../../lib/email.js';
+import type { EmailGateway, EmailSendResult } from '../../lib/email.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import type { BackgroundWork } from '../../lib/background.js';
+import { insertEmailDelivery } from './email-delivery.dao.js';
 import { findUserEmail } from './notification-email.dao.js';
 
 /**
@@ -184,12 +191,35 @@ export async function sendNotificationEmail(
     const href = notificationHref(row as NotificationRow) ?? '/bookings';
     const url = `${deps.webOrigin}${audience === 'vendor' ? forVendor(href) : href}`;
 
-    await deps.email.send({
-      to: recipient.email,
-      subject: row.title,
-      html: renderHtml({ title: row.title, body: row.body, label, url }),
-      text: renderText({ title: row.title, body: row.body, label, url }),
-      idempotencyKey: row.id,
+    let result: EmailSendResult;
+    try {
+      result = await deps.email.send({
+        to: recipient.email,
+        subject: row.title,
+        html: renderHtml({ title: row.title, body: row.body, label, url }),
+        text: renderText({ title: row.title, body: row.body, label, url }),
+        idempotencyKey: row.id,
+      });
+    } catch (error) {
+      /*
+       * Record the failure, then hand the error back to the outer catch, which
+       * is where "a failed email never fails the operation" already lives. The
+       * rethrow keeps that policy in one place instead of two, and the record
+       * is #439's first half: a send that never happened used to leave nothing
+       * behind but a log line on a process that may have rotated.
+       */
+      await recordDelivery(deps, row, recipient.email, {
+        outcome: 'failed',
+        providerMessageId: null,
+        failureReason: reasonFor(error),
+      });
+      throw error;
+    }
+
+    await recordDelivery(deps, row, recipient.email, {
+      outcome: 'sent',
+      providerMessageId: result.providerMessageId,
+      failureReason: null,
     });
   } catch (error) {
     /*
@@ -202,6 +232,143 @@ export async function sendNotificationEmail(
       'Transactional email failed to send; the operation itself succeeded',
     );
   }
+}
+
+/** The outcome half of a delivery record, as the send knows it. */
+interface AttemptRecord {
+  outcome: Extract<EmailDeliveryOutcome, 'sent' | 'failed'>;
+  providerMessageId: string | null;
+  failureReason: string | null;
+}
+
+/**
+ * Writes the delivery record, and **cannot fail the send or the operation**.
+ *
+ * The rule the file already follows, applied one layer further in. A booking
+ * that succeeded must not appear to fail because its bookkeeping did, so this
+ * catches its own write — and it has to be its own catch rather than the
+ * caller's, because reaching that one would log "the email failed" about an
+ * email that was delivered.
+ *
+ * Deliberately **not** in a transaction with anything. There is nothing to make
+ * atomic: the notification row is long committed, the message is already at
+ * Resend, and a transaction here could only roll back a record of something
+ * that has already happened.
+ */
+async function recordDelivery(
+  deps: NotificationEmailDeps,
+  row: NotificationEmailRow,
+  recipientEmail: string,
+  attempt: AttemptRecord,
+): Promise<void> {
+  try {
+    await insertEmailDelivery(deps.db, {
+      notificationId: row.id,
+      userId: row.userId,
+      recipientEmail,
+      notificationType: row.type,
+      ...relatedEntityOf(row),
+      outcome: attempt.outcome,
+      providerMessageId: attempt.providerMessageId,
+      // Cut to the column's width by the DAO, on both write paths.
+      failureReason: attempt.failureReason,
+    });
+  } catch (error) {
+    /*
+     * **Never `err: error` here**, which is the obvious thing to write and is a
+     * PII leak. Drizzle wraps a failed statement in a `DrizzleQueryError` whose
+     * `params` are set as an own enumerable property *and* interpolated into
+     * the message — and the bound params of this insert include
+     * `recipientEmail`. Pino's `err` serialiser copies own properties, and
+     * `server.ts`'s `redact` list is path-based on `req.headers.*`, so it never
+     * reaches them. The address would land in the log stream at `error` level
+     * on any database blip, contradicting the rule `lib/email.ts` and the
+     * webhook both state: the column holds the address, the log does not.
+     *
+     * The class name and the driver's own `code` are what a reader actually
+     * needs to tell a timeout from a constraint violation, and neither carries
+     * a value. `notificationId` remains the correlator.
+     */
+    deps.log.error(
+      {
+        notificationId: row.id,
+        type: row.type,
+        outcome: attempt.outcome,
+        reason: error instanceof Error ? error.name : 'unknown',
+        code: databaseErrorCode(error),
+      },
+      'Failed to record an email delivery; the email itself is unaffected',
+    );
+  }
+}
+
+/**
+ * Postgres' `SQLSTATE` for a failed statement, when there is one.
+ *
+ * Read off the `cause` rather than the wrapper, because the wrapper is the half
+ * that carries the bound parameters — see the catch above. `undefined` when the
+ * failure was not the driver's.
+ */
+function databaseErrorCode(error: unknown): string | undefined {
+  const cause: unknown = error instanceof Error ? error.cause : undefined;
+
+  if (typeof cause === 'object' && cause !== null && 'code' in cause) {
+    const { code } = cause as { code: unknown };
+    return typeof code === 'string' ? code : undefined;
+  }
+
+  return undefined;
+}
+
+/** What an email was about, as the delivery record stores it. */
+interface RelatedEntity {
+  relatedEntityType: EmailDeliveryEntity | null;
+  relatedEntityId: string | null;
+}
+
+/**
+ * The booking or booking request an email was about, when it names one.
+ *
+ * The fourteen notification payloads name two different entities — the
+ * booking-request flow carries `bookingRequestId`, while payments, moderation
+ * and reviews carry `bookingId` — so the type is stored beside the id rather
+ * than left to be guessed at from a bare uuid.
+ *
+ * `bookingId` is looked for first because it is the more durable of the two: it
+ * names a booking that exists, where a request may never become one. No payload
+ * carries both today, so the order decides nothing yet and is stated rather
+ * than left to chance.
+ *
+ * Validated rather than trusted: the column is a `uuid`, so a payload carrying
+ * anything else would make Postgres refuse the whole row — losing the record of
+ * a message that was genuinely sent, for the sake of a field nothing else
+ * needs. Both null is the honest answer for the types that concern an account,
+ * and for a payload whose id does not parse.
+ */
+function relatedEntityOf(row: NotificationEmailRow): RelatedEntity {
+  const data = row.data ?? {};
+
+  const bookingId = uuidSchema.safeParse(data.bookingId);
+  if (bookingId.success) {
+    return { relatedEntityType: 'booking', relatedEntityId: bookingId.data };
+  }
+
+  const requestId = uuidSchema.safeParse(data.bookingRequestId);
+  if (requestId.success) {
+    return { relatedEntityType: 'booking_request', relatedEntityId: requestId.data };
+  }
+
+  return { relatedEntityType: null, relatedEntityId: null };
+}
+
+/**
+ * Why a send failed, in one string.
+ *
+ * `EmailGateway` throws a status-only message precisely so no recipient address
+ * can reach a log or, now, this column — see `lib/email.ts`.
+ */
+function reasonFor(error: unknown): string {
+  return error instanceof Error ? error.message : 'The email transport failed with a non-Error';
 }
 
 interface Rendered {

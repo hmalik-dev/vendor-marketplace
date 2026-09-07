@@ -66,6 +66,27 @@ export interface EmailMessage {
   idempotencyKey: string;
 }
 
+/**
+ * What the provider said about a message it accepted.
+ *
+ * Returned rather than discarded since #439: the id is the only key a Resend
+ * delivery event carries, so a send that does not hand it back leaves every
+ * later `delivered`, `bounced` and `complained` with nothing to match on and
+ * the record frozen at "we tried".
+ */
+export interface EmailSendResult {
+  /**
+   * Resend's own id for the accepted message.
+   *
+   * Nullable because acceptance is the contract and the id is not: a 200 whose
+   * body is missing, malformed or reshaped by the provider still means the
+   * message was taken, and throwing there would turn a delivered email into a
+   * recorded failure. The delivery record then stands as `sent` with no id,
+   * which is exactly true — it was sent, and no event can be matched to it.
+   */
+  providerMessageId: string | null;
+}
+
 export interface EmailGateway {
   /**
    * Sends one message.
@@ -75,7 +96,7 @@ export interface EmailGateway {
    * a policy the service layer owns, and burying it here would make it
    * unobservable.
    */
-  send(message: EmailMessage): Promise<void>;
+  send(message: EmailMessage): Promise<EmailSendResult>;
 }
 
 export interface ResendOptions {
@@ -120,6 +141,32 @@ export function createResendGateway({ apiKey, from }: ResendOptions): EmailGatew
          */
         throw new Error(`Resend refused the send (${response.status})`);
       }
+
+      return { providerMessageId: await readMessageId(response) };
     },
   };
+}
+
+/**
+ * Resend's `{ "id": "..." }`, or null when the body is not that.
+ *
+ * Every failure here is swallowed on purpose. The message has already been
+ * accepted by the time this runs — the status said so — so a body that does
+ * not parse is a gap in the *record*, not a failed send, and throwing would
+ * make `sendNotificationEmail` write `failed` for an email the customer is
+ * about to receive. That is worse than the missing id it would be reporting.
+ */
+async function readMessageId(response: Response): Promise<string | null> {
+  try {
+    const body: unknown = await response.json();
+
+    if (typeof body === 'object' && body !== null && 'id' in body) {
+      const { id } = body as { id: unknown };
+      return typeof id === 'string' && id.length > 0 ? id : null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
 }

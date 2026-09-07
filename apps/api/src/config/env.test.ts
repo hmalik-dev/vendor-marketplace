@@ -24,11 +24,13 @@ const REQUIRED: NodeJS.ProcessEnv = {
  * of them is something the secret scanner and the pre-tool credential hook have
  * to be taught to forgive.
  */
-for (const [stripeKey, clerkKey] of [
+for (const [borrower, lender] of [
   ['STRIPE_SECRET_KEY', 'CLERK_SECRET_KEY'],
   ['STRIPE_WEBHOOK_SECRET', 'CLERK_WEBHOOK_SECRET'],
+  // Resend signs with svix too, so its signing secret takes the same shape.
+  ['RESEND_WEBHOOK_SECRET', 'CLERK_WEBHOOK_SECRET'],
 ] as const) {
-  REQUIRED[stripeKey] = REQUIRED[clerkKey];
+  REQUIRED[borrower] = REQUIRED[lender];
 }
 
 /*
@@ -115,6 +117,53 @@ describe('parseEnv', () => {
   it('requires the email capability now that the API sends transactional mail', () => {
     expect(Object.keys(parseEnv(REQUIRED))).toContain('RESEND_API_KEY');
     expect(Object.keys(parseEnv(REQUIRED))).toContain('EMAIL_FROM');
+  });
+
+  /*
+   * The exception to the rule above, and the only row in the registry that is
+   * excused on every target (#439). A deployment whose account holder has not
+   * configured the Resend webhook still has to boot, still has to send, and
+   * still has to record what it attempted — so absence must parse rather than
+   * refuse. It is safe to excuse only because absence is refusal, not
+   * permission: `resend.routes.ts` does not register the endpoint at all
+   * without it, so no unsigned event can reach the record.
+   */
+  it('boots with no Resend webhook secret, and reports it as absent', () => {
+    const withoutWebhook = { ...REQUIRED };
+    delete withoutWebhook.RESEND_WEBHOOK_SECRET;
+
+    expect(() => parseEnv(withoutWebhook)).not.toThrow();
+    expect(parseEnv(withoutWebhook).RESEND_WEBHOOK_SECRET).toBeUndefined();
+    expect(parseEnv(REQUIRED).RESEND_WEBHOOK_SECRET).toBe(REQUIRED.CLERK_WEBHOOK_SECRET);
+  });
+
+  /*
+   * **Blank is absent**, and it is the shape a real deployment produces: a
+   * hosting dashboard with the variable declared and the box empty, a `.env`
+   * line with nothing after the `=`, a `cp .env.example .env` where only the
+   * used rows were filled in. `min(1)` and the `whsec_` shape would both refuse
+   * `''` and take the whole API down at boot — while `pnpm preflight`, which
+   * treats empty and unset alike, reported the environment as fine.
+   */
+  it('treats a blank optional value as unset rather than refusing to boot', () => {
+    const blank = { ...REQUIRED };
+    blank.RESEND_WEBHOOK_SECRET = '';
+
+    expect(() => parseEnv(blank)).not.toThrow();
+    expect(parseEnv(blank).RESEND_WEBHOOK_SECRET).toBeUndefined();
+  });
+
+  /*
+   * The other direction, which blank-is-absent must not weaken: a value that is
+   * *present* and wrong still refuses the boot. Optional means "may be absent",
+   * never "may be anything".
+   */
+  it('still refuses an optional value that is present and malformed', () => {
+    const junk = 'not-a-signing-value';
+    const malformed = { ...REQUIRED };
+    malformed.RESEND_WEBHOOK_SECRET = junk;
+
+    expect(() => parseEnv(malformed)).toThrow(/RESEND_WEBHOOK_SECRET/);
   });
 });
 

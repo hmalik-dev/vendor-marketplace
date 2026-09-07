@@ -120,7 +120,7 @@ describe('a notification that cannot be written', () => {
   afterEach(async () => {
     failNotificationWrites = false;
     harness.email.sent.length = 0;
-    harness.email.deliveredKeys.clear();
+    harness.email.messageIdsByKey.clear();
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
     await harness.database.db.delete(bookingRequests);
@@ -203,7 +203,7 @@ describe('a notification that cannot be written', () => {
     const realSend = harness.email.send;
     harness.email.send = async (message) => {
       await gate;
-      await realSend(message);
+      return realSend(message);
     };
 
     const created = await harness.app.inject({

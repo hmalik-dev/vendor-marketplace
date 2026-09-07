@@ -512,12 +512,61 @@ describe('registrySchemaShape', () => {
       expect(() => shape.S3_ENDPOINT.parse('not-a-url')).toThrow(/S3_ENDPOINT/);
     });
 
+    /*
+     * The excused rows, written out rather than derived — so adding a fourth
+     * has to be a deliberate edit here, where somebody reads why. Deriving the
+     * list from `optionalFor` would restate `requiresExplicitValue`'s own
+     * branch, and an assertion that mirrors the implementation cannot fail for
+     * any change made consistently in both.
+     *
+     * Only `RESEND_WEBHOOK_SECRET` is excused on a deployment (#439): the
+     * delivery record has to hold what was attempted whether or not the account
+     * holder configured the webhook, and absence there means the endpoint is
+     * not registered at all rather than a permissive one. The other two are
+     * `tooling` rows that no deployed app reads.
+     */
+    const EXCUSED_ON_DEPLOYED = ['RESEND_WEBHOOK_SECRET'];
+
     it('requires exactly the per-environment rows, and every one of them', () => {
       for (const variable of ENV_REGISTRY) {
         const expected =
-          variable.environments === 'per-environment' || variable.defaultValue === undefined;
+          !EXCUSED_ON_DEPLOYED.includes(variable.key) &&
+          (variable.environments === 'per-environment' || variable.defaultValue === undefined);
 
         expect(requiresExplicitValue(variable, 'deployed'), variable.key).toBe(expected);
+      }
+    });
+
+    /*
+     * The other half of that exemption, and the one that matters: a row excused
+     * anywhere must have **no default to fall back into**. A row with both
+     * would be a development default reaching production with the gate turned
+     * off for it, which is exactly what this file exists to prevent.
+     */
+    it('never excuses a row that has a default to fall back into', () => {
+      const excused = ALL_VARIABLES.filter((variable) => variable.optionalFor !== undefined);
+
+      expect(excused.length).toBeGreaterThan(0);
+      for (const variable of excused) {
+        expect(variable.defaultValue, variable.key).toBeUndefined();
+      }
+    });
+
+    /*
+     * `FieldFor` in `schema.ts` decides optionality in the **type** from a
+     * hardcoded `baseline`, while `schemaFor` decides it at runtime from the
+     * caller's actual target. The two agree only while every excused row
+     * includes `baseline` — so that is asserted rather than assumed. A row
+     * excused on `deployed` alone would type as required and parse as optional,
+     * and nothing else in the suite would notice.
+     */
+    it('excuses no row that a baseline schema would still type as required', () => {
+      for (const variable of ALL_VARIABLES) {
+        if (variable.optionalFor === undefined) {
+          continue;
+        }
+
+        expect(variable.optionalFor, variable.key).toContain('baseline');
       }
     });
   });

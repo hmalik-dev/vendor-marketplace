@@ -27,6 +27,7 @@ const EXPECTED_TABLES = [
   'bookings',
   'categories',
   'conversations',
+  'email_deliveries',
   'legal_acceptances',
   'messages',
   'notifications',

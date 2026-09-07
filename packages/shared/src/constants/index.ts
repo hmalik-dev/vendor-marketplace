@@ -470,6 +470,93 @@ export const NOTIFICATION_TYPES = [
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
+/**
+ * What became of one transactional email, on the row written beside the send.
+ *
+ * Two of these are written locally and three only ever arrive from Resend, and
+ * the split is what the values are shaped around:
+ *
+ * - `sent` — the provider accepted the message. It is the *end* of what the
+ *   sending process can know, not the end of the story.
+ * - `failed` — the provider refused it, or the send threw before it answered.
+ *   A row in this state carries no provider message id, so no delivery event
+ *   can ever reach it; the failure reason is the whole record.
+ * - `delivered`, `bounced`, `complained` — the provider's own account of what
+ *   happened afterwards, matched to the row by message id.
+ *
+ * There is deliberately no `opened` or `clicked`. Resend emits both, and
+ * recording them would turn an operational record of *whether we told someone*
+ * into behavioural tracking of a person who never asked for it. #439 asks
+ * whether the customer was told, and delivery answers that.
+ */
+export const EMAIL_DELIVERY_OUTCOMES = [
+  'sent',
+  'failed',
+  'delivered',
+  'bounced',
+  'complained',
+] as const;
+export type EmailDeliveryOutcome = (typeof EMAIL_DELIVERY_OUTCOMES)[number];
+
+/**
+ * Which outcome may replace which, so a replayed or reordered provider event
+ * cannot walk a record backwards.
+ *
+ * An event is applied **only when it outranks what the row already holds**,
+ * which is the whole of the idempotency rule: replaying `email.delivered` a
+ * second time is a no-op because `delivered` does not outrank `delivered`, and
+ * a `delivered` webhook arriving after a `bounced` one — Resend retries for
+ * hours, and nothing promises order — leaves the bounce standing.
+ *
+ * `bounced` ranks highest because it is the one outcome that says something
+ * about the *address* rather than about this message: every future
+ * notification to that person is lost too, which is exactly the signal an
+ * operator needs and the one that must never be overwritten. `complained`
+ * outranks `delivered` because it can only ever follow one.
+ *
+ * `failed` sits just above `sent` and below every delivery outcome. Above
+ * `sent`, because Resend's own `email.failed` and `email.suppressed` say the
+ * message never went out and must be able to replace "we handed it over".
+ * Below the rest, because if the provider ever says both `failed` and
+ * `delivered` for one message, the delivery is the later truth — and a locally
+ * written `failed` row carries no provider message id for any event to reach
+ * anyway.
+ */
+export const EMAIL_DELIVERY_OUTCOME_RANK: Readonly<Record<EmailDeliveryOutcome, number>> = {
+  sent: 0,
+  failed: 1,
+  delivered: 2,
+  complained: 3,
+  bounced: 4,
+};
+
+/**
+ * What a transactional email was *about*, when it was about anything.
+ *
+ * Stored beside the id rather than instead of it, for `ADMIN_ACTION_SUBJECTS`'
+ * reason and one more. The reason: a bare uuid does not say which table it came
+ * from, and these ids carry no foreign key because the record has to outlive
+ * its subject. The one more: the fourteen notification payloads name **two**
+ * different entities — the booking-request flow carries `bookingRequestId`,
+ * while payments, moderation and reviews carry `bookingId` — so a single
+ * untyped column would put two id spaces in one place and make "the emails this
+ * booking generated" answerable only by guessing.
+ *
+ * A conversation is deliberately absent: `new_message` is the one notification
+ * type that never emails, so no delivery record can ever be about one.
+ */
+export const EMAIL_DELIVERY_ENTITIES = ['booking_request', 'booking'] as const;
+export type EmailDeliveryEntity = (typeof EMAIL_DELIVERY_ENTITIES)[number];
+
+/**
+ * How much of a provider failure reason is kept.
+ *
+ * Long enough for Resend's bounce diagnostics — an SMTP rejection quotes the
+ * receiving server verbatim — and short enough that a provider answering with
+ * something unbounded cannot write a page of text per send into the table.
+ */
+export const MAX_EMAIL_FAILURE_REASON_LENGTH = 500;
+
 export const VENDOR_SORT_OPTIONS = [
   'relevance',
   'rating',

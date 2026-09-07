@@ -236,8 +236,15 @@
     {
       "idx": 33,
       "version": "7",
-      "when": 1788808809530,
-      "tag": "0033_broad_shadowcat",
+      "when": 1788809941511,
+      "tag": "0033_lethal_blindfold",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788812785903,
+      "tag": "0034_flimsy_beast",
       "breakpoints": true
     }
   ]

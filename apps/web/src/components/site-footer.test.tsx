@@ -3,12 +3,40 @@ import { join } from 'node:path';
 import type { ReactNode } from 'react';
 import {
   BRAND_NAME,
+  BRAND_TAGLINE,
   CATEGORY_SEEDS,
   LANDING_JUMP_CATEGORY_SLUGS,
   SUPPORT_PATH,
 } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deltaFrame } from '@/testing/design-frames';
+
+/**
+ * The type scale, so a size drawn in a frame can be checked against the step
+ * this footer actually asks for.
+ *
+ * A frame states pixels and the markup states a token, and nothing otherwise
+ * connects the two: `text-base` and `text-action` are half a pixel apart, and
+ * an assertion naming either one on its own passes whatever the frame draws.
+ * Reading the scale is what makes "the frame draws 13px" and "the footer uses
+ * `text-action`" the same claim. Each step is a distinct value, so the lookup
+ * is unambiguous.
+ */
+const THEME = readFileSync(
+  join(process.cwd(), '..', '..', 'packages', 'config', 'tailwind', 'theme.css'),
+  'utf8',
+);
+
+function typeStepFor(px: number): string {
+  const step = new RegExp(`--text-([a-z]+): ${px}px;`).exec(THEME);
+
+  if (step === null) {
+    throw new Error(`the type scale has no ${px}px step, which is what the frame draws`);
+  }
+
+  return `text-${step[1] as string}`;
+}
 
 type AuthState = 'signed-in' | 'signed-out';
 
@@ -281,6 +309,226 @@ describe('SiteFooter', () => {
      */
     const legalRow = container.querySelector('[data-slot="footer-legal"]');
     expect(legalRow?.className.split(/\s+/) ?? []).toContain('border-t');
+  });
+
+  /*
+   * #441, layout axis. The closing-band delta frame is the only one that draws
+   * this footer, and it draws it twice — signed out and signed in — with the
+   * same numbers both times, which is the corroboration D30 asks for. Every
+   * number below is read back out of the frame rather than restated, so the
+   * markup and the frame cannot drift apart in silence.
+   *
+   * jsdom lays nothing out, so this is the class-level half: the box, the grid
+   * template and the gap that together produce 419/280/280/280 at 1440. The
+   * rendered ladder is the parity pass's to confirm in a browser.
+   */
+  it('lays the footer box and its columns on the frame’s ladder', async () => {
+    /*
+     * Found by the footer's own ground (`stone-950`), not by the values being
+     * asserted — the frame holds five grids and three of them belong to the
+     * band above. The padding rides along because it is on the same element.
+     */
+    const drawn = [
+      ...deltaFrame('delta-band').matchAll(
+        /padding:(\d+)px;background:#1C1916">\s*<div style="display:grid;grid-template-columns:([^;"]+);gap:(\d+)px/g,
+      ),
+    ].map((match) => ({
+      padding: Number(match[1]),
+      columns: match[2] as string,
+      gap: Number(match[3]),
+    }));
+
+    const [frame, second] = drawn;
+
+    expect(drawn).toHaveLength(2);
+    expect(frame).toEqual(second);
+    expect(frame?.columns).toBe('1.5fr 1fr 1fr 1fr');
+
+    const { container } = render(await SiteFooter());
+    const box = container.querySelector('[data-slot="site-footer"] > div');
+    const grid = box?.firstElementChild;
+    const classes = grid?.className.split(/\s+/) ?? [];
+
+    /*
+     * The frame's numbers on Tailwind's 4px scale. Only the vertical padding is
+     * this ticket's: the horizontal half is the page's own gutter ladder, which
+     * already reached the frame's 40px at 1440.
+     */
+    expect(box?.className.split(/\s+/) ?? []).toContain(`py-${(frame?.padding ?? 0) / 4}`);
+    // The template, verbatim — underscores are Tailwind's space.
+    expect(classes).toContain(`lg:grid-cols-[${frame?.columns.replaceAll(' ', '_')}]`);
+    // Four equal quarters put `Browse` at x=390 against the frame's 493.
+    expect(classes).not.toContain('lg:grid-cols-4');
+
+    // The gap holds on the outer grid and on the nav that spans three of it.
+    const gap = `gap-${(frame?.gap ?? 0) / 4}`;
+    expect(classes).toContain(gap);
+    expect(
+      container.querySelector('nav[aria-label="Footer"]')?.className.split(/\s+/) ?? [],
+    ).toContain(gap);
+  });
+
+  /*
+   * #441, style axis. Every number here is read out of the frame and resolved
+   * through the type scale, because the deviations this ticket closed are all
+   * half-steps: 13.5px for 13, a 10px row gap for 11, 1.6 leading for 1.5. An
+   * assertion that names the built utility without deriving it passes equally
+   * well against the value the ticket was filed to remove.
+   *
+   * The micro-labels are deliberately left at `text-label`: see the comment on
+   * `LINK_CLASS` for why this frame's `.lbl` restyle is the outlier.
+   */
+  it('sets the link columns and the tagline at the frame’s own steps', async () => {
+    const frame = deltaFrame('delta-band');
+    // Three columns per footer, twice over, and all six must agree.
+    const columns = [
+      ...frame.matchAll(/flex-direction:column;gap:(\d+)px;font-size:(\d+)px;color:#B8AF9F/g),
+    ].map((match) => ({ gap: Number(match[1]), size: Number(match[2]) }));
+    // The tagline states a ratio; the legal row's 12px states none.
+    const taglines = [
+      ...frame.matchAll(/font:400 (\d+)px\/([\d.]+) 'Instrument Sans',sans-serif;color:#8C8375/g),
+    ].map((match) => ({ size: Number(match[1]), leading: match[2] }));
+
+    expect(columns).toHaveLength(6);
+    expect(new Set(columns.map((column) => JSON.stringify(column))).size).toBe(1);
+    expect(taglines).toHaveLength(2);
+    expect(taglines[0]).toEqual(taglines[1]);
+
+    const { container } = render(await SiteFooter());
+
+    /*
+     * On the list, not on the link. A row's height is the `li`'s own line box,
+     * and a smaller inline child does not shrink it — 13px on the anchor alone
+     * left every row a 20px box against the frame's 16, and the footer 25px
+     * taller than it draws. Asserting the anchor carries NO size utility is
+     * what makes this fail if the size is ever moved back onto it.
+     */
+    const [column] = columns;
+
+    for (const list of container.querySelectorAll('nav[aria-label="Footer"] ul')) {
+      const classes = list.className.split(/\s+/);
+
+      expect(classes).toContain(typeStepFor(column?.size ?? 0));
+      // 11px on Tailwind's 4px scale. `gap-2.5` is the 10px this replaced.
+      expect(classes).toContain(`gap-${(column?.gap ?? 0) / 4}`);
+    }
+
+    for (const link of container.querySelectorAll('nav[aria-label="Footer"] a')) {
+      const classes = link.className.split(/\s+/);
+
+      expect(classes.filter((name) => /^text-(?!stone-)/.test(name))).toEqual([]);
+      // The one row the frame lifts to `stone-50` belongs to the test below.
+      if (link.textContent !== 'Contact support') {
+        expect(classes).toContain('text-stone-520');
+      }
+    }
+
+    // The legal row is the same mechanism at the frame's own smaller step.
+    const legal = [
+      ...frame.matchAll(/font:400 (\d+)px 'Instrument Sans',sans-serif;color:#8C8375/g),
+    ].map((match) => Number(match[1]));
+
+    expect(new Set(legal)).toEqual(new Set([12]));
+    expect(
+      container.querySelector('[data-slot="footer-legal"] ul')?.className.split(/\s+/) ?? [],
+    ).toContain(typeStepFor(legal[0] ?? 0));
+
+    /*
+     * The gap between the lockup and the tagline. Matched through the mark's
+     * own fill and its `#F8F5EF` stroke, so the design document's masthead —
+     * which draws the same two circles over the ink at a different margin — is
+     * not mistaken for a footer lockup.
+     */
+    const lockups = [
+      ...frame.matchAll(
+        /margin-bottom:(\d+)px">\s*<div style="[^"]*">\s*<div style="[^"]*background:#B4552F[^"]*">\s*<\/div>\s*<div style="[^"]*solid #F8F5EF/g,
+      ),
+    ].map((match) => Number(match[1]));
+
+    expect(new Set(lockups)).toEqual(new Set([12]));
+    expect(
+      container.querySelector('[data-slot="site-footer"] p')?.className.split(/\s+/) ?? [],
+    ).toContain(`mt-${(lockups[0] ?? 0) / 4}`);
+
+    /*
+     * The tagline is the brand column's paragraph, outside the nav. Its 1.5 is
+     * Tailwind's own `leading-normal`, which `theme.css` records as the reason
+     * the ratio gets no token of its own — so the assertion is that it is NOT
+     * `leading-prose`, the 1.6 this replaced.
+     */
+    const tagline = container.querySelector('[data-slot="site-footer"] p');
+    const taglineClasses = tagline?.className.split(/\s+/) ?? [];
+
+    expect(tagline?.textContent).toBe(BRAND_TAGLINE);
+    expect(taglineClasses).toContain(typeStepFor(taglines[0]?.size ?? 0));
+    expect(taglines[0]?.leading).toBe('1.5');
+    expect(taglineClasses).toContain('leading-normal');
+    expect(taglineClasses).not.toContain('leading-prose');
+
+    /*
+     * The 600/0.05em micro-label is held against this frame's 500/0.07em — read
+     * off the rendered heading, not off the source, so reordering two utilities
+     * cannot fail a test about type size.
+     */
+    expect(
+      container.querySelector('nav[aria-label="Footer"] p')?.className.split(/\s+/) ?? [],
+    ).toEqual(expect.arrayContaining(['text-label', 'font-semibold', 'tracking-label']));
+  });
+
+  /*
+   * #441. Both footers in the frame draw every link at `400 #B8AF9F` and
+   * `Contact support` alone at `600 #F8F5EF` — the resting state of the others'
+   * hover. It is the one row that is a way out of a problem.
+   */
+  it('draws Contact support at the frame’s emphasis, and nothing else', async () => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+    const { container } = render(await SiteFooter());
+
+    const emphasised = [...container.querySelectorAll('nav[aria-label="Footer"] a')].filter(
+      (link) => link.className.split(/\s+/).includes('font-semibold'),
+    );
+
+    expect(emphasised.map((link) => link.textContent)).toEqual(['Contact support']);
+
+    /*
+     * Both halves, and the second is the one that broke: `text-stone-50` and
+     * `text-stone-520` are the same utility, so appending the emphasis to the
+     * base class string left the row bold in the unemphasised colour. `cn`
+     * merges them; asserting the loser's absence is what makes this fail if it
+     * is ever concatenated again.
+     */
+    const classes = emphasised[0]?.className.split(/\s+/) ?? [];
+    expect(classes).toContain('text-stone-50');
+    expect(classes).not.toContain('text-stone-520');
+  });
+
+  /*
+   * #441, colour axis — the mechanism #430 fixed in the band, in the place it
+   * survived. The frame draws `rgba(248,245,239,.1)`, which is `stone-50`; the
+   * row had `stone-0` (`#fffdf9`), a surface value that is not on this ground's
+   * ramp at all.
+   */
+  it('draws the legal hairline from the ramp’s own end, not from a surface token', async () => {
+    const drawn = new Set(
+      [...deltaFrame('delta-band').matchAll(/border-top:1px solid rgba\(([\d, .]+)\)/g)].map(
+        (match) => match[1],
+      ),
+    );
+
+    /*
+     * 248,245,239 is `stone-50`; `stone-0` is #fffdf9 and would be 255,253,249.
+     * The token's own value is `theme-tokens.test.ts`'s to guard — this is the
+     * call site, the same split the admin header's guard makes.
+     */
+    expect(drawn).toEqual(new Set(['248,245,239,.1']));
+
+    const { container } = render(await SiteFooter());
+    const classes =
+      container.querySelector('[data-slot="footer-legal"]')?.className.split(/\s+/) ?? [];
+
+    expect(classes).toContain('border-stone-50/10');
+    expect(classes).not.toContain('border-stone-0/10');
   });
 
   /*

@@ -59,6 +59,38 @@ describe('createResendGateway', () => {
   });
 
   /*
+   * The id every delivery event is keyed on, and the only place production
+   * obtains it — every other suite runs the recording fake, which mints its own.
+   * With this unasserted, a `readMessageId` that always returned `null` left the
+   * whole gate green while every Resend webhook in production found no record.
+   */
+  it('returns the provider message id Resend answers with', async () => {
+    stubFetch(new Response('{"id":"56761188-7520-42d8-8898-ff6fc54ce618"}', { status: 200 }));
+
+    await expect(gateway().send(message)).resolves.toEqual({
+      providerMessageId: '56761188-7520-42d8-8898-ff6fc54ce618',
+    });
+  });
+
+  /*
+   * Acceptance is the contract; the id is not. A 200 whose body is missing,
+   * malformed or reshaped still means the message was taken, so this resolves
+   * with no id rather than throwing — throwing would record `failed` for an
+   * email the customer is about to receive.
+   */
+  it.each([
+    ['no body at all', new Response(null, { status: 200 })],
+    ['a body that is not JSON', new Response('accepted', { status: 200 })],
+    ['a body carrying no id', new Response('{"ok":true}', { status: 200 })],
+    ['an id that is not a string', new Response('{"id":42}', { status: 200 })],
+    ['an empty id', new Response('{"id":""}', { status: 200 })],
+  ])('accepts the send with no id when Resend answers %s', async (_case, response) => {
+    stubFetch(response);
+
+    await expect(gateway().send(message)).resolves.toEqual({ providerMessageId: null });
+  });
+
+  /*
    * The status and nothing else. A Resend error body can echo the recipient
    * address back, and this string reaches the log.
    */
