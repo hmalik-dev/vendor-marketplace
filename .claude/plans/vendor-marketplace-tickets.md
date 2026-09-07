@@ -1868,7 +1868,30 @@ and phone are not the subject's data — and say in the export what was withheld
 and why. Delivery follows the privacy policy's own claim; if that is by email,
 the link expires.
 
-**2. Operator-initiated closure.** `POST /admin/users/:userId/close`, which does
+#### Ruled 2026-09-07 (D39): closure is **refused**, not priced
+
+The account holder ruled that an account holding a **future confirmed booking
+cannot be closed at all** — the customer cancels their upcoming bookings first,
+which routes them through D3's existing tiers, and no new money path is created.
+Post-release is always operator-settled: the platform never claws back a
+completed transfer.
+
+**This changes what this ticket builds.** Closure here answers **409** while a
+future confirmed booking exists, naming what the customer must do first. It does
+not refund, and it does not price anything.
+
+**The hard half is the Clerk self-serve path.** `<UserButton />` is mounted at
+`site-header.tsx:197`, and a Clerk deletion is *reactive* — by the time
+`user.deleted` reaches the webhook the identity is gone and there is nothing left
+to refuse. A refusal guarding only this ticket's own route is one a user walks
+around in two clicks. So this ticket must either disable self-serve deletion in
+the Clerk instance and route closure through the product, or state plainly that
+the webhook remains an unrefusable backstop. **Say which; do not leave it
+implied.** #433's operator-settled fallback — booking left confirmed and payable,
+logged for a human — stays as that backstop and is deliberately decision-free.
+
+**2. Operator-initiated closure.** `POST /admin/users/:userId/close`, which
+refuses per D39 while a future confirmed booking exists, and otherwise does
 what #433 makes the deletion path do — retire the storefront, decline open
 requests, cancel and fully refund future confirmed bookings — and soft-deletes
 the user row. **It must reuse #433's path**, not fork it, so closure by request
@@ -1895,8 +1918,11 @@ same answer the export gives.
    counterparty contact details, naming what it withheld.
 2. An export of a user with no vendor profile, no bookings and no reviews
    succeeds and is not an error.
-3. Closure runs #433's unwind — same code path, asserted — and soft-deletes the
-   user.
+3. Closure is **refused with a 409** while the account holds a future confirmed
+   booking (D39), naming what the customer must cancel first; otherwise it runs
+   #433's unwind — same code path, asserted — and soft-deletes the user.
+   The Clerk self-serve deletion path is either intercepted or explicitly
+   documented as an unrefusable backstop.
 4. Closure of a vendor retires the storefront; their slug 404s.
 5. A hard delete of a user with a legal acceptance is refused by the database,
    and the console never attempts one.

@@ -1947,3 +1947,71 @@ worth doing the day a suite needs mixed state. And the provisioning **must not**
 be memoised per identity: many suites clear `users` in `afterEach`, so "already
 provisioned" is not a fact that survives the test that established it — memoising
 it broke 20 suites and was reverted.
+
+### D39: An Account With Live Bookings Cannot Be Closed — *2026-09-07*
+
+**Closure is refused while the account holds a future confirmed booking.** The
+account holder ruled it directly, choosing refusal over both alternatives:
+*"Block closure until settled"* — the customer cancels their upcoming bookings
+first, which routes them through **D3**'s existing tiers, and no new money path
+is created at all.
+
+**What it replaces.** #433's acceptance 3 required the deletion unwind to refund
+future confirmed bookings *"in full"*, reusing `setUserBanned`'s path. That is
+correct when a **vendor** is removed — the customer did nothing wrong and the
+vendor walked away — and it inverts when a **customer** removes themselves.
+`findConfirmedBookingsToUnwind` selects both sides, so as specified a customer
+who cancelled 12 hours out took D3's late tier and kept 50%, while the same
+customer who *deleted their account instead* took 100% back on **every** future
+booking at once, with `vendor_payout_cents` written to 0 so the sweep paid those
+vendors nothing. Nothing links a deleted identity to a re-registration, so it
+repeated. The lane found it in its own security pass, refused to price it, and
+asked rather than guessing — the same reflex that has #440 sitting Deferred.
+
+**The release boundary does not divide this, and that was worth establishing.**
+The obvious worry was that "refund in full" means different things either side of
+**D35**'s 72-hour hold: before release a transfer can be reversed, after it there
+is nothing left to reverse. It turns out the post-release side is **empty by
+construction**. `findConfirmedBookingsToUnwind` bounds on
+`status = 'confirmed' AND event_date > today`, and D35 releases 72 hours *after*
+the event, so every row that loop can see has `payout_released_at` and
+`stripe_transfer_id` both null. Nothing has transferred, so **D31**'s
+`reverse_transfer` has nothing to claw back and **D37** has no proportional split
+to write down. That is why the path carries no transfer reversal, and it predates
+all of this.
+
+One exception, and it is handled: the pre-#423 destination charge, because
+`0028`'s backfill marked every legacy row released regardless of event date.
+`isLegacyDestinationPayout` — exactly `payout_released_at !== null &&
+stripe_transfer_id === null` — diverts those to a human rather than refunding
+them.
+
+**Post-release is therefore operator-settled, always**, which the account holder
+also ruled explicitly: *"Operator settles post-release."* The platform never
+claws back a completed transfer. D31 would permit it — a vendor balance may go
+negative — but permitting is not requiring, and debiting a vendor weeks after
+they were paid is not a thing this product does on an account closure.
+
+**What this obliges.**
+
+1. **#438 builds the refusal**, not a refund. Operator-initiated closure and any
+   in-product self-closure answer `409` while a future confirmed booking exists,
+   telling the customer to cancel their upcoming bookings first.
+2. **The Clerk self-serve path has to be intercepted, and it is the hard half.**
+   `<UserButton />` is mounted at `site-header.tsx:197`, and a Clerk account
+   deletion is *reactive* — by the time `user.deleted` reaches the webhook the
+   identity is already gone and there is nothing left to refuse. A refusal that
+   only guards the product's own closure route is a refusal a determined user
+   walks around. So either the self-serve delete is disabled in the Clerk
+   instance and closure is routed through the product, or the webhook remains a
+   backstop that cannot refuse.
+3. **#433's operator-settled fallback stays, and is now the backstop rather than
+   the policy.** For any closure that reaches the webhook anyway, the booking is
+   left `confirmed` and payable and logged for a human. It decides nothing, which
+   is exactly what a backstop for an unrefusable event should do.
+
+**Why refusal rather than D3 pricing.** Pricing self-closure as a cancellation
+was the tidier-looking option and was rejected: it silently applies a penalty to
+someone who may simply be leaving, and it would have needed reconciling against
+D31, under which a cancellation is a *full* unwind rather than a tiered one.
+Refusal creates no new money rule to reconcile with anything.
