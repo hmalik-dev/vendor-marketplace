@@ -37,3 +37,19 @@ your own doing rather than a peer's.
 
 Related: [[vendor-marketplace-playwright-verification]],
 [[ticket-worktree-merge-immediately]]
+
+**`turbo typecheck build` in ONE invocation races the same directory** — and
+this one is not about the dev server at all. Turbo runs the two concurrently,
+the build wipes and regenerates `apps/web/.next/types/**`, and `tsc` reads the
+directory mid-rebuild: 37 `error TS6053: File '.../.next/types/app/**/page.ts'
+not found`, every one of them naming a route that exists and compiles. It reads
+exactly like a broken tsconfig or a mangled route tree.
+
+Run them as **separate commands** — `pnpm turbo build --force` then `pnpm turbo
+typecheck --force` — and both are clean on the identical tree. Seen on lane
+t372 (2026-09-06) while running the final gate, after the same two had passed
+serially minutes earlier.
+
+**How to apply:** never batch `typecheck` and `build` into one `turbo` call. A
+`TS6053` naming a file under `.next/types` is this, not your diff — re-run the
+two serially before believing it.
