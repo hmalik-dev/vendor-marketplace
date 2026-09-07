@@ -263,6 +263,7 @@ storefront, each of which tells the reader something untrue. |
 | **451** | **Closing an account leaves its Clerk identity live, and its email locked** | P3 | M6 | **P1 High** | **Backlog** | — | **#438** — the closure it describes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 by lane #438's `/code-review high`**, held out of scope correctly: closure soft-deleting is the ruled behaviour and revoking a Clerk session is a new integration call. Two defects from one omission. **The person stays signed in to an application that refuses them** — `clerk-auth.ts:164` 401s a request whose local row is retired, but the Clerk session is still valid, so the browser renders **signed-in header chrome over a signed-out application** indefinitely, with no sign-out prompt because nothing knows to show one. **And their email is locked under the retired row** — `users_email_key` does not care about `deleted_at`, so a re-registration with the same address collides on insert. That is the same state `CLAUDE.md` already warns about for the E2E seed; closure creates it deliberately. Decide *and state* whether the address is burned — the privacy policy says an account can be closed, not that the address is gone. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 | **452** | **Every role bounce off `/admin` costs a failed `https` request** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #432's browser pass.** A customer or vendor sent to `/admin` lands correctly on their own dashboard, but the browser first logs `GET https://localhost:3016/bookings :: net::ERR_SSL_PROTOCOL_ERROR` and `Failed to load resource` before falling back to `http`. `current-user.ts:111` issues a **relative** `redirect(DASHBOARD_PATH_BY_ROLE[user.role])`, so the scheme is being inferred downstream rather than chosen. The outcome is right, which is why nobody has noticed: the cost is one wasted round trip and a console error on every denial, and a console that is never clean is one nobody reads. Neither `current-user.ts` nor `middleware.ts` was touched by #432. |
+| **453** | **Frames for the nine admin screens the design contract does not draw** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder — this ticket *is* the request for frames** | `core` `auth` | **Filed 2026-09-07 at the account holder's request.** The Admin Panel section roughly doubled the console, and frame `13` draws **one** screen — the Vendors table. Everything since has followed the component vocabulary by **convention, not contract**, and nothing arbitrates it. Nine unframed screens: `/admin/activity`, `/admin/cases`, `/admin/cases/[caseId]`, `/admin/users/[userId]` (all on `main`), and `/admin/vendors/[id]`, `/admin/customers/[id]`, `/admin/bookings/[id]`, `/admin/requests`, `/admin/categories` (#437 builds these five). **Three patterns, realistically two frames**: the four *lists* reuse frame `13`'s table and need only a ruling; one **detail-view** frame covers vendor, customer, booking and user; and **case detail** is the one genuinely new shape, carrying the two-position resolve control that moves money. `22-admin.md` currently specifies detail views as *"card-based groupings with prominent actions"* and nothing more — five screens would be invented from that sentence. **#437 should be held until the detail frame exists**; the four already landed get a parity pass rather than a rebuild. Per `design-is-a-contract-not-code`, this row requests the frames and does not attempt them. |
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #452 was filed and #431 was closed out: 19 rows — 16 Backlog and 3 `Deferred — needs a human`.** #431's row and detail section are now **deleted**, per the rule above — `db539991` marked it `Done` but did not remove it, and lane 432 correctly declined to sweep another ticket's row on its way past rather than risk one ticket existing in two places. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`) and #432 (`1e899ae1`) have all landed** — so **#435**, **#436**, **#437**, **#438**, **#442**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
@@ -2502,3 +2503,68 @@ the policy text, and #374's account-holder wording gate covers it.
       retirement must not double-refund, which is #433's guard doing its job.
 - [ ] Acceptance 4, if taken, asserted against the real unique index rather than
       a mocked insert.
+
+### #453: Frames for the nine admin screens the design contract does not draw
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Deferred — needs a human | **Capabilities:** `core` `auth`
+**Blocked by:** The account holder — this ticket **is** the request for frames; the design comes from them, and a ticket may not invent it
+
+**Filed 2026-09-07 at the account holder's request.** The Admin Panel section
+(#431–#440) roughly doubled the console. Frame `13` draws **one** screen — the
+Vendors table — and everything built since has followed the console's component
+vocabulary (`AdminSurface`, `DataTable`, `StatusPill`, `ConfirmAction`) by
+convention. **That is a convention, not a contract**, and nothing arbitrates it.
+
+`design-is-a-contract-not-code` is the rule this ticket exists to honour: design
+passes edit the plan, tickets write the code, never the reverse. So this row
+requests the frames and does not attempt them.
+
+#### The nine screens
+
+**Already on `main`:**
+
+| Route | Screen | Functionality to draw |
+| --- | --- | --- |
+| `/admin/activity` | Log list | Actor, action, subject, timestamp. Filters by actor and by subject. **An eighth nav row** the frame does not draw — ruled into `22-admin.md`'s rail by #434 and sitting last because it is the only item that is not a working surface. |
+| `/admin/cases` | Queue list | Reference (`ORL-4K7Q-P2` shape), sender, subject, linked booking or `—`, age, status. Filter open/resolved. **Open-count badge in the rail**, beside the Reviews badge. Default open, oldest first — the age of the oldest open case is money someone is not being paid. |
+| `/admin/cases/[caseId]` | **Case detail** | The message body in full; sender and their role; the linked booking carrying total, fee, payout, `paid_at`, `dispute_reason`, `cancelled_by`, `refund_amount_cents`, `payout_released_at`, and the chargeback's Stripe id where there is one. Then the **two-position resolve control** — resolve for the vendor (hold lifts, payout resumes) or for the customer (refund and cancel) — each naming its consequence in money. Plus a case-scoped read of the reported message thread (#436). |
+| `/admin/users/[userId]` | Data rights | Retained-data counts by category, an export action, a closure action that refuses with a 409 while a future confirmed booking exists (D39), and the legal-acceptance record marked read-only. |
+
+**Not yet built — #437 adds five:**
+
+| Route | Screen | Functionality to draw |
+| --- | --- | --- |
+| `/admin/vendors/[id]` | **Vendor detail** | Profile fields; Stripe state with disabled reason and outstanding requirements (read-only, per D29); packages; portfolio; availability locks and what holds them; publish/unpublish; the moderation actions #435 landed without a surface. |
+| `/admin/customers/[id]` | Customer detail | Profile, bookings, reviews written and received, notifications sent with read state and delivery outcome (#439). |
+| `/admin/bookings/[id]` | Booking detail | The money story in one place: total, fee, payout, `paid_at`, `payout_released_at`, payout attempts and failure reason, refund amount, cancellation reason, `cancelled_by`, dispute reason. |
+| `/admin/requests` | Request list | The pre-payment funnel — six statuses (`pending`, `quoted`, `accepted`, `declined`, `expired`, `cancelled`), vendor, customer, event date, quoted price, time to expiry. |
+| `/admin/categories` | Category management | `is_active` and `display_order`. The existing tag table is the template. |
+
+#### Three patterns, realistically two frames
+
+- **List** — activity, cases, requests, categories. **Frame `13`'s table already
+  covers this shape**; these need no new frame, only confirmation that reusing it
+  is right.
+- **Detail view** — vendor, customer, booking, user. **One frame applies to all
+  four.** `22-admin.md` currently specifies only *"detail views: card-based
+  groupings with prominent actions"*, which is the entire spec a lane would build
+  five screens from.
+- **Queue plus detail** — `/admin/cases`. The only genuinely **new shape** in the
+  console, and the one carrying a money decision.
+
+#### What this ticket needs from the account holder
+
+1. **A detail-view frame** at 1440x900, applied to one of vendor/customer/booking.
+2. **A case-detail frame**, including the two-position resolve control.
+3. **A ruling that the four list screens reuse frame `13`'s table** rather than
+   getting frames of their own — or frames for them if not.
+
+#### What happens after
+
+`#437` builds five of the nine and **should be held until the detail-view frame
+exists** — it is cheaper to frame the pattern than to parity-check five invented
+layouts against it afterwards. The four already on `main` get a parity pass, not
+a rebuild, unless a frame contradicts what shipped.
+
+Every screen here is admin-only, so **no invented numbers** applies trivially —
+all of it is real counts read at request time.
