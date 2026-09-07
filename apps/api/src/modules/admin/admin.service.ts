@@ -486,7 +486,7 @@ export async function listCustomers(
 }
 
 /** `First Last`, collapsed — the same shape every other admin surface prints. */
-function fullName(firstName: string, lastName: string): string {
+export function fullName(firstName: string, lastName: string): string {
   return `${firstName} ${lastName}`.trim();
 }
 

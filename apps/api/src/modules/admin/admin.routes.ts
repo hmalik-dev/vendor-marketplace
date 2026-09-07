@@ -176,9 +176,14 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
    * refused where D39 says it must be (#438).
    *
    * The refusal is a 409 naming the upcoming confirmed bookings the customer
-   * has to cancel first, which routes them through D3's tiers. This route
-   * prices nothing and refunds nothing, and nothing that does either belongs on
-   * it.
+   * has to cancel first, which routes them through D3's tiers.
+   *
+   * **It prices nothing against the account holder, which is not the same as
+   * refunding nothing.** D39 refuses a closure while the holder's own forward
+   * bookings stand precisely so this route never has to price one — and rules
+   * the other direction for a vendor, whose customers are refunded in full by
+   * #433's shared unwind because the vendor walked away and they did not. No
+   * new money path is created here either way; the unwind's is reused.
    */
   app.post(
     '/admin/users/:userId/close',

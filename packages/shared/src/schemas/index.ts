@@ -2836,6 +2836,18 @@ export const adminCloseAccountResultSchema = z.object({
   bookingsCancelled: z.int(),
   /** Confirmed bookings the unwind deliberately left for a human (D39). */
   bookingsLeftForReview: z.int(),
+  /** Refunds that actually issued — the vendor side of a closure (D39). */
+  refundsIssued: z.int(),
+  /**
+   * Bookings whose refund Stripe refused, or which the unwind declined to
+   * price, and which are therefore **still confirmed** on a closed account.
+   *
+   * The same field `adminBanResultSchema` carries for the same reason (#400):
+   * without it the console shows a closure that succeeded while the money is
+   * still at Stripe, the customer has not been told, and the vendor's date is
+   * still held. A closure with a non-zero count here needs a human.
+   */
+  refundsFailed: z.int(),
   profileRetired: z.boolean(),
 });
 export type AdminCloseAccountResult = z.infer<typeof adminCloseAccountResultSchema>;
@@ -2868,6 +2880,18 @@ export const adminUserDataRightsSchema = z.object({
   }),
   /** Future confirmed bookings that would refuse a closure right now (D39). */
   closeBlockers: z.array(adminCloseBlockerSchema),
+  /**
+   * Future confirmed bookings this account holds **as the vendor**, which a
+   * closure cancels and refunds in full (D39).
+   *
+   * The other half of the same ruling, and the half that moves money. A
+   * customer's own forward bookings refuse the closure; a vendor's are
+   * refunded to their customers with the payout written to zero, because the
+   * vendor walked away and the customer did nothing wrong. The console shows
+   * the count so an operator confirming a closure is told what it will do
+   * rather than the opposite.
+   */
+  bookingsRefundedOnClose: z.int(),
   legalAcceptances: z.array(legalAcceptanceRecordSchema),
 });
 export type AdminUserDataRights = z.infer<typeof adminUserDataRightsSchema>;

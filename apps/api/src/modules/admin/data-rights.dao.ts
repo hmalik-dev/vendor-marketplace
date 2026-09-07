@@ -68,6 +68,18 @@ export async function findVendorProfileRecord(
   return rows?.[0] ?? null;
 }
 
+/*
+ * **Every read below refuses an undefined predicate.**
+ *
+ * `or()` is typed `SQL | undefined`, and `.where(undefined)` is not a narrow
+ * filter — it is *no* filter. Nowhere else would that matter much; here it
+ * would turn one person's subject-access file into every booking, message and
+ * review in the database, handed to an operator to forward. Both operands are
+ * always defined today, so this cannot fire — which is exactly the argument
+ * that was made everywhere a guard was later needed.
+ * `findConfirmedBookingsToUnwind` guards the identical shape.
+ */
+
 /** Both sides of a request, the way every other unwind-shaped read scopes one. */
 function requestSides(userId: string, vendorProfileId: string | null) {
   return vendorProfileId
@@ -101,6 +113,12 @@ export async function findExportBookingRequests(
   userId: string,
   vendorProfileId: string | null,
 ): Promise<ExportRequestRow[]> {
+  const sides = requestSides(userId, vendorProfileId);
+
+  if (!sides) {
+    return [];
+  }
+
   return db
     .select({
       id: bookingRequests.id,
@@ -118,7 +136,7 @@ export async function findExportBookingRequests(
     })
     .from(bookingRequests)
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookingRequests.vendorId))
-    .where(requestSides(userId, vendorProfileId))
+    .where(sides)
     .orderBy(bookingRequests.createdAt);
 }
 
@@ -146,6 +164,12 @@ export async function findExportBookings(
   userId: string,
   vendorProfileId: string | null,
 ): Promise<ExportBookingRow[]> {
+  const sides = bookingSides(userId, vendorProfileId);
+
+  if (!sides) {
+    return [];
+  }
+
   return db
     .select({
       id: bookings.id,
@@ -167,7 +191,7 @@ export async function findExportBookings(
     })
     .from(bookings)
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
-    .where(bookingSides(userId, vendorProfileId))
+    .where(sides)
     .orderBy(bookings.createdAt);
 }
 
@@ -202,6 +226,10 @@ export async function findExportReviews(
   const sides = vendorProfileId
     ? or(eq(bookings.customerId, userId), eq(bookings.vendorId, vendorProfileId))
     : eq(bookings.customerId, userId);
+
+  if (!sides) {
+    return [];
+  }
 
   return db
     .select({
@@ -252,6 +280,10 @@ export async function findExportMessages(
   const sides = vendorProfileId
     ? or(eq(conversations.customerId, userId), eq(conversations.vendorId, vendorProfileId))
     : eq(conversations.customerId, userId);
+
+  if (!sides) {
+    return [];
+  }
 
   return db
     .select({

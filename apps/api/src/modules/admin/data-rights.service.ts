@@ -11,7 +11,7 @@ import type { AppDatabase } from '../../lib/database.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import { retireUserById } from '../users/users.dao.js';
 import { findConfirmedBookingsToUnwind } from './admin.dao.js';
-import { recordAdminActionBestEffort } from './admin.service.js';
+import { fullName, recordAdminActionBestEffort } from './admin.service.js';
 import { CLOSURE_UNWIND, unwindAccountBookings, type AdminContext } from './account-unwind.js';
 import {
   findBookingEventDates,
@@ -211,7 +211,7 @@ export async function exportUserData(
    * that refused the row must not turn a completed answer into a 500 the
    * operator would retry — producing a second copy of the same person's file.
    */
-  await recordExport(context, actorId, user.id, record);
+  await recordExport(context, actorId, user.id, record, { written, received });
 
   return {
     generatedAt: new Date(),
@@ -249,7 +249,7 @@ export async function exportUserData(
       : null,
     counterparties: counterparties.map((row) => ({
       id: row.id,
-      name: row.businessName ?? `${row.firstName} ${row.lastName}`.trim(),
+      name: row.businessName ?? fullName(row.firstName, row.lastName),
       role: row.businessName ? ('vendor' as const) : ('customer' as const),
     })),
     bookingRequests: record.requests.map((row) => ({
@@ -317,9 +317,8 @@ async function recordExport(
   actorId: string,
   userId: string,
   record: GatheredRecord,
+  reviews: { written: ExportReviewRow[]; received: ExportReviewRow[] },
 ): Promise<void> {
-  const { written, received } = splitReviews(record);
-
   await recordAdminActionBestEffort(context, {
     actorId,
     action: 'user_data_exported',
@@ -334,8 +333,8 @@ async function recordExport(
     detail: {
       bookingRequests: record.requests.length,
       bookings: record.bookings.length,
-      reviewsWritten: written.length,
-      reviewsReceived: received.length,
+      reviewsWritten: reviews.written.length,
+      reviewsReceived: reviews.received.length,
       messages: record.messages.length,
       notifications: record.notifications.length,
       legalAcceptances: record.acceptances.length,
@@ -346,48 +345,88 @@ async function recordExport(
 /**
  * The bookings that refuse a closure, resolved with the counterparty's name so
  * the refusal can say which ones.
+ *
+ * **The subject's own bookings, as the customer on them — never the ones they
+ * hold as the vendor.** D39 draws the line there explicitly: refunding a future
+ * confirmed booking in full "is correct when a **vendor** is removed — the
+ * customer did nothing wrong and the vendor walked away — and it inverts when a
+ * **customer** removes themselves". So the refusal exists for the customer side
+ * only, and `unwindAccountBookings` already agrees with that: its
+ * leave-for-review branch is guarded on `initiatedBy === 'account-holder' &&
+ * booking.customerId === targetId`, and everything else is refunded in full.
+ *
+ * Passing `null` for the vendor profile is what narrows
+ * `findConfirmedBookingsToUnwind` — which selects **both** sides, exactly the
+ * width D39 was written to correct — down to `customer_id = subject`. Refusing
+ * on the vendor side instead would have been a dead end rather than a rule: only
+ * the customer can cancel a confirmed booking (`payments.service.ts` answers
+ * `Only the customer can cancel a confirmed booking`), so a vendor asking to
+ * close would be told to do something they cannot do, by a counterparty with no
+ * reason to do it for them.
  */
 async function closeBlockers(
   db: AppDatabase,
   userId: string,
-  vendorProfileId: string | null,
   now: Date,
 ): Promise<AdminCloseBlocker[]> {
-  const held = await findConfirmedBookingsToUnwind(db, userId, vendorProfileId, toDateString(now));
+  const held = await findConfirmedBookingsToUnwind(db, userId, null, toDateString(now));
 
   if (held.length === 0) {
     return [];
   }
 
+  /* The side the subject is not on, decided once per booking by the one rule. */
+  const sides = held.map((booking) => ({ booking, other: otherParty(booking, userId) }));
+
   const [dateRows, counterparties] = await Promise.all([
     findBookingEventDates(
       db,
-      held.map((booking) => booking.id),
+      sides.map(({ booking }) => booking.id),
     ),
     findCounterparties(
       db,
-      held.map((booking) =>
-        booking.customerId === userId ? booking.vendorUserId : booking.customerId,
-      ),
+      sides.map(({ other }) => other),
     ),
   ]);
   const dates = new Map(dateRows.map((row) => [row.id, row.eventDate]));
   const names = new Map(
     counterparties.map((row) => [
       row.id,
-      row.businessName ?? `${row.firstName} ${row.lastName}`.trim(),
+      row.businessName ?? fullName(row.firstName, row.lastName),
     ]),
   );
 
-  return held.map((booking) => {
-    const other = booking.customerId === userId ? booking.vendorUserId : booking.customerId;
+  return sides.map(({ booking, other }) => ({
+    bookingId: booking.id,
+    eventDate: dates.get(booking.id) ?? '',
+    counterpartyName: names.get(other) ?? 'the other party',
+  }));
+}
 
-    return {
-      bookingId: booking.id,
-      eventDate: dates.get(booking.id) ?? '',
-      counterpartyName: names.get(other) ?? 'the other party',
-    };
-  });
+/**
+ * The bookings a closure would cancel and refund in full: the ones this
+ * account holds **as the vendor**.
+ *
+ * The other side of `closeBlockers`, and the side that moves money. D39
+ * refuses a customer's closure while their own forward bookings stand, and
+ * refunds a vendor's customers in full when the vendor goes — so a closure is
+ * never priced against the person asking for it, and is always priced for the
+ * person on the other end. The console needs the count because the operator
+ * confirming the closure is the only person who can be told first.
+ */
+async function vendorSideRefundsOnClose(
+  db: AppDatabase,
+  userId: string,
+  vendorProfileId: string | null,
+  now: Date,
+): Promise<number> {
+  if (!vendorProfileId) {
+    return 0;
+  }
+
+  const held = await findConfirmedBookingsToUnwind(db, userId, vendorProfileId, toDateString(now));
+
+  return held.filter((booking) => booking.customerId !== userId).length;
 }
 
 /**
@@ -443,7 +482,7 @@ export async function closeAccount(
   }
 
   const profile = await findVendorProfileRecord(context.db, userId);
-  const blockers = await closeBlockers(context.db, userId, profile?.id ?? null, now);
+  const blockers = await closeBlockers(context.db, userId, now);
 
   if (blockers.length > 0) {
     throw conflict(
@@ -500,6 +539,8 @@ export async function closeAccount(
       requestsDeclined: unwound.requestsDeclined,
       bookingsCancelled: unwound.bookingsCancelled,
       bookingsLeftForReview: unwound.bookingsLeftForReview,
+      refundsIssued: unwound.refundsIssued,
+      refundsFailed: unwound.refundsFailed,
       profileRetired: retired.profileRetired,
     },
   });
@@ -510,6 +551,8 @@ export async function closeAccount(
     requestsDeclined: unwound.requestsDeclined,
     bookingsCancelled: unwound.bookingsCancelled,
     bookingsLeftForReview: unwound.bookingsLeftForReview,
+    refundsIssued: unwound.refundsIssued,
+    refundsFailed: unwound.refundsFailed,
     profileRetired: retired.profileRetired,
   };
 }
@@ -534,14 +577,15 @@ export async function readUserDataRights(
 
   const record = await gather(db, user);
   const { written, received } = splitReviews(record);
-  const blockers = user.deletedAt
-    ? []
-    : await closeBlockers(db, userId, record.profile?.id ?? null, now);
+  const blockers = user.deletedAt ? [] : await closeBlockers(db, userId, now);
+  const bookingsRefundedOnClose = user.deletedAt
+    ? 0
+    : await vendorSideRefundsOnClose(db, userId, record.profile?.id ?? null, now);
 
   return {
     userId: user.id,
     email: user.email,
-    name: `${user.firstName} ${user.lastName}`.trim(),
+    name: fullName(user.firstName, user.lastName),
     role: user.role,
     isBanned: user.isBanned,
     closedAt: user.deletedAt,
@@ -557,6 +601,7 @@ export async function readUserDataRights(
       legalAcceptances: record.acceptances.length,
     },
     closeBlockers: blockers,
+    bookingsRefundedOnClose,
     legalAcceptances: record.acceptances.map(toAcceptanceRecord),
   };
 }

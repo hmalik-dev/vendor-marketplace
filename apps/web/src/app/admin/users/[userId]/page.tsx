@@ -82,13 +82,16 @@ export default async function AdminUserDataRightsPage({
           <p className="mt-1 mb-3 text-sm leading-prose text-stone-700">
             The privacy policy promises a copy of what we hold, and closure on request. Both are
             answered here. Closure retires the account and takes any storefront down; it never
-            deletes the record, and it never prices a refund.
+            deletes the record. It never prices the account holder&apos;s own bookings — those have
+            to be cancelled first — and where the account is a vendor, the bookings their customers
+            hold are cancelled and refunded in full.
           </p>
           <DataRightsActions
             userId={rights.userId}
             name={rights.name || rights.email}
             closedAt={rights.closedAt}
             closeBlockers={rights.closeBlockers}
+            bookingsRefundedOnClose={rights.bookingsRefundedOnClose}
           />
         </section>
 
@@ -96,8 +99,8 @@ export default async function AdminUserDataRightsPage({
           <h2 className="display-heading text-display-sm text-stone-900">What is still held</h2>
           <p className="mt-1 mb-3 text-sm leading-prose text-stone-700">
             Exactly what the export enumerates. A closed account keeps all of it — the other
-            party&rsquo;s copy of a booking or a conversation is theirs as much as it is this
-            account&rsquo;s.
+            party&apos;s copy of a booking or a conversation is theirs as much as it is this
+            account&apos;s.
           </p>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
             {retained.map(([key, count]) => (
@@ -117,7 +120,7 @@ export default async function AdminUserDataRightsPage({
           <p className="mt-1 mb-3 text-sm leading-prose text-stone-700">
             The record that answers &ldquo;did they agree to this, and to which version&rdquo;. It
             is append-only in the database — three triggers refuse an update, a delete and a
-            truncate — so there is nothing to edit here and no control that would.
+            table-wide wipe — so there is nothing to edit here and no control that would.
           </p>
           <DataTable
             rows={rights.legalAcceptances}

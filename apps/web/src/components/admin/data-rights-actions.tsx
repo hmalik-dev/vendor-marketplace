@@ -1,5 +1,6 @@
 'use client';
 
+import { BRAND_NAME, toDateString } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmAction } from '@/components/admin/confirm-action';
@@ -19,6 +20,11 @@ export interface DataRightsActionsProps {
   closedAt: Date | null;
   /** The upcoming confirmed bookings that would refuse a closure (D39). */
   closeBlockers: readonly WireAdminCloseBlocker[];
+  /**
+   * Upcoming confirmed bookings held **as the vendor**, which the closure
+   * cancels and refunds in full. The operator is told before they confirm.
+   */
+  bookingsRefundedOnClose: number;
 }
 
 /**
@@ -35,6 +41,7 @@ export function DataRightsActions({
   name,
   closedAt,
   closeBlockers,
+  bookingsRefundedOnClose,
 }: DataRightsActionsProps): React.ReactElement {
   const call = useApi();
   const router = useRouter();
@@ -56,18 +63,34 @@ export function DataRightsActions({
        *
        * What they have to do with it is send it to the person who asked, and a
        * screen of JSON is not something anybody can forward. The object URL is
-       * revoked immediately after the click: it holds the whole archive in
-       * memory, and this is the one payload on the console that should not
-       * outlive the download by a single navigation.
+       * revoked as soon as the download has taken it: it holds the whole
+       * archive in memory, and this is the one payload on the console that
+       * should not outlive the download by a navigation.
+       *
+       * **A task later, not the next statement.** Revoking synchronously after
+       * `click()` is what Chrome tolerates and Firefox has historically
+       * cancelled the download over — the fetch of a `blob:` URL is started by
+       * the click but not finished by it. One macrotask is the smallest delay
+       * that is after the download begins and before anything a person could
+       * do next.
        */
       const blob = new Blob([JSON.stringify(archive, null, 2)], { type: 'application/json' });
       const href = URL.createObjectURL(blob);
       const link = document.createElement('a');
 
       link.href = href;
-      link.download = `orla-data-export-${userId}.json`;
+      link.download = `${BRAND_NAME.toLowerCase()}-data-export-${userId}.json`;
+      /*
+       * Attached before the click and removed after it. A programmatic click
+       * on a **detached** anchor downloads in Chrome and has historically done
+       * nothing in Firefox — and nothing is what it would look like here: the
+       * request succeeded, `busy` clears, no error renders, and no file
+       * arrives for the person who asked for it.
+       */
+      document.body.append(link);
       link.click();
-      URL.revokeObjectURL(href);
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 0);
     } catch (failure) {
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
@@ -76,10 +99,26 @@ export function DataRightsActions({
   }
 
   async function close(): Promise<void> {
-    await call(`/admin/users/${userId}/close`, {
+    const result = await call(`/admin/users/${userId}/close`, {
       method: 'POST',
       schema: wireAdminCloseAccountResultSchema,
     });
+
+    /*
+     * #400's signal, on this route too. A closure whose refunds did not all
+     * issue leaves money at Stripe, a customer untold and a date still held —
+     * and the account is closed either way, so a silent refresh would show an
+     * operator a success that is only partly one.
+     */
+    const stranded = result.refundsFailed + result.bookingsLeftForReview;
+
+    setError(
+      stranded > 0
+        ? `The account is closed, but ${stranded} ${
+            stranded === 1 ? 'booking is' : 'bookings are'
+          } still confirmed and unrefunded. That needs a person: the money is still at Stripe and the customer has not been told.`
+        : null,
+    );
     router.refresh();
   }
 
@@ -97,9 +136,7 @@ export function DataRightsActions({
         </Button>
 
         {closedAt ? (
-          <span className="text-meta text-stone-600">
-            Closed {closedAt.toISOString().slice(0, 10)}
-          </span>
+          <span className="text-meta text-stone-600">Closed {toDateString(closedAt)}</span>
         ) : closeBlockers.length > 0 ? (
           <Button type="button" variant="secondary" size="sm" disabled>
             Close account
@@ -116,8 +153,14 @@ export function DataRightsActions({
             description={
               <>
                 This retires the account and takes any storefront off the marketplace immediately,
-                and declines every request still open against it. It refunds nothing and prices
-                nothing.
+                and declines every request still open against it.{' '}
+                {bookingsRefundedOnClose > 0
+                  ? `It also cancels the ${bookingsRefundedOnClose} upcoming confirmed ${
+                      bookingsRefundedOnClose === 1 ? 'booking' : 'bookings'
+                    } their customers hold with them and refunds ${
+                      bookingsRefundedOnClose === 1 ? 'it' : 'them'
+                    } in full, paying this vendor nothing. Any refund Stripe refuses is reported back here rather than retried.`
+                  : 'It refunds nothing and prices nothing.'}
                 <br />
                 <br />
                 Their bookings, messages, reviews and legal acceptances are kept — the privacy

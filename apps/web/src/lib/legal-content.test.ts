@@ -241,13 +241,31 @@ describe('the facts in the copy', () => {
     it('warns that closure is refused while an upcoming confirmed booking stands', () => {
       const text = rightsText();
 
-      expect(text).toContain('Closing is refused while you hold an upcoming confirmed booking');
-      expect(text).toContain('closing an account prices nothing and refunds nothing');
+      expect(text).toContain(
+        'Closing is refused while you hold an upcoming confirmed booking of your own',
+      );
+      expect(text).toContain('never prices your own cancellation for you');
       expect(text).toContain('retires your account');
     });
 
     it('no longer claims closure removes everything else', () => {
       expect(rightsText()).not.toContain('What closing does remove is everything else');
+    });
+
+    /**
+     * The other half of D39, which the document has to carry because the
+     * product does. A vendor's closure **does** move money — their customers'
+     * upcoming bookings are cancelled and refunded in full by #433's shared
+     * unwind, with the payout written to zero. A policy that said closure
+     * refunds nothing would be false for every vendor who reads it.
+     */
+    it('states that a vendor closing refunds their customers in full', () => {
+      const text = rightsText();
+
+      expect(text).toContain('If you are a vendor');
+      expect(text).toContain('refunds those customers in full');
+      expect(text).toContain('you are paid nothing for them');
+      expect(text).not.toContain('closing an account prices nothing and refunds nothing');
     });
   });
 

@@ -466,7 +466,7 @@ describe('data rights', () => {
       });
 
       /*
-       * `requestsDeclined: 1` is the assertion that this ran **#433's path**
+       * `requestsDeclined` above is the assertion that this ran **#433's path**
        * rather than a second one. `declineOpenRequests` is only reachable
        * through `unwindAccountBookings`, so an open request left `pending`
        * would mean closure had forked its own unwind.
@@ -520,6 +520,70 @@ describe('data rights', () => {
       expect(profile).toMatchObject({ isDeleted: true, isPublished: false });
     });
 
+    /**
+     * D39's line, from the side that is not the customer's.
+     *
+     * The refusal exists because a customer who deletes their account instead
+     * of cancelling would take 100% back on every future booking at once. That
+     * argument inverts for a vendor — *"the customer did nothing wrong and the
+     * vendor walked away"* — so a vendor's forward bookings are refunded in
+     * full by #433's path rather than refusing the closure. Refusing here
+     * instead would have been unresolvable: only the customer can cancel a
+     * confirmed booking, so the vendor would be told to do something they
+     * cannot do.
+     */
+    it('closes a vendor holding a future confirmed booking, refunding it (D39)', async () => {
+      await signIn(ADMIN, true);
+      await signIn(VENDOR);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile();
+
+      const bookingId = await createBooking(
+        customerId,
+        vendor.profileId,
+        '2099-06-01',
+        'confirmed',
+      );
+
+      /* The console offers the control, because the API would not refuse it. */
+      const rights = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/users/${vendor.userId}/data-rights`,
+        headers: bearer(ADMIN),
+      });
+      expect(rights.statusCode).toBe(200);
+      expect(rights.json().closeBlockers).toEqual([]);
+      /* Nothing refuses it — and the console is told what it will refund. */
+      expect(rights.json().bookingsRefundedOnClose).toBe(1);
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${vendor.userId}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        bookingsCancelled: 1,
+        bookingsLeftForReview: 0,
+        /*
+         * Both reported, per #400: a closure that left money at Stripe must
+         * not read as a clean one. Nothing was paid here — the fixture booking
+         * carries no payment intent — so the honest answer is zero issued and
+         * zero failed, and the console has a field to read either way.
+         */
+        refundsIssued: 0,
+        refundsFailed: 0,
+        profileRetired: true,
+      });
+
+      const [booking] = await harness.database.db
+        .select({ status: bookings.status })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+      expect(booking!.status).toBe('cancelled');
+    });
+
     it('leaves the legal acceptance record standing, because it never hard-deletes', async () => {
       await signIn(ADMIN, true);
       await signIn(VENDOR);
@@ -566,6 +630,17 @@ describe('data rights', () => {
         .where(eq(users.id, vendor.userId));
       expect(account).toBeDefined();
       expect(account!.deletedAt).not.toBeNull();
+
+      /*
+       * And the audit trail survives with it, counted the same way. A closure
+       * that took the account's own `admin_actions` rows down with it — which
+       * a hard delete would, through the same cascade — would erase the record
+       * of the closure itself, which is the one row that has to outlive it.
+       */
+      const audit = await actionRows();
+      expect(
+        audit.filter((row) => row.subjectId === vendor.userId).map((row) => row.action),
+      ).toEqual(['user_closed']);
     });
 
     it('refuses a second closure of the same account', async () => {
