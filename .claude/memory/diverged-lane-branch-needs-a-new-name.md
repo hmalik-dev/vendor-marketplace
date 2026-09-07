@@ -53,8 +53,8 @@ Related: [[lane-manifest-branch-drifts]],
 ## Better: do not rewrite at all — merge `origin/main` instead — 2026-09-07
 
 Lane 439 rebased its pushed branch onto `origin/main`, which rewrote history and
-left the branch **unpushable**: `git push --force-with-lease` is blocked by the
-hook, so there is no way to land a rewritten lane branch. Renaming the branch
+left the branch **unpushable**: **`git push --force-with-lease` is blocked outright by the hook — not just
+`--force`** — which is what turns a rebased-after-push branch into a dead end, so there is no way to land a rewritten lane branch. Renaming the branch
 would have meant abandoning the open PR **and its queue position**, and drifting
 the lane manifest — see [[lane-manifest-branch-drifts]].
 
