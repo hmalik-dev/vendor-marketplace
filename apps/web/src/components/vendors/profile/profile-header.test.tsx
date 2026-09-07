@@ -1,5 +1,5 @@
 import type { Tag } from '@vendor-marketplace/shared';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ProfileHeader } from './profile-header';
 
@@ -188,7 +188,28 @@ describe('ProfileHeader', () => {
 
       expect(cover.className).toContain('bg-stone-250');
       expect(cover.textContent).toBe('');
-      expect(cover.querySelector('[data-slot="coverless"]')).not.toBeNull();
+      expect(cover.querySelector('[data-slot="image-fallback"]')).not.toBeNull();
+    });
+
+    /*
+     * #422: the failure half. A cover whose stored object is gone drew the
+     * browser's broken-image glyph over the ground; it now lands on exactly
+     * the block a coverless vendor gets, inside the cover's own box.
+     */
+    it('grounds a cover that fails to load in the same block', () => {
+      renderHeader({ coverImageUrl: 'https://example.test/gone.jpg' });
+
+      const cover = screen.getByTestId('profile-cover');
+
+      fireEvent.error(cover.querySelector('img')!);
+
+      expect(cover.querySelector('img')).toBeNull();
+      expect(cover.querySelector('[data-slot="image-fallback"]')?.className).toContain(
+        'bg-stone-250',
+      );
+      expect(cover.textContent).toBe('');
+      /* The 3:2 box lives on the container, so nothing reflows on failure. */
+      expect(cover.className).toContain('aspect-[3/2]');
     });
 
     it('leaves no developer-facing label on a coverless profile', () => {

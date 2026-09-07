@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { VendorCard as VendorCardData } from '@vendor-marketplace/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { VendorCard } from './vendor-card';
@@ -307,11 +307,44 @@ describe('VendorCard', () => {
   it('grounds a coverless vendor in stone-250 with nothing inside it', () => {
     const { container } = render(<VendorCard vendor={vendor()} />);
 
-    const coverless = container.querySelector('[data-slot="coverless"]');
+    const coverless = container.querySelector('[data-slot="image-fallback"]');
 
     expect(coverless).not.toBeNull();
     expect(coverless?.className).toContain('bg-stone-250');
     expect(coverless?.textContent).toBe('');
+  });
+
+  /*
+   * #422. The absent case above always worked; a load that *failed* rendered
+   * the browser's broken-image glyph on a public card — a 404'd storage key,
+   * an R2 outage, a category file never shipped. An absent cover and a failed
+   * one are the same thing to the person reading, so they land in the same
+   * block, at the same 3:2 box, with the same hover transform.
+   *
+   * jsdom fetches nothing, so `fireEvent.error` stands in for the event the
+   * browser dispatches; `e2e/image-fallback.spec.ts` drives a real 404 in
+   * Chromium and measures the rendered box.
+   */
+  it('grounds a vendor whose cover fails to load in the same block', () => {
+    const failed = render(
+      <VendorCard vendor={vendor({ coverImageUrl: 'https://example.test/gone.jpg' })} />,
+    );
+
+    fireEvent.error(failed.container.querySelector('img[src*="gone.jpg"]')!);
+
+    const block = failed.container.querySelector('[data-slot="image-fallback"]');
+
+    expect(block?.className).toContain('bg-stone-250');
+    expect(block?.textContent).toBe('');
+    /* The 3:2 box is the wrapper's, so the card cannot reflow when it fails. */
+    expect(failed.container.querySelector('[class*="aspect-[3/2]"]')).not.toBeNull();
+    expect(failed.container.querySelector('img[src*="gone.jpg"]')).toBeNull();
+
+    const absent = render(<VendorCard vendor={vendor()} />).container.querySelector(
+      '[data-slot="image-fallback"]',
+    );
+
+    expect(block?.outerHTML).toBe(absent?.outerHTML);
   });
 
   it('shows a coverless vendor no hatch and no developer-facing label', () => {
@@ -332,7 +365,7 @@ describe('VendorCard', () => {
       <VendorCard vendor={vendor({ coverImageUrl: 'https://example.test/cover.jpg' })} />,
     );
 
-    expect(container.querySelector('[data-slot="coverless"]')).toBeNull();
+    expect(container.querySelector('[data-slot="image-fallback"]')).toBeNull();
     expect(container.querySelector('img[src="https://example.test/cover.jpg"]')).not.toBeNull();
   });
 
