@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { payoutReleaseAt, SUPPORT_PATH } from '@vendor-marketplace/shared';
+import { payoutReleaseAt, SUPPORT_PATH, toDateString } from '@vendor-marketplace/shared';
 import { reportWindowFor, type ReportSubject, type ReportWindow } from '@/lib/booking-report';
+import { formatPayoutDate } from '@/lib/payout-date';
 import { supportBookingLink } from '@/lib/support-link';
 
 export interface ReportProblemProps {
@@ -8,13 +9,6 @@ export interface ReportProblemProps {
   /** How the vendor is named in the sentences below. */
   vendorName: string;
 }
-
-/** `Jun 18` — the day the window closes, never the interval that sets it. */
-const CLOSES = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
 
 /** What each window says, and what it offers. `null` renders nothing at all. */
 interface ReportState {
@@ -85,7 +79,7 @@ function stateFor(
           `Something go wrong on the day? Tell us what happened and we'll hold ${vendorName}'s ` +
           (closes === null
             ? 'payment while we look into it.'
-            : `payment while we look into it — up until ${CLOSES.format(closes)}, when it goes out.`),
+            : `payment while we look into it — up until ${formatPayoutDate(closes, toDateString(new Date()))}, when it goes out.`),
         action: { label: 'Report a problem', href: supportBookingLink(booking.id) },
       };
     }

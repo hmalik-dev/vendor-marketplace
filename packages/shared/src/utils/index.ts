@@ -481,16 +481,23 @@ export interface PayoutSubject {
  * From outside, a payout that has not arrived is `pending`, and the reason lives
  * in the log and in `payout_failure_reason`.
  */
-export function payoutStatusOf(
-  /*
-   * Only the two columns it actually reads. `PayoutSubject` names all three
-   * because `isLegacyDestinationCharge` beside it needs the transfer id — but a
-   * caller that has to supply a Stripe identifier it does not hold, to ask a
-   * question that never looks at one, either invents a value or ships the id to
-   * a screen with no use for it. #425's customer surface is that caller.
-   */
-  booking: Pick<PayoutSubject, 'status' | 'payoutReleasedAt'>,
-): PayoutStatus {
+/**
+ * What `payoutStatusOf` needs, which is **less than `PayoutSubject`**.
+ *
+ * `PayoutSubject` names the transfer id because `isLegacyDestinationPayout`
+ * beside it reads one. This function never does — and a caller that has to
+ * supply a Stripe identifier to ask a question that does not look at one either
+ * invents a value or ships the id to a screen with no use for it. #425's
+ * customer surface is that caller: `bookingSchema` carries the release
+ * timestamp and deliberately not the Stripe ids.
+ *
+ * The transfer id stays *permitted* so a caller holding a whole row can pass it
+ * as written; it is simply not required.
+ */
+export type PayoutStatusSubject = Pick<PayoutSubject, 'status' | 'payoutReleasedAt'> &
+  Partial<PayoutSubject>;
+
+export function payoutStatusOf(booking: PayoutStatusSubject): PayoutStatus {
   if (booking.payoutReleasedAt) {
     return 'released';
   }
