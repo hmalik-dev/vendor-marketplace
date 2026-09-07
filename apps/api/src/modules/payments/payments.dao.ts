@@ -301,12 +301,23 @@ export async function cancelBookingAndFreeDate(
   db: AppDatabase,
   bookingId: string,
   patch: CancellationRecord,
+  /**
+   * The status the caller read, and the only one this write will move from.
+   *
+   * A parameter rather than a hard-coded `'confirmed'` because a dispute upheld
+   * in the customer's favour cancels a **`disputed`** booking (#423), and the
+   * alternative was a second copy of this transaction differing in one word —
+   * with the availability release, the parent request settlement and the
+   * counter refresh duplicated alongside it. The guard is unchanged in kind:
+   * only a booking still in the state the caller saw is moved.
+   */
+  from: BookingRow['status'] = 'confirmed',
 ): Promise<BookingRow | null> {
   return db.transaction(async (tx) => {
     const updated = await tx
       .update(bookings)
       .set({ ...patch, status: 'cancelled', updatedAt: sql`now()` })
-      .where(and(eq(bookings.id, bookingId), eq(bookings.status, 'confirmed')))
+      .where(and(eq(bookings.id, bookingId), eq(bookings.status, from)))
       .returning();
 
     const row = updated?.[0];

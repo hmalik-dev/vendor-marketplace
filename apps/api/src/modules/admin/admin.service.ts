@@ -295,10 +295,22 @@ export async function setUserBanned(
              * `isBanned` check above is a read and not a lock, so two concurrent
              * bans both reach this loop; without a key they would both refund.
              *
-             * Versioned with the unwind policy: Stripe refuses a key replayed
-             * with different parameters, and D31 changed them.
+             * Versioned with the request: Stripe refuses a key replayed with
+             * different parameters. D31 changed them once, and #423 changed
+             * them again — the refund now carries neither `reverse_transfer`
+             * nor `refund_application_fee`, because the charge is a plain one
+             * into the platform balance. A ban re-issued within 24 hours of one
+             * attempted under the old params would otherwise be refused with an
+             * `idempotency_error` rather than refunded.
+             *
+             * There is deliberately no transfer reversal on this path. It only
+             * ever unwinds bookings whose event date is still ahead
+             * (`findConfirmedBookingsToUnwind`), and a payout is not released
+             * until well after the event — so a ban cannot reach a booking that
+             * has been transferred, and the money is all still Orla's to give
+             * back.
              */
-            idempotencyKey: `ban-refund:unwind:${booking.id}`,
+            idempotencyKey: `ban-refund:direct:${booking.id}`,
           });
 
           refundedCents = refund.amountCents;

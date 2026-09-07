@@ -910,6 +910,58 @@ export const FULL_REFUND_CUTOFF_HOURS = 48;
 export const LATE_CANCELLATION_REFUND_RATE = 0.5;
 
 /**
+ * How long after the event date the vendor's share is transferred. **D32.**
+ *
+ * The product charges into Orla's own balance and pays the vendor afterwards
+ * (#423), so this is the whole of the payout schedule. **It is one constant,
+ * read everywhere**: `payoutReleaseAt` is the only place a release date is
+ * derived from it, and every surface that names one — the vendor dashboard's
+ * payout line, the window a customer can report a problem inside, the terms —
+ * reads it from there. Nothing restates the interval, in code or in prose.
+ *
+ * **72, and calendar hours.** No business days, no holiday calendar, and no new
+ * timezone arithmetic: #409 already cost this product one bug of that shape.
+ * The window exists so that a customer can dispute *before* the release, and
+ * that is worth more than a short one — under D31 a dispute after release is a
+ * transfer reversal that can push a vendor negative, while before it there is
+ * nothing transferred and a cancellation is a plain refund. Every dispute the
+ * window pulls forward avoids the worst failure this path has.
+ *
+ * D32 also rules out what this is *not* for: a deliverable that arrives weeks
+ * after the event — a photographer's gallery — is not a release-window problem
+ * and no interval fixes it. That belongs to the dispute path, and after release
+ * to D31's unwind. Do not widen this trying to cover it.
+ *
+ * Changing it reprices nothing, because the date is derived on every read
+ * rather than written onto the booking, and the amount is the stored
+ * `vendor_payout_cents`.
+ */
+export const PAYOUT_RELEASE_HOURS = 72;
+
+/**
+ * How often the API sweeps for payouts that have come due.
+ *
+ * Fifteen minutes, because the thing being waited for is measured in hours: a
+ * tighter loop would add database round trips to buy resolution the release
+ * window cannot use. The sweep is safe to run twice — a booking is claimed with
+ * `FOR UPDATE SKIP LOCKED` and the transfer carries an idempotency key — so the
+ * interval is a cost decision rather than a correctness one.
+ */
+export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
+
+/**
+ * What the vendor's side of a booking can say about its payout, as data.
+ *
+ * `status` cannot carry this: a booking is `confirmed` both before and after
+ * the money moves, so a surface reading the status alone cannot tell a payout
+ * that is waiting for its date from one already sent. `held` is the dispute
+ * hold — distinguishable from `pending` here rather than by inferring it from
+ * `status = 'disputed'`, which is what #423 acceptance 16 asks for.
+ */
+export const PAYOUT_STATUSES = ['pending', 'held', 'released'] as const;
+export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
+
+/**
  * Days in the dashboard's `This week` strip.
  *
  * Seven, and **rolling from today** rather than snapped to a calendar week:

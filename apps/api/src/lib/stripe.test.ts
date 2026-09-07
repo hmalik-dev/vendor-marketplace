@@ -1,45 +1,83 @@
 import { describe, expect, it } from 'vitest';
 import {
-  REFUND_UNWIND,
   describeAccountEvent,
   isMissingPayoutsOnly,
   isOnboarded,
+  paymentIntentParams,
   refundParams,
   refusedRefundParams,
+  refusedReversalParams,
+  refusedTransferParams,
+  reversalAmountCents,
+  reversalParams,
+  transferGroupFor,
+  transferParams,
 } from './stripe.js';
 
+describe('paymentIntentParams', () => {
+  const INPUT = {
+    requestId: 'req_one',
+    amountCents: 145_000,
+    customerId: 'cus_one',
+    vendorId: 'ven_one',
+  } as const;
+
+  /**
+   * #423 acceptance 1, and it is a statement about two fields that are
+   * **absent**. The charge is a plain charge into Orla's balance: a
+   * `transfer_data` would split the money as the card succeeded and pay a
+   * vendor booked for March in January, and an `application_fee_amount` is
+   * meaningless without one.
+   */
+  it('charges into the platform balance, with no fee and no destination', () => {
+    const params = paymentIntentParams(INPUT);
+
+    expect(params.transfer_data).toBeUndefined();
+    expect(params.application_fee_amount).toBeUndefined();
+    expect(params.amount).toBe(145_000);
+    expect(params.transfer_group).toBe('booking_req_one');
+  });
+
+  /** The group is what ties the charge to the transfer it eventually funds. */
+  it('labels the charge with the transfer group the release will search on', () => {
+    expect(paymentIntentParams(INPUT).transfer_group).toBe(transferGroupFor('req_one'));
+  });
+});
+
 describe('refundParams', () => {
-  const INPUT = { paymentIntentId: 'pi_destination', amountCents: 72_500 } as const;
+  const INPUT = { paymentIntentId: 'pi_platform', amountCents: 72_500 } as const;
 
   /*
-   * #416. The shipped pair was `refund_application_fee: true` with
-   * `reverse_transfer: false`, which Stripe answers 400 for on every
-   * destination charge — so no refund this product offered had ever succeeded.
-   * D31 rules the full unwind: all three parties back where they started.
+   * #416 shipped `refund_application_fee: true` with `reverse_transfer: false`,
+   * which Stripe answers 400 for — so no refund this product offered had ever
+   * succeeded. #423 removed both: there is no destination charge left to carry
+   * either flag, and the vendor's share comes back through a transfer reversal
+   * instead. D31's policy is unchanged; only the mechanism moved.
    */
-  it('sends the full unwind for a destination charge', () => {
+  it('sends a plain refund, with neither unwind flag', () => {
     expect(refundParams(INPUT)).toEqual({
-      payment_intent: 'pi_destination',
+      payment_intent: 'pi_platform',
       amount: 72_500,
       reason: undefined,
-      refund_application_fee: true,
-      reverse_transfer: true,
     });
   });
 
   /**
    * The guard that keeps the double honest: the fake refuses whatever
-   * `refusedRefundParams` refuses, so a policy Stripe cannot perform turns
+   * `refusedRefundParams` refuses, so a request Stripe cannot perform turns
    * every refund route test red rather than passing against a call that 400s.
    */
-  it('ships a policy Stripe accepts', () => {
-    expect(refusedRefundParams(refundParams(INPUT, REFUND_UNWIND))).toBeNull();
+  it('ships a request Stripe accepts', () => {
+    expect(refusedRefundParams(refundParams(INPUT))).toBeNull();
   });
 });
 
 describe('refusedRefundParams', () => {
-  const params = (unwind: { reverseTransfer: boolean; refundApplicationFee: boolean }) =>
-    refundParams({ paymentIntentId: 'pi_one', amountCents: 100 }, unwind);
+  const params = (unwind: { reverseTransfer: boolean; refundApplicationFee: boolean }) => ({
+    ...refundParams({ paymentIntentId: 'pi_one', amountCents: 100 }),
+    reverse_transfer: unwind.reverseTransfer,
+    refund_application_fee: unwind.refundApplicationFee,
+  });
 
   it('refuses refunding the fee without reversing the transfer, as Stripe does', () => {
     expect(
@@ -50,16 +88,146 @@ describe('refusedRefundParams', () => {
     );
   });
 
-  it('accepts the other three combinations', () => {
-    expect(refusedRefundParams(params({ reverseTransfer: true, refundApplicationFee: true }))).toBe(
-      null,
-    );
+  /*
+   * The #423 half. A plain charge has no transfer on it, so Stripe refuses the
+   * flag rather than ignoring it — which is exactly the mistake a reader who
+   * remembers the destination charge would make while moving a refund across
+   * the release boundary.
+   */
+  it('refuses reversing a transfer the charge does not have', () => {
     expect(
       refusedRefundParams(params({ reverseTransfer: true, refundApplicationFee: false })),
-    ).toBe(null);
+    ).toBe(
+      'Charge for pi_one has no associated transfer to reverse. Reverse the transfer object ' +
+        'directly instead.',
+    );
+    expect(refusedRefundParams(params({ reverseTransfer: true, refundApplicationFee: true }))).toBe(
+      'Charge for pi_one has no associated transfer to reverse. Reverse the transfer object ' +
+        'directly instead.',
+    );
+  });
+
+  it('accepts a refund carrying neither flag', () => {
     expect(
       refusedRefundParams(params({ reverseTransfer: false, refundApplicationFee: false })),
     ).toBe(null);
+  });
+});
+
+describe('transferParams', () => {
+  const INPUT = {
+    bookingId: 'bkg_one',
+    amountCents: 127_600,
+    destinationAccountId: 'acct_vendor',
+    transferGroup: 'booking_req_one',
+  } as const;
+
+  it('sends the stored payout to the vendor account, tagged with its group', () => {
+    expect(transferParams(INPUT)).toEqual({
+      amount: 127_600,
+      currency: 'usd',
+      destination: 'acct_vendor',
+      transfer_group: 'booking_req_one',
+      metadata: { bookingId: 'bkg_one' },
+    });
+  });
+
+  it('ships a request Stripe accepts', () => {
+    expect(refusedTransferParams(transferParams(INPUT))).toBeNull();
+  });
+
+  /*
+   * Reachable from real data: a booking whose total rounds its whole value into
+   * the platform fee has `vendor_payout_cents = 0`, and a sweep that sent it
+   * would 400 every quarter of an hour forever against a payout that can never
+   * succeed.
+   */
+  it('refuses a zero-cent transfer, as Stripe does', () => {
+    expect(refusedTransferParams(transferParams({ ...INPUT, amountCents: 0 }))).toBe(
+      'Invalid integer: 0. Transfer amount must be at least 1 cent.',
+    );
+  });
+
+  it('refuses a transfer with no destination, as Stripe does', () => {
+    expect(refusedTransferParams(transferParams({ ...INPUT, destinationAccountId: '' }))).toBe(
+      'Missing required param: destination.',
+    );
+  });
+});
+
+describe('reversalAmountCents', () => {
+  /* A full refund puts all three parties back where they started (D31). */
+  it('reverses the whole payout for a full refund', () => {
+    expect(
+      reversalAmountCents({
+        totalAmountCents: 100_000,
+        vendorPayoutCents: 88_000,
+        refundCents: 100_000,
+      }),
+    ).toBe(88_000);
+  });
+
+  /* And half of it at the 50% tier, leaving Orla half its commission. */
+  it('reverses proportionally at the late-cancellation tier', () => {
+    expect(
+      reversalAmountCents({
+        totalAmountCents: 100_000,
+        vendorPayoutCents: 88_000,
+        refundCents: 50_000,
+      }),
+    ).toBe(44_000);
+  });
+
+  it('reverses nothing when nothing is refunded', () => {
+    expect(
+      reversalAmountCents({ totalAmountCents: 100_000, vendorPayoutCents: 88_000, refundCents: 0 }),
+    ).toBe(0);
+  });
+
+  /*
+   * Rounding must never ask for more than was transferred. A one-cent booking
+   * whose payout rounds up is the shape that would otherwise produce a reversal
+   * Stripe refuses, on the retry path where nobody is watching.
+   */
+  it('never asks for more than the payout, whatever the rounding', () => {
+    expect(reversalAmountCents({ totalAmountCents: 3, vendorPayoutCents: 3, refundCents: 3 })).toBe(
+      3,
+    );
+    expect(reversalAmountCents({ totalAmountCents: 0, vendorPayoutCents: 0, refundCents: 0 })).toBe(
+      0,
+    );
+  });
+});
+
+describe('refusedReversalParams', () => {
+  const params = reversalParams({
+    transferId: 'tr_one',
+    amountCents: 5_000,
+    idempotencyKey: 'k',
+  });
+
+  it('accepts a reversal inside the unreversed balance', () => {
+    expect(refusedReversalParams(params, 5_000)).toBeNull();
+  });
+
+  /*
+   * A booking cancelled twice, a day apart, is past Stripe's idempotency
+   * window — and reversing the vendor's share twice takes a third party's
+   * balance negative twice over, which D31 accepted once and never twice.
+   */
+  it('refuses reversing more than is left on the transfer, as Stripe does', () => {
+    expect(refusedReversalParams(params, 4_999)).toBe(
+      'Reversal amount (5000) is greater than the unreversed amount (4999) on the transfer.',
+    );
+  });
+
+  it('refuses a zero-cent reversal, as Stripe does', () => {
+    expect(
+      refusedReversalParams(
+        reversalParams({ transferId: 'tr_one', amountCents: 0, idempotencyKey: 'k' }),
+        5_000,
+      ),
+    ).toBe('Invalid integer: 0. Reversal amount must be at least 1 cent.');
   });
 });
 

@@ -4,6 +4,7 @@ import {
   cancelBookingSchema,
   cancelledBookingSchema,
   checkoutIntentSchema,
+  disputeBookingSchema,
   uuidSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
@@ -14,6 +15,7 @@ import {
   cancelBooking,
   completeBooking,
   openCheckout,
+  raiseDispute,
   reconcileBooking,
   type PaymentContext,
 } from './payments.service.js';
@@ -102,6 +104,34 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
         contextFor(request.log),
         authenticated(request.auth),
         request.params.bookingId,
+        app.clock(),
+      ),
+  );
+
+  /**
+   * The customer reports a problem, which holds the payout (#423).
+   *
+   * `PUT` and not `POST`: it moves an existing booking into the hold state and
+   * repeating it is refused as a conflict rather than opening a second report,
+   * so there is no collection here for a `POST` to append to. **#425 builds the
+   * surface** that calls this; the hold and its guards are this ticket's.
+   */
+  app.put(
+    '/customer/bookings/:bookingId/dispute',
+    {
+      preHandler: requireAuth,
+      schema: {
+        params: bookingParamsSchema,
+        body: disputeBookingSchema,
+        response: { 200: bookingSchema },
+      },
+    },
+    async (request) =>
+      raiseDispute(
+        contextFor(request.log),
+        authenticated(request.auth),
+        request.params.bookingId,
+        request.body.reason,
         app.clock(),
       ),
   );

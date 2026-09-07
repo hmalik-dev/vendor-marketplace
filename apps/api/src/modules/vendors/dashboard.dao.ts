@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -6,7 +6,7 @@ import {
   users,
   vendorCategories,
 } from '@vendor-marketplace/db/schema';
-import type { AvailabilityStatus } from '@vendor-marketplace/shared';
+import type { AvailabilityStatus, BookingStatus } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /**
@@ -161,20 +161,51 @@ export interface NextPayoutRow {
   eventDate: string;
   customerFirstName: string;
   vendorPayoutCents: number;
+  /**
+   * The three columns `payoutStatusOf` decides the payout state from, selected
+   * together because that helper takes the booking rather than a status string.
+   *
+   * `payoutReleasedAt` is always null here — the query filters on it — and is
+   * carried anyway rather than passed as a literal `null`: the moment a caller
+   * starts supplying a field the row does not really have, the helper is
+   * answering a question about something that is not this booking.
+   */
+  status: BookingStatus;
+  payoutReleasedAt: Date | null;
+  stripeTransferId: string | null;
 }
 
 /**
- * The soonest event on or after `from` that this vendor is owed money for.
+ * The soonest payout this vendor is still owed — the earliest event whose money
+ * has not yet been transferred.
  *
- * `confirmed` only. A `completed` booking has already paid out, and a
- * `cancelled` or `disputed` one is money that is not coming — naming any of
- * them as the *next* payout would overstate what is owed, which is the one
- * direction a money figure must never err in.
+ * **Three things about the predicate changed with #423, and each was a claim
+ * that stopped being true when the release moved off the destination charge.**
+ *
+ * `completed` is included. It used to be excluded because "a `completed`
+ * booking has already paid out" — true of a destination charge, where Stripe
+ * split the money as the card succeeded. It is now false: the vendor marking a
+ * booking complete moves no money, so a completed booking still inside its
+ * payout window is precisely a payout that is owed, and omitting it would show
+ * a vendor nothing where they are due a transfer.
+ *
+ * `disputed` is included, and it is the reason this returns a status at all. A
+ * held payout is money the vendor is still owed and cannot yet have, and
+ * showing them nothing would be the same screen as having nothing owed. The
+ * surface says which it is (#423 acceptance 16).
+ *
+ * The event-date floor is gone. Whether a payout has been sent is
+ * `payout_released_at`, not whether the event is in the future — a booking whose
+ * event was last week and whose window has not closed is the *most* imminent
+ * payout there is, and a date floor hid exactly those.
+ *
+ * `cancelled` remains excluded: that money is not coming, and naming it would
+ * overstate what is owed, which is the one direction a money figure must never
+ * err in.
  */
 export async function findNextPayout(
   db: AppDatabase,
   vendorId: string,
-  from: string,
 ): Promise<NextPayoutRow | null> {
   const rows = await db
     .select({
@@ -182,14 +213,17 @@ export async function findNextPayout(
       eventDate: bookings.eventDate,
       customerFirstName: users.firstName,
       vendorPayoutCents: bookings.vendorPayoutCents,
+      status: bookings.status,
+      payoutReleasedAt: bookings.payoutReleasedAt,
+      stripeTransferId: bookings.stripeTransferId,
     })
     .from(bookings)
     .innerJoin(users, eq(bookings.customerId, users.id))
     .where(
       and(
         eq(bookings.vendorId, vendorId),
-        eq(bookings.status, 'confirmed'),
-        gte(bookings.eventDate, from),
+        inArray(bookings.status, ['confirmed', 'completed', 'disputed']),
+        isNull(bookings.payoutReleasedAt),
       ),
     )
     .orderBy(asc(bookings.eventDate))

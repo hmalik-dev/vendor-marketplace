@@ -197,6 +197,13 @@
       "when": 1788665372305,
       "tag": "0027_tough_night_nurse",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788746062801,
+      "tag": "0028_hold_payouts_until_the_event",
+      "breakpoints": true
     }
   ]
 }

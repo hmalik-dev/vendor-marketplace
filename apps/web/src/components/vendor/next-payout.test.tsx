@@ -13,6 +13,8 @@ describe('NextPayout', () => {
           eventDate: '2026-06-15',
           customerFirstName: 'Anjali',
           vendorPayoutCents: 175_000,
+          releaseAt: new Date('2026-06-18T00:00:00.000Z'),
+          status: 'pending',
         }}
       />,
     );
@@ -35,6 +37,8 @@ describe('NextPayout', () => {
           eventDate: '2026-06-15',
           customerFirstName: 'Anjali',
           vendorPayoutCents: 175_000,
+          releaseAt: new Date('2026-06-18T00:00:00.000Z'),
+          status: 'pending',
         }}
       />,
     );

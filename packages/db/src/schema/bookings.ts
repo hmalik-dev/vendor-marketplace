@@ -141,8 +141,54 @@ export const bookings = pgTable(
     vendorPayoutCents: integer('vendor_payout_cents').notNull(),
     status: bookingStatusEnum('status').notNull().default('confirmed'),
     stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
+    /**
+     * The transfer that actually moved the vendor's share, once it has moved.
+     *
+     * Null for the life of this column until #423, because the charge was a
+     * *destination* charge and its transfer was implicit — Stripe split the
+     * money as the card succeeded and there was no object for the platform to
+     * record. Under separate charges and transfers the platform makes the
+     * transfer itself, and this is the receipt: the handle a reversal needs,
+     * and the one thing that ties a booking to a movement in Stripe.
+     */
     stripeTransferId: varchar('stripe_transfer_id', { length: 255 }),
     paidAt: timestamp('paid_at', { withTimezone: true }),
+    /**
+     * When the payout sweep transferred the vendor's share. Written **only** on
+     * success, together with `stripe_transfer_id`.
+     *
+     * A separate column rather than `stripe_transfer_id is not null` doing the
+     * work, so a *failed* transfer is never indistinguishable from one that was
+     * never attempted or one that completed (#423 acceptance 7). The three
+     * states read off this row: never attempted is `payout_attempts = 0` with
+     * this null; failed is `payout_attempts > 0` with this null and a reason;
+     * released is this set. `status` cannot carry any of it — a booking is
+     * `confirmed` both before and after the money moves.
+     */
+    payoutReleasedAt: timestamp('payout_released_at', { withTimezone: true }),
+    /**
+     * How many times the sweep has tried and failed to transfer this payout.
+     *
+     * A failed transfer leaves the booking releasable, so the next run retries
+     * it — and without a counter a payout failing every quarter of an hour
+     * forever looks exactly like one nobody has reached yet.
+     */
+    payoutAttempts: integer('payout_attempts').notNull().default(0),
+    /** Why the last transfer attempt failed. Cleared when one succeeds. */
+    payoutFailureReason: text('payout_failure_reason'),
+    /**
+     * The customer's own words about the problem they reported, kept while the
+     * complaint is open and cleared when it is resolved.
+     *
+     * **`status = 'disputed'` is the hold, and there is deliberately no second
+     * column recording that a dispute is open.** A `disputed_at` beside this one
+     * would move in the same statement as the status, every time, in both
+     * directions — one fact written twice and free to disagree, which is the
+     * same criticism this file's `completed_at` derivation avoids. What a
+     * *surface* needs is not the timestamp but the payout state, and that is
+     * `payoutStatusOf`, which is the one place the status enum is read.
+     */
+    disputeReason: text('dispute_reason'),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancellationReason: text('cancellation_reason'),
@@ -172,6 +218,27 @@ export const bookings = pgTable(
     uniqueIndex('bookings_request_id_key').on(table.requestId),
     index('bookings_customer_idx').on(table.customerId),
     index('bookings_vendor_idx').on(table.vendorId),
+    /*
+     * Serves the payout sweep, which runs every quarter of an hour forever and
+     * only ever asks for bookings that are still owed a transfer.
+     *
+     * **Both halves of the predicate are load-bearing.** `payout_released_at is
+     * null` is the obvious one. `status <> 'cancelled'` is the one that keeps
+     * this index from growing without bound: a cancelled booking is never
+     * released, so it would sit here for the life of the platform — and since
+     * the scan walks the index from the *oldest* event date upward, the
+     * accumulated cancellations are exactly the rows it would wade through
+     * first, heap-fetching each one only to reject it on `status`. That makes
+     * every sweep proportional to lifetime cancellations rather than to what is
+     * actually due.
+     *
+     * `disputed` stays indexed, which is why the predicate excludes one status
+     * rather than listing the releasable pair: resolving a dispute makes a
+     * booking due again and writes neither of these columns.
+     */
+    index('bookings_payout_due_idx')
+      .on(table.eventDate)
+      .where(sql`${table.payoutReleasedAt} is null and ${table.status} <> 'cancelled'`),
   ],
 );
 

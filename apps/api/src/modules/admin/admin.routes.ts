@@ -18,6 +18,8 @@ import {
   adminVendorFacetsSchema,
   adminVendorPageSchema,
   adminVendorQuerySchema,
+  bookingSchema,
+  resolveDisputeSchema,
   resolveTagSuggestionSchema,
   updateTagSchema,
 } from '@vendor-marketplace/shared';
@@ -39,11 +41,13 @@ import {
   updateTag,
   type AdminContext,
 } from './admin.service.js';
+import { resolveDispute } from '../payments/payments.service.js';
 
 const userParamsSchema = z.object({ userId: z.uuid() });
 const reviewParamsSchema = z.object({ reviewId: z.uuid() });
 const suggestionParamsSchema = z.object({ suggestionId: z.uuid() });
 const tagParamsSchema = z.object({ tagId: z.uuid() });
+const bookingParamsSchema = z.object({ bookingId: z.uuid() });
 
 /**
  * The operations control plane (#15).
@@ -134,6 +138,34 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
         false,
         app.clock(),
       ),
+  );
+
+  /**
+   * An operator settles a reported problem, one way or the other (#423).
+   *
+   * Here rather than in the payments plugin because the actor is an operator
+   * and every route in this file is `admin` and nothing else — a dispute
+   * resolution exposed on a customer- or vendor-guarded plugin would let one
+   * party to the disagreement decide it. The money it moves is still
+   * `payments.service.ts`'s: `resolveDispute` is the same function, called with
+   * this plugin's context.
+   *
+   * Deliberately not a case-management product. The hold needs an off switch
+   * with two positions and it has one; the admin surfaces that already exist
+   * are where an operator reads the booking.
+   */
+  app.put(
+    '/admin/bookings/:bookingId/dispute',
+    {
+      onRequest: adminOnly,
+      schema: {
+        params: bookingParamsSchema,
+        body: resolveDisputeSchema,
+        response: { 200: bookingSchema },
+      },
+    },
+    async (request) =>
+      resolveDispute(context(), request.params.bookingId, request.body.outcome, app.clock()),
   );
 
   app.get(

@@ -2,6 +2,8 @@ import {
   BOOKING_WEEK_WINDOW_DAYS,
   addDays,
   parseDateString,
+  payoutReleaseAt,
+  payoutStatusOf,
   toDateString,
   type AvailabilityStatus,
   type VendorDashboard,
@@ -16,6 +18,7 @@ import {
   findCategoryIds,
   findNextPayout,
   sumPayoutsBetween,
+  type NextPayoutRow,
 } from './dashboard.dao.js';
 import { publishBlockers, requireOwnVendorProfile } from './vendors.service.js';
 
@@ -138,7 +141,7 @@ export async function getVendorDashboard(
       new Date(`${next}T00:00:00.000Z`),
     ),
     findCalendarBetween(db, vendor.id, windowDays[0] ?? today, windowEnd),
-    findNextPayout(db, vendor.id, today),
+    findNextPayout(db, vendor.id),
     findCategoryIds(db, vendor.id),
     countActivePackages(db, vendor.id),
   ]);
@@ -168,6 +171,44 @@ export async function getVendorDashboard(
       date,
       status: byDate.get(date) ?? ('available' as AvailabilityStatus),
     })),
-    nextPayout,
+    nextPayout: toNextPayout(nextPayout),
+  };
+}
+
+/**
+ * The payout card's three facts, derived where the booking row is the only
+ * source: the stored amount, the date `payoutReleaseAt` gives, and which of the
+ * payout states it is in (#423 acceptance 15).
+ *
+ * Nothing here recomputes a fee and nothing invents a date. `releaseAt` cannot
+ * be null in practice — the row's `event_date` came out of a `DATE` column —
+ * but the helper's contract allows it, and a payout card is the wrong place to
+ * assert past a `null`: showing no card is honest, and showing one built on a
+ * date that failed to parse is not.
+ */
+function toNextPayout(row: NextPayoutRow | null): VendorDashboard['nextPayout'] {
+  if (!row) {
+    return null;
+  }
+
+  const releaseAt = payoutReleaseAt(row.eventDate);
+
+  if (!releaseAt) {
+    return null;
+  }
+
+  return {
+    bookingId: row.bookingId,
+    eventDate: row.eventDate,
+    customerFirstName: row.customerFirstName,
+    vendorPayoutCents: row.vendorPayoutCents,
+    releaseAt,
+    /*
+     * Through `payoutStatusOf`, not an inline `status === 'disputed'` here.
+     * Acceptance 16's point is that no surface should infer "the money is
+     * stuck" from `BOOKING_STATUSES`, and writing that inference once in this
+     * file would leave #424 and #425 each writing their own.
+     */
+    status: payoutStatusOf(row),
   };
 }

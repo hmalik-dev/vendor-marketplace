@@ -776,17 +776,24 @@ describe('payments', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().refundCents).toBe(PRICE_CENTS);
       expect(response.json().isFullRefund).toBe(true);
-      // D31, the full unwind: the vendor gives their share back and Orla gives
-      // its commission back, which is the only pair Stripe accepts on a
-      // destination charge that carried an application fee (#416).
+      /*
+       * #423 acceptance 12 — a plain refund, with neither unwind flag.
+       *
+       * The event is months out, so the payout has not been released: nothing
+       * has been transferred, there is nothing to reverse, and there is no way
+       * for this cancellation to push the vendor's balance negative. That is
+       * the consequence D31 had to accept, and holding the money until the
+       * event has happened is what removes it for every cancellation before
+       * the event.
+       */
       expect(harness.stripe.refunds).toEqual([
         {
           paymentIntentId: booking!.stripePaymentIntentId,
           amountCents: PRICE_CENTS,
           reason: 'requested_by_customer',
-          idempotencyKey: `cancel_${booking!.id}_unwind`,
-          reverseTransfer: true,
-          refundApplicationFee: true,
+          idempotencyKey: `cancel_${booking!.id}_direct`,
+          reverseTransfer: false,
+          refundApplicationFee: false,
         },
       ]);
     });
@@ -860,16 +867,19 @@ describe('payments', () => {
 
       expect(response.json().refundCents).toBe(PRICE_CENTS / 2);
       expect(response.json().isFullRefund).toBe(false);
-      // The unwind is the same at both tiers — Stripe reverses the transfer and
-      // the fee proportionally, so the three-way split survives a 50% refund.
+      /*
+       * #423 acceptance 14 — the tiers are untouched. Half comes back, and the
+       * refund is as plain at this tier as at the other one: the boundary is
+       * the release, not the amount.
+       */
       expect(harness.stripe.refunds).toEqual([
         {
           paymentIntentId: booking!.stripePaymentIntentId,
           amountCents: PRICE_CENTS / 2,
           reason: 'requested_by_customer',
-          idempotencyKey: `cancel_${booking!.id}_unwind`,
-          reverseTransfer: true,
-          refundApplicationFee: true,
+          idempotencyKey: `cancel_${booking!.id}_direct`,
+          reverseTransfer: false,
+          refundApplicationFee: false,
         },
       ]);
     });
@@ -1045,8 +1055,8 @@ describe('payments', () => {
         amountCents: PRICE_CENTS,
         reason: 'requested_by_customer',
         idempotencyKey: undefined,
-        reverseTransfer: true,
-        refundApplicationFee: true,
+        reverseTransfer: false,
+        refundApplicationFee: false,
       });
 
       const response = await inject(
@@ -1080,7 +1090,7 @@ describe('payments', () => {
       expect(harness.stripe.refunds).toEqual([]);
     });
 
-    it('tells the vendor their date is free again, and that their payout is reversed', async () => {
+    it('tells the vendor their date is free and that nothing is taken back', async () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
@@ -1093,15 +1103,20 @@ describe('payments', () => {
 
       expect(rows).toHaveLength(1);
       /*
-       * D31 takes the vendor's share back out of their connected account, and a
-       * vendor already paid out is carried negative by it. This notification is
-       * the only message the product sends them about the cancellation, so it
-       * is where that has to be said rather than left to a Stripe statement.
+       * This notification is the only message the product sends the vendor
+       * about the cancellation, so which of the two sentences it carries is a
+       * money claim rather than a copy choice — telling a vendor their balance
+       * is being clawed back when it is not is as wrong as the reverse.
+       *
+       * The event here is months out, so nothing has been transferred and
+       * nothing comes back. D31's reversal sentence is still sent, and still
+       * warns about a negative balance, on a booking cancelled after its
+       * payout has been released — the assertion beside `payout_released_at`
+       * covers that side.
        */
       expect(rows[0]?.body).toBe(
-        'The date is free again on your calendar. Their refund takes back the same share of ' +
-          'your payout, out of your Stripe balance — which can leave it negative if this ' +
-          'booking had already been paid out.',
+        'The date is free again on your calendar. This booking had not been paid out yet, so ' +
+          'nothing is taken back out of your Stripe balance.',
       );
     });
   });
