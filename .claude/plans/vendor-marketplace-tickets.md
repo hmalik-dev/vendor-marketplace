@@ -246,7 +246,7 @@ the silent-submit work #388 closed:
   aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
   restores focus — a keyboard user t |
 storefront, each of which tells the reader something untrue. |
-| **429** | **Legal acceptance is vendor-only and records a version, not the document — close both** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 on the account holder's instruction**, after auditing what #427 shipped: *"it is essential that we have an appropriate tracker of ToS and any other vendor agreement tracked."* **The table is good and is not the problem** — `legal_acceptances` is immutable by a database trigger (not a DAO convention), copies `accepted_by_name` and `business_name` so a later rename cannot rewrite history, captures `ip`, `user_agent` and a timezone-aware `accepted_at`, and its immutability is proven by attempting the update and delete. **Two holes.** (1) **`vendor_id` is `NOT NULL`**, so only a vendor can be recorded — a customer accepting the Terms of Service at sign-up has nowhere to go, and `terms_of_service` sits in the enum with **nothing anywhere writing it**, exactly as `disputed` did before #425. (2) **Nothing records what the document said** — only a version string, while the copy is placeholder markdown explicitly planned for replacement, so editing `terms.md` without bumping the version silently makes every existing row attest to text that no longer exists. **Not in scope, already built:** the stale-version blocker (`hasCurrentVendorAgreement`) and the privacy disclosure of the IP capture |
+| **429** | **Legal acceptance is vendor-only and records a version, not the document — close both** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 on the account holder's instruction**, after auditing what #427 shipped: *"it is essential that we have an appropriate tracker of ToS and any other vendor agreement tracked."* **The table is good and is not the problem** — `legal_acceptances` is immutable by a database trigger (not a DAO convention), copies `accepted_by_name` and `business_name` so a later rename cannot rewrite history, captures `ip`, `user_agent` and a timezone-aware `accepted_at`, and its immutability is proven by attempting the update and delete. **Three holes.** (1) **`vendor_id` is `NOT NULL`**, so only a vendor can be recorded — a customer accepting the Terms of Service at sign-up has nowhere to go, and `terms_of_service` sits in the enum with **nothing anywhere writing it**, exactly as `disputed` did before #425. (2) **Nothing records what the document said** — only a version string, while the copy is placeholder markdown explicitly planned for replacement, so editing `terms.md` without bumping the version silently makes every existing row attest to text that no longer exists. (3) **Nothing is affirmatively accepted** — the flow is browsewrap, so the row attests to a `Continue` press. Ruled 2026-09-07: *"explicit checkbox"* and SHA-256 to pin the version. Because `sign-up-form.tsx` renders Clerk's prebuilt `<SignUp>`, the clickwrap gate goes **after** authentication — a first-sign-in interstitial on `/after-sign-in`, which every account traverses however it was created, writing the `users` row and the acceptance in one transaction. **Not in scope, already built:** the stale-version blocker (`hasCurrentVendorAgreement`) and the privacy disclosure of the IP capture |
 | **430** | **Closing band and footer: stack the band, and drop both centred measures** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 with a design revision.** `design/delta-band/` — `CLOSING-BAND-PROMPT.md` and `Orla-Closing-Band.html`. **This revises what #428 shipped rather than replacing it**: the band is already vendor-only, already signed-out-only, already free of pricing figures, and already points both controls at one destination. **What changes is the composition.** The band becomes **stacked, not columned** — the pitch spans a top line and the three steps run full-width beneath as `repeat(3, 1fr)` — and **both the band and the footer stop centring an inner measure and sit flush to the page's 40px gutter**. #428 deliberately chose `max-w-[1160px] mx-auto` and left a comment defending it as *"the frame's own measure"*; **that reasoning is now overruled by a newer frame** and the comment must be corrected rather than left contradicting the code. Also: serif 33px→35px, the vertical rule between columns becomes a full-width horizontal one, the button moves after the link so the strongest element sits at the outer edge, and the footer's compensating `border-top` goes because the `#1C1916` ground replaces it |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
@@ -1085,21 +1085,58 @@ alongside the version. Version says *which* one; the hash proves *which bytes*.
 It is small, it is immutable with the rest of the row, and it is the difference
 between "they accepted v1.0" and "they accepted this".
 
-**Two decisions to take deliberately and record:**
+**Both open questions are ruled here. Do not relitigate them in the lane.**
 
-1. **Hash the markdown source, or the rendered text?** The source is what is
-   version-controlled and diffable; the rendered text is what the person actually
-   read. Say which and why.
-2. **What happens when the file changes without a version bump.** The honest
-   options are to fail the build, or to derive the version from the hash so it
-   cannot drift. A silent mismatch is the one outcome that must not be possible —
-   it is the exact failure this column exists to make visible.
+1. **Hash the markdown source bytes as committed** — SHA-256 of the file, not of
+   the rendered HTML. Rendering is a function of the renderer, so a markdown
+   library or Tailwind upgrade would move a rendered hash for text nobody edited,
+   and every acceptance row would then read as drift. The source is what is
+   diffable, what is in version control, and what — rendered by the code at that
+   commit — uniquely determines what was on screen.
+2. **Drift fails loudly, in the test suite.** Commit a manifest of
+   `{document, version, sha256}` next to the documents, and assert each entry
+   against the file it names. Editing `terms.md` without bumping the version then
+   fails `pnpm test` with the document named, which is the outcome that makes the
+   silent case impossible. Do **not** derive the version from the hash: a version
+   a human chose is what the row, the blocker and the agreement all cite, and a
+   hash-derived one would change under a typo fix that nobody needs to re-accept.
 
-#### Also worth capturing while the row is being changed
+#### Hole 3 — nothing is actually *accepted*; the flow is browsewrap
 
-- **The acceptance method** — an explicit checkbox versus continuing through a
-  flow. It is what distinguishes clickwrap from browsewrap if acceptance is ever
-  contested, and it is one column.
+**Ruled by the account holder 2026-09-07: _"explicit checkbox."_** This is not a
+nice-to-have and it is not a column — it is the acceptance itself. A row saying
+someone accepted the Terms is worth nothing if all they did was press a button
+labelled `Continue` under a link they never opened. That is browsewrap, and it is
+the form courts decline to enforce. Clickwrap is an **unticked box the person
+ticks**, with the document named and linked beside it.
+
+**The placement problem is real, and it is the hard part of this hole.**
+`sign-up-form.tsx` renders Clerk's prebuilt `<SignUp>` component, so there is no
+seam inside the form to put a checkbox in — and a checkbox placed *before* it, on
+the role step, is bypassed by every social sign-up that enters Clerk directly.
+
+**So the gate goes after authentication, not before it:** a first-sign-in
+interstitial on the `/after-sign-in` path, which every account traverses exactly
+once regardless of how it was created, and which is already where the `users` row
+is written. Until the box is ticked and submitted, that is the only page the
+account can reach; the submit is what writes both the `users` row and the
+acceptance, in one transaction, so an account cannot exist without its acceptance
+row.
+
+Three properties this has to have, each of which a shortcut would lose:
+
+- **The box starts unticked.** A pre-ticked box is not an affirmative act, and
+  pre-ticking it is the single most common way a clickwrap record is thrown out.
+- **The document is reachable from beside the box**, opening without leaving or
+  resetting the interstitial.
+- **The `ip` and `user_agent` recorded are the ones on the request that carried
+  the tick** — not on some earlier request in the flow. This is the whole reason
+  those columns exist, and it is quietly easy to get wrong when the write moves
+  to a different handler from the one the person submitted.
+
+Record the method on the row (`acceptance_method`), so a later flow that accepts
+some other way is distinguishable from this one rather than retroactively
+indistinguishable from it.
 
 #### Acceptance
 
@@ -1118,7 +1155,14 @@ between "they accepted v1.0" and "they accepted this".
    replace one, and the earlier row still answers "what did I agree to".
 7. `document_sha256` matches the document served, and a changed file without a
    version bump is impossible or fails loudly — whichever was ruled.
-8. The acceptance method is recorded.
+8. **Acceptance is an unticked checkbox the person ticks**, on a first-sign-in
+   interstitial every account traverses, with the document linked beside it. The
+   account cannot reach any other page until it is submitted.
+9. The `ip` and `user_agent` on the row are the ones from the request that
+   carried the tick.
+10. The `users` row and its acceptance row are written in **one transaction** —
+    an account with no acceptance row is not a reachable state.
+11. The acceptance method is recorded on the row.
 
 #### Tests (required)
 
@@ -1130,6 +1174,15 @@ between "they accepted v1.0" and "they accepted this".
       so the drift this column is for is demonstrably caught.
 - [ ] Sign-in twice; assert one row.
 - [ ] Migration applied against seeded data carrying existing acceptances.
+- [ ] **The checkbox starts unticked**, and submitting without it writes no row
+      and lets no route through — asserted on both halves, since a gate that
+      records nothing but still admits you is the failure worth catching.
+- [ ] A test that the recorded `ip`/`user_agent` come from the submitting
+      request, by making them differ from an earlier request in the same flow.
+- [ ] The manifest test: mutate a legal markdown file in a fixture and assert the
+      suite fails naming that document.
+- [ ] Browser-verified at both auth states, including a social sign-up path, so
+      the gate is shown to be unbypassable rather than argued to be.
 
 #### Explicitly out of scope
 
@@ -1157,6 +1210,10 @@ restates it because it was written as a standalone brief:
 - both controls already share **one destination** (`VENDOR_ENTRY_PATH`), so
   neither can drift from the other;
 - the footer already has its **legal row** and its `#1C1916` ground;
+- the footer's **Account column is already right in both states** — signed out is
+  `Sign in` · `Sign up` with `Dashboard` deliberately absent, and the reasoning is
+  written above `site-footer.tsx:66`. The prompt restates it because it is a
+  standalone brief; it is not a change;
 - a signed-in vendor is already redirected off `/`.
 
 Re-implementing any of that is how a revision becomes a regression.
