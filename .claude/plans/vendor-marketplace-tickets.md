@@ -261,6 +261,8 @@ storefront, each of which tells the reader something untrue. |
 | **447** | **A border or surface token used as text on ink — four instances, three per-call-site guards, no law** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441, which was the third instance.** The recurring mistake is not "a border token used as text" but ***the nearest hex is not the right role***, and it has now bitten four times: `stone-400` as text on ink twice (#430's closing band, #441's admin header), `stone-0` as a border on ink once (#441's legal hairline), and the 78%-alpha-of-`stone-50` that `theme.css` records as the defect which minted the ink-ground ramp in the first place. Three of those now carry **three separately hand-written per-call-site guards** — `page.test.tsx` for the band, `admin-header.test.tsx` and `site-footer.test.tsx` for #441 — and no law. A fourth guard would make it a habit. **#441 looked for the cheap guard and reports that there is not one**, which is the part that should stop the next person rediscovering it: a blanket ban on `text-stone-400` needs **four legitimate exemptions** (`ui/empty-state.tsx`, `vendors/profile/review-form.tsx`, and two in `packages/package-manager.tsx` — all decorative glyphs on a light ground), and a file-level "this file has an ink ground" rule matches **14 files**, most of which use `bg-stone-900` for a scrim, a chip or one button variant. So the guard has to know the *ground an element renders on*, which no source scan can see. Options worth weighing: extend `theme-tokens.test.ts`'s contrast table into a role table naming which tokens may be `text-*` at all; or assert it in the browser during the parity pass, where the ground **is** observable. |
 | **448** | **Lane env tooling hands web-side children the wrong API origin, silently** | INFRA | M-OPS | **P1 High** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 — both halves found the same day, by #435 and #441.** `renderLaneEnv` in `packages/preflight/src/lane/env.ts` writes `NEXT_PUBLIC_API_URL` and **not** `API_URL`. They are different variables: `API_URL` is what `apps/web/src/lib/api-client.ts:13` reads for every **Server Component** fetch, while `NEXT_PUBLIC_API_URL` is inlined into the browser bundle at build time. With no lane value the root `.env`'s `API_URL=http://localhost:4000` wins, so **every lane's server-side renders read another checkout's database**. Confirmed in lane 441: `.env.lane` carried no `API_URL`, and something *was* listening on 4000 and answering 200 — so nothing failed, nothing 500'd, and pages rendered. **The second half is `PORT`.** `lane:exec` exports the lane's `PORT` — the **API's** port — to *every* child, so `next start` serves the **web app on 4021**. `next dev` escapes only because Turborepo's dev task passes the port explicitly, which is an accident of one task definition rather than a property of the lane: *"use `next dev` and you are fine"* is the wrong lesson. Both directions are silent — the lane's web port refuses the connection and reads as a broken app, while the API port renders the app correctly. **Fix**: `renderLaneEnv` writes `API_URL`, and `lane:exec` stops exporting the API's `PORT` to non-API children. Setting `PORT` over the lane env is the workaround a lane can apply today; those two are the actual fix. **Add the preflight assertion #435 asks for** — *"the lane's web app resolves the lane's API"* — on **both** axes, because the build-time half is independent: a build not made through `lane:exec` bakes `localhost:4000` into the bundle and the CSP whatever the server env says, and #441 measured exactly that (`connect-src` naming 4000 while SSR correctly resolved 4021). The CSP half is one `curl -sI`. **A lane env written before this fix is stale** and needs `lane:down && lane:up`, which drops the lane database — re-seed after. |
 | **449** | **The screens document is content-box and every delta bundle is border-box, so the logo mark paints 19px where the frame draws 17** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's `diff-reviewer` pass, and it overturns a standing assumption rather than finding drift.** `design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing` hits are inline opt-ins — which is what #250 measured when it ruled `box-content` for the logo mark. **Every delta bundle opens with `* { box-sizing: border-box; }`**: `delta-band`, `delta-legal` and `contact-support` all do. So the closing-band frame draws the footer mark as two **equal footprints** — a 17px outline circle with its 1.3px stroke inside, beside a 17px disc — where `logo.tsx` paints a **19px** outline circle at x=7.64, 2px larger than the disc and 2px low. Measured in Chromium against the frame's own markup under its own reset. **#441 deliberately did not fix it**: `box-content` is #250's ruling, taken from the screens document and measured there, and overturning it moves the mark on the desktop header, the auth panel, the favicon and the app icon on one bundle's authority. That is a design adjudication. It is written up at the `box-content` comment in `logo.tsx`, and `logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at D=17 — a diameter taken from a border-box frame — so the two guards in that file read the same contract two incompatible ways until this is settled. **A `delta-band` parity read measuring 19-against-17 is looking at this ruling, not at drift.** |
+| **450** | **A closed account vanishes from the only screen it can be reached from** | P3 | M6 | **P1 High** | **Backlog** | — | **#438** — the closure it describes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 by lane #438's `diff-reviewer`**, which correctly declined to fix it in scope: the defect is in an **existing** surface's query. `/admin/customers` filters `deleted_at is null` (`admin.dao.ts:490`) and closure sets `deleted_at` — while `/admin/users/[userId]`, the data-rights page carrying the export, the retained counts and the legal acceptance record, is reachable **from that table and by direct URL and nowhere else**. So closing an account removes the page needed to audit the closure. **It is worst exactly when it matters**: a subject-access request, a regulator, or a dispute about whether closure did what was promised all arrive *after* the closure and none come with the uuid in hand. Fix with a deliberate way to ask for closed accounts — not by dropping the predicate, which correctly makes live accounts the default. |
+| **451** | **Closing an account leaves its Clerk identity live, and its email locked** | P3 | M6 | **P1 High** | **Backlog** | — | **#438** — the closure it describes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 by lane #438's `/code-review high`**, held out of scope correctly: closure soft-deleting is the ruled behaviour and revoking a Clerk session is a new integration call. Two defects from one omission. **The person stays signed in to an application that refuses them** — `clerk-auth.ts:164` 401s a request whose local row is retired, but the Clerk session is still valid, so the browser renders **signed-in header chrome over a signed-out application** indefinitely, with no sign-out prompt because nothing knows to show one. **And their email is locked under the retired row** — `users_email_key` does not care about `deleted_at`, so a re-registration with the same address collides on insert. That is the same state `CLAUDE.md` already warns about for the E2E seed; closure creates it deliberately. Decide *and state* whether the address is burned — the privacy policy says an account can be closed, not that the address is gone. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #441 landed: 18 rows — 15 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`) and #441 (`1b8435f3`) have all landed** — so **#431**, **#432**, **#435**, **#436**, **#437**, **#438**, **#442**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447**, **#448** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
@@ -2507,3 +2509,144 @@ the same contract two incompatible ways until this is settled.
 
 **A `delta-band` parity read measuring 19-against-17 is looking at this ruling,
 not at drift.**
+
+### #450: A closed account vanishes from the only screen it can be reached from
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** #438 — the closure it describes does not exist until that lands
+
+**Filed 2026-09-07 by lane #438's `diff-reviewer` pass**, which correctly declined
+to fix it in scope: the defect is in an **existing** surface's query, not in the
+closure #438 builds.
+
+#### The defect
+
+`/admin/customers` filters `deleted_at is null` (`admin.dao.ts:490`). Account
+closure (#438) sets `deleted_at`. And `/admin/users/[userId]` — the data-rights
+page carrying the export, the retained counts and the legal acceptance record —
+is reachable **from the customers table and by direct URL, and from nowhere
+else**.
+
+So the moment an operator closes an account, the page they would need to audit
+that closure stops being reachable by navigation. The record survives; the route
+to it does not. An operator who did not keep the URL has to reconstruct a uuid.
+
+**It is worst exactly when it matters.** The reasons to look at a closed
+account's data-rights page are a subject-access request, a regulator, or a
+dispute about whether closure did what was promised — all of which arrive
+*after* the closure, and none of which come with the uuid in hand.
+
+#### What to build
+
+**Let the operator see closed accounts, deliberately rather than by accident.**
+The straightforward shape is a filter on `/admin/customers` — a `Closed` or
+`Include closed` state alongside the existing search — with closed rows visibly
+marked rather than silently mixed in. `deriveVendorStatus` already has the
+precedent for a retired state on the vendor side (#433), and the customers table
+already has a `Flagged` pill for a banned account, so the vocabulary exists.
+
+**Do not simply drop the `deleted_at is null` predicate.** It is there so the
+default view is live accounts, which is right — the fix is a deliberate way to
+ask for the other set, not the removal of the distinction.
+
+**Check the neighbouring reads while you are there.** `admin.dao.ts` filters
+`deleted_at is null` in at least three places (the customer list, the ban lookup,
+the metrics count). Each is probably correct for its own purpose, but they were
+written when nothing set `deleted_at` except a Clerk webhook — say which of them
+should now surface closed accounts and which should not, rather than changing one
+and leaving the reader to guess about the rest.
+
+#### Acceptance
+
+1. An operator can reach a closed account's `/admin/users/[userId]` page by
+   navigation, without knowing the uuid.
+2. Closed accounts are visibly distinguished from live ones, using the existing
+   pill vocabulary rather than a new tone.
+3. The **default** `/admin/customers` view still shows live accounts only.
+4. Every other `deleted_at is null` read in `admin.dao.ts` is either changed with
+   a stated reason or documented as deliberately unchanged.
+5. Asserted end to end: close an account through #438's route, then reach its
+   data-rights page from the customers screen.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 5 driven through the real closure route, not a row hand-set
+      with `deleted_at`, so the fixture cannot drift from what closure produces.
+
+### #451: Closing an account leaves its Clerk identity live, and its email locked
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** #438 — the closure it describes does not exist until that lands
+
+**Filed 2026-09-07 by lane #438's `/code-review high`**, which correctly held it
+out of scope: closure soft-deleting is the **ruled** behaviour (D39 and the
+retire-never-remove rule), and revoking a Clerk session is a new integration
+call, not a fix to the ticket that surfaced it.
+
+#### Two defects from one omission
+
+Closure sets `users.deleted_at` and stops. Nothing tells Clerk.
+
+**1. The person stays signed in to an application that refuses them.**
+`clerk-auth.ts:164` 401s a request whose local row is retired — but the Clerk
+session itself is still valid, so the browser keeps rendering **signed-in header
+chrome over a signed-out application**, indefinitely, until that session ages
+out on its own. Every read fails; the shell says they are logged in. There is no
+sign-out prompt because nothing knows to show one.
+
+**2. Their email is locked under the retired row.** `users_email_key` is a unique
+index that does not care about `deleted_at`, so a closed account's address is
+held forever. A person who closes an account and later returns cannot
+re-register with the same email — the insert collides, and the failure surfaces
+wherever the sync path reports it rather than as anything a user could act on.
+
+This is the same class the E2E-seed note in `CLAUDE.md` already warns about:
+*"a `users` row carrying an E2E email under a made-up id makes that account's
+next sign-in collide on the email index and locks it out."* Closure creates that
+state deliberately.
+
+#### What to build
+
+**Revoke the Clerk identity as part of closure**, in the same operation that
+retires the row — Clerk's backend API can revoke sessions or delete the user.
+Decide and state which:
+
+- **Revoking sessions** ends the ghost-session half and leaves the identity, so
+  the email stays locked.
+- **Deleting the Clerk user** ends both halves, and fires `user.deleted` back at
+  our own webhook — so the handler must be idempotent against a retirement it
+  just performed, which #433's replay guard already provides.
+
+**Then decide what the email index should mean.** Options, and this is a product
+decision as much as a technical one:
+
+- keep the address held forever (current behaviour, no change, but say so
+  deliberately rather than by omission);
+- release it on closure, which means the unique index becomes partial
+  (`WHERE deleted_at IS NULL`) and two rows can share an address across time;
+- keep it held but give the operator a way to release it.
+
+**Do not pick silently.** The privacy policy says an account can be closed; it
+does not say the address is burned. If the answer is that it is, that belongs in
+the policy text, and #374's account-holder wording gate covers it.
+
+#### Acceptance
+
+1. Closure revokes the Clerk identity, and a browser holding that session lands
+   somewhere coherent rather than on signed-in chrome over a dead application.
+2. Whichever Clerk call is used, our own `user.deleted` handler is idempotent
+   against a retirement already performed.
+3. The email-index behaviour is **stated** — in the schema comment and in the
+   policy text if it burns the address.
+4. If the address is released, a re-registration with a closed account's email
+   succeeds and does not resurrect or collide with the retired row.
+5. Asserted end to end through #438's closure route.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 2 asserted by replaying the webhook after a closure — a double
+      retirement must not double-refund, which is #433's guard doing its job.
+- [ ] Acceptance 4, if taken, asserted against the real unique index rather than
+      a mocked insert.

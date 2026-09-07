@@ -540,6 +540,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   447: [], // border and surface tokens used as text on ink — a role law, not a fourth guard
   448: [], // lane env hands web children the wrong API origin, on both axes
   449: [], // screens doc is content-box, every delta bundle is border-box
+  450: ['auth'], // a closed account leaves the only screen that reaches it
+  451: ['auth'], // closure leaves the Clerk identity live and the email locked
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
