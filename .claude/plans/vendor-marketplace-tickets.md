@@ -249,11 +249,11 @@ storefront, each of which tells the reader something untrue. |
 | **423** | **Hold the money until the event has happened — separate charges and transfers, a dated release, and a dispute hold** | P1.5 | M4.5 | **P0 Critical** | **Backlog** | — | **None** | `core` `stripe` | **Filed 2026-09-06 on the account holder's ruling.** Today checkout is a **destination charge**: `transfer_data.destination` splits the money the instant the card succeeds, so a vendor booked for an event in March is paid in January and `createRecipientAccount` sets no payout schedule. **Replaces it with separate charges and transfers**, the Airbnb model adapted to single-day events: the customer pays into **Orla's** balance, and a scheduled job transfers the vendor's share **a fixed window after the event date** — not when anyone clicks a button. **The release is keyed to the date, never to a party's action:** the vendor is the one who benefits from marking a booking complete, so it proves nothing, and a vendor who forgets would strand the money forever. **A customer complaint pauses the release** — `disputed` already exists in `BOOKING_STATUSES` and is unused. **This also simplifies refunds:** before release nothing has been transferred, so a cancellation is a plain refund with no `reverse_transfer` and no way to push a vendor negative, which is the consequence D31 had to accept. **This is the money path — the bar is that every test drives the real state machine, not a mock that agrees with itself.** #416 shipped a refund that had never once worked, for months, because the double was more permissive than the gateway |
 | **424** | **Vendor dashboard: a pending payout with a real date, and an honest held state** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **#423** — it owns the release date, the held state and the API read this surface renders | `core` `stripe` | **Filed 2026-09-06 on the account holder's instruction**, split out of #423 so the money mechanics and the surface that reports them are separate reviewable units. The dashboard's payout line reads **`Paid out after each event`** — a dateless sentence chosen in #308 precisely because there was no payout schedule to read a date from. **#423 creates one.** This ticket replaces the sentence with a real amount and a real date, and says so when a dispute is holding it. **Every number here is read from the booking row at request time** — the amount is the stored `vendorPayoutCents`, never a recomputed fee, and the date is derived from the event date and `PAYOUT_RELEASE_HOURS`. **A payout figure that disagrees with what Stripe moves is worse than no figure at all**, which is why this carries the same testing bar as #423 rather than a lighter one |
 | **425** | **A customer has no way to report a problem with a booking** | P1.5 | M4.5 | **P1 High** | **Backlog** | — | **#423** (owns the `disputed` hold and the release window a report has to land inside) | `core` | **Filed 2026-09-06 on the account holder's instruction.** Measured first: **nothing in the web app lets a customer raise anything about a booking** — no dispute control, no `Report a problem`, no route — and **nothing anywhere writes `disputed`**, which appears only in read predicates in `customers.dao.ts` and `dashboard.dao.ts`. So the status #423 uses as its payout hold has no way to be reached by the person it exists for. Adds the entry point on the customer's booking, routed to **`/support` prefilled with that booking's context** — the pattern #421 already built for frame `16`, where an error's digest travels in `searchParams` and renders as attached, non-editable context. **The report is what places the hold**, so this is on the money path and carries the same testing bar: a report that silently fails to hold a payout is worse than no button |
-| **426** | **Put the caret back on the vendor-type picker — landing and search only** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-06 on the account holder's instruction**, verbatim: *"lets add a caret to the vendor type per the design - both to landing and browser - i removed it before but want it back"*. **This partially reverses D25**, which is the account holder's own override from 2026-08-31 removing `▾` from fourteen trigger sites — so it is a ruling changing, not a parity finding, and the reversal has to be recorded as deliberately as the original was. Frames `01 Landing` and `02 Search` both draw the caret, so this restores frame fidelity on those two. **Scope is the vendor-type picker on those two surfaces only** — the other twelve sites keep the override. **`dropdown-caret.test.ts` will go red and must be NARROWED, not deleted**: it is the assertion that stopped the caret returning after it came back twice as #228 and #338, and deleting it would let the glyph creep back to all fourteen. **Also decide the open-state signal**: D25 gave three triggers `font-semibold text-clay-600` on the value *because* they lost the caret as their only visible open signal — with the caret back, keeping both may be doubled signalling |
 | **427** | **Legal and money surfaces — the three static pages, the vendor agreement step, and the refund schedule at checkout** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#423** for the two claims that depend on it: `/terms` section 4 describes the hold-until-event mechanism, and the payout interval must read #423's constant rather than a second one | `core` `auth` `stripe` | **Filed 2026-09-06 with a full design.** The account holder supplied `design/delta-legal/` — `Orla-Legal-Surfaces.html` (frames **31, 32, 33**) and `LEGAL-SURFACES-PROMPT.md` — and asked for one ticket. **Frames 31-33 are NOT in `Orla - Screens.dc.html`**, which ends at 28, so the parity gate reads the delta bundle. Builds: a `LegalPage` reading layout that does not exist yet (the page scrolls, not a pane; 660px measure; 15px/1.85 prose), `/terms`, `/privacy` and `/cookies`, a sticky jump rail, a footer legal line, the **vendor agreement as step 3 of 5 in onboarding** with an immutable acceptance record, and the **refund schedule resolved into real dates and amounts above the pay control**. **THE SCHEDULE IN THE DESIGN CONTRADICTS THE CODE and must not ship as drawn** — see the detail section; the design says so itself |
+| **428** | **Landing: a vendor-only closing band for signed-out visitors, a signed-in customer landing, and the footer** | P1 | M3 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-06 with a design.** `design/LANDING-BAND-CHANGE-PROMPT.md` and `design/Orla-Screens-all.html` **section 30, `Landing — full page, scrolled out`**, which draws the signed-out and signed-in pages side by side. **Four changes, one scope: the landing closing band, the signed-in variant of `/`, and the footer.** Roles are exclusive and that decides routing — a signed-in **vendor** hitting `/` redirects to `/dashboard` and never sees the marketing page; a **customer** stays and gets the signed-in variant. **Confirmed already true for sign-in itself:** `POST_SIGN_IN_PATH_BY_ROLE` maps `customer: '/'` and `vendor: /vendor/dashboard`, so the new work is the `/` redirect and the header logo target, not the sign-in path. The closing band becomes **vendor-only and signed-out-only**, with **no pricing figures** — deliberately removed, see the detail. **`/for-vendors` is a new page this depends on**; if it is not built here, both controls fall back to `/sign-up?role=vendor` with a named TODO |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06 after #422 landed and its row was deleted: 8 rows — 6 Backlog and 2 `Deferred — needs a human`.** Startable now: **#423** and **#426**. #424, #425 and #427 all wait on #423 — it owns the release date, the `disputed` hold and the payout constant they read. #370 waits on #362; #362 and #374 need the account holder. **Do not hand-maintain this number, recount it.**
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-06 after #426 landed and #428 was filed: 8 rows — 6 Backlog and 2 `Deferred — needs a human`.** Startable now: **#428**. #423 is in flight, and #424, #425 and #427 all wait on it — it owns the release date, the `disputed` hold and the payout constant they read. #370 waits on #362; #362 and #374 need the account holder. Startable now: **#423**. #424, #425 and #427 all wait on #423 — it owns the release date, the `disputed` hold and the payout constant they read. #370 waits on #362; #362 and #374 need the account holder. **Do not hand-maintain this number, recount it.**
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
 carrying them — and the **`[PLATFORM]`** title prefix — changes how the application is
 built, deployed, backed up or paid for, and ships **no user-facing behaviour**. It is not
@@ -1349,81 +1349,6 @@ made.
 - [ ] A browser pass driving the entry point through to the placed hold, and a
       check that #423's release job then skips that booking.
 
-### #426: Put the caret back on the vendor-type picker — landing and search only
-
-**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
-**Blocked by:** None
-
-**Filed 2026-09-06 on the account holder's instruction:** *"lets add a caret to
-the vendor type per the design - both to landing and browser - i removed it
-before but want it back."*
-
-#### This reverses a standing ruling, and that is the point
-
-**D25 (2026-08-31) is the account holder's own override** removing `▾` from
-fourteen trigger sites, against frames that draw it and against
-`42-dropdowns.md` which specifies it in writing. So this is **a ruling changing,
-not a parity finding**, and it must be recorded as deliberately as the original
-was — otherwise the next reader cannot tell which way the decision currently
-points.
-
-Frames `01 Landing` and `02 Search` both draw the caret, so on these two
-surfaces the reversal **restores frame fidelity** rather than departing from it.
-
-#### Scope — two surfaces, one control
-
-The **vendor-type picker** on the landing hero and on `/search`. Both mount the
-same `search-bar.tsx`, so this is one change reaching two pages — verified by
-import during #417.
-
-**The other twelve sites keep D25's override.** Do not sweep the caret back
-across the app.
-
-#### The guard must be narrowed, not deleted
-
-`apps/web/src/app/dropdown-caret.test.ts` asserts the absence of the two unicode
-glyphs **anywhere in rendered source**, and it will go red. It exists because the
-caret came back twice on its own — as **#228** and again as **#338** — when a
-parity pass read the frame, saw a caret the app did not draw, and correctly filed
-it.
-
-**Deleting that test would let the glyph creep back to all fourteen sites.**
-Narrow it to exempt the vendor-type trigger and keep it enforcing everywhere
-else. `frame-13-parity.test.ts` inverts its own `toContain('▾')` for the same
-reason — check whether it is affected.
-
-#### Decide the open-state signal
-
-D25 recorded a consequence this reversal reopens: three triggers — the hero's
-vendor-type and city segments, and the compact bar's date — **drew their open
-state through the caret alone**, and with it gone they rendered byte-identically
-open and closed. The sweep gave them `font-semibold text-clay-600` on the value
-instead.
-
-With the caret back on vendor-type, **keeping both may be doubled signalling.**
-Rule it: caret alone, clay value alone, or both. Say which and why. Note the city
-segment is *not* in this ticket's scope, so whatever is decided must not leave the
-two segments inconsistent with each other without saying so.
-
-#### Acceptance
-
-1. The vendor-type picker draws the caret on the landing hero and on `/search`,
-   matching frames `01` and `02`.
-2. No other trigger gains one.
-3. `dropdown-caret.test.ts` still fails if a caret appears on any of the twelve
-   sites D25 cleared.
-4. The open-state signal is ruled, applied, and recorded.
-5. The caret is `aria-hidden` and never part of an accessible name — D25 found
-   two chips announcing *"black down-pointing small triangle"*.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] **D25 amended in `vendor-marketplace-decisions.md`, and the override list in
-      `.claude/rules/web-design-parity.md` updated.** That file currently tells
-      every parity pass the caret is deliberately absent and has been re-filed
-      four times. Leaving it stale would make the next pass remove this work.
-
 ### #427: Legal and money surfaces — three pages, the vendor agreement step, and the refund schedule at checkout
 
 **Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth` `stripe`
@@ -1632,3 +1557,138 @@ executed is worse than silence. Remove the sentence.
   two copies drift.
 - **The vendor agreement's four-terms panel** takes its commission and payout
   timing from the same constants, not from prose written beside them.
+
+### #428: Landing — a vendor-only closing band for signed-out visitors, a signed-in customer landing, and the footer
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-09-06 with a design.** `design/LANDING-BAND-CHANGE-PROMPT.md` is the
+spec; the frames are in **`design/Orla-Screens-all.html`, section 30 — `Landing —
+full page, scrolled out`**, which draws the signed-out and signed-in pages side by
+side with the band's notes.
+
+**Scope is the landing closing band, the signed-in variant of `/`, and the
+footer. Nothing else.** The prompt says so twice and means it: *"Every other
+screen, component and token is correct as built — do not touch, refactor,
+'improve', or reformat anything outside this scope."*
+
+#### Read this before opening the new design file
+
+**`Orla-Screens-all.html` is a bundled page, not plain HTML.** Its frames carry
+`data-screen-label` as before, but **escaped inside a JavaScript string**
+(`\"01 Landing\"`, `/` for `/`). So the grep every previous ticket used —
+`data-screen-label="01 Landing"` — **finds nothing**, and a lane concluding the
+frame is missing would be wrong. Open it in a browser, or unescape before
+searching.
+
+**The old file is still present and still referenced.** The prompt's own header
+points at `Orla - Screens.dc.html`, and **30 files reference it** — `CLAUDE.md`,
+eleven `design-plan/` specs, five agent memories, `playwright.config.ts` and the
+tracker. The account holder has said it may be removed. **Removing it is not part
+of this ticket**: it is a repo-wide rename touching every one of those
+references, and doing it inside a landing change would bury it. File it or do it
+separately, deliberately.
+
+#### Change 1 — Roles are exclusive, and that decides who sees `/`
+
+- A signed-in **vendor** at `/` is redirected to `/dashboard`; the marketing
+  landing never renders for them, and **the header logo points at `/dashboard`**
+  for a vendor.
+- A signed-in **customer** stays on `/` and gets the signed-in variant.
+- A signed-out visitor gets the page as built, with Change 2's band.
+
+**Already true, verified 2026-09-06 — do not rebuild it:**
+`POST_SIGN_IN_PATH_BY_ROLE` in `apps/web/src/lib/role-routes.ts` maps
+`customer: '/'` and `vendor: DASHBOARD_PATH_BY_ROLE.vendor`, and `postSignInPath`
+honours a safe `returnTo` over both. **The new work is the redirect for a vendor
+who reaches `/` some other way**, plus the logo target.
+
+**Do not add a role switcher** or any affordance implying one account holds both
+roles. A customer who wants to sell needs a separate account.
+
+#### Change 2 — The closing band is vendor-only, and signed-out only
+
+Replaces today's two-column customer/vendor fork with a **single vendor band**.
+The reasoning, recorded so it does not drift back: *the customer half was
+redundant — the hero is a live search bar, so a button whose only job is to
+scroll you back to it earns nothing.*
+
+Composition, copy and the three numbered mechanism steps are specified exactly in
+the prompt. Build from it.
+
+**No pricing figures in this band — deliberately removed, do not reintroduce.**
+Two structural reasons, both worth keeping: commission is a *conversion* number,
+not an acquisition one, and **customers read this same page** — *"Orla takes 12%"*
+invites a customer to conclude a vendor charges more here than direct, which is
+backwards and undercuts the *No service fee* trust item three sections above. The
+commission belongs on `/for-vendors` and in the vendor agreement (**#427**).
+
+**`/for-vendors` is a new page this change depends on.** Both band controls and
+the nav's *For vendors* link point there. Today they drop a vendor into a signup
+form, so a vendor first learns the commission at step 3 of onboarding — after
+creating an account. **If the page is not built in this pass, point both at
+`/sign-up?role=vendor` and leave a TODO naming `/for-vendors`. Do not invent a
+different destination.**
+
+#### Change 3 — The signed-in landing
+
+**The hero is unchanged.** Do not re-cut it.
+
+**Add** a 60px status strip between header and hero, derived from **real data**:
+sage dot for the next booking, gold dot for a request waiting. `40-states.md`
+colour law applies — sage is settled, gold is waiting on someone. **Render only
+the items that exist, and omit the strip entirely** when there are neither.
+
+**Remove for signed-in customers:** *How it works* (explains a process they have
+completed), *Featured vendors*, and the closing band.
+
+**Keep the trust band** — a deliberate reversal of an earlier note that cut it —
+with copy **resolved against the customer's actual booking**, falling back to the
+generic signed-out copy when there is none.
+
+**How the page ends matters:** with the closing band gone the trust band is the
+last block, and the ramp is hero gradient → `#F8F5EF` → `#F4F0E8` trust band →
+`#1C1916` footer. **Keep the trust band on `#F4F0E8`** so the footer arrives as
+the bottom of a ramp rather than a hard cut.
+
+#### Change 4 — Footer, every page, both auth states
+
+Ground drops `#23201C` → **`#1C1916`** so it recedes beneath the band rather than
+reading as one 400px dark mass. Micro-labels **`#8C8375`** — *"Do not use anything
+darker — `#7A7266` was tried and fails contrast at 10.5px."* Account column
+differs by auth state; **drop `Dashboard` when signed out** — a visitor has no
+dashboard.
+
+**The legal row is the same row #427 adds.** If #427 has landed first, leave it.
+Coordinate rather than building it twice, and **not a fifth column.**
+
+#### Acceptance
+
+1. A signed-in vendor reaching `/` lands on `/dashboard` and never renders the
+   marketing page; their header logo points at `/dashboard`.
+2. A signed-in customer gets the signed-in variant; a signed-out visitor gets the
+   band.
+3. The closing band renders for **signed-out visitors only**, is vendor-only, and
+   contains **no pricing figure** — asserted by searching the rendered output.
+4. Both band controls and the nav link share one destination, and it is
+   `/for-vendors` or the documented fallback — never two different targets.
+5. The status strip derives from real data, omits absent items, and disappears
+   entirely with no bookings and no open requests.
+6. *How it works*, *Featured vendors* and the closing band are absent for a
+   signed-in customer; the trust band is present and is the last content block.
+7. Trust-band copy resolves against the customer's booking and falls back
+   cleanly when there is none.
+8. Footer ground, label colour and account column match per auth state, and the
+   legal row exists exactly once.
+9. Section 30 matches on all six axes at 1440x900, both states.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, each watched failing first.
+- [ ] **Both auth states driven in a browser** — this ticket is defined by the
+      difference between them, so a signed-out-only pass proves half of it.
+- [ ] The no-pricing-figure assertion searches rendered output rather than
+      reading the source, because the figure could arrive through a constant.
+- [ ] Contrast asserted on the new footer values — the prompt names `#7A7266` as
+      already tried and failing at 10.5px.
