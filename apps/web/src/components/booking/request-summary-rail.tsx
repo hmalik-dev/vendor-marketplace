@@ -4,6 +4,11 @@ import { FieldMessage, errorProps } from '@/components/form-error-summary';
 import type { FieldIssue } from '@/lib/use-submit-validation';
 import { formatPrice } from '@vendor-marketplace/shared';
 import Link from 'next/link';
+import {
+  FALLBACK_TONES as AVATAR_FALLBACK_TONES,
+  avatarToneIndex,
+  initialsFor,
+} from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { FallbackImage } from '@/components/ui/fallback-image';
 import { Label } from '@/components/ui/label';
@@ -81,10 +86,26 @@ export function RequestSummaryRail({
       <div className="flex items-center gap-3 border-b border-stone-200 px-4.5 py-4">
         {/*
           The remote CDN host is not in the image config yet (#47), so this
-          stays a plain image. Its absent state is the rail's own `stone-150`
-          swatch rather than the D17 ground, and a *failed* load now lands on
-          that same swatch (#422) instead of a broken glyph beside the price
-          the customer is about to commit to.
+          stays a plain image.
+
+          **The fallback is the vendor's monogram, not a blank swatch** (#422).
+          This slot held a featureless `stone-150` square, so the same vendor
+          read as `KC` on a clay circle in `/search`, `/bookings` and
+          `/messages` and as a grey box on the one page where the customer
+          commits to a price. Frame `04` draws `.ph` here — the build-time
+          hatch, standing in for a photograph the frame does not have — which
+          is a placeholder rather than a ruling, and the hatch is forbidden on
+          a live surface. D24 is the ruling that applies: an avatar falls back
+          to a monogram.
+
+          Not `Avatar` itself: the frame draws a 58px square at a 12px radius
+          and `Avatar` is `rounded-full` or `rounded-panel`. The initials and
+          the tone come from `Avatar`'s own helpers, so one vendor keeps one
+          colour everywhere — the same shape `bookings-hub.tsx` takes for its
+          9px squircle.
+
+          A failed load lands here too, which is the whole ticket: an absent
+          photograph and a 404'd one are the same thing to the reader.
         */}
         <FallbackImage
           src={vendor.avatarUrl}
@@ -92,7 +113,15 @@ export function RequestSummaryRail({
           className="size-14.5 shrink-0 rounded-xl"
           imageClassName="object-cover"
           fallback={
-            <span aria-hidden="true" className="size-14.5 shrink-0 rounded-xl bg-stone-150" />
+            <span
+              aria-hidden="true"
+              className={cn(
+                'flex size-14.5 shrink-0 items-center justify-center rounded-xl text-[19px] font-semibold',
+                AVATAR_FALLBACK_TONES[avatarToneIndex(vendor.businessName)],
+              )}
+            >
+              {initialsFor(vendor.businessName)}
+            </span>
           }
         />
         <div className="min-w-0">

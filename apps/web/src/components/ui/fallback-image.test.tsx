@@ -19,6 +19,29 @@ function block(): HTMLElement | null {
   return document.querySelector('[data-slot="image-fallback"]');
 }
 
+/**
+ * Replace jsdom's own `HTMLImageElement` accessors for one test, and hand back
+ * the restore. jsdom decodes nothing, so `complete` and `naturalWidth` are the
+ * only way to model an image the browser has already finished with.
+ */
+function stub(getters: Record<string, () => unknown>): () => void {
+  const originals = Object.entries(getters).map(([name, get]) => {
+    const previous = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, name);
+    Object.defineProperty(HTMLImageElement.prototype, name, { configurable: true, get });
+    return [name, previous] as const;
+  });
+
+  return () => {
+    for (const [name, previous] of originals) {
+      if (previous) {
+        Object.defineProperty(HTMLImageElement.prototype, name, previous);
+      } else {
+        Reflect.deleteProperty(HTMLImageElement.prototype, name);
+      }
+    }
+  };
+}
+
 describe('ImageFallback', () => {
   it('is the ruled tone block and nothing else — no hatch, no label, no icon', () => {
     render(<ImageFallback className="aspect-[3/2] w-full" />);
@@ -150,14 +173,15 @@ describe('FallbackImage', () => {
    * evidence left, and the `ref` reads it on mount.
    */
   it('catches a failure that landed before hydration attached the handler', () => {
-    Object.defineProperty(HTMLImageElement.prototype, 'complete', {
-      configurable: true,
-      get: () => true,
-    });
-    Object.defineProperty(HTMLImageElement.prototype, 'naturalWidth', {
-      configurable: true,
-      get: () => 0,
-    });
+    /*
+     * jsdom's own accessors are captured and **restored**, not deleted.
+     * Deleting them leaves `img.complete` as `undefined` for every test
+     * appended after this one — falsy, so the ref check can never fire and a
+     * later test would silently assert against a component stuck in the wrong
+     * branch. Caught by `diff-reviewer`; it passed only because this happened
+     * to be the last case in the file.
+     */
+    const restore = stub({ complete: () => true, naturalWidth: () => 0 });
 
     try {
       render(<FallbackImage src="/gone.jpg" alt="" className="size-full" />);
@@ -165,8 +189,25 @@ describe('FallbackImage', () => {
       expect(document.querySelector('img')).toBeNull();
       expect(block()).not.toBeNull();
     } finally {
-      Reflect.deleteProperty(HTMLImageElement.prototype, 'complete');
-      Reflect.deleteProperty(HTMLImageElement.prototype, 'naturalWidth');
+      restore();
+    }
+  });
+
+  it('leaves the image alone when a completed load really did decode', () => {
+    /*
+     * The other half of the same read, and what makes the one above a check:
+     * `complete` is true for a *successful* load too, so only the zero
+     * `naturalWidth` may stand in for failure.
+     */
+    const restore = stub({ complete: () => true, naturalWidth: () => 800 });
+
+    try {
+      render(<FallbackImage src="/present.jpg" alt="" className="size-full" />);
+
+      expect(document.querySelector('img')).not.toBeNull();
+      expect(block()).toBeNull();
+    } finally {
+      restore();
     }
   });
 });

@@ -68,3 +68,44 @@ describe('StockPhoto', () => {
     );
   });
 });
+
+/*
+ * The pre-hydration failure, on the adapter it matters most for.
+ *
+ * The landing page's category art is server-rendered and eager, so the browser
+ * starts the fetch from the streamed HTML and a 404 can land before React
+ * attaches `onError` — an event that is never replayed. `useImageFailure`'s
+ * ref reads the only evidence left: an image the browser has finished with and
+ * could not decode.
+ *
+ * Kept as its own case because it is what a Next upgrade would break silently.
+ * `next/image` forwards `ref` to the underlying element today; if it stopped,
+ * the front door would be where that was discovered.
+ */
+describe('StockPhoto, when the photograph failed before hydration', () => {
+  it('reads a completed, undecodable image as a failure', () => {
+    const complete = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'complete');
+    const width = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'naturalWidth');
+
+    Object.defineProperty(HTMLImageElement.prototype, 'complete', {
+      configurable: true,
+      get: () => true,
+    });
+    Object.defineProperty(HTMLImageElement.prototype, 'naturalWidth', {
+      configurable: true,
+      get: () => 0,
+    });
+
+    try {
+      const { container } = renderPhoto('h-[94px] w-full');
+
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.querySelector('[data-slot="image-fallback"]')?.className).toContain(
+        'bg-stone-250',
+      );
+    } finally {
+      if (complete) Object.defineProperty(HTMLImageElement.prototype, 'complete', complete);
+      if (width) Object.defineProperty(HTMLImageElement.prototype, 'naturalWidth', width);
+    }
+  });
+});

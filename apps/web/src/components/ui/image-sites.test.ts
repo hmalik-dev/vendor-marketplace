@@ -1,6 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { sourceFiles, TS_AND_TSX, withoutComments } from '@/testing/source-scan';
 
 /*
  * Acceptance 5 of #422: **one shared mechanism, and a new image site inherits
@@ -15,74 +14,60 @@ import { describe, expect, it } from 'vitest';
  * mechanism (`useImageFailure` + `ImageFallback`), because `next/image` and a
  * plain `<img>` genuinely differ — bucket content skips `next/image` since the
  * host changes between environments.
+ *
+ * **The scan comes from `@/testing/source-scan`, not from a copy.** The first
+ * version of this file grew its own tree walk and its own comment stripper, and
+ * that stripper reopened the exact hole the helper's docblock records from
+ * #395: a naive block-comment rule reads the slash-star inside
+ * `'https://*.clerk.accounts.dev'` as a comment opener and deletes everything
+ * down to the next closing pair. On `security-headers.ts` that was 138 of 250
+ * lines — so an image site written under a wildcard URL would have passed this
+ * guard silently. Caught in review, before it shipped.
  */
 const SANCTIONED = [
-  /* The plain-`<img>` adapter: `FallbackImage`, and the tone block itself. */
-  'src/components/ui/fallback-image.tsx',
+  /* The plain-image adapter: `FallbackImage`, and the tone block itself. */
+  'components/ui/fallback-image.tsx',
   /* The `next/image` adapter: local stock and category art. */
-  'src/components/ui/stock-photo.tsx',
+  'components/ui/stock-photo.tsx',
   /*
-   * The upload zone is the one deliberate exception, and it is not an
-   * omission. Its `<img>` is the *evidence the vendor's own upload arrived* —
-   * `onLoad` is what commits the form and the toast, and its `onError` already
-   * reports the upload as failed and keeps the previous photo. Replacing that
-   * with a silent tone block would tell a vendor their upload worked. This is
-   * an editor surface, not a page a customer reads.
+   * The upload zone is the one deliberate exception, and it is narrow.
+   *
+   * Its image is the *evidence the vendor's own upload arrived* — `onLoad` is
+   * what commits the form and the toast — so a silent tone block there would
+   * tell a vendor an upload worked. It still has to answer a failed load of an
+   * *already saved* photograph, which is not an upload at all; it does, with
+   * the drop zone's own empty state, and `image-upload.test.tsx` holds it to
+   * that.
    */
-  'src/components/image-upload.tsx',
+  'components/image-upload.tsx',
 ];
 
-const WEB_SRC = join(process.cwd(), 'src');
+/** A real element, not the word in prose — comments are already blanked. */
+const RAW_IMG = /<img[\s/>]/;
+const NEXT_IMAGE = /from ['"]next\/image['"]/;
 
-/**
- * Comments are stripped before scanning, because several of these files
- * *describe* the `<img>` they render ("A plain <img>: user uploads on an origin
- * that changes...") and a guard that matches its own prose can never fail —
- * the failure mode `web-design-parity.md` records as a check that is not one.
- */
-function withoutComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .filter((line) => !line.trimStart().startsWith('//'))
-    .join('\n');
-}
-
-function sourceFiles(directory = WEB_SRC, prefix = ''): string[] {
-  const found: string[] = [];
-
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
-
-    if (entry.isDirectory()) {
-      found.push(...sourceFiles(join(directory, entry.name), relativePath));
-    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
-      found.push(relativePath);
-    }
-  }
-
-  return found.sort();
+/** `source-scan` names files with the platform separator; the list uses `/`. */
+function slashed(name: string): string {
+  return name.split('\\').join('/');
 }
 
 describe('image render sites', () => {
-  it('renders every image through the shared fallback mechanism', () => {
+  it('renders every image through the shared fallback mechanism', async () => {
     const offenders: string[] = [];
 
-    for (const file of sourceFiles()) {
-      const path = `src/${file}`;
+    for (const file of await sourceFiles(undefined, TS_AND_TSX)) {
+      const name = slashed(file.name);
 
-      if (SANCTIONED.includes(path)) {
+      if (SANCTIONED.includes(name)) {
         continue;
       }
 
-      const source = withoutComments(readFileSync(join(WEB_SRC, file), 'utf8'));
-
-      if (/<img[\s/>]/.test(source)) {
-        offenders.push(`${path} — raw <img>`);
+      if (RAW_IMG.test(file.code)) {
+        offenders.push(`${name} — raw image element`);
       }
 
-      if (/from ['"]next\/image['"]/.test(source)) {
-        offenders.push(`${path} — next/image`);
+      if (NEXT_IMAGE.test(file.code)) {
+        offenders.push(`${name} — next/image`);
       }
     }
 
@@ -92,37 +77,40 @@ describe('image render sites', () => {
     ).toEqual([]);
   });
 
-  it('scans the tree it claims to scan', () => {
+  it('scans the tree it claims to scan', async () => {
     /*
-     * The guard above passes trivially if the glob returns nothing, and a
-     * silently empty scan is exactly how a guard comes to defend nothing. Both
-     * halves are asserted: that real files were read, and that the sanctioned
-     * list still names files that exist.
+     * The guard above passes trivially if the walk returns nothing, and a
+     * silently empty scan is how a guard comes to defend nothing. Both halves
+     * are asserted: that real files were read, and that the sanctioned list
+     * still names files that exist.
      */
-    const files = sourceFiles();
+    const names = (await sourceFiles(undefined, TS_AND_TSX)).map((file) => slashed(file.name));
 
-    expect(files.length).toBeGreaterThan(100);
+    expect(names.length).toBeGreaterThan(100);
 
     for (const path of SANCTIONED) {
-      expect(files, `${path} is sanctioned but no longer exists`).toContain(
-        path.replace(/^src\//, ''),
-      );
+      expect(names, `${path} is sanctioned but no longer exists`).toContain(path);
     }
   });
 
-  it('would fail on a raw <img>, comment or not', () => {
+  it('would fail on a real element, and not on a sentence about one', () => {
     /*
      * The check on the check. A needle taken from the code is usually also in
-     * the prose beside it, so this states both directions explicitly: real
-     * markup is caught, and a sentence describing it is not.
+     * the prose beside it, so both directions are stated — and the third case
+     * is the one review caught: a wildcard URL must not swallow the markup
+     * under it.
      */
-    expect(/<img[\s/>]/.test(withoutComments('<img src="/a.jpg" />'))).toBe(true);
-    expect(/<img[\s/>]/.test(withoutComments('/* A plain <img> on a bucket host. */'))).toBe(false);
-    expect(/<img[\s/>]/.test(withoutComments('// eslint-disable @next/next/no-img-element'))).toBe(
+    expect(RAW_IMG.test(withoutComments('<img src="/a.jpg" />'))).toBe(true);
+    expect(RAW_IMG.test(withoutComments('/* A plain <img> on a bucket host. */'))).toBe(false);
+    expect(RAW_IMG.test(withoutComments('// eslint-disable @next/next/no-img-element'))).toBe(
       false,
     );
+    expect(NEXT_IMAGE.test(withoutComments("import Image from 'next/image';"))).toBe(true);
     expect(
-      /from ['"]next\/image['"]/.test(withoutComments("import Image from 'next/image';")),
+      RAW_IMG.test(
+        withoutComments("const csp = 'https://*.clerk.accounts.dev';\n<img src='/leaked.jpg' />"),
+      ),
+      'a wildcard URL swallowed the markup below it — the #395 hole',
     ).toBe(true);
   });
 });

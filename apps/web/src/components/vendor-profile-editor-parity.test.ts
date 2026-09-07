@@ -265,7 +265,12 @@ describe('the profile photo drop zone matches the frame (#143)', () => {
     // gradient, so the two cannot drift. The condition is the resolved preview
     // `src`, not the form's `value`: since #171 the form holds the object key,
     // which is never what gets rendered.
-    expect(uploadSource).toContain("src ? 'bg-stone-50' : 'placeholder-hatch'");
+    //
+    // `hasPreview` rather than `src` since #422: a *stored* photograph whose
+    // object has gone used to leave the browser's broken-image glyph in a zone
+    // still styled as filled. A saved image that will not render is an empty
+    // zone, and the zone the vendor can replace it from is a hatched one.
+    expect(uploadSource).toContain("hasPreview ? 'bg-stone-50' : 'placeholder-hatch'");
   });
 
   it('sizes the circle 128px from `sm`, not 160px', () => {

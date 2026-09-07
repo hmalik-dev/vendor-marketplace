@@ -9,6 +9,7 @@ import { ImagePlus } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiClientError } from '@/lib/api-client';
+import { useImageFailure } from '@/components/ui/fallback-image';
 import { useImageUpload, UploadTransportError } from '@/lib/use-api';
 import { toImageSrc } from '@/lib/wire-schemas';
 import {
@@ -110,6 +111,23 @@ export function ImageUpload({
    * key — through the one place this app resolves stored images.
    */
   const src = uploaded !== null ? uploaded.imageUrl : toImageSrc(value);
+  /*
+   * A *saved* photograph that will not render (#422).
+   *
+   * `src` is the vendor's stored cover or avatar on first render, long before
+   * any upload — so `onError` here is not always about an upload at all. It
+   * used to return early in that case and swallow the event, which left this
+   * one zone drawing the browser's broken-image glyph while the same vendor's
+   * card on `/search` drew the ruled tone block. Found by `diff-reviewer`.
+   *
+   * The answer is not the tone block: this is the surface where the photograph
+   * can actually be fixed, so a stored image that has gone falls back to the
+   * zone's own empty state, which invites a replacement. The shared hook is
+   * what tracks it, so the failure is keyed to the `src` that failed and a new
+   * upload is not hidden behind an old one's failure.
+   */
+  const savedFailure = useImageFailure(src);
+  const hasPreview = src !== null && src !== '' && !savedFailure.failed;
 
   const handleFile = async (file: File | undefined): Promise<void> => {
     if (!file) {
@@ -196,6 +214,8 @@ export function ImageUpload({
    */
   const handlePreviewFailed = (): void => {
     if (!isAwaitingPreview) {
+      // Not an upload — a stored photograph that has gone. See `savedFailure`.
+      savedFailure.onError();
       return;
     }
     setIsAwaitingPreview(false);
@@ -258,20 +278,21 @@ export function ImageUpload({
             zone) does not clip it.
           */
           'has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-clay-400/40 has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-stone-50',
-          src ? 'bg-stone-50' : 'placeholder-hatch',
+          hasPreview ? 'bg-stone-50' : 'placeholder-hatch',
           // 128px circle from `sm`, the size frame 09 draws the profile photo.
           rounded ? 'size-24 rounded-full sm:size-32' : cn(aspectClassName, 'rounded-lg'),
           isDragging && 'border-clay-400 bg-clay-100',
           isBusy && 'opacity-70',
         )}
       >
-        {src ? (
+        {hasPreview ? (
           // A plain <img>: these are user uploads on an origin that changes
           // between environments, so next/image's loader would need per-env
           // remote patterns for no benefit at this size.
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              ref={savedFailure.ref}
               src={src}
               alt=""
               className="size-full object-cover"

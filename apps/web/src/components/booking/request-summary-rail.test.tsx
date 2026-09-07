@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { FALLBACK_TONES } from '@/components/ui/avatar';
 import { RequestSummaryRail } from './request-summary-rail';
 
 /*
@@ -49,20 +50,37 @@ function renderRail(avatarUrl: string | null) {
 }
 
 describe('RequestSummaryRail vendor avatar', () => {
-  it('falls back to the rail swatch when the avatar fails to load', () => {
+  it('falls back to the vendor monogram when the avatar fails to load', () => {
     const { container } = renderRail('https://example.test/gone.jpg');
 
     fireEvent.error(container.querySelector('img[src*="gone.jpg"]')!);
 
-    const swatch = container.querySelector('span[aria-hidden="true"].size-14\\.5');
+    const monogram = screen.getByText('KC');
 
     expect(container.querySelector('img[src*="gone.jpg"]')).toBeNull();
-    expect(swatch).not.toBeNull();
-    expect(swatch?.className).toContain('bg-stone-150');
-    /* The 58px box and its radius are held, so the identity row does not jump. */
-    expect(swatch?.className).toContain('rounded-xl');
-    /* Not the cover tone block: this slot is an avatar, ruled separately. */
+    /* The 58px box and its 12px radius are held, so the row does not jump. */
+    expect(monogram.className).toContain('size-14.5');
+    expect(monogram.className).toContain('rounded-xl');
+    /* Not the cover tone block: an avatar is ruled separately (D24). */
     expect(container.querySelector('[data-slot="image-fallback"]')).toBeNull();
+  });
+
+  /*
+   * The grey box this replaced. A featureless swatch said nothing about who
+   * was being asked, on the one page where the customer commits to a price —
+   * and the same vendor already read as initials everywhere else.
+   */
+  it('never draws a blank swatch in place of the vendor', () => {
+    const { container } = renderRail(null);
+
+    const monogram = screen.getByText('KC');
+
+    expect(monogram.className).not.toContain('bg-stone-150');
+    expect(
+      FALLBACK_TONES.some((tone) => monogram.className.includes(tone.split(' ')[0])),
+      'the monogram must carry one of the two ruled avatar tones',
+    ).toBe(true);
+    expect(container.querySelector('.bg-stone-150')).toBeNull();
   });
 
   it('renders a failed avatar exactly as it renders an absent one', () => {
