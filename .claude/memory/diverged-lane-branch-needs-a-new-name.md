@@ -49,3 +49,43 @@ abandoned even when `prUrl` is right.
 Related: [[lane-manifest-branch-drifts]],
 [[main-pushes-dequeue-parallel-lane-prs]],
 [[ticket-worktree-merge-immediately]].
+
+## Better: do not rewrite at all — merge `origin/main` instead — 2026-09-07
+
+Lane 439 rebased its pushed branch onto `origin/main`, which rewrote history and
+left the branch **unpushable**: `git push --force-with-lease` is blocked by the
+hook, so there is no way to land a rewritten lane branch. Renaming the branch
+would have meant abandoning the open PR **and its queue position**, and drifting
+the lane manifest — see [[lane-manifest-branch-drifts]].
+
+**What it did instead, and this is the recipe:**
+
+1. `git reset` back onto the **pushed tip** (undoing the rebase locally).
+2. Redo the update as a real **merge** of `origin/main` — which is a
+   fast-forward-able push, so the branch and its PR survive.
+3. **Verify the merge result is byte-identical to the rebased tree** it had
+   already run the gate on: `git diff <rebased-sha> HEAD` empty.
+4. Confirm the diff against main touches only that ticket's paths.
+
+Step 3 is what makes it safe rather than hopeful — it proves the cheaper history
+produced the same tree the expensive one did, so the gate run already performed
+still applies.
+
+**The rule: once a lane branch is pushed, update it by merging, never by
+rebasing.** `gh pr update-branch <n>` does exactly this from the remote side and
+is the one-command version. Rebase is only for a branch that has never been
+pushed.
+
+**`DIRTY` and `BEHIND` need different tools, and they arrive in that order.**
+Lane 431 added this and it is the part that is easy to get wrong:
+`gh pr update-branch` **only fast-forwards** — it cannot resolve a content
+conflict. So a `DIRTY` PR needs a **local merge** of `origin/main` with the
+conflict resolved by hand; only once it is `BEHIND` is `update-branch` the right
+tool. Reaching for `update-branch` on a `DIRTY` PR does nothing and looks like
+the command failing.
+
+**And the free-rebase exception:** a lane whose branch has **never been pushed**
+(`git ls-remote origin refs/heads/<branch>` empty) can rebase safely, because
+there is no remote history to rewrite. That is worth spending deliberately —
+rebase once, immediately before the first push, onto the final state rather than
+twice. After the first push, the merge-only rule applies for good.

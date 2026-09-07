@@ -53,3 +53,22 @@ serially minutes earlier.
 **How to apply:** never batch `typecheck` and `build` into one `turbo` call. A
 `TS6053` naming a file under `.next/types` is this, not your diff — re-run the
 two serially before believing it.
+
+## The tell: a lane that 500s on `/terms` has a poisoned `.next` — 2026-09-07
+
+Lane 441 lost most of an hour to this. With its lane wiring **already
+corrected**, `next dev` served **500 on every route** — including `/terms`,
+which has no data dependencies at all. The API was fine: `/categories` and
+`/vendors` both answered 200 from the lane's own database.
+
+The cause was `.next` left in a **production** state by an earlier `pnpm build`
+— this file's contention in its least obvious form. Not a killed dev server, but
+a dev server refusing to serve a directory another command rebuilt underneath
+it.
+
+**The diagnostic, because it separates the two causes in one request:** `/terms`
+renders from nothing. If it 500s, the app is not broken and the API is not the
+problem — `.next` is poisoned. Rebuild, or serve the production build. Do not
+debug the page and do not go looking at data.
+
+A passing production build served 200 immediately.

@@ -56,3 +56,4 @@
 - [A z.date() needs a wire coercion](zdate-needs-a-wire-coercion.md) — else that screen 500s, conditionally, with the whole local gate green
 - [A clean rebase is not a compiling rebase](rebase-auto-merges-are-not-compile-checked.md) — git merges text, not signatures; re-run typecheck and the suites after every rebase
 - [A stale whole-file copy silently reverts](stale-whole-file-copy-silently-reverts.md) — a code PR carrying an old tracker/registry copy erases other lanes' filings; no conflict, and the contiguity guard passes the damage
+- [The payout sweep ticks under your test](the-payout-sweep-ticks-under-your-test.md) — it runs every 15 min on real rows; assert the count increased, never that it equals 9
