@@ -1408,12 +1408,32 @@ works. Say that in the confirmation dialog, in the same register as the
 suspension copy, because an operator who confuses the two destroys a business by
 mistake.
 
+**This route shares its column with the vendor and therefore does not hold —
+see acceptance 1.** Writing `is_published` was the whole instruction here, and
+it is the right first step, but it was written without noticing that the
+moderated party writes the same column. Do not add the hold in this ticket; it
+needs a migration and vendor-facing refusal copy nobody has approved.
+
 **2. Hide and unhide a review.** `PUT /admin/reviews/:reviewId/visibility`,
 writing `is_public`. Hidden reviews leave the public profile and **are excluded
 from the rating**, which means the same recomputation `deleteReviewAndRecalculate`
 already performs — reach it, do not reimplement it, for the reason that file
 already gives. Unhiding restores both. Deletion stays, for content that must not
 persist at all; hiding becomes the default action and deletion the escalation.
+
+**Scoped to `customer_to_vendor` rows only — corrected 2026-09-07 by the
+adversarial review on the implementing lane.** This item was written as though
+`is_public` had one meaning, and it has two: on a review *of a vendor* it is
+this ticket's hide flag, and on a vendor's note *about a customer* it is the
+**author's** choice about whether other vendors may read it
+(`customers.dao.ts`). The first implementation offered one lever over both, so
+the console stamped every private note "Hidden" and offered "Unhide review" —
+which would have published it to every other vendor. `seed-demo` writes every
+one of those notes private, so it was a single click away on any demo database.
+The route now refuses a `vendor_to_customer` row outright and the console offers
+only deletion on one. **Do not widen this later without a way to tell a
+moderator-hidden row from an author-private one** — #434's action log is what
+would make that distinguishable.
 
 **3. `is_public` becomes real on the read side.** It is currently honoured in
 exactly one place (`customers.dao.ts:119`). Every public review read — the vendor
@@ -1434,6 +1454,22 @@ reversible in practice.
 
 1. Unpublishing a storefront takes it off search and 404s its slug, and cancels
    nothing, declines nothing and refunds nothing.
+
+   **Read this as advisory, not as enforcement — corrected 2026-09-07 by the
+   security audit on the implementing lane.** `is_published` is the *vendor's
+   own* column: `PUT /vendor/profile` accepts `isPublished: true` and checks
+   only `publishBlockers`, and there is no moderation hold anywhere on
+   `vendor_profiles`. So an operator unpublishes a storefront and the vendor
+   toggles it back on from their own dashboard seconds later, with no block and
+   no notification — the same for a deactivated package via
+   `PUT /vendor/packages/:id`. A follow-up ticket adds the `moderation_hold`
+   that makes this hold; until it lands, ban remains the only enforcing lever
+   against an uncooperative vendor, and this criterion means only that the
+   storefront leaves the marketplace *until its owner puts it back*.
+
+   Review hiding and portfolio removal are **not** affected and do hold:
+   nothing outside the admin plugin writes `reviews.is_public`, and a removed
+   photo's object is gone.
 2. Republishing restores it.
 3. The unpublish dialog cannot be confused with the suspend dialog — asserted on
    the copy, because that is the whole risk.

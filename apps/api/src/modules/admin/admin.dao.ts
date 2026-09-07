@@ -6,7 +6,9 @@ import {
   bookingRequests,
   bookings,
   categories,
+  portfolioItems,
   reviews,
+  servicePackages,
   tagSuggestions,
   tags,
   users,
@@ -543,6 +545,94 @@ export async function setBanned(
   });
 }
 
+// --- Graduated moderation (#435) -------------------------------------------
+
+/**
+ * Takes the vendor row's lock for the rest of the transaction.
+ *
+ * The two moderation writers that can contend — publishing a storefront and
+ * deactivating a package — both decide from a count of the vendor's active
+ * packages and then write, so they have to serialise on a row they share, and
+ * the vendor is the only one. `for no key update` rather than `for update`: it
+ * blocks the other writer without blocking rows that merely reference this one
+ * by foreign key, which is the same trade `lockForRecompute` makes in
+ * `reviews.dao.ts`.
+ *
+ * Returns nothing. The caller re-reads what it needs **after** this, because a
+ * row read before the lock is a snapshot of whatever was true beforehand.
+ */
+export async function lockVendorProfile(db: AppDatabase, vendorId: string): Promise<void> {
+  if (!vendorId) {
+    return;
+  }
+
+  await db
+    .select({ id: vendorProfiles.id })
+    .from(vendorProfiles)
+    .where(eq(vendorProfiles.id, vendorId))
+    .for('no key update')
+    .limit(1);
+}
+
+/**
+ * A service package, seen from "may an operator switch this off?".
+ *
+ * Read here rather than through `findPackageById`, which is keyed by the
+ * **vendor** as well as the package because every other caller is the vendor
+ * who owns it. An operator reaches a package by its id alone and has to be told
+ * who it belongs to, not asked.
+ */
+export async function findServicePackageForModeration(
+  db: AppDatabase,
+  packageId: string,
+): Promise<{ id: string; vendorId: string; isActive: boolean } | null> {
+  if (!packageId) {
+    return null;
+  }
+
+  const rows = await db
+    .select({
+      id: servicePackages.id,
+      vendorId: servicePackages.vendorId,
+      isActive: servicePackages.isActive,
+    })
+    .from(servicePackages)
+    .where(eq(servicePackages.id, packageId))
+    .limit(1);
+
+  return rows?.[0] ?? null;
+}
+
+/**
+ * A portfolio item and the account that owns the objects behind it.
+ *
+ * `reapObjects` checks the owner segment of the storage key against a user id
+ * before it removes anything, so an admin delete has to carry the **vendor's**
+ * user id — passing the operator's would fail that check silently and leave
+ * every removed photo in the bucket.
+ */
+export async function findPortfolioItemForModeration(
+  db: AppDatabase,
+  itemId: string,
+): Promise<{ id: string; vendorId: string; vendorUserId: string } | null> {
+  if (!itemId) {
+    return null;
+  }
+
+  const rows = await db
+    .select({
+      id: portfolioItems.id,
+      vendorId: portfolioItems.vendorId,
+      vendorUserId: vendorProfiles.userId,
+    })
+    .from(portfolioItems)
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, portfolioItems.vendorId))
+    .where(eq(portfolioItems.id, itemId))
+    .limit(1);
+
+  return rows?.[0] ?? null;
+}
+
 // --- Customers -------------------------------------------------------------
 
 export interface AdminCustomerProjection {
@@ -860,6 +950,8 @@ export interface AdminReviewProjection {
   authorLastName: string;
   vendorName: string;
   vendorSlug: string;
+  /** The console is the only reader that sees hidden reviews (#435). */
+  isPublic: boolean;
   createdAt: Date;
 }
 
@@ -880,6 +972,7 @@ export async function findAdminReviews(
       authorLastName: users.lastName,
       vendorName: vendorProfiles.businessName,
       vendorSlug: vendorProfiles.slug,
+      isPublic: reviews.isPublic,
       createdAt: reviews.createdAt,
     })
     .from(reviews)

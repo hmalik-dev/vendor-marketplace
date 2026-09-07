@@ -71,3 +71,4 @@
 - [`support_cases` is the first durable copy of a complaint](support-cases-is-the-first-durable-copy-of-a-complaint.md) — the admin routes are gated and the chargeback actor is sound; audit the public writer's failure branch
 - [`freeText()` lets NUL through](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — Postgres raises 22021, so a caller picks when a user-text insert fails and which branch runs
 - [A browser parse failure is reader-visible copy](client-parse-failures-are-shown-verbatim.md) — `ApiClientError` carries the 200, so `userFacingError`'s 5xx filter never fires and a landed transfer reports as failed
+- [Moderation levers are undoable by their subject](moderation-levers-are-undoable-by-their-subject.md) — #435’s unpublish and deactivate write the vendor’s own columns; only ban and review-hide stick

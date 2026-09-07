@@ -220,8 +220,12 @@ describe('free text on a request body', () => {
     // the customer's free text now reaches `dispute_reason` through
     // `supportMessageSchema.message`, which is still counted here; 22 since
     // #427 added `acceptVendorAgreementSchema`; 23 since #429 added
-    // `acceptTermsSchema`.
-    expect(names).toHaveLength(23);
+    // `acceptTermsSchema`; 26 since #435 added `setVendorPublishedSchema`,
+    // `setReviewVisibilitySchema` and `setPackageActiveSchema` — three booleans
+    // with no free text between them, which is exactly the case this count
+    // exists to keep visible rather than let a future prose field slip in
+    // beside one.
+    expect(names).toHaveLength(26);
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
 

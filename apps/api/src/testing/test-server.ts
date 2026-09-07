@@ -1,6 +1,8 @@
 import { seedReferenceData } from '@vendor-marketplace/db';
 import { CURRENT_TERMS_VERSION, legalDocumentSha256 } from '@vendor-marketplace/shared';
+import { users } from '@vendor-marketplace/db/schema';
 import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
 import type { AppDatabase } from '../lib/database.js';
@@ -910,6 +912,55 @@ export async function createTestHarness(
 
 export function bearer(clerkUserId: string): Record<string, string> {
   return { authorization: `Bearer token-${clerkUserId}` };
+}
+
+/**
+ * Creates the `users` row for a fake Clerk identity and returns its id.
+ *
+ * A sign-in is the only thing that writes a `users` row, so a test that wants a
+ * user has to make the request rather than insert one — the row carries columns
+ * (`role`, `clerk_user_id`, the mirrored name) that the sync owns.
+ *
+ * `promoteToAdmin` is a second step and cannot be a first one: `normalizeRole`
+ * refuses `admin` from Clerk metadata **by design**, precisely so the role can
+ * only be granted by an operator with database access. Every admin-facing suite
+ * therefore signs in and then promotes, and three of them had written that out
+ * by hand before this lived here.
+ */
+export async function signInAs(
+  harness: TestHarness<HarnessDatabase>,
+  clerkUserId: string,
+  promoteToAdmin = false,
+): Promise<string> {
+  const response = await harness.app.inject({
+    method: 'GET',
+    url: '/users/me',
+    headers: bearer(clerkUserId),
+  });
+
+  if (response.statusCode !== 200) {
+    throw new Error(`Sign-in for ${clerkUserId} answered ${response.statusCode}`);
+  }
+
+  if (promoteToAdmin) {
+    await harness.database.db
+      .update(users)
+      .set({ role: 'admin' })
+      .where(eq(users.clerkUserId, clerkUserId));
+  }
+
+  const rows = await harness.database.db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.clerkUserId, clerkUserId))
+    .limit(1);
+  const row = rows[0];
+
+  if (!row) {
+    throw new Error(`No users row for ${clerkUserId} after signing in`);
+  }
+
+  return row.id;
 }
 
 export const SVIX_HEADERS = {

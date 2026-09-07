@@ -253,6 +253,13 @@
       "when": 1788814553861,
       "tag": "0035_familiar_vector",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788815996415,
+      "tag": "0036_lying_caretaker",
+      "breakpoints": true
     }
   ]
 }
