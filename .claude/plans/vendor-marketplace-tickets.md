@@ -258,6 +258,7 @@ storefront, each of which tells the reader something untrue. |
 | **442** | **A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder: does a second acceptance of a version already held mean one row or two?** | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. The obvious fix — a unique index on `(accepted_by_user_id, document, version)` — **overturns #427's ruling** that a second acceptance of a held version *is* a second row, on the grounds that *"I accepted it twice"* is a true statement about what happened; `legal-acceptance-immutability.test.ts` asserts exactly that today. So the race cannot be closed without first deciding what the record is claiming, which is a product question, not a lane's. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
 | **443** | **Frame `13`'s parity residue, including two access findings nothing else checks** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 from #433's parity pass**, which returned MATCH on all six axes for its own change and correctly declined to attribute these six to itself. **Two are access findings** — the search field has an `aria-label` but no visible `<label>`, and the row checkbox is `22x44` against `04-laws.md`'s 44px minimum — and the parity pass is the **only** gate on the accessibility laws and the contrast table, so an unfiled access finding is not caught later, it evaporates. The other four: the header is 1px short, the wordmark renders 24px against 23px, the four filter dropdowns carry a 2px padding asymmetry left over from the caret D25 removed (**correct the padding, do not restore the caret**), and the filtered empty state offers no way out where every other console empty state does. Batched by surface per the filing convention rather than filed as six rows. D30 binds: corroborate each transcribed number against the neighbouring widths before building it. |
 | **444** | **An unwind declines the accepted request behind a completed booking** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #438**, which tripped over it building account closure, verified it was pre-existing rather than its own, and pinned current behaviour in a test rather than widening scope. Confirmed independently before filing. `declineOpenRequests` (`admin.dao.ts:484`) sets `status: 'declined'` where status is in `['pending','quoted','accepted']` — **unconditionally**. But `accepted` is exactly the status a request holds *after checkout*, so an unwind flips the accepted request behind an **already-completed** booking to `declined`: the event happened, the vendor was paid, and the customer's requests screen now says it was declined. That is rewriting history, not unwinding it. **Reachable from any ban**, so it predates #433 and #438 both. The neighbouring `findConfirmedBookingsToUnwind` gets it right and is the model — it bounds on `event_date > today`; the request decline has no equivalent bound. Do **not** simply drop `accepted`: a request accepted but never paid for is a real open commitment. |
+| **445** | **A failed query logs every bound parameter, and the redact list cannot reach it** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 after two lanes hit it independently** — #431's security pass and #439's review — which makes it a shape rather than an incident. Drizzle 0.45.2's `DrizzleQueryError` puts the statement's bound parameters in its `message` **and** in an own enumerable `params` property; pino's `err` serialiser copies own properties, so any `log.*({ err })` on a failed query writes every bound value into the log stream. **`server.ts`'s redact list is path-based on `req.headers.*` and never reaches it.** Caller-triggerable, which is why it is P0: `freeText()` does not strip `U+0000`, Postgres refuses it with `22021`, and the insert is on the **public unauthenticated** `POST /support/messages` — so a stranger picks when the write fails, six times an hour, and up to 4,000 characters of what they typed plus their reply-to address is logged. **Fix the sink, not the source**: a custom pino `err` serialiser covers every existing and future call site, where narrowing `freeText()` closes one trigger and leaves the class open. Two lanes have already written per-call-site guards; a third would make it a habit rather than a law. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #433 landed: 13 rows — 10 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`) and #433 (`ad1b179`) have both landed** — so **#431**, **#432**, **#435**, **#436**, **#437**, **#438**, **#439**, **#441** and **#442** are startable unattended today. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **#438 inherits D39**: closure is a refusal, not a refund, and it must reuse the path #433 landed rather than fork it. **Do not hand-maintain this number, recount it.**
@@ -2258,3 +2259,82 @@ ticket rather than picking the least-wrong word silently.
 - [ ] The completed-booking case asserted against a real completed booking, not
       a row hand-set to `completed`, so the fixture cannot drift from what the
       payment path actually produces.
+
+### #445: A failed query logs every bound parameter, and the redact list cannot reach it
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 after two lanes hit it independently** — #431's security pass
+and #439's review — which is what makes it a shape rather than an incident.
+Neither was looking for it.
+
+#### The defect
+
+Drizzle 0.45.2 wraps a failed statement in a `DrizzleQueryError` whose `message`
+is `Failed query: … params: <every bound parameter>`, **and** which carries
+`params` as an **own enumerable property**. Pino's `err` serialiser copies own
+properties. So any `log.*({ err })` on a failed query writes every bound value
+of that statement into the log stream.
+
+**`server.ts`'s redact list cannot help.** It is path-based on `req.headers.*`
+and never reaches a property hanging off a serialised error.
+
+**It is caller-triggerable, which is what makes it P0 rather than hygiene.**
+#431 found the reachable instance: `freeText()` does not strip `U+0000`,
+Postgres refuses that with `22021`, and the insert is on the **public,
+unauthenticated** `POST /support/messages` — so a stranger chooses when the
+write fails, six times an hour, and up to 4,000 characters of what they typed
+plus their reply-to address goes into the logs. Every field on that form is
+user-supplied.
+
+#### Why a per-call-site fix is not the answer
+
+Both lanes fixed their own write paths — #431 now logs the driver code and never
+the error, #439 avoided the shape on its path. That is three hand-written
+guards across the API and no law, which is the same trajectory the colour-role
+class is on (#446). The next `log.error({ err })` written against a query
+failure reintroduces it, and nothing fails.
+
+#### What to build
+
+**A serialiser-level fix, so the guard is structural rather than remembered.**
+Options, in the order worth trying:
+
+1. **A custom pino `err` serialiser** that strips `params` and truncates
+   `message` at the `params:` boundary for `DrizzleQueryError`, applied once at
+   the logger. Every existing and future call site is covered without edits.
+2. Failing that, a narrow error-mapping helper every DAO catch uses, plus a lint
+   rule or a source guard that fails on `{ err }` in a catch around a query.
+
+**Assert it over the whole serialised output, not field by field.** The
+prohibition is "no bound parameter appears anywhere in what is logged" — the
+same shape #434's `admin_actions` content test uses, and for the same reason: a
+field-by-field check passes while the payload leaks through a field nobody
+listed.
+
+**Do not widen `freeText()` to strip `U+0000` and call it done.** That closes
+the one reachable trigger and leaves the class open — any query failure on any
+user-supplied value still leaks. Fix the sink; narrowing the source is a
+defence-in-depth extra, worth doing second.
+
+#### Acceptance
+
+1. A failed query logged via `log.*({ err })` emits **no bound parameter** —
+   asserted against the whole serialised record, not named fields.
+2. The `message` no longer carries the `params:` tail.
+3. The driver error code and the statement's identity are still logged, so the
+   failure remains diagnosable.
+4. A `U+0000` payload to `POST /support/messages` leaks nothing, driven through
+   the real route.
+5. The guard is structural — a new `log.error({ err })` around a query written
+   after this ticket is covered without the author knowing about it.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, **watched failing first** against the current
+      serialiser — this is a security fix, so the failing test is the evidence.
+- [ ] Acceptance 1 asserted by searching the serialised output for a sentinel
+      value bound into the failing statement, rather than by inspecting keys.
+- [ ] Acceptance 4 driven end to end through the public route, not by calling
+      the DAO.

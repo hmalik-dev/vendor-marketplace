@@ -535,6 +535,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   442: ['auth'], // check-then-insert race in acceptTerms — needs a ruling on repeat acceptances
   443: ['auth'], // frame 13 parity residue, incl. two access findings
   444: ['auth'], // unwind must not decline the request behind a settled booking
+  445: [], // failed-query logs leak bound params; fix the pino err serialiser
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
