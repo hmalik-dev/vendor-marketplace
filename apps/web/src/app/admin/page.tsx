@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { formatPrice } from '@vendor-marketplace/shared';
+import { PayoutHealthAlert } from '@/components/admin/payout-health-alert';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { MetricCharts } from '@/components/admin/metric-charts.lazy';
 import { getAdminMetrics } from '@/lib/admin-data';
@@ -46,6 +47,20 @@ export default async function AdminOverviewPage(): Promise<React.ReactElement> {
       ]}
     >
       <div className="h-full min-h-0 overflow-y-auto pb-2">
+        {/*
+          Above the cards rather than as a fifth one (#432).
+
+          `22-admin.md` says four metric cards and means it — a fifth would wrap
+          the `xl:grid-cols-4` row and leave one card alone on a second line at
+          the widest viewport the contract draws. This is also not a metric: it
+          is zero on a healthy platform and disappears entirely, which is the
+          opposite of what a card does. It links to the two filtered lists,
+          because a number that leads nowhere is furniture.
+        */}
+        <PayoutHealthAlert
+          blockedVendors={metrics.payoutsBlockedVendorsCount}
+          failingBookings={metrics.payoutsFailingBookingsCount}
+        />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {cards.map((card) => (
             <Link

@@ -24,6 +24,22 @@ describe('renderLaneEnv', () => {
     expect(parsed.WEB_PORT).toBe('3007');
   });
 
+  /**
+   * The server-side twin, and the one that fails **silently**.
+   *
+   * `apps/web/src/lib/api-client.ts` reads `process.env.API_URL` for every
+   * Server Component fetch; `NEXT_PUBLIC_API_URL` above only reaches the
+   * browser bundle. Writing the public one alone leaves the root `.env`'s
+   * `http://localhost:4000` in force, so a lane's pages render against another
+   * checkout's API — which produced a 500 on every `/admin/*` route in lane
+   * 432 and read as a defect in the change under test.
+   */
+  it('points server-side fetches at this lane own API too, not just the browser', () => {
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
+    expect(parsed.API_URL).toBe('http://localhost:4007');
+    expect(parsed.API_URL).toBe(parsed.NEXT_PUBLIC_API_URL);
+  });
+
   it('lets the API accept this lane own web origin, so a browser can drive it', () => {
     const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
     // `allowedOrigins()` splits WEB_URL; without it the lane refuses its own

@@ -13,6 +13,7 @@ import {
   adminCustomerPageSchema,
   adminCustomerQuerySchema,
   adminMetricsSchema,
+  adminPayoutRetryResultSchema,
   adminPaymentPageSchema,
   adminPaymentQuerySchema,
   adminReviewPageSchema,
@@ -46,6 +47,7 @@ import {
   readMetrics,
   readVendorFacets,
   resolveBookingDispute,
+  retryBookingPayout,
   resolveTagSuggestion,
   setUserBanned,
   updateTag,
@@ -171,6 +173,33 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
         assertRole(request.auth, ['admin']).id,
         request.params.bookingId,
         request.body.outcome,
+        app.clock(),
+      ),
+  );
+
+  /**
+   * An operator retries one stuck payout (#432).
+   *
+   * `PUT` because it is idempotent in the sense that matters: pressing it twice
+   * on a payout that has landed is refused as already released, and on one that
+   * has not it re-enters the same sweep the timer runs. The transfer is
+   * `payouts.service.ts`'s, unchanged — this route adds only the operator, and
+   * `retryBookingPayout` records which one.
+   */
+  app.put(
+    '/admin/bookings/:bookingId/payout/retry',
+    {
+      onRequest: adminOnly,
+      schema: {
+        params: bookingParamsSchema,
+        response: { 200: adminPayoutRetryResultSchema },
+      },
+    },
+    async (request) =>
+      retryBookingPayout(
+        context(),
+        assertRole(request.auth, ['admin']).id,
+        request.params.bookingId,
         app.clock(),
       ),
   );

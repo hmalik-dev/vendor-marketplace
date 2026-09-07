@@ -41,6 +41,7 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   tag_suggestion_resolved: 'Resolved a tag suggestion',
   dispute_resolved: 'Resolved a report',
   support_case_resolved: 'Closed a case',
+  payout_retried: 'Retried a payout',
   conversation_messages_read: 'Read a reported thread',
 };
 

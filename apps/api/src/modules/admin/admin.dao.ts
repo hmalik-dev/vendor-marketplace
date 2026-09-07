@@ -22,7 +22,9 @@ import type {
   AdminActionDetail,
   AdminActionSubject,
   AdminBookingFlag,
+  AdminPaymentFlag,
   AdminPayoutFilter,
+  PayoutModel,
   AdminVendorStatus,
   BookingStatus,
   ReviewType,
@@ -31,6 +33,16 @@ import type {
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { containsInsensitive } from '../../lib/like-pattern.js';
+/*
+ * The sweep's own definition of a failing payout, imported rather than restated.
+ *
+ * It is `payoutOwedClauses` plus an attempt, and it looks trivial — which is
+ * exactly why the owed clauses were written out by hand in three places before
+ * #424 and drifted. The Payments filter and the Overview's count have to name
+ * the same rows the transfer names, or the number an operator acts on describes
+ * a set the sweep does not work.
+ */
+import { payoutFailingClauses } from '../payments/payouts.dao.js';
 
 /**
  * Every read and write the admin portal makes. Policy lives in the service; this
@@ -51,6 +63,10 @@ export interface AdminVendorProjection {
   bookingsCount: number;
   isPublished: boolean;
   stripeOnboarded: boolean;
+  /** The connected account, so the row can link out to Stripe (#432). */
+  stripeAccountId: string | null;
+  stripeDisabledReason: string | null;
+  stripeRequirementsDue: string[];
   isBanned: boolean;
   /** Whether the account is gone (#433), so the row can read `retired`. */
   isRetired: boolean;
@@ -264,6 +280,9 @@ export async function findAdminVendors(
       bookingsCount: bookingsCountExpression,
       isPublished: vendorProfiles.isPublished,
       stripeOnboarded: vendorProfiles.stripeOnboarded,
+      stripeAccountId: vendorProfiles.stripeAccountId,
+      stripeDisabledReason: vendorProfiles.stripeDisabledReason,
+      stripeRequirementsDue: vendorProfiles.stripeRequirementsDue,
       isBanned: users.isBanned,
       isRetired: RETIRED,
       createdAt: vendorProfiles.createdAt,
@@ -673,6 +692,12 @@ function bookingSelection() {
     platformFeeCents: bookings.platformFeeCents,
     vendorPayoutCents: bookings.vendorPayoutCents,
     stripePaymentIntentId: bookings.stripePaymentIntentId,
+    stripeTransferId: bookings.stripeTransferId,
+    /* Read by `isPayoutFailing`, which is `payoutOwedClauses` plus an attempt. */
+    payoutModel: bookings.payoutModel,
+    payoutReleasedAt: bookings.payoutReleasedAt,
+    payoutAttempts: bookings.payoutAttempts,
+    payoutFailureReason: bookings.payoutFailureReason,
     paidAt: bookings.paidAt,
     customerFirstName: users.firstName,
     customerLastName: users.lastName,
@@ -690,6 +715,11 @@ export interface AdminBookingProjection {
   platformFeeCents: number;
   vendorPayoutCents: number;
   stripePaymentIntentId: string | null;
+  stripeTransferId: string | null;
+  payoutModel: PayoutModel;
+  payoutReleasedAt: Date | null;
+  payoutAttempts: number;
+  payoutFailureReason: string | null;
   paidAt: Date | null;
   customerFirstName: string;
   customerLastName: string;
@@ -774,8 +804,24 @@ export async function countAdminBookings(
  * so it filters to bookings that were actually paid and orders by when the
  * money moved. **There is no `payments` table** — see `adminPaymentRowSchema`.
  */
+/**
+ * A payment is a booking whose money arrived, and the filter narrows to the
+ * ones whose money then failed to leave again.
+ *
+ * Composed rather than branched so the count below runs the identical
+ * predicate: a pager whose total came from a different `WHERE` than its rows is
+ * the same class of defect as two definitions of "held".
+ */
+function paymentFilterCondition(flag: AdminPaymentFlag | undefined): SQL | undefined {
+  return and(
+    sql`${bookings.paidAt} is not null`,
+    ...(flag === 'payout-failing' ? payoutFailingClauses() : []),
+  );
+}
+
 export async function findAdminPayments(
   db: AppDatabase,
+  flag: AdminPaymentFlag | undefined,
   limit: number,
   offset: number,
 ): Promise<AdminBookingProjection[]> {
@@ -784,17 +830,20 @@ export async function findAdminPayments(
     .from(bookings)
     .innerJoin(users, eq(users.id, bookings.customerId))
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
-    .where(sql`${bookings.paidAt} is not null`)
+    .where(paymentFilterCondition(flag))
     .orderBy(desc(bookings.paidAt))
     .limit(limit)
     .offset(offset);
 }
 
-export async function countAdminPayments(db: AppDatabase): Promise<number> {
+export async function countAdminPayments(
+  db: AppDatabase,
+  flag: AdminPaymentFlag | undefined,
+): Promise<number> {
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(bookings)
-    .where(sql`${bookings.paidAt} is not null`);
+    .where(paymentFilterCondition(flag));
 
   return rows?.[0]?.total ?? 0;
 }
@@ -1191,41 +1240,66 @@ export interface AdminMetricTotals {
   usersCount: number;
   pendingTagSuggestionsCount: number;
   reviewsCount: number;
+  payoutsBlockedVendorsCount: number;
+  payoutsFailingBookingsCount: number;
 }
 
 export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetricTotals> {
-  const [bookingTotals, activeVendors, userRows, pending, reviewRows] = await Promise.all([
-    /*
-     * One scan of `bookings` for both numbers. They were two full scans of the
-     * same table, differing only by a predicate a `FILTER` expresses.
-     */
-    db
-      .select({
-        bookingsCount: sql<number>`count(*)::int`,
-        revenueCents: sql<number>`coalesce(sum(${bookings.totalAmountCents}) filter (where ${PAID_AND_KEPT}), 0)::int`,
-      })
-      .from(bookings),
-    db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(vendorProfiles)
-      .innerJoin(users, eq(users.id, vendorProfiles.userId))
+  const [bookingTotals, activeVendors, userRows, pending, reviewRows, payoutHealth] =
+    await Promise.all([
       /*
-       * `NOT_RETIRED` rather than `is_deleted` alone (#433), so the metric
-       * agrees with the status the table shows. An account deleted under the
-       * old `deleted_at`-only path has `is_deleted` false and was counted here
-       * as an active vendor while every public read already hid it.
+       * One scan of `bookings` for both numbers. They were two full scans of the
+       * same table, differing only by a predicate a `FILTER` expresses.
        */
-      .where(and(NOT_RETIRED, eq(vendorProfiles.isPublished, true), eq(users.isBanned, false))),
-    db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(users)
-      .where(sql`${users.deletedAt} is null`),
-    db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(tagSuggestions)
-      .where(eq(tagSuggestions.status, 'pending')),
-    db.select({ total: sql<number>`count(*)::int` }).from(reviews),
-  ]);
+      db
+        .select({
+          bookingsCount: sql<number>`count(*)::int`,
+          revenueCents: sql<number>`coalesce(sum(${bookings.totalAmountCents}) filter (where ${PAID_AND_KEPT}), 0)::int`,
+        })
+        .from(bookings),
+      db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(vendorProfiles)
+        .innerJoin(users, eq(users.id, vendorProfiles.userId))
+        /*
+         * `NOT_RETIRED` rather than `is_deleted` alone (#433), so the metric
+         * agrees with the status the table shows. An account deleted under the
+         * old `deleted_at`-only path has `is_deleted` false and was counted here
+         * as an active vendor while every public read already hid it.
+         */
+        .where(and(NOT_RETIRED, eq(vendorProfiles.isPublished, true), eq(users.isBanned, false))),
+      db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(users)
+        .where(sql`${users.deletedAt} is null`),
+      db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(tagSuggestions)
+        .where(eq(tagSuggestions.status, 'pending')),
+      db.select({ total: sql<number>`count(*)::int` }).from(reviews),
+      /*
+       * Payout health, and **both numbers over one set** (#432).
+       *
+       * That set is `payoutFailingClauses` — the same expression the Payments
+       * filter composes — so the alert on the Overview and the list its link
+       * lands on describe the same rows. Counting blocked vendors over some
+       * *wider* set was the first shape of this and it was wrong in the way
+       * that matters: "1 vendor is owed money we cannot send" linking to a
+       * `Payouts: not connected` list of forty, with nothing marking the one.
+       *
+       * A vendor who has never onboarded and never taken a booking is nobody's
+       * emergency and is deliberately not here. One whose money is genuinely
+       * stuck arrives within a sweep interval, because a blocked account is a
+       * failed transfer as soon as the sweep reaches it.
+       */
+      db
+        .select({
+          failingBookings: sql<number>`count(*)::int`,
+          blockedVendors: sql<number>`count(distinct ${bookings.vendorId})::int`,
+        })
+        .from(bookings)
+        .where(and(...payoutFailingClauses())),
+    ]);
 
   return {
     totalRevenueCents: bookingTotals?.[0]?.revenueCents ?? 0,
@@ -1234,6 +1308,8 @@ export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetri
     usersCount: userRows?.[0]?.total ?? 0,
     pendingTagSuggestionsCount: pending?.[0]?.total ?? 0,
     reviewsCount: reviewRows?.[0]?.total ?? 0,
+    payoutsBlockedVendorsCount: payoutHealth?.[0]?.blockedVendors ?? 0,
+    payoutsFailingBookingsCount: payoutHealth?.[0]?.failingBookings ?? 0,
   };
 }
 

@@ -240,6 +240,11 @@ describe('admin routes', () => {
       { method: 'GET', url: `/admin/cases/${NIL}` },
       { method: 'PUT', url: `/admin/cases/${NIL}/resolve` },
       /*
+       * #432. The retry moves money out of the platform's balance, so it is a
+       * write, not a refresh — and the operator who pressed it is recorded.
+       */
+      { method: 'PUT', url: `/admin/bookings/${NIL}/payout/retry` },
+      /*
        * #436. The most privileged read in the console: two people's private
        * messages. It is scoped by an open case on top of this guard, but the
        * guard is what stops a stranger reaching the scope check at all.

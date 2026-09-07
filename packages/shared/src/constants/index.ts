@@ -1120,6 +1120,7 @@ export const ADMIN_ACTIONS = [
   'tag_suggestion_resolved',
   'dispute_resolved',
   'support_case_resolved',
+  'payout_retried',
   /**
    * A read, and the one read in the console that is logged (#436).
    *
