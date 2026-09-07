@@ -98,11 +98,20 @@ function stateFor(
           'booking — the refund is shown above before you confirm.',
       };
 
+    /*
+     * Offer first, mechanism second. This said `<vendor> has been paid ... so we
+     * can't hold the payment any more. Get in touch and a person will look into
+     * it` — which opens on what the product cannot do and reads as a shrug at
+     * the one person on this screen with a complaint. The facts are unchanged:
+     * the money is gone and no hold is possible. What changed is the order, so
+     * the reader meets the help before the limitation.
+     */
     case 'released':
       return {
         body:
-          `${vendorName} has been paid for this booking, so we can't hold the payment any more. ` +
-          'Get in touch and a person will look into it.',
+          `Something still not right? Tell us what happened and we'll look into it with you. ` +
+          `${vendorName}'s payment for this booking has already gone out, so this one comes ` +
+          'straight to us rather than pausing a payment.',
         action: { label: 'Contact support', href: SUPPORT_PATH },
       };
 
