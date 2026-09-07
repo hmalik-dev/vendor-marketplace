@@ -38,7 +38,7 @@
 - [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased
 - [Drizzle query errors log every bound parameter](drizzle-query-errors-log-bound-parameters.md) — `Failed query: … params: …` is in the message and pino emits it; pre-existing and accepted, check what the statement binds before escalating
 - [The background queue carries no session](background-work-queue-carries-no-session.md) — `app.background` re-derives its recipient from the notification row; a second caller must not close over `request.auth` or a `tx`
-- [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — per-request verified in react 19.2.8; `/vendors/[slug]` is dynamic only via SiteHeader's `auth()`
+- [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — per-request verified in react 19.2.8; `/` now renders a customer's booking amount and still declares no `force-dynamic`
 - [`canBook` is chrome, not a gate](canbook-is-chrome-not-a-gate.md) — three server checks refuse a vendor; the prop degrades to the most permissive answer on purpose
 - [The deployed origin shares the dev Clerk instance](deployed-origin-shares-the-dev-clerk-instance.md) — one `E2E_BASE_URL` signs the E2E accounts, admin included, into production data; #392 made `e2e:auth` refuse to default off localhost
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — live Clerk session JWTs; `FORBIDDEN_PATHS` covers the path as of #392, and no content rule ever will
