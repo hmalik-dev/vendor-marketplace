@@ -1615,6 +1615,11 @@ showing **only the row that applies today**.
 13. **The checkout block's tiers equal what `calculateRefund` would actually
     return** for the same booking. This is the acceptance that prevents the
     dispute #374 warns about.
+14. **No page, panel or email states a non-refundable window**, because none
+    exists. Asserted by searching the rendered copy, not by reading it.
+15. Every number in the legal copy — 12%, 48 hours, 50%, 7 days, the payout
+    interval — **resolves from the constant, not from a literal in the
+    markdown**. A test changes a constant and asserts the rendered page follows.
 
 #### Tests (required)
 
@@ -1622,18 +1627,74 @@ showing **only the row that applies today**.
 - [ ] **AC 13 is the one that matters most**: assert the rendered schedule against
       the refund function's own output, not against a hardcoded expectation. If
       they can disagree, they eventually will.
+- [ ] **AC 15 is how the copy stays true after this ticket.** A page that hardcodes
+      "12%" in markdown is correct today and wrong the first time the rate moves.
+      The test that proves it: change the constant, re-render, assert the page
+      changed with it.
 - [ ] Immutability tested by attempting an update and a delete, not by inspecting
       the schema.
 - [ ] Authorisation on the agreement step per role: the vendor it belongs to,
       another vendor, a customer, admin, signed out.
 
-#### Open questions the design itself raises — do not answer silently
+#### The copy is placeholder — these facts are not
 
-- **The refund schedule**: platform-wide or per-vendor? Per-vendor grows a field
-  on the profile editor, must be referenced by the agreement, and probably belongs
-  on the search card. This changes three screens.
-- **Does "non-refundable" release the full amount to the vendor**, or does Orla
-  waive commission on a cancelled booking? The 12% depends on the answer.
-- **Cancellation enforcement**: the design says *"repeated cancellations can end
-  your listing"*, which implies a process nothing in the plan describes. **Cut the
-  sentence rather than shipping a threat that cannot be executed.**
+**Ruled 2026-09-06.** The account holder gave explicit authority to make the copy
+match the mechanics rather than ship the design's placeholder wording: *"the
+terms design text is currently a placeholder — what we discussed is the concrete
+and you have authority to ensure the text matches what we discussed."*
+
+**Still not reviewed legal text.** It ships from `content/legal/*.md` as
+replaceable placeholder, and that has not changed. What has changed is that
+**every factual claim in it must now be true of this codebase**, and a sentence
+that contradicts the table below is a defect, not a wording preference.
+
+| Claim the copy may make | Value | Source of truth |
+| --- | --- | --- |
+| Platform commission | **12%** | `DEFAULT_PLATFORM_FEE_RATE = 0.12` |
+| Full refund | cancel **48 hours or more** before the event | `FULL_REFUND_CUTOFF_HOURS = 48` |
+| Late cancellation | **50%** refunded | `LATE_CANCELLATION_REFUND_RATE = 0.5` |
+| Non-refundable window | **there is none** | no such tier exists in the code |
+| Vendor cancels | customer refunded in full, no commission retained | D31 |
+| Refund after payout release | full unwind — vendor returns their share, Orla returns its commission | D31 |
+| Money before the event | held by **Orla**, not the vendor | #423 |
+| Release trigger | a fixed window **after the event date** — never a vendor action | #423 |
+| Payout interval | `PAYOUT_RELEASE_HOURS`, **one constant**, three render sites | #423 |
+| Unanswered request | expires after **7 days** | `BOOKING_REQUEST_EXPIRY_DAYS = 7` |
+| A dispute | **pauses** the payout release | #423 / #425 |
+
+**Three of the design's open questions are now closed by that ruling:**
+
+1. **The refund schedule is the code's, not the design's.** `30 days / 50% /
+   non-refundable` does not ship. The tiers are **48 hours / 50%**, and there is
+   **no non-refundable window** — so the checkout block has three rows and a
+   vendor-cancels row, not four tiers ending in "non-refundable".
+2. **Platform-wide, not per-vendor.** The tiers are constants today and stay
+   constants. Per-vendor policy is Post-MVP: it would grow a profile field, need
+   referencing from the agreement, and belong on the search card.
+3. **The "non-refundable releases the full amount" question is moot** — there is
+   no non-refundable tier for it to be about.
+
+**Two remain genuinely open and must not be answered silently:**
+
+- **`PAYOUT_RELEASE_HOURS` itself.** The design says *"Event + 2 days"*; Airbnb
+  releases about 24 hours after check-in; and 48 would mirror the existing refund
+  cutoff. **Not ruled.** Name the constant, pick a documented default, and flag
+  it — do not let three surfaces each hardcode a different sentence.
+- **Whether Orla holding customer funds** raises a compliance question in the
+  jurisdictions it operates in. Flag it; do not decide it in code.
+
+**Cut, not asked:** the design's *"repeated cancellations can end your listing"*.
+Nothing in the plan describes an enforcement process, and a threat that cannot be
+executed is worse than silence. Remove the sentence.
+
+#### Section-level consequences of the above
+
+- **`/terms` section 4** describes the hold: the customer pays Orla, Orla holds
+  the money, and the vendor is paid a fixed window after the event date. It states
+  the **12%**. It must not describe payment as reaching the vendor at checkout,
+  which is what happens today and what #423 changes.
+- **`/terms` section 5** defers the schedule to checkout by reference and
+  **restates no numbers** — that is already in the design and it is right, because
+  two copies drift.
+- **The vendor agreement's four-terms panel** takes its commission and payout
+  timing from the same constants, not from prose written beside them.
