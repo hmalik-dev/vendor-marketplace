@@ -24,6 +24,28 @@ straight to `main`, need a moment's thought during a parallel run: they are the
 commits most likely to dequeue someone. Batch them, or send them while no PR is
 in flight.
 
+**The open-PR check must GATE the merge, not accompany it — 2026-09-07.** A lane
+was told to check `gh pr list --state open` "in the same breath as the merge",
+and put the check and the `gh pr merge --squash` in **one command**. The check
+printed its answer *after* the merge had already gone through, and a peer's PR
+had opened while the lane waited on CI — so it was knocked BEHIND by the very
+merge the check existed to prevent. The wording caused it; the rule is:
+
+    gh pr list --state open      # its own command. read the result.
+    gh pr merge --squash         # only if the first was empty.
+
+**Why:** a check whose result arrives after the action it guards is not a guard,
+it is a log line. Same class as [[verify-with-a-differently-shaped-check]] — ask
+what state would make it fail, and if the answer is "nothing, by then", it is not
+a check.
+
+**Merging past a red Vercel check, mechanically.** `gh pr merge --squash` is
+*refused* while the required status check is pending, and `--admin` — the
+documented bypass — is blocked by the permission classifier. What works: wait for
+the check named **`Typecheck, lint, build, test`** to read SUCCESS, then plain
+`gh pr merge --squash` goes through on its own, with Vercel still failing. The
+merge is gated on CI and **not** on Vercel. See [[vercel-deploy-check-always-fails]].
+
 **BEHIND never clears itself here, and the two obvious escapes are both shut.**
 Confirmed 2026-08-31 on PR #89: the `Create or update the branch` workflow
 reports `skipping`, so nothing updates the branch automatically, and
