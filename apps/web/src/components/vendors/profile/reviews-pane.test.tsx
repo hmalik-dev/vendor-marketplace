@@ -329,3 +329,43 @@ describe('ReviewsPane — writing one', () => {
     expect(screen.queryByRole('button', { name: 'Write a review' })).toBeNull();
   });
 });
+
+/**
+ * The report control on a review (#436).
+ *
+ * Here rather than only in the browser because the seeded E2E storefront has
+ * no reviews, so a browser pass over the four reportable subjects can drive
+ * three of them and reads the fourth as "no control" — indistinguishable from
+ * the control being absent. The other three are browser-verified; this is the
+ * one that needs a fixture with a review in it, and a render test is the
+ * cheapest place to get one.
+ */
+describe('ReviewsPane — reporting a review', () => {
+  it('offers a report control per review, not one for the tab', () => {
+    render(
+      <ReviewsPane
+        {...BASE}
+        reviewCount={2}
+        initial={payload({
+          items: [review({ id: 'rev-1' }), review({ id: 'rev-2', reviewerName: 'Sam O.' })],
+        })}
+      />,
+    );
+
+    /* A report names a row, so two reviews carry two controls. */
+    expect(screen.getAllByRole('button', { name: 'Report this review' })).toHaveLength(2);
+  });
+
+  /*
+   * Reporting is authenticated, so a signed-out reader is offered the thing
+   * that would let them do it rather than a form that can only fail.
+   */
+  it('sends a signed-out reader to sign in instead', () => {
+    render(<ReviewsPane {...BASE} signedIn={false} reviewCount={2} initial={payload()} />);
+
+    expect(screen.queryByRole('button', { name: 'Report this review' })).toBeNull();
+    expect(
+      screen.getByRole('link', { name: 'Sign in to report this review' }).getAttribute('href'),
+    ).toBe('/sign-in');
+  });
+});
