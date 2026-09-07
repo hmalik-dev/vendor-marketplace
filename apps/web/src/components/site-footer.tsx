@@ -36,10 +36,27 @@ const BROWSE_LINKS = [
  * so nothing here reads as a working channel that is not one.
  */
 const COMPANY_LINKS = [
-  { href: '/#how-it-works', label: 'How it works' },
   { href: '/sign-up?role=vendor', label: 'For vendors' },
   { href: SUPPORT_PATH, label: 'Contact support' },
 ];
+
+/**
+ * `How it works` is an **anchor**, so it is only a link for a reader who has
+ * the section to land on — and two roles do not.
+ *
+ * A signed-in customer's `/` drops that section (#428): the process is one they
+ * have completed, so it comes off their landing, and the footer renders on
+ * every route, which made this the one control still pointing at it. A vendor
+ * never reaches `/` at all — `redirectVendorToDashboard` sends them to their own
+ * dashboard — so for them it has always been a link that silently goes
+ * somewhere else, and it goes now with the customer's.
+ *
+ * A signed-out visitor and an operator both render the section and keep it.
+ * Written as the roles that *lose* it, because that is the question being
+ * asked: not "who is signed in" but "for whom does the target exist".
+ */
+const ROLES_WITHOUT_HOW_IT_WORKS: readonly UserRole[] = ['customer', 'vendor'];
+const HOW_IT_WORKS_LINK = { href: '/#how-it-works', label: 'How it works' };
 
 /**
  * Both of these land on an authentication page, which bounces an
@@ -173,7 +190,23 @@ export async function SiteFooter(): Promise<React.ReactElement> {
    * makes a request when signed out, so a marketing page pays nothing for it —
    * the same contract the header relies on.
    */
-  const accountLinks = ACCOUNT_LINKS_BY_ROLE[(await readRoleForChrome()) ?? 'customer'];
+  const role = await readRoleForChrome();
+  /*
+   * `null` is a signed-out visitor **or** an account record that could not be
+   * read, and the two columns want different things from that ambiguity.
+   *
+   * Account falls back to the customer's set, because the `Show` around it has
+   * already established there is a session and the customer is the
+   * overwhelmingly common one. Company must not: the fallback would take
+   * `How it works` away from every signed-out visitor, who is exactly the
+   * reader the section is written for. So the anchor is dropped only for a role
+   * that was actually read and actually loses the target.
+   */
+  const accountLinks = ACCOUNT_LINKS_BY_ROLE[role ?? 'customer'];
+  const companyLinks =
+    role !== null && ROLES_WITHOUT_HOW_IT_WORKS.includes(role)
+      ? COMPANY_LINKS
+      : [HOW_IT_WORKS_LINK, ...COMPANY_LINKS];
 
   return (
     /*
@@ -207,7 +240,7 @@ export async function SiteFooter(): Promise<React.ReactElement> {
             </FooterColumn>
 
             <FooterColumn heading="Company">
-              {COMPANY_LINKS.map((link) => (
+              {companyLinks.map((link) => (
                 <FooterLink key={link.href} {...link} />
               ))}
             </FooterColumn>

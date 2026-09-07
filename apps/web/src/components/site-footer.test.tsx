@@ -182,6 +182,39 @@ describe('SiteFooter', () => {
   });
 
   /*
+   * `How it works` is an anchor, and the footer renders on every route — so it
+   * is only a link for a reader whose `/` has the section to land on.
+   *
+   * A signed-in customer's does not, since #428 took it off their landing, and
+   * a vendor never reaches `/` at all. A signed-out visitor and an operator
+   * both render it. Both directions are asserted: the presence half alone
+   * passes on the broken version.
+   */
+  it.each([
+    [null, true],
+    ['admin' as const, true],
+    ['customer' as const, false],
+    ['vendor' as const, false],
+  ])('offers How it works to a %s only when the section exists for them', async (role, offered) => {
+    authState = role === null ? 'signed-out' : 'signed-in';
+    currentRole = role;
+
+    render(await SiteFooter());
+
+    const link = screen.queryByRole('link', { name: 'How it works' });
+
+    if (offered) {
+      expect(link).toHaveProperty('href', 'http://localhost:3000/#how-it-works');
+    } else {
+      expect(link).toBeNull();
+    }
+
+    // The rest of the column is unconditional either way.
+    expect(screen.getByRole('link', { name: 'For vendors' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Contact support' })).toBeDefined();
+  });
+
+  /*
    * A row, never a fifth column — a column would give three links the same
    * visual weight as Browse, which is the whole catalogue.
    *

@@ -887,6 +887,48 @@ describe('HomePage, signed in as a customer', () => {
   });
 
   /*
+   * #33's law: a public route must render for a signed-in visitor even when the
+   * API will not answer them. The two hub reads do not honour it on their own —
+   * `customerToken()` redirects when Clerk hands back no token, and
+   * `degradeToEmpty` redirects on a 401 before it can return its empty list.
+   * Both are right for `/bookings`; here they would bounce a customer whose JWT
+   * the API rejects off the marketing home to `/sign-in?returnTo=/`, and back
+   * again on arrival.
+   *
+   * A `NEXT_REDIRECT` rejection is the shape those raise, and it is the case
+   * the wholesale module mock hid.
+   */
+  it.each([
+    ['a redirect out of the reads', new Error('NEXT_REDIRECT:/sign-in?returnTo=%2F')],
+    ['an upstream that failed outright', new Error('boom')],
+  ])('still renders the landing page when the hub answers with %s', async (_label, failure) => {
+    getOwnBookings.mockRejectedValue(failure);
+    getOwnBookingRequests.mockRejectedValue(failure);
+
+    render(await HomePage());
+
+    expect(screen.getByRole('heading', { level: 1 })).toBeDefined();
+    // Degraded to the visitor's guarantees rather than to no page at all.
+    expect(
+      screen.getByText(
+        'Stripe holds your payment until your event is complete, then releases it to the vendor.',
+      ),
+    ).toBeDefined();
+    expect(screen.queryByRole('region', { name: 'Your bookings at a glance' })).toBeNull();
+  });
+
+  /*
+   * The featured row is off for this reader, so fetching it is a round trip
+   * whose result is discarded — on the one page whose own comment measures what
+   * this wave costs.
+   */
+  it('does not fetch the featured row it will not render', async () => {
+    render(await HomePage());
+
+    expect(getFeaturedVendors).not.toHaveBeenCalled();
+  });
+
+  /*
    * The redirect runs before anything else on this route, so a vendor never
    * renders the marketing page at all. Its own behaviour is
    * `current-user.test.ts`'s; what this pins is that the page still asks.

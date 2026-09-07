@@ -55,6 +55,40 @@ describe('StatusStrip', () => {
     expect(strip.textContent).toContain(`Sun, Jun 14 · ${expected}`);
   });
 
+  /*
+   * The server filters on `isUniversallyPastDate`, which deliberately keeps
+   * yesterday's row — west of UTC yesterday is still today, and the server
+   * cannot know which side of that the reader is on. Re-anchored here on the
+   * reader's own day the same row can be behind them, and the strip read
+   * "Sat, Apr 25 · today" about it while `/bookings` — one click away, through
+   * the link in this very strip — filed it under history.
+   */
+  it.each([
+    ['2026-06-15', 'the day after'],
+    ['2026-06-16', 'two days after'],
+  ])('drops a booking the reader own day has passed — %s, %s', async (today) => {
+    render(<StatusStrip status={status()} serverToday={viewerOn(today)} />);
+
+    const strip = await screen.findByRole('region', { name: 'Your bookings at a glance' });
+
+    expect(strip.textContent).not.toContain('Next up');
+    expect(strip.textContent).not.toContain('today');
+    // The other item is untouched, and the strip still renders for it.
+    expect(strip.textContent).toContain('1 request waiting on a vendor');
+  });
+
+  /* And with nothing else in it, the strip goes with the booking. */
+  it('disappears when the passed booking was the only item', () => {
+    const { container } = render(
+      <StatusStrip
+        status={status({ requestsWaitingOnVendor: 0 })}
+        serverToday={viewerOn('2026-06-15')}
+      />,
+    );
+
+    expect(container.innerHTML).toBe('');
+  });
+
   it('pluralises the waiting requests', async () => {
     render(
       <StatusStrip

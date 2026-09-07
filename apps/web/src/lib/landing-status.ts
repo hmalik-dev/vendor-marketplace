@@ -107,9 +107,26 @@ export function hasStatusStrip(status: LandingStatus): boolean {
   return status.next !== null || status.requestsWaitingOnVendor > 0;
 }
 
+/**
+ * The three guarantees the band states, as titles.
+ *
+ * A closed set rather than free strings, because the title is also the **key**
+ * `page.tsx` hangs each signal's glyph on. Keyed by title so the band can
+ * reorder — the signed-in page leads with the payment — but a string key with
+ * an open type means a legitimate copy edit here, updated in this file's own
+ * test, silently hands the payment guarantee somebody else's icon with the
+ * suite green. As a union it fails `tsc` instead.
+ */
+export const TRUST_TITLES = [
+  'Reviews from real bookings',
+  'Payment held until the event',
+  'No service fee',
+] as const;
+export type TrustTitle = (typeof TRUST_TITLES)[number];
+
 /** One trust signal, as the band renders it. */
 export interface TrustCopy {
-  readonly title: string;
+  readonly title: TrustTitle;
   readonly body: string;
 }
 

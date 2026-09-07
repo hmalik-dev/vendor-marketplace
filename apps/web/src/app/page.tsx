@@ -27,7 +27,7 @@ import {
   landingStatus,
   trustCopyFor,
 } from '@/lib/landing-status';
-import type { LandingStatus } from '@/lib/landing-status';
+import type { LandingStatus, TrustTitle } from '@/lib/landing-status';
 import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
 
 /**
@@ -95,7 +95,7 @@ const HOW_IT_WORKS = [
  * "secure and reliable". This section does the work the stats band would have
  * done, which is why there is no stats band.
  */
-const TRUST_ICONS: Record<string, LucideIcon> = {
+const TRUST_ICONS: Record<TrustTitle, LucideIcon> = {
   'Reviews from real bookings': Star,
   'Payment held until the event': ShieldCheck,
   'No service fee': Tag,
@@ -256,6 +256,34 @@ function landingCategories(categories: readonly Category[]): Category[] {
 const EMPTY_STATUS: LandingStatus = { next: null, requestsWaitingOnVendor: 0 };
 
 /**
+ * One of the customer's own reads, degraded to nothing rather than allowed to
+ * navigate.
+ *
+ * **`/` must render for a signed-in visitor even when the API will not answer
+ * them** — #33's law, which is why `readIdentityOnPublicRoute` exists at all.
+ * The two hub reads do not honour it on their own: `customerToken()` calls
+ * `redirect()` when Clerk hands back no token, and `degradeToEmpty` redirects
+ * on a 401 *before* it can return its empty list. Both are right for
+ * `/bookings`, whose whole subject is those rows. Here they are wrong: a
+ * customer whose JWT the API rejects — a rotated key, clock skew, a session
+ * revoked while the cookie survives — would be bounced off the marketing home
+ * to `/sign-in?returnTo=/`, and back again on arrival.
+ *
+ * So the catch is **total, navigation signals included**, which is the one
+ * place in this app that is the correct handling rather than a swallowed bug:
+ * the only redirect these can raise is to sign-in, and this page is public.
+ * The cost of failing is the strip and the resolved trust copy; the page is
+ * not about them.
+ */
+async function ownRowsOrNothing<T>(read: () => Promise<T[]>): Promise<T[]> {
+  try {
+    return await read();
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Never prerendered, and **declared rather than inherited** (#428).
  *
  * This route is already dynamic — `redirectVendorToDashboard()` reaches Clerk's
@@ -296,19 +324,27 @@ export default async function HomePage(): Promise<React.ReactElement> {
   /*
     One wave, and every read in it bounded by `API_REQUEST_TIMEOUT_MS` (#390).
 
-    All three degrade to an empty list, so a wedged upstream costs this page
-    its category row and its featured row and keeps everything else — but
-    before the deadline existed, "degrades" was theoretical: a suspended API
-    never answers at all, so `/` held the connection open with zero bytes
-    flushed until the platform's gateway ended it. The visitor got a blank tab
-    and then somebody else's 504 page. Measured 2026-08-31: 35s and 0 bytes
-    before, 8.1s and a rendered page after.
+    Every one of them degrades to an empty list, so a wedged upstream costs
+    this page its category row, its featured row and a signed-in customer's
+    status strip, and keeps everything else — but before the deadline existed,
+    "degrades" was theoretical: a suspended API never answers at all, so `/`
+    held the connection open with zero bytes flushed until the platform's
+    gateway ended it. The visitor got a blank tab and then somebody else's 504
+    page. Measured 2026-08-31: 35s and 0 bytes before, 8.1s and a rendered page
+    after.
+
+    The two reference reads degrade on their own; the customer's two are the
+    hub's, which redirect rather than degrade, so `ownRowsOrNothing` is what
+    holds them to this route's rule.
   */
   const [categories, featuredVendors, requests, bookings] = await Promise.all([
     getCategories(),
-    getFeaturedVendors(),
-    isCustomer ? getOwnBookingRequests() : [],
-    isCustomer ? getOwnBookings() : [],
+    // Fetched only for the composition that renders it — the featured row is
+    // off for a signed-in customer, and a discarded round trip is one this
+    // page's own deadline comment measures the cost of.
+    isCustomer ? [] : getFeaturedVendors(),
+    isCustomer ? ownRowsOrNothing(getOwnBookingRequests) : [],
+    isCustomer ? ownRowsOrNothing(getOwnBookings) : [],
   ]);
   const featured = landingCategories(categories);
   const status = isCustomer ? landingStatus(requests, bookings) : EMPTY_STATUS;
@@ -636,7 +672,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
         the front door has no honest way to tell those apart, and inventing one
         would mean claiming a vendor count nobody queried.
       */}
-      {featuredVendors.length > 0 && !isCustomer ? (
+      {featuredVendors.length > 0 ? (
         <section aria-labelledby="featured-heading" className={`${CONTAINER} py-14`}>
           <div className="mb-5 flex items-baseline justify-between gap-4">
             <h2 id="featured-heading" className="display-heading text-display-md text-stone-900">
@@ -723,7 +759,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
 
           <ul className="grid gap-8 sm:grid-cols-3">
             {trustSignals.map((signal) => {
-              const Icon = TRUST_ICONS[signal.title] ?? Star;
+              const Icon = TRUST_ICONS[signal.title];
 
               return (
                 <li key={signal.title}>

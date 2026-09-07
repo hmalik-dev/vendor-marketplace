@@ -197,7 +197,7 @@ describe('contrast rules', () => {
    * The value the footer's micro-labels were nearly given, kept as a number so
    * a later "it looks a bit loud" cannot quietly reintroduce it. `#7a7266` is
    * the step below `stone-560`, and at the label's 10.5px it fails — which is
-   * why `550` exists at all rather than the labels reusing an existing step.
+   * why `560` exists at all rather than the labels reusing an existing step.
    */
   it('records why the footer micro-label may not go darker than stone-560', () => {
     expect(contrastOf('#7a7266', '#1c1916')).toBeLessThan(AA_NORMAL);
