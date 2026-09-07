@@ -34,11 +34,22 @@ import { findReportSubject, type ReportSubjectProjection } from './reports.dao.j
  * unwind, and a second entry point is how the two would come to disagree about
  * when a payout stops.
  *
- * **The email is the delivery and the row is not it**, which is the ordering
- * `support.service.ts` states at length and the reason `openReportCase` is
- * allowed to swallow its own failure. Without a send this would be the
- * opposite — a swallowed row would be a complaint silently dropped — so the two
- * travel together or neither does.
+ * **The row is the delivery here, and the email is the nudge — the opposite way
+ * round from `/support/messages`, deliberately.**
+ *
+ * That form's row is a note beside an email a human answers, so a failed send
+ * means the complaint reached nobody and 502 is the truth. A report is answered
+ * by nobody: it is worked from `/admin/cases`, which reads the row. So a report
+ * whose row is written **has arrived**, whatever the mail service did, and
+ * telling its author otherwise is false twice over — it invites a retry that
+ * files a duplicate case and spends one of their six an hour, while the
+ * operator's queue quietly fills with the same complaint.
+ *
+ * Found by driving it: an unverified `EMAIL_FROM` sender made every report 502
+ * while every one of them was sitting in the queue. So the halves swap. The row
+ * failing is the 502, because then there is genuinely nothing; the send failing
+ * is recorded on the case with `email_failed_at` — which is what that column
+ * was added for — and the reporter still gets their reference.
  */
 
 export interface ReportDeps {
@@ -104,10 +115,9 @@ async function resolveSubject(
 /**
  * Files one report and hands back its reference.
  *
- * The ordering mirrors `sendSupportMessage` exactly, minus the hold it has no
- * business placing: resolve every refusal first, write the best-effort row,
- * then send. Writing earlier would file cases for reports that were refused;
- * writing later would leave a failed send with nothing to record the failure on.
+ * Resolve every refusal first, then write the row, then send. Writing earlier
+ * would file cases for reports that were refused; writing later would leave a
+ * failed send with nothing to record the failure on.
  */
 export async function createReport(
   deps: ReportDeps,
@@ -140,6 +150,24 @@ export async function createReport(
     reason: input.reason,
   });
 
+  if (!reportCase) {
+    /*
+     * The one failure that really does lose the report. `openReportCase` has
+     * already logged the driver's code — never the reporter's text — so this
+     * adds the answer and nothing else.
+     *
+     * No reference in `details`: on the support form a reference is worth
+     * quoting because a message the mail service refused was still logged, and
+     * here there is no row to quote it against. Handing over a code that
+     * resolves to nothing is worse than handing over none.
+     */
+    throw new AppError(
+      502,
+      ERROR_CODES.INTERNAL_ERROR,
+      'We could not file that report. Try again in a moment.',
+    );
+  }
+
   const notice = renderReportNotice({
     reference,
     subjectLabel: REPORT_SUBJECT_LABELS[input.subjectType],
@@ -160,22 +188,22 @@ export async function createReport(
     });
   } catch (error) {
     /*
+     * **Recorded, not raised.** The case is already in the queue an operator
+     * works, so the report has arrived; what failed is the nudge telling them
+     * to look. `email_failed_at` is exactly the column for that, and the case
+     * detail already renders it as the one state an operator has to chase
+     * rather than work.
+     *
      * The reference and the failure, never the address and never the detail —
      * `cases.service.ts` sets out at length why a transport error must not be
      * handed to the logger with user-written content bound to it.
      */
     deps.log.error(
       { reference, subjectType: input.subjectType, err: error },
-      'A report failed to reach the support inbox',
+      'A report was filed but its notice did not reach the support inbox',
     );
 
-    if (reportCase) {
-      await recordCaseSendFailure(deps, reportCase, now);
-    }
-
-    throw new AppError(502, ERROR_CODES.INTERNAL_ERROR, 'The mail service rejected the report', {
-      reference,
-    } satisfies ReportReceipt);
+    await recordCaseSendFailure(deps, reportCase, now);
   }
 
   /*

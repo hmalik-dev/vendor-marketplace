@@ -457,6 +457,59 @@ describe('reporting and message visibility (#436)', () => {
     expect(told).toHaveLength(0);
   });
 
+  /*
+   * **A mail outage must not tell a reporter their report was lost.**
+   *
+   * Found in the browser, not here: an unverified `EMAIL_FROM` sender made
+   * every report answer 502 — "That report did not reach us… try again" — while
+   * every one of those reports was sitting in `/admin/cases` waiting to be
+   * worked. A retry then files a duplicate case and spends one of the six an
+   * hour, so the queue fills with the same complaint and its author is told
+   * none of it arrived.
+   *
+   * The row is what an operator works, so the row is the delivery. The send is
+   * a nudge, and its failure is recorded on the case rather than raised.
+   */
+  it('still files the report, and answers with its reference, when the notice cannot be sent', async () => {
+    const fixture = await seed();
+    harness.email.failNext = true;
+
+    const response = await report(CUSTOMER, 'vendor_profile', fixture.vendorProfileId);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().reference).toMatch(SUPPORT_REFERENCE_PATTERN);
+    await harness.flushEmail();
+
+    const [filed] = await casesFor(fixture.vendorProfileId);
+    expect(filed?.reference).toBe(response.json().reference);
+    expect(filed?.status).toBe('open');
+    /* Recorded, so an operator can see this one is a case nobody was told about. */
+    expect(filed?.emailFailedAt).toBeInstanceOf(Date);
+  });
+
+  /*
+   * The other half, and the only failure that really does lose a report: the
+   * row could not be written, so there is nothing in the queue and nothing to
+   * quote. It answers 502 and carries **no** reference — a code that resolves
+   * to no case is worse than no code.
+   */
+  it('answers 502 with no reference when the case row cannot be written', async () => {
+    const fixture = await seed();
+
+    /*
+     * `freeText()` strips bidi controls and trims; neither removes `U+0000`,
+     * and Postgres refuses a null byte with `22021`. So this is a real insert
+     * failure a caller can cause, not a mock standing in for one.
+     */
+    const response = await report(CUSTOMER, 'vendor_profile', fixture.vendorProfileId, {
+      detail: `They asked for a bank transfer.\u0000`,
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json().details).toBeUndefined();
+    expect(await casesFor(fixture.vendorProfileId)).toHaveLength(0);
+  });
+
   // --- Acceptance 3: the limit, and the reader who is told about it ----------
 
   it('rate limits reports per account and says so rather than 500ing', async () => {

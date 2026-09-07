@@ -13,6 +13,9 @@ import {
   PAYOUT_RELEASE_HOURS,
   legalFactTokens,
 } from '@vendor-marketplace/shared';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { legalDocument, legalMarkdownSource } from './legal-content';
 import { legalDocumentText, parseLegalMarkdown } from './legal-markdown';
 
@@ -35,6 +38,35 @@ describe('legal content', () => {
     for (const slug of LEGAL_DOCUMENT_SLUGS) {
       expect([slug, legalDocument(slug).lastUpdated]).toEqual([slug, dates[slug]]);
     }
+  });
+
+  /**
+   * A claim about reading private messages must be on somebody's review list.
+   *
+   * #436 added the only paragraph in this corpus that asserts staff can read a
+   * user's messages. Everything else here is placeholder nobody has relied on;
+   * that sentence is not, and the ticket's own acceptance asks for it to be
+   * marked as unreviewed rather than shipped as though a lawyer had written it.
+   * `docs/pre-launch.md` is the register #374 established for exactly that.
+   *
+   * A test rather than a paragraph asking a future reader to remember, because
+   * the failure mode is silent in both directions: delete the register line and
+   * the claim ships unreviewed, reword the claim and the register stops
+   * describing it. This fails if the clause exists without an entry naming it.
+   */
+  it('keeps the staff-message-access clause on the pre-launch review register', () => {
+    const privacy = legalMarkdownSource('privacy');
+    const claimsStaffCanRead = /the people who operate the platform can read it/.test(privacy);
+
+    expect(claimsStaffCanRead).toBe(true);
+
+    const register = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../../../../docs/pre-launch.md'),
+      'utf8',
+    );
+
+    expect(register).toContain('staff-message-access clause');
+    expect(register).toContain('#436');
   });
 
   it('titles each page from its frontmatter', () => {
