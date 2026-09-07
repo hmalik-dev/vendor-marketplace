@@ -11,7 +11,7 @@ import { type CommandOutcome, runCommand } from '../exec.js';
 export const POSTGRES_CONTAINER = 'vendor-marketplace-postgres';
 export const POSTGRES_USER = 'vendor_marketplace';
 
-const LANE_DATABASE_PREFIX = 'vendor_marketplace_lane_';
+export const LANE_DATABASE_PREFIX = 'vendor_marketplace_lane_';
 
 /** Reduces a ticket identifier to a safe, lowercase SQL identifier. */
 export function laneDatabaseName(ticket: string): string {

@@ -62,7 +62,9 @@ async function main(): Promise<void> {
   const child = spawn(executable, args, {
     cwd: worktree,
     stdio: 'inherit' as const,
-    env: laneEnvFor(worktree),
+    // The command decides which of the lane's two ports `PORT` names: handing
+    // the API's to `next start` served the web app on the API port.
+    env: laneEnvFor(worktree, process.env, parsed.command),
   });
 
   child.on('exit', (code: number | null) => {
