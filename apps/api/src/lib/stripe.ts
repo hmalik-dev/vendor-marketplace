@@ -111,6 +111,17 @@ export interface StripeConnectGateway {
   retrievePaymentIntent(paymentIntentId: string): Promise<PaymentIntentSnapshot>;
 
   /**
+   * Reads a dispute back (#431).
+   *
+   * The `charge.dispute.*` handler re-reads for the same reason the intent
+   * handler does and the account handler does: the event body is
+   * attacker-shaped input that happens to be signed, and the amount and reason
+   * on it are what the operator's case will quote. The figures that reach the
+   * row are the ones Stripe answers with, never the ones that arrived.
+   */
+  retrieveDispute(disputeId: string): Promise<StripeDisputeSnapshot>;
+
+  /**
    * Refunds part or all of an intent. The amount is always passed explicitly,
    * even for a full refund: the cancellation tiers are the product's rule, and
    * letting Stripe default to "everything" would make a 50% refund and a 100%
@@ -494,6 +505,31 @@ export interface PaymentIntentSnapshot {
 export const PAYMENT_INTENT_SUCCEEDED = 'succeeded';
 
 /**
+ * A chargeback as this platform reads it (#431).
+ *
+ * `status` and `reason` are **Stripe's vocabulary in plain strings**, not enums
+ * of ours. Both are lists Stripe owns and extends, and a member we had not heard
+ * of must reach the operator's case rather than fail a webhook we are obliged to
+ * acknowledge — the same reasoning `support_cases.network_outcome` carries.
+ */
+export interface StripeDisputeSnapshot {
+  id: string;
+  /** `needs_response`, `under_review`, `won`, `lost`, `warning_closed`, … */
+  status: string;
+  /** `fraudulent`, `product_not_received`, … */
+  reason: string;
+  amountCents: number;
+  /**
+   * The intent the disputed charge belongs to, or `null`.
+   *
+   * `null` is a real case rather than a defensive one: a charge created outside
+   * this platform has no intent of ours, and it is how the handler decides the
+   * event is not ours to act on.
+   */
+  paymentIntentId: string | null;
+}
+
+/**
  * The refund statuses that mean the customer's money is coming back.
  *
  * `pending` is included: it is a refund in flight, and treating it as absent
@@ -757,6 +793,27 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
 
     async retrievePaymentIntent(paymentIntentId) {
       return toSnapshot(await stripe.paymentIntents.retrieve(paymentIntentId));
+    },
+
+    async retrieveDispute(disputeId) {
+      const dispute = await stripe.disputes.retrieve(disputeId);
+
+      return {
+        id: dispute.id,
+        status: dispute.status,
+        reason: dispute.reason,
+        amountCents: dispute.amount,
+        /*
+         * Expanded or not, Stripe answers this as either the id or the whole
+         * object depending on the request — so both shapes are read rather than
+         * one being assumed. Assuming the string is how a handler silently gets
+         * `[object Object]` as a foreign key.
+         */
+        paymentIntentId:
+          typeof dispute.payment_intent === 'string'
+            ? dispute.payment_intent
+            : (dispute.payment_intent?.id ?? null),
+      };
     },
 
     async createTransfer(input) {

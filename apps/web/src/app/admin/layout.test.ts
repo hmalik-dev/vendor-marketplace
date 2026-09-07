@@ -26,10 +26,30 @@ describe('the admin layout resolves the role before anything else', () => {
 
   it('awaits requireRole before it reads anything else', () => {
     const roleCheck = layout.indexOf("await requireRole('admin')");
-    const badgeRead = layout.indexOf('await getAdminReviews(');
 
     expect(roleCheck).toBeGreaterThan(-1);
-    expect(badgeRead).toBeGreaterThan(-1);
-    expect(roleCheck).toBeLessThan(badgeRead);
+
+    /*
+     * **Every** badge read, not one named read. #431 added a second count to
+     * the rail and put the two in a `Promise.all` *after* the role check —
+     * which is safe, because both are `adminRead`s whose only redirect is `/`,
+     * so they are not in the race the test above forbids. A guard keyed to the
+     * literal `await getAdminReviews(` went red for that correct change and
+     * would have gone green again for a third read added before the role
+     * check. The invariant is the position of `requireRole`, so that is what is
+     * asserted.
+     */
+    const reads = [...layout.matchAll(/getAdmin[A-Za-z]+\(/g)];
+
+    /*
+     * The floor the literal version had for free. Without it a rename — or
+     * inlining `adminRead(` — leaves a loop over nothing, which passes while
+     * asserting nothing at all.
+     */
+    expect(reads.length).toBeGreaterThan(0);
+
+    for (const read of reads) {
+      expect(roleCheck, `${read[0]} runs before the role check`).toBeLessThan(read.index);
+    }
   });
 });

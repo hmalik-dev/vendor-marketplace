@@ -2,7 +2,13 @@ import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { unauthorized } from '../../lib/errors.js';
 import { PAYMENT_INTENT_SUCCEEDED, type StripeEventNotification } from '../../lib/stripe.js';
-import { recordSuccessfulPayment } from '../payments/payments.service.js';
+import {
+  openChargebackCase,
+  recordChargebackOutcome,
+  type ChargebackOutcome,
+} from '../cases/cases.service.js';
+import { bookingContextFor, recordSuccessfulPayment } from '../payments/payments.service.js';
+import { generateSupportReference } from '../support/support.service.js';
 import {
   accountUpdateOutcomeSchema,
   applyAccountStatusChange,
@@ -19,9 +25,32 @@ import { keepRawJsonBody, rawBodyOf } from './raw-body.js';
  */
 const paymentOutcomeSchema = z.enum(['booked', 'already-booked']);
 
+/**
+ * The chargeback outcomes (#431), separate again for the same reason.
+ *
+ * `dispute-opened` is a case and a payout hold; `dispute-recorded` is the
+ * network's answer written onto a case that already exists; `already-recorded`
+ * is a replay that changed nothing. All three are successes and Stripe must
+ * stop retrying on every one of them — telling them apart is for the log line
+ * an operator reads when a hold appears and nobody knows why.
+ */
+const disputeOutcomeSchema = z.enum([
+  'dispute-opened',
+  'dispute-recorded',
+  'already-recorded',
+  /*
+   * Listed here rather than borrowed from `accountUpdateOutcomeSchema`, which
+   * also happens to carry it. That schema belongs to the vendors module for a
+   * different purpose, and leaning on the coincidence meant renaming a member
+   * there would turn a chargeback on a foreign charge into a 500 with nothing
+   * in this file naming the dependency.
+   */
+  'ignored',
+]);
+
 const webhookResponseSchema = z.object({
   received: z.literal(true),
-  outcome: z.union([accountUpdateOutcomeSchema, paymentOutcomeSchema]),
+  outcome: z.union([accountUpdateOutcomeSchema, paymentOutcomeSchema, disputeOutcomeSchema]),
 });
 
 /**
@@ -68,6 +97,31 @@ const SNAPSHOT_ACCOUNT_EVENTS = new Set(['account.updated', 'capability.updated'
  * already written the row by the time Stripe echoes the event back.
  */
 const PAYMENT_SUCCEEDED_EVENT = `payment_intent.${PAYMENT_INTENT_SUCCEEDED}`;
+
+/**
+ * The chargeback that opens a case and freezes the payout (#431).
+ *
+ * One event, not a prefix. `charge.dispute.updated` fires on every piece of
+ * evidence submitted and would re-run the open path for each; the two closing
+ * events below are the ones that carry an outcome worth recording.
+ */
+const DISPUTE_CREATED_EVENT = 'charge.dispute.created';
+
+/**
+ * The two ways a chargeback ends, and **neither resolves the booking**.
+ *
+ * `funds_reinstated` is the platform winning after the money was already
+ * pulled, and `closed` covers every other ending. Both write Stripe's own word
+ * for what happened onto the case and stop there: the network's outcome and
+ * the platform's disposition are different facts, and an operator reconciles
+ * them. Auto-resolving here would settle a dispute on a card network's
+ * evidence rules.
+ */
+const DISPUTE_CLOSED_EVENTS = new Set(['charge.dispute.closed', 'charge.dispute.funds_reinstated']);
+
+function isDisputeEvent(type: string): boolean {
+  return type === DISPUTE_CREATED_EVENT || DISPUTE_CLOSED_EVENTS.has(type);
+}
 
 function isAccountEvent(type: string): boolean {
   return (
@@ -128,6 +182,10 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           );
         }
 
+        if (isDisputeEvent(event.type) && event.objectId) {
+          return applyDisputeEvent(event.type, event.objectId);
+        }
+
         if (event.type !== PAYMENT_SUCCEEDED_EVENT || !event.objectId) {
           return 'ignored';
         }
@@ -181,6 +239,50 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
         );
 
         return created ? 'booked' : 'already-booked';
+      }
+
+      /**
+       * A chargeback, re-read from Stripe and handed to the case queue.
+       *
+       * **The hold is not placed here.** `openChargebackCase` calls
+       * `placeDisputeHold` — the same primitive a customer's own report goes
+       * through — because a second writer is how two paths come to disagree
+       * about when a payout freezes. This function's whole job is to turn a
+       * signed event into a verified snapshot and pick the branch.
+       *
+       * The reference is minted here rather than inside the case service so the
+       * two doors into the queue hand a case its public id the same way: a
+       * chargeback's case is quoted at support exactly like a report's.
+       */
+      async function applyDisputeEvent(
+        type: string,
+        disputeId: string,
+      ): Promise<ChargebackOutcome> {
+        if (DISPUTE_CLOSED_EVENTS.has(type)) {
+          return recordChargebackOutcome(
+            { db: app.db, log: request.log },
+            await app.stripe.retrieveDispute(disputeId),
+            app.clock(),
+          );
+        }
+
+        /*
+         * The read is handed over **unperformed**. `openChargebackCase` asks the
+         * database whether this dispute already has a case before it asks Stripe
+         * anything, so an ordinary replay costs one indexed lookup instead of an
+         * outbound round trip on a webhook Stripe times out and retries.
+         */
+        return openChargebackCase(
+          {
+            db: app.db,
+            log: request.log,
+            bookings: bookingContextFor(app, request.log, options.webOrigin),
+          },
+          disputeId,
+          () => app.stripe.retrieveDispute(disputeId),
+          generateSupportReference(),
+          app.clock(),
+        );
       }
 
       request.log.info({ stripeEvent: event.type, outcome }, 'Applied a Stripe webhook');

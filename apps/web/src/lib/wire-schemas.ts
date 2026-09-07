@@ -27,6 +27,9 @@ import {
   userSchema,
   adminActivityRowSchema,
   adminBookingRowSchema,
+  adminCaseBookingSchema,
+  adminCaseDetailSchema,
+  adminCaseRowSchema,
   adminCustomerRowSchema,
   adminMetricsSchema,
   adminPaymentRowSchema,
@@ -449,6 +452,36 @@ export const wireAdminActivityRowSchema = adminActivityRowSchema.extend({
 export type WireAdminActivityRow = z.infer<typeof wireAdminActivityRowSchema>;
 export const wireAdminActivityPageSchema = paginatedSchema(wireAdminActivityRowSchema);
 export type WireAdminActivityPage = z.infer<typeof wireAdminActivityPageSchema>;
+
+/**
+ * The case queue (#431).
+ *
+ * Five coercions rather than one, because the case detail is the console's only
+ * read with dates on **two** levels — the case's own, and the booking's money
+ * timestamps. A missing coercion on either 500s the screen an operator opens to
+ * decide who keeps the money, which is the worst place in the product for a
+ * `.getTime is not a function`.
+ */
+export const wireAdminCaseRowSchema = adminCaseRowSchema.extend({
+  createdAt: z.coerce.date(),
+});
+export type WireAdminCaseRow = z.infer<typeof wireAdminCaseRowSchema>;
+export const wireAdminCasePageSchema = paginatedSchema(wireAdminCaseRowSchema);
+export type WireAdminCasePage = z.infer<typeof wireAdminCasePageSchema>;
+
+export const wireAdminCaseBookingSchema = adminCaseBookingSchema.extend({
+  paidAt: z.coerce.date().nullable(),
+  payoutReleasedAt: z.coerce.date().nullable(),
+});
+export type WireAdminCaseBooking = z.infer<typeof wireAdminCaseBookingSchema>;
+
+export const wireAdminCaseDetailSchema = adminCaseDetailSchema.extend({
+  createdAt: z.coerce.date(),
+  emailFailedAt: z.coerce.date().nullable(),
+  resolvedAt: z.coerce.date().nullable(),
+  booking: wireAdminCaseBookingSchema.nullable(),
+});
+export type WireAdminCaseDetail = z.infer<typeof wireAdminCaseDetailSchema>;
 
 /** No dates on the wire: every series point is already a `YYYY-MM-DD` string. */
 export const wireAdminMetricsSchema = adminMetricsSchema;

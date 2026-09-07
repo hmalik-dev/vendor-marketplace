@@ -7,8 +7,16 @@ Scannability beats airiness; the whitespace moves to the gutters.
 
 The header inverts to `stone-900` with a translucent "Admin" chip — an
 unmistakable signal you're on the ops side of the product. Sidebar 210px:
-Overview · Vendors · Customers · Bookings · Payments · Reviews (count) ·
-Categories & tags · Activity.
+Overview · Vendors · Customers · Bookings · Payments · Cases (count) ·
+Reviews (count) · Categories & tags · Activity.
+
+**Cases is a ninth row and carries the second count — ruled 2026-09-07
+(#431).** It sits between `Payments` and `Reviews`, in the order an operator
+works: it is money, and it is the only row on the rail where the platform owes
+somebody an answer. The count is open cases, and it earns the badge for a
+sharper reason than Reviews does — an unreviewed review is somebody waiting for
+an opinion, an open case is somebody's payout frozen. Read the same cheap way,
+`pageSize=1` for the `total`, never through `/admin/metrics`.
 
 **Activity is an eighth row and frame `13` draws seven — ruled 2026-09-07
 (#434).** The frame yields, the same direction D30 settled: this file is the
@@ -68,8 +76,24 @@ uuid the platform holds. **No row carries an action**, and that is not an
 omission: the table is append-only in the database, so a control here would
 offer something Postgres refuses.
 
+**Cases** — the operations queue (#431), and the only console list ordered
+**oldest first**. Reference · Who · Subject · Booking · Age · Filed · Status,
+filtered by open/resolved and by whether a booking is attached, defaulting to
+open. The count line carries the age of the oldest open case, because that
+number is money somebody is not being paid; every other list's newest-first
+order would put exactly that row on the last page. One inbox for both doors — a
+customer's report and a card network's chargeback — because an operator working
+two queues works neither.
+
 **Detail views** — card-based groupings with the actions prominent. Every
 destructive action goes through an AlertDialog naming the consequence.
+
+The case detail is the worked example: the message in full, the sender, the
+chargeback's Stripe id and network outcome where there is one, and the booking
+with every money field the list rows omit — total, fee, payout, refund, paid-at,
+payout-released-at and the hold's reason. Then the two-position control, each
+side of it naming its consequence **in money**: "$1,200 goes back to the
+customer and the booking is cancelled", never "Are you sure?".
 
 ## Acceptance
 
