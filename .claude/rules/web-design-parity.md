@@ -104,6 +104,33 @@ drift.
   The frame's surviving price-before-date order is an artefact of a filter that
   was removed.
 
+**Frame `13`'s filter bar has four dropdowns, not three (#433, measured 2026-09-07).**
+The frame and `22-admin.md` both draw three; the app adds `Status`. **Measured and
+accepted**: `Export CSV` lands at x=1347.1 against the frame's 1348.1, so the
+right anchor has not moved, and the slack goes 361.5px to 321.8px — smaller than
+it looks, because D25's caret removal had already given back ~10.4px per trigger,
+so without `Status` the app would sit ~35px _looser_ than the frame. Worst
+realistic case 201.8px, no wrap, no overflow, `scrollWidth === clientWidth` in
+every state. Re-found by a second pass on 2026-09-07 because this entry did not
+exist yet; it does now.
+
+**An actions menu is not governed by `42-dropdowns.md`'s Tab clause (#435, ruled
+2026-09-07).** That clause — _"`Tab` closes and moves on. Focus returns to the
+field on close"_ — sits in a bullet about ↑↓ moving, ↵ committing and typing
+narrowing the list in place, i.e. the **select/combobox shell**, a pattern that
+selects a value. A row-actions menu is an ARIA menu button, and returning focus
+to its trigger on close is that pattern's conventional behaviour — and is also
+what the clause's own second sentence asks for. So: panel closes, `aria-expanded`
+goes `false`, focus parks on the trigger. Reaching the next control costs one
+extra Tab, and that is correct rather than a defect.
+
+**Do not "fix" it by hand-rolling a tab-order walk.** Radix's menu keydown
+handling sits between the component's handler and the browser default, so
+declining to `preventDefault` does not hand the key back — and the admin table
+renders every row action **twice** (the grid and the `md:hidden` card list), which
+is precisely the DOM that makes a naive next-focusable query select the wrong
+element.
+
 **A retired vendor's row draws no `···` control (#433, ruled 2026-09-07).**
 Frame `13` draws the row-actions control in all fifteen rows. A retired account
 correctly has none: `setUserBanned` answers 404 on a soft-deleted user, so the
