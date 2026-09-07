@@ -1,12 +1,15 @@
-import { payoutDueThroughDate } from '@vendor-marketplace/shared';
+import { PAYOUT_RELEASE_HOURS, payoutDueThroughDate } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import type { FastifyBaseLogger } from 'fastify';
+import { conflict, notFound } from '../../lib/errors.js';
 import { transferGroupFor, type StripeConnectGateway } from '../../lib/stripe.js';
 import {
   claimReleasableBooking,
   findDuePayoutBookingIds,
+  findPayoutRetrySubject,
   recordPayoutFailure,
   recordPayoutRelease,
+  type PayoutRetrySubjectRow,
 } from './payouts.dao.js';
 
 /**
@@ -79,6 +82,123 @@ export async function releaseDuePayouts(
   }
 
   return result;
+}
+
+/**
+ * What one operator-driven retry did, and the payout state it left behind.
+ *
+ * The refreshed row travels back with the outcome so the console can redraw the
+ * row it acted on without a second request — and, more importantly, so the
+ * operator is told the **new** failure reason rather than the one they were
+ * looking at when they pressed the button.
+ */
+export interface PayoutRetryResult {
+  outcome: 'released' | 'failed' | 'busy';
+  payoutAttempts: number;
+  payoutFailureReason: string | null;
+  payoutReleasedAt: Date | null;
+  stripeTransferId: string | null;
+}
+
+/**
+ * Retries one stuck payout on an operator's say-so, through the **sweep's own
+ * path** rather than a second transfer implementation (#432).
+ *
+ * The sweep already retries every fifteen minutes, so this buys the operator an
+ * answer *now* — did it work, and if not what does Stripe say today — rather
+ * than a capability the platform lacked. That is also why it reuses
+ * `releaseOnePayout` verbatim: a separate transfer call here would be a second
+ * place for the transfer group, the fee split and the idempotency key to be
+ * decided, and money is the worst place in the codebase to hold two opinions.
+ *
+ * **D36 is satisfied structurally, not by remembering it.** The key is
+ * `payout_<bookingId>_<attempt>` and the attempt is read from the row inside
+ * the claim; a failure increments that counter durably, so a retry necessarily
+ * mints a different key from the one whose refusal Stripe has cached. Reusing
+ * it would replay that cached failure for 24 hours and the operator would learn
+ * nothing, which is the state the sweep itself was in before #423.
+ */
+export async function retryPayoutRelease(
+  context: PayoutContext,
+  bookingId: string,
+  now: Date,
+): Promise<PayoutRetryResult> {
+  const dueThroughDate = payoutDueThroughDate(now);
+  const subject = await findPayoutRetrySubject(context.db, bookingId);
+
+  if (!subject) {
+    throw notFound('No booking with that id');
+  }
+
+  refusePayoutRetry(subject, dueThroughDate);
+
+  const outcome = await releaseOnePayout(context, bookingId, dueThroughDate, now);
+  const after = await findPayoutRetrySubject(context.db, bookingId);
+
+  if (!after) {
+    throw notFound('No booking with that id');
+  }
+
+  return {
+    /*
+     * A `skipped` claim means a concurrent sweep holds the row lock — it is
+     * neither a refusal nor a failure, and telling the operator "that failed"
+     * would be false. `busy` is the honest third answer: nothing was attempted
+     * here because something else is attempting it right now.
+     */
+    outcome: outcome === 'skipped' ? 'busy' : outcome,
+    payoutAttempts: after.payoutAttempts,
+    payoutFailureReason: after.payoutFailureReason,
+    payoutReleasedAt: after.payoutReleasedAt,
+    stripeTransferId: after.stripeTransferId,
+  };
+}
+
+/**
+ * The states a retry is refused from, most specific first, each saying which.
+ *
+ * Refusing rather than quietly returning "nothing happened": the operator
+ * pressed a button on a row they believed was stuck, and the one thing they
+ * must not be handed is a no-op that reads like a retry.
+ *
+ * **`cancelled` is refused even though the sweep releases it.** A cancellation
+ * inside D3's window leaves the vendor a residual the sweep still pays on the
+ * original schedule (D31), so no money is stranded by this refusal — the
+ * fifteen-minute sweep keeps working the row. What is withheld is the operator
+ * *forcing* it on the one status where the amount owed was rewritten after the
+ * fact, and the message says that rather than implying nothing is owed.
+ */
+function refusePayoutRetry(subject: PayoutRetrySubjectRow, dueThroughDate: string): void {
+  if (subject.payoutReleasedAt) {
+    throw conflict('This payout has already been released, so there is nothing to retry');
+  }
+
+  if (subject.status === 'disputed') {
+    throw conflict('This payout is on hold while the reported problem is being resolved');
+  }
+
+  if (subject.status === 'cancelled') {
+    throw conflict(
+      'This booking was cancelled. Any residual the vendor is still owed is released by the ' +
+        'scheduled sweep, not by hand',
+    );
+  }
+
+  if (subject.payoutModel !== 'separate') {
+    throw conflict(
+      'The vendor was paid as the card succeeded on this booking, so no transfer is owed',
+    );
+  }
+
+  if (subject.vendorPayoutCents <= 0) {
+    throw conflict('Nothing is owed to the vendor on this booking');
+  }
+
+  if (subject.eventDate > dueThroughDate) {
+    throw conflict(
+      `This payout is not due yet — it is released ${PAYOUT_RELEASE_HOURS} hours after the event`,
+    );
+  }
 }
 
 /**

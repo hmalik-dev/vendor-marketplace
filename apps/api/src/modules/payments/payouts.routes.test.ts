@@ -27,7 +27,7 @@ import {
   type TestHarness,
 } from '../../testing/test-server.js';
 import { liftDisputeHold } from './payments.service.js';
-import { releaseDuePayouts } from './payouts.service.js';
+import { releaseDuePayouts, retryPayoutRelease } from './payouts.service.js';
 
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
@@ -339,6 +339,105 @@ describe('payouts', () => {
       expect(booking.stripeTransferId).toBeNull();
       expect(booking.payoutReleasedAt).toBeNull();
       expect(harness.stripe.transfers).toEqual([]);
+    });
+  });
+
+  /* #432 acceptance 3 — the operator retry and everything it refuses. */
+  describe('the operator retry', () => {
+    /** The retry, driven the way the admin route drives it. */
+    async function retry(bookingId: string, now: Date = clockNow) {
+      return retryPayoutRelease(
+        { db: harness.database.db, stripe: harness.stripe, log: harness.app.log },
+        bookingId,
+        now,
+      );
+    }
+
+    /**
+     * **The D36 regression, and the only test that can see it.**
+     *
+     * The first attempt is refused and the double caches that refusal under its
+     * key exactly as Stripe does. A retry that reused `payout_<bookingId>_0`
+     * would be answered from that cache — the same error, forever, with the
+     * original request's log URL — and the operator would press the button and
+     * learn nothing. A test that only asserts the happy retry cannot tell the
+     * two apart, which is how this shipped in the first place.
+     */
+    it('mints a key versioned by the attempt rather than replaying the cached failure', async () => {
+      const paid = await paidBooking();
+      clockNow = AFTER_RELEASE;
+      harness.stripe.transfersToRefuse.add(paid.id);
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 1 });
+
+      harness.stripe.transfersToRefuse.clear();
+      const result = await retry(paid.id);
+
+      expect(result.outcome).toBe('released');
+      expect(result.payoutFailureReason).toBeNull();
+      expect(result.stripeTransferId).not.toBeNull();
+      expect(harness.stripe.transfers).toHaveLength(1);
+      expect(harness.stripe.transfers[0]?.idempotencyKey).toBe(`payout_${paid.id}_1`);
+    });
+
+    /** A retry that fails again counts the attempt and reports today's reason. */
+    it('records the new attempt and returns the reason when it fails again', async () => {
+      const paid = await paidBooking();
+      clockNow = AFTER_RELEASE;
+      harness.stripe.transfersToRefuse.add(paid.id);
+      await sweep();
+
+      const result = await retry(paid.id);
+
+      expect(result.outcome).toBe('failed');
+      expect(result.payoutAttempts).toBe(2);
+      expect(result.payoutFailureReason).toContain('refused a transfer');
+      expect(result.payoutReleasedAt).toBeNull();
+      expect(harness.stripe.transfers).toEqual([]);
+    });
+
+    it('refuses a payout that has already been released, and says so', async () => {
+      const paid = await paidBooking();
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      await expect(retry(paid.id)).rejects.toThrow(
+        'This payout has already been released, so there is nothing to retry',
+      );
+    });
+
+    it('refuses a payout held by a reported problem, and says so', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+      expect((await report(paid.id, CUSTOMER)).statusCode).toBe(200);
+      clockNow = AFTER_RELEASE;
+
+      await expect(retry(paid.id)).rejects.toThrow(
+        'This payout is on hold while the reported problem is being resolved',
+      );
+      expect(harness.stripe.transfers).toEqual([]);
+    });
+
+    it('refuses a cancelled booking, and says the sweep owns the residual', async () => {
+      const paid = await paidBooking();
+      const cancelled = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      expect(cancelled.statusCode).toBe(200);
+      clockNow = AFTER_RELEASE;
+
+      await expect(retry(paid.id)).rejects.toThrow('This booking was cancelled');
+    });
+
+    it('refuses a payout whose window has not closed yet, and says so', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+
+      await expect(retry(paid.id)).rejects.toThrow('This payout is not due yet');
+      expect(harness.stripe.transfers).toEqual([]);
+    });
+
+    it('refuses a booking id that does not exist', async () => {
+      await expect(retry('00000000-0000-4000-8000-000000000000')).rejects.toThrow(
+        'No booking with that id',
+      );
     });
   });
 

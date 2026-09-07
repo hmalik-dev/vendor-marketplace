@@ -5,6 +5,7 @@ import {
   decimal,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -69,6 +70,35 @@ export const vendorProfiles = pgTable(
      * one** — see `vendor_profiles_stripe_onboarded_requires_account` below.
      */
     stripeOnboarded: boolean('stripe_onboarded').notNull().default(false),
+    /**
+     * Stripe's machine-readable code for **why** a capability is not active —
+     * `requirements_past_due`, `unsupported_country`, `restricted_other` and
+     * the rest of `status_details[].code`. Null while both capabilities are
+     * active, and null for a vendor who has never started onboarding.
+     *
+     * `stripeOnboarded` is a boolean and a boolean cannot answer the operator's
+     * actual question. A vendor who never connected an account and a vendor
+     * Stripe restricted this morning both read `false`, and the console's
+     * `No payouts yet` filter listed them together with nothing to separate
+     * them (#432). The reason is what separates them, and it is Stripe's own
+     * word for it rather than one this codebase invents.
+     *
+     * **Derived, never operator-written**, exactly like `stripeOnboarded`: the
+     * account webhook re-reads the account and writes all three together. D29's
+     * constraint makes the flag entail an account id; this column is only ever
+     * as true as the last capability read.
+     */
+    stripeDisabledReason: text('stripe_disabled_reason'),
+    /**
+     * The requirements Stripe is still waiting on, as its own
+     * `requirements.entries[].description` strings — `currently_due` and
+     * `past_due` only, and only those awaiting the **user** rather than Stripe.
+     *
+     * An empty array for a vendor with nothing outstanding, which is both the
+     * onboarded case and the never-started one; those two are told apart by
+     * `stripeAccountId`, not by this.
+     */
+    stripeRequirementsDue: jsonb('stripe_requirements_due').$type<string[]>().notNull().default([]),
     /** Vendor-controlled public visibility. */
     isPublished: boolean('is_published').notNull().default(false),
     /** Soft delete — preserves booking history integrity. */

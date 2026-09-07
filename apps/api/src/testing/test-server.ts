@@ -18,6 +18,7 @@ import {
 } from '../lib/stripe.js';
 import type {
   PaymentIntentSnapshot,
+  StripeAccountCapabilities,
   StripeAccountStatus,
   StripeConnectGateway,
   StripeDisputeSnapshot,
@@ -281,6 +282,9 @@ function createFakeEmail(): FakeEmail {
   return fake;
 }
 
+/** What a suite may set on an account: the pair always, the reasons optionally. */
+export type FakeAccountStatus = StripeAccountCapabilities & Partial<StripeAccountStatus>;
+
 /**
  * The Stripe Connect boundary, recorded rather than called. Suites set the
  * capability statuses they want an account to have and read back what the
@@ -291,8 +295,15 @@ export interface FakeStripe extends StripeConnectGateway {
   createdAccounts: { accountId: string; vendorId: string; contactEmail: string }[];
   /** Every onboarding link minted, so a suite can assert on the URLs sent. */
   createdLinks: { accountId: string; returnUrl: string; refreshUrl: string }[];
-  /** Capability state per account id; absent means both capabilities inactive. */
-  accountStatuses: Map<string, StripeAccountStatus>;
+  /**
+   * Capability state per account id; absent means both capabilities inactive.
+   *
+   * The reason and the requirement list are **optional** here (#432). Almost
+   * every suite cares only about the capability pair, and making them supply
+   * Stripe's `status_details` vocabulary to say "this account can receive a
+   * transfer" would put invented copy in twenty tests that never read it.
+   */
+  accountStatuses: Map<string, FakeAccountStatus>;
   /** Signatures the fake verifier accepts; anything else is rejected. */
   validSignatures: Set<string>;
   /**
@@ -407,7 +418,7 @@ export interface FakeStripe extends StripeConnectGateway {
 function createFakeStripe(): FakeStripe {
   const createdAccounts: FakeStripe['createdAccounts'] = [];
   const createdLinks: FakeStripe['createdLinks'] = [];
-  const accountStatuses = new Map<string, StripeAccountStatus>();
+  const accountStatuses = new Map<string, FakeAccountStatus>();
   const validSignatures = new Set<string>(['valid-signature']);
   const paymentIntents = new Map<string, PaymentIntentSnapshot>();
   const intentsByKey = new Map<string, string>();
@@ -469,8 +480,16 @@ function createFakeStripe(): FakeStripe {
       return { url: `https://connect.stripe.test/setup/${input.accountId}/${createdLinks.length}` };
     },
 
-    readAccountStatus: async (accountId) =>
-      accountStatuses.get(accountId) ?? { transfersActive: false, payoutsActive: false },
+    readAccountStatus: async (accountId) => {
+      const status = accountStatuses.get(accountId);
+
+      return {
+        transfersActive: status?.transfersActive ?? false,
+        payoutsActive: status?.payoutsActive ?? false,
+        disabledReason: status?.disabledReason ?? null,
+        requirementsDue: status?.requirementsDue ?? [],
+      };
+    },
 
     parseEventNotification: (_payload, signature) => {
       if (!validSignatures.has(signature)) {

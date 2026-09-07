@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, inArray, isNull, lte, sql, type SQL } from 'drizzle-orm';
 import { bookings, vendorProfiles } from '@vendor-marketplace/db/schema';
+import type { BookingStatus, PayoutModel } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /**
@@ -172,6 +173,48 @@ export async function claimReleasableBooking(
       ),
     )
     .for('update', { of: bookings, skipLocked: true })
+    .limit(1);
+
+  return rows?.[0] ?? null;
+}
+
+/**
+ * Everything the operator retry has to refuse on, read without a lock.
+ *
+ * Unlocked on purpose: this read only decides whether the retry is *allowed to
+ * be attempted*, and the attempt itself re-reads every one of these predicates
+ * under `FOR UPDATE SKIP LOCKED` in `claimReleasableBooking`. Taking the lock
+ * here would hold it across the refusal path too, for a question whose answer
+ * the claim is going to check again anyway.
+ */
+export interface PayoutRetrySubjectRow {
+  status: BookingStatus;
+  eventDate: string;
+  payoutModel: PayoutModel;
+  vendorPayoutCents: number;
+  payoutReleasedAt: Date | null;
+  payoutAttempts: number;
+  payoutFailureReason: string | null;
+  stripeTransferId: string | null;
+}
+
+export async function findPayoutRetrySubject(
+  db: AppDatabase,
+  bookingId: string,
+): Promise<PayoutRetrySubjectRow | null> {
+  const rows = await db
+    .select({
+      status: bookings.status,
+      eventDate: bookings.eventDate,
+      payoutModel: bookings.payoutModel,
+      vendorPayoutCents: bookings.vendorPayoutCents,
+      payoutReleasedAt: bookings.payoutReleasedAt,
+      payoutAttempts: bookings.payoutAttempts,
+      payoutFailureReason: bookings.payoutFailureReason,
+      stripeTransferId: bookings.stripeTransferId,
+    })
+    .from(bookings)
+    .where(eq(bookings.id, bookingId))
     .limit(1);
 
   return rows?.[0] ?? null;
