@@ -194,9 +194,28 @@ So a parity pass finding `stone-400` as text on ink should expect the suite to
 have caught it already. **Treat a miss as a gap in the guard and widen it, rather
 than filing a fifth instance** — the four historical ones (#430's closing band,
 #441's admin header, #441's legal hairline, and the 78%-alpha-of-`stone-50` that
-minted the ink ramp) are fixtures in that suite. The three per-call-site guards
-stay: each also pins the exact token its frame names, which is a parity
-assertion the law cannot make.
+minted the ink ramp) are fixtures in that suite. The per-call-site guards stay:
+each also pins the exact token its frame names, which is a parity assertion the
+law cannot make, and a negative assertion at a call site records that _this_
+site got it wrong once — history the law does not carry.
+
+**The law covers ink grounds only, and that limit is principled rather than
+lazy. Do not read it as closing the whole class.** On an ink ground the ground is
+observable, so a wrong role is decidable. On a **light** ground it is not:
+`stone-400` is legitimate `text-*` at four sites (`ui/empty-state.tsx`,
+`vendors/profile/review-form.tsx`, and two in `packages/package-manager.tsx` —
+all decorative glyphs), and no source scan can separate those from a mistake. So
+**"wrong role on a light ground" remains entirely unguarded** — no test, no lint,
+nothing. A fifth instance of _that_ shape is a new finding and not a regression
+in #447.
+
+`INK_GROUND` is **derived from `STONE_ROLES`**, not a literal pattern, so
+declaring a third ink ground updates the guard automatically. It got there the
+right way: the first version wrote the character class `bg-stone-9[05]0` and
+`design-tokens.test.ts`'s ratchet flagged the truncated `bg-stone-9` as a utility
+naming a ramp step that does not exist. **An existing guard catching the new
+guard's own text is the system working** — and the ratchet is at zero, so do not
+add a line to it to get past something.
 
 **The Florals category no longer exists (#419, ruled 2026-09-06).** It was
 folded into `Decor`, so the taxonomy is ten categories and three frames now
