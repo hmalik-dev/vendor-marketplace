@@ -1486,9 +1486,17 @@ the four metric cards already are. A number that leads to the filtered list;
    findable by filter.
 3. The retry mints a new idempotency key versioned by the attempt (D36) and is
    refused with a specific message on cancelled, disputed and released bookings.
-4. A vendor Stripe has restricted shows the disabled reason and the outstanding
-   requirements; a vendor who never onboarded shows neither and reads
-   differently.
+4. **Ruled 2026-09-07: data-complete here, view deferred to #437.** The Vendors
+   table is frame `13`'s seven columns and `frame-13-parity.test.ts` asserts the
+   grid template, so an eighth column would break the parity gate #392 owns —
+   a design-contract change, which a ticket may not make. So this ticket
+   **supplies and tests** `stripeAccountId`, `stripeDisabledReason` and
+   `stripeRequirementsDue` on `adminVendorRowSchema`, written only by the
+   account webhook, and #437 draws them on the vendor detail view. A vendor
+   Stripe has restricted must be distinguishable in the *data* from one who
+   never onboarded; that distinction becoming visible is #437's acceptance, not
+   this one's. (Same call #438 made in declining to add a vendor-table link for
+   the same reason.)
 5. Nothing in the console writes `stripe_onboarded`.
 6. The Overview carries a payout-health count that links to the filtered list.
 7. Every new number is a query result at request time — the no-invented-numbers
