@@ -61,7 +61,20 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
         address readable once the label starts eliding.
       */}
       <div className="flex min-w-0 items-center gap-4.5">
-        <span className="truncate text-action text-stone-400" title={email}>
+        {/*
+          `stone-480`, not `stone-400` (#441). `stone-400` is a **border**
+          value: the frames draw it on a light ground at thirty-nine sites and
+          as text on ink at none. This header is `stone-900`, so its text reads
+          from the ink-ground ramp minted in `aac9b3b` — 480, 520, 540, 560 —
+          of which 480 is the lightest step.
+
+          Frame `13` does draw this line at `stone-400`'s own value. That is the
+          frame naming a colour rather than a role, and the two steps are three
+          units apart, so the line renders as it did and only its meaning
+          changes. This is the product's one instance, which is why it rides
+          with the footer rather than with the admin tickets.
+        */}
+        <span className="truncate text-action text-stone-480" title={email}>
           Logged in as {email}
         </span>
         {/*
