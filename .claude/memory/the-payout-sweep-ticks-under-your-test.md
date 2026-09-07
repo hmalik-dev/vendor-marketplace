@@ -9,18 +9,32 @@ metadata:
 watched a fixture go from **7 attempts to 8 during a browser pass**, with nobody
 touching it.
 
-That is correct behaviour — the sweep is doing its job — but it means any test or
-verification that pins a **literal `payout_attempts` value** on a booking the
-sweep considers due is a flake waiting to happen. It will pass locally, pass in
-CI, and fail once on somebody else's machine fifteen minutes later.
+**Scope, narrowed 2026-09-07 and verified — this does NOT reach the vitest
+suites.** `createTestHarness` passes `payoutSweepIntervalMs: 0`
+(`testing/test-server.ts:768`) and `payoutReleasePlugin` returns early on
+`intervalMs <= 0` (`plugins/payout-release.ts:40`), deliberately, because a
+sweep firing mid-test would move money against fixtures nobody asked it to
+touch. So a suite pinning `payoutAttempts: 2` is **stable by construction** and
+is not what this memory is about. Do not go weakening suite assertions that were
+never at risk.
+
+**What is exposed is anything driven against a running API** — browser passes,
+manual checks, `lane:exec` scripts. That is where the 7 → 8 happened. A literal
+attempt count asserted there is a flake.
 
 **How to apply:**
 
 - Assert **relative** facts — that the count increased, that a reason is present,
   that the row is still unreleased — not `attempts === 9`.
-- Or take the booking **out of the sweep's reach**: the sweep selects on
-  `payout_released_at IS NULL AND status <> 'cancelled' AND vendor_payout_cents > 0`,
-  so a fixture that fails any of those is stable by construction.
+- Or take the booking **out of the sweep's reach**. The sweep selects on
+  `payout_released_at IS NULL AND status <> 'cancelled' AND vendor_payout_cents > 0`
+  **and a due window on the event date**, so a fixture failing any of those is
+  stable. The least invasive is moving the **event date forward**: it drops out
+  of the due window while staying failing, because the failing predicate has no
+  date bound. Lane 432 needed that for a sharper reason than flakiness — its
+  fixture sat on the **real Stripe test account**, so a tick would have
+  transferred real money and dropped its failing count from 2 to 1 under a pass
+  asserting 2.
 - Copy displayed to a user *may* name the number (`That is attempt 9.`); the
   **test** for that copy must not pin it.
 
