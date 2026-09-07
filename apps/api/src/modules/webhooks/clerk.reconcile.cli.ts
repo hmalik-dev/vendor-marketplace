@@ -1,6 +1,9 @@
 import { createClerkClient } from '@clerk/backend';
 import { createDatabase, loadEnv } from '@vendor-marketplace/db';
-import { parseEnv } from '../../config/env.js';
+import { canonicalWebOrigin, parseEnv } from '../../config/env.js';
+import { createS3Storage } from '../../lib/storage.js';
+import { bookingContextFor } from '../payments/payments.service.js';
+import { buildServer } from '../../server.js';
 import { reconcileClerkUsers } from './clerk.reconcile.js';
 
 /**
@@ -23,8 +26,28 @@ const env = parseEnv();
 const { db, client } = createDatabase();
 const clerk = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
 
+/*
+ * The real instance, never listened on (#433).
+ *
+ * Retiring a user now refunds their bookings, so this pass needs Stripe, the
+ * event hub and the mailer — and assembling those here by hand is how the
+ * repair path comes to hold a different client from the live one. The payout
+ * sweep is off because a repair pass must move no money it was not asked to.
+ */
+const app = await buildServer({
+  env,
+  db,
+  storage: createS3Storage(env),
+  payoutSweepIntervalMs: 0,
+});
+
 try {
-  const summary = await reconcileClerkUsers(db, clerk.users, { dryRun });
+  const summary = await reconcileClerkUsers(
+    bookingContextFor(app, app.log, canonicalWebOrigin(env)),
+    clerk.users,
+    { dryRun },
+    app.clock(),
+  );
 
   process.stdout.write(
     `${dryRun ? 'Would reconcile' : 'Reconciled'} ${summary.examined} user(s) against Clerk\n` +
@@ -34,5 +57,6 @@ try {
       `  ${summary.skipped} skipped — seeded accounts Clerk never issued\n`,
   );
 } finally {
+  await app.close();
   await client.end();
 }

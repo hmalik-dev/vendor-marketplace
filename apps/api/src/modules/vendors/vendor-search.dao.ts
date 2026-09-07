@@ -3,6 +3,7 @@ import { categories, vendorCategories, vendorProfiles } from '@vendor-marketplac
 import type { CategoryFacet, VendorCard, VendorSearchQuery } from '@vendor-marketplace/shared';
 import { isNewVendor } from './vendor-recency.js';
 import type { AppDatabase } from '../../lib/database.js';
+import { VENDOR_VISIBLE } from './vendor-visibility.js';
 import { escapeLikePattern } from '../../lib/like-pattern.js';
 
 /*
@@ -16,17 +17,6 @@ import { escapeLikePattern } from '../../lib/like-pattern.js';
  * back null. The names here are constants, never user input; every value that
  * is interpolated still goes through a bound parameter.
  */
-
-/**
- * The public search query.
- *
- * Every filter is optional and they are AND-combined: a customer who narrows by
- * category, date and price is asking for all three at once, and returning the
- * union would bury the matches they actually asked for.
- *
- * Only published, non-deleted vendors are ever visible here.
- */
-const VISIBLE = and(eq(vendorProfiles.isPublished, true), eq(vendorProfiles.isDeleted, false));
 
 /**
  * The cheapest active package, as a correlated subquery.
@@ -49,14 +39,14 @@ function startingPriceCents(): SQL<number | null> {
  * facet counts, so all three describe the same set. `exceptCategory` drops the
  * category filter, which is what makes a facet count answer "how many would I
  * get if I picked this one instead".
+ *
+ * Every filter is optional and they are AND-combined: a customer who narrows by
+ * category, date and price is asking for all three at once, and returning the
+ * union would bury the matches they actually asked for. `VENDOR_VISIBLE` is the
+ * one that is never optional.
  */
 function filters(query: VendorSearchQuery, exceptCategory = false): SQL[] {
-  const conditions: SQL[] = [];
-  const visible = VISIBLE;
-
-  if (visible) {
-    conditions.push(visible);
-  }
+  const conditions: SQL[] = [VENDOR_VISIBLE];
 
   /*
    * Name search is the referral affordance, not a general text query: it

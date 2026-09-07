@@ -1,5 +1,9 @@
 import Link from 'next/link';
-import { ADMIN_PAYOUT_FILTERS, ADMIN_VENDOR_STATUSES } from '@vendor-marketplace/shared';
+import {
+  ADMIN_PAYOUT_FILTERS,
+  ADMIN_VENDOR_STATUSES,
+  ADMIN_VENDOR_STATUS_LABELS,
+} from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { VendorTable } from '@/components/admin/vendor-table';
@@ -135,6 +139,29 @@ export default async function AdminVendorsPage({
             label="City"
             value={params.city ?? ''}
             options={facets.cities.map((city) => ({ value: city, label: city }))}
+          />
+          {/*
+            The Status control, which the bar did not have (#433).
+
+            The saved `Awaiting review` chip was the only thing that set this
+            parameter, so the other states were reachable only by typing a query
+            string. That was liveable while every state a vendor could be in was
+            visible from the pill; it stopped being liveable when `retired`
+            arrived, because a deleted account is exactly the row an operator
+            goes looking for and cannot find by scrolling. Both controls write
+            `status`, so they agree: choosing `Review` here and clicking the chip
+            land on the same filtered view.
+          */}
+          <FilterSelect
+            action={PATH}
+            carried={params}
+            name="status"
+            label="Status"
+            value={params.status ?? ''}
+            options={ADMIN_VENDOR_STATUSES.map((status) => ({
+              value: status,
+              label: ADMIN_VENDOR_STATUS_LABELS[status],
+            }))}
           />
           <FilterSelect
             action={PATH}

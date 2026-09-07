@@ -3,7 +3,11 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { adminBanResultSchema, type AdminVendorStatus } from '@vendor-marketplace/shared';
+import {
+  ADMIN_VENDOR_STATUS_LABELS,
+  adminBanResultSchema,
+  type AdminVendorStatus,
+} from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { RowTrigger } from '@/components/admin/row-trigger';
 import { DataTable } from '@/components/admin/data-table';
@@ -17,9 +21,9 @@ import type { WireAdminVendorRow } from '@/lib/wire-schemas';
 const STUCK_REFUNDS_PATH = '/admin/bookings?flag=refund-stuck';
 
 /**
- * The four statuses frame `13` draws, mapped onto the shared pill vocabulary in
- * `03-components.md` rather than onto four new colours. Every value here is a
- * token pair the frame already uses:
+ * The statuses frame `13` draws, mapped onto the shared pill vocabulary in
+ * `03-components.md` rather than onto new colours. Every value here is a token
+ * pair the frame already uses:
  *
  * | Status  | Frame fill / text   | Shared tone |
  * | ------- | ------------------- | ----------- |
@@ -27,12 +31,20 @@ const STUCK_REFUNDS_PATH = '/admin/bookings?flag=refund-stuck';
  * | Review  | `#F5EEDC` `#7A5A12` | `pending`   |
  * | Flagged | `#F7E7E0` `#8E3F20` | `needsYou`  |
  * | Paused  | `#EFE9E0` `#6B6459` | `inert`     |
+ *
+ * `Retired` (#433) is the one the frame does not draw, because the state did
+ * not exist when it was drawn. It takes `inert` — the same tone as `Paused`,
+ * which is the frame's vocabulary for "this storefront is not trading" — and is
+ * told apart by its label rather than by a fifth colour nobody specified. A new
+ * token pair here would be inventing design, which is the plan's job and not
+ * this ticket's.
  */
-const STATUS_PILLS: Record<AdminVendorStatus, { tone: StatusTone; label: string }> = {
-  live: { tone: 'confirmed', label: 'Live' },
-  review: { tone: 'pending', label: 'Review' },
-  flagged: { tone: 'needsYou', label: 'Flagged' },
-  paused: { tone: 'inert', label: 'Paused' },
+const STATUS_TONES: Record<AdminVendorStatus, StatusTone> = {
+  live: 'confirmed',
+  review: 'pending',
+  flagged: 'needsYou',
+  paused: 'inert',
+  retired: 'inert',
 };
 
 /**
@@ -78,8 +90,14 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
    * A vendor already flagged is already suspended. Offering them in a bulk
    * suspend would send a request the API answers 409, so they are excluded from
    * the count the dialog names as well as from the loop.
+   *
+   * A retired vendor is excluded for the stronger reason (#433): the account is
+   * gone, its bookings were already unwound and refunded, and suspending it
+   * would move no money and mean nothing. There is nothing left to moderate.
    */
-  const suspendable = selectedRows.filter((row) => row.status !== 'flagged');
+  const suspendable = selectedRows.filter(
+    (row) => row.status !== 'flagged' && row.status !== 'retired',
+  );
 
   function toggle(userId: string, checked: boolean): void {
     setSelected((current) => {
@@ -164,7 +182,7 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
             The way back to them once this line is gone. Without it the banner
             was the whole record: it lives in component state, so the next
             navigation took it, and nothing else in the console listed a
-            confirmed booking on a suspended account.
+            confirmed booking on a closed or suspended account.
           */}
           <Link href={STUCK_REFUNDS_PATH} className="font-semibold underline">
             See the bookings
@@ -309,8 +327,8 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
             width: '.9fr',
             header: 'Status',
             cell: (row) => (
-              <StatusPill tone={STATUS_PILLS[row.status].tone}>
-                {STATUS_PILLS[row.status].label}
+              <StatusPill tone={STATUS_TONES[row.status]}>
+                {ADMIN_VENDOR_STATUS_LABELS[row.status]}
               </StatusPill>
             ),
           },
@@ -329,6 +347,19 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
                 the part that must not drift, and it had already drifted once
                 between here and the bulk bar above.
               */
+              /*
+                A retired account has no third decision, so it gets no control
+                (#433). Its owner deleted their Clerk identity, its bookings
+                were unwound and refunded when they did, and there is nothing
+                a suspension or a reinstatement could reach. Offering the
+                button would put a destructive dialog in front of an operator
+                for an action the API answers 404 — `setUserBanned` looks the
+                target up with `findUserById`, which filters `deleted_at`.
+              */
+              if (row.status === 'retired') {
+                return null;
+              }
+
               const flagged = row.status === 'flagged';
 
               return (

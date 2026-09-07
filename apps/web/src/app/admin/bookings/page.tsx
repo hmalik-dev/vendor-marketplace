@@ -58,7 +58,7 @@ export default async function AdminBookingsPage({
       : flag
         ? {
             headline: 'No refunds are stuck',
-            description: 'Every booking on a suspended account has been unwound.',
+            description: 'Every booking on a closed or suspended account has been unwound.',
           }
         : status
           ? {

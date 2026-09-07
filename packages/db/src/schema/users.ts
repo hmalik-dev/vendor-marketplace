@@ -64,6 +64,27 @@ export const users = pgTable(
     uniqueIndex('users_clerk_user_id_key').on(table.clerkUserId),
     uniqueIndex('users_email_key').on(table.email),
     index('users_role_idx').on(table.role),
+    /**
+     * The retired accounts, and only those (#433).
+     *
+     * Every public vendor read now carries `OWNER_NOT_DELETED` — a correlated
+     * `NOT EXISTS` over this table — so that a storefront whose owner deleted
+     * their identity cannot be seen or booked. Postgres flattens that into an
+     * anti-join and, with nothing to index on `deleted_at`, builds its hash
+     * side by reading **every** row of `users`: measured here as a `Seq Scan`
+     * with `Rows Removed by Filter` equal to the whole table, on the vendor
+     * search (which runs it three times, for the page, the count and the facet
+     * counts), the profile page, the messaging read, nearby availability and
+     * request creation. The single-row slug lookup was the worst shape — a
+     * whole-table scan bolted onto a unique-index hit.
+     *
+     * Partial, so it holds only the deleted accounts and stays near-empty on a
+     * healthy marketplace; keyed on `id`, which is what the semi-join probes.
+     * With it the same plan reads one page as an index-only scan.
+     */
+    index('users_deleted_at_idx')
+      .on(table.id)
+      .where(sql`${table.deletedAt} IS NOT NULL`),
   ],
 );
 

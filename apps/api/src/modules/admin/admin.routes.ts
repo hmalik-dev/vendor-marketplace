@@ -45,6 +45,7 @@ import {
   updateTag,
   type AdminContext,
 } from './admin.service.js';
+import { bookingContextFor } from '../payments/payments.service.js';
 
 const userParamsSchema = z.object({ userId: z.uuid() });
 const reviewParamsSchema = z.object({ reviewId: z.uuid() });
@@ -85,19 +86,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
    */
   const adminOnly = requireRoleBeforeValidation('admin');
 
-  const context = (): AdminContext => ({
-    db: app.db,
-    stripe: app.stripe,
-    hub: app.events,
-    log: app.log,
-    mail: {
-      db: app.db,
-      email: app.email,
-      log: app.log,
-      webOrigin: options.webOrigin,
-      background: app.background,
-    },
-  });
+  const context = (): AdminContext => bookingContextFor(app, app.log, options.webOrigin);
 
   app.get(
     '/admin/vendors',

@@ -1,10 +1,4 @@
-import type { FastifyBaseLogger } from 'fastify';
-import {
-  addDays,
-  generateSlug,
-  isLegacyDestinationPayout,
-  toDateString,
-} from '@vendor-marketplace/shared';
+import { addDays, generateSlug, toDateString } from '@vendor-marketplace/shared';
 import type {
   AdminActivityPage,
   AdminActivityQuery,
@@ -37,15 +31,16 @@ import type {
   UpdateTag,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
-import type { EventHub } from '../../lib/event-stream.js';
-import type { StripeConnectGateway } from '../../lib/stripe.js';
 import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
-import {
-  queueNotificationEmail,
-  type NotificationEmailDeps,
-} from '../notifications/notification-email.js';
+import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
-import { cancelBookingAndFreeDate } from '../payments/payments.dao.js';
+import {
+  bestEffortNotice,
+  unwindAccountBookings,
+  SUSPENSION_UNWIND,
+  type AdminContext,
+} from './account-unwind.js';
+
 import { deleteReviewAndRecalculate } from '../reviews/reviews.dao.js';
 import { normalizeTagName } from '../tags/tags.service.js';
 import { resolveDispute } from '../payments/payments.service.js';
@@ -59,7 +54,6 @@ import {
   countAdminTagSuggestions,
   countAdminVendors,
   countVendorsHoldingTag,
-  declineOpenRequests,
   findAdminActions,
   findAdminBookings,
   findAdminCustomers,
@@ -71,7 +65,6 @@ import {
   findAdminTagSuggestions,
   findAdminTags,
   findAdminVendors,
-  findConfirmedBookingsToUnwind,
   findTagByCategoryAndName,
   findTagById,
   findTagBySlug,
@@ -92,6 +85,18 @@ import {
   type DailyBucket,
 } from './admin.dao.js';
 
+/*
+ * Re-exported rather than left where it now lives.
+ *
+ * `AdminContext` moved to `account-unwind.js` with the unwind that needs it,
+ * but `admin.routes.ts` imports it inside a multi-line block from this module
+ * that two other lanes are appending to at the same time — so re-pointing that
+ * one line would be a textual conflict with both of them for no behavioural
+ * gain. The seam is real; this keeps the import stable while it settles. A
+ * later ticket can collapse it once those lanes have landed.
+ */
+export type { AdminContext } from './account-unwind.js';
+
 /**
  * The page window's offset.
  *
@@ -101,22 +106,6 @@ import {
  */
 function offsetOf(query: { page: number; pageSize: number }): number {
   return (query.page - 1) * query.pageSize;
-}
-
-/** Everything an admin operation needs. Mirrors `PaymentContext`, for the same reason. */
-export interface AdminContext {
-  db: AppDatabase;
-  stripe: StripeConnectGateway;
-  hub: EventHub;
-  log: FastifyBaseLogger;
-  /**
-   * Everything the transactional email needs.
-   *
-   * Carried on the context beside `hub` because the email *is* the
-   * notification: an event that rings the bell and does not reach the inbox has
-   * drifted, and threading them separately is how that happens.
-   */
-  mail: NotificationEmailDeps;
 }
 
 // --- The action log (#434) -------------------------------------------------
@@ -198,17 +187,27 @@ export async function listActivity(
 }
 
 /**
- * The four statuses, derived from the three columns that actually record state.
+ * The five statuses, derived from the columns that actually record state.
  *
- * Order matters and is the same order `statusCondition` filters in: a banned
- * vendor is `flagged` whatever their publish flag says, because the ban is the
- * fact an operator needs to see first.
+ * Order matters and is the same order `statusCondition` filters in. `retired`
+ * is tested first, ahead even of the ban (#433): an account whose owner deleted
+ * their Clerk identity cannot be moderated, reinstated or asked anything, so
+ * "this account is gone" is the fact that makes every other one moot. A
+ * suspension on a retired row is history, not a lever.
+ *
+ * A banned vendor is then `flagged` whatever their publish flag says, because
+ * the ban is the next fact an operator needs to see.
  */
 export function deriveVendorStatus(row: {
+  isRetired: boolean;
   isBanned: boolean;
   isPublished: boolean;
   stripeOnboarded: boolean;
 }): AdminVendorStatus {
+  if (row.isRetired) {
+    return 'retired';
+  }
+
   if (row.isBanned) {
     return 'flagged';
   }
@@ -369,229 +368,14 @@ export async function setUserBanned(
     };
   }
 
-  const today = toDateString(now);
-  const affected = await findConfirmedBookingsToUnwind(
-    context.db,
-    targetId,
-    profile?.id ?? null,
-    today,
-  );
-
-  let refundsIssued = 0;
-  let bookingsCancelled = 0;
-  let refundsFailed = 0;
-
-  for (const booking of affected) {
-    /*
-     * What actually came back, for the row to record (#415). `null` while no
-     * refund has moved, which is both the unpaid booking and the one whose
-     * refund the loop below is about to fail on.
-     */
-    let refundedCents: number | null = null;
-
-    /*
-     * A pre-#423 destination charge is refused here for the same reason
-     * `refundAndUnwind` refuses it: Stripe split that charge as the card
-     * succeeded, so the vendor already holds their share, and this path's
-     * refund no longer carries `reverse_transfer` — it would return the
-     * customer's money and claw back nothing.
-     *
-     * The old comment here reasoned that "a ban cannot reach a booking that has
-     * been transferred" because it only unwinds *future* events. That is true
-     * of the new model and false of the old one: `0028`'s backfill marks every
-     * legacy row released regardless of its event date, so a legacy booking for
-     * an event next month is exactly the row this loop selects.
-     */
-    if (isLegacyDestinationPayout(booking)) {
-      context.log.error(
-        { bookingId: booking.id },
-        'Skipped a legacy destination-charge booking during a ban; it needs an operator refund',
-      );
-      refundsFailed += 1;
-      continue;
-    }
-
-    if (booking.stripePaymentIntentId) {
-      try {
-        /*
-         * Asked before told, for the same reason the customer's cancellation
-         * asks: a key Stripe has forgotten is no guard at all, and a ban
-         * re-issued a day after one that failed to cancel its bookings would
-         * otherwise refund every one of them twice (D31).
-         */
-        const alreadyRefunded = await context.stripe.findRefund(booking.stripePaymentIntentId);
-
-        if (!alreadyRefunded) {
-          const refund = await context.stripe.createRefund({
-            paymentIntentId: booking.stripePaymentIntentId,
-            amountCents: booking.totalAmountCents,
-            /*
-             * One refund per booking, however many times a ban is issued. The
-             * `isBanned` check above is a read and not a lock, so two concurrent
-             * bans both reach this loop; without a key they would both refund.
-             *
-             * Versioned with the request: Stripe refuses a key replayed with
-             * different parameters. D31 changed them once, and #423 changed
-             * them again — the refund now carries neither `reverse_transfer`
-             * nor `refund_application_fee`, because the charge is a plain one
-             * into the platform balance. A ban re-issued within 24 hours of one
-             * attempted under the old params would otherwise be refused with an
-             * `idempotency_error` rather than refunded.
-             *
-             * There is deliberately no transfer reversal on this path. It only
-             * ever unwinds bookings whose event date is still ahead
-             * (`findConfirmedBookingsToUnwind`), and a payout is not released
-             * until well after the event — so a ban cannot reach a booking that
-             * has been transferred, and the money is all still Orla's to give
-             * back.
-             */
-            idempotencyKey: `ban-refund:direct:${booking.id}`,
-          });
-
-          refundedCents = refund.amountCents;
-        } else {
-          /*
-           * Read off the money that moved, not off the amount this call asked
-           * for. They agree on every first attempt and part company on the one
-           * that matters: a booking the customer had already half-refunded
-           * through their own cancellation, whose row never moved, is found
-           * here — and recording `totalAmountCents` for it would tell them
-           * they got everything back when half of it never left Stripe.
-           */
-          refundedCents = alreadyRefunded.amountCents;
-        }
-
-        refundsIssued += 1;
-      } catch (error) {
-        /*
-         * One failed refund must not abandon the rest of the ban. The account is
-         * still removed, the remaining bookings are still unwound, and this one
-         * is logged loudly because the money did not move and only a human can
-         * finish it.
-         */
-        context.log.error(
-          { bookingId: booking.id, err: error },
-          'Refund failed while banning an account',
-        );
-        /*
-         * Counted, not only logged (#400). The `continue` is right — a booking
-         * whose money did not come back must not be cancelled underneath the
-         * customer, and one failure must not abandon the rest of the ban — but
-         * it leaves a **confirmed** booking on a suspended account with neither
-         * party told, and the result used to have no field to say so. The
-         * operator saw a clean success and a log line nobody was reading.
-         */
-        refundsFailed += 1;
-        continue;
-      }
-    }
-
-    const cancelled = await cancelBookingAndFreeDate(context.db, booking.id, {
-      cancelledAt: now,
-      cancellationReason: "The other party's account was suspended",
-      /*
-       * The column, not the sentence above it (#415). Both parties' screens
-       * have to distinguish an operator's unwind from a customer's own
-       * cancellation, and reading that off `cancellation_reason` would make
-       * this string load-bearing copy.
-       */
-      cancelledBy: 'admin',
-      refundAmountCents: refundedCents,
-      /*
-       * A ban refunds in **full**, so the vendor keeps nothing and the payout
-       * sweep must never pay this booking out. Stating it rather than leaving
-       * `vendor_payout_cents` at the figure settled at payment is what stops
-       * the row staying releasable after the money went back to the customer.
-       */
-      vendorPayoutCents: 0,
-      disputeReason: null,
-    });
-
-    if (!cancelled) {
-      continue;
-    }
-
-    bookingsCancelled += 1;
-
-    const recipients = [booking.customerId, booking.vendorUserId].filter(
-      (id): id is string => typeof id === 'string' && id !== targetId,
-    );
-
-    /*
-     * The body is per recipient, and per whether money actually moved.
-     *
-     * One string went to both sides claiming "your payment has been refunded in
-     * full" — to the vendor, who did not pay but was about to be paid, and on
-     * an unpaid booking, where no refund happened at all. Both are the product
-     * telling somebody something untrue about their money.
-     *
-     * The vendor's line says *reversed*, not "no payout will follow" (D31). A
-     * transfer already paid out is clawed back rather than withheld, and a
-     * vendor whose balance is about to go negative learns it here.
-     */
-    const refunded = booking.stripePaymentIntentId !== null;
-
-    for (const recipient of recipients) {
-      await bestEffortNotice(
-        context,
-        { bookingId: booking.id, recipient },
-        async () => {
-          const body =
-            recipient === booking.customerId
-              ? refunded
-                ? "The other party's account was suspended. Your payment has been refunded in full."
-                : "The other party's account was suspended. Nothing was charged for this booking."
-              : refunded
-                ? "The customer's account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance."
-                : "The customer's account was suspended and the booking was cancelled. Nothing had been charged for it.";
-
-          const stored = await insertNotification(context.db, {
-            userId: recipient,
-            type: 'booking_cancelled',
-            title: 'A booking was cancelled',
-            body,
-            data: { bookingId: booking.id },
-          });
-
-          if (stored) {
-            context.hub.publish(recipient, {
-              type: 'new_notification',
-              notification: {
-                id: stored.id,
-                type: stored.type,
-                title: stored.title,
-                body: stored.body,
-                href: '/bookings',
-                isRead: false,
-                createdAt: stored.createdAt,
-              },
-            });
-
-            /*
-             * Per recipient, which is the point. One shared string here once told a
-             * vendor their payment had been refunded — they had not paid, and on an
-             * unpaid booking nothing was refunded at all. The email carries the
-             * body written for *this* reader, so both parties read the same refund
-             * figure and neither reads the other's.
-             */
-            queueNotificationEmail(
-              context.mail,
-              stored,
-              recipient === booking.customerId ? 'customer' : 'vendor',
-            );
-          }
-        },
-        'The operation succeeded but its notification could not be recorded',
-      );
-    }
-  }
-
-  const requestsDeclined = await declineOpenRequests(
-    context.db,
+  const unwound = await unwindAccountBookings(
+    context,
     targetId,
     profile?.id ?? null,
     now,
+    SUSPENSION_UNWIND,
   );
+
   const { profileUnpublished } = await setBanned(
     context.db,
     targetId,
@@ -617,21 +401,27 @@ export async function setUserBanned(
     subjectType: 'user',
     subjectId: targetId,
     detail: {
-      requestsDeclined,
-      bookingsCancelled,
-      refundsIssued,
-      refundsFailed,
+      requestsDeclined: unwound.requestsDeclined,
+      bookingsCancelled: unwound.bookingsCancelled,
+      refundsIssued: unwound.refundsIssued,
+      refundsFailed: unwound.refundsFailed,
       profileUnpublished,
     },
   });
 
+  /*
+   * Named, not spread. `AccountUnwindResult` carries one field `AdminBanResult`
+   * has no place for — `bookingsLeftForReview`, which only an account-holder
+   * unwind can ever be non-zero — and spreading it into a response Zod
+   * validates would put an undeclared key in the body.
+   */
   return {
     userId: targetId,
     isBanned: true,
-    requestsDeclined,
-    bookingsCancelled,
-    refundsIssued,
-    refundsFailed,
+    requestsDeclined: unwound.requestsDeclined,
+    bookingsCancelled: unwound.bookingsCancelled,
+    refundsIssued: unwound.refundsIssued,
+    refundsFailed: unwound.refundsFailed,
     profileUnpublished,
   };
 }
@@ -886,38 +676,6 @@ export async function listTagSuggestions(
  */
 function tagSlug(category: TagCategory, name: string): string {
   return `${category}-${generateSlug(name)}`;
-}
-
-/**
- * Runs a notification, and never lets it undo the work it announces.
- *
- * Both notification writes in this file follow work that has already
- * committed — `setUserBanned` has issued refunds through Stripe and cancelled
- * the bookings, `approveSuggestion`'s tag transaction has closed and the
- * suggestion is no longer `pending`. A throw at that point answered 500 on an
- * operation the operator cannot repeat: the retry re-enters a partly applied
- * ban, or finds a suggestion it can no longer resolve. Same rule as
- * `bestEffortAnnouncement` in the booking-request service and `bestEffortNotice`
- * in payments; #408 added it there and left these two, which is exactly how a
- * rule becomes a special case.
- *
- * The message became a parameter with #434, which gave this a second kind of
- * caller: the audit write follows the identical rule for a sharper reason, and
- * a second copy of this body — which is what it started as — would have been
- * the same drift again, one ticket later. It is the **last** parameter so the
- * two notification callers keep the shape they already had.
- */
-async function bestEffortNotice(
-  context: AdminContext,
-  subject: Record<string, string>,
-  work: () => Promise<void>,
-  message: string,
-): Promise<void> {
-  try {
-    await work();
-  } catch (error) {
-    context.log.error({ ...subject, err: error }, message);
-  }
 }
 
 async function notifyVendorOfTag(
