@@ -4,6 +4,7 @@ import {
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
+  PAYOUT_MODELS,
   PRICE_TYPES,
   REVIEW_TYPES,
   TAG_CATEGORIES,
@@ -23,6 +24,7 @@ export const availabilityStatusEnum = pgEnum('availability_status', AVAILABILITY
 export const bookingRequestStatusEnum = pgEnum('booking_request_status', BOOKING_REQUEST_STATUSES);
 export const bookingStatusEnum = pgEnum('booking_status', BOOKING_STATUSES);
 export const bookingCancelledByEnum = pgEnum('booking_cancelled_by', BOOKING_CANCELLED_BY);
+export const payoutModelEnum = pgEnum('payout_model', PAYOUT_MODELS);
 export const reviewTypeEnum = pgEnum('review_type', REVIEW_TYPES);
 export const budgetTierEnum = pgEnum('budget_tier', BUDGET_TIERS);
 export const tagCategoryEnum = pgEnum('tag_category', TAG_CATEGORIES);

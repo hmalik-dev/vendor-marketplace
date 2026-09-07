@@ -52,3 +52,5 @@
 - [Clerk localization is scoped by route only](clerk-localization-is-scoped-by-route-only.md) — a nested `ClerkProvider` silently drops every prop; branch on `usePathname()` in `ClerkShell`
 - [Migration numbers collide between lanes](migration-numbers-collide-between-lanes.md) — two lanes both claim `0025`; regenerate against the landed snapshot, never rename your own
 - [Class assertions need the split list](class-assertions-need-the-split-list.md) — `toContain` on `className` is a substring match, so `min-[90rem]:text-[11px]` satisfies a check meant to pin `text-[11px]`
+- [Stripe caches failed idempotent results](stripe-caches-failed-idempotent-results.md) — a retry key needs the attempt number; `request_log_url` is the tell (D36)
+- [A z.date() needs a wire coercion](zdate-needs-a-wire-coercion.md) — else that screen 500s, conditionally, with the whole local gate green

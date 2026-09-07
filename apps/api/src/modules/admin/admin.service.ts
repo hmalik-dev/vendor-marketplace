@@ -1,5 +1,10 @@
 import type { FastifyBaseLogger } from 'fastify';
-import { addDays, generateSlug, toDateString } from '@vendor-marketplace/shared';
+import {
+  addDays,
+  generateSlug,
+  isLegacyDestinationPayout,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import type {
   AdminBanResult,
   AdminBookingPage,
@@ -276,6 +281,28 @@ export async function setUserBanned(
      */
     let refundedCents: number | null = null;
 
+    /*
+     * A pre-#423 destination charge is refused here for the same reason
+     * `refundAndUnwind` refuses it: Stripe split that charge as the card
+     * succeeded, so the vendor already holds their share, and this path's
+     * refund no longer carries `reverse_transfer` — it would return the
+     * customer's money and claw back nothing.
+     *
+     * The old comment here reasoned that "a ban cannot reach a booking that has
+     * been transferred" because it only unwinds *future* events. That is true
+     * of the new model and false of the old one: `0028`'s backfill marks every
+     * legacy row released regardless of its event date, so a legacy booking for
+     * an event next month is exactly the row this loop selects.
+     */
+    if (isLegacyDestinationPayout(booking)) {
+      context.log.error(
+        { bookingId: booking.id },
+        'Skipped a legacy destination-charge booking during a ban; it needs an operator refund',
+      );
+      refundsFailed += 1;
+      continue;
+    }
+
     if (booking.stripePaymentIntentId) {
       try {
         /*
@@ -295,10 +322,22 @@ export async function setUserBanned(
              * `isBanned` check above is a read and not a lock, so two concurrent
              * bans both reach this loop; without a key they would both refund.
              *
-             * Versioned with the unwind policy: Stripe refuses a key replayed
-             * with different parameters, and D31 changed them.
+             * Versioned with the request: Stripe refuses a key replayed with
+             * different parameters. D31 changed them once, and #423 changed
+             * them again — the refund now carries neither `reverse_transfer`
+             * nor `refund_application_fee`, because the charge is a plain one
+             * into the platform balance. A ban re-issued within 24 hours of one
+             * attempted under the old params would otherwise be refused with an
+             * `idempotency_error` rather than refunded.
+             *
+             * There is deliberately no transfer reversal on this path. It only
+             * ever unwinds bookings whose event date is still ahead
+             * (`findConfirmedBookingsToUnwind`), and a payout is not released
+             * until well after the event — so a ban cannot reach a booking that
+             * has been transferred, and the money is all still Orla's to give
+             * back.
              */
-            idempotencyKey: `ban-refund:unwind:${booking.id}`,
+            idempotencyKey: `ban-refund:direct:${booking.id}`,
           });
 
           refundedCents = refund.amountCents;
@@ -350,6 +389,14 @@ export async function setUserBanned(
        */
       cancelledBy: 'admin',
       refundAmountCents: refundedCents,
+      /*
+       * A ban refunds in **full**, so the vendor keeps nothing and the payout
+       * sweep must never pay this booking out. Stating it rather than leaving
+       * `vendor_payout_cents` at the figure settled at payment is what stops
+       * the row staying releasable after the money went back to the customer.
+       */
+      vendorPayoutCents: 0,
+      disputeReason: null,
     });
 
     if (!cancelled) {

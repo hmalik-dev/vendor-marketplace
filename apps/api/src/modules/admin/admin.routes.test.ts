@@ -217,6 +217,13 @@ describe('admin routes', () => {
       { method: 'PUT', url: `/admin/tags/${NIL}` },
       { method: 'PUT', url: `/admin/users/${NIL}/ban` },
       { method: 'PUT', url: `/admin/users/${NIL}/unban` },
+      /*
+       * #423. A dispute resolution decides who keeps the money, so a stranger
+       * or either party reaching it would let one side of the disagreement
+       * settle it — which is precisely what this list is here to prove cannot
+       * happen.
+       */
+      { method: 'PUT', url: `/admin/bookings/${NIL}/dispute` },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {
@@ -550,10 +557,16 @@ describe('admin routes', () => {
           amountCents: 120_000,
           reason: undefined,
           idempotencyKey: expect.stringMatching(/^ban-refund:/) as unknown as string,
-          // The ban unwind refunds through the same gateway call as a customer
-          // cancellation, so it takes D31's full unwind too (#416).
-          reverseTransfer: true,
-          refundApplicationFee: true,
+          /*
+           * The ban unwind refunds through the same gateway call as a customer
+           * cancellation, so it is as plain as that one is (#423). It only ever
+           * unwinds bookings whose event is still ahead, and a payout is not
+           * released until well after the event — so a ban can never reach a
+           * booking that has been transferred, and the money is all still
+           * Orla's to give back.
+           */
+          reverseTransfer: false,
+          refundApplicationFee: false,
         },
       ]);
 
@@ -641,9 +654,9 @@ describe('admin routes', () => {
         paymentIntentId: 'pi_test_ban',
         amountCents: 60_000,
         reason: 'requested_by_customer',
-        idempotencyKey: 'cancel_earlier_unwind',
-        reverseTransfer: true,
-        refundApplicationFee: true,
+        idempotencyKey: 'cancel_earlier_direct',
+        reverseTransfer: false,
+        refundApplicationFee: false,
       });
 
       await harness.app.inject({
@@ -681,9 +694,9 @@ describe('admin routes', () => {
         paymentIntentId: 'pi_test_ban',
         amountCents: 120_000,
         reason: 'requested_by_customer',
-        idempotencyKey: 'cancel_failed_unwind',
-        reverseTransfer: true,
-        refundApplicationFee: true,
+        idempotencyKey: 'cancel_failed_direct',
+        reverseTransfer: false,
+        refundApplicationFee: false,
         status: 'failed',
       });
 
@@ -698,7 +711,7 @@ describe('admin routes', () => {
       const [booking] = await harness.database.db.select().from(bookings);
       expect(booking).toMatchObject({ status: 'cancelled', refundAmountCents: 120_000 });
       expect(harness.stripe.refunds[1]).toMatchObject({
-        idempotencyKey: 'ban-refund:unwind:' + booking!.id,
+        idempotencyKey: 'ban-refund:direct:' + booking!.id,
       });
     });
 
@@ -1727,7 +1740,7 @@ describe('admin routes', () => {
       });
 
       expect(harness.stripe.refunds).toHaveLength(1);
-      expect(harness.stripe.refunds[0]?.idempotencyKey).toBe(`ban-refund:unwind:${bookingId}`);
+      expect(harness.stripe.refunds[0]?.idempotencyKey).toBe(`ban-refund:direct:${bookingId}`);
     });
   });
 

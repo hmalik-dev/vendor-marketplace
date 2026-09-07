@@ -237,6 +237,30 @@ export const BOOKING_STATUSES = ['confirmed', 'completed', 'cancelled', 'dispute
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 
 /**
+ * How a booking's money was arranged at the moment it was paid — **written
+ * down rather than inferred, because the two are unwound differently and a row
+ * cannot be asked afterwards which one it was.**
+ *
+ * `destination`: the pre-#423 destination charge. Stripe split the money as the
+ * card succeeded, so the vendor already holds their share, there is no transfer
+ * object, and a refund had to carry `reverse_transfer`. Nothing writes this any
+ * more; it is the column's **default**, which is the point.
+ *
+ * `separate`: separate charges and transfers. The whole amount sits in Orla's
+ * balance until the payout sweep moves the vendor's share.
+ *
+ * The default is what closes the deploy window. Migrations run in Railway's
+ * `preDeployCommand`, so the old image keeps serving until the new one is
+ * healthy — every checkout completing in between is a destination charge that
+ * the backfill has already been and gone past. Defaulting to `destination` and
+ * having only the new code write `separate` means those rows identify
+ * themselves, instead of looking to the sweep like unpaid new-model bookings
+ * and being transferred a second time.
+ */
+export const PAYOUT_MODELS = ['destination', 'separate'] as const;
+export type PayoutModel = (typeof PAYOUT_MODELS)[number];
+
+/**
  * Who ended a booking, recorded rather than inferred.
  *
  * A cancelled booking reaches the customer's screen by two routes that read
@@ -908,6 +932,69 @@ export const FULL_REFUND_CUTOFF_HOURS = 48;
 
 /** Refund fraction when cancelling inside the full-refund cutoff. */
 export const LATE_CANCELLATION_REFUND_RATE = 0.5;
+
+/**
+ * How long after the event date the vendor's share is transferred. **D35.**
+ *
+ * The product charges into Orla's own balance and pays the vendor afterwards
+ * (#423), so this is the whole of the payout schedule. **It is one constant,
+ * read everywhere**: `payoutReleaseAt` is the only place a release date is
+ * derived from it, and every surface that names one — the vendor dashboard's
+ * payout line, the window a customer can report a problem inside, the terms —
+ * reads it from there. Nothing restates the interval, in code or in prose.
+ *
+ * **72, and calendar hours.** No business days, no holiday calendar, and no new
+ * timezone arithmetic: #409 already cost this product one bug of that shape.
+ * The window exists so that a customer can dispute *before* the release, and
+ * that is worth more than a short one — under D31 a dispute after release is a
+ * transfer reversal that can push a vendor negative, while before it there is
+ * nothing transferred and a cancellation is a plain refund. Every dispute the
+ * window pulls forward avoids the worst failure this path has.
+ *
+ * D35 also rules out what this is *not* for: a deliverable that arrives weeks
+ * after the event — a photographer's gallery — is not a release-window problem
+ * and no interval fixes it. That belongs to the dispute path, and after release
+ * to D31's unwind. Do not widen this trying to cover it.
+ *
+ * Changing it reprices nothing, because the date is derived on every read
+ * rather than written onto the booking, and the amount is the stored
+ * `vendor_payout_cents`.
+ */
+export const PAYOUT_RELEASE_HOURS = 72;
+
+/**
+ * How often the API sweeps for payouts that have come due.
+ *
+ * Fifteen minutes, because the thing being waited for is measured in hours: a
+ * tighter loop would add database round trips to buy resolution the release
+ * window cannot use. The sweep is safe to run twice — a booking is claimed with
+ * `FOR UPDATE SKIP LOCKED` and the transfer carries an idempotency key — so the
+ * interval is a cost decision rather than a correctness one.
+ */
+export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
+
+/**
+ * What the vendor's side of a booking can say about its payout, as data.
+ *
+ * `status` cannot carry this: a booking is `confirmed` both before and after
+ * the money moves, so a surface reading the status alone cannot tell a payout
+ * that is waiting for its date from one already sent. `held` is the dispute
+ * hold — distinguishable from `pending` here rather than by inferring it from
+ * `status = 'disputed'`, which is what #423 acceptance 16 asks for.
+ */
+export const PAYOUT_STATUSES = ['pending', 'held', 'released'] as const;
+export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
+
+/**
+ * Which way an operator settled a reported problem.
+ *
+ * Here rather than beside its Zod schema because `.claude/rules/shared-contracts.md`
+ * has one home for a domain vocabulary, and `resolveDispute`'s parameter type
+ * is derived from this rather than re-spelled as a literal union — which the
+ * same rule calls a defect even when the two currently match.
+ */
+export const RESOLVE_DISPUTE_OUTCOMES = ['vendor', 'customer'] as const;
+export type DisputeOutcome = (typeof RESOLVE_DISPUTE_OUTCOMES)[number];
 
 /**
  * Days in the dashboard's `This week` strip.

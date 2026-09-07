@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FULL_REFUND_CUTOFF_HOURS } from '../constants/index.js';
+import { FULL_REFUND_CUTOFF_HOURS, PAYOUT_RELEASE_HOURS } from '../constants/index.js';
 import {
   addDays,
   calculateFees,
@@ -11,12 +11,17 @@ import {
   generateSlug,
   isFutureDate,
   isPastDate,
+  isLegacyDestinationPayout,
+  isPayoutDue,
   isUniversallyFutureDate,
   isUniversallyPastDate,
   joinWithAnd,
   kmToMiles,
   milesToKm,
   parseDateString,
+  payoutDueThroughDate,
+  payoutReleaseAt,
+  payoutStatusOf,
   replyDeadline,
   shortTimeAgo,
   toDateString,
@@ -460,5 +465,171 @@ describe('formatDurationHours', () => {
   it('keeps a half hour and does not pad a whole one', () => {
     expect(formatDurationHours(1.5)).toBe('1.5 hours');
     expect(formatDurationHours(10)).toBe('10 hours');
+  });
+});
+
+describe('payoutReleaseAt', () => {
+  /*
+   * D35: 72 calendar hours from midnight UTC on the event date, which is three
+   * days on. The expected instant is written out rather than derived from the
+   * constant — a test that recomputes the implementation cannot catch it
+   * changing.
+   */
+  it('releases 72 hours after the start of the event day in UTC', () => {
+    expect(payoutReleaseAt('2026-06-15')?.toISOString()).toBe('2026-06-18T00:00:00.000Z');
+  });
+
+  it('measures from the same zero point the refund cutoff does', () => {
+    const eventDate = '2026-06-15';
+    const releaseAt = payoutReleaseAt(eventDate)!;
+    const eventStart = new Date(`${eventDate}T00:00:00.000Z`);
+
+    expect(releaseAt.getTime() - eventStart.getTime()).toBe(PAYOUT_RELEASE_HOURS * 3_600_000);
+  });
+
+  /*
+   * The window has to clear the widest wall-clock spread in use. An event day
+   * in UTC-12 ends 36 hours after its own midnight UTC, so a release at 72
+   * leaves a day and a half in hand — which is what lets D35 keep this to plain
+   * calendar arithmetic instead of a second timezone rule.
+   */
+  it('lands after the event day has ended in every timezone', () => {
+    const latestPossibleEnd = new Date('2026-06-16T12:00:00.000Z');
+
+    expect(payoutReleaseAt('2026-06-15')!.getTime()).toBeGreaterThan(latestPossibleEnd.getTime());
+  });
+
+  it('answers null for a date the parser rejects', () => {
+    expect(payoutReleaseAt('2026-02-30')).toBeNull();
+    expect(payoutReleaseAt('not-a-date')).toBeNull();
+  });
+});
+
+describe('isPayoutDue', () => {
+  const EVENT = '2026-06-15';
+
+  it('is false the instant before the release and true at it', () => {
+    expect(isPayoutDue(EVENT, new Date('2026-06-17T23:59:59.999Z'))).toBe(false);
+    expect(isPayoutDue(EVENT, new Date('2026-06-18T00:00:00.000Z'))).toBe(true);
+  });
+
+  /* A booking whose event has happened is not yet a booking that pays out. */
+  it('is false the day after the event, while the window is still open', () => {
+    expect(isPayoutDue(EVENT, new Date('2026-06-16T12:00:00.000Z'))).toBe(false);
+  });
+
+  /* Money must never move against a date that cannot be read. */
+  it('is false for a date the parser rejects', () => {
+    expect(isPayoutDue('2026-02-30', new Date('2030-01-01T00:00:00.000Z'))).toBe(false);
+  });
+});
+
+describe('payoutDueThroughDate', () => {
+  it('names the last due date', () => {
+    expect(payoutDueThroughDate(new Date('2026-06-18T09:00:00.000Z'))).toBe('2026-06-15');
+  });
+
+  /**
+   * `isPayoutDue` is the specification and `payoutDueThroughDate` is its
+   * inversion, so what has to hold between them is a property, not a value: the
+   * date it names is due and the next one along is not.
+   *
+   * Asserted over a range rather than at one instant, because the pair that
+   * must never disagree is the date the sweep pays on and the date a vendor was
+   * shown — the one disagreement a payout screen cannot have. A single sample
+   * would keep passing if the zero point of one of them moved by a day.
+   */
+  it('agrees with isPayoutDue at every hour across a week', () => {
+    for (let hour = 0; hour < 24 * 7; hour += 1) {
+      const now = new Date(Date.UTC(2026, 5, 12) + hour * 3_600_000);
+      const dueThrough = payoutDueThroughDate(now);
+      const dayAfter = toDateString(addDays(new Date(`${dueThrough}T00:00:00Z`), 1));
+
+      expect(isPayoutDue(dueThrough, now), `${now.toISOString()} -> ${dueThrough}`).toBe(true);
+      expect(isPayoutDue(dayAfter, now), `${now.toISOString()} -> ${dayAfter}`).toBe(false);
+    }
+  });
+});
+
+describe('payoutStatusOf', () => {
+  const PENDING = {
+    status: 'confirmed',
+    payoutReleasedAt: null,
+    stripeTransferId: null,
+  } as const;
+
+  it('is pending before the transfer and released after it', () => {
+    expect(payoutStatusOf(PENDING)).toBe('pending');
+    expect(
+      payoutStatusOf({
+        ...PENDING,
+        payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
+        stripeTransferId: 'tr_one',
+      }),
+    ).toBe('released');
+  });
+
+  /* A vendor marking a booking complete moves no money and no payout state. */
+  it('is still pending for a completed booking', () => {
+    expect(payoutStatusOf({ ...PENDING, status: 'completed' })).toBe('pending');
+  });
+
+  /* #423 acceptance 16 — held is a state of its own, not an unrendered status. */
+  it('is held while a report is open', () => {
+    expect(payoutStatusOf({ ...PENDING, status: 'disputed' })).toBe('held');
+  });
+
+  /*
+   * The release wins over the hold, and the order matters: a dispute cannot be
+   * raised after a payout has gone out, so a row that is both is a released
+   * booking, and calling it `held` would tell a vendor money already in their
+   * account is frozen.
+   */
+  it('reports a released booking as released whatever its status says', () => {
+    expect(
+      payoutStatusOf({
+        status: 'disputed',
+        payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
+        stripeTransferId: 'tr_one',
+      }),
+    ).toBe('released');
+  });
+});
+
+describe('isLegacyDestinationPayout', () => {
+  /*
+   * The pair the #423 migration's backfill creates: released, with no transfer
+   * object, because a destination charge never had one. Refunding such a row as
+   * though it were a modern booking would return the customer's money and claw
+   * nothing back from the vendor who already holds their share.
+   */
+  it('names a booking released with no transfer to show for it', () => {
+    expect(
+      isLegacyDestinationPayout({
+        status: 'confirmed',
+        payoutReleasedAt: new Date('2026-01-04T00:00:00Z'),
+        stripeTransferId: null,
+      }),
+    ).toBe(true);
+  });
+
+  it('is false for a booking released by a real transfer', () => {
+    expect(
+      isLegacyDestinationPayout({
+        status: 'confirmed',
+        payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
+        stripeTransferId: 'tr_one',
+      }),
+    ).toBe(false);
+  });
+
+  it('is false for a booking that has not been released at all', () => {
+    expect(
+      isLegacyDestinationPayout({
+        status: 'confirmed',
+        payoutReleasedAt: null,
+        stripeTransferId: null,
+      }),
+    ).toBe(false);
   });
 });

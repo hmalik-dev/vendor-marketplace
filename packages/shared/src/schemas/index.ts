@@ -48,6 +48,8 @@ import {
   MESSAGE_MAX_LENGTH,
   MIN_BOOKING_AMOUNT_CENTS,
   NOTIFICATION_TYPES,
+  PAYOUT_STATUSES,
+  RESOLVE_DISPUTE_OUTCOMES,
   PRICE_TYPES,
   REVIEW_CONTENT_MAX_LENGTH,
   REVIEW_CONTENT_MIN_LENGTH,
@@ -251,6 +253,7 @@ export const bookingRequestStatusSchema = z.enum(BOOKING_REQUEST_STATUSES);
 export const eventTypeSchema = z.enum(EVENT_TYPES);
 export const bookingStatusSchema = z.enum(BOOKING_STATUSES);
 export const bookingCancelledBySchema = z.enum(BOOKING_CANCELLED_BY);
+export const payoutStatusSchema = z.enum(PAYOUT_STATUSES);
 export const reviewTypeSchema = z.enum(REVIEW_TYPES);
 export const budgetTierSchema = z.enum(BUDGET_TIERS);
 export const tagCategorySchema = z.enum(TAG_CATEGORIES);
@@ -986,6 +989,28 @@ export const cancelBookingSchema = z.object({
 });
 export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 
+/**
+ * What a customer sends to report a problem with a booking (#423).
+ *
+ * The same shape as a cancellation's, and deliberately not richer: the report
+ * exists to **place the payout hold**, not to open a case-management product.
+ * #425 builds the surface that sends it, routed through the support form the
+ * error page already uses, so the free text is the whole payload.
+ */
+export const disputeBookingSchema = z.object({
+  reason: freeText().max(1_000).optional(),
+});
+export type DisputeBookingInput = z.infer<typeof disputeBookingSchema>;
+
+export const resolveDisputeSchema = z.object({
+  /**
+   * `vendor` lifts the hold and lets the payout run on the next sweep;
+   * `customer` cancels the booking and refunds it in full.
+   */
+  outcome: z.enum(RESOLVE_DISPUTE_OUTCOMES),
+});
+export type ResolveDisputeInput = z.infer<typeof resolveDisputeSchema>;
+
 // --- Bookings --------------------------------------------------------------
 
 /**
@@ -1218,13 +1243,23 @@ export const vendorDashboardSchema = z.object({
     )
     .length(BOOKING_WEEK_WINDOW_DAYS),
   /**
-   * The soonest event this vendor is owed money for, for the rail's second card.
+   * The soonest payout this vendor is still owed, for the rail's second card.
    *
-   * The **amount** is real — it is that booking's `vendor_payout_cents`, already
-   * settled at payment. The **date is the event's**, not a payout date: there is
-   * no payout schedule to read one from until #10, and frame `08`'s
-   * `Next payout Jun 18` is exactly the invented number the money rules forbid.
-   * `null` when nothing upcoming has been paid for.
+   * **Every field is read off the booking row, and none of it is recomputed**
+   * (#423 acceptance 15). The amount is that booking's `vendor_payout_cents`,
+   * settled at the rate in force when the card succeeded — a surface that
+   * recomputed the fee would silently reprice old bookings the moment the rate
+   * moved. `releaseAt` is `payoutReleaseAt(eventDate)`, the same helper the
+   * payout sweep pays on, so the date a vendor is shown and the date they are
+   * paid cannot drift. `status` says which of the three states it is in.
+   *
+   * **There is now a payout schedule to read a date from, which there was not.**
+   * `MONEY_COPY.vendorPayout` is the dateless sentence #308 had to ship in its
+   * place, and frame `08`'s `Next payout Jun 18` stopped being an invented
+   * number the moment #423 created the schedule behind it. Rendering it is
+   * #424's, not this schema's.
+   *
+   * `null` when nothing is owed.
    */
   nextPayout: z
     .object({
@@ -1232,6 +1267,16 @@ export const vendorDashboardSchema = z.object({
       eventDate: calendarDateSchema,
       customerFirstName: trimmedString(MAX_NAME_LENGTH, 0),
       vendorPayoutCents: z.int().min(0),
+      /** When the transfer is due, derived from the event date. */
+      releaseAt: z.date(),
+      /**
+       * `held` is the dispute hold, and it is a **field rather than something a
+       * surface infers from `status`** — acceptance 16. A screen that had to
+       * know which member of `BOOKING_STATUSES` means "money is stuck" would be
+       * one enum change away from telling a vendor a payout is on its way while
+       * it is frozen.
+       */
+      status: payoutStatusSchema,
     })
     .nullable(),
 });

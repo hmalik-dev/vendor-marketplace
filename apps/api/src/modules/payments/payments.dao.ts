@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -241,12 +241,32 @@ export async function applyBookingTransition(
   bookingId: string,
   from: BookingRow['status'],
   patch: Partial<NewBookingRow>,
+  /**
+   * The payout state the caller decided on, when it decided on one.
+   *
+   * `undefined` leaves the write guarded by `status` alone, which is right for
+   * a transition that does not care — `markComplete`. The dispute hold does
+   * care: the payout sweep moves `payout_released_at` **without touching
+   * `status`**, so a hold whose refusal check ran before a sweep committed
+   * would otherwise be written onto a booking that had just been paid out.
+   */
+  releasedBefore?: Date | null,
 ): Promise<BookingRow | null> {
   return db.transaction(async (tx) => {
     const updated = await tx
       .update(bookings)
       .set({ ...patch, updatedAt: sql`now()` })
-      .where(and(eq(bookings.id, bookingId), eq(bookings.status, from)))
+      .where(
+        and(
+          eq(bookings.id, bookingId),
+          eq(bookings.status, from),
+          releasedBefore === undefined
+            ? undefined
+            : releasedBefore === null
+              ? isNull(bookings.payoutReleasedAt)
+              : eq(bookings.payoutReleasedAt, releasedBefore),
+        ),
+      )
       .returning();
 
     const row = updated?.[0];
@@ -295,18 +315,71 @@ export interface CancellationRecord {
   cancelledBy: BookingCancelledBy;
   /** What Stripe actually moved. `null` when there was no payment to return. */
   refundAmountCents: number | null;
+  /**
+   * What the vendor is still owed after the refund — zero for a full one.
+   *
+   * Required rather than optional for the reason the four fields above are: it
+   * is the figure the payout sweep pays, and a cancellation path that forgot to
+   * state it would leave the vendor's whole pre-release share sitting with the
+   * platform, silently.
+   */
+  vendorPayoutCents: number;
+  /**
+   * Cleared, because the complaint is settled once the booking is cancelled.
+   *
+   * The vendor-favour branch of `resolveDispute` clears it; this is the other
+   * branch, and without it the text survives on a resolved row — so any later
+   * reader treating `dispute_reason` as "there is an open complaint" would be
+   * wrong for every upheld dispute.
+   */
+  disputeReason: null;
 }
 
 export async function cancelBookingAndFreeDate(
   db: AppDatabase,
   bookingId: string,
   patch: CancellationRecord,
+  /**
+   * The status the caller read, and the only one this write will move from.
+   *
+   * A parameter rather than a hard-coded `'confirmed'` because a dispute upheld
+   * in the customer's favour cancels a **`disputed`** booking (#423), and the
+   * alternative was a second copy of this transaction differing in one word —
+   * with the availability release, the parent request settlement and the
+   * counter refresh duplicated alongside it. The guard is unchanged in kind:
+   * only a booking still in the state the caller saw is moved.
+   */
+  from: BookingRow['status'] = 'confirmed',
+  /**
+   * The payout state the caller read before it moved money, re-asserted here.
+   *
+   * `status` alone is not enough any more, because #423 added a **second money
+   * mover that never changes it**: the payout sweep claims a booking on
+   * `status in (confirmed, completed)` and `payout_released_at is null`, and
+   * commits a transfer without touching `status`. A cancellation whose two
+   * Stripe calls overlap a sweep tick would otherwise refund on the strength of
+   * "nothing has been transferred", have that stop being true underneath it,
+   * and still match this predicate — paying the refund *and* the payout.
+   *
+   * Passing the value the decision was made on turns that into an ordinary
+   * conflict: the loser gets "that booking changed while you were cancelling
+   * it", and its retry re-reads the row, sees the transfer, and reverses.
+   */
+  releasedBefore: Date | null = null,
 ): Promise<BookingRow | null> {
   return db.transaction(async (tx) => {
     const updated = await tx
       .update(bookings)
       .set({ ...patch, status: 'cancelled', updatedAt: sql`now()` })
-      .where(and(eq(bookings.id, bookingId), eq(bookings.status, 'confirmed')))
+      .where(
+        and(
+          eq(bookings.id, bookingId),
+          eq(bookings.status, from),
+          releasedBefore === null
+            ? isNull(bookings.payoutReleasedAt)
+            : eq(bookings.payoutReleasedAt, releasedBefore),
+        ),
+      )
       .returning();
 
     const row = updated?.[0];

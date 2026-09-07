@@ -7,6 +7,7 @@ import {
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
+  PAYOUT_MODELS,
   PRICE_TYPES,
   REVIEW_TYPES,
   TAG_CATEGORIES,
@@ -65,6 +66,7 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'budget_tier', values: BUDGET_TIERS },
     { enumName: 'price_type', values: PRICE_TYPES },
     { enumName: 'tag_suggestion_status', values: TAG_SUGGESTION_STATUSES },
+    { enumName: 'payout_model', values: PAYOUT_MODELS },
     { enumName: 'us_state', values: US_STATE_CODES },
   ];
 

@@ -5,11 +5,15 @@ import {
   LATE_CANCELLATION_REFUND_RATE,
   MAX_EVENT_DATE_MONTHS_AHEAD,
   MAX_SLUG_LENGTH,
+  PAYOUT_RELEASE_HOURS,
+  type BookingStatus,
+  type PayoutStatus,
 } from '../constants/index.js';
 
 const SLUG_FALLBACK = 'vendor';
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
 
 /**
  * Builds a URL-safe slug from arbitrary user input. Accented Latin characters
@@ -170,7 +174,7 @@ export function calculateRefund(
     throw new Error(`calculateRefund: eventDate is not a calendar date: ${eventDate}`);
   }
 
-  const hoursUntilEvent = Math.max((eventStart.getTime() - now.getTime()) / 3_600_000, 0);
+  const hoursUntilEvent = Math.max((eventStart.getTime() - now.getTime()) / MS_PER_HOUR, 0);
   const isFullRefund = hoursUntilEvent >= FULL_REFUND_CUTOFF_HOURS;
 
   return {
@@ -377,6 +381,131 @@ export function universallyPastFrom(value: string): Date | null {
    * strict.
    */
   return parsed === null ? null : addDays(parsed, 2);
+}
+
+/**
+ * When the vendor's share of a booking on `eventDate` becomes transferable —
+ * `PAYOUT_RELEASE_HOURS` after the start of the event day in UTC (D35).
+ *
+ * **The release is keyed to the date and to nothing else** (#423). Not to the
+ * vendor marking the booking complete — the vendor is the party who benefits
+ * from pressing that button, so it evidences nothing about whether the event
+ * happened, and a vendor who never presses it would strand the money with no
+ * owner. Not to the customer confirming either. A date is the one input both
+ * sides can check and neither can move.
+ *
+ * **The zero point is midnight UTC on the event date**, the same one
+ * `calculateRefund` measures its 48-hour cutoff from, and for the same reason:
+ * `eventDate` is a `DATE` column carrying no zone, so "72 hours after the
+ * event" has to mean 72 hours after *something*, and midnight UTC is the only
+ * choice that does not move with the reader's timezone. D35 is deliberate that
+ * this stays plain calendar arithmetic — no business days, no end-of-day
+ * correction, no second timezone rule to keep in step with the first. The
+ * window is wide enough to absorb the spread: the latest an event day can end
+ * anywhere on Earth is 36 hours after that midnight, which leaves a day and a
+ * half in hand.
+ *
+ * Derived on every read rather than written onto the booking, so changing
+ * `PAYOUT_RELEASE_HOURS` moves every unreleased payout and reprices none of
+ * them — the amount is the stored `vendor_payout_cents` and this does not touch
+ * it. `null` for a date string the parser rejects, matching the helpers above.
+ */
+export function payoutReleaseAt(eventDate: string): Date | null {
+  const eventStart = parseDateString(eventDate);
+
+  return eventStart === null
+    ? null
+    : new Date(eventStart.getTime() + PAYOUT_RELEASE_HOURS * MS_PER_HOUR);
+}
+
+/**
+ * True once `payoutReleaseAt` has passed — the date half of the release
+ * predicate, in the one place the sweep and every surface read it from.
+ *
+ * The status half (confirmed or completed, never disputed or cancelled) lives
+ * with the sweep, because that is a question about the row rather than about
+ * the calendar. `false` for an unparseable date: a booking whose event date
+ * cannot be read must not have money moved against it.
+ */
+export function isPayoutDue(eventDate: string, now: Date = new Date()): boolean {
+  const releaseAt = payoutReleaseAt(eventDate);
+
+  return releaseAt !== null && now.getTime() >= releaseAt.getTime();
+}
+
+/**
+ * The latest event date whose payout window has closed at `now` — the sweep's
+ * cut-off, so its scan is an index range on `event_date` rather than a
+ * predicate evaluated per row.
+ *
+ * `isPayoutDue` above is the specification and this is the inversion of it:
+ * `midnight(d) + hours <= now` is `d <= dateString(now - hours)`. The two are
+ * one subtraction apart and read the same constant, and **`payoutDueThroughDate
+ * agrees with isPayoutDue` is asserted as a property over a range of dates**
+ * rather than left to be noticed — because the pair that must never disagree is
+ * the date the sweep pays on and the date a vendor was shown, and that is the
+ * one disagreement a payout screen cannot have.
+ *
+ * This was a loop walking the predicate backwards a day at a time, which could
+ * not drift but had a worse failure: bounded at 60 iterations, it fell through
+ * to a cut-off *later* than the true one, and a too-late cut-off on this path
+ * releases money early. A closed form has no fall-through to be wrong in.
+ */
+export function payoutDueThroughDate(now: Date = new Date()): string {
+  return toDateString(new Date(now.getTime() - PAYOUT_RELEASE_HOURS * MS_PER_HOUR));
+}
+
+/** The columns a payout's state is decided from, and nothing else. */
+export interface PayoutSubject {
+  status: BookingStatus;
+  payoutReleasedAt: Date | null;
+  stripeTransferId: string | null;
+}
+
+/**
+ * Which of the three payout states a booking is in — the **one** derivation,
+ * so no surface has to infer "the money is stuck" from `BOOKING_STATUSES`.
+ *
+ * That inference is what #423 acceptance 16 forbids, and forbidding it in prose
+ * is not enough: #424 renders the pending payout and #425 renders the report
+ * that holds it, and each writing its own `status === 'disputed'` is exactly how
+ * a screen comes to tell a vendor their money is on its way while it is frozen.
+ * This is the function all three call.
+ *
+ * **`failed` is deliberately not one of the states.** The row distinguishes it —
+ * `payout_attempts > 0` with no `payout_released_at` — because the sweep must
+ * tell a transfer that failed from one nobody has reached (acceptance 7). But a
+ * failed transfer is retried every quarter of an hour and self-heals, so
+ * surfacing it to a vendor would alarm them about something already in hand.
+ * From outside, a payout that has not arrived is `pending`, and the reason lives
+ * in the log and in `payout_failure_reason`.
+ */
+export function payoutStatusOf(booking: PayoutSubject): PayoutStatus {
+  if (booking.payoutReleasedAt) {
+    return 'released';
+  }
+
+  return booking.status === 'disputed' ? 'held' : 'pending';
+}
+
+/**
+ * True for a booking paid by the **destination charge** this product used
+ * before #423 — released, with no transfer object to show for it.
+ *
+ * Named rather than left as a shape to be re-derived at each point of use. The
+ * pair means something specific: Stripe split that charge as the card
+ * succeeded, so the vendor already holds their share and there is no transfer
+ * to reverse. A refund issued as though it were a modern booking would return
+ * the customer's money and claw back nothing.
+ *
+ * Every such row was written by `0028_hold_payouts_until_the_event`'s backfill
+ * and the set can never grow — nothing creates a destination charge any more.
+ * It is exported anyway because the alternative is each future reader (#424,
+ * #425, a reconciliation report) independently rediscovering what that pair
+ * means, on the money path.
+ */
+export function isLegacyDestinationPayout(booking: PayoutSubject): boolean {
+  return booking.payoutReleasedAt !== null && booking.stripeTransferId === null;
 }
 
 /**

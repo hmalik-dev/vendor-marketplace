@@ -5,7 +5,16 @@ import type { ApiEnv } from '../config/env.js';
 import type { AppDatabase } from '../lib/database.js';
 import type { EmailGateway, EmailMessage } from '../lib/email.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
-import { refundParams, refusedRefundParams } from '../lib/stripe.js';
+import {
+  paymentIntentParams,
+  refundParams,
+  refusedRefundParams,
+  refusedReversalParams,
+  refusedTransferParams,
+  reversalParams,
+  transferIdempotencyKey,
+  transferParams,
+} from '../lib/stripe.js';
 import type {
   PaymentIntentSnapshot,
   StripeAccountStatus,
@@ -239,6 +248,51 @@ export interface FakeStripe extends StripeConnectGateway {
      */
     status?: string;
   }[];
+  /**
+   * Transfers asked for, in order, so a suite can assert the **call count**
+   * rather than only the end state (#423).
+   *
+   * A second sweep that no-ops because the row already changed and one that
+   * never issues the transfer at all look identical on the booking. Only this
+   * list tells them apart, which is why the idempotency acceptance is written
+   * against its length.
+   */
+  transfers: {
+    transferId: string;
+    bookingId: string;
+    amountCents: number;
+    destinationAccountId: string;
+    transferGroup: string;
+    idempotencyKey: string;
+    /** Cents already reversed, so an over-reversal is refused as Stripe does. */
+    reversedCents: number;
+  }[];
+  /** Reversals asked for, in order, with the transfer each one applied to. */
+  reversals: {
+    reversalId: string;
+    transferId: string;
+    amountCents: number;
+    idempotencyKey: string;
+  }[];
+  /**
+   * Booking ids whose transfer the fake must refuse.
+   *
+   * A transfer failing is not hypothetical — an insufficient platform balance,
+   * a connected account restricted between payment and release, a Stripe
+   * outage — and it is the branch that must leave the booking releasable rather
+   * than silently released (#423 acceptance 7). There is no other way to reach
+   * it from a test.
+   */
+  transfersToRefuse: Set<string>;
+  /**
+   * Idempotency keys whose result was a **failure**, replayed as Stripe does.
+   *
+   * Exposed so a suite can clear it between tests alongside `transfers`. Booking
+   * ids are fresh uuids so a stale entry cannot currently collide, but a fake
+   * that remembers a refusal across tests is exactly the kind of coupling that
+   * produces an unexplainable red one day.
+   */
+  failedTransferKeys: Map<string, string>;
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
 }
@@ -252,6 +306,11 @@ function createFakeStripe(): FakeStripe {
   const intentsByKey = new Map<string, string>();
   const refunds: FakeStripe['refunds'] = [];
   const refundsToRefuse = new Set<string>();
+  const transfers: FakeStripe['transfers'] = [];
+  const reversals: FakeStripe['reversals'] = [];
+  const transfersToRefuse = new Set<string>();
+  /** Idempotency keys whose result was a failure, replayed as Stripe does. */
+  const failedTransferKeys = new Map<string, string>();
 
   const fake: FakeStripe = {
     createdAccounts,
@@ -262,6 +321,10 @@ function createFakeStripe(): FakeStripe {
     intentsByKey,
     refunds,
     refundsToRefuse,
+    transfers,
+    reversals,
+    transfersToRefuse,
+    failedTransferKeys,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
 
     succeed: (paymentIntentId) => {
@@ -322,16 +385,18 @@ function createFakeStripe(): FakeStripe {
       }
 
       const id = `pi_test_${paymentIntents.size + 1}`;
+      /*
+       * Built through the adapter's own params so the intent the suite reads
+       * back is shaped by the code that would post it — the metadata below is
+       * the very object Stripe would be sent, not a paraphrase of it.
+       */
+      const params = paymentIntentParams(input);
       const intent: PaymentIntentSnapshot = {
         id,
         status: 'requires_payment_method',
         amountReceivedCents: input.amountCents,
         clientSecret: `${id}_secret_test`,
-        metadata: {
-          requestId: input.requestId,
-          customerId: input.customerId,
-          vendorId: input.vendorId,
-        },
+        metadata: params.metadata as Record<string, string>,
       };
 
       paymentIntents.set(id, intent);
@@ -348,6 +413,136 @@ function createFakeStripe(): FakeStripe {
       }
 
       return intent;
+    },
+
+    createTransfer: async (input) => {
+      /*
+       * Stripe replays a transfer for a repeated key rather than sending a
+       * second one. Modelled rather than asserted: a fake that minted a fresh
+       * transfer per call would let a double payout through a green suite,
+       * which is the exact shape #416 warns about — and here the money leaves
+       * the platform's balance.
+       */
+      const idempotencyKey = transferIdempotencyKey(input);
+      const replayed = transfers.find((transfer) => transfer.idempotencyKey === idempotencyKey);
+
+      if (replayed) {
+        return { transferId: replayed.transferId, amountCents: replayed.amountCents };
+      }
+
+      /*
+       * **And it replays a cached _failure_ under that key too**, which is the
+       * half a double would never think to model and which cost a real
+       * debugging session to find: driven against real Stripe, a payout refused
+       * `balance_insufficient` kept returning that same error — with the
+       * original request's log URL — for every later attempt, even once the
+       * balance was funded. A key fixed at `payout_<bookingId>` therefore froze
+       * a transient failure for 24 hours while the sweep asked for the same
+       * cached "no" every quarter of an hour.
+       *
+       * The attempt number in the key is what fixes it, and this branch is what
+       * stops the fix being quietly reverted: drop `attempt` and the retry
+       * assertion in `payouts.routes.test.ts` goes red here instead of a payout
+       * going silently stuck in production.
+       */
+      const failed = failedTransferKeys.get(idempotencyKey);
+
+      if (failed) {
+        throw new Error(failed);
+      }
+
+      if (transfersToRefuse.has(input.bookingId)) {
+        const message = `Fake Stripe refused a transfer for booking ${input.bookingId}`;
+        failedTransferKeys.set(idempotencyKey, message);
+        throw new Error(message);
+      }
+
+      /*
+       * The double judges the real request. `refusedTransferParams` carries the
+       * rules that are readable off the params; the capability check is here
+       * because only the gateway knows the account state — and it is the #387
+       * failure exactly: a connected account that every column-shaped check
+       * read as payment-capable, which Stripe refused as a transfer
+       * destination.
+       */
+      const params = transferParams(input);
+      const refusal = refusedTransferParams(params);
+
+      if (refusal) {
+        throw new Error(refusal);
+      }
+
+      if (!accountStatuses.get(input.destinationAccountId)?.transfersActive) {
+        throw new Error(
+          `Your destination account (${input.destinationAccountId}) needs to have at least one ` +
+            'of the following capabilities enabled: transfers, crypto_transfers, legacy_payments',
+        );
+      }
+
+      const transferId = `tr_test_${transfers.length + 1}`;
+      transfers.push({
+        transferId,
+        bookingId: input.bookingId,
+        amountCents: input.amountCents,
+        destinationAccountId: input.destinationAccountId,
+        transferGroup: input.transferGroup,
+        idempotencyKey,
+        reversedCents: 0,
+      });
+
+      return { transferId, amountCents: input.amountCents };
+    },
+
+    findTransfer: async (transferGroup) => {
+      const transfer = transfers.find((candidate) => candidate.transferGroup === transferGroup);
+
+      return transfer
+        ? {
+            transferId: transfer.transferId,
+            amountCents: transfer.amountCents,
+            reversedCents: transfer.reversedCents,
+          }
+        : null;
+    },
+
+    reverseTransfer: async (input) => {
+      const replayed = reversals.find(
+        (reversal) => reversal.idempotencyKey === input.idempotencyKey,
+      );
+
+      if (replayed) {
+        return { reversalId: replayed.reversalId, amountCents: replayed.amountCents };
+      }
+
+      const transfer = transfers.find((candidate) => candidate.transferId === input.transferId);
+
+      if (!transfer) {
+        throw new Error(`No such transfer: ${input.transferId}`);
+      }
+
+      /*
+       * The unreversed balance is tracked so the double refuses an
+       * over-reversal the way Stripe does. A booking cancelled twice, a day
+       * apart, would otherwise claw the vendor's share back twice — and D31
+       * accepted carrying a vendor negative once, never twice.
+       */
+      const params = reversalParams(input);
+      const refusal = refusedReversalParams(params, transfer.amountCents - transfer.reversedCents);
+
+      if (refusal) {
+        throw new Error(refusal);
+      }
+
+      transfer.reversedCents += input.amountCents;
+      const reversalId = `trr_test_${reversals.length + 1}`;
+      reversals.push({
+        reversalId,
+        transferId: input.transferId,
+        amountCents: input.amountCents,
+        idempotencyKey: input.idempotencyKey,
+      });
+
+      return { reversalId, amountCents: input.amountCents };
     },
 
     createRefund: async (input) => {
@@ -374,6 +569,11 @@ function createFakeStripe(): FakeStripe {
         amountCents: input.amountCents,
         reason: input.reason,
         idempotencyKey: input.idempotencyKey,
+        /*
+         * Both false on every refund under #423 and recorded anyway, because
+         * they are what a suite asserts the *absence* of: a refund that had
+         * either set would be one sent against a charge that cannot carry it.
+         */
         reverseTransfer: params.reverse_transfer === true,
         refundApplicationFee: params.refund_application_fee === true,
       });
@@ -489,6 +689,14 @@ export async function createTestHarness(
     env: { ...TEST_ENV, ...options.env },
     db: database.db,
     storage,
+    /*
+     * The payout sweep never runs on a timer in a suite. It moves money against
+     * whatever fixtures happen to be due, so a tick landing between an `inject`
+     * and its assertion would be a source of flakes on the one path where a
+     * flake is a transfer. Suites that exercise it call `releaseDuePayouts`
+     * directly, which is the same function the timer calls.
+     */
+    payoutSweepIntervalMs: 0,
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     auth: {

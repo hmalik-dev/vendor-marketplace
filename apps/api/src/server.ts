@@ -10,7 +10,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { createDatabase, loadEnv } from '@vendor-marketplace/db';
-import { MAX_UPLOAD_BYTES } from '@vendor-marketplace/shared';
+import { MAX_UPLOAD_BYTES, PAYOUT_SWEEP_INTERVAL_MS } from '@vendor-marketplace/shared';
 import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
 import { allowedOrigins, canonicalWebOrigin, parseEnv, type ApiEnv } from './config/env.js';
 import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.js';
@@ -25,6 +25,7 @@ import { clockPlugin, type Clock } from './plugins/clock.js';
 import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { eventsPlugin } from './plugins/events.js';
+import { payoutReleasePlugin } from './plugins/payout-release.js';
 import { storagePlugin } from './plugins/storage.js';
 import { emailPlugin } from './plugins/email.js';
 import { stripePlugin } from './plugins/stripe.js';
@@ -79,6 +80,18 @@ export interface BuildServerOptions {
   stripe?: StripeConnectGateway;
   /** Resend seam, for the same reason: the suites assert on what would be sent. */
   email?: EmailGateway;
+  /**
+   * How often the payout sweep runs, in milliseconds; `0` disables it.
+   *
+   * Defaults to `PAYOUT_SWEEP_INTERVAL_MS` rather than to disabled, and the
+   * direction is deliberate. A default of `0` would mean a deployment that
+   * forgot to set it never pays a single vendor, silently and for as long as
+   * nobody checks — the sweep has no request to fail and no screen that says it
+   * is not running. On by default fails the other way: the suites pass `0`
+   * explicitly, and a suite that forgot to would see the sweep move money and
+   * go red, which is a failure that reports itself.
+   */
+  payoutSweepIntervalMs?: number;
 }
 
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
@@ -181,6 +194,9 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(clerkAuthPlugin, {
     secretKey: env.CLERK_SECRET_KEY,
     ...options.auth,
+  });
+  await app.register(payoutReleasePlugin, {
+    intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,
   });
 
   await app.register(healthRoutes);

@@ -33,6 +33,8 @@ interface DashboardBody {
     eventDate: string;
     customerFirstName: string;
     vendorPayoutCents: number;
+    releaseAt: string;
+    status: string;
   } | null;
 }
 
@@ -464,13 +466,41 @@ describe('/vendor/dashboard', () => {
       expect(((await read()).json() as DashboardBody).nextPayout?.vendorPayoutCents).toBe(900_000);
     });
 
-    it('is null when every booking is already behind the vendor', async () => {
+    /**
+     * A past event whose payout has not gone out is the **most** imminent
+     * payout there is, and this used to answer null for it (#423).
+     *
+     * The date floor was correct while a destination charge paid the vendor as
+     * the card succeeded: an event behind you was money already received.
+     * Nothing pays out at the charge now, so whether a vendor is still owed is
+     * `payout_released_at`, and the floor hid exactly the rows a vendor most
+     * wants to see.
+     */
+    it('still names a past booking whose payout has not gone out', async () => {
       const vendorId = await createProfile();
       const packageId = await addPackage();
       await publish(vendorId);
       const past = await request(vendorId, packageId, 10);
 
       await book(vendorId, past, -5, 50_000);
+
+      const payout = ((await read()).json() as DashboardBody).nextPayout;
+      expect(payout?.vendorPayoutCents).toBe(50_000);
+      expect(payout?.status).toBe('pending');
+    });
+
+    /* And nothing at all once the transfer has been made. */
+    it('is null once every payout has been released', async () => {
+      const vendorId = await createProfile();
+      const packageId = await addPackage();
+      await publish(vendorId);
+      const past = await request(vendorId, packageId, 10);
+
+      await book(vendorId, past, -5, 50_000);
+      await harness.database.db
+        .update(bookings)
+        .set({ payoutReleasedAt: new Date(), stripeTransferId: 'tr_test_released' })
+        .where(eq(bookings.vendorId, vendorId));
 
       expect(((await read()).json() as DashboardBody).nextPayout).toBeNull();
     });
