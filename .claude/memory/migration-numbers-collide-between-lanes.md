@@ -42,4 +42,11 @@ there is no clean way to emit `0031` with `0030` absent anyway.
 A reserved-but-unlanded number is not taken. Say so rather than complying — the
 instruction was a slip, and it was withdrawn once the arithmetic was laid out.
 
+**The lane database has to be recreated, not re-migrated.** `__drizzle_migrations`
+records the tag you originally applied, and after regenerating, that tag no longer
+exists in the journal — so `pnpm db:migrate` tries to apply the landed lane's
+migration _and_ yours on a database that already has yours under a dead name.
+Drop and recreate the lane database, then `db:migrate`, `db:seed`, `db:seed:e2e`.
+Confirmed 2026-09-07 on #429 after #434 took `0030`; regenerated as `0031`.
+
 Related: [[ticket-worktree-merge-immediately]], [[main-pushes-dequeue-parallel-lane-prs]].

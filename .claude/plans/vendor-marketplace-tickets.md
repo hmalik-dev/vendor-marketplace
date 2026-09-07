@@ -246,8 +246,6 @@ the silent-submit work #388 closed:
   aria-modal="true"` but nothing focuses it, nothing traps Tab and nothing
   restores focus — a keyboard user t |
 storefront, each of which tells the reader something untrue. |
-| **429** | **Legal acceptance is vendor-only and records a version, not the document — close both** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 on the account holder's instruction**, after auditing what #427 shipped: *"it is essential that we have an appropriate tracker of ToS and any other vendor agreement tracked."* **The table is good and is not the problem** — `legal_acceptances` is immutable by a database trigger (not a DAO convention), copies `accepted_by_name` and `business_name` so a later rename cannot rewrite history, captures `ip`, `user_agent` and a timezone-aware `accepted_at`, and its immutability is proven by attempting the update and delete. **Three holes.** (1) **`vendor_id` is `NOT NULL`**, so only a vendor can be recorded — a customer accepting the Terms of Service at sign-up has nowhere to go, and `terms_of_service` sits in the enum with **nothing anywhere writing it**, exactly as `disputed` did before #425. (2) **Nothing records what the document said** — only a version string, while the copy is placeholder markdown explicitly planned for replacement, so editing `terms.md` without bumping the version silently makes every existing row attest to text that no longer exists. (3) **Nothing is affirmatively accepted** — the flow is browsewrap, so the row attests to a `Continue` press. Ruled 2026-09-07: *"explicit checkbox"* and SHA-256 to pin the version. Because `sign-up-form.tsx` renders Clerk's prebuilt `<SignUp>`, the clickwrap gate goes **after** authentication — a first-sign-in interstitial on `/after-sign-in`, which every account traverses however it was created, writing the `users` row and the acceptance in one transaction. **Not in scope, already built:** the stale-version blocker (`hasCurrentVendorAgreement`) and the privacy disclosure of the IP capture |
-| **430** | **Closing band and footer: stack the band, and drop both centred measures** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 with a design revision.** `design/delta-band/` — `CLOSING-BAND-PROMPT.md` and `Orla-Closing-Band.html`. **This revises what #428 shipped rather than replacing it**: the band is already vendor-only, already signed-out-only, already free of pricing figures, and already points both controls at one destination. **What changes is the composition.** The band becomes **stacked, not columned** — the pitch spans a top line and the three steps run full-width beneath as `repeat(3, 1fr)` — and **both the band and the footer stop centring an inner measure and sit flush to the page's 40px gutter**. #428 deliberately chose `max-w-[1160px] mx-auto` and left a comment defending it as *"the frame's own measure"*; **that reasoning is now overruled by a newer frame** and the comment must be corrected rather than left contradicting the code. Also: serif 33px→35px, the vertical rule between columns becomes a full-width horizontal one, the button moves after the link so the strongest element sits at the outer edge, and the footer's compensating `border-top` goes because the `#1C1916` ground replaces it |
 | **431** | **Operations case console: every dispute, however it arrives, and its resolution** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` `email` | **Filed 2026-09-07 by the admin-panel investigation.** `PUT /admin/bookings/:bookingId/dispute` is the only way to lift a payout hold and **has no UI whatsoever** — `admin-data.ts` is nine GETs and nothing else, so an operator resolves disputes with curl while the vendor's money sits frozen. The complaint that justifies the hold is never stored: `POST /support/messages` sends one email and keeps no row, so the reason lives in an inbox and the hold lives in `bookings.dispute_reason`, which no admin schema exposes. `charge.dispute.*` is not among the handled Stripe events, so a chargeback never reaches the booking at all. |
 | **432** | **Payout health: failed transfers, retries, and why Stripe stopped a vendor** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** `payouts.dao.ts:213` writes `payout_attempts` and `payout_failure_reason` on every failed transfer and **nothing anywhere reads either column** — not admin, not the vendor dashboard. `adminPaymentRowSchema` carries no payout state at all, so a vendor owed money by a transfer that keeps failing generates no signal. `stripe_onboarded` is a boolean with no reason behind it: when Stripe revokes a capability the operator sees only "No payouts yet" in a filter. |
 | **433** | **A deleted account keeps a live, bookable storefront** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation. This is a defect, not a gap.** `softDeleteUserByClerkId` sets `users.deleted_at` and stops. `vendor_profiles.is_deleted` is read as a visibility filter by four DAOs and **written by nothing outside seed scripts** — so a vendor who deletes their Clerk identity keeps a published profile that stays searchable, bookable and payable. The ban flow unpublishes; deletion does not. |
@@ -257,6 +255,8 @@ storefront, each of which tells the reader something untrue. |
 | **438** | **Data rights: export, account closure, and the legal acceptance record** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** — #434 landed 2026-09-07 (`1f8011a`) | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Neither privacy-policy promise is backed by anything: the text says *"ask us for a copy of what we hold"* and *"to close your account, ask us through Contact support"*, and there is no export endpoint, no admin-initiated deletion, and no screen. Deletion happens only if the user deletes themselves in Clerk. Separately, `legal_acceptances` is the platform's evidence a vendor agreed to the 12% and the 72-hour hold — immutable, IP and UA captured, three DB triggers — and no operator can read it. |
 | **439** | **Transactional email delivery is invisible** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` `email` | **Filed 2026-09-07 by the admin-panel investigation.** Fourteen notification types fire and forget; failures are logged and dropped at `notification-email.ts:200`. The `notifications` table records the in-app bell only — no `sentAt`, no failure reason, no provider id. *"Was the customer actually told their booking was cancelled?"* is unanswerable from the console, from the database, or from anywhere but a log search. |
 | **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
+| **441** | **The site footer against the newer frame, and the ink-ground text ramp used as a border** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #430's parity pass**, which measured the footer against `design/delta-band/Orla-Closing-Band.html` — a frame #428 never saw, so none of this is a regression. **Nine layout, style and font deviations**: inner padding `py-14` (56px) where the frame draws 40px top and bottom; the column grid is four equal quarters where the frame draws `1.5fr 1fr 1fr 1fr` (419/280/280/280), which puts `Browse` at x=390 against the frame's ≈493; gap 40px vs 34px; the footer wordmark at 32px vs 25px, and its logo mark `29x20` with **unequal** circles (20px filled, 22px outer) where the frame draws `26x17` with two equal 17px circles — so `logo.tsx:50`'s comment that `marketingFooter` is *"absent from every frame"* is now stale, this frame draws it twice; `Contact support` renders `#B8AF9F`/400 where the frame singles it out at `#F8F5EF`/600; link columns 13.5px vs 13px; tagline 13.5px/1.6 vs 13px/1.5; micro-labels at 600 weight and .05em vs 500 and .07em. **And the mechanism #430 fixed in the band, in the two places it survives**: the legal row's hairline is `border-stone-0/10` where the frame draws `rgba(248,245,239,.1)` — `stone-50`, the other end of the ramp — and **`admin-header.tsx:64`** sets `text-stone-400` as text on frame `13`'s inverted `#23201C` ground. `stone-400` is a **border** value: it is drawn on a light ground at thirty-nine sites across the frames and as text on ink at none. `stone-480` (`#d8d0c2`) was added to the ink-ground text ramp in `aac9b3b` and is the token both should read. That is the only admin instance, which is why it rides here rather than in #431–#440 — the ramp is the defect, not the surface. **One access finding with no other checker**: the footer logo link is `88x32`, twelve pixels under `04-laws.md`'s 44px minimum; its `aria-label` is present and correct. **Not in scope**: the `Florals` mismatch in the Browse column is the ruled #419 override, and the band itself is done (#430, `aac9b3b`). |
+| **442** | **A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder: does a second acceptance of a version already held mean one row or two?** | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. The obvious fix — a unique index on `(accepted_by_user_id, document, version)` — **overturns #427's ruling** that a second acceptance of a held version *is* a second row, on the grounds that *"I accepted it twice"* is a true statement about what happened; `legal-acceptance-immutability.test.ts` asserts exactly that today. So the race cannot be closed without first deciding what the record is claiming, which is a product question, not a lane's. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #434 landed: 14 rows — 11 Backlog and 3 `Deferred — needs a human`.** The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 landed 2026-09-07 (`1f8011a`), which cleared the only blocker inside the section** — so **#431**, **#432**, **#433**, **#435**, **#436**, **#437**, **#438** and **#439** are all startable unattended today, alongside **#429** and **#430**. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **The board is no longer waiting on a human before it can use another lane** — that was true on 2026-09-07 morning with 5 rows and is not true now. **Do not hand-maintain this number, recount it.**
@@ -1018,16 +1018,6 @@ is **correct as built** — frame `02` draws `$500 – $3,200 ▾` for a range a
 header submit's `ring-offset-0` is deliberate and tracked under #306/#73, now
 re-reported six times by successive passes.
 
-### #429: Legal acceptance is vendor-only and records a version, not the document — close both
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** None
-
-**Filed 2026-09-07 on the account holder's instruction**, after auditing what
-#427 shipped: *"is there a tracker for users that accept the terms… we need to
-safely store that for legal purposes… 1 ticket that is best handling
-appropriately for legal purposes."*
-
 #### Read this first: the table is good, and most of it is not the problem
 
 `legal_acceptances` (#427) is better built than an audit usually finds, and
@@ -1198,15 +1188,6 @@ indistinguishable from it.
 The operative legal wording (**#374**), the stale-version blocker and the privacy
 disclosure — all three already exist or belong elsewhere. This ticket is about
 **what is recorded**, not what the documents say.
-
-### #430: Closing band and footer — stack the band, and drop both centred measures
-
-**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
-**Blocked by:** None
-
-**Filed 2026-09-07 with a design revision** supplied by the account holder:
-`design/delta-band/CLOSING-BAND-PROMPT.md` and `Orla-Closing-Band.html`, drawn
-at 1440.
 
 #### This is a revision of #428, not a rebuild — read what is already true
 
@@ -2075,3 +2056,98 @@ row (#434), and notifying both parties.
 **Do not build any part of this before the decision exists.** A money path
 implemented against a guessed policy is the one kind of code in this repository
 that cannot be corrected by a later ticket.
+
+### #441: The site footer against the newer frame, and the ink-ground text ramp used as a border
+
+**Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 by the parity pass on #430**, which compared the closing band
+_and_ the footer against `design/delta-band/Orla-Closing-Band.html`. The band is
+done (`aac9b3b`, PR #134). Everything below is the footer, and **none of it is a
+regression**: these are #428-era values measured against a frame #428 never saw.
+#430 deliberately left them rather than widening a revision into a restyle.
+
+Two different mechanisms live here, and they are one ticket because a single lane
+opens the same two files for both.
+
+### #442: A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** The account holder — see the ruling below
+
+**Filed 2026-09-07** from #429's `security-auditor` pass. The lane found it,
+wrote it up as **D38**, and deliberately left it open, which was the right call:
+the fix decides a product question.
+
+#### What is wrong
+
+`acceptTerms` in `apps/api/src/modules/legal/terms.service.ts` does a
+**check-then-insert**: it reads whether this user already holds the current
+version, and if not, inserts. Nothing at the database level enforces the
+invariant that read is protecting, so two submissions racing from one session
+can both pass the check and both insert.
+
+The table is `legal_acceptances`, which a database trigger makes **immutable** —
+no update, no delete. So a duplicate is not a row someone can tidy up later. It
+is permanent, and it sits in the one table whose entire purpose is to be
+evidence.
+
+#### Why it was not simply fixed
+
+The obvious remedy is a unique index on `(accepted_by_user_id, document,
+version)`. That **overturns a ruling #427 made deliberately**: a second
+acceptance of a version already held *is* a second row, because *"I accepted it
+twice"* is a true statement about what happened, and a record built to say what
+happened should not silently collapse two acts into one.
+`packages/db/src/legal-acceptance-immutability.test.ts` asserts that behaviour
+directly, so the index and the test cannot both stand.
+
+**The question for the account holder, stated plainly:** when the same person
+accepts the same version of the same document twice, should the record show one
+acceptance or two?
+
+- **One row** — the record answers *"what is this person bound by"*. Add the
+  unique index, let the second insert lose harmlessly, and amend #427's test.
+- **Two rows** — the record answers *"what did this person do, and when"*.
+  Keep the current meaning and close the race a different way: a transaction
+  with the right isolation, or an advisory lock keyed to the user and document,
+  so a genuine repeat acceptance minutes apart still records two rows while two
+  submissions of one click record one.
+
+Either is defensible. What is not defensible is leaving a race open in an
+append-only evidence table because the question was never asked.
+
+#### Scope, once ruled
+
+- **Both writers, not just the new one.** The vendor agreement has had the
+  identical shape since #427; #429 only widened the record from vendors to every
+  user. Fixing `acceptTerms` and leaving `acceptAgreement` alone fixes half of it.
+- **D38 is the write-up** and should be amended with the ruling rather than
+  duplicated.
+- The `document_sha256` manifest and the clickwrap gate are **not** in scope —
+  both shipped in #429 and are correct.
+
+#### Acceptance
+
+1. Two concurrent submissions of one acceptance produce exactly the outcome the
+   ruling specifies — one row or two — and the assertion names which ruling it
+   is enforcing.
+2. The same holds for `acceptAgreement` on the vendor agreement.
+3. A genuine repeat acceptance after a version bump still writes a new row under
+   either ruling; the fix must not block the case the table exists for.
+4. `legal-acceptance-immutability.test.ts` either still asserts #427's meaning or
+   is amended in the same commit that overturns it — never left contradicting the
+   schema.
+5. Immutability still holds, proven by attempting an update and a delete.
+
+#### Tests (required)
+
+- [ ] A **contention test** on real Postgres, not PGlite. This is a race: PGlite
+      is a single connection and cannot tell a lock from its absence, so a
+      passing `pnpm test` here would prove nothing. `pnpm test:contention`.
+- [ ] The race reproduced **failing first** — two writes landing today — then
+      passing after the fix.
+- [ ] Both writers covered, in separate cases.
+- [ ] A version-bump case, so the fix is shown not to have closed the door on
+      legitimate re-acceptance.

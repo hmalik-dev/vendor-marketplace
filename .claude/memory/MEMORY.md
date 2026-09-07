@@ -54,3 +54,4 @@
 - [Class assertions need the split list](class-assertions-need-the-split-list.md) — `toContain` on `className` is a substring match, so `min-[90rem]:text-[11px]` satisfies a check meant to pin `text-[11px]`
 - [Stripe caches failed idempotent results](stripe-caches-failed-idempotent-results.md) — a retry key needs the attempt number; `request_log_url` is the tell (D36)
 - [A z.date() needs a wire coercion](zdate-needs-a-wire-coercion.md) — else that screen 500s, conditionally, with the whole local gate green
+- [A clean rebase is not a compiling rebase](rebase-auto-merges-are-not-compile-checked.md) — git merges text, not signatures; re-run typecheck and the suites after every rebase
