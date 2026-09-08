@@ -9,7 +9,18 @@ import { findUserByClerkId, retireUserByClerkId, updateUserByClerkId } from '../
 import { mirroredClerkName, syncUserFromClerk } from '../users/users.service.js';
 import { primaryEmail, type ClerkWebhookEvent } from './clerk.schemas.js';
 
-export type ClerkWebhookOutcome = 'created' | 'updated' | 'deleted' | 'ignored';
+export type ClerkWebhookOutcome =
+  | 'created'
+  | 'updated'
+  | 'deleted'
+  | 'ignored'
+  /**
+   * Applied, but the address could not be written because another row holds it
+   * (#462). Distinct from `updated` because `pnpm reconcile:clerk` counts these
+   * and would otherwise report a row it did not repair as corrected — on every
+   * run, since the row stays drifted.
+   */
+  | 'diverged';
 
 /**
  * Applies one verified Clerk lifecycle event. Events arrive out of order and
@@ -68,8 +79,34 @@ export async function applyClerkUserEvent(
         ...(event.data.image_url === undefined ? {} : { avatarUrl: event.data.image_url || null }),
       };
 
-      const updated = await updateUserByClerkId(db, clerkUserId, patch);
-      return updated ? 'updated' : 'ignored';
+      const mirrored = await updateUserByClerkId(db, clerkUserId, patch);
+
+      if (!mirrored) {
+        return 'ignored';
+      }
+
+      /*
+       * The address Clerk sent belongs to another row, so it was recorded as
+       * pending rather than written (#462). The event still **succeeds**: svix
+       * would redeliver a failure until it gave up, and every one of those
+       * deliveries would meet the same other row.
+       *
+       * `email_sync_failed_at` and `pending_email` are what an operator acts
+       * on — `/admin/customers?flag=email-stale` lists them — and this line is
+       * the same class of report as the stranded-refund line below: something
+       * went wrong after a committed operation, and only a person can finish
+       * it.
+       */
+      if (mirrored.emailDiverged) {
+        context.log.error(
+          { userId: mirrored.user.id, clerkUserId },
+          'Clerk sent an address another account already holds; users.email is now stale',
+        );
+
+        return 'diverged';
+      }
+
+      return 'updated';
     }
 
     case 'user.deleted': {

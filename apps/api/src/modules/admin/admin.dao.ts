@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
@@ -24,6 +24,7 @@ import type {
   AdminActionDetail,
   AdminActionSubject,
   AdminBookingFlag,
+  AdminCustomerFlag,
   AdminPaymentFlag,
   AdminPayoutFilter,
   PayoutModel,
@@ -678,7 +679,13 @@ export interface AdminCustomerProjection {
   state: string | null;
   totalBookingsCount: number;
   isBanned: boolean;
+  pendingEmail: string | null;
   createdAt: Date;
+}
+
+interface AdminCustomerFilters {
+  q: string | undefined;
+  flag: AdminCustomerFlag | undefined;
 }
 
 /**
@@ -686,14 +693,14 @@ export interface AdminCustomerProjection {
  * Soft-deleted accounts are excluded for the same reason deleted vendors are:
  * an operator moderating an account that no longer exists can only cause harm.
  */
-function customerCondition(q: string | undefined) {
+function customerCondition(filters: AdminCustomerFilters) {
   const conditions = [eq(users.role, 'customer'), sql`${users.deletedAt} is null`];
 
-  if (q) {
+  if (filters.q) {
     const match = or(
-      containsInsensitive(users.email, q),
-      containsInsensitive(users.firstName, q),
-      containsInsensitive(users.lastName, q),
+      containsInsensitive(users.email, filters.q),
+      containsInsensitive(users.firstName, filters.q),
+      containsInsensitive(users.lastName, filters.q),
     );
 
     if (match) {
@@ -701,12 +708,28 @@ function customerCondition(q: string | undefined) {
     }
   }
 
+  /*
+   * The accounts whose stored address the identity provider has already moved
+   * on from (#462).
+   *
+   * Stored rather than derived, unlike `refundStuck`: nothing else in the
+   * database knows what Clerk currently believes, so `pending_email` — written
+   * by `updateUserByClerkId` when `users_email_key` refuses the new address —
+   * is the only record that the two disagree. Keyed on it rather than on
+   * `email_sync_failed_at` because it is the column the console prints, and a
+   * filter that can select a row the table then renders as blank is a filter
+   * that lies.
+   */
+  if (filters.flag === 'email-stale') {
+    conditions.push(isNotNull(users.pendingEmail));
+  }
+
   return and(...conditions);
 }
 
 export async function findAdminCustomers(
   db: AppDatabase,
-  q: string | undefined,
+  filters: AdminCustomerFilters,
   limit: number,
   offset: number,
 ): Promise<AdminCustomerProjection[]> {
@@ -720,42 +743,46 @@ export async function findAdminCustomers(
       state: users.state,
       totalBookingsCount: users.totalBookingsCount,
       isBanned: users.isBanned,
+      pendingEmail: users.pendingEmail,
       createdAt: users.createdAt,
     })
     .from(users)
-    .where(customerCondition(q))
+    .where(customerCondition(filters))
     .orderBy(desc(users.createdAt))
     .limit(limit)
     .offset(offset);
 }
 
 /**
- * The one filter the customers table can be narrowed by.
+ * The filters the customers table can be narrowed by.
  *
  * `role = 'customer'` and the deleted-account exclusion are the screen's
  * *domain*, not filters — widening past either would list vendors, or accounts
  * that no longer exist, on a screen about customers.
  */
-export const CUSTOMER_FILTER_KEYS = ['q'] as const;
+export const CUSTOMER_FILTER_KEYS = ['q', 'flag'] as const;
 export type CustomerFilterKey = (typeof CUSTOMER_FILTER_KEYS)[number];
 
-/** How many customers dropping the search would reveal, in one scan (#454). */
+/** How many customers each single widening would reveal, in one scan (#454). */
 export async function countCustomerWidenings(
   db: AppDatabase,
-  q: string | undefined,
+  filters: AdminCustomerFilters,
 ): Promise<FilterWidening[]> {
   return countWidenings<CustomerFilterKey>({
-    active: q === undefined ? [] : CUSTOMER_FILTER_KEYS,
-    conditionWithout: () => customerCondition(undefined),
+    active: CUSTOMER_FILTER_KEYS.filter((key) => filters[key] !== undefined),
+    conditionWithout: (dropped) => customerCondition({ ...filters, [dropped]: undefined }),
     scan: (selection) => db.select(selection).from(users),
   });
 }
 
-export async function countAdminCustomers(db: AppDatabase, q: string | undefined): Promise<number> {
+export async function countAdminCustomers(
+  db: AppDatabase,
+  filters: AdminCustomerFilters,
+): Promise<number> {
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(users)
-    .where(customerCondition(q));
+    .where(customerCondition(filters));
 
   return rows?.[0]?.total ?? 0;
 }

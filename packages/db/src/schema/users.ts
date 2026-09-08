@@ -13,6 +13,17 @@ import {
 import { MAX_CUSTOMER_BIO_LENGTH } from '@vendor-marketplace/shared';
 import { budgetTierEnum, userRoleEnum } from './enums.js';
 
+/**
+ * The unique index behind `users.email`, named once (#462).
+ *
+ * `updateUserByClerkId` has to recognise the 23505 this index raises and no
+ * other — a collision on `users_clerk_user_id_key` means something quite
+ * different and must keep failing loudly. Recognising it means matching the
+ * constraint name Postgres reports, so the name is a constant both the schema
+ * and that catch read rather than a string spelled out twice.
+ */
+export const USERS_EMAIL_UNIQUE_INDEX = 'users_email_key';
+
 export const users = pgTable(
   'users',
   {
@@ -57,6 +68,34 @@ export const users = pgTable(
      * messages reference this row, so it is retired rather than removed.
      */
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    /**
+     * The address Clerk holds that this row could **not** be given, and when
+     * the mirror first failed (#462).
+     *
+     * `users.email` is written from `user.updated`, and `users_email_key` can
+     * decline that write because some other row already holds the new address.
+     * The webhook has no way to retry its way out of that — the collision is a
+     * fact about a different row — so the update is abandoned and `email` stays
+     * at the **old** value. Left unrecorded that is silent and permanent, and
+     * `notification-email.dao.ts` then keeps mailing counterparty detail to an
+     * address the account holder has already given up.
+     *
+     * So the divergence is stored on the row it is about rather than only
+     * logged: `pending_email` is what Clerk says the address is, and
+     * `email_sync_failed_at` is when the two stopped agreeing. Both are cleared
+     * the moment a later `user.updated` writes the address successfully, so a
+     * set `pending_email` always means *currently* diverged rather than *once
+     * diverged*.
+     *
+     * `/admin/customers?flag=email-stale` is the operator's read of them, the
+     * same shape `refund-stuck` gives the bookings that need a person.
+     *
+     * No unique index covers `pending_email`, deliberately: two accounts can be
+     * waiting on the same contested address at once, and refusing the second
+     * record would hide exactly the case that most needs an operator.
+     */
+    pendingEmail: varchar('pending_email', { length: 255 }),
+    emailSyncFailedAt: timestamp('email_sync_failed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -74,8 +113,13 @@ export const users = pgTable(
      * what happened to that person, not a collision. The retired row itself
      * cannot go — bookings, reviews and messages reference it — so releasing
      * the address is the only way to let them back in.
+     *
+     * **The predicate narrowed; the name did not** (#462). `pending_email` is
+     * written when this index refuses an address, and the catch that writes it
+     * matches on the constraint name — so the name is the constant above
+     * rather than a literal, and #451's `where` clause is untouched by that.
      */
-    uniqueIndex('users_email_key')
+    uniqueIndex(USERS_EMAIL_UNIQUE_INDEX)
       .on(table.email)
       .where(sql`${table.deletedAt} is null`),
     index('users_role_idx').on(table.role),

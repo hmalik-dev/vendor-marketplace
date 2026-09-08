@@ -1240,6 +1240,46 @@ describe('data rights', () => {
       expect(body.closeBlockers).toEqual([]);
     });
 
+    /**
+     * The divergence #462 records, on the one console surface **every** role
+     * reaches — `/admin/customers?flag=email-stale` is `role = 'customer'` by
+     * domain, so a vendor whose address went stale is only visible here.
+     *
+     * The export is asserted in the same test rather than a second one,
+     * because the two are one rule: this file's own contract is that the
+     * console cannot report a record the export does not hand over, and these
+     * two fields are personal data that survives closure.
+     */
+    it('reports a stale address to the operator and to the subject alike', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+
+      await harness.database.db
+        .update(users)
+        .set({ pendingEmail: 'moved@example.com', emailSyncFailedAt: new Date('2026-09-01') })
+        .where(eq(users.id, customerId));
+
+      const rights = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/users/${customerId}/data-rights`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(rights.statusCode).toBe(200);
+      expect(rights.json().pendingEmail).toBe('moved@example.com');
+      expect(new Date(rights.json().emailSyncFailedAt as string)).toEqual(new Date('2026-09-01'));
+
+      const exported = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${customerId}/export`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(exported.statusCode).toBe(200);
+      expect(exported.json().subject.pendingEmail).toBe('moved@example.com');
+      expect(exported.json().subject.emailSyncFailedAt).not.toBeNull();
+    });
+
     it('counts exactly what the export enumerates', async () => {
       await signIn(ADMIN, true);
       await signIn(VENDOR);

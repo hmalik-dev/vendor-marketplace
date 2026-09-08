@@ -54,6 +54,7 @@ const reconcileClerkUsers = vi.fn(async () => ({
   updated: 0,
   deleted: 0,
   unchanged: 0,
+  diverged: 0,
   skipped: 0,
 }));
 
