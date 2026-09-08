@@ -547,10 +547,20 @@ which Postgres treats as a different pathkey even on a `NOT NULL` column — so
 without it no index on `admin_actions` is usable. Measured at 50k rows: the
 unfiltered page read 624 buffers as a top-N heapsort and 13 as an index scan.
 
-**This log is load-bearing beyond its own ticket.** An operator unpublishing a
-storefront is advisory — a vendor can republish from their own dashboard — so
-until #442 lands, the row written here is the only trace that the moderation
-action happened at all.
+**This log was load-bearing beyond its own ticket, and is no longer the only
+trace.** An operator unpublishing a storefront used to be **advisory** — the
+vendor republished it from their own dashboard, and the row written here was the
+only record that the moderation action had happened at all. **#457 landed
+2026-09-08 (`f0ff1196`) and made it enforcing**: `vendor_profiles.moderation_hold`
+is set by this route and cleared only by it, the vendor's own path answers 403,
+and the console shows the storefront as `Held` rather than `Paused`. So the state
+now carries the fact and this log carries the actor and the moment, which is the
+division it was designed for.
+
+**The unblocking ticket was #457, not #442.** The earlier reference here was
+wrong — #442 is the Terms-acceptance unique index and has nothing to do with
+moderation. Corrected by #457's own lane on landing, because a wrong cross
+reference in an archived section is read as fact by whoever follows it.
 
 #### The state before it landed
 
