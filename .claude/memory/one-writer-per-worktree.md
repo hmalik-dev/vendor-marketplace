@@ -37,3 +37,24 @@ notification is the reliable signal; `git status` alone is not.
 Related: [[guard-a-delegated-browser-pass-with-a-liveness-watch]] and
 [[verify-with-a-differently-shaped-check]] — the same family, where a check
 completes and reports having established nothing.
+
+## A "read-only" review agent is still a writer
+
+`diff-reviewer`, `security-auditor` and the rest carry **project memory**, so they
+write to `.claude/agent-memory/<agent>/` even on a pass that touches no project
+file. That path is tracked.
+
+Two consequences, both seen 2026-09-07:
+
+- **`pnpm format:check` goes red after a review pass.** A lane ran
+  `security-auditor`, which wrote
+  `retired-users-keep-their-email-in-the-unique-index.md`, and the gate failed on
+  formatting for a file the lane never opened. Committing without re-running
+  `format:check` ships an unformatted file and fails CI.
+- **A review agent running mid-rebase stalls it** — the same
+  `rebase --continue blames conflicts for unstaged changes` failure already
+  recorded.
+
+**How to apply:** treat every review agent as a writer for scheduling purposes,
+and **re-run `format:check` after one returns**, not only after your own edits.
+Index whatever it wrote in that agent's `MEMORY.md` before committing.

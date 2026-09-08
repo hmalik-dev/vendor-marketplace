@@ -116,3 +116,25 @@ partly on how long work appeared to be taking — a healthy lane reading as
 difference — an `until` loop testing the thing itself (`until gh pr checks … |
 grep -q …; do sleep 30; done`), or a Monitor whose script exits when the state
 flips. And treat any duration you did not observe a process block for as a guess.
+
+## A severity is only as good as the trace behind it
+
+A `security-auditor` graded a finding **LOW**: an unhandled 23505 on
+`updateUserByClerkId` leaves `users.email` stale. The lane relayed the rating and
+so did its report.
+
+The rating was for the **failed request**. What made it P1 lives one hop
+downstream: `notification-email.dao.ts` reads the recipient from that column, so
+a permanently stale value means every later notification — counterparty names,
+event dates, booking details — goes to an address the person no longer controls,
+indefinitely, with nothing retrying. **A failed request is an incident; mail to a
+relinquished address is a continuing disclosure.**
+
+**Why:** an agent scoped to a diff cannot grade a consequence that lives outside
+it, and it was never asked to. The severity looks like the agent's judgement and
+is actually the judgement of whoever chose the scope.
+
+**How to apply:** before accepting a severity on a data-integrity finding, ask
+**what reads this value afterwards** and follow it one hop. Where the answer is
+"something that sends, publishes or bills", the rating from a diff-scoped pass is
+a floor, not the number.
