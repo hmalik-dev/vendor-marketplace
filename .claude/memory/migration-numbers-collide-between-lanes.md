@@ -50,3 +50,39 @@ Drop and recreate the lane database, then `db:migrate`, `db:seed`, `db:seed:e2e`
 Confirmed 2026-09-07 on #429 after #434 took `0030`; regenerated as `0031`.
 
 Related: [[ticket-worktree-merge-immediately]], [[main-pushes-dequeue-parallel-lane-prs]].
+
+## The collision does not present in the `.sql` file — it presents in the snapshot
+
+Two lanes both numbered a migration `0040`. The `.sql` files collided add/add,
+which is loud and obvious. **The dangerous conflict was in
+`0040_snapshot.json` and `_journal.json`**, and it was silent:
+
+- The `users.ts` conflict fell on the very line #451 had rewritten. Taking
+  "ours" would have **dropped `.where(deleted_at is null)`** and silently
+  re-locked a closed account's address.
+- **No test would have failed** — the DAO tests only need an index to exist
+  under that name, not to be partial.
+- The damage stays invisible **until somebody's next `db:generate` re-emits the
+  reverted index** from the bad snapshot.
+
+**How to apply.** When a migration number collides: keep the landed migration's
+`.sql`, restore **main's snapshot and `_journal.json` byte-for-byte** rather than
+merging them, and regenerate your own against that landed snapshot to take the
+next number. Then read the schema source conflict on its own terms — a snapshot
+merge that looks clean can still carry a reverted predicate.
+
+Recorded 2026-09-08, lane #462.
+
+## Regenerating is not enough — undo the old one in the lane database first
+
+If you generated a migration **before** rebasing, your lane database already
+holds a `__drizzle_migrations` row for a file that no longer exists. Deleting the
+file and regenerating leaves that row behind, and **the real landed migrations
+then silently never apply** — `db:migrate` believes it is already past them.
+
+**Drop the columns your migration added, delete that one row, then migrate.** It
+is a five-line script and far cheaper than `lane:down`, which drops the whole
+lane database.
+
+The tell is a `db:migrate` that reports nothing to do on a tree that visibly has
+new migrations in it. Recorded 2026-09-08, lane #457.
