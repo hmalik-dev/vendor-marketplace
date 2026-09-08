@@ -138,3 +138,22 @@ is actually the judgement of whoever chose the scope.
 **what reads this value afterwards** and follow it one hop. Where the answer is
 "something that sends, publishes or bills", the rating from a diff-scoped pass is
 a floor, not the number.
+
+## Wait on the thing itself, never on a promise to signal
+
+Eighteen `until [ -f <sentinel> ]; do sleep N; done` loops from one job were
+found still running **two days** after its session ended — each waiting on a file
+that session was going to write by hand and never did. The shells outlived the
+promise.
+
+**Why it is not just untidiness:** they consume memory, and the OS kills
+background work **by pressure, not relevance**. It had already reaped two live
+tasks on the night they were found, and a browser pass or a `test:contention` run
+killed partway **reports nothing and looks like a clean run**.
+
+**How to apply:** a `run_in_background` wait must end on something a **real
+process produces** — a file a build writes, a PR state, a log line, an exit code.
+A loop waiting on a flag *you* intend to set later is a leak by construction,
+because your session can end first. And when clearing someone else's: confirm the
+owning job is absent from the live-session list, **list the PIDs and read them**,
+then kill scoped to that job's own path — never an unscoped `pkill`.

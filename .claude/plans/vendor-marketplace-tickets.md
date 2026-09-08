@@ -263,6 +263,7 @@ storefront, each of which tells the reader something untrue. |
 | **461** | **A live error type routes around #445's log sink** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #451's `security-auditor`. Nothing leaks today** — it is filed because a path #445 documented as *unreachable* turns out to be reachable, and the next error type to travel it will not be as harmless. `ClerkAPIResponseError` carries an own enumerable **`errors`** array; `pino-std-serializers` copies it to **`aggregateErrors`** without passing it through `log-error-serializer.ts`, so its contents reach the log stream having been through none of the redaction. Contents today are Clerk's `{code, message, longMessage, meta}` — no credential, no bound parameter. **That is exactly why to fix it now**: #445's claim is that the sink is total and *nobody needs to know the hazard exists to be safe from it*, and a known hole with benign contents is one that gets forgotten before something else flows through it. #445 already follows `cause` and `err.errors`; this is the same array arriving under a different key, from the library rather than from our own recursion. **Fix the sink again, not this error type** — a `ClerkAPIResponseError` special case would be the fourth per-call-site guard in a story whose point was that per-call-site guards are how a rule becomes a special case. |
 | **462** | **A failed email update leaves `users.email` stale for ever, and notifications keep going there** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #451's partial index removes one trigger, not the defect | `core` `auth` `email` | **Filed 2026-09-07 by #442's `security-auditor`**, pre-existing and found while auditing something else. `updateUserByClerkId` sets `email` with **no conflict handling**, so a `user.updated` carrying an address another row holds raises a **23505**, the handler 500s, svix exhausts its retries, and `users.email` stays at the **old** value permanently — with nothing surfacing it, because the failure is upstream and the row looks ordinary. **Then the stale column is used to send mail**: `notification-email.dao.ts` picks the recipient from it, so every notification for that account — carrying **counterparty PII**, names, event dates, booking details, message excerpts — keeps going to an address the account holder **no longer controls**, indefinitely, because nothing ever retries the update. The 500 is a nuisance; the mail is a disclosure. Catch the 23505 on that one statement — it is **not** inside a transaction, unlike `insertUserIfAbsent`'s path, which is why #442 needed a different shape there — and let the webhook **succeed**, since a retry cannot help a collision that is a fact about another row. Record the divergence where an operator sees it, the way `refundsFailed` and `identityDeleted` already are. **Then ask** what mail should do while the column is known-stale; continuing to send is the actual harm and is a product decision. Not fixed by #451 (that clears only the retired-row trigger; live-versus-live remains) and not the same defect as #442 (different caller, different transaction shape, different consequence). |
 | **463** | **The admin detail views are drawn to Pattern B and C and built to neither** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** — the patterns are in the repository (#454) | `core` `auth` | **Filed 2026-09-08 by #454's parity pass**, which measured four console screens on six axes. #454 took the four findings inside its own acceptances and scoped this out in as many words: *"Neither is a rebuild. Both were built to a convention and now have a contract."* This is that rebuild. **`/admin/cases/[caseId]` renders one column where Pattern C draws two** — regions 1 and 3 left, region 2 right — and the **case-scoped reported-thread card is absent entirely**, which is a *required* part of region 2 rather than decoration: #436 built the conversation read and Pattern C asks for it scoped to the event date with the steel `Case-scoped read` chip. Region 1 has no sender block (avatar, role, id) and no `stone-50` inset around the message; label/value pairs stack where Pattern B rule 2 puts a fixed 150px label column beside a `minmax(0,1fr)` value. **`/admin/users/[userId]` has no 320px right column**, so `Export data` and `Close account` sit inside the first content card instead of a right-column Actions card below Identity, with no hairline between tiers and no per-action consequence line — rule 4's *literal* half. **Its spirit half already passes and must keep passing**: the two genuinely read-only cards contain zero interactive elements. Neither screen draws the `.ach` header band (`#F4F0E8` on a `1px #E4DDD1` rule), so region 3's *"Moves money. Both positions confirm first."* note has nowhere to live; card radii are 14px against `.ac`'s 12px throughout. **Values render 13.5px where rule 2 says 13px, and money and dates 13.5px sans where it says mono 12px.** Smaller and separable: `/admin/activity`'s filter bar carries one facet where Pattern A names three (Actor, Subject type, date range), `/admin/cases` has no search field though the bundle draws one, both lack frame `13`'s `Export CSV`, the Cases status filters carry no counts, and the `READ-ONLY` marker is stone where `40-states.md` makes information steel. **Read `web-design-parity.md` before measuring** — #454's four live overrides and two ruled colour entries are expected deviations, not drift. |
+| **464** | **Sign-up dead-ends silently when the bot challenge cannot complete** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #451b's browser pass and reproduced independently on `localhost:3000` in a real browser** — this is product behaviour, not a test-environment obstacle. Pick a role, type an email and password, press **Create my account**: `POST /v1/client/sign_ups` is **never sent** (verified by request interception — the only traffic is `challenges.cloudflare.com`), clerk-js waits on a Turnstile token that never arrives (`Error: 600010`), the form **disables every field permanently**, and the Clerk card then unmounts leaving the role picker. **No error, no timeout, no message, no retry — the button eats the click.** Sign-in is unaffected. **P0 because the people it hits are real and it is the only route into the product**: a privacy extension blocking `challenges.cloudflare.com`, a corporate or school network doing the same, third-party frames disabled, or Cloudflare failing — and there is no support path because there is no error to quote. **Ruled out already, do not re-derive**: headless (re-run under real Chrome), bundled Chromium, the network (Cloudflare's own demo page solved from the same machine), Clerk bot protection (a testing token made the widget vanish and submit **still** hung), and lane env (reproduced on `:3000`). **Not archived #226**, which recorded the same symptom as a *testing* obstacle on 2026-08-29 — `auth.spec.ts:9-14` still excludes sign-up for that reason — and that deferral is why the product half went unnoticed for nine days. Build a **bounded wait**, an **actionable error** in approved copy under `40-states.md`'s failure tone, and a **form that is usable again** rather than one needing a reload; then **ask** whether a challenge-free fallback is wanted, since that trades off against what bot protection exists to stop. |
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #454 landed: 19 rows — 16 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's, #447's, #458's, #454's and #456's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`), #458 (`affd481c`) and #454 (`32fa9bd4`, which closed #456 with it) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 was closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07. **#454 consumed them and landed 2026-09-08 (`32fa9bd4`)**, closing **#456** with it and taking the counted filtered-empty pattern to all seven console lists. That unblocks **#437** — the Pattern B detail frame it was held for is now in the repository — and **#457** with it. What #454 deliberately did not build is filed as **#463**: it landed the rulings and the parity fixes inside its own acceptances, and Pattern B and C's **composition** is a rebuild rather than a parity fix. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
 
@@ -2607,3 +2608,94 @@ it is content-box. That is the distinction #449 turns on.
       the kind of thing a `toContain` on a class string cannot see.
 - [ ] Browser: both detail screens driven at 1440x900, and the resolve control
       still reachable only past the evidence after the recomposition.
+
+### #464: Sign-up dead-ends silently when the bot challenge cannot complete
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-09-07 by lane #451b's browser pass, then reproduced independently
+by the supervising session on `localhost:3000` in a real browser.** This is not a
+test-environment problem. **Nobody can create an account whose browser cannot
+complete the Cloudflare Turnstile challenge, and the product says nothing.**
+
+#### What happens
+
+Pick a role, type an email and a password, press **Create my account**:
+
+- `POST /v1/client/sign_ups` is **never sent**. Verified by request interception
+  — the only network traffic is `challenges.cloudflare.com`.
+- clerk-js waits on a Turnstile token that never arrives (`Error: 600010`,
+  `challenges.cloudflare.com` `ERR_ABORTED`).
+- **The form disables every field permanently**, then the Clerk card unmounts,
+  leaving the role picker and a *"Already with us? Sign in"* link.
+- **No error, no timeout, no message, no retry.** The button eats the click.
+
+**Sign-in is unaffected** and works normally.
+
+#### Why this is P0 rather than an automation nuisance
+
+The people it hits are real: a privacy extension that blocks
+`challenges.cloudflare.com`, a corporate or school network that does the same, a
+browser with third-party frames disabled, or Cloudflare simply failing. **They
+get a sign-up button that does nothing, for ever, with nothing to read and
+nothing to try.** There is no support path because there is no error to quote.
+
+It is also **the only route into the product.** A vendor cannot list and a
+customer cannot book without an account, so this is the top of every funnel.
+
+#### What was ruled out, so nobody re-derives it
+
+Lane #451b's pass eliminated, in order: headless mode (re-ran under real Chrome),
+the bundled Chromium, the network (solved Cloudflare's own demo page from the
+same machine), and Clerk bot protection (minted a Clerk testing token — the
+widget vanished and submit **still** hung). The supervising session then
+reproduced it on `:3000` rather than a lane port, so it is not lane env either.
+
+**Do not confuse this with archived #226.** That recorded the same Turnstile
+symptom on 2026-08-29 and deferred it **as a test-environment obstacle** —
+`apps/web/e2e/auth.spec.ts:9-14` still says sign-up is deliberately absent from
+the suite for that reason. This row is the **product behaviour**: what a person
+experiences when the challenge cannot complete. Same cause, different subject,
+and the deferral of the first is why the second went unnoticed for nine days.
+
+#### What to build
+
+**The failure must become visible and recoverable.** At minimum:
+
+1. **A bounded wait.** If the challenge has not produced a token within a stated
+   timeout, stop waiting and say so. An indefinite wait is what turns a failure
+   into a dead end.
+2. **An error the person can act on**, in approved copy from
+   `31-content-voice.md` — what happened, in their words, and one action.
+   `40-states.md` binds: this is a failure, so it is red, and it needs the one
+   action the state offers.
+3. **The form must not stay disabled.** Re-enable the fields so the attempt can
+   be retried, and offer the retry explicitly rather than requiring a reload.
+4. **Decide whether a fallback exists.** Clerk supports email-code sign-up
+   without a password, and a Turnstile-free path may or may not be acceptable
+   given what bot protection is there to stop. **This is a product decision —
+   ask before choosing.** Shipping (1)–(3) without it is still a strict
+   improvement on silence.
+
+#### Acceptance
+
+1. With `challenges.cloudflare.com` blocked, pressing **Create my account**
+   surfaces a stated error within a bounded time rather than hanging.
+2. The form is usable again afterwards — fields enabled, a retry offered.
+3. The error copy is in `31-content-voice.md` and follows `40-states.md`'s
+   failure tone.
+4. Sign-up still succeeds normally when the challenge **can** complete.
+5. Whatever is ruled for a fallback path is implemented, or the row records that
+   none is wanted and why.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] **Acceptance 1 asserted with the challenge host actually blocked** — route
+      interception on `challenges.cloudflare.com`, not a mocked clerk-js
+      rejection. The defect is that a real network condition produces no
+      response at all, and a mock that rejects *has already done the thing the
+      product fails to do*.
+- [ ] Acceptance 4 driven in a browser, because the whole class of defect here is
+      one no unit test reached for nine days.
