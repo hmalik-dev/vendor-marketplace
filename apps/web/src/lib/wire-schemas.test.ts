@@ -122,6 +122,7 @@ describe('wireVendorProfileSchema', () => {
     categoryIds: [UUID],
     tags: [TAG_JSON],
     publishBlockers: [],
+    moderationHold: false,
     createdAt: ISO,
     updatedAt: ISO,
   };

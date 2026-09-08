@@ -72,6 +72,22 @@ export async function updateVendorProfileById(
   db: AppDatabase,
   id: string,
   patch: Partial<NewVendorProfileRow>,
+  /**
+   * `requireUnheld` puts the moderation hold **in the `WHERE`**, so the write
+   * is a compare-and-set rather than a write behind an earlier read (#457).
+   *
+   * The vendor's editor reads their row, decides, then writes several round
+   * trips later, and it takes no lock — so an operator's takedown committing in
+   * that window was overwritten by a publish that had already passed the check.
+   * The row then carried `is_published = true` with `moderation_hold = true`:
+   * back on search, labelled `Held` in the console, and the operator's own
+   * republish answering 409. Checking the column in the statement that writes
+   * it is what makes that unrepresentable rather than unlikely.
+   *
+   * Off by default because the console's own writer must be able to set
+   * `is_published` on a row it is holding.
+   */
+  options: { requireUnheld?: boolean } = {},
 ): Promise<VendorProfileRow | null> {
   if (!id || Object.keys(patch).length === 0) {
     return null;
@@ -80,7 +96,13 @@ export async function updateVendorProfileById(
   const updated = await db
     .update(vendorProfiles)
     .set({ ...patch, updatedAt: sql`now()` })
-    .where(and(eq(vendorProfiles.id, id), live))
+    .where(
+      and(
+        eq(vendorProfiles.id, id),
+        live,
+        options.requireUnheld === true ? eq(vendorProfiles.moderationHold, false) : undefined,
+      ),
+    )
     .returning();
 
   return updated?.[0] ?? null;

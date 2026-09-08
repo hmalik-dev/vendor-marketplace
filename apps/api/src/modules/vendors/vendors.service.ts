@@ -1,4 +1,5 @@
 import {
+  VENDOR_PROFILE_MODERATION_HOLD_MESSAGE,
   MAX_SLUG_LENGTH,
   generateSlug,
   vendorSearchResultSchema,
@@ -14,7 +15,7 @@ import {
 import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
-import { conflict, notFound, validationFailed } from '../../lib/errors.js';
+import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import { assertOwnedImageRefs, thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
 import { reapObjects } from '../portfolio/portfolio.service.js';
 import { replaceVendorTags } from '../tags/tags.dao.js';
@@ -361,7 +362,16 @@ export async function updateVendorProfile(
     throw notFound('You have not created a vendor profile yet');
   }
 
-  const patch: Partial<NewVendorProfileRow> = {};
+  /*
+   * `moderationHold` is excluded from the patch **type**, not merely left out of
+   * it (#457). The DAO takes a general `Partial<NewVendorProfileRow>` because
+   * the console's own writer legitimately sets that column, so nothing below the
+   * service can tell a vendor's save from an operator's — which left "no
+   * vendor-facing write may touch it" resting on whoever edits this function
+   * next remembering the rule. Now `patch.moderationHold = …` does not compile
+   * here, and the compiler is the one reader that never forgets.
+   */
+  const patch: Omit<Partial<NewVendorProfileRow>, 'moderationHold'> = {};
 
   if (input.businessName !== undefined) {
     patch.businessName = input.businessName;
@@ -422,6 +432,17 @@ export async function updateVendorProfile(
 
   if (input.isPublished !== undefined) {
     if (input.isPublished) {
+      /*
+       * Checked before the blockers, because it is not one (#457). A blocker is
+       * a list of things the vendor can go and finish; this is a refusal they
+       * cannot clear at all, and reporting it as a fourth incomplete field
+       * would send them round the editor looking for it.
+       */
+      if (existing.moderationHold) {
+        throw forbidden(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
+      }
+      // The hold can still land between here and the write; see the transaction.
+
       const [effectiveCategories, activePackageCount] = await Promise.all([
         categoryIds === undefined ? findVendorCategoryIds(db, existing.id) : categoryIds,
         countActivePackages(db, existing.id),
@@ -453,9 +474,39 @@ export async function updateVendorProfile(
       await replaceVendorTags(tx, existing.id, tags.tagIds);
     }
 
-    return Object.keys(patch).length > 0
-      ? await updateVendorProfileById(tx, existing.id, patch)
-      : existing;
+    if (Object.keys(patch).length === 0) {
+      return existing;
+    }
+
+    /*
+     * The hold is re-checked **in the statement that publishes** (#457).
+     *
+     * `existing` was read before `resolveSlug`, the category and tag
+     * resolution and two counts, and nothing here locks the row — so the guard
+     * above is a fast refusal, not the guarantee. An operator's takedown
+     * committing inside that window would otherwise be overwritten by a publish
+     * that had already passed the check, leaving `is_published = true` beside
+     * `moderation_hold = true`: on search, `Held` in the console, and the
+     * operator's own republish answering 409 with no lever left but a ban.
+     */
+    const updated = await updateVendorProfileById(tx, existing.id, patch, {
+      requireUnheld: patch.isPublished === true,
+    });
+
+    if (!updated && patch.isPublished === true) {
+      /*
+       * Re-read to say which of the two things happened, rather than reporting
+       * a hold as a missing profile or the reverse. Only on this path, so the
+       * ordinary save still costs one statement.
+       */
+      const current = await findVendorProfileByUserId(tx, userId);
+
+      if (current?.moderationHold) {
+        throw forbidden(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
+      }
+    }
+
+    return updated;
   });
 
   if (!row) {

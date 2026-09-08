@@ -1,0 +1,2 @@
+ALTER TABLE "vendor_profiles" ADD COLUMN "moderation_hold" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "service_packages" ADD COLUMN "moderation_hold" boolean DEFAULT false NOT NULL;

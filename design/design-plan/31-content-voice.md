@@ -160,11 +160,11 @@ console's destructive controls, so the labels below are approved strings, not
 conventions a lane picked. Recorded here because a label that exists only in a
 frame gets reworded by the next person who touches the component.
 
-| Control                            | Label                  | Consequence line                                                                                                                                           |
-| ---------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Take a storefront off search       | **Unpublish profile**  | Removes it from search and browse. Existing bookings stand; the vendor keeps their dashboard.                                                              |
-| Moderate a vendor off the platform | **Suspend vendor**     | Declines their open requests and cancels every future confirmed booking, refunded in full — which reverses the vendor's share out of their Stripe balance. |
-| Dismiss a resolve confirm          | **Keep the case open** | —                                                                                                                                                          |
+| Control                            | Label                  | Consequence line                                                                                                                                                 |
+| ---------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Take a storefront off search       | **Unpublish profile**  | Removes it from search and browse. Existing bookings stand and the vendor keeps their dashboard, but they cannot put the storefront back — only an operator can. |
+| Moderate a vendor off the platform | **Suspend vendor**     | Declines their open requests and cancels every future confirmed booking, refunded in full — which reverses the vendor's share out of their Stripe balance.       |
+| Dismiss a resolve confirm          | **Keep the case open** | —                                                                                                                                                                |
 
 **`Unpublish profile` and `Suspend vendor` replace `Unpublish storefront` and
 `Suspend account` (#454, correcting #435).** #435 shipped the older pair before
@@ -181,6 +181,38 @@ unchanged and the shipped dialog already stated it at length — being told is t
 ruled requirement, because the refund can leave a vendor's Stripe balance
 negative. A hold is reversible and leaves the customer's money where it is; a
 full refund is neither, so the two are not interchangeable wordings.
+
+## The unpublish consequence line, corrected — ruled 2026-09-08 (#457)
+
+**This entry is a ruling, recorded here because a lane changing approved copy is
+normally forbidden.** The same exception #464 relied on applies, and the trigger
+is narrower still: the approved sentence did not become unclear, it became
+**false**, and the ticket that falsified it is the one correcting it.
+
+`Unpublish profile`'s line closed _"Publish it again from this menu whenever you
+like."_ That was true when #435 drew it — `is_published` was a column the vendor
+also wrote, so anyone could put the storefront back. #457 added
+`vendor_profiles.moderation_hold`, and from that commit the vendor cannot. The
+sentence then described, on the control that removes the ability, the exact
+ability it removes, to the operator, at the moment of the press.
+
+The correction keeps the half that is still true and states the half that
+changed: an operator undoes this from this menu, and the vendor cannot undo it at
+all. It is a correction rather than a rewrite — same register, same length, same
+reassuring function.
+
+**A future design pass may reword it; a future lane may not.** What a future lane
+must not do is quietly restore the old promise: `vendor-table.render.test.tsx`
+asserts both that the copy names the operator-only route back and that it does
+**not** promise the vendor one, so the string and the behaviour cannot drift
+apart again without a red test.
+
+**The class this belongs to is prose going stale behind a change**, which is why
+the guard is a test rather than this paragraph. Three instances landed in one
+night: this line, `RepublishConsequence`'s justification clause (narrowed rather
+than falsified — see `web-design-parity.md`), and the vendor editor's _"Ready to
+publish — flip this when you are."_, which #457 also had to correct because it
+told a held vendor yes and then refused them.
 
 **"Cancel" is not a dismissal word on a screen about money.** The case-detail
 confirm dismisses with **Keep the case open**, naming the state you return to —

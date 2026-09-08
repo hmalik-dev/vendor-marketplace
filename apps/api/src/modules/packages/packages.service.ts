@@ -1,4 +1,5 @@
 import {
+  SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE,
   parseDurationHours,
   type CreateServicePackageInput,
   type ReorderServicePackagesInput,
@@ -7,7 +8,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { NewServicePackageRow, ServicePackageRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
-import { notFound } from '../../lib/errors.js';
+import { forbidden, notFound } from '../../lib/errors.js';
 import { assertCompleteOrder } from '../../lib/ordering.js';
 import {
   requireOwnVendorProfile,
@@ -75,7 +76,8 @@ export async function updatePackage(
     throw notFound('That package does not exist');
   }
 
-  const patch: Partial<NewServicePackageRow> = {};
+  /* Excluded from the type for the reason `updateVendorProfile` gives (#457). */
+  const patch: Omit<Partial<NewServicePackageRow>, 'moderationHold'> = {};
 
   if (input.name !== undefined) {
     patch.name = input.name;
@@ -102,11 +104,38 @@ export async function updatePackage(
     patch.displayOrder = input.displayOrder;
   }
   if (input.isActive !== undefined) {
+    /*
+     * The package half of #457. Only the reactivation is refused: a held
+     * package is already inactive, so a save that leaves it that way — which is
+     * every save the editor makes while the hold stands — has nothing to
+     * refuse, and blocking those would take the vendor's whole package editor
+     * away over one switch.
+     */
+    if (input.isActive && existing.moderationHold) {
+      throw forbidden(SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE);
+    }
+
     patch.isActive = input.isActive;
   }
 
-  const row = await updatePackageById(db, vendor.id, packageId, patch);
+  /*
+   * The hold rides in the `WHERE`, not only in the check above (#457). `existing`
+   * was read before this statement and nothing locks the row, so an operator's
+   * deactivation committing in between would otherwise be overwritten by a
+   * reactivation that had already passed.
+   */
+  const row = await updatePackageById(db, vendor.id, packageId, patch, {
+    requireUnheld: patch.isActive === true,
+  });
+
   if (!row) {
+    if (
+      patch.isActive === true &&
+      (await findPackageById(db, vendor.id, packageId))?.moderationHold
+    ) {
+      throw forbidden(SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE);
+    }
+
     throw notFound('That package does not exist');
   }
 

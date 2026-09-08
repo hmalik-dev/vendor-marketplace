@@ -250,6 +250,7 @@ export function deriveVendorStatus(row: {
   isRetired: boolean;
   isBanned: boolean;
   isPublished: boolean;
+  moderationHold: boolean;
   stripeOnboarded: boolean;
 }): AdminVendorStatus {
   if (row.isRetired) {
@@ -258,6 +259,18 @@ export function deriveVendorStatus(row: {
 
   if (row.isBanned) {
     return 'flagged';
+  }
+
+  /*
+   * Ahead of the publish flag, not derived from it (#457). A held storefront is
+   * always unpublished, so `paused` and `review` would both swallow it — and
+   * those are the two labels that say the vendor chose this, which is the
+   * confusion the hold exists to end. Tested before `live` as well, so a hold
+   * left standing over a published row reads as the anomaly it is rather than
+   * as a live storefront.
+   */
+  if (row.moderationHold) {
+    return 'held';
   }
 
   if (row.isPublished) {
@@ -903,7 +916,22 @@ export async function setVendorPublished(
 
     const owner = await findUserById(tx, vendor.userId);
 
-    if (vendor.isPublished === isPublished) {
+    /*
+     * The no-op check compares **both** columns this route writes (#457).
+     *
+     * It used to read `is_published` alone, which made the hold settable only
+     * on a storefront that was live at that instant — and the vendor decides
+     * that. Pausing their own storefront, or having the last-package cascade or
+     * a lifted ban leave it down, made the operator's only lever answer 409 and
+     * write nothing; the vendor then published again whenever they liked. So
+     * the lever worked on exactly the vendors who had not thought to take
+     * themselves down first, which is the wrong half.
+     *
+     * Taking down an already-unpublished storefront is therefore a real action
+     * with a real effect — it sets the hold — and only a request that would
+     * change neither column is refused.
+     */
+    if (vendor.isPublished === isPublished && vendor.moderationHold === !isPublished) {
       throw conflict(
         isPublished
           ? 'That storefront is already published'
@@ -939,12 +967,37 @@ export async function setVendorPublished(
       const activePackages = await countActivePackages(tx, vendor.id);
       const blockers = publishBlockers(vendor, categoryIds, activePackages);
 
+      /*
+       * A held storefront is released by republishing it, so a vendor who has
+       * since taken their last package down blocks their own release until they
+       * put one back (#457). Left as it is deliberately: the alternative is a
+       * second control that clears the hold without publishing, which is a
+       * surface no frame draws. The blockers rule itself is #435's and
+       * unchanged — an operator reinstating a listing does not get to overrule
+       * it — and the vendor holds the key to the one state that traps it.
+       */
       if (blockers.length > 0) {
         throw validationFailed('This storefront is not complete enough to publish.', { blockers });
       }
     }
 
-    const updated = await updateVendorProfileById(tx, vendor.id, { isPublished });
+    /*
+     * The hold moves with the lever, in the same statement (#457).
+     *
+     * This route is the **only** writer of `moderation_hold` on a storefront:
+     * taking one down sets it, putting it back clears it, and there is no third
+     * control that could leave the two disagreeing. That is what makes the
+     * vendor's refusal decidable from one column instead of from a search
+     * through `admin_actions` for whichever row happened to be last.
+     *
+     * The cascade in `setPackageActive` deliberately does not do this. An
+     * automatic unpublish because the last bookable package went away is a
+     * consequence of a decision about a *package*, and holding the storefront
+     * for it would leave the vendor unable to publish a storefront nobody
+     * moderated.
+     */
+    const moderationHold = !isPublished;
+    const updated = await updateVendorProfileById(tx, vendor.id, { isPublished, moderationHold });
 
     if (!updated) {
       throw notFound('No storefront with that id');
@@ -979,6 +1032,7 @@ export async function setVendorPublished(
         isRetired: !owner,
         isBanned: owner?.isBanned ?? false,
         isPublished,
+        moderationHold,
         stripeOnboarded: vendor.stripeOnboarded,
       }),
     };
@@ -1092,13 +1146,18 @@ export async function setPackageActive(
       throw notFound('No package with that id');
     }
 
-    if (servicePackage.isActive === isActive) {
+    /* Both columns, for the reason `setVendorPublished` gives (#457). */
+    if (servicePackage.isActive === isActive && servicePackage.moderationHold === !isActive) {
       throw conflict(
         isActive ? 'That package is already active' : 'That package is already deactivated',
       );
     }
 
-    const updated = await updatePackageById(tx, servicePackage.vendorId, packageId, { isActive });
+    /* The package's half of #457, and this route is its only writer too. */
+    const updated = await updatePackageById(tx, servicePackage.vendorId, packageId, {
+      isActive,
+      moderationHold: !isActive,
+    });
 
     if (!updated) {
       throw notFound('No package with that id');
