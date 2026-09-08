@@ -1,5 +1,11 @@
-/** What replaces a query value in the log. */
-const REDACTED = '[redacted]';
+/**
+ * What replaces a withheld value in the log — a query value here, a failed
+ * statement's bound parameters in `log-error-serializer.ts`.
+ *
+ * One marker for both, because a reader and a grep should not have to know
+ * which redaction wrote a line to recognise that something was withheld.
+ */
+export const REDACTED = '[redacted]';
 
 /**
  * What an ordinary parameter name looks like. A name outside this shape is

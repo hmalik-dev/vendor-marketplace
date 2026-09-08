@@ -36,7 +36,7 @@
 - [Refund idempotency keys are narrower than their params](refund-idempotency-key-is-parameter-sensitive.md) — the key is the booking id, the amount drifts by tier and the unwind flags changed; Stripe refuses the retry
 - [A refund with no durable record can happen twice](refund-before-row-move-can-double-refund.md) — refund precedes the row move, no refund column, and past 24h a retry debits the vendor a second time
 - [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased
-- [Drizzle query errors log every bound parameter](drizzle-query-errors-log-bound-parameters.md) — `Failed query: … params: …` is in the message and pino emits it; pre-existing and accepted, check what the statement binds before escalating
+- [Drizzle query errors log every bound parameter — FIXED](drizzle-query-errors-log-bound-parameters.md) — the `err` serialiser and record formatter withheld them at the sink in #445; see [[err-serializer-is-the-log-sink]] before re-reporting
 - [The background queue carries no session](background-work-queue-carries-no-session.md) — `app.background` re-derives its recipient from the notification row; a second caller must not close over `request.auth` or a `tx`
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — per-request verified in react 19.2.8; `/` now renders a customer's booking amount and still declares no `force-dynamic`
 - [`canBook` is chrome, not a gate](canbook-is-chrome-not-a-gate.md) — three server checks refuse a vendor; the prop degrades to the most permissive answer on purpose
@@ -75,3 +75,4 @@
 - [A browser parse failure is reader-visible copy](client-parse-failures-are-shown-verbatim.md) — `ApiClientError` carries the 200, so `userFacingError`'s 5xx filter never fires and a landed transfer reports as failed
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking in full with an empty `closeBlockers`; copy that says "refunds nothing" is true of one side only
 - [Moderation levers are undoable by their subject](moderation-levers-are-undoable-by-their-subject.md) — #435’s unpublish and deactivate write the vendor’s own columns; only ban and review-hide stick
+- [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino reaches nested errors through three doors, all three closed in #445; `PostgresError.detail` is redacted there too
