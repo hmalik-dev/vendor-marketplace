@@ -40,6 +40,23 @@ recreate therefore wipes local data.** Restore with `pnpm db:migrate` then
 `pnpm db:seed:marketing`; the reference seed alone leaves zero vendors and a 404
 on every profile.
 
+**There is no `psql` on this machine's PATH.** Query through the container:
+`docker exec vendor-marketplace-postgres psql -U vendor_marketplace -d
+vendor_marketplace -Atc "<sql>"`. The role is `vendor_marketplace`, **not**
+`postgres` — a `-U postgres` connection fails with `role "postgres" does not
+exist`, which reads like a broken container rather than a wrong flag.
+
+This matters most at lane teardown, where the question is "is the lane database
+gone?" and a wrong answer is invisible. A host `psql -l | grep -i lane` fails
+`command not found`, prints nothing, and looks exactly like "no lane databases
+left". A `|| echo "(none)"` fallback does not save it either: attached to a
+pipeline, `||` reads the **last** command's status, so neither the missing
+binary nor grep's no-match ever reaches it. **Print `select datname from
+pg_database` and read the list** rather than counting matches — see
+[[a-failed-command-reads-as-a-passing-check]]. Orphan `vendor_marketplace_lane_*`
+databases outlive their sessions and nothing reclaims them, so the printed list
+is also how you find them.
+
 The test suite uses in-process PGlite via `@vendor-marketplace/db/testing`, a
 deliberate choice: it keeps `pnpm test` runnable with nothing started and makes
 each suite hermetic. Not a workaround for missing Docker.
