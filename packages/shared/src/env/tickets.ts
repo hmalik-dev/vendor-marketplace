@@ -557,6 +557,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   464: ['auth'], // sign-up hangs silently when the Turnstile challenge cannot complete
   465: ['auth'], // post-sign-up routing, and a no-dead-routes sweep at every role
   466: [], // For vendors should open an informational page, not the sign-up form
+  467: [], // violatesConstraint's field arm never matches the real driver
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
