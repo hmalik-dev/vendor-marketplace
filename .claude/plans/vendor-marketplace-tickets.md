@@ -248,7 +248,6 @@ the silent-submit work #388 closed:
 storefront, each of which tells the reader something untrue. |
 | **437** | **Admin detail views, and the entities the console cannot see** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #435 landed 2026-09-07 (`d83d374b`) and the Pattern B detail frame this row was held for arrived the same day in `design/delta-admin/` (#454) | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Seven list screens, zero detail screens, against a design plan that specifies *"detail views: card-based groupings with prominent actions"* (`22-admin.md`). Consequence: `refund_amount_cents`, `cancellation_reason`, `dispute_reason`, `cancelled_by`, `payout_released_at` and `banned_at` appear on no row schema and no screen. Whole entities are absent — `booking_requests` (the entire pre-payment funnel), `service_packages`, `portfolio_items`, `availability`, `notifications`, `categories` — several of which the plan's own authorization matrix (§7) already grants admin. |
 | **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
-| **442** | **A repeat Terms acceptance can write two permanent rows — the read has no index behind it** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — the product question this row invented was false, corrected 2026-09-07 | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. **There is no product question and this row was wrong to claim one.** Both writers already refuse a repeat — `acceptTerms` and `acceptVendorAgreement` each return early under the comment *"Already held: answer, do not write"*, and `terms.routes.test.ts` asserts it twice. The cited `legal-acceptance-immutability.test.ts:248` **inserts directly into the table**, so it asserts a schema fact — *"there is no unique key to collide on"* — and not a ruling that the product permits two acceptances. A test that writes past the code cannot say what the code decided. So the intent is already one row per person, per document, per version, and the service's early return is merely **advisory**: nothing at the database level holds it. Add the unique index and let the losing insert of a race lose harmlessly. Check three things first — existing duplicates would block the index in a table the trigger will not let you tidy; `vendor_id` is left out of the key, which is safe only if one user can never hold two vendor profiles; and both writers must be covered. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
 | **443** | **Frame `13`'s parity residue, including two access findings nothing else checks** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 from #433's parity pass**, which returned MATCH on all six axes for its own change and correctly declined to attribute these six to itself. **Two are access findings** — the search field has an `aria-label` but no visible `<label>`, and the row checkbox is `22x44` against `04-laws.md`'s 44px minimum — and the parity pass is the **only** gate on the accessibility laws and the contrast table, so an unfiled access finding is not caught later, it evaporates. The other four: the header is 1px short, the wordmark renders 24px against 23px, the four filter dropdowns carry a 2px padding asymmetry left over from the caret D25 removed (**correct the padding, do not restore the caret**), and the filtered empty state offers no way out where every other console empty state does. Batched by surface per the filing convention rather than filed as six rows. D30 binds: corroborate each transcribed number against the neighbouring widths before building it. |
 | **444** | **An unwind declines the accepted request behind a completed booking** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #438**, which tripped over it building account closure, verified it was pre-existing rather than its own, and pinned current behaviour in a test rather than widening scope. Confirmed independently before filing. `declineOpenRequests` (`admin.dao.ts:484`) sets `status: 'declined'` where status is in `['pending','quoted','accepted']` — **unconditionally**. But `accepted` is exactly the status a request holds *after checkout*, so an unwind flips the accepted request behind an **already-completed** booking to `declined`: the event happened, the vendor was paid, and the customer's requests screen now says it was declined. That is rewriting history, not unwinding it. **Reachable from any ban**, so it predates #433 and #438 both. The neighbouring `findConfirmedBookingsToUnwind` gets it right and is the model — it bounds on `event_date > today`; the request decline has no equivalent bound. Do **not** simply drop `accepted`: a request accepted but never paid for is a real open commitment. |
 | **446** | **The app declares no body text size, so every unsized block renders at 16px** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's parity pass, which hit it as a worked example.** `globals.css` sets `line-height` on `html` and its own comment explains why a per-call-site fix cannot close that class — *"an element with no text utility at all still inherits, so the per-site route cannot close the class"* — and then **stops one property short**. Nothing declares `font-size`, so every block element carrying no `text-*` utility inherits the browser's **16px**, which is `--text-lg`, not the 13.5px `--text-base` body step. **The worked example**: #441 set the footer's 13px on the `<a>`, and each `<li>`'s own line box stayed 16px because an inline child does not shrink its block. Rows measured 31px against the frame's 27, the footer was **25px taller** than it draws, and the legal row's copyright sat 1.5px off the links' baseline. #441 fixed the footer by moving the size onto the `<ul>`; the class is still open everywhere else. **Scope is the fix *plus* the sweep, not the fix with a caveat.** `body { font-size: var(--text-base) }` in the same `@layer base` block — on `body`, never `html`, which would rescale every rem-based spacing utility in the product — rescales **every currently-unsized block** from 16px to 13.5px. Anyone picking this up needs to know that before they start rather than discover it: it wants a parity pass over every frame-carrying screen, and it may well surface sites that were silently relying on the 16px. |
@@ -267,7 +266,7 @@ storefront, each of which tells the reader something untrue. |
 | **465** | **Post-sign-up routing, and no dead routes for any role** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-08 at the account holder's request** after they completed a sign-up by hand and were returned to the role picker. **#464 is the sign-up form's own failure; this row is where sign-up *sends* you.** Role picked, email verified, **Clerk identity created correctly** (`unsafe_metadata: {"role":"customer"}`) — and then `/after-sign-in` resolves to **`/sign-in`** rather than the Terms interstitial, because `getCurrentUser()` returns `null`, which means no token or a 401/404 from `/users/me`. Neither is what a session with no `users` row should produce: `clerk-auth.ts` sets `termsRequired = true` for exactly that state and `signedInFailurePath` turns it into the interstitial. **Diagnose which branch before fixing** — no active session after `setActive()`, or the gate never reached — since the symptom is identical and the fixes are not. **P0 because the person now holds a real verified account and has been shown the sign-up screen again**: they retry, meet *"that email is taken"*, and conclude the product is broken. **The wider requirement is the account holder's**: *"must be Playwright verified as all users to prevent this issue. No dead routes."* So build a **route-landing sweep** over roles × targets — signed out, customer, vendor, admin, and a **newly verified account with no `users` row**, which no fixture represents — against every router segment and every literal redirect destination, asserting a terminal status, a rendered screen and the role's own chrome. **Enumerate targets from the source**, never a hand-maintained list, and assert unreachable cells as refusals rather than skipping them. |
 | **466** | **"For vendors" sends a visitor to a sign-up form instead of an informational page** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder — the page needs a frame or a ruling before it is built** | `core` | **Filed 2026-09-08 at the account holder's request**: *"the 'for vendors' link should take users to a dedicated `/for-vendors` informational route not sign up again."* Today `marketing-nav.tsx:43` is `{ label: 'For vendors', href: '/sign-up?role=vendor' }`, so the one nav item addressed to vendors **asks them to create an account before telling them anything** — and a visitor who already has one is shown a sign-up screen again, which is #465's confusion from another direction. Build an **informational** `/for-vendors`: what it costs, how payouts work, what a storefront looks like, then the call to action carrying `?role=vendor` into sign-up. The deep link **keeps working** — `SignUpForm`'s `initialRole` exists for it — so what changes is which door the *nav* opens. **Blocked because there is no frame**: neither `Orla - Screens.dc.html` nor `design/design-plan/` has a vendor marketing page, and a lane building one would be inventing a public surface with nothing for the parity gate to compare against. The account holder picks: a frame, or a ruling that it composes from the landing page's existing vocabulary with the strings recorded in `31-content-voice.md` first. **No invented numbers** — this is the surface most likely to reach for *"vendors earn on average…"*, and MVP forbids every one of those. |
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #454 landed: 19 rows — 16 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's, #447's, #458's, #454's and #456's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`), #458 (`affd481c`) and #454 (`32fa9bd4`, which closed #456 with it) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 was closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07. **#454 consumed them and landed 2026-09-08 (`32fa9bd4`)**, closing **#456** with it and taking the counted filtered-empty pattern to all seven console lists. That unblocks **#437** — the Pattern B detail frame it was held for is now in the repository — and **#457** with it. What #454 deliberately did not build is filed as **#463**: it landed the rulings and the parity fixes inside its own acceptances, and Pattern B and C's **composition** is a rebuild rather than a parity fix. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #442 landed: 21 rows — 18 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's, #447's, #458's, #454's, #456's and #442's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`), #458 (`affd481c`), #454 (`32fa9bd4`, which closed #456 with it) and #442 (`dcf8728c`) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 was closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07. **#454 consumed them and landed 2026-09-08 (`32fa9bd4`)**, closing **#456** with it and taking the counted filtered-empty pattern to all seven console lists. That unblocks **#437** — the Pattern B detail frame it was held for is now in the repository — and **#457** with it. What #454 deliberately did not build is filed as **#463**: it landed the rulings and the parity fixes inside its own acceptances, and Pattern B and C's **composition** is a rebuild rather than a parity fix. **#442 landed 2026-09-08 (`dcf8728c`), and the ruling it was waiting on never existed.** The row claimed #427 had ruled that a second acceptance of a version already held is a second row, citing `legal-acceptance-immutability.test.ts` — but that test **inserts straight into the table, past both services**, so it recorded a schema fact and not a decision. Both writers had refused a repeat since #427 and #429. So the fix enforced a policy that already existed rather than settling one: a unique index on `(accepted_by_user_id, document, version)`, with `ON CONFLICT DO NOTHING` so the losing insert of a race loses harmlessly. **No Backlog row now waits on a person** — the three `Deferred` rows (#362, #374, #440) still do, and #370 is blocked behind #362.
 
 **#448 landed a bigger finding than either half it was filed for, and that finding is the one to carry forward.** The filed halves were `renderLaneEnv` not writing `API_URL` and `lane:exec` handing every child the API's `PORT`; the first had already landed inside #432 (`1e899ae1`) before the lane branched, which is the board's own rule about trusting the repository over the ticket, arriving again. The real defect was **`laneEnvAgreesWith` comparing a subset of what `renderLaneEnv` writes** — it checked the two ports and `NEXT_PUBLIC_API_URL` and nothing else, so a `.env.lane` written before `API_URL` existed still *agreed* with its manifest, was never rewritten, and every long-running lane resumed onto the stale file for ever while `lane:up` printed ✓ over it. **A check that cannot fail for the state it exists to detect is worse than no check**, because it is also the thing that stops anyone else looking. It now compares every origin the file writes, and that is what makes **`pnpm lane:up <n>` the repair for a stale lane env — in place, database kept.** Do not tell a lane to `lane:down` for this. `pnpm preflight` now also fails a lane whose `.env.lane` omits `API_URL` **and** one whose `apps/web` build was made outside `lane:exec` — the second read out of `routes-manifest.json` rather than by curling the web port, because preflight runs *before* the dev servers, so a request probe finds nothing listening in the very flow it gates and cannot tell that from a server still cold-compiling. It would have to pass both, reproducing #448's own defect inside #448's fix.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
@@ -1522,130 +1521,6 @@ row (#434), and notifying both parties.
 **Do not build any part of this before the decision exists.** A money path
 implemented against a guessed policy is the one kind of code in this repository
 that cannot be corrected by a later ticket.
-
-### #442: A repeat Terms acceptance can write two permanent rows — rule what the record means, then close the race
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** None. **Unblocked 2026-09-07 — the product question was a false
-one, and the row was wrong.**
-
-**Filed 2026-09-07** from #429's `security-auditor` pass, which found the race
-and wrote it up as **D38**. The lane was right to leave the race open. This row
-was wrong about *why*.
-
-#### What is wrong
-
-`acceptTerms` in `apps/api/src/modules/legal/terms.service.ts` does a
-**check-then-insert**: it reads whether this user already holds the current
-version, and if not, inserts. Nothing at the database level enforces the
-invariant that read is protecting, so two submissions racing from one session
-can both pass the check and both insert.
-
-The table is `legal_acceptances`, which a database trigger makes **immutable** —
-no update, no delete. So a duplicate is not a row someone can tidy up later. It
-is permanent, and it sits in the one table whose entire purpose is to be
-evidence.
-
-#### There is no product question. This row invented one — read this before working it
-
-The account holder asked the obvious question — *"why is a user able to accept
-the terms twice if it's the same terms?"* — and the answer is that **they are
-not, and never were.** Verified in the shipped code on 2026-09-07:
-
-- `acceptTerms` (`terms.service.ts`) reads the held version and, under the
-  comment *"Already held: answer, do not write"*, **returns the status without
-  inserting**.
-- `acceptVendorAgreement` (`legal-agreement.service.ts`) does the same, under
-  the same comment, with the reasoning spelled out: *"the second acceptance of a
-  version already held adds no answer to it. A **new** version still adds its
-  row."*
-- `terms.routes.test.ts` asserts it twice — *"records the acceptance against the
-  existing account, without a second one"* (`:196`) and *"signing in again is not
-  accepting again"* (`:350`).
-
-So the intent is unambiguous and already implemented: **one row per person, per
-document, per version.** A repeat submission is refused at the service layer.
-
-**This row previously claimed #427 ruled the opposite** — that a second
-acceptance *is* a second row — and cited
-`packages/db/src/legal-acceptance-immutability.test.ts:248` as asserting it.
-That citation was misread, and the misreading is worth naming because it is a
-recurring one: **that test inserts directly into the table**, bypassing both
-services. It asserts a *schema* fact — *"there is no unique key to collide on and
-no upsert path"* — which is a true description of the database as it stands
-today and **not** a ruling that the product permits two acceptances. A test that
-writes past the code cannot tell you what the code decided.
-
-**So the fix is not a policy change, it is enforcement of a policy that already
-exists.** The service's early return is advisory: nothing at the database level
-holds it, so two requests racing from one session both read *not held* and both
-insert into a table a trigger makes permanent.
-
-#### What to build
-
-Add the **unique index** — `(accepted_by_user_id, document, version)` — and let
-the losing insert of a race lose harmlessly rather than surfacing as a 500. The
-index turns the existing early return from a courtesy into a guarantee, which is
-what the two service comments already believe they have.
-
-**Three things to check before writing the migration, none of them optional:**
-
-1. **Existing duplicates block the index.** A `CREATE UNIQUE INDEX` fails if the
-   table already holds a colliding pair, and this table cannot be tidied — the
-   trigger refuses deletes. Query for duplicates first and say in the ticket what
-   you found; if any exist, the repair is a decision, not a migration.
-2. **`vendor_id` is deliberately not in the key, and you must confirm that is
-   safe.** A `vendor_agreement` row carries `vendor_id`; the proposed key does
-   not. That is correct **only if** one user can never hold two vendor profiles.
-   Verify it against the schema rather than assuming — if it is not true, the key
-   needs `vendor_id` and the Terms rows (which carry `null`) still behave, since
-   Postgres treats nulls as distinct in a unique index, which is a second thing
-   to check rather than assume.
-3. **Both writers must be covered**, because the identical shape has been live on
-   the vendor agreement since #427. One index covers both; make sure the
-   duplicate-key handling does too, so the vendor path does not 500 where the
-   Terms path no-ops.
-
-**The window is small but it reopens at every version bump**, and the rows are
-permanent, which is the whole reason a P1 sits on a race that closes in
-milliseconds.
-
-Either is defensible. What is not defensible is leaving a race open in an
-append-only evidence table because the question was never asked.
-
-#### Scope, once ruled
-
-- **Both writers, not just the new one.** The vendor agreement has had the
-  identical shape since #427; #429 only widened the record from vendors to every
-  user. Fixing `acceptTerms` and leaving `acceptAgreement` alone fixes half of it.
-- **D38 is the write-up** and should be amended with the ruling rather than
-  duplicated.
-- The `document_sha256` manifest and the clickwrap gate are **not** in scope —
-  both shipped in #429 and are correct.
-
-#### Acceptance
-
-1. Two concurrent submissions of one acceptance produce exactly the outcome the
-   ruling specifies — one row or two — and the assertion names which ruling it
-   is enforcing.
-2. The same holds for `acceptAgreement` on the vendor agreement.
-3. A genuine repeat acceptance after a version bump still writes a new row under
-   either ruling; the fix must not block the case the table exists for.
-4. `legal-acceptance-immutability.test.ts` either still asserts #427's meaning or
-   is amended in the same commit that overturns it — never left contradicting the
-   schema.
-5. Immutability still holds, proven by attempting an update and a delete.
-
-#### Tests (required)
-
-- [ ] A **contention test** on real Postgres, not PGlite. This is a race: PGlite
-      is a single connection and cannot tell a lock from its absence, so a
-      passing `pnpm test` here would prove nothing. `pnpm test:contention`.
-- [ ] The race reproduced **failing first** — two writes landing today — then
-      passing after the fix.
-- [ ] Both writers covered, in separate cases.
-- [ ] A version-bump case, so the fix is shown not to have closed the door on
-      legitimate re-acceptance.
 
 ### #443: Frame `13`'s parity residue, including two access findings nothing else checks
 
