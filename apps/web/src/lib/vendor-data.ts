@@ -115,6 +115,49 @@ export async function getOwnVendorProfile(): Promise<WireVendorProfile | null> {
 }
 
 /**
+ * The reading vendor's own storefront id, for a **public** page deciding what
+ * to offer them — `null` for everybody else, and `null` whenever the read
+ * fails.
+ *
+ * `/vendors/[slug]` is public and must stay public, which rules out
+ * `getOwnVendorProfile`: that one is a protected read and redirects on an
+ * expired session, a suspension and the terms gate. Any of those would move a
+ * visitor off a page they were entitled to see, which is the regression #33
+ * fixed once already and the reason `readRoleForChrome` exists beside it.
+ *
+ * So this read redirects for nothing and degrades to `null`. Degrading is safe
+ * **here specifically** because the value decorates: `null` means "not the
+ * owner", and the only cost of getting that wrong is that a vendor is offered
+ * a report control over their own storefront — the state that already ships.
+ * It is not a gate, and nothing hangs off it that `POST /reports` does not
+ * decide for itself. Never reach for this where the answer is load-bearing.
+ *
+ * `cache()` for the same reason `getCurrentUser` has it: one render, one
+ * record, and it cannot change between two reads of it.
+ */
+export const readOwnVendorProfileIdForChrome = cache(
+  async function readOwnVendorProfileIdForChrome(): Promise<string | null> {
+    try {
+      const { getToken } = await auth();
+      const token = await getToken();
+
+      if (!token) {
+        return null;
+      }
+
+      return (await apiRequest('/vendor/profile', { schema: wireVendorProfileSchema, token })).id;
+    } catch {
+      /*
+       * No `isNavigationSignal` re-throw, unlike its protected neighbours:
+       * nothing above redirects, so there is no navigation to preserve, and
+       * catching everything is the point rather than an oversight.
+       */
+      return null;
+    }
+  },
+);
+
+/**
  * The vendor's service packages, portfolio, and calendar. Each answers 404
  * before the profile exists — the surfaces that call these redirect to profile
  * creation rather than rendering an empty manager for a business that has not

@@ -23,6 +23,7 @@ import {
   getPublicVendorAvailability,
   getPublicVendorProfile,
   getPublicVendorReviews,
+  readOwnVendorProfileIdForChrome,
 } from '@/lib/vendor-data';
 
 /**
@@ -188,6 +189,31 @@ export default async function VendorProfilePage({
   if (!vendor) {
     notFound();
   }
+
+  /*
+   * Whether the reader is this storefront's own vendor (#458).
+   *
+   * A vendor previewing their own profile was offered *Report this profile*
+   * and *Report this photo* over their own record, and filing one succeeded —
+   * `POST /reports` accepts any signed-in caller for a public subject,
+   * deliberately, because restricting that would only stop the passer-by who
+   * noticed. The cost was a real case in the operations queue naming a vendor
+   * as their own reporter. The refusal therefore belongs to the viewer, not
+   * the API: answering 403 to the owner alone would turn the endpoint into an
+   * oracle for who owns a storefront.
+   *
+   * It reaches the About and Portfolio panes only. The Reviews pane keeps its
+   * control for the owner — see the note at its call site below.
+   *
+   * A second wave rather than a fourth entry in the one above (#390): the role
+   * is not known until that wave lands, and asking `/vendor/profile` before it
+   * would spend a request on every customer and every signed-out visitor to
+   * learn nothing. Only a signed-in vendor pays it, and only they can be the
+   * owner.
+   */
+  const viewerOwnsProfile =
+    viewerRole === 'vendor' && (await readOwnVendorProfileIdForChrome()) === vendor.id;
+
   /*
    * The server's UTC day. Both client panes below take it as a seed only and
    * re-anchor on the visitor's own day after mount (#409); nothing on this
@@ -293,6 +319,7 @@ export default async function VendorProfilePage({
                 onSeePackagesHref={`/vendors/${vendor.slug}?tab=packages`}
                 vendorProfileId={vendor.id}
                 signedIn={viewerRole !== null}
+                viewerOwnsProfile={viewerOwnsProfile}
               />
             ),
             packages: (
@@ -303,6 +330,7 @@ export default async function VendorProfilePage({
                 items={vendor.portfolio}
                 businessName={vendor.businessName}
                 signedIn={viewerRole !== null}
+                viewerOwnsProfile={viewerOwnsProfile}
               />
             ),
             reviews: (
@@ -314,6 +342,18 @@ export default async function VendorProfilePage({
                 reviewCount={vendor.reviewCount}
                 initial={reviews}
                 signedIn={viewerRole !== null}
+                /*
+                  Deliberately **not** given `viewerOwnsProfile` (#458).
+
+                  The other two panes report the vendor's own record, and the
+                  owner reporting one of those is self-reporting. A review is a
+                  different subject with a different author: a customer wrote
+                  it *about* them, and objecting to it is the ordinary case
+                  rather than the noise this ticket removes. It is also their
+                  only channel — there is no vendor-side reviews surface — so
+                  hiding it would trade a case an operator dismisses for one
+                  nobody can raise.
+                */
               />
             ),
             availability: (

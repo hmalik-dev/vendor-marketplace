@@ -34,11 +34,14 @@ vi.mock('@clerk/nextjs', () => ({
 const getPublicVendorProfile = vi.fn();
 const getPublicVendorAvailability = vi.fn();
 const getPublicVendorReviews = vi.fn();
+/* The reading vendor's own storefront id, or `null` for everybody else (#458). */
+const readOwnVendorProfileIdForChrome = vi.fn();
 
 vi.mock('@/lib/vendor-data', () => ({
   getPublicVendorProfile: (slug: string) => getPublicVendorProfile(slug),
   getPublicVendorAvailability: (slug: string) => getPublicVendorAvailability(slug),
   getPublicVendorReviews: (slug: string) => getPublicVendorReviews(slug),
+  readOwnVendorProfileIdForChrome: () => readOwnVendorProfileIdForChrome(),
 }));
 
 /*
@@ -86,23 +89,55 @@ const VENDOR = {
   portfolio: [],
 };
 
+/**
+ * One real review, so the Reviews tab draws a row — and therefore a report
+ * control — rather than its empty state. `ReviewsPane` renders nothing
+ * reportable from an empty page, which would make every assertion about that
+ * tab pass for the wrong reason.
+ */
+const REVIEWS_PAYLOAD = {
+  items: [
+    {
+      id: 'rev-1',
+      rating: 5,
+      title: 'Worth every penny',
+      content: 'They caught the whole day without ever getting in the way of it.',
+      reviewerName: 'Priya M.',
+      eventType: 'wedding',
+      createdAt: new Date('2026-06-20T12:00:00Z'),
+    },
+  ],
+  summary: { avgRating: 5, reviewCount: 1, distribution: [0, 0, 0, 0, 1] },
+  viewer: { canReview: false, bookingId: null },
+  page: 1,
+  pageSize: 10,
+  hasMore: false,
+};
+
 beforeEach(() => {
   readRoleForChrome.mockResolvedValue(null);
+  readOwnVendorProfileIdForChrome.mockResolvedValue(null);
   getPublicVendorProfile.mockResolvedValue(VENDOR);
   getPublicVendorAvailability.mockResolvedValue([]);
-  getPublicVendorReviews.mockResolvedValue({ items: [], total: 0, summary: null, viewer: null });
+  getPublicVendorReviews.mockResolvedValue(REVIEWS_PAYLOAD);
 });
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-async function renderPage(): Promise<HTMLElement> {
+async function renderPage(searchParams = ''): Promise<HTMLElement> {
   const { container } = render(
     await VendorProfilePage({ params: Promise.resolve({ slug: 'hostile-studio' }) }),
     // `ProfileTabs` holds the open tab in the URL; the adapter lives in the
-    // root layout, which a page-level render does not go through.
-    { wrapper: NuqsTestingAdapter },
+    // root layout, which a page-level render does not go through. Passing a
+    // query here is what lets a test open a tab other than the default, and
+    // `ProfileTabs` mounts only the open one.
+    {
+      wrapper: ({ children }) => (
+        <NuqsTestingAdapter searchParams={searchParams}>{children}</NuqsTestingAdapter>
+      ),
+    },
   );
 
   return container;
@@ -321,5 +356,126 @@ describe('who the storefront offers its CTAs to', () => {
     expect(container.textContent).not.toContain('Request booking');
     expect(container.textContent).not.toContain('Send a message');
     expect(container.textContent).toContain(CANNOT);
+  });
+});
+
+/**
+ * #458 — the storefront's own vendor is not offered a report control on it.
+ *
+ * `POST /reports` stays as permissive as it was: a public subject is
+ * reportable by anybody signed in, and refusing the owner alone would answer
+ * 403 to the one caller least likely to be malicious *and* make the endpoint
+ * an oracle for who owns a storefront. The refusal is the viewer's, so this is
+ * the layer that can carry it.
+ *
+ * Every case renders the **same** storefront and asserts the page rendered
+ * before it asserts what is missing. "No report control" and "the page never
+ * rendered" are the same absence otherwise, which is how #436's own pass
+ * mistook a blank tab for a passing check.
+ */
+describe('who the storefront offers a report control to', () => {
+  const REPORT = 'Report this profile';
+  const SIGN_IN_TO_REPORT = 'Sign in to report this profile';
+
+  /* The About tab is the default, and it is the only pane `ProfileTabs`
+     mounts — so it is the one report control a page-level render can see. */
+  it('offers a signed-out visitor the sign-in variant', async () => {
+    const container = await renderPage();
+
+    expect(container.textContent).toContain('Austin, TX');
+    expect(container.textContent).toContain(SIGN_IN_TO_REPORT);
+  });
+
+  it('offers it to a signed-in customer', async () => {
+    readRoleForChrome.mockResolvedValue('customer');
+
+    const container = await renderPage();
+
+    expect(container.textContent).toContain('Austin, TX');
+    expect(container.textContent).toContain(REPORT);
+  });
+
+  it('offers it to a different vendor', async () => {
+    readRoleForChrome.mockResolvedValue('vendor');
+    readOwnVendorProfileIdForChrome.mockResolvedValue('99999999-9999-4999-8999-999999999999');
+
+    const container = await renderPage();
+
+    expect(container.textContent).toContain('Austin, TX');
+    expect(container.textContent).toContain(REPORT);
+  });
+
+  it('offers it to nobody who owns this storefront', async () => {
+    readRoleForChrome.mockResolvedValue('vendor');
+    readOwnVendorProfileIdForChrome.mockResolvedValue(VENDOR.id);
+
+    const container = await renderPage();
+
+    /* The page rendered — the absence below is the control's, not the page's. */
+    expect(container.textContent).toContain('Austin, TX');
+    expect(container.textContent).not.toContain(REPORT);
+    expect(container.textContent).not.toContain(SIGN_IN_TO_REPORT);
+  });
+
+  /*
+   * The read degrades to `null` rather than throwing, because it runs on a
+   * public page. `null` has to mean "not the owner": the alternative is a
+   * storefront that hides its report control from every reader whenever
+   * `/vendor/profile` is unreachable.
+   */
+  it('offers it to a vendor whose own-profile read degraded to null', async () => {
+    readRoleForChrome.mockResolvedValue('vendor');
+    readOwnVendorProfileIdForChrome.mockResolvedValue(null);
+
+    const container = await renderPage();
+
+    expect(container.textContent).toContain(REPORT);
+  });
+
+  /* Only a vendor can own a storefront, so nobody else pays the round trip. */
+  it.each([null, 'customer', 'admin'])('asks nothing of /vendor/profile for %s', async (role) => {
+    readRoleForChrome.mockResolvedValue(role);
+
+    await renderPage();
+
+    expect(readOwnVendorProfileIdForChrome).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #458's narrowing, pinned end to end through the real panes.
+ *
+ * The About and Portfolio controls report the vendor's own record, so the
+ * owner is not offered them. The Reviews control reports a **customer's**
+ * writing about the vendor, so the owner keeps it — it is their only route to
+ * object to a defamatory review, because nothing under `app/vendor/` shows
+ * them their reviews at all.
+ *
+ * This lives at the page rather than in `reviews-pane.test.tsx` deliberately.
+ * The pane cannot test the claim: the claim is about what the *page* hands it,
+ * and a guard written inside the pane's own file passes happily while the page
+ * starts passing a new prop. Here the real `ProfileTabs`, the real
+ * `ReviewsPane` and the real page wiring are all in the assertion.
+ */
+describe('the one report control the storefront still offers its own vendor', () => {
+  beforeEach(() => {
+    readRoleForChrome.mockResolvedValue('vendor');
+    readOwnVendorProfileIdForChrome.mockResolvedValue(VENDOR.id);
+  });
+
+  it('keeps the review control for the vendor the review is about', async () => {
+    const container = await renderPage('?tab=reviews');
+
+    /* The tab rendered — the presence below is the control's, not an accident
+       of landing on some other pane. */
+    expect(container.textContent).toContain('Priya M.');
+    expect(container.textContent).toContain('Report this review');
+  });
+
+  it('still withholds the profile control from that same vendor', async () => {
+    const container = await renderPage();
+
+    expect(container.textContent).toContain('Austin, TX');
+    expect(container.textContent).not.toContain('Report this profile');
   });
 });

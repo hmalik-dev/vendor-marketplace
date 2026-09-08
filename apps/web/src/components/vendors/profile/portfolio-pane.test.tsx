@@ -31,7 +31,14 @@ function items(count: number): WirePortfolioItem[] {
 }
 
 function pane(count = 3): void {
-  render(<PortfolioPane items={items(count)} businessName="Kessler & Co." signedIn />);
+  render(
+    <PortfolioPane
+      items={items(count)}
+      businessName="Kessler & Co."
+      signedIn
+      viewerOwnsProfile={false}
+    />,
+  );
 }
 
 /** The dialog, once open. */
@@ -178,7 +185,12 @@ describe('PortfolioPane image failure', () => {
 
   it('replaces a tile whose photograph 404s with a tone block that has extent', () => {
     const { container } = render(
-      <PortfolioPane items={items(3)} businessName="Kessler & Co." signedIn />,
+      <PortfolioPane
+        items={items(3)}
+        businessName="Kessler & Co."
+        signedIn
+        viewerOwnsProfile={false}
+      />,
     );
 
     fireEvent.error(container.querySelector('img[src*="1-thumb.jpg"]')!);
@@ -195,7 +207,14 @@ describe('PortfolioPane image failure', () => {
   });
 
   it('replaces a lightbox photograph that fails with a block of stated extent', async () => {
-    render(<PortfolioPane items={items(1)} businessName="Kessler & Co." signedIn />);
+    render(
+      <PortfolioPane
+        items={items(1)}
+        businessName="Kessler & Co."
+        signedIn
+        viewerOwnsProfile={false}
+      />,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: 'Photograph 1' }));
 
@@ -208,5 +227,35 @@ describe('PortfolioPane image failure', () => {
     expect(dialog.querySelector('img')).toBeNull();
     expect(block?.className).toContain('bg-stone-250');
     expect(block?.className).toContain('aspect-[4/3]');
+  });
+});
+
+/**
+ * #458 — the vendor whose portfolio this is gets no control to report their
+ * own photographs. Each case renders the same three tiles and asserts they
+ * are there, so an absent control is distinguishable from an absent pane.
+ */
+describe('PortfolioPane — the report control', () => {
+  it('offers one per photo to a reader who does not own them', () => {
+    render(
+      <PortfolioPane
+        items={items(3)}
+        businessName="Kessler & Co."
+        signedIn
+        viewerOwnsProfile={false}
+      />,
+    );
+
+    expect(screen.getAllByRole('button', { name: /Photograph/ })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'Report this photo' })).toHaveLength(3);
+  });
+
+  it('offers none to the vendor who owns them', () => {
+    render(
+      <PortfolioPane items={items(3)} businessName="Kessler & Co." signedIn viewerOwnsProfile />,
+    );
+
+    expect(screen.getAllByRole('button', { name: /Photograph/ })).toHaveLength(3);
+    expect(screen.queryByText(/report this photo/i)).toBeNull();
   });
 });
