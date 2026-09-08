@@ -106,3 +106,21 @@ rule is for history that genuinely changed. Compare **the commit's own patch
 against its parent on both sides** first — if they are byte-identical, the rebase
 moved the commit onto new docs commits and changed nothing that reached the diff,
 so realigning to the pushed branch loses nothing.
+
+## `gh pr merge --delete-branch` fails *after* landing, from a worktree
+
+    gh pr merge --squash --delete-branch
+    failed to run git: fatal: 'main' is already used by worktree at …
+
+**The merge had already succeeded.** That error is `gh` attempting the *local*
+branch cleanup afterwards, which it cannot do from a lane session because `main`
+is checked out in the shared checkout. Reading the non-zero exit as "the merge
+failed" leads straight to a retry against an already-merged PR.
+
+**The command's exit status is a fact about `gh`, not about the merge.** Check
+`state` and `mergeCommit` on the PR instead — the same instrument-versus-subject
+distinction that keeps producing wrong answers here.
+
+**How to apply: drop `--delete-branch` from the lane recipe.** Merge plainly,
+then delete the remote branch explicitly during teardown. Every lane landing from
+a worktree hits this otherwise.
