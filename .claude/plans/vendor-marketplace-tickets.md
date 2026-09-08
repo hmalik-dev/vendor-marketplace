@@ -2766,6 +2766,36 @@ the sign-up screen again. They retry, meet *"that email is taken"*, and conclude
 the product is broken while owning an account they cannot tell exists. It is the
 top of the funnel and it fails silently.
 
+#### `/after-sign-in` is transit, and must never be where you end up
+
+**Ruled 2026-09-08 by the account holder:** *"signing in shouldn't take me to
+`/after-sign-in` — it should take me based on my role."*
+
+**The intent already matches that**, and the table is `role-routes.ts`:
+
+| Role | Lands on |
+| --- | --- |
+| `customer` | `/` — a customer's first move is to browse, not to open a dashboard they did not ask for |
+| `vendor` | `/vendor/dashboard` |
+| `admin` | `/admin` — note there is **no `/admin/dashboard`**; the console's overview is `/admin` itself |
+
+`/after-sign-in` is a **route handler, not a page**. Clerk lands there because it
+does not know the role — role lives in our database, never in Clerk metadata —
+and the handler answers with a real HTTP redirect to the row above. It is a
+route handler rather than a page calling `redirect()` precisely because Clerk
+arrives by client-side navigation, where an RSC redirect across layout segments
+leaves the App Router unable to reconcile the tree (#410).
+
+**So seeing `/after-sign-in` in the address bar is the defect itself**, not a
+design to change: it means the redirect did not resolve. `/dashboard` is the same
+shape and inherits the same requirement.
+
+**Make it an assertion rather than a property nobody checks.** After any
+authentication, the **terminal** URL is the role's destination; `/after-sign-in`
+and `/dashboard` never appear as a final location for any role, including the
+no-row state. That is one line in the sweep below and it is the line that would
+have caught this.
+
 #### The wider requirement: no dead routes, for any role
 
 The account holder's instruction is that this class must not recur:
@@ -2811,6 +2841,10 @@ a skipped cell and a passing cell look identical in a summary.
 4. The target list is **derived from the source**, not hand-maintained, so a new
    route is covered on the day it is added.
 5. Unreachable cells are asserted as refusals, not omitted.
+6. **The terminal URL after authenticating is the role's own destination** —
+   `/` for a customer, `/vendor/dashboard` for a vendor, `/admin` for an
+   operator. Neither `/after-sign-in` nor `/dashboard` is ever a final location,
+   for any role or for the no-row state.
 
 #### Tests (required)
 
