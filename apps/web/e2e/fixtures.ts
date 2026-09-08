@@ -32,7 +32,14 @@ function workspaceRoot(from: string = __dirname): string {
 /** `.auth/` lives at the repository root, beside `scripts/`. */
 export const AUTH_DIR = resolve(workspaceRoot(), '.auth');
 
-export type Role = 'customer' | 'vendor';
+/**
+ * `admin` is here because `pnpm e2e:auth` already mints it — `DEFAULT_ROLES` in
+ * `scripts/e2e-roles.mjs` has carried all three since #392 — and because the
+ * console is unreachable any other way: `role = 'admin'` comes from Clerk's
+ * `unsafeMetadata` at first sign-in and is immutable afterwards, so no sign-up
+ * flow produces one (D27).
+ */
+export type Role = 'customer' | 'vendor' | 'admin';
 
 export function storageStatePath(role: Role): string {
   return resolve(AUTH_DIR, `${role}.json`);
@@ -101,7 +108,27 @@ export function assertNotRateLimited(page: Page): void {
   }
 }
 
-async function pageForRole(browser: Browser, role: Role): Promise<Page> {
+/**
+ * Start recording 429s for a page.
+ *
+ * The recording is only half of it: `explainFailure` is what reads the log and
+ * annotates the failure, and it runs in a fixture's teardown. So a page that
+ * wants the diagnosis has to be handed out **by a fixture** — which is why
+ * `scriptlessAdminPage` below is one rather than a helper a spec calls.
+ */
+function watchForRateLimit(page: Page): Page {
+  rateLimited.set(page, []);
+  page.on('response', (response) => {
+    if (response.status() === 429) {
+      rateLimited.get(page)?.push(response.url());
+    }
+  });
+
+  return page;
+}
+
+/** The stored session for a role, or the error that names how to mint one. */
+function storageStateFor(role: Role): string {
   const statePath = storageStatePath(role);
 
   if (!existsSync(statePath)) {
@@ -112,17 +139,13 @@ async function pageForRole(browser: Browser, role: Role): Promise<Page> {
     );
   }
 
-  const context = await browser.newContext({ storageState: statePath });
-  const page = await context.newPage();
+  return statePath;
+}
 
-  rateLimited.set(page, []);
-  page.on('response', (response) => {
-    if (response.status() === 429) {
-      rateLimited.get(page)?.push(response.url());
-    }
-  });
+async function pageForRole(browser: Browser, role: Role): Promise<Page> {
+  const context = await browser.newContext({ storageState: storageStateFor(role) });
 
-  return page;
+  return watchForRateLimit(await context.newPage());
 }
 
 /**
@@ -164,30 +187,78 @@ function explainFailure(page: Page, testInfo: TestInfo): void {
  * naming the fix — instead of surfacing as a dozen unrelated assertion failures
  * deeper in a suite.
  */
-export const test = base.extend<{ customerPage: Page; vendorPage: Page }>({
-  /*
-   * Playwright names this second parameter `use` by convention, but the name is
-   * positional and free — and `use` trips `react-hooks/rules-of-hooks`, which
-   * reads any bare `use(...)` as React's hook. Renaming it is cheaper and more
-   * local than disabling that rule for the directory, which would also stop it
-   * catching a real misuse in a spec that does render components.
-   */
-  customerPage: async ({ browser }, provide, testInfo) => {
-    const page = await pageForRole(browser, 'customer');
-    await page.goto('/bookings');
-    await expectSignedIn(page);
-    await provide(page);
-    explainFailure(page, testInfo);
-    await page.context().close();
-  },
+type RoleFixture = (
+  args: { browser: Browser },
+  provide: (page: Page) => Promise<void>,
+  testInfo: TestInfo,
+) => Promise<void>;
 
-  vendorPage: async ({ browser }, provide, testInfo) => {
-    const page = await pageForRole(browser, 'vendor');
-    await page.goto('/vendor/dashboard');
+/**
+ * One fixture body, three roles.
+ *
+ * `provide` is Playwright's `use`, renamed: the name is positional and free,
+ * and a bare `use(...)` trips `react-hooks/rules-of-hooks`, which reads it as
+ * React's hook. Renaming is cheaper and more local than disabling that rule for
+ * the directory, which would also stop it catching a real misuse in a spec that
+ * does render components.
+ */
+function roleFixture(role: Role, landing: string): RoleFixture {
+  return async ({ browser }, provide, testInfo) => {
+    const page = await pageForRole(browser, role);
+
+    await page.goto(landing);
     await expectSignedIn(page);
     await provide(page);
     explainFailure(page, testInfo);
     await page.context().close();
+  };
+}
+
+export const test = base.extend<{
+  customerPage: Page;
+  vendorPage: Page;
+  adminPage: Page;
+  scriptlessAdminPage: Page;
+}>({
+  customerPage: roleFixture('customer', '/bookings'),
+  vendorPage: roleFixture('vendor', '/vendor/dashboard'),
+  adminPage: roleFixture('admin', '/admin'),
+
+  /**
+   * A signed-in console page with **JavaScript disabled**, for the paths that
+   * have to work without it.
+   *
+   * It cannot simply load `.auth/admin.json`: Clerk's short-lived `__session`
+   * JWT is refreshed by Clerk's own script, so a stored state minted more than
+   * a minute ago arrives expired and the middleware answers with a handshake
+   * redirect that nothing on a scriptless page can complete — the run lands on
+   * `/sign-in` and reads as a broken console. So the session is **warmed** in a
+   * scripted context first and the refreshed cookies are handed to the
+   * scriptless one, which is the difference between a spec that measures the
+   * no-JS path and one that measures Clerk.
+   *
+   * `/admin` is the cheapest authenticated console route and the cookie is the
+   * same whichever one refreshes it, so the warm hop does not render the
+   * surface under test.
+   *
+   * A fixture rather than a helper, so the scriptless page gets the same
+   * teardown every other page here does: the 429 annotation, and a context that
+   * is closed on the failing path as well as the passing one.
+   */
+  scriptlessAdminPage: async ({ browser }, provide, testInfo) => {
+    const warmPage = await pageForRole(browser, 'admin');
+
+    await warmPage.goto('/admin');
+    await expectSignedIn(warmPage);
+    const refreshed = await warmPage.context().storageState();
+    await warmPage.context().close();
+
+    const context = await browser.newContext({ storageState: refreshed, javaScriptEnabled: false });
+    const page = watchForRateLimit(await context.newPage());
+
+    await provide(page);
+    explainFailure(page, testInfo);
+    await context.close();
   },
 });
 

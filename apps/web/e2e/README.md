@@ -24,6 +24,13 @@ rather than as a mystery:
    from the main checkout, where it was minted against port 3000 and has usually
    expired, so a fresh worktree inherits a session that is wrong for its port.
 3. **`seed:e2e` has run against the lane database.** `lane:up` does this.
+4. **`db:seed:demo` has run, for `admin-filters.spec.ts` only.** That spec
+   narrows the console's review list, and a review needs a completed booking —
+   which `seed:e2e` has no reason to create, since its fixture is a _live_
+   request. With no reviews in both directions the Direction filter has nothing
+   to remove and every assertion would pass against a bar that still discards
+   the query, so the spec refuses to run rather than reporting a vacuous green:
+   `pnpm lane:exec <n> -- pnpm db:seed:demo`.
 
 ### Raise the rate limit
 

@@ -76,6 +76,7 @@
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking in full with an empty `closeBlockers`; copy that says "refunds nothing" is true of one side only
 - [Moderation levers are undoable by their subject](moderation-levers-are-undoable-by-their-subject.md) — #457’s `moderation_hold`; both ways the subject could still win were closed on its own lane, so do not re-report them
 - [Retired users keep their email in the unique index](retired-users-keep-their-email-in-the-unique-index.md) — closure never releases the address, so re-registering the same email is a permanent opaque 500
+- [FilterBar's `params` is a narrowing contract](filter-bar-params-is-a-narrowing-contract.md) — it re-emits admin searchParams as hidden fields and its type cannot tell narrowed from raw; `page` must stay out
 - [Sign-up role is client-written, server-narrowed](sign-up-role-is-client-written-server-narrowed.md) — `unsafeMetadata.role` can say `admin`; only `normalizeRole` refuses it, and the whole sign-up screen is chrome
 - [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino reaches nested errors through three doors, all three closed in #445; `PostgresError.detail` is redacted there too
 - [Email is a label, `clerk_user_id` is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial since #451; audited, nothing in the tree resolves a person by email

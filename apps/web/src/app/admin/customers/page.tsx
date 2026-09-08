@@ -72,7 +72,12 @@ export default async function AdminCustomersPage({
       counts={[`${customers.total} total`]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH} searchPlaceholder="Search name or email…" searchValue={q}>
+        <FilterBar
+          action={PATH}
+          params={{ q, flag }}
+          searchPlaceholder="Search name or email…"
+          searchValue={q}
+        >
           {/*
             The state an operator could not find (#462). A `user.updated`
             carrying an address another account already holds cannot be
@@ -87,14 +92,6 @@ export default async function AdminCustomersPage({
             value={flag ?? ''}
             options={[{ value: 'email-stale', label: EMAIL_STALE_LABEL }]}
           />
-          {/*
-            The flag travels with the search form as a hidden field. Submitting
-            a GET form sends only its own controls, and the dropdown navigates
-            on its own — so without this, pressing Enter in the search box would
-            silently clear the flag and answer with every customer, which is the
-            opposite of what an operator filtering for a problem wants.
-          */}
-          {flag ? <input type="hidden" name="flag" value={flag} /> : null}
         </FilterBar>
       }
       pager={{
