@@ -558,6 +558,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   465: ['auth'], // post-sign-up routing, and a no-dead-routes sweep at every role
   466: [], // For vendors should open an informational page, not the sign-up form
   467: [], // violatesConstraint's field arm never matches the real driver
+  468: ['auth'], // FilteredEmpty promises a widening it does not always offer
+  469: ['email'], // what mail does while users.email is known-stale — needs a ruling
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
