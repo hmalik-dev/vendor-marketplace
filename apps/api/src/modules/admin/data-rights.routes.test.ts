@@ -471,7 +471,12 @@ describe('data rights', () => {
       const vendor = await createVendorProfile();
 
       /* A past booking does not block; an open request is the unwind's work. */
-      await createBooking(customerId, vendor.profileId, '2020-06-01', 'completed');
+      const settledBookingId = await createBooking(
+        customerId,
+        vendor.profileId,
+        '2020-06-01',
+        'completed',
+      );
       const openRequest = await harness.database.db
         .insert(bookingRequests)
         .values({
@@ -490,19 +495,35 @@ describe('data rights', () => {
 
       expect(response.statusCode).toBe(200);
       /*
-       * Two, not one: the completed booking's own request is still `accepted`,
-       * and `declineOpenRequests` selects `pending | quoted | accepted` on both
-       * sides. That is #433's existing behaviour rather than this route's, and
-       * pinning it here is what would catch a closure that quietly grew its own
-       * narrower unwind.
+       * **One, and it used to be two (#444).** The second was the completed
+       * booking's own request, still `accepted` because that is the status
+       * checkout leaves behind — and `declineOpenRequests` took `accepted`
+       * unconditionally, so closing the account told the customer that a
+       * request whose event had happened and been paid for had been *declined*.
+       * #438 pinned that here as the behaviour it found rather than widening
+       * its own scope to fix it; #444 narrowed the predicate, and this number
+       * moving is what makes the change visible as a change.
        */
       expect(response.json()).toMatchObject({
         userId: customerId,
-        requestsDeclined: 2,
+        requestsDeclined: 1,
         bookingsCancelled: 0,
         bookingsLeftForReview: 0,
         profileRetired: false,
       });
+
+      /*
+       * The settled booking's own request kept its history on the closure path
+       * too — the half of #444 that must survive, asserted here as well as on
+       * the ban path, because #433 extracted the unwind and #438's closure
+       * shares it.
+       */
+      const [settled] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests)
+        .innerJoin(bookings, eq(bookings.requestId, bookingRequests.id))
+        .where(eq(bookings.id, settledBookingId));
+      expect(settled!.status).toBe('accepted');
 
       /*
        * `requestsDeclined` above is the assertion that this ran **#433's path**
