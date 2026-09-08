@@ -1332,6 +1332,21 @@ inside Bookings, not a rail row**, and the route the bundle calls
 `/admin/categories` is served today at `/admin/tags`, which #454's second design
 question settles.
 
+**Two things #454 hands you, both of which are code you must write and not
+merely read:**
+
+1. **The closure refusal's link is owed.** #454 built `/admin/users/[userId]`'s
+   refusal panel exactly as the frame draws it — disabled button, gold panel
+   naming the blocking booking and its date — **except the link**, because
+   `/admin/bookings/[id]` did not exist and a link to a 404 is worse than none.
+   Wire it when you build that route. There is a comment at the call site saying
+   so; delete it when you do.
+2. **`/admin/requests` gets no rail row.** The bundle rules it a **tab inside
+   Bookings** (`Bookings · Requests`), because a request is a booking before it
+   exists and an operator reaches it while looking at bookings. And its `quoted`
+   pill draws **steel**, not the delta's gold — ruled 2026-09-07, with
+   `03-components.md` standing and the bundle corrected.
+
 #### The state today
 
 **Seven list screens and zero detail screens.** There is no
