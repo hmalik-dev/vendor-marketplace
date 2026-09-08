@@ -47,3 +47,23 @@ Also true, and cheaper than reasoning about it: a lane whose server-side reads
 go elsewhere renders `/vendors/<seeded slug>` as **404**, because the seeded
 vendor exists only in the lane database. See
 [[next-dev-hits-emfile-with-many-lanes]] for why a build is being served at all.
+
+## A port answering 200 does not mean it is serving *your* build
+
+After rebuilding, a **stale `next start` still holding the lane's port** makes the
+new `pnpm start` exit `EADDRINUSE` — **in the background log, where nobody is
+looking** — while the port keeps answering 200 from the *old* build. The E2E
+suite then runs against code that no longer exists and fails in ways that read as
+product defects. Three failures were misread that way before the log was checked
+(lane #464, 2026-09-08).
+
+**The tell is that the failures look like real defects and the server looks
+healthy**, because it is healthy — it is just the wrong one.
+
+**How to apply:** after any rebuild, confirm the process serving the port is the
+one you just started — check the start command's own exit, or kill the port
+*before* starting and assert it is free. A 200 proves something is listening; it
+proves nothing about what it is listening with.
+
+Sibling of the API half already recorded here, and of #454's stale-API case where
+the web was current and the API predated the rebase.
