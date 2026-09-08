@@ -1,8 +1,37 @@
 import { eq } from 'drizzle-orm';
 import { users } from '@vendor-marketplace/db/schema';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
-import { insertUserIfAbsent } from './users.dao.js';
+import { insertUserIfAbsent, updateUserByClerkId } from './users.dao.js';
+
+/**
+ * One harness for the whole file. Two `createTestHarness()` instances in one
+ * suite is real wall-clock on every run, and two copies of `newUser` that must
+ * not drift.
+ */
+let harness: TestHarness;
+
+function newUser(clerkUserId: string, email: string) {
+  return {
+    clerkUserId,
+    email,
+    role: 'customer' as const,
+    firstName: 'Ada',
+    lastName: 'Reyes',
+  };
+}
+
+beforeAll(async () => {
+  harness = await createTestHarness();
+});
+
+afterEach(async () => {
+  await harness.database.db.delete(users);
+});
+
+afterAll(async () => {
+  await harness.close();
+});
 
 /**
  * What `insertUserIfAbsent` does when the insert is declined — the branch #442
@@ -29,30 +58,6 @@ import { insertUserIfAbsent } from './users.dao.js';
  */
 describe('insertUserIfAbsent, when the insert is declined', () => {
   const HELD_EMAIL = 'ada@example.com';
-
-  let harness: TestHarness;
-
-  function newUser(clerkUserId: string, email: string) {
-    return {
-      clerkUserId,
-      email,
-      role: 'customer' as const,
-      firstName: 'Ada',
-      lastName: 'Reyes',
-    };
-  }
-
-  beforeAll(async () => {
-    harness = await createTestHarness();
-  });
-
-  afterEach(async () => {
-    await harness.database.db.delete(users);
-  });
-
-  afterAll(async () => {
-    await harness.close();
-  });
 
   /**
    * The race, arriving one statement at a time: the row is already there under
@@ -165,5 +170,121 @@ describe('insertUserIfAbsent, when the insert is declined', () => {
       .where(eq(users.clerkUserId, 'clerk_ada'));
 
     expect(stored?.id).toBe(created?.id);
+  });
+});
+
+/**
+ * `updateUserByClerkId` when `users_email_key` refuses the address (#462).
+ *
+ * **Driven against the real index, with a second row genuinely holding the
+ * address.** A mocked rejection would prove the catch runs and not that
+ * anything can reach it — and reachability is the entire question here, because
+ * the defect was that a live statement raised 23505 where nobody was catching.
+ * Every case below puts a real second row in the table and lets Postgres
+ * decide.
+ */
+describe('updateUserByClerkId, when another account already holds the address', () => {
+  const ADA = 'clerk_ada';
+  const BEA = 'clerk_bea';
+  const ADA_EMAIL = 'ada@example.com';
+  const BEA_EMAIL = 'bea@example.com';
+
+  async function rowFor(clerkUserId: string) {
+    const [row] = await harness.database.db
+      .select()
+      .from(users)
+      .where(eq(users.clerkUserId, clerkUserId));
+
+    return row;
+  }
+
+  beforeEach(async () => {
+    await harness.database.db
+      .insert(users)
+      .values([newUser(ADA, ADA_EMAIL), newUser(BEA, BEA_EMAIL)]);
+  });
+
+  /**
+   * **Acceptance 1 and 3 together, which is the point.**
+   *
+   * Reading only the row passes against a version that silently discards the
+   * update — `email` is unchanged either way — so the divergence record is
+   * asserted in the same breath. And the rest of the patch still lands: a name
+   * that arrived in the same event is not in dispute, and freezing it would let
+   * one contested address stop every other mirrored field on the account.
+   */
+  it('keeps the old address, records the one it could not write, and mirrors the rest', async () => {
+    const result = await updateUserByClerkId(harness.database.db, ADA, {
+      email: BEA_EMAIL,
+      firstName: 'Grace',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.emailDiverged).toBe(true);
+
+    const ada = await rowFor(ADA);
+
+    expect(ada?.email).toBe(ADA_EMAIL);
+    expect(ada?.pendingEmail).toBe(BEA_EMAIL);
+    expect(ada?.emailSyncFailedAt).toBeInstanceOf(Date);
+    expect(ada?.firstName).toBe('Grace');
+
+    // The row that holds the address is not touched by somebody else's event.
+    expect((await rowFor(BEA))?.email).toBe(BEA_EMAIL);
+  });
+
+  /**
+   * The narrowness of the catch, and it is not decoration.
+   *
+   * A 23505 from `users_clerk_user_id_key` means two rows claiming one
+   * identity — a broken invariant rather than a stale column — and swallowing
+   * it would turn the loudest failure in this file into a silent no-op. Only
+   * `users_email_key` is caught, so this still throws.
+   */
+  it('does not swallow a collision on any other unique index', async () => {
+    await expect(
+      updateUserByClerkId(harness.database.db, ADA, { clerkUserId: BEA }),
+    ).rejects.toThrow();
+
+    expect((await rowFor(ADA))?.pendingEmail).toBeNull();
+  });
+
+  /**
+   * The repair, which is what makes `pending_email` mean *currently* diverged
+   * rather than *once* diverged. Without this an account that fixed itself
+   * would sit on the operator's list for ever.
+   */
+  it('clears the record once the address can be written', async () => {
+    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+    expect((await rowFor(ADA))?.pendingEmail).toBe(BEA_EMAIL);
+
+    await updateUserByClerkId(harness.database.db, ADA, { email: 'ada.new@example.com' });
+
+    const ada = await rowFor(ADA);
+
+    expect(ada?.email).toBe('ada.new@example.com');
+    expect(ada?.pendingEmail).toBeNull();
+    expect(ada?.emailSyncFailedAt).toBeNull();
+  });
+
+  /**
+   * `email_sync_failed_at` answers "since when has this been wrong", so a
+   * redelivery — or a second event colliding again — must not push it forward.
+   * `coalesce` is what holds it, and a plain `now()` would pass every other
+   * assertion in this file.
+   */
+  it('holds the timestamp at the first failure across repeated collisions', async () => {
+    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+    const first = (await rowFor(ADA))?.emailSyncFailedAt;
+
+    await updateUserByClerkId(harness.database.db, ADA, {
+      email: BEA_EMAIL,
+      lastName: 'Lovelace',
+    });
+
+    const ada = await rowFor(ADA);
+
+    expect(ada?.emailSyncFailedAt?.getTime()).toBe(first?.getTime());
+    expect(ada?.lastName).toBe('Lovelace');
   });
 });

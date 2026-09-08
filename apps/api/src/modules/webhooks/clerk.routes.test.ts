@@ -132,6 +132,67 @@ describe('POST /webhooks/clerk', () => {
     expect(rows[0]?.clerkUserId).toBe(CLERK_ID);
   });
 
+  /**
+   * **A `user.updated` carrying an address another account holds must not
+   * fail** (#462).
+   *
+   * It used to answer 500, so svix redelivered until it gave up — and every one
+   * of those deliveries met the same other row, because the collision is a fact
+   * about that row rather than a transient one. What the exhausted retries left
+   * behind was `users.email` at the **old** address for ever, with nothing
+   * anywhere saying so, while `findUserEmail` went on sending booking detail
+   * about other people to it.
+   *
+   * Driven through the route against the real index and a real second row, so
+   * this pins that the catch is reachable from the webhook and not only that it
+   * exists. The row is asserted alongside the status for the reason the DAO
+   * suite gives: a version that silently discarded the update would answer 200
+   * here too.
+   */
+  it('succeeds when user.updated carries an address another account holds', async () => {
+    await post(harness, userCreated());
+    await harness.database.db.insert(users).values({
+      clerkUserId: 'user_other',
+      email: 'taken@example.com',
+      role: 'customer',
+      firstName: 'Dorothy',
+      lastName: 'Vaughan',
+    });
+
+    const response = await post(
+      harness,
+      JSON.stringify({
+        type: 'user.updated',
+        data: {
+          id: CLERK_ID,
+          email_addresses: [{ id: 'idn_primary', email_address: 'taken@example.com' }],
+          primary_email_address_id: 'idn_primary',
+          first_name: 'Katherine',
+          last_name: 'Coleman',
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(200);
+    /*
+     * `diverged`, not `updated`: the event was applied and must not be retried,
+     * but the address was refused. `pnpm reconcile:clerk` counts on the
+     * difference so it cannot report a row it did not repair as corrected.
+     */
+    expect(response.json()).toMatchObject({ received: true, outcome: 'diverged' });
+
+    const [row] = await harness.database.db
+      .select()
+      .from(users)
+      .where(eq(users.clerkUserId, CLERK_ID));
+
+    expect(row?.email).toBe('katherine@example.com');
+    expect(row?.pendingEmail).toBe('taken@example.com');
+    expect(row?.emailSyncFailedAt).toBeInstanceOf(Date);
+    // The rest of the event still landed.
+    expect(row?.lastName).toBe('Coleman');
+  });
+
   it('does not let user.created escalate the role through unsafe metadata', async () => {
     await post(harness, userCreated({ unsafe_metadata: { role: 'admin' } }));
 

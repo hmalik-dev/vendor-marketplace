@@ -53,6 +53,7 @@ try {
     `${dryRun ? 'Would reconcile' : 'Reconciled'} ${summary.examined} user(s) against Clerk\n` +
       `  ${summary.updated} ${dryRun ? 'would be corrected' : 'corrected'}\n` +
       `  ${summary.deleted} ${dryRun ? 'would be retired' : 'retired'} (deleted in Clerk)\n` +
+      `  ${summary.diverged} still disagree — the address is held by another account\n` +
       `  ${summary.unchanged} already in agreement\n` +
       `  ${summary.skipped} skipped — seeded accounts Clerk never issued\n`,
   );

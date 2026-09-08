@@ -279,7 +279,14 @@ describe('reconcileClerkUsers', () => {
 
     const summary = await reconcileClerkUsers(context(), clerk);
 
-    expect(summary).toEqual({ examined: 0, updated: 0, deleted: 0, unchanged: 0, skipped: 0 });
+    expect(summary).toEqual({
+      examined: 0,
+      updated: 0,
+      deleted: 0,
+      unchanged: 0,
+      diverged: 0,
+      skipped: 0,
+    });
     expect(clerk.getUserList).not.toHaveBeenCalled();
   });
 
