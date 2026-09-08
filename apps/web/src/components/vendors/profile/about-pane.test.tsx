@@ -24,6 +24,7 @@ function servicePackage(priceCents: number, inclusions: readonly string[]): Serv
 const BASE = {
   vendorProfileId: '5a4d0f6e-6ef0-4e1e-9d0b-2b47b3f0c111',
   signedIn: true,
+  viewerOwnsProfile: false,
   bio: 'Ten years photographing weddings across central Texas.',
   yearsInBusiness: null,
   completedEventCount: 0,
@@ -164,5 +165,31 @@ describe('AboutPane — the stat tiles', () => {
     render(<AboutPane {...BASE} />);
 
     expect(document.querySelector('dl')).toBeNull();
+  });
+});
+
+/**
+ * #458 — a vendor previewing their own storefront is not offered a control to
+ * report it. The API still accepts the report if one is somehow filed: the
+ * refusal is the viewer's, because a 403 for the owner alone would tell any
+ * prober who owns a storefront.
+ *
+ * Both cases render the same pane and assert the bio first, so "no control"
+ * cannot be an empty render wearing a passing check.
+ */
+describe('AboutPane — the report control', () => {
+  it('offers it to a reader who does not own the profile', () => {
+    render(<AboutPane {...BASE} />);
+
+    expect(screen.getByText(BASE.bio)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Report this profile' })).toBeTruthy();
+  });
+
+  it('offers it to nobody who owns the profile', () => {
+    render(<AboutPane {...BASE} viewerOwnsProfile />);
+
+    expect(screen.getByText(BASE.bio)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Report this profile' })).toBeNull();
+    expect(screen.queryByText(/report this profile/i)).toBeNull();
   });
 });

@@ -17,6 +17,16 @@ export interface PortfolioPaneProps {
   businessName: string;
   /** Reporting is authenticated, so a signed-out reader is sent to sign-in. */
   signedIn: boolean;
+  /**
+   * The reader is the vendor whose photographs these are (#458).
+   *
+   * Same rule as the About pane's profile control, applied per tile: a vendor
+   * is not offered a way to report their own work. `POST /reports` is
+   * unchanged and still accepts them — the refusal is the viewer's, because a
+   * server-side one would make the endpoint an oracle for who owns a
+   * storefront.
+   */
+  viewerOwnsProfile: boolean;
 }
 
 /**
@@ -31,6 +41,7 @@ export function PortfolioPane({
   items,
   businessName,
   signedIn,
+  viewerOwnsProfile,
 }: PortfolioPaneProps): React.ReactElement {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const dialog = useRef<HTMLDivElement>(null);
@@ -207,14 +218,16 @@ export function PortfolioPane({
               fighting over both — a report control that closed the photograph
               it was reporting.
             */}
-            <div className="mt-1.5">
-              <ReportDialog
-                subjectType="portfolio_item"
-                subjectId={item.id}
-                subjectNoun="this photo"
-                signedIn={signedIn}
-              />
-            </div>
+            {viewerOwnsProfile ? null : (
+              <div className="mt-1.5">
+                <ReportDialog
+                  subjectType="portfolio_item"
+                  subjectId={item.id}
+                  subjectNoun="this photo"
+                  signedIn={signedIn}
+                />
+              </div>
+            )}
           </li>
         ))}
       </ul>

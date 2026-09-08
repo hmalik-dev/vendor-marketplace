@@ -7,8 +7,10 @@ import { API_REQUEST_TIMEOUT_MS, ApiClientError, ApiTimeoutError } from './api-c
  * reads. The reference reads under test here are unauthenticated, so both
  * server dependencies are stubbed down to nothing.
  */
+const clerk = vi.hoisted(() => ({ token: 'session-token' as string | null }));
+
 vi.mock('@clerk/nextjs/server', () => ({
-  auth: async () => ({ getToken: async () => 'session-token' }),
+  auth: async () => ({ getToken: async () => clerk.token }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -31,6 +33,7 @@ const {
   getPublicVendorAvailability,
   getPublicVendorProfile,
   getPublicVendorReviews,
+  readOwnVendorProfileIdForChrome,
 } = await import('./vendor-data');
 
 const upstream500 = new ApiClientError(
@@ -333,5 +336,92 @@ describe('an upstream that never answers', () => {
     );
 
     await expect(getPublicVendorProfile('june-harlow')).resolves.toBeNull();
+  });
+});
+
+/**
+ * `readOwnVendorProfileIdForChrome` — the reader #458 added, tested directly.
+ *
+ * Everything that consumes it mocks this whole module, so without these its
+ * body is never executed by any test: a one-token change to it restores the
+ * defect with the entire suite green. The two functions its docstring models
+ * itself on — `readRoleForChrome` and `readIdentityForSupport` — are both
+ * pinned branch by branch in `current-user.test.ts`, and this one makes the
+ * stronger claim of the three (that swallowing *everything* is deliberate),
+ * so it needs the same treatment.
+ *
+ * It runs on `/vendors/[slug]`, which is public. Every failure therefore has
+ * to resolve `null` rather than throw or redirect: `null` means "not the
+ * owner", which leaves the report control offered — the behaviour that
+ * shipped before this ticket, and one `POST /reports` accepts anyway.
+ */
+describe('readOwnVendorProfileIdForChrome', () => {
+  /*
+   * `id` and `userId` are both uuid-shaped strings on the wire profile, so
+   * returning the wrong one typechecks and is silently, permanently wrong —
+   * a `users.id` can never equal a `vendor_profiles.id`, so the owner would
+   * simply never be recognised. They are deliberately different here.
+   */
+  const OWN_PROFILE = {
+    id: '5a4d0f6e-6ef0-4e1e-9d0b-2b47b3f0c111',
+    userId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+  };
+
+  beforeEach(() => {
+    clerk.token = 'session-token';
+    apiRequest.mockReset();
+  });
+
+  it("returns the profile's own id, not the owning user's id", async () => {
+    apiRequest.mockResolvedValue(OWN_PROFILE);
+
+    await expect(readOwnVendorProfileIdForChrome()).resolves.toBe(OWN_PROFILE.id);
+
+    expect(apiRequest).toHaveBeenCalledWith('/vendor/profile', expect.anything());
+  });
+
+  it('asks the API nothing when nobody is signed in', async () => {
+    clerk.token = null;
+
+    await expect(readOwnVendorProfileIdForChrome()).resolves.toBeNull();
+
+    expect(apiRequest).not.toHaveBeenCalled();
+  });
+
+  /* A vendor who has not created a storefront yet owns none, which is the
+     honest answer rather than an error. */
+  it('answers null for a vendor with no profile yet', async () => {
+    apiRequest.mockRejectedValue(
+      new ApiClientError(404, ERROR_CODES.NOT_FOUND, 'Request failed with status 404'),
+    );
+
+    await expect(readOwnVendorProfileIdForChrome()).resolves.toBeNull();
+  });
+
+  /*
+   * The case that separates this reader from `getOwnVendorProfile`, which
+   * answers a 403 with `redirect('/suspended')`. Doing that here would move a
+   * visitor off a **public** page they were entitled to see — the #33 class.
+   * `next/navigation`'s mock in this file throws on `redirect`, so a
+   * redirecting implementation fails this rather than passing quietly.
+   */
+  it('does not redirect a suspended vendor off a public page', async () => {
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, ERROR_CODES.FORBIDDEN, 'Request failed with status 403'),
+    );
+
+    await expect(readOwnVendorProfileIdForChrome()).resolves.toBeNull();
+  });
+
+  it('degrades to null when the API cannot be reached at all', async () => {
+    apiRequest.mockRejectedValue(apiUnreachable);
+
+    await expect(readOwnVendorProfileIdForChrome()).resolves.toBeNull();
+  });
+
+  it('degrades to null on an upstream 500 rather than taking the page down', async () => {
+    apiRequest.mockRejectedValue(upstream500);
+
+    await expect(readOwnVendorProfileIdForChrome()).resolves.toBeNull();
   });
 });

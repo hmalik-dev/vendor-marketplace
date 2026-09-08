@@ -368,4 +368,39 @@ describe('ReviewsPane — reporting a review', () => {
       screen.getByRole('link', { name: 'Sign in to report this review' }).getAttribute('href'),
     ).toBe('/sign-in');
   });
+
+  /*
+   * #458 narrowed here, and the distinction is pinned at the page rather than
+   * in this file — see `who the storefront offers a report control to` in
+   * `app/vendors/[slug]/page.test.tsx`, which drives the owning vendor through
+   * the real `ReviewsPane`.
+   *
+   * The About and Portfolio panes stop offering their controls to the vendor
+   * who owns the storefront, because those subjects are the vendor's own
+   * record and reporting one is self-reporting. **A review is not.** A
+   * customer wrote it about them, and a vendor objecting to a defamatory or
+   * extortionate review is the ordinary use of the control rather than the
+   * noise #458 removes — and it is their only route, because there is no
+   * vendor-side reviews surface anywhere in `apps/web/src/app/vendor/`.
+   *
+   * An earlier version of this test asserted `Object.keys(BASE)` did not
+   * contain `viewerOwnsProfile`, which was a guard on the fixture beside it:
+   * adding an optional prop to `ReviewsPane` and passing it from the page
+   * would have left `BASE` untouched and this file green. A guard on the
+   * literal it lives next to cannot fail for a change made anywhere else.
+   */
+  it('offers one control per review to a signed-in reader, whoever they are', () => {
+    render(
+      <ReviewsPane
+        {...BASE}
+        reviewCount={2}
+        initial={payload({
+          items: [review({ id: 'rev-1' }), review({ id: 'rev-2', reviewerName: 'Sam O.' })],
+        })}
+      />,
+    );
+
+    expect(screen.getAllByText('Sam O.').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Report this review' })).toHaveLength(2);
+  });
 });

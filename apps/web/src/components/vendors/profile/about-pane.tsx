@@ -17,6 +17,18 @@ export interface AboutPaneProps {
   vendorProfileId: string;
   /** Reporting is authenticated, so a signed-out reader is sent to sign-in. */
   signedIn: boolean;
+  /**
+   * The reader is the vendor this profile belongs to (#458).
+   *
+   * They were being offered a control to report their own record, and filing
+   * one worked — it put a case in the operations queue naming a vendor as
+   * their own reporter, which an operator opens only to dismiss. The refusal
+   * is here rather than at `POST /reports`, which still accepts any signed-in
+   * caller for a public subject: refusing the owner alone would answer 403 to
+   * the caller least likely to be malicious, and would let anybody probe for
+   * who owns a storefront.
+   */
+  viewerOwnsProfile: boolean;
 }
 
 /**
@@ -81,6 +93,7 @@ export function AboutPane({
   onSeePackagesHref,
   vendorProfileId,
   signedIn,
+  viewerOwnsProfile,
 }: AboutPaneProps): React.ReactElement {
   const tiles: Array<{ label: string; value: string }> = [];
 
@@ -190,14 +203,16 @@ export function AboutPane({
         A design pass rules on where it belongs; a ticket does not move the
         frame.
       */}
-      <div className="mt-6">
-        <ReportDialog
-          subjectType="vendor_profile"
-          subjectId={vendorProfileId}
-          subjectNoun="this profile"
-          signedIn={signedIn}
-        />
-      </div>
+      {viewerOwnsProfile ? null : (
+        <div className="mt-6">
+          <ReportDialog
+            subjectType="vendor_profile"
+            subjectId={vendorProfileId}
+            subjectNoun="this profile"
+            signedIn={signedIn}
+          />
+        </div>
+      )}
     </div>
   );
 }
