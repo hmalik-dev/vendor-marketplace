@@ -2405,7 +2405,18 @@ step 1 — not scattered through the code commits.
    payout failure, a chargeback and a dispute reason.
 6. Every filtered-empty state offers one widening button **per active filter**,
    each carrying the count it would reveal, never offering a zero-count route,
-   with `Clear all filters` last as a ghost link.
+   with `Clear all filters` last as a ghost link. **"Every" means all seven
+   console lists** — `/admin/cases`, `/admin/activity`, `/admin/vendors`,
+   `/admin/bookings`, `/admin/customers`, `/admin/payments` and
+   `/admin/reviews` — confirmed 2026-09-07 when the lane asked whether the
+   first three were the scope. **A half-applied pattern is worse than either
+   state**: an operator who learns on one screen that a dead end offers counted
+   ways out reads its absence on another as the screen being broken. If a
+   filter's count will not fit the single-scan `count(*) filter (where …)`
+   shape, stop at the ones that do and file the rest — do not force a query
+   shape to satisfy the word "every"; and **say in the commit which screens
+   have it and which do not**, because implicit coverage is what turned #443's
+   sixth finding into a rediscovery.
 7. `/admin/users/[userId]` draws the closure refusal as a disabled button plus a
    gold panel naming the blocking booking and linking it — before the press.
 8. `/admin/cases/[caseId]` draws three numbered regions with the resolve control
