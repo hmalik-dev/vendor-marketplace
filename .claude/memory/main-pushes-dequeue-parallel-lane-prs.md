@@ -232,6 +232,13 @@ Exit 0 = the branch already contains `main`. Non-zero = it needs
 `update-branch`. Pure git over refs you already have, so it answers while the API
 is still thinking.
 
+**And `update-branch` failing is itself a decisive signal.** It only
+fast-forwards, so `Cannot update PR branch due to conflicts` **distinguishes
+DIRTY from BEHIND immediately** — no waiting for `mergeStateStatus` to leave
+`UNKNOWN`. `merge-base --is-ancestor` answers the BEHIND question; the
+`update-branch` refusal answers the DIRTY one, from the other side. Lane #444,
+2026-09-08.
+
 **`mergeStateStatus` is the reporting field; `merge-base --is-ancestor` is the
 deciding one.** Use the API to understand *why* something is stuck; use git to
 decide *whether to act*. Lane #462, 2026-09-08.
