@@ -4,16 +4,31 @@ import type { ReactNode } from 'react';
 import { formatPrice, REPORT_SUBJECT_LABELS, uuidSchema } from '@vendor-marketplace/shared';
 import { CaseConversation } from '@/components/admin/case-conversation';
 import { CaseResolution } from '@/components/admin/case-resolution';
-import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
-import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
+import { StatusPill } from '@/components/ui/status-pill';
+import { BOOKING_PRESENTATION, PAYOUT_PRESENTATION } from '@/lib/booking-entries';
 import { getAdminCase } from '@/lib/admin-data';
 import { CASE_ARRIVAL, CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
 import { cn } from '@/lib/utils';
-import type { WireAdminCaseBooking } from '@/lib/wire-schemas';
 
+/*
+ * **24-hour, like `/admin/activity` and like Pattern C** (#454).
+ *
+ * `timeStyle: 'short'` renders `12:16 AM`, and the frame draws `opened 4 Sep
+ * 2026, 09:12`. The argument the delta makes for the activity log applies
+ * unchanged here — `2:02 PM` is a form a reader has to disambiguate before
+ * comparing two rows — and the two screens are one click apart, so a console
+ * that switched conventions between them would be worse than either alone.
+ *
+ * Written out rather than `timeStyle`, which has no 24-hour option that also
+ * keeps a medium date.
+ */
 const FILED = new Intl.DateTimeFormat('en-US', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
   timeZone: 'UTC',
 });
 
@@ -24,18 +39,25 @@ const EVENT_DATE = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 
-/** The three payout states, in the vocabulary `40-states.md` assigns them. */
-const PAYOUT_TONES: Record<WireAdminCaseBooking['payoutStatus'], StatusTone> = {
-  pending: 'pending',
-  held: 'failed',
-  released: 'confirmed',
-};
-
-const PAYOUT_LABELS: Record<WireAdminCaseBooking['payoutStatus'], string> = {
-  pending: 'Awaiting the sweep',
-  held: 'On hold',
-  released: 'Paid out',
-};
+/*
+ * The payout pill reads `PAYOUT_PRESENTATION`, and the private copy this
+ * replaces is exactly the drift that map's own docstring warns about (#454).
+ *
+ * **It painted `held` red.** `40-states.md` reserves red for failure and the
+ * delta's colour table spends it on three things — a payout attempt that
+ * failed, a chargeback, a dispute reason. A hold is none of them: it is
+ * deliberate, correct, and the frame draws it **gold** (`$2,314.00 · held`).
+ * Telling an operator that a working hold has failed is the exact sentence
+ * `PAYOUT_PRESENTATION` says it exists to prevent — *"painting it as a failure
+ * would tell an operator to fix something that is working."*
+ *
+ * It also carried a second vocabulary — `On hold` / `Awaiting the sweep` /
+ * `Paid out` against the shared `Held` / `Awaiting release` / `Released` — so
+ * this screen and `/admin/payments` named one state three different ways
+ * between them. That map is exported from `booking-entries.ts` rather than
+ * from the client `payment-table.tsx` precisely so a Server Component like this
+ * one can read it.
+ */
 
 /**
  * A card, and — for the three that make up Pattern C — its region number.
@@ -296,8 +318,8 @@ export default async function AdminCasePage({
               <StatusPill tone={BOOKING_PRESENTATION[booking.status].tone}>
                 {BOOKING_PRESENTATION[booking.status].label}
               </StatusPill>
-              <StatusPill tone={PAYOUT_TONES[booking.payoutStatus]}>
-                {PAYOUT_LABELS[booking.payoutStatus]}
+              <StatusPill tone={PAYOUT_PRESENTATION[booking.payoutStatus].tone}>
+                {PAYOUT_PRESENTATION[booking.payoutStatus].label}
               </StatusPill>
             </div>
 

@@ -211,7 +211,21 @@ export function DataRightsActions({
         ) : (
           <ConfirmAction
             trigger={
-              <Button type="button" variant="destructive" size="sm">
+              /*
+               * **Outlined red, never filled** — Pattern B rule 4 (#454).
+               *
+               * This was the `destructive` variant, which is a red *fill*. The
+               * rule is explicit about why: "a filled red button in a corner is
+               * a mis-click waiting". The fill is earned at the confirm below,
+               * which is the last thing before the account is retired, and
+               * `ConfirmAction` still paints it there.
+               */
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="border-error-200 text-error-500 hover:bg-error-50"
+              >
                 Close account
               </Button>
             }

@@ -21,7 +21,7 @@ shares.
 unrelated pages 500 with one shared error digest, on the diff that touched the
 admin console. A browser pass reports the feature dead.
 
-**This is [[a-clean-rebase-is-not-a-compiling-rebase]] extended past compile
+**This is [[rebase-auto-merges-are-not-compile-checked]] extended past compile
 time into runtime.** The tree compiled, `pnpm test` was green across seven
 packages, and the two running processes disagreed with each other — nothing in
 the local gate can see that, because the gate never runs the built API against

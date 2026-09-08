@@ -162,7 +162,29 @@ export default async function AdminUserDataRightsPage({
                 header: 'On behalf of',
                 cell: (row) => row.businessName ?? '—',
               },
-              { key: 'ip', width: '.9fr', header: 'From', cell: (row) => row.ip ?? '—' },
+              {
+                key: 'ip',
+                width: '.9fr',
+                header: 'From',
+                /*
+                  **Wraps, never truncates** — Pattern B rule 3 (#454).
+
+                  `DataTable`'s cells are `overflow-clip text-ellipsis
+                  whitespace-nowrap` by default, which is right for a scannable
+                  list and wrong for a record an operator copies out of. Rule 3
+                  is explicit: *"No ellipsis, no tooltip: a truncated Stripe id
+                  is a call to support."* An acceptance IP is exactly that kind
+                  of value — an IPv6 address is 39 characters and this track is
+                  147px, so under the default it would ellipsise silently.
+
+                  Overridden per column rather than in the primitive: the class
+                  string is merged after the defaults, so these three win the
+                  conflict, and every other admin table keeps the truncation its
+                  own screens were measured with.
+                */
+                className: 'overflow-visible break-words whitespace-normal',
+                cell: (row) => row.ip ?? '—',
+              },
             ]}
           />
         </section>

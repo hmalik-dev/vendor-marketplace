@@ -432,12 +432,56 @@ describe('the delta colour vocabulary', () => {
    * above structurally cannot cover, and leaving them out of the acceptance
    * because of that would be a coverage gap dressed as a scope decision.
    */
+  /**
+   * The clock is 24-hour on **both** screens that print a time, not only the
+   * one the delta names.
+   *
+   * Pattern C draws `opened 4 Sep 2026, 09:12`, the case detail is one click
+   * from `/admin/activity`, and a console that switched conventions between
+   * two adjacent screens would be worse than either alone. The case detail
+   * printed `12:16 AM` until the parity pass measured it.
+   */
+  it('keeps a 24-hour clock on the case detail as well as the activity log', () => {
+    const caseDetail = sourceWithoutComments('src/app/admin/cases/[caseId]/page.tsx');
+
+    expect(caseDetail).toContain('hour12: false');
+    expect(caseDetail).not.toContain("timeStyle: 'short'");
+  });
+
   it('draws a failing payout red, and the dispute reason red', () => {
     const paymentTable = sourceWithoutComments('src/components/admin/payment-table.tsx');
     expect(paymentTable).toContain('<StatusPill tone="failed">{PAYOUT_FAILING_LABEL}</StatusPill>');
 
     const caseDetail = sourceWithoutComments('src/app/admin/cases/[caseId]/page.tsx');
     expect(caseDetail).toMatch(/disputeReason[\s\S]{0,600}text-error-500/);
+  });
+
+  /**
+   * A private tone map is how a screen comes to disagree with the law.
+   *
+   * `/admin/cases/[caseId]` carried its own `PAYOUT_TONES` mapping `held` to
+   * **`failed`** — red — while the shared `PAYOUT_PRESENTATION` maps it to
+   * `needsYou`. The parity pass caught it; the table above could not, because
+   * the table reads the shared map and the screen did not.
+   *
+   * Red on a hold is a `40-states.md` violation and not a taste question: the
+   * delta spends red on a failed payout attempt, a chargeback and a dispute
+   * reason, and a hold is none of them — it is deliberate, correct, and drawn
+   * gold. The shared map's own docstring says exactly what the copy did wrong:
+   * *"painting it as a failure would tell an operator to fix something that is
+   * working."*
+   *
+   * So the guard is that the screen has **no second map at all**, which is a
+   * stronger claim than any assertion about what a second map contains.
+   */
+  it('reads the shared payout map rather than a private one', () => {
+    const caseDetail = sourceWithoutComments('src/app/admin/cases/[caseId]/page.tsx');
+
+    expect(caseDetail).toContain('PAYOUT_PRESENTATION[booking.payoutStatus].tone');
+    expect(caseDetail).not.toContain('PAYOUT_TONES');
+    expect(caseDetail).not.toContain('PAYOUT_LABELS');
+    // The value the copy got wrong, asserted where it is now read from.
+    expect(toneOf(PAYOUT_PRESENTATION.held)).toBe('clay');
   });
 
   /**
