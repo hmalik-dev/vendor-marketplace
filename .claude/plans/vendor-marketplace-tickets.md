@@ -263,7 +263,9 @@ storefront, each of which tells the reader something untrue. |
 | **461** | **A live error type routes around #445's log sink** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #451's `security-auditor`. Nothing leaks today** — it is filed because a path #445 documented as *unreachable* turns out to be reachable, and the next error type to travel it will not be as harmless. `ClerkAPIResponseError` carries an own enumerable **`errors`** array; `pino-std-serializers` copies it to **`aggregateErrors`** without passing it through `log-error-serializer.ts`, so its contents reach the log stream having been through none of the redaction. Contents today are Clerk's `{code, message, longMessage, meta}` — no credential, no bound parameter. **That is exactly why to fix it now**: #445's claim is that the sink is total and *nobody needs to know the hazard exists to be safe from it*, and a known hole with benign contents is one that gets forgotten before something else flows through it. #445 already follows `cause` and `err.errors`; this is the same array arriving under a different key, from the library rather than from our own recursion. **Fix the sink again, not this error type** — a `ClerkAPIResponseError` special case would be the fourth per-call-site guard in a story whose point was that per-call-site guards are how a rule becomes a special case. |
 | **462** | **A failed email update leaves `users.email` stale for ever, and notifications keep going there** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #451's partial index removes one trigger, not the defect | `core` `auth` `email` | **Filed 2026-09-07 by #442's `security-auditor`**, pre-existing and found while auditing something else. `updateUserByClerkId` sets `email` with **no conflict handling**, so a `user.updated` carrying an address another row holds raises a **23505**, the handler 500s, svix exhausts its retries, and `users.email` stays at the **old** value permanently — with nothing surfacing it, because the failure is upstream and the row looks ordinary. **Then the stale column is used to send mail**: `notification-email.dao.ts` picks the recipient from it, so every notification for that account — carrying **counterparty PII**, names, event dates, booking details, message excerpts — keeps going to an address the account holder **no longer controls**, indefinitely, because nothing ever retries the update. The 500 is a nuisance; the mail is a disclosure. Catch the 23505 on that one statement — it is **not** inside a transaction, unlike `insertUserIfAbsent`'s path, which is why #442 needed a different shape there — and let the webhook **succeed**, since a retry cannot help a collision that is a fact about another row. Record the divergence where an operator sees it, the way `refundsFailed` and `identityDeleted` already are. **Then ask** what mail should do while the column is known-stale; continuing to send is the actual harm and is a product decision. Not fixed by #451 (that clears only the retired-row trigger; live-versus-live remains) and not the same defect as #442 (different caller, different transaction shape, different consequence). |
 | **463** | **The admin detail views are drawn to Pattern B and C and built to neither** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** — the patterns are in the repository (#454) | `core` `auth` | **Filed 2026-09-08 by #454's parity pass**, which measured four console screens on six axes. #454 took the four findings inside its own acceptances and scoped this out in as many words: *"Neither is a rebuild. Both were built to a convention and now have a contract."* This is that rebuild. **`/admin/cases/[caseId]` renders one column where Pattern C draws two** — regions 1 and 3 left, region 2 right — and the **case-scoped reported-thread card is absent entirely**, which is a *required* part of region 2 rather than decoration: #436 built the conversation read and Pattern C asks for it scoped to the event date with the steel `Case-scoped read` chip. Region 1 has no sender block (avatar, role, id) and no `stone-50` inset around the message; label/value pairs stack where Pattern B rule 2 puts a fixed 150px label column beside a `minmax(0,1fr)` value. **`/admin/users/[userId]` has no 320px right column**, so `Export data` and `Close account` sit inside the first content card instead of a right-column Actions card below Identity, with no hairline between tiers and no per-action consequence line — rule 4's *literal* half. **Its spirit half already passes and must keep passing**: the two genuinely read-only cards contain zero interactive elements. Neither screen draws the `.ach` header band (`#F4F0E8` on a `1px #E4DDD1` rule), so region 3's *"Moves money. Both positions confirm first."* note has nowhere to live; card radii are 14px against `.ac`'s 12px throughout. **Values render 13.5px where rule 2 says 13px, and money and dates 13.5px sans where it says mono 12px.** Smaller and separable: `/admin/activity`'s filter bar carries one facet where Pattern A names three (Actor, Subject type, date range), `/admin/cases` has no search field though the bundle draws one, both lack frame `13`'s `Export CSV`, the Cases status filters carry no counts, and the `READ-ONLY` marker is stone where `40-states.md` makes information steel. **Read `web-design-parity.md` before measuring** — #454's four live overrides and two ruled colour entries are expected deviations, not drift. |
-| **464** | **Sign-up dead-ends silently when the bot challenge cannot complete** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #451b's browser pass and reproduced independently on `localhost:3000` in a real browser** — this is product behaviour, not a test-environment obstacle. Pick a role, type an email and password, press **Create my account**: `POST /v1/client/sign_ups` is **never sent** (verified by request interception — the only traffic is `challenges.cloudflare.com`), clerk-js waits on a Turnstile token that never arrives (`Error: 600010`), the form **disables every field permanently**, and the Clerk card then unmounts leaving the role picker. **No error, no timeout, no message, no retry — the button eats the click.** Sign-in is unaffected. **P0 because the people it hits are real and it is the only route into the product**: a privacy extension blocking `challenges.cloudflare.com`, a corporate or school network doing the same, third-party frames disabled, or Cloudflare failing — and there is no support path because there is no error to quote. **Ruled out already, do not re-derive**: headless (re-run under real Chrome), bundled Chromium, the network (Cloudflare's own demo page solved from the same machine), Clerk bot protection (a testing token made the widget vanish and submit **still** hung), and lane env (reproduced on `:3000`). **Not archived #226**, which recorded the same symptom as a *testing* obstacle on 2026-08-29 — `auth.spec.ts:9-14` still excludes sign-up for that reason — and that deferral is why the product half went unnoticed for nine days. Build a **bounded wait**, an **actionable error** in approved copy under `40-states.md`'s failure tone, and a **form that is usable again** rather than one needing a reload; then **ask** whether a challenge-free fallback is wanted, since that trades off against what bot protection exists to stop. |
+| **464** | **Sign-up dead-ends silently when the bot challenge cannot complete** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #451b's browser pass and reproduced independently on `localhost:3000` in a real browser** — this is product behaviour, not a test-environment obstacle. Pick a role, type an email and password, press **Create my account**: `POST /v1/client/sign_ups` is **never sent** (verified by request interception — the only traffic is `challenges.cloudflare.com`), clerk-js waits on a Turnstile token that never arrives (`Error: 600010`), the form **disables every field permanently**, and the Clerk card then unmounts leaving the role picker. **No error, no timeout, no message, no retry — the button eats the click.** Sign-in is unaffected. **P0 because the people it hits are real and it is the only route into the product**: a privacy extension blocking `challenges.cloudflare.com`, a corporate or school network doing the same, third-party frames disabled, or Cloudflare failing — and there is no support path because there is no error to quote. **Ruled out already, do not re-derive**: headless (re-run under real Chrome), bundled Chromium, the network (Cloudflare's own demo page solved from the same machine), Clerk bot protection (a testing token made the widget vanish and submit **still** hung), and lane env (reproduced on `:3000`). **Not archived #226**, which recorded the same symptom as a *testing* obstacle on 2026-08-29 — `auth.spec.ts:9-14` still excludes sign-up for that reason — and that deferral is why the product half went unnoticed for nine days. Build a **bounded wait**, an **actionable error** in approved copy under `40-states.md`'s failure tone, and a **form that is usable again** rather than one needing a reload; then **ask** whether a challenge-free fallback is wanted, since that trades off against what bot protection exists to stop. **A second half was found 2026-09-08 and it is worse**: a sign-up that *succeeds* can still strand you. The account holder completed one by hand — role picked, email verified, Clerk identity created with `role: customer` — and landed back on the **role picker**, because `/after-sign-in` resolves to `/sign-in` rather than to the Terms interstitial. `getCurrentUser()` returns `null`, which means no token or a 401/404 from `/users/me`, where `clerk-auth.ts` should be answering `TERMS_REQUIRED` for a session with no row. **Diagnose which before fixing** — a browser left without an active session, or the gate not being reached — since the symptom is identical and the fixes are not. This half creates a **real verified account** and then shows the person the sign-up screen again, so they retry, meet *"that email is taken"*, and conclude the product is broken while holding an account they cannot tell exists. |
+| **465** | **Post-sign-up routing, and no dead routes for any role** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-08 at the account holder's request** after they completed a sign-up by hand and were returned to the role picker. **#464 is the sign-up form's own failure; this row is where sign-up *sends* you.** Role picked, email verified, **Clerk identity created correctly** (`unsafe_metadata: {"role":"customer"}`) — and then `/after-sign-in` resolves to **`/sign-in`** rather than the Terms interstitial, because `getCurrentUser()` returns `null`, which means no token or a 401/404 from `/users/me`. Neither is what a session with no `users` row should produce: `clerk-auth.ts` sets `termsRequired = true` for exactly that state and `signedInFailurePath` turns it into the interstitial. **Diagnose which branch before fixing** — no active session after `setActive()`, or the gate never reached — since the symptom is identical and the fixes are not. **P0 because the person now holds a real verified account and has been shown the sign-up screen again**: they retry, meet *"that email is taken"*, and conclude the product is broken. **The wider requirement is the account holder's**: *"must be Playwright verified as all users to prevent this issue. No dead routes."* So build a **route-landing sweep** over roles × targets — signed out, customer, vendor, admin, and a **newly verified account with no `users` row**, which no fixture represents — against every router segment and every literal redirect destination, asserting a terminal status, a rendered screen and the role's own chrome. **Enumerate targets from the source**, never a hand-maintained list, and assert unreachable cells as refusals rather than skipping them. |
+| **466** | **"For vendors" sends a visitor to a sign-up form instead of an informational page** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder — the page needs a frame or a ruling before it is built** | `core` | **Filed 2026-09-08 at the account holder's request**: *"the 'for vendors' link should take users to a dedicated `/for-vendors` informational route not sign up again."* Today `marketing-nav.tsx:43` is `{ label: 'For vendors', href: '/sign-up?role=vendor' }`, so the one nav item addressed to vendors **asks them to create an account before telling them anything** — and a visitor who already has one is shown a sign-up screen again, which is #465's confusion from another direction. Build an **informational** `/for-vendors`: what it costs, how payouts work, what a storefront looks like, then the call to action carrying `?role=vendor` into sign-up. The deep link **keeps working** — `SignUpForm`'s `initialRole` exists for it — so what changes is which door the *nav* opens. **Blocked because there is no frame**: neither `Orla - Screens.dc.html` nor `design/design-plan/` has a vendor marketing page, and a lane building one would be inventing a public surface with nothing for the parity gate to compare against. The account holder picks: a frame, or a ruling that it composes from the landing page's existing vocabulary with the strings recorded in `31-content-voice.md` first. **No invented numbers** — this is the surface most likely to reach for *"vendors earn on average…"*, and MVP forbids every one of those. |
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #454 landed: 19 rows — 16 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's, #447's, #458's, #454's and #456's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`), #458 (`affd481c`) and #454 (`32fa9bd4`, which closed #456 with it) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 was closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07. **#454 consumed them and landed 2026-09-08 (`32fa9bd4`)**, closing **#456** with it and taking the counted filtered-empty pattern to all seven console lists. That unblocks **#437** — the Pattern B detail frame it was held for is now in the repository — and **#457** with it. What #454 deliberately did not build is filed as **#463**: it landed the rulings and the parity fixes inside its own acceptances, and Pattern B and C's **composition** is a rebuild rather than a parity fix. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
 
@@ -2644,6 +2646,36 @@ nothing to try.** There is no support path because there is no error to quote.
 It is also **the only route into the product.** A vendor cannot list and a
 customer cannot book without an account, so this is the top of every funnel.
 
+#### The second half, found 2026-09-08: sign-up can *succeed* and still strand you
+
+The account holder completed a sign-up by hand — role picked, email verified —
+and **landed back on the role picker**, with no indication anything had worked.
+
+Checked rather than inferred:
+
+- **The Clerk identity was created correctly**: verified email,
+  `unsafe_metadata: {"role":"customer"}`. Round one genuinely succeeded.
+- **No `users` row exists**, which is correct — since #429 the acceptance gate is
+  the only writer on the product path, so a new account is *supposed* to be held
+  at the interstitial.
+- **But `/after-sign-in` resolves to `/sign-in`**, not to the Terms interstitial.
+  `getCurrentUser()` returned `null`, which happens on **no token** or on a
+  **401/404** from `/users/me` — and neither is what a session with no row should
+  produce. `clerk-auth.ts` sets `termsRequired = true` for exactly that state and
+  `requireAuth` throws `termsRequiredError()`, which `signedInFailurePath` turns
+  into the interstitial. That path is not being taken.
+
+**Diagnose which of the two it is before fixing** — a browser left without an
+active session after `setActive()`, or a `/users/me` answering 401/404 where the
+gate should answer `TERMS_REQUIRED`. They have different fixes and the symptom is
+identical.
+
+**This half is worse than the hang.** The hang at least does nothing. This one
+**creates a real, verified account** and then shows the person the sign-up screen
+again — so they try again, hit *"that email is taken"*, and conclude the product
+is broken while holding an account they cannot tell exists. Add it to acceptance
+1's sibling: a completed sign-up must land somewhere that reflects it.
+
 #### What was ruled out, so nobody re-derives it
 
 Lane #451b's pass eliminated, in order: headless mode (re-ran under real Chrome),
@@ -2699,3 +2731,202 @@ and the deferral of the first is why the second went unnoticed for nine days.
       product fails to do*.
 - [ ] Acceptance 4 driven in a browser, because the whole class of defect here is
       one no unit test reached for nine days.
+
+### #465: Post-sign-up routing, and no dead routes for any role
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-09-08 at the account holder's request**, after they completed a
+sign-up by hand and were returned to the role picker with no sign anything had
+worked. **#464 is the sign-up form's own failure; this row is where sign-up
+*sends* you, and every other landing like it.**
+
+#### The observed defect
+
+Role picked, email verified, **Clerk identity created correctly** — verified
+address, `unsafe_metadata: {"role":"customer"}`. Then:
+
+- `/after-sign-in` resolves to **`/sign-in`**, not to the Terms interstitial.
+- `getCurrentUser()` returned `null`, which happens on **no token** or on a
+  **401/404** from `/users/me`.
+- Neither is what a session with no `users` row should produce.
+  `clerk-auth.ts` sets `termsRequired = true` for exactly that state,
+  `requireAuth` throws `termsRequiredError()`, and `signedInFailurePath` turns
+  that into the interstitial. **That path is not being taken.**
+
+**Diagnose which of the two it is before writing a fix** — a browser left with no
+active session after Clerk's `setActive()`, or the gate never reached. The
+symptom is identical and the fixes are not. Start by capturing what `/users/me`
+actually answers for a freshly verified identity with no row: that single
+response tells you which branch you are in.
+
+**Why P0:** the person now holds a **real, verified account** and has been shown
+the sign-up screen again. They retry, meet *"that email is taken"*, and conclude
+the product is broken while owning an account they cannot tell exists. It is the
+top of the funnel and it fails silently.
+
+#### `/after-sign-in` is transit, and must never be where you end up
+
+**Ruled 2026-09-08 by the account holder:** *"signing in shouldn't take me to
+`/after-sign-in` — it should take me based on my role."*
+
+**The intent already matches that**, and the table is `role-routes.ts`:
+
+| Role | Lands on |
+| --- | --- |
+| `customer` | `/` — a customer's first move is to browse, not to open a dashboard they did not ask for |
+| `vendor` | `/vendor/dashboard` |
+| `admin` | `/admin` — note there is **no `/admin/dashboard`**; the console's overview is `/admin` itself |
+
+`/after-sign-in` is a **route handler, not a page**. Clerk lands there because it
+does not know the role — role lives in our database, never in Clerk metadata —
+and the handler answers with a real HTTP redirect to the row above. It is a
+route handler rather than a page calling `redirect()` precisely because Clerk
+arrives by client-side navigation, where an RSC redirect across layout segments
+leaves the App Router unable to reconcile the tree (#410).
+
+**So seeing `/after-sign-in` in the address bar is the defect itself**, not a
+design to change: it means the redirect did not resolve. `/dashboard` is the same
+shape and inherits the same requirement.
+
+**Make it an assertion rather than a property nobody checks.** After any
+authentication, the **terminal** URL is the role's destination; `/after-sign-in`
+and `/dashboard` never appear as a final location for any role, including the
+no-row state. That is one line in the sweep below and it is the line that would
+have caught this.
+
+#### The wider requirement: no dead routes, for any role
+
+The account holder's instruction is that this class must not recur:
+**"must be Playwright verified as all users to prevent this issue. No dead
+routes."**
+
+So the fix is not only the branch above. **Every landing and redirect target in
+the product must resolve to a rendered screen for every role that can reach it.**
+
+Build a **route-landing sweep** driven in a real browser, over the matrix of:
+
+- **Roles**: signed out · customer · vendor · admin · a **newly verified account
+  with no `users` row** (the state this ticket is about, and the one no fixture
+  currently represents).
+- **Targets**: every entry in the app router, plus every literal redirect
+  destination — `postSignInPath`, `signedInFailurePath`, `termsAcceptancePath`,
+  `DASHBOARD_PATH_BY_ROLE`, `/after-sign-in`, and the `?returnTo=` round trip.
+
+For each cell assert: a **terminal** HTTP status (no redirect loop), a rendered
+screen rather than an error boundary, and the role's own chrome. **A redirect
+that lands on another redirect is only acceptable if the chain terminates**, and
+the test must follow it rather than reading the first hop.
+
+#### What "no dead routes" has to mean in a test
+
+**Not a list of routes someone maintained by hand** — that is the failure this
+repo keeps finding, a check whose reach is smaller than its author believed.
+Enumerate the targets from the **source**: walk the app router directory for
+segments, and grep the redirect helpers for their literal destinations, so a
+route added later is covered without anyone remembering.
+
+Where a cell is legitimately unreachable, assert **that** rather than skipping —
+a skipped cell and a passing cell look identical in a summary.
+
+#### Acceptance
+
+1. A freshly verified account with no `users` row lands on the **Terms
+   interstitial**, from `/after-sign-in` and from a direct URL alike.
+2. The root cause is **named** in the ticket and in the code comment — session or
+   gate — rather than fixed by making the symptom go away.
+3. Every role × target cell resolves to a terminal status and a rendered screen,
+   with no redirect loop and no error boundary.
+4. The target list is **derived from the source**, not hand-maintained, so a new
+   route is covered on the day it is added.
+5. Unreachable cells are asserted as refusals, not omitted.
+6. **The terminal URL after authenticating is the role's own destination** —
+   `/` for a customer, `/vendor/dashboard` for a vendor, `/admin` for an
+   operator. Neither `/after-sign-in` nor `/dashboard` is ever a final location,
+   for any role or for the no-row state.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first — acceptance 1 must fail
+      against `main` today.
+- [ ] **Playwright, at every role in the matrix**, per the account holder's
+      instruction. The no-row state is the one that has no fixture: create it the
+      way the product does, or seed a Clerk identity with no local row, and say
+      in the test which.
+- [ ] The redirect chain **followed to termination**, not asserted on the first
+      hop — a loop passes a first-hop assertion.
+- [ ] A deliberately broken redirect target added and the sweep watched to fail,
+      so the enumeration is proven to reach.
+
+
+### #466: "For vendors" sends a visitor to a sign-up form instead of an informational page
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** The account holder — the page needs a frame before it is built. See below.
+
+**Filed 2026-09-08 at the account holder's request:** *"the 'for vendors' link
+should take users to a dedicated `/for-vendors` route not sign up again."*
+
+#### What it does today
+
+`marketing-nav.tsx:43` — `{ label: 'For vendors', href: '/sign-up?role=vendor' }`.
+
+So the one nav item addressed to vendors asks them to **create an account before
+telling them anything**. A visitor evaluating whether to list with us is handed a
+form. And a visitor who is **already signed up** and clicks it out of curiosity
+is shown a sign-up screen again, which is the same confusion #465 is about
+arriving from a different direction.
+
+#### What to build
+
+**A real `/for-vendors` route — informational, as the account holder specified.** A page *about* vending: what it costs,
+how payouts work, what a storefront looks like, and *then* the call to action
+that carries `?role=vendor` into sign-up. The nav points there instead.
+
+**The sign-up deep link keeps working.** `/sign-up?role=vendor` is a supported
+entry — `SignUpForm`'s `initialRole` exists for it and pre-selects the vendor
+card — so the change is which door the **nav** opens, not the removal of a route.
+
+#### This needs a frame before it is built, and that is why it is blocked
+
+`design-is-a-contract-not-code`: there is **no frame for a vendor marketing
+page** in `Orla - Screens.dc.html`, and `design/design-plan/` has no screen file
+for one. A lane building it would be inventing a public surface, which is exactly
+what the MVP rule and the design contract exist to stop — and the parity gate
+would have nothing to compare it against.
+
+**Two ways forward, and the account holder picks:**
+
+1. **A frame**, the way `delta-admin` answered #453.
+2. **A ruling that it composes from existing frames** — the landing page's own
+   vocabulary applied to vendor-side copy, with the approved strings recorded in
+   `31-content-voice.md` first. Cheaper, and defensible because the page is a
+   rearrangement of parts that are already drawn rather than a new shape.
+
+**No invented numbers.** A vendor marketing page is the surface most likely to
+reach for *"vendors earn on average…"* or *"X events booked"*. MVP forbids every
+one of those on a public page: nothing ships here that is not a query result at
+request time or a fact about the product's own mechanics.
+
+#### Acceptance
+
+1. `/for-vendors` exists and renders for a signed-out visitor, a customer and a
+   vendor — no role is bounced off a public marketing page.
+2. The nav's "For vendors" points at it.
+3. `/sign-up?role=vendor` still works and still pre-selects the vendor card.
+4. The page's call to action carries `?role=vendor` into sign-up.
+5. Every claim on the page is a product mechanic or a request-time query result —
+   **no platform statistics**.
+6. Parity against whatever the account holder supplies, on all six axes at
+   1440x900.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 1 driven at **all three** auth states — the defect class this
+      sits beside (#465) is precisely a route that renders for one role and not
+      another.
+- [ ] Acceptance 3 asserted after the nav change, since the deep link and the nav
+      target are now different things and a regression would silently merge them
+      back.
