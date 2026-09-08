@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, notExists, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
@@ -519,6 +519,46 @@ export async function findConfirmedBookingsToUnwind(
  * Requests that have not become bookings yet. They carry no money, so they are
  * declined rather than refunded — but leaving them pending would keep a banned
  * account in someone's queue as if it could still answer.
+ *
+ * **`accepted` is bounded, and this is what #444 fixed.** `accepted` used to sit
+ * in the status list unconditionally, but it is exactly the status a request
+ * holds *after* checkout — `bookings` carries a unique index on `request_id`
+ * because one accepted request becomes one booking, and nothing moves the
+ * request again while that booking stands. So every unwind flipped the accepted
+ * request behind an **already-completed** booking to `declined`: the event
+ * happened, the vendor was paid, and the customer's screen then said the request
+ * had been declined.
+ * That is rewriting history rather than unwinding it, and it was reachable from
+ * any ban, so it predated both #433's deletion path and #438's closure.
+ *
+ * The bound is the same one the whole unwind works to — *undo what has not
+ * happened yet* — and it is the neighbouring `findConfirmedBookingsToUnwind`'s
+ * rule stated for requests: **an accepted request is declined only when there is
+ * no booking behind it at all**, which is the genuine mid-checkout case, and the
+ * only one where nothing else records what happened. Dropping `accepted`
+ * outright would have been the other wrong answer: a request accepted but never
+ * paid for is a real open commitment, and leaving it standing holds a vendor's
+ * date for an account that no longer trades.
+ *
+ * **The request behind a booking this unwind *cancels* never arrives here as
+ * `accepted`, and that is why this predicate needs no third case (#444's third
+ * acceptance).** `cancelBookingAndFreeDate` settles it to `cancelled` in the
+ * same transaction as the cancellation, and has since #400 — deliberately, so
+ * `syncHeldDate` cannot read an accepted request off a date whose booking is
+ * gone and mark it booked again. The unwind runs that cancellation for every
+ * booking it ends *before* it reaches this call, so by the time the UPDATE runs
+ * those requests are `cancelled` and outside every arm of the predicate.
+ *
+ * So the ticket's open question — what the customer's screen should say for one
+ * of those — is already answered by the product, and not by this function:
+ * `cancelled`, which the hub renders as **"Withdrawn"**. That word is wrong for
+ * a platform unwind, but it is #400's wording of an existing state rather than
+ * anything decided here, and it costs little because the *booking* row is where
+ * this story is actually told: it carries `cancelled_by = 'admin'` and its
+ * cancellation reason, and #415 made the customer's sentence come from that
+ * narrative rather than from a status lookup. Naming the act honestly would
+ * take a new `BOOKING_REQUEST_STATUSES` member — a schema, vocabulary and design
+ * change, and a ticket of its own.
  */
 export async function declineOpenRequests(
   db: AppDatabase,
@@ -534,10 +574,28 @@ export async function declineOpenRequests(
     return 0;
   }
 
+  /*
+   * The booking this request became, if it ever became one. The correlation is
+   * on `booking_requests.id`, so it reads the row the UPDATE is deciding about;
+   * `bookings_request_id_key` makes it at most one row.
+   */
+  const bookingBehindRequest = db
+    .select({ present: sql`1` })
+    .from(bookings)
+    .where(eq(bookings.requestId, bookingRequests.id));
+
   const declined = await db
     .update(bookingRequests)
     .set({ status: 'declined', updatedAt: now })
-    .where(and(inArray(bookingRequests.status, ['pending', 'quoted', 'accepted']), sides))
+    .where(
+      and(
+        or(
+          inArray(bookingRequests.status, ['pending', 'quoted']),
+          and(eq(bookingRequests.status, 'accepted'), notExists(bookingBehindRequest)),
+        ),
+        sides,
+      ),
+    )
     .returning({ id: bookingRequests.id });
 
   return declined.length;
