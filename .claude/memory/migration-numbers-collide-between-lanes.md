@@ -72,3 +72,17 @@ next number. Then read the schema source conflict on its own terms — a snapsho
 merge that looks clean can still carry a reverted predicate.
 
 Recorded 2026-09-08, lane #462.
+
+## Regenerating is not enough — undo the old one in the lane database first
+
+If you generated a migration **before** rebasing, your lane database already
+holds a `__drizzle_migrations` row for a file that no longer exists. Deleting the
+file and regenerating leaves that row behind, and **the real landed migrations
+then silently never apply** — `db:migrate` believes it is already past them.
+
+**Drop the columns your migration added, delete that one row, then migrate.** It
+is a five-line script and far cheaper than `lane:down`, which drops the whole
+lane database.
+
+The tell is a `db:migrate` that reports nothing to do on a tree that visibly has
+new migrations in it. Recorded 2026-09-08, lane #457.
