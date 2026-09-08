@@ -2062,6 +2062,44 @@ export interface Paginated<T> {
   pageSize: number;
 }
 
+/**
+ * How many rows dropping **exactly one** active filter would reveal (#454).
+ *
+ * The counted way out of a filtered-empty console list, drawn by Pattern A of
+ * the admin delta: *"Open cases instead (4)"*, *"Any origin (2)"*, *"All time
+ * (9)"*. The point of the number is that an operator picks the widening that
+ * **pays** instead of clearing everything and rebuilding the query from
+ * scratch.
+ *
+ * `key` names the query parameter this route drops; the surface owns the words,
+ * because "Open cases instead" is copy and `status` is a parameter name.
+ *
+ * **The count has to be known before the button is drawn, not after.** A route
+ * that would reveal zero must not render at all, so a shape that let the web
+ * layer discover the number by following the link could not satisfy the
+ * requirement — which is why this rides back with the empty page rather than
+ * being fetched per button.
+ */
+export const filterWideningSchema = z.object({
+  key: z.string(),
+  count: z.int().min(0),
+});
+export type FilterWidening = z.infer<typeof filterWideningSchema>;
+
+/**
+ * The widenings a list carries **only when it came back empty under filters**.
+ *
+ * Empty on every other response, and deliberately: computing them costs an
+ * unfiltered scan of the table — the rows outside the current filter are
+ * exactly the ones being counted — and that is only worth paying on the one
+ * screen state that has nothing else to show. It is still **one round trip**:
+ * the counts ride home in the list response, and a `count(*) filter (where …)`
+ * aggregate per key makes it one scan rather than one query per filter.
+ */
+export const wideningShape = {
+  widenings: z.array(filterWideningSchema).default([]),
+};
+
 // --- Event stream ----------------------------------------------------------
 
 /**
@@ -2350,6 +2388,7 @@ export type AdminVendorQuery = z.infer<typeof adminVendorQuerySchema>;
  */
 export const adminVendorPageSchema = paginatedSchema(adminVendorRowSchema).extend({
   awaitingReview: z.int(),
+  ...wideningShape,
 });
 export type AdminVendorPage = z.infer<typeof adminVendorPageSchema>;
 
@@ -2849,7 +2888,8 @@ export const adminActivityQuerySchema = z.object({
 });
 export type AdminActivityQuery = z.infer<typeof adminActivityQuerySchema>;
 
-export const adminActivityPageSchema = paginatedSchema(adminActivityRowSchema);
+export const adminActivityPageSchema =
+  paginatedSchema(adminActivityRowSchema).extend(wideningShape);
 export type AdminActivityPage = z.infer<typeof adminActivityPageSchema>;
 
 // --- The operations case queue (#431) --------------------------------------
@@ -2994,7 +3034,7 @@ export const adminCaseQuerySchema = z.object({
 });
 export type AdminCaseQuery = z.infer<typeof adminCaseQuerySchema>;
 
-export const adminCasePageSchema = paginatedSchema(adminCaseRowSchema);
+export const adminCasePageSchema = paginatedSchema(adminCaseRowSchema).extend(wideningShape);
 export type AdminCasePage = z.infer<typeof adminCasePageSchema>;
 
 // --- Data rights: export, closure, legal record (#438) ----------------------

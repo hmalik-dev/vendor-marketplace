@@ -127,6 +127,48 @@ export function DataRightsActions({
 
   return (
     <div className="flex flex-col gap-2">
+      {/*
+        The refusal, drawn **above** the control it refuses (Pattern B, #454).
+
+        #438 built the prevention and this changes only where it is drawn and
+        what colour it is, which is not cosmetic: the explanation sat *below*
+        the button, so an operator read a disabled control first and the reason
+        second, and a disabled button with no visible cause is indistinguishable
+        from a broken one. Gold because `40-states.md` reserves it for waiting on
+        someone — this account is waiting on a booking, and nothing has failed.
+
+        **D39's 409 is shown before the press, never as an error after it.** The
+        API's refusal is the guarantee; this is the explanation.
+      */}
+      {!closedAt && (isSelf || closeBlockers.length > 0) ? (
+        <div className="rounded-lg border border-gold-200 bg-gold-50 px-3.5 py-3 text-sm leading-prose text-stone-900">
+          {isSelf ? (
+            <>
+              <strong className="font-semibold">Can&apos;t close: this is your own account.</strong>{' '}
+              Every action on this console is recorded against the operator who took it, and an
+              audit trail its own actor can end is not one.
+            </>
+          ) : (
+            <>
+              <strong className="font-semibold">
+                Can&apos;t close: {closeBlockers.length} confirmed{' '}
+                {closeBlockers.length === 1 ? 'booking' : 'bookings'} on{' '}
+                {closeBlockers.map((booking) => booking.eventDate).join(', ')}.
+              </strong>{' '}
+              Cancel or complete {closeBlockers.length === 1 ? 'it' : 'them'} first, from the
+              booking screens, where the refund is priced.
+              <ul className="mt-1.5 flex flex-col gap-0.5 text-stone-700">
+                {closeBlockers.map((booking) => (
+                  <li key={booking.bookingId}>
+                    {booking.eventDate} with {booking.counterpartyName}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
@@ -175,27 +217,6 @@ export function DataRightsActions({
           />
         )}
       </div>
-
-      {isSelf && !closedAt ? (
-        <p className="text-sm text-stone-700">
-          You cannot close your own account. Every action on this console is recorded against the
-          operator who took it, and an audit trail its own actor can end is not one.
-        </p>
-      ) : null}
-
-      {!isSelf && closeBlockers.length > 0 && !closedAt ? (
-        <p className="text-sm text-stone-700">
-          This account cannot be closed while it holds{' '}
-          {closeBlockers.length === 1
-            ? 'an upcoming confirmed booking'
-            : 'upcoming confirmed bookings'}
-          . They have to be cancelled from the booking screens first, where the refund is priced:{' '}
-          {closeBlockers
-            .map((booking) => `${booking.eventDate} with ${booking.counterpartyName}`)
-            .join(', ')}
-          .
-        </p>
-      ) : null}
 
       {error ? (
         <p role="alert" className="text-sm text-error-500">

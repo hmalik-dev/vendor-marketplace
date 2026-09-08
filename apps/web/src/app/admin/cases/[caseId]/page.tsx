@@ -8,6 +8,7 @@ import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
 import { getAdminCase } from '@/lib/admin-data';
 import { CASE_ARRIVAL, CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
+import { cn } from '@/lib/utils';
 import type { WireAdminCaseBooking } from '@/lib/wire-schemas';
 
 const FILED = new Intl.DateTimeFormat('en-US', {
@@ -36,10 +37,43 @@ const PAYOUT_LABELS: Record<WireAdminCaseBooking['payoutStatus'], string> = {
   released: 'Paid out',
 };
 
-function Card({ title, children }: { title: string; children: ReactNode }): React.ReactElement {
+/**
+ * A card, and — for the three that make up Pattern C — its region number.
+ *
+ * **The numbers are visible on purpose.** The delta stacks the complaint, the
+ * booking it froze and the resolve control in the order an operator has to read
+ * them to be allowed to act, and puts the control last so it is reachable only
+ * past the evidence: *the scroll is half the safeguard and the copy is the
+ * other half*. Numbering them is what lets somebody who jumped straight to the
+ * bottom see what they skipped — an unnumbered stack in the right order looks
+ * identical to one in the wrong order.
+ *
+ * The chargeback card carries no number. It is conditional — most cases have
+ * none — and a numbered sequence that gains and loses a member depending on the
+ * row is not a sequence.
+ *
+ * `3` is drawn on a clay edge, because it is the one that moves money.
+ */
+function Card({
+  title,
+  region,
+  children,
+}: {
+  title: string;
+  region?: 1 | 2 | 3;
+  children: ReactNode;
+}): React.ReactElement {
   return (
-    <section className="rounded-xl border border-stone-300 bg-stone-0 p-4">
-      <h2 className="text-label font-semibold tracking-label text-stone-600 uppercase">{title}</h2>
+    <section
+      className={cn(
+        'rounded-xl border bg-stone-0 p-4',
+        region === 3 ? 'border-clay-200' : 'border-stone-300',
+      )}
+    >
+      <h2 className="text-label font-semibold tracking-label text-stone-600 uppercase">
+        {region ? <span className="text-stone-900">{region} · </span> : null}
+        {title}
+      </h2>
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -125,7 +159,7 @@ export default async function AdminCasePage({
       </p>
 
       <div className="mt-4 flex flex-col gap-3">
-        <Card title="The message">
+        <Card region={1} title="The complaint">
           {/*
             `whitespace-pre-wrap`: this is what somebody typed into a textarea,
             and collapsing their paragraphs would make a four-paragraph account
@@ -250,7 +284,7 @@ export default async function AdminCasePage({
         ) : null}
 
         {booking ? (
-          <Card title="The booking">
+          <Card region={2} title="The booking it froze">
             <div className="flex flex-wrap items-baseline gap-2.5">
               <Link
                 href={`/vendors/${booking.vendorSlug}`}
@@ -327,7 +361,7 @@ export default async function AdminCasePage({
           </Card>
         ) : null}
 
-        <Card title="Resolution">
+        <Card region={3} title="Resolve">
           <CaseResolution supportCase={supportCase} />
         </Card>
       </div>

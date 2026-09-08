@@ -14,13 +14,26 @@ import type { WireAdminActivityRow } from '@/lib/wire-schemas';
  * when**". And the console renders in UTC throughout, so a timestamp quoted
  * out of this table into a support thread is off by the reader's offset unless
  * the zone travels with it.
+ *
+ * **The clock is 24-hour, drawn by Pattern A of the admin delta (#454)** —
+ * `7 Sep 2026, 14:02`. Absolute to the minute, never relative: an audit trail
+ * that rounds is not an audit trail, and `2:02 PM` is a form a reader has to
+ * disambiguate before they can compare two rows.
+ *
+ * Two differences from the frame are deliberate and are recorded as live
+ * overrides in `.claude/rules/web-design-parity.md`. It draws `7 Sep` and this
+ * prints `Sep 7` — `31-content-voice.md` rules the product US English and the
+ * frame's order is the British form. And it draws no zone, which is a mock
+ * timestamp rather than a ruling against one; the reason the zone is here is
+ * unaddressed by the frame and still holds.
  */
 const WHEN = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
   year: 'numeric',
-  hour: 'numeric',
+  hour: '2-digit',
   minute: '2-digit',
+  hour12: false,
   timeZone: 'UTC',
   timeZoneName: 'short',
 });
@@ -112,6 +125,16 @@ export interface ActivityTableProps {
   /** The surface's own path, so a cell can filter by what it names. */
   path: string;
   filtered: boolean;
+  /**
+   * The counted filtered-empty state (#454), supplied by the page.
+   *
+   * Here rather than built inside this component because the words on each
+   * widening button are the *screen's* copy — "Any operator", "Any action" —
+   * and this table has no business knowing them. It still owns the **true**
+   * empty below, which is one sentence about where rows come from and carries
+   * no button at all.
+   */
+  filteredEmpty?: React.ReactNode;
 }
 
 /**
@@ -126,7 +149,12 @@ export interface ActivityTableProps {
  * holds. "What else did this operator do" and "what else happened to this
  * account" are one click from any row.
  */
-export function ActivityTable({ rows, path, filtered }: ActivityTableProps): React.ReactElement {
+export function ActivityTable({
+  rows,
+  path,
+  filtered,
+  filteredEmpty,
+}: ActivityTableProps): React.ReactElement {
   /*
    * Everything each cell needs, computed once per row.
    *
@@ -148,27 +176,44 @@ export function ActivityTable({ rows, path, filtered }: ActivityTableProps): Rea
       rows={prepared}
       rowKey={({ row }) => row.id}
       empty={
-        <EmptyState
-          headline={filtered ? 'Nothing matches that filter' : 'No console activity yet'}
-          description={
-            filtered
-              ? 'Clear the filter to see everything the console has done.'
-              : 'Every suspension, deletion and ruling an operator makes is recorded here.'
-          }
-        />
+        filtered && filteredEmpty ? (
+          filteredEmpty
+        ) : (
+          /*
+           * **True empty carries no button.** Nothing an operator does creates
+           * an activity row, so a control here would offer an action that
+           * cannot help; the copy's only job is to say where rows come from, so
+           * the silence reads as calm rather than broken.
+           */
+          <EmptyState
+            headline={filtered ? 'Nothing matches that filter' : 'No console activity yet'}
+            description={
+              filtered
+                ? 'Clear the filter to see everything the console has done.'
+                : 'Every suspension, deletion and ruling an operator makes is recorded here.'
+            }
+          />
+        )
       }
+      /*
+       * Pattern A's grid (#454), with `What changed` kept and `When` last.
+       *
+       * The delta lists four columns — `Actor · Action · Subject · When` — and
+       * `What changed` was ruled back in on 2026-09-07: the paragraph that
+       * forbids rounding a timestamp forbids this harder, because a trail
+       * recording *that* something changed but not *what* fails the same test.
+       * The bundle was written at pattern level and the column was not
+       * considered. Its width is the one it already had; the delta draws none.
+       *
+       * `Actor`, not `Operator`: the delta names the column, and the log
+       * records actions taken by the platform's own sweeps as well as by
+       * people.
+       */
       columns={[
         {
-          key: 'when',
-          width: '1.3fr',
-          header: 'When',
-          className: 'text-stone-900',
-          cell: ({ when }) => when,
-        },
-        {
           key: 'actor',
-          width: '1.1fr',
-          header: 'Operator',
+          width: '1.2fr',
+          header: 'Actor',
           className: 'font-semibold text-stone-900',
           cell: ({ row, actorHref }) => (
             <Link href={actorHref} className="hover:underline">
@@ -178,18 +223,26 @@ export function ActivityTable({ rows, path, filtered }: ActivityTableProps): Rea
         },
         {
           key: 'action',
-          width: '1.4fr',
+          width: '1fr',
           header: 'Action',
           cell: ({ row }) => ACTION_LABELS[row.action],
         },
         {
           key: 'subject',
-          width: '1.2fr',
+          width: '1.6fr',
           header: 'Subject',
-          className: 'font-mono text-stone-700',
+          /*
+           * Type and id in **one** cell, and typographically distinct within
+           * it: the type in `stone-600` and the id in mono `stone-900`, which
+           * is what lets the eye sort by type down the column while the id
+           * still looks like something you would paste into a support thread.
+           * The cell was uniformly mono `stone-700`, so `Booking` and its uuid
+           * read as one undifferentiated string.
+           */
           cell: ({ row, subjectHref }) => (
             <Link href={subjectHref} className="hover:underline" title={row.subjectId}>
-              {SUBJECT_LABELS[row.subjectType]} {shortId(row.subjectId)}
+              <span className="text-stone-600">{SUBJECT_LABELS[row.subjectType]}</span>{' '}
+              <span className="font-mono text-stone-900">{shortId(row.subjectId)}</span>
             </Link>
           ),
         },
@@ -199,6 +252,13 @@ export function ActivityTable({ rows, path, filtered }: ActivityTableProps): Rea
           header: 'What changed',
           className: 'text-stone-600',
           cell: ({ detail }) => detail,
+        },
+        {
+          key: 'when',
+          width: '.9fr',
+          header: 'When',
+          className: 'text-stone-900',
+          cell: ({ when }) => when,
         },
       ]}
     />

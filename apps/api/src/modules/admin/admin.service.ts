@@ -71,6 +71,7 @@ import { resolveDispute } from '../payments/payments.service.js';
 import { retryPayoutRelease } from '../payments/payouts.service.js';
 import {
   assignTagToVendor,
+  countActionWidenings,
   countAdminActions,
   countAdminBookings,
   countAdminCustomers,
@@ -78,6 +79,7 @@ import {
   countAdminReviews,
   countAdminTagSuggestions,
   countAdminVendors,
+  countVendorWidenings,
   countVendorsHoldingTag,
   findAdminActions,
   findAdminBookings,
@@ -197,7 +199,16 @@ export async function listActivity(
     countAdminActions(db, query),
   ]);
 
+  /*
+   * The counted ways out, and only for an empty page (#454). Sequential rather
+   * than folded into the `Promise.all` above, because it costs an unfiltered
+   * scan that buys nothing on the overwhelming majority of requests, which
+   * return rows.
+   */
+  const widenings = rows.length === 0 ? await countActionWidenings(db, query) : [];
+
   return {
+    widenings,
     items: rows.map((row) => ({
       id: row.id,
       actorId: row.actorId,
@@ -298,11 +309,18 @@ export async function listVendors(
     countAdminVendors(db, filters),
   ]);
 
+  /*
+   * The counted ways out, and only for an empty page (#454) — the screen #443's
+   * sixth finding was filed against, and the one with five filters to widen.
+   */
+  const widenings = rows.length === 0 ? await countVendorWidenings(db, filters) : [];
+
   return {
     items: rows.map(toVendorRow),
     ...counts,
     page: query.page,
     pageSize: query.pageSize,
+    widenings,
   };
 }
 

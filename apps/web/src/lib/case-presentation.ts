@@ -82,3 +82,41 @@ export const CASE_PRESENTATION: Record<SupportCaseStatus, { tone: StatusTone; la
   open: { tone: 'pending', label: 'Open' },
   resolved: { tone: 'confirmed', label: 'Resolved' },
 };
+
+/**
+ * How long a case has been waiting, in whole days.
+ *
+ * The number the queue exists for, and it is computed rather than stored: the
+ * age of the oldest open case is money somebody is not being paid, and a column
+ * holding it would be wrong the moment nobody wrote to it. Whole days because
+ * that is the granularity an operator acts on — nothing changes between "four
+ * hours" and "seven hours", and everything changes at "eleven days".
+ */
+export function ageInDays(createdAt: Date, now: number): number {
+  return Math.max(0, Math.floor((now - createdAt.getTime()) / 86_400_000));
+}
+
+/**
+ * Age is the queue's pressure column, and its colour is the SLA rather than the
+ * case.
+ *
+ * Drawn by Pattern A of the admin delta (#454): stone under 24h, gold at 24h,
+ * red at 72h. Read it carefully — **red here means the SLA failed, not that the
+ * case did**, which is why it does not contradict `40-states.md` reserving red
+ * for failure. Somebody's payout has been frozen for three days.
+ *
+ * The thresholds land exactly on whole-day boundaries, so the figure and the
+ * colour come from one number and cannot disagree: under 24h is `0d`, 24h and
+ * 48h are `1d` and `2d`, and 72h is `3d`.
+ *
+ * Here rather than in the page for the reason the tables above it are: a page
+ * file in the App Router is not a module you can import a helper out of, and an
+ * age threshold nothing can unit-test is one nobody will notice going wrong.
+ */
+export function ageTone(days: number): string {
+  if (days >= 3) {
+    return 'text-error-500';
+  }
+
+  return days >= 1 ? 'text-gold-600' : 'text-stone-900';
+}

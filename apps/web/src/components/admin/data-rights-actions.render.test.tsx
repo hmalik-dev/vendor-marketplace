@@ -57,12 +57,20 @@ function closeButton(): HTMLButtonElement {
  * not decoration. The API's 409 remains the guarantee — these assertions are
  * that the page agrees with it rather than that it enforces anything.
  */
+/** The refusal panel — the one gold surface this component draws. */
+function panel(): HTMLElement {
+  const found = document.querySelector<HTMLElement>('.bg-gold-50');
+  expect(found, 'no refusal panel is drawn').not.toBeNull();
+
+  return found as HTMLElement;
+}
+
 describe('the data-rights closure control', () => {
   it('offers the closure when nothing blocks it', () => {
     renderActions({});
 
     expect(closeButton().disabled).toBe(false);
-    expect(screen.queryByText(/cannot be closed while it holds/)).toBeNull();
+    expect(screen.queryByText(/Can't close/)).toBeNull();
   });
 
   it('disables it and names every blocking booking when one stands (D39)', () => {
@@ -70,9 +78,36 @@ describe('the data-rights closure control', () => {
 
     expect(closeButton().disabled).toBe(true);
 
-    const warning = screen.getByText(/cannot be closed while it holds/);
-    expect(warning.textContent).toContain('an upcoming confirmed booking');
+    /*
+     * Pattern B's copy (#454): the refusal opens by *naming itself*, so the
+     * first four words tell an operator this is a rule rather than a fault.
+     */
+    const warning = panel();
+    expect(warning.textContent).toContain("Can't close: 1 confirmed booking on 2099-06-01.");
+    expect(warning.textContent).toContain('Cancel or complete it first');
     expect(warning.textContent).toContain('2099-06-01 with Sunlit Studio');
+  });
+
+  /**
+   * The panel is gold and sits **above** the control it refuses.
+   *
+   * Both halves matter and neither is decoration. The explanation used to sit
+   * below the button, so an operator met a disabled control first and its
+   * cause second — and a disabled button with no visible reason is
+   * indistinguishable from a broken one. Gold because `40-states.md` reserves
+   * it for waiting on someone: this account is waiting on a booking, and
+   * nothing has failed.
+   */
+  it('draws the refusal in gold, above the button', () => {
+    renderActions({ closeBlockers: [BLOCKER] });
+
+    const gold = panel();
+    expect(gold.className).toContain('bg-gold-50');
+    expect(gold.compareDocumentPosition(closeButton()) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    // Not red: nothing has failed, so `40-states.md` reserves this for gold.
+    expect(document.querySelectorAll('.bg-error-50')).toHaveLength(0);
   });
 
   it('pluralises and lists each booking when several stand', () => {
@@ -83,8 +118,9 @@ describe('the data-rights closure control', () => {
       ],
     });
 
-    const warning = screen.getByText(/cannot be closed while it holds/);
-    expect(warning.textContent).toContain('upcoming confirmed bookings');
+    const warning = panel();
+    expect(warning.textContent).toContain('2 confirmed bookings');
+    expect(warning.textContent).toContain('Cancel or complete them first');
     expect(warning.textContent).toContain('2099-06-01 with Sunlit Studio');
     expect(warning.textContent).toContain('2099-07-04 with Ada Pell');
   });
@@ -138,9 +174,10 @@ describe('the data-rights closure control', () => {
 
     expect(closeButton().disabled).toBe(true);
 
-    const reason = screen.getByText(/cannot close your own account/);
+    const reason = panel();
+    expect(reason.textContent).toContain("Can't close: this is your own account.");
     expect(reason.textContent).toContain('recorded against the operator who took it');
-    expect(screen.queryByText(/cannot be closed while it holds/)).toBeNull();
+    expect(reason.textContent).not.toContain('confirmed booking');
   });
 
   it('still offers the export on the operator own record', () => {

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AdminVendorStatus } from '@vendor-marketplace/shared';
@@ -159,11 +161,52 @@ describe('VendorRowActions', () => {
    * labels: a `live` storefront is the one you can take down.
    */
   it('offers Unpublish on a live storefront and Publish on an unpublished one', () => {
-    expect(menuLabelsFor('live')).toEqual(['Unpublish storefront', 'Suspend account']);
+    expect(menuLabelsFor('live')).toEqual(['Unpublish profile', 'Suspend vendor']);
     cleanup();
-    expect(menuLabelsFor('paused')).toEqual(['Publish storefront', 'Suspend account']);
+    expect(menuLabelsFor('paused')).toEqual(['Publish profile', 'Suspend vendor']);
     cleanup();
-    expect(menuLabelsFor('review')).toEqual(['Publish storefront', 'Suspend account']);
+    expect(menuLabelsFor('review')).toEqual(['Publish profile', 'Suspend vendor']);
+  });
+
+  /*
+   * The drawn copy, and the reason these are assertions rather than a
+   * preference (#454, closing #456).
+   *
+   * #435 shipped `Unpublish storefront` and `Suspend account` before any frame
+   * drew this surface. The drawn bundle in `design/delta-admin/` then drew the
+   * Actions card naming them **`Unpublish profile`** and **`Suspend vendor`**,
+   * which makes them text-parity findings against a frame rather than taste —
+   * `web-design-parity.md` is explicit that "same composition with reworded
+   * copy has failed too".
+   *
+   * The *inverse* and *plural* labels are not drawn and were changed with them
+   * on coherence grounds: `Publish storefront` sitting in the same menu as
+   * `Unpublish profile` gives an operator two nouns for one object. The
+   * consequence prose still says "storefront", deliberately — the button names
+   * the record and the description names the effect, and #456 recorded the
+   * descriptions as already agreeing with the frame.
+   */
+  it('names the vendor record the way the frame draws it, in every label', () => {
+    const drawn = ['Unpublish profile', 'Publish profile', 'Suspend vendor', 'Suspend vendors'];
+    const retired = ['Unpublish storefront', 'Publish storefront', 'Suspend account'];
+
+    const source = readFileSync(
+      join(process.cwd(), 'src/components/admin/vendor-table.tsx'),
+      'utf8',
+    ).replace(/\{?\/\*[\s\S]*?\*\/\}?/g, '');
+
+    for (const label of drawn) {
+      // Quote-agnostic: JSX attributes take `"` and the menu items take `'`.
+      expect(source, label).toMatch(new RegExp(`['"]${label}['"]`));
+    }
+    /*
+     * The half that can actually fail. Stripping comments first is what makes
+     * it able to: the paragraph above quotes all three retired labels, so
+     * against the raw file this assertion is unfailable.
+     */
+    for (const label of retired) {
+      expect(source, label).not.toContain(label);
+    }
   });
 
   /** A suspended account is offered the lift and nothing else. */

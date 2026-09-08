@@ -11,12 +11,14 @@ import {
 import type {
   AdminCaseQuery,
   BookingStatus,
+  FilterWidening,
   ReportReason,
   ReportSubject,
   SupportCaseOrigin,
   SupportCaseStatus,
   SupportTopic,
 } from '@vendor-marketplace/shared';
+import { countWidenings } from '../admin/widenings.js';
 import type { AppDatabase } from '../../lib/database.js';
 
 /**
@@ -85,9 +87,13 @@ const CASE_SELECTION = {
   createdAt: supportCases.createdAt,
 } as const;
 
-function caseFilterCondition(query: Pick<AdminCaseQuery, 'status' | 'booking'>): SQL | undefined {
+function caseFilterCondition(query: {
+  status?: SupportCaseStatus;
+  booking?: AdminCaseQuery['booking'];
+}): SQL | undefined {
   return and(
-    eq(supportCases.status, query.status),
+    // `undefined` is the widening scan dropping this filter, never a missing value.
+    query.status ? eq(supportCases.status, query.status) : undefined,
     query.booking === 'with'
       ? isNotNull(supportCases.bookingId)
       : query.booking === 'without'
@@ -116,6 +122,44 @@ export async function findSupportCases(
     .orderBy(asc(supportCases.createdAt))
     .limit(limit)
     .offset(offset);
+}
+
+/**
+ * The two filters this queue can be narrowed by, and the widening each drops.
+ *
+ * `status` is on the list even though `adminCaseQuerySchema` defaults it to
+ * `open` and the filter bar offers no "any". That default *is* a narrowing —
+ * the drawn example is literally "Open cases instead (4)" from a resolved
+ * view — and an operator staring at an empty resolved list needs the way back
+ * to open more than anyone needs it anywhere else on the console.
+ */
+export const CASE_FILTER_KEYS = ['status', 'booking'] as const;
+export type CaseFilterKey = (typeof CASE_FILTER_KEYS)[number];
+
+/**
+ * How many cases each single widening would reveal, in one scan (#454).
+ *
+ * Only called for an empty page, and the caller is what enforces that: see
+ * `countWidenings`. The scan is unfiltered because dropping a filter widens,
+ * so every row being counted is outside the current `WHERE` by construction.
+ *
+ * No sender join, for the reason `countSupportCases` gives: nothing in
+ * `caseFilterCondition` leaves `support_cases`, and a left join cannot change a
+ * count.
+ */
+export async function countCaseWidenings(
+  db: AppDatabase,
+  query: AdminCaseQuery,
+): Promise<FilterWidening[]> {
+  return countWidenings<CaseFilterKey>({
+    active: CASE_FILTER_KEYS.filter((key) => key !== 'booking' || query.booking !== undefined),
+    conditionWithout: (dropped) =>
+      caseFilterCondition({
+        status: dropped === 'status' ? undefined : query.status,
+        booking: dropped === 'booking' ? undefined : query.booking,
+      }),
+    scan: (selection) => db.select(selection).from(supportCases),
+  });
 }
 
 export async function countSupportCases(db: AppDatabase, query: AdminCaseQuery): Promise<number> {

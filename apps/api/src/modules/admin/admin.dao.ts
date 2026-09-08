@@ -29,10 +29,12 @@ import type {
   PayoutModel,
   AdminVendorStatus,
   BookingStatus,
+  FilterWidening,
   ReviewType,
   TagCategory,
   TagSuggestionStatus,
 } from '@vendor-marketplace/shared';
+import { countWidenings } from './widenings.js';
 import type { AppDatabase } from '../../lib/database.js';
 import { containsInsensitive } from '../../lib/like-pattern.js';
 /*
@@ -335,6 +337,38 @@ export async function countAdminVendors(
     .where(vendorFilterCondition({ ...filters, status: undefined }));
 
   return { total: rows?.[0]?.total ?? 0, awaitingReview: rows?.[0]?.awaitingReview ?? 0 };
+}
+
+/** The five filters the vendor table can be narrowed by. */
+export const VENDOR_FILTER_KEYS = ['q', 'category', 'city', 'payouts', 'status'] as const;
+export type VendorFilterKey = (typeof VENDOR_FILTER_KEYS)[number];
+
+/**
+ * How many vendors each single widening would reveal, in one scan (#454).
+ *
+ * This is the screen #443's sixth finding was filed against — *"the filtered
+ * empty state offers no way out where every other console empty state does"* —
+ * and the one where the counts earn their cost: five filters is where clearing
+ * everything and rebuilding the query is genuinely expensive for an operator.
+ *
+ * The `FROM` repeats the list's `innerJoin` on `users`, unlike the two feeds
+ * above, and it has to: `q` matches `users.email` and `status` reads
+ * `users.isBanned`, so a scan of `vendor_profiles` alone would fail to build
+ * the predicate at all.
+ */
+export async function countVendorWidenings(
+  db: AppDatabase,
+  filters: AdminVendorFilters,
+): Promise<FilterWidening[]> {
+  return countWidenings<VendorFilterKey>({
+    active: VENDOR_FILTER_KEYS.filter((key) => filters[key] !== undefined),
+    conditionWithout: (dropped) => vendorFilterCondition({ ...filters, [dropped]: undefined }),
+    scan: (selection) =>
+      db
+        .select(selection)
+        .from(vendorProfiles)
+        .innerJoin(users, eq(users.id, vendorProfiles.userId)),
+  });
 }
 
 /** The distinct cities and categories the filter bar offers — real values only. */
@@ -1588,4 +1622,26 @@ export async function countAdminActions(
     .where(actionFilterCondition(filters));
 
   return rows?.[0]?.total ?? 0;
+}
+
+/** The three filters the activity feed can be narrowed by. */
+export const ACTION_FILTER_KEYS = ['actor', 'subject', 'action'] as const;
+export type ActionFilterKey = (typeof ACTION_FILTER_KEYS)[number];
+
+/**
+ * How many log rows each single widening would reveal, in one scan (#454).
+ *
+ * No actor join: `actionFilterCondition` never leaves `admin_actions`, and the
+ * join is an inner one on a row that cannot be missing, so it cannot change a
+ * count either way.
+ */
+export async function countActionWidenings(
+  db: AppDatabase,
+  filters: AdminActionFilters,
+): Promise<FilterWidening[]> {
+  return countWidenings<ActionFilterKey>({
+    active: ACTION_FILTER_KEYS.filter((key) => filters[key] !== undefined),
+    conditionWithout: (dropped) => actionFilterCondition({ ...filters, [dropped]: undefined }),
+    scan: (selection) => db.select(selection).from(adminActions),
+  });
 }

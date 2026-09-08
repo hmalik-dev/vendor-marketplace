@@ -123,9 +123,24 @@ export interface VendorTableProps {
   rows: readonly WireAdminVendorRow[];
   /** True when a filter is applied, so the empty state can say which kind of empty this is. */
   filtered: boolean;
+  /**
+   * The counted filtered-empty state (#454), supplied by the page.
+   *
+   * This is the screen #443's sixth finding was filed against — *"the filtered
+   * empty state offers no way out where every other console empty state
+   * does"* — and it is where the counted routes are worth most, because five
+   * filters is where clearing everything and rebuilding the query is genuinely
+   * expensive. The words on each button are the page's copy, so the page owns
+   * them; this component still owns the true empty below.
+   */
+  filteredEmpty?: React.ReactNode;
 }
 
-export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactElement {
+export function VendorTable({
+  rows,
+  filtered,
+  filteredEmpty,
+}: VendorTableProps): React.ReactElement {
   const router = useRouter();
   const call = useApi();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -275,7 +290,7 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
             }
             title={`Suspend ${suspendable.length} ${suspendable.length === 1 ? 'account' : 'accounts'}?`}
             description={<SuspensionConsequence subject="A published storefront" />}
-            confirmLabel="Suspend accounts"
+            confirmLabel="Suspend vendors"
             onConfirm={async () => {
               /*
                * Serial, not `Promise.all`. Each ban issues Stripe refunds and
@@ -300,14 +315,18 @@ export function VendorTable({ rows, filtered }: VendorTableProps): React.ReactEl
         rows={rows}
         rowKey={(row) => row.id}
         empty={
-          <EmptyState
-            headline={filtered ? 'No vendors match those filters' : 'No vendors yet'}
-            description={
-              filtered
-                ? 'Clear a filter to widen the search.'
-                : 'Vendors appear here as soon as they create a storefront.'
-            }
-          />
+          filtered && filteredEmpty ? (
+            filteredEmpty
+          ) : (
+            <EmptyState
+              headline={filtered ? 'No vendors match those filters' : 'No vendors yet'}
+              description={
+                filtered
+                  ? 'Clear a filter to widen the search.'
+                  : 'Vendors appear here as soon as they create a storefront.'
+              }
+            />
+          )
         }
         columns={[
           {
@@ -458,12 +477,12 @@ function VendorRowActions({
     : [
         {
           key: 'publish',
-          label: published ? 'Unpublish storefront' : 'Publish storefront',
+          label: published ? 'Unpublish profile' : 'Publish profile',
           onSelect: () => setOpen('publish'),
         },
         {
           key: 'ban',
-          label: 'Suspend account',
+          label: 'Suspend vendor',
           destructive: true,
           onSelect: () => setOpen('ban'),
         },
@@ -498,7 +517,7 @@ function VendorRowActions({
                   <SuspensionConsequence subject="Their storefront" />
                 )
               }
-              confirmLabel={flagged ? 'Lift suspension' : 'Suspend account'}
+              confirmLabel={flagged ? 'Lift suspension' : 'Suspend vendor'}
               onConfirm={async () => {
                 await onBan(!flagged);
                 onDone();
@@ -527,7 +546,7 @@ function VendorRowActions({
                   <RepublishConsequence subject="Their storefront" />
                 )
               }
-              confirmLabel={published ? 'Unpublish storefront' : 'Publish storefront'}
+              confirmLabel={published ? 'Unpublish profile' : 'Publish profile'}
               onConfirm={async () => {
                 await setPublished(!published);
                 onDone();
