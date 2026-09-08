@@ -61,6 +61,16 @@ on lane 411 (2026-09-05), and the first two apply to route 1 as well:
   warm-up reload `.claude/rules/e2e-auth.md` prescribes — the Clerk handshake
   can outlast it. Loop the navigation until `new URL(page.url()).pathname` is
   the path you asked for; two of my three roles needed the third attempt.
+- **A correct URL is not a signed-in render, and that is the harder half.** On a
+  **public** page the first navigation does not redirect at all — it serves the
+  right path and paints **signed-out chrome** while the handshake completes. So
+  the pathname loop above passes and the read is still wrong. Discard the first
+  navigation as warm-up and take the **second** as evidence, on public routes
+  especially. Measured on lane 458 (2026-09-07): a run reported all viewers
+  signed out, **including the customer**, on `/vendors/[slug]`. **The wrong read
+  was self-consistent** — every case agreed with every other, which is exactly
+  what made it look like a result rather than a broken harness. Agreement across
+  cases is not corroboration when one shared fault produces all of them.
 - **Resolution, not location, is the real constraint.** The usual advice is to
   put the script inside a workspace package (`apps/web/`, `packages/db/`) so its
   bare imports resolve, then delete it before staging because the commit hook
