@@ -820,6 +820,7 @@ describe('vendorProfileDetailSchema', () => {
       ...row,
       categoryIds: [UUID],
       publishBlockers: [],
+      moderationHold: false,
       tags: [
         {
           id: UUID,
@@ -840,7 +841,29 @@ describe('vendorProfileDetailSchema', () => {
 
   it('rejects a detail payload missing its tag list', () => {
     expect(
-      vendorProfileDetailSchema.safeParse({ ...row, categoryIds: [], publishBlockers: [] }).success,
+      vendorProfileDetailSchema.safeParse({
+        ...row,
+        categoryIds: [],
+        publishBlockers: [],
+        moderationHold: false,
+      }).success,
+    ).toBe(false);
+  });
+
+  /*
+   * The vendor's own read carries the hold (#457), and it is required rather
+   * than defaulted: a payload that forgot it would otherwise parse as "not
+   * held" and the editor would offer a publish the API refuses — the exact
+   * false yes the field exists to prevent.
+   */
+  it('rejects a detail payload that omits the moderation hold', () => {
+    expect(
+      vendorProfileDetailSchema.safeParse({
+        ...row,
+        categoryIds: [],
+        publishBlockers: [],
+        tags: [],
+      }).success,
     ).toBe(false);
   });
 });

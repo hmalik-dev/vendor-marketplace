@@ -74,7 +74,7 @@
 - [TLS headers key on the build-time origin](tls-headers-key-on-build-time-origin.md) — `headers()` is baked into routes-manifest at build; `deploymentOrigin` passes an explicit `http://` through and outranks WEB_URL
 - [A browser parse failure is reader-visible copy](client-parse-failures-are-shown-verbatim.md) — `ApiClientError` carries the 200, so `userFacingError`'s 5xx filter never fires and a landed transfer reports as failed
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking in full with an empty `closeBlockers`; copy that says "refunds nothing" is true of one side only
-- [Moderation levers are undoable by their subject](moderation-levers-are-undoable-by-their-subject.md) — #435’s unpublish and deactivate write the vendor’s own columns; only ban and review-hide stick
+- [Moderation levers are undoable by their subject](moderation-levers-are-undoable-by-their-subject.md) — #457’s `moderation_hold`; both ways the subject could still win were closed on its own lane, so do not re-report them
 - [Retired users keep their email in the unique index](retired-users-keep-their-email-in-the-unique-index.md) — closure never releases the address, so re-registering the same email is a permanent opaque 500
 - [FilterBar's `params` is a narrowing contract](filter-bar-params-is-a-narrowing-contract.md) — it re-emits admin searchParams as hidden fields and its type cannot tell narrowed from raw; `page` must stay out
 - [Sign-up role is client-written, server-narrowed](sign-up-role-is-client-written-server-narrowed.md) — `unsafeMetadata.role` can say `admin`; only `normalizeRole` refuses it, and the whole sign-up screen is chrome

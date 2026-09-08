@@ -18,6 +18,12 @@ import {
   signInAs,
   type TestHarness,
 } from '../../testing/test-server.js';
+import {
+  SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE,
+  VENDOR_PROFILE_MODERATION_HOLD_MESSAGE,
+} from '@vendor-marketplace/shared';
+import { updatePackageById } from '../packages/packages.dao.js';
+import { updateVendorProfileById } from '../vendors/vendors.dao.js';
 
 const ADMIN = 'user_admin_mod';
 const VENDOR = 'user_vendor_mod';
@@ -377,10 +383,16 @@ describe('admin graduated moderation', () => {
       });
 
       expect(response.statusCode).toBe(200);
+      /*
+       * `held`, not `review` (#457). The lever now sets the hold in the same
+       * statement, and `held` is the status derived from it — which is the
+       * whole point: `review` is the label for a storefront that has never been
+       * let in, and this one was taken down.
+       */
       expect(response.json()).toEqual({
         vendorId: vendor.id,
         isPublished: false,
-        status: 'review',
+        status: 'held',
       });
 
       const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
@@ -1104,6 +1116,706 @@ describe('admin graduated moderation', () => {
       });
 
       expect(response.statusCode).toBe(404);
+    });
+  });
+
+  /**
+   * The moderation hold (#457) — the column that makes #435's two reversible
+   * levers enforcing rather than advisory.
+   *
+   * Before it, `is_published` and `is_active` were each written by two parties
+   * and the second silently undid the first: an operator took a storefront down
+   * for a policy breach and the vendor put it back from their own dashboard
+   * seconds later, with no refusal and no notification. Every test here is
+   * therefore written against **the vendor's own route**, signed in as the
+   * vendor — asserting the admin route alone is asserting the half that already
+   * worked.
+   *
+   * And each of the two refusals is asserted on the **public surface** as well
+   * as on the status code, because the defect was a write that succeeded: a
+   * test reading only the API's answer would have passed against the broken
+   * version.
+   */
+  describe('the moderation hold', () => {
+    /** Sets the hold the only way anything may — the console's own lever. */
+    async function unpublishAsAdmin(vendorId: string): Promise<void> {
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/vendors/${vendorId}/publish`,
+        headers: bearer(ADMIN),
+        payload: { isPublished: false },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('held');
+    }
+
+    async function holdOnProfile(vendorId: string): Promise<boolean> {
+      const rows = await harness.database.db
+        .select({ moderationHold: vendorProfiles.moderationHold })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendorId))
+        .limit(1);
+
+      return rows[0]!.moderationHold;
+    }
+
+    async function publishedFlag(vendorId: string): Promise<boolean> {
+      const rows = await harness.database.db
+        .select({ isPublished: vendorProfiles.isPublished })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendorId))
+        .limit(1);
+
+      return rows[0]!.isPublished;
+    }
+
+    /** The one status the console shows for this vendor, read the way it reads it. */
+    async function consoleStatus(vendorId: string): Promise<string> {
+      const listed = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/vendors',
+        headers: bearer(ADMIN),
+      });
+      expect(listed.statusCode).toBe(200);
+      const row = listed.json().items.find((item: { id: string }) => item.id === vendorId) as {
+        status: string;
+      };
+      expect(row).toBeDefined();
+
+      return row.status;
+    }
+
+    // --- Acceptance 1 -------------------------------------------------------
+
+    it('refuses the vendor republishing a storefront an operator took down', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+      await unpublishAsAdmin(vendor.id);
+
+      const republished = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: true },
+      });
+
+      expect(republished.statusCode).toBe(403);
+      expect(republished.json()).toMatchObject({
+        error: 'FORBIDDEN',
+        message: VENDOR_PROFILE_MODERATION_HOLD_MESSAGE,
+      });
+
+      /*
+       * The half a status-code-only test would have missed. The bug was a write
+       * that succeeded, so the column and both public reads are the assertion.
+       */
+      expect(await publishedFlag(vendor.id)).toBe(false);
+
+      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      expect(profile.statusCode).toBe(404);
+
+      const search = await harness.app.inject({ method: 'GET', url: '/vendors' });
+      expect(search.statusCode).toBe(200);
+      expect(search.json().items.map((row: { slug: string }) => row.slug)).not.toContain(
+        vendor.slug,
+      );
+    });
+
+    it('refuses it as a 403 rather than as a publish blocker, on a profile with none', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+      await unpublishAsAdmin(vendor.id);
+
+      const republished = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: true },
+      });
+
+      /*
+       * The storefront `seedVendor` builds published cleanly, so nothing here
+       * is incomplete. A 400 with a `blockers` list would send the vendor round
+       * the editor hunting for a field that is not missing.
+       */
+      expect(republished.statusCode).toBe(403);
+      expect(republished.json().details).toBeUndefined();
+    });
+
+    // --- Acceptance 2 -------------------------------------------------------
+
+    it('refuses the vendor reactivating a package an operator switched off', async () => {
+      await signIn(ADMIN, true);
+      /*
+       * Two packages, so deactivating one leaves the storefront live and its
+       * public package list is a surface the refusal can be read on.
+       */
+      const vendor = await seedVendor([150_000, 90_000]);
+      const heldPackageId = vendor.packageIds[1]!;
+
+      const deactivated = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/packages/${heldPackageId}/active`,
+        headers: bearer(ADMIN),
+        payload: { isActive: false },
+      });
+      expect(deactivated.statusCode).toBe(200);
+      expect(deactivated.json().vendorUnpublished).toBe(false);
+
+      const reactivated = await harness.app.inject({
+        method: 'PUT',
+        url: `/vendor/packages/${heldPackageId}`,
+        headers: bearer(VENDOR),
+        payload: { isActive: true },
+      });
+
+      expect(reactivated.statusCode).toBe(403);
+      expect(reactivated.json()).toMatchObject({
+        error: 'FORBIDDEN',
+        message: SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE,
+      });
+
+      const stored = await harness.database.db
+        .select({ isActive: servicePackages.isActive })
+        .from(servicePackages)
+        .where(eq(servicePackages.id, heldPackageId))
+        .limit(1);
+      expect(stored[0]!.isActive).toBe(false);
+
+      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      expect(profile.statusCode).toBe(200);
+      expect(profile.json().packages.map((row: { id: string }) => row.id)).toEqual([
+        vendor.packageIds[0],
+      ]);
+    });
+
+    it('still lets the vendor edit the rest of a held package', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor([150_000, 90_000]);
+      const heldPackageId = vendor.packageIds[1]!;
+
+      const deactivated = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/packages/${heldPackageId}/active`,
+        headers: bearer(ADMIN),
+        payload: { isActive: false },
+      });
+      expect(deactivated.statusCode).toBe(200);
+
+      /*
+       * The editor submits every field it holds, `isActive` included. Refusing
+       * on the presence of the key rather than on the value it carries would
+       * take the vendor's whole package editor away over one switch.
+       */
+      const edited = await harness.app.inject({
+        method: 'PUT',
+        url: `/vendor/packages/${heldPackageId}`,
+        headers: bearer(VENDOR),
+        payload: {
+          name: 'Half day coverage',
+          description: 'A shorter package with a description long enough to pass validation.',
+          isActive: false,
+        },
+      });
+
+      expect(edited.statusCode).toBe(200);
+      expect(edited.json()).toMatchObject({ name: 'Half day coverage', isActive: false });
+    });
+
+    // --- Acceptance 3 -------------------------------------------------------
+
+    it('lets the vendor publish again once an operator clears the hold', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+      await unpublishAsAdmin(vendor.id);
+
+      const cleared = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/vendors/${vendor.id}/publish`,
+        headers: bearer(ADMIN),
+        payload: { isPublished: true },
+      });
+      expect(cleared.statusCode).toBe(200);
+      expect(cleared.json().status).toBe('live');
+      expect(await holdOnProfile(vendor.id)).toBe(false);
+
+      /* The vendor's own lever works again in both directions. */
+      const paused = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: false },
+      });
+      expect(paused.statusCode).toBe(200);
+
+      const republished = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: true },
+      });
+      expect(republished.statusCode).toBe(200);
+      expect(await publishedFlag(vendor.id)).toBe(true);
+
+      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      expect(profile.statusCode).toBe(200);
+    });
+
+    it('lets the vendor switch a package back on once an operator reactivates it', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor([150_000, 90_000]);
+      const heldPackageId = vendor.packageIds[1]!;
+
+      for (const isActive of [false, true]) {
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: `/admin/packages/${heldPackageId}/active`,
+          headers: bearer(ADMIN),
+          payload: { isActive },
+        });
+        expect(response.statusCode).toBe(200);
+      }
+
+      const off = await harness.app.inject({
+        method: 'PUT',
+        url: `/vendor/packages/${heldPackageId}`,
+        headers: bearer(VENDOR),
+        payload: { isActive: false },
+      });
+      expect(off.statusCode).toBe(200);
+
+      const on = await harness.app.inject({
+        method: 'PUT',
+        url: `/vendor/packages/${heldPackageId}`,
+        headers: bearer(VENDOR),
+        payload: { isActive: true },
+      });
+      expect(on.statusCode).toBe(200);
+      expect(on.json().isActive).toBe(true);
+    });
+
+    // --- Acceptance 4 -------------------------------------------------------
+
+    it('survives a whole-profile save that never mentions isPublished', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+      await unpublishAsAdmin(vendor.id);
+
+      /*
+       * Every field the storefront editor submits, which is the shape that
+       * matters: a patch-shaped fixture omitting one key would pass against a
+       * version that cleared the hold on any save.
+       */
+      const saved = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: {
+          businessName: 'Fernbank Studio',
+          slug: vendor.slug,
+          bio: 'Fernbank Studio photographs weddings across central Texas and beyond.',
+          tagline: 'Quiet, unhurried coverage.',
+          yearsInBusiness: 9,
+          address: '1200 E 6th St',
+          city: 'Austin',
+          state: 'TX',
+          serviceRadiusKm: 120,
+          responseTimeHours: 4,
+          categoryIds: [photographyId],
+          tagIds: [],
+        },
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({ tagline: 'Quiet, unhurried coverage.' });
+
+      expect(await holdOnProfile(vendor.id)).toBe(true);
+      expect(await publishedFlag(vendor.id)).toBe(false);
+
+      const republished = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: true },
+      });
+      expect(republished.statusCode).toBe(403);
+    });
+
+    // --- Acceptance 5 -------------------------------------------------------
+
+    it('names the actor on the row that sets the hold and on the row that clears it', async () => {
+      const actorId = await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+
+      await unpublishAsAdmin(vendor.id);
+      expect(await holdOnProfile(vendor.id)).toBe(true);
+
+      const cleared = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/vendors/${vendor.id}/publish`,
+        headers: bearer(ADMIN),
+        payload: { isPublished: true },
+      });
+      expect(cleared.statusCode).toBe(200);
+      expect(await holdOnProfile(vendor.id)).toBe(false);
+
+      /*
+       * The hold rides #434's existing pair rather than minting a second one.
+       * `vendor_unpublished` **is** the setting and `vendor_republished` **is**
+       * the clearing, because the console has exactly one lever for both — so a
+       * `hold_set` member beside them would log one press twice and make "how
+       * many storefronts did we take down" answer double.
+       */
+      expect(await actionsFor(vendor.id)).toEqual([
+        { action: 'vendor_unpublished', actorId },
+        { action: 'vendor_republished', actorId },
+      ]);
+    });
+
+    it('names the actor on both package rows too', async () => {
+      const actorId = await signIn(ADMIN, true);
+      const vendor = await seedVendor([150_000, 90_000]);
+      const heldPackageId = vendor.packageIds[1]!;
+
+      for (const isActive of [false, true]) {
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: `/admin/packages/${heldPackageId}/active`,
+          headers: bearer(ADMIN),
+          payload: { isActive },
+        });
+        expect(response.statusCode).toBe(200);
+      }
+
+      expect(await actionsFor(heldPackageId)).toEqual([
+        { action: 'package_deactivated', actorId },
+        { action: 'package_reactivated', actorId },
+      ]);
+    });
+
+    // --- Acceptance 6 -------------------------------------------------------
+
+    it('tells a held storefront apart from one the vendor took down themselves', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+
+      expect(await consoleStatus(vendor.id)).toBe('live');
+
+      /* The vendor's own pause. Nothing was moderated, and the row says so. */
+      const paused = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: false },
+      });
+      expect(paused.statusCode).toBe(200);
+      expect(await consoleStatus(vendor.id)).toBe('review');
+
+      const republished = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: true },
+      });
+      expect(republished.statusCode).toBe(200);
+
+      await unpublishAsAdmin(vendor.id);
+      expect(await consoleStatus(vendor.id)).toBe('held');
+    });
+
+    it('filters and counts the held rows as held, and not as review', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+      await unpublishAsAdmin(vendor.id);
+
+      const held = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/vendors?status=held',
+        headers: bearer(ADMIN),
+      });
+      expect(held.statusCode).toBe(200);
+      expect(held.json().items.map((row: { id: string }) => row.id)).toEqual([vendor.id]);
+
+      const review = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/vendors?status=review',
+        headers: bearer(ADMIN),
+      });
+      expect(review.statusCode).toBe(200);
+      expect(review.json().items).toEqual([]);
+
+      /*
+       * The count line under the title is built from the same condition, so a
+       * held row leaking into `awaitingReview` would describe a set the table
+       * does not show.
+       */
+      expect(review.json().awaitingReview).toBe(0);
+    });
+
+    // --- Acceptance 7 -------------------------------------------------------
+
+    it('bans nothing, refunds nothing and leaves the bookings standing', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await seedVendor();
+      const bookingId = await confirmedBooking(customerId, vendor.id);
+
+      await unpublishAsAdmin(vendor.id);
+
+      const refused = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: true },
+      });
+      expect(refused.statusCode).toBe(403);
+
+      const booking = await harness.database.db
+        .select({ status: bookings.status })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId))
+        .limit(1);
+      expect(booking[0]!.status).toBe('confirmed');
+      expect(harness.stripe.refunds).toHaveLength(0);
+
+      const owner = await harness.database.db
+        .select({ isBanned: users.isBanned })
+        .from(users)
+        .where(eq(users.clerkUserId, VENDOR))
+        .limit(1);
+      expect(owner[0]!.isBanned).toBe(false);
+    });
+
+    // --- The evasion the first draft left open ------------------------------
+
+    /**
+     * **The lever has to work on a storefront that is already down**, because
+     * the party it is used against decides whether it is up.
+     *
+     * The first version of this ticket read `is_published` alone in the console
+     * route's no-op check, so `{ isPublished: false }` against a paused
+     * storefront answered 409 and wrote nothing. A vendor who took themselves
+     * down first — which is what a vendor does when support contacts them — was
+     * the one vendor an operator could not hold, and every storefront the
+     * last-package cascade or a lifted ban had left down was in the same state.
+     */
+    it('holds a storefront the vendor had already taken down themselves', async () => {
+      const actorId = await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+
+      const paused = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: false },
+      });
+      expect(paused.statusCode).toBe(200);
+      expect(await consoleStatus(vendor.id)).toBe('review');
+
+      const held = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/vendors/${vendor.id}/publish`,
+        headers: bearer(ADMIN),
+        payload: { isPublished: false },
+      });
+
+      expect(held.statusCode).toBe(200);
+      expect(held.json()).toEqual({
+        vendorId: vendor.id,
+        isPublished: false,
+        status: 'held',
+      });
+      expect(await holdOnProfile(vendor.id)).toBe(true);
+      expect(await actionsFor(vendor.id)).toEqual([{ action: 'vendor_unpublished', actorId }]);
+
+      const republished = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: true },
+      });
+      expect(republished.statusCode).toBe(403);
+
+      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      expect(profile.statusCode).toBe(404);
+    });
+
+    it('deactivates a package the vendor had already switched off', async () => {
+      const actorId = await signIn(ADMIN, true);
+      const vendor = await seedVendor([150_000, 90_000]);
+      const target = vendor.packageIds[1]!;
+
+      const off = await harness.app.inject({
+        method: 'PUT',
+        url: `/vendor/packages/${target}`,
+        headers: bearer(VENDOR),
+        payload: { isActive: false },
+      });
+      expect(off.statusCode).toBe(200);
+
+      const held = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/packages/${target}/active`,
+        headers: bearer(ADMIN),
+        payload: { isActive: false },
+      });
+      expect(held.statusCode).toBe(200);
+      expect(await actionsFor(target)).toEqual([{ action: 'package_deactivated', actorId }]);
+
+      const on = await harness.app.inject({
+        method: 'PUT',
+        url: `/vendor/packages/${target}`,
+        headers: bearer(VENDOR),
+        payload: { isActive: true },
+      });
+      expect(on.statusCode).toBe(403);
+    });
+
+    /*
+     * The other half of the same rule: a request that would change neither
+     * column is still a 409. Without this the route would append an audit row
+     * every time an operator pressed a button twice, and "how many storefronts
+     * did we take down last week" would count presses instead of takedowns.
+     */
+    it('still refuses a press that would change nothing', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+      await unpublishAsAdmin(vendor.id);
+
+      const again = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/vendors/${vendor.id}/publish`,
+        headers: bearer(ADMIN),
+        payload: { isPublished: false },
+      });
+
+      expect(again.statusCode).toBe(409);
+      expect(again.json().message).toBe('That storefront is already unpublished');
+      expect(await actionsFor(vendor.id)).toEqual([
+        { action: 'vendor_unpublished', actorId: expect.any(String) },
+      ]);
+    });
+
+    it('still refuses a package press that would change nothing', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor([150_000, 90_000]);
+      const target = vendor.packageIds[1]!;
+
+      for (const attempt of [200, 409]) {
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: `/admin/packages/${target}/active`,
+          headers: bearer(ADMIN),
+          payload: { isActive: false },
+        });
+        expect(response.statusCode).toBe(attempt);
+      }
+    });
+
+    /**
+     * The compare-and-set itself, at the level where one connection can prove it.
+     *
+     * The service checks the hold on a row it read several statements earlier
+     * and takes no lock, so that check is a fast refusal and not the guarantee —
+     * the guarantee is `requireUnheld`, which puts the column in the `WHERE` of
+     * the statement that publishes. Forced here rather than raced: read, set the
+     * hold, then write, which is exactly the interleaving without the timing.
+     *
+     * The **service** passing the option is what
+     * `vendor-moderation-hold.contention.test.ts` covers, because that needs two
+     * connections and PGlite has one.
+     */
+    it('refuses the publishing write itself once the hold is set under it', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+
+      const before = await harness.database.db
+        .select({ id: vendorProfiles.id })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendor.id))
+        .limit(1);
+      expect(before[0]!.id).toBe(vendor.id);
+
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ isPublished: false, moderationHold: true })
+        .where(eq(vendorProfiles.id, vendor.id));
+
+      const refused = await updateVendorProfileById(
+        harness.database.db,
+        vendor.id,
+        { isPublished: true },
+        { requireUnheld: true },
+      );
+
+      expect(refused).toBeNull();
+      expect(await publishedFlag(vendor.id)).toBe(false);
+
+      /* Without the option the same statement writes — so the predicate, and
+       * not some other condition in the `WHERE`, is what refused it. */
+      const written = await updateVendorProfileById(harness.database.db, vendor.id, {
+        isPublished: true,
+      });
+      expect(written?.isPublished).toBe(true);
+    });
+
+    it('refuses the reactivating write itself once a package hold is set under it', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor([150_000, 90_000]);
+      const target = vendor.packageIds[1]!;
+
+      await harness.database.db
+        .update(servicePackages)
+        .set({ isActive: false, moderationHold: true })
+        .where(eq(servicePackages.id, target));
+
+      const refused = await updatePackageById(
+        harness.database.db,
+        vendor.id,
+        target,
+        { isActive: true },
+        { requireUnheld: true },
+      );
+      expect(refused).toBeNull();
+
+      const written = await updatePackageById(harness.database.db, vendor.id, target, {
+        isActive: true,
+      });
+      expect(written?.isActive).toBe(true);
+    });
+
+    // --- The cascade is a consequence, not a decision -------------------------
+
+    it('does not hold a storefront the last-package cascade unpublished', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor();
+
+      const deactivated = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/packages/${vendor.packageIds[0]}/active`,
+        headers: bearer(ADMIN),
+        payload: { isActive: false },
+      });
+      expect(deactivated.statusCode).toBe(200);
+      expect(deactivated.json().vendorUnpublished).toBe(true);
+
+      /*
+       * The operator decided about a **package**. Holding the storefront for it
+       * would leave the vendor unable to publish a storefront nobody moderated,
+       * with no lever in the console that says so. The package's own hold is
+       * what stops them trading, and `publishBlockers` is what refuses the
+       * publish — as a list of things they could fix, which is what it is.
+       */
+      expect(await holdOnProfile(vendor.id)).toBe(false);
+      expect(await consoleStatus(vendor.id)).toBe('review');
+
+      const republished = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { isPublished: true },
+      });
+      expect(republished.statusCode).toBe(400);
+      expect(republished.json().details.blockers).toContain('packages');
     });
   });
 });

@@ -1,4 +1,9 @@
-import { COVER_CONSTRAINT_LINE, ERROR_CODES, type Category } from '@vendor-marketplace/shared';
+import {
+  COVER_CONSTRAINT_LINE,
+  ERROR_CODES,
+  VENDOR_PROFILE_MODERATION_HOLD_MESSAGE,
+  type Category,
+} from '@vendor-marketplace/shared';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import type { WireVendorProfile } from '@/lib/wire-schemas';
 import userEvent from '@testing-library/user-event';
@@ -74,6 +79,7 @@ function savedProfile(overrides: Partial<WireVendorProfile> = {}): WireVendorPro
     categoryIds: [CATEGORIES[0]!.id],
     tags: [],
     publishBlockers: [],
+    moderationHold: false,
     ...overrides,
   };
 }
@@ -794,5 +800,57 @@ describe('VendorProfileForm — the save is one unit, and it is honest about it'
     ).toBe(true);
     expect(screen.getByText(/Save your changes first/)).toBeTruthy();
     expect(requestMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The moderation hold, stated before the press (#457).
+ *
+ * The refusal itself is the API's 403 and is asserted against the real database
+ * in `admin-moderation.routes.test.ts`. What is owed here is the half a status
+ * code cannot deliver: the switch used to read *"Ready to publish — flip this
+ * when you are."* over a storefront the server refuses, so a held vendor was
+ * told yes and then told no, in that order. Being told no twice is a worse
+ * refusal than being told once, before acting.
+ */
+describe('VendorProfileForm under a moderation hold', () => {
+  function holdLine(): string {
+    const label = screen.getByText('Visible to customers');
+
+    return label.parentElement?.querySelector('p')?.textContent ?? '';
+  }
+
+  it('states the refusal on the switch and disables it', () => {
+    renderSaved({ isPublished: false, moderationHold: true, publishBlockers: [] });
+
+    const toggle = screen.getByRole('switch', { name: 'Visible to customers' });
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(toggle.hasAttribute('disabled')).toBe(true);
+
+    /* The API's own sentence, read from `packages/shared` rather than retyped —
+     * so ratifying that copy cannot leave the two disagreeing. */
+    expect(holdLine()).toBe(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
+  });
+
+  /*
+   * Fails on a hold check that sits *after* the blockers branch. A held vendor
+   * who has since deactivated their last package has both, and "1 thing left
+   * before you can publish" would send them to finish work that changes
+   * nothing — the same false yes in a second costume.
+   */
+  it('outranks the publish blockers rather than queueing behind them', () => {
+    renderSaved({ isPublished: false, moderationHold: true, publishBlockers: ['packages'] });
+
+    expect(holdLine()).toBe(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
+    expect(screen.queryByText(/left before you can publish/)).toBeNull();
+  });
+
+  it('says the ordinary thing when no hold stands', () => {
+    renderSaved({ isPublished: false, moderationHold: false, publishBlockers: [] });
+
+    expect(holdLine()).toBe('Ready to publish — flip this when you are.');
+    expect(
+      screen.getByRole('switch', { name: 'Visible to customers' }).hasAttribute('disabled'),
+    ).toBe(false);
   });
 });

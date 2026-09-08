@@ -86,6 +86,8 @@ export async function updatePackageById(
   vendorId: string,
   packageId: string,
   patch: Partial<NewServicePackageRow>,
+  /** The compare-and-set `updateVendorProfileById` documents, for a package (#457). */
+  options: { requireUnheld?: boolean } = {},
 ): Promise<ServicePackageRow | null> {
   if (!vendorId || !packageId || Object.keys(patch).length === 0) {
     return null;
@@ -94,7 +96,13 @@ export async function updatePackageById(
   const updated = await db
     .update(servicePackages)
     .set({ ...patch, updatedAt: sql`now()` })
-    .where(and(eq(servicePackages.vendorId, vendorId), eq(servicePackages.id, packageId)))
+    .where(
+      and(
+        eq(servicePackages.vendorId, vendorId),
+        eq(servicePackages.id, packageId),
+        options.requireUnheld === true ? eq(servicePackages.moderationHold, false) : undefined,
+      ),
+    )
     .returning();
 
   return updated?.[0] ?? null;

@@ -193,4 +193,98 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
     expect(state.activePackages).toBe(0);
     expect(state.isPublished).toBe(false);
   });
+
+  /**
+   * **The vendor's own publish against the operator's takedown (#457).**
+   *
+   * The vendor's editor reads its row, decides, and writes several statements
+   * later without taking a lock — so `moderation_hold` being false when it read
+   * says nothing about the moment it writes. If that write does not carry the
+   * hold in its own `WHERE`, an operator's takedown committing inside the window
+   * is simply overwritten, and the row lands on the one state neither party can
+   * get out of: `is_published = true` beside `moderation_hold = true`. The
+   * storefront is back on search, the console labels the row `Held`, and the
+   * operator's republish answers 409 because it is already published.
+   *
+   * **The assertion is order-independent, and the race is entered rather than
+   * forced.** Whichever of the two commits first, the pair has to agree —
+   * published implies not held, held implies not published — and the vendor's
+   * own answer has to describe the state that was actually stored. Nothing here
+   * *makes* the window open, so a future reader should not read a green run as
+   * proof that it did; what the invariant does is make the bad state impossible
+   * to reach without failing on any run that enters it.
+   *
+   * Measured, because "probably races" is the kind of claim that quietly stops
+   * being true: with the `requireUnheld` option removed from
+   * `updateVendorProfile`, this failed **three runs out of three** on
+   * `is_published && moderation_hold`, and passed three out of three with it
+   * back. The window is wide because the vendor's read is the first statement
+   * of its request and the operator's whole transaction is shorter than the
+   * four reads that follow it.
+   */
+  it('never leaves a storefront published and held at once', async () => {
+    const published = await harness!.app.inject({
+      method: 'PUT',
+      url: '/vendor/profile',
+      headers: bearer(VENDOR),
+      payload: { isPublished: true },
+    });
+    expect(published.statusCode).toBe(200);
+
+    const paused = await harness!.app.inject({
+      method: 'PUT',
+      url: '/vendor/profile',
+      headers: bearer(VENDOR),
+      payload: { isPublished: false },
+    });
+    expect(paused.statusCode).toBe(200);
+
+    const [vendorPublish, operatorHold] = await Promise.all([
+      /* A whole-profile save, because that is the long pre-write path: slug
+       * resolution, category and tag reads and two counts all sit between the
+       * read that checks the hold and the write that acts on it. */
+      harness!.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: {
+          businessName: 'Fernbank Studio',
+          bio: 'Fernbank Studio photographs weddings across central Texas and beyond.',
+          responseTimeHours: 4,
+          categoryIds: [photographyId],
+          tagIds: [],
+          isPublished: true,
+        },
+      }),
+      harness!.app.inject({
+        method: 'PUT',
+        url: `/admin/vendors/${vendorId}/publish`,
+        headers: bearer(ADMIN_ONE),
+        payload: { isPublished: false },
+      }),
+    ]);
+
+    const [row] = await harness!.database.db
+      .select({
+        isPublished: vendorProfiles.isPublished,
+        moderationHold: vendorProfiles.moderationHold,
+      })
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.id, vendorId))
+      .limit(1);
+
+    expect(operatorHold.statusCode).toBe(200);
+    expect(row!.moderationHold).toBe(true);
+
+    /* The invariant, both halves. */
+    expect(row!.isPublished && row!.moderationHold).toBe(false);
+
+    /*
+     * And the vendor was told the truth. A 200 that left the storefront down,
+     * or a 403 beside a published row, is the same defect wearing the other
+     * answer — the vendor acts on what they were told, not on the column.
+     */
+    expect([200, 403]).toContain(vendorPublish.statusCode);
+    expect(vendorPublish.statusCode === 200).toBe(row!.isPublished);
+  });
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  VENDOR_PROFILE_MODERATION_HOLD_MESSAGE,
   BRAND_DOMAIN,
   COVER_CONSTRAINT_LINE,
   createVendorProfileSchema,
@@ -350,6 +351,13 @@ export function VendorProfileForm({
   );
   const [isPublished, setIsPublished] = useState(profile?.isPublished ?? false);
   /*
+   * Kept in state beside `publishBlockers` and refreshed from the same
+   * responses, so a hold set while the vendor had this page open is picked up
+   * by their next save rather than only by a reload (#457). Nothing here can
+   * clear it — only the console writes the column.
+   */
+  const [moderationHold, setModerationHold] = useState(profile?.moderationHold ?? false);
+  /*
    * #258: the bar never said when the storefront was last saved, so a vendor
    * returning to it could not tell a saved draft from an unsaved one.
    */
@@ -558,6 +566,7 @@ export function VendorProfileForm({
       };
 
       setPublishBlockers(saved.publishBlockers);
+      setModerationHold(saved.moderationHold);
       setIsPublished(saved.isPublished);
       setLastSavedAt(saved.updatedAt);
       /*
@@ -614,6 +623,7 @@ export function VendorProfileForm({
 
       setIsPublished(saved.isPublished);
       setPublishBlockers(saved.publishBlockers);
+      setModerationHold(saved.moderationHold);
       toast.success(saved.isPublished ? 'Your profile is live.' : 'Your profile is hidden.');
       router.refresh();
     } catch (error) {
@@ -1106,11 +1116,17 @@ export function VendorProfileForm({
               <p className="text-base text-stone-700">
                 You can change any of this after you create your profile.
               </p>
-            ) : !isPublished && blockers.length > 0 ? (
+            ) : !isPublished && blockers.length > 0 && !moderationHold ? (
               /*
                * The third of the three places a blocker appears at once — the
                * field, the nav, and here — so the vendor sees what and where
                * without scrolling to find either.
+               *
+               * **A hold outranks it** (#457). A blocker is a list of things
+               * the vendor can go and finish; under a hold none of them would
+               * let them publish, so leading with "2 things left" would send
+               * them round the editor after work that changes nothing. The
+               * switch branch below states the refusal instead.
                */
               <p className="flex items-center gap-2.5 text-base text-stone-700">
                 <span aria-hidden="true" className="size-1.75 shrink-0 rounded-full bg-gold-400" />
@@ -1148,17 +1164,29 @@ export function VendorProfileForm({
                   id="isPublished"
                   className={SWITCH_TOUCH_TARGET}
                   checked={isPublished}
-                  disabled={isSaving || (isDirty && !isPublished)}
+                  disabled={isSaving || moderationHold || (isDirty && !isPublished)}
                   onCheckedChange={(next) => void togglePublished(next)}
                 />
                 <div>
                   <Label htmlFor="isPublished">Visible to customers</Label>
+                  {/*
+                    The hold is stated **before** the press, not only after it
+                    (#457). The line below read 'Ready to publish — flip this
+                    when you are.' over a storefront the server refuses, so a
+                    held vendor was told yes and then told no, in that order —
+                    which is a worse refusal than the 403 on its own. The
+                    sentence is the one the API answers with, read from
+                    `packages/shared` rather than written twice, so ratifying
+                    that copy changes both at once.
+                  */}
                   <p className="text-xs text-stone-600">
-                    {isPublished
-                      ? 'Customers can find and book you.'
-                      : isDirty
-                        ? 'Save your changes first — this switch applies to your saved storefront.'
-                        : 'Ready to publish — flip this when you are.'}
+                    {moderationHold
+                      ? VENDOR_PROFILE_MODERATION_HOLD_MESSAGE
+                      : isPublished
+                        ? 'Customers can find and book you.'
+                        : isDirty
+                          ? 'Save your changes first — this switch applies to your saved storefront.'
+                          : 'Ready to publish — flip this when you are.'}
                   </p>
                 </div>
               </div>

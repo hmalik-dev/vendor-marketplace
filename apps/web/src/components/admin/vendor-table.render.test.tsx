@@ -131,12 +131,55 @@ describe('UnpublishConsequence, against the dialog it sits beside', () => {
 
   it('offers the way back, where suspension says its damage is not undone', () => {
     expect(copyOf(<UnpublishConsequence subject="Their storefront" />)).toMatch(
-      /Publish it again from this menu/,
+      /this menu can publish it again/,
     );
     cleanup();
     expect(copyOf(<SuspensionConsequence subject="Their storefront" />)).toMatch(
       /the bookings are not restored/,
     );
+  });
+
+  /**
+   * The way back is the **operator's**, and the copy has to say so (#457).
+   *
+   * This sentence read *"Publish it again from this menu whenever you like"*
+   * until the moderation hold landed, at which point it described — on the
+   * control that removes the ability, to the operator, at the instant of the
+   * press — the exact ability it removes. A consequence line that contradicts
+   * the consequence is worse than no line.
+   *
+   * Both directions, because only one of them catches the regression that
+   * matters. Asserting the new clause alone would pass a copy edit that added
+   * it and left the old promise standing beside it, which is the likeliest way
+   * this comes back: someone restoring a sentence that reads reassuring and is
+   * false. `31-content-voice.md` carries the ruling and points here.
+   */
+  it('says the vendor cannot put it back, and does not promise them they can', () => {
+    const copy = copyOf(<UnpublishConsequence subject="Their storefront" />);
+
+    expect(copy).toMatch(/the vendor cannot put it back themselves/);
+    expect(copy).not.toMatch(/whenever you like/);
+  });
+
+  /*
+   * The approved-strings file makes the same claim, matched on the claim rather
+   * than on the wording — the table cell is a summary and the dialog is prose,
+   * so they are deliberately different lengths and an equality check between
+   * them would only ever be noise. What must not drift is which of the two
+   * parties can undo this.
+   */
+  it('agrees with the approved consequence line in 31-content-voice.md', () => {
+    const voice = readFileSync(
+      join(process.cwd(), '../../design/design-plan/31-content-voice.md'),
+      'utf8',
+    );
+    const row = voice
+      .split('\n')
+      .find((line) => line.includes('**Unpublish profile**') && line.startsWith('|'));
+
+    expect(row, 'the Unpublish profile row is missing from the approved-copy table').toBeDefined();
+    expect(row).toMatch(/only an operator can/i);
+    expect(row).not.toMatch(/whenever you like/);
   });
 
   it('takes its subject from the caller, like its neighbour', () => {
@@ -163,9 +206,26 @@ describe('VendorRowActions', () => {
   it('offers Unpublish on a live storefront and Publish on an unpublished one', () => {
     expect(menuLabelsFor('live')).toEqual(['Unpublish profile', 'Suspend vendor']);
     cleanup();
-    expect(menuLabelsFor('paused')).toEqual(['Publish profile', 'Suspend vendor']);
+    /*
+     * Both directions on a row that is already down (#457). Unpublish is what
+     * sets the moderation hold, so a menu that offered only Publish here left
+     * the one vendor an operator could not moderate as the one who had taken
+     * themselves down first — which is the evasion the hold exists to close,
+     * and is reachable in one request from the vendor's own dashboard.
+     *
+     * Order is least → most severe, per the admin delta's Pattern B.
+     */
+    expect(menuLabelsFor('paused')).toEqual([
+      'Publish profile',
+      'Unpublish profile',
+      'Suspend vendor',
+    ]);
     cleanup();
-    expect(menuLabelsFor('review')).toEqual(['Publish profile', 'Suspend vendor']);
+    expect(menuLabelsFor('review')).toEqual([
+      'Publish profile',
+      'Unpublish profile',
+      'Suspend vendor',
+    ]);
   });
 
   /*
@@ -246,8 +306,17 @@ describe('VendorRowActions', () => {
  * same column. So the console can offer Publish on a row it cannot explain, and
  * the operator can put a business back on the marketplace against its owner's
  * own choice. Flagged by the adversarial review as the mirror of the recorded
- * acceptance-1 amendment; the copy is what is available until an action log
- * makes the question answerable.
+ * acceptance-1 amendment.
+ *
+ * **#457 answered half of it and the copy still stands for the other half.**
+ * A storefront moderated from now on reads `Held` in the row's own status, so
+ * that case explains itself before the dialog opens. Every row that reads
+ * `Paused` or `Review` is still the ambiguous one — the vendor's own pause and
+ * every moderation taken before the hold column existed both land there, and
+ * nothing distinguishes them. So this warning is not stale; it is now the
+ * warning for the rows that are still unexplained, and the dialog's own
+ * justification clause is the part that has narrowed. Rewording it is a copy
+ * change the design pass owns, filed with #457's other two unratified strings.
  */
 describe('RepublishConsequence', () => {
   it('warns that the storefront may have been paused by its own owner', () => {
@@ -262,5 +331,52 @@ describe('RepublishConsequence', () => {
     expect(copyOf(<RepublishConsequence subject="Their storefront" />)).toMatch(
       /a category, a bio, a reply time and one bookable package/,
     );
+  });
+});
+
+/**
+ * The moderation hold's one console-facing requirement (#457, acceptance 6).
+ *
+ * `is_published` recorded that a storefront was down and never who put it
+ * down, so an operator arriving at an unpublished row could not tell their
+ * colleague's moderation from the vendor's own pause — the ambiguity
+ * `RepublishConsequence` warns about in prose because nothing on the row could
+ * answer it. `moderation_hold` answers it, and `Held` is how the table says so.
+ */
+describe('the held status (#457)', () => {
+  /** The pill's own attribute, so the assertion survives a Tailwind class edit. */
+  function pillFor(status: AdminVendorStatus): { label: string; tone: string } {
+    render(<VendorTable filtered={false} rows={[vendorRow(status)]} />);
+    const [pill] = document.querySelectorAll('[data-slot="status-pill"]');
+
+    return {
+      label: pill?.textContent ?? '',
+      tone: pill?.getAttribute('data-tone') ?? '',
+    };
+  }
+
+  /*
+   * Fails on a `held: 'inert'` entry, which is the mistake worth guarding: it
+   * would draw a moderated storefront in the same grey as one the vendor
+   * paused, which is the exact confusion this status exists to end.
+   */
+  it('draws Held apart from Paused, in the tone the other moderation state spends', () => {
+    expect(pillFor('held')).toEqual({ label: 'Held', tone: 'needsYou' });
+    cleanup();
+    expect(pillFor('paused')).toEqual({ label: 'Paused', tone: 'inert' });
+    cleanup();
+    /* Shared with `Flagged` deliberately — both say an operator did this. */
+    expect(pillFor('flagged')).toEqual({ label: 'Flagged', tone: 'needsYou' });
+  });
+
+  /*
+   * The clearing lever. A held storefront is unpublished, so the menu offers
+   * the publish direction — and `PUT /admin/vendors/:id/publish` is the only
+   * writer that clears the hold, which makes this menu item the whole of
+   * acceptance 3's operator path.
+   */
+  it('offers the operator the publish direction on a held row, and only that', () => {
+    /* No Unpublish: the hold it would set already stands. */
+    expect(menuLabelsFor('held')).toEqual(['Publish profile', 'Suspend vendor']);
   });
 });
