@@ -54,3 +54,22 @@ deleted.
 
 Related: [[main-pushes-dequeue-parallel-lane-prs]],
 [[ticket-worktree-merge-immediately]].
+
+## A squash commit on `main` often has no green run of its own — and that is fine
+
+Three lanes hit this on 2026-09-08. The CI run for a squash SHA reads
+**`cancelled`**, because the lane's close-out push lands seconds later and
+`cancel-in-progress` kills the run for the commit underneath it.
+
+**Nothing is red.** What actually gated the merge is the **PR's** required
+`Typecheck, lint, build, test`, which passed on exactly the tree that was
+squashed — auto-merge could not have fired otherwise.
+
+**Why it matters:** somebody auditing `main` by commit will find several
+`cancelled` runs against real landings and can reasonably read that as a history
+of broken merges. It is the opposite: it means the close-out followed the merge
+promptly.
+
+**How to apply:** when reporting a landing, cite **the PR's check on the merge
+candidate**, not the run on the squash commit. And when reading history, treat
+`cancelled` on a squash as "superseded", never as a failure — check the PR.
