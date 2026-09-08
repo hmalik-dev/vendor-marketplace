@@ -521,16 +521,23 @@ describe('seedE2eFixtures', () => {
   });
 
   /*
-   * The hazard the whole design turns on. `insertUserIfAbsent` absorbs a
-   * conflict on `clerk_user_id` and nothing else, so a fixture that invented an
-   * id would leave this email attached to the wrong identity — and the account's
-   * first real sign-in would collide on the email index, throw, and lock the
-   * account out. Attaching by the real id is what makes a later sign-in a no-op.
+   * The hazard the whole design turns on. A fixture that invented an id would
+   * leave this email attached to the wrong identity — and the account's first
+   * real sign-in would hit `users_email_key`, where `insertUserIfAbsent`
+   * declines the write, finds no row under the real Clerk id and throws,
+   * locking the account out. Attaching by the real id is what makes a later
+   * sign-in a no-op.
    */
   it('leaves a later sign-in for the same identity able to find its row', async () => {
     const result = published(await seedE2eFixtures(database.db, INPUT));
 
-    // What `insertUserIfAbsent` does on the account's next authenticated request.
+    /*
+     * The conflict the account's next authenticated request meets. Spelled out
+     * rather than routed through `insertUserIfAbsent`, whose own shape is
+     * pinned in `apps/api/src/modules/users/users.dao.test.ts` — this asserts
+     * the *fixture's* row is the one a later sign-in finds, which is a fact
+     * about the seed and holds whatever arbiter that function names.
+     */
     const inserted = await database.db
       .insert(users)
       .values({

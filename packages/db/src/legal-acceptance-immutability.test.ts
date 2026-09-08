@@ -241,15 +241,52 @@ describe('legal_acceptances is append-only', () => {
   });
 
   /**
-   * A second acceptance of the same version does not overwrite the first —
-   * acceptance 9. There is no unique key to collide on and no upsert path: the
-   * table simply grows, and the newest row is the one a surface reads.
+   * **Amended by #442, which overturned what this case used to assert.**
+   *
+   * It previously wrote a second `v1.0` row and expected the table to grow,
+   * describing that as "there is no unique key to collide on and no upsert
+   * path". That was a true statement about the schema as it stood and it was
+   * read, in the ticket that became #442, as a *ruling* that the product
+   * permits two acceptances of one version. It never was one: this file writes
+   * straight to the table, past both services, and both of them had refused a
+   * repeat since #427 and #429 under the comment *"Already held: answer, do not
+   * write"*. A test that writes past the code cannot say what the code decided.
+   *
+   * So the key now exists — `legal_acceptances_user_document_version_key` — and
+   * the schema says what the services already meant: one row per person, per
+   * document, per version. Asserted by attempting the write, like every other
+   * case here.
    */
-  it('records a second acceptance of the same version as a second row', async () => {
+  it('refuses a second acceptance of a version this person already holds', async () => {
+    const before = await acceptanceCount();
+
+    const message = await refusalOf(
+      testDb.db,
+      `INSERT INTO legal_acceptances
+         (vendor_id, document, version, document_sha256, acceptance_method,
+          accepted_by_user_id, accepted_by_name, business_name)
+       VALUES ('${VENDOR}', 'vendor_agreement', 'v1.0', '${AGREEMENT_SHA}', 'clickwrap_checkbox',
+               '${VENDOR_USER}', 'June Harlow', 'June Harlow Photography')`,
+    );
+
+    expect(message).toContain('legal_acceptances_user_document_version_key');
+    expect(await acceptanceCount()).toBe(before);
+  });
+
+  /**
+   * The other half of the same key, and the case the append-only table exists
+   * for: the **version** is in it, so a genuine re-acceptance after a bump
+   * still writes — and writes a *new* row rather than touching the old one,
+   * which is acceptance 9's real content and the only part of it that was ever
+   * about this table's behaviour.
+   */
+  it('records an acceptance of a new version as a second row, leaving the first alone', async () => {
+    const before = await acceptanceCount();
+
     await testDb.db.insert(legalAcceptances).values({
       vendorId: VENDOR,
       document: 'vendor_agreement',
-      version: 'v1.0',
+      version: 'v2.0',
       documentSha256: AGREEMENT_SHA,
       acceptanceMethod: 'clickwrap_checkbox',
       acceptedByUserId: VENDOR_USER,
@@ -257,7 +294,14 @@ describe('legal_acceptances is append-only', () => {
       businessName: 'June Harlow Photography',
     });
 
-    expect(await acceptanceCount()).toBe(3);
+    expect(await acceptanceCount()).toBe(before + 1);
+
+    const versions = await testDb.db
+      .select({ version: legalAcceptances.version })
+      .from(legalAcceptances)
+      .where(eq(legalAcceptances.acceptedByUserId, VENDOR_USER));
+
+    expect(versions.map((row) => row.version).sort()).toEqual(['v1.0', 'v2.0']);
   });
 
   /**

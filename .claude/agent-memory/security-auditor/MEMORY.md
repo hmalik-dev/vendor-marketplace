@@ -75,4 +75,5 @@
 - [A browser parse failure is reader-visible copy](client-parse-failures-are-shown-verbatim.md) — `ApiClientError` carries the 200, so `userFacingError`'s 5xx filter never fires and a landed transfer reports as failed
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking in full with an empty `closeBlockers`; copy that says "refunds nothing" is true of one side only
 - [Moderation levers are undoable by their subject](moderation-levers-are-undoable-by-their-subject.md) — #435’s unpublish and deactivate write the vendor’s own columns; only ban and review-hide stick
+- [Retired users keep their email in the unique index](retired-users-keep-their-email-in-the-unique-index.md) — closure never releases the address, so re-registering the same email is a permanent opaque 500
 - [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino reaches nested errors through three doors, all three closed in #445; `PostgresError.detail` is redacted there too

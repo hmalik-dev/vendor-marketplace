@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "legal_acceptances_user_document_version_key" ON "legal_acceptances" USING btree ("accepted_by_user_id","document","version");

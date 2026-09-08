@@ -54,11 +54,11 @@ function defaultLastName(role: string): string {
 /**
  * Resolves an end-to-end account's **real** Clerk id from its email.
  *
- * The id cannot be invented. `insertUserIfAbsent` absorbs a conflict on
- * `clerk_user_id` and nothing else, so a row carrying this email under a
- * made-up id makes the account's first real sign-in collide on the email index
- * instead — the insert throws and the account can never sign in. Asking Clerk
- * is the only correct source.
+ * The id cannot be invented. A row carrying this email under a made-up id makes
+ * the account's first real sign-in hit `users_email_key` instead:
+ * `insertUserIfAbsent` declines the write, finds no row under the real Clerk
+ * id, and throws naming it — so the account can never sign in. Asking Clerk is
+ * the only correct source.
  */
 async function resolveAccount(email: string, secretKey: string, role: string): Promise<E2eAccount> {
   const url = `${CLERK_API}?email_address=${encodeURIComponent(email)}&limit=1`;

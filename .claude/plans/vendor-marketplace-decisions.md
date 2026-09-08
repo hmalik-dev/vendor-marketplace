@@ -1912,18 +1912,88 @@ outlives the account. #429 widened that record from vendors to every user, so
 the sentence became a false claim about everybody. The page now says what the
 code does.
 
-*The check-then-insert race is left open, on purpose.* `acceptTerms` reads
-"already accepted" and then inserts, with no unique index behind it, so
-simultaneous submissions from one session can each write a row. Closing it means
-a unique index on `(accepted_by_user_id, document, version)` — which would
-**overturn #427's ruling** that a second acceptance of a version already held is
-a second row, because "I accepted it twice" is a true statement about what
-happened, and `legal-acceptance-immutability.test.ts` asserts exactly that. That
-is a product decision about what the record means, not a lane's to make. The
-window is small (it closes on the first commit), rate-limited, and identical in
-shape to the vendor agreement, which shipped in #427 — but it reopens at every
-version bump and the rows are permanent, so it is worth a ticket rather than a
-shrug.
+*The check-then-insert race was left open, and #442 closed it — with no ruling
+required.* `acceptTerms` read "already accepted" and then inserted, with no
+unique index behind it, so simultaneous submissions from one session could each
+write a row into a table nothing can delete.
+
+**#429 believed closing it needed a product decision, and that was wrong.** The
+reasoning went: a unique index on `(accepted_by_user_id, document, version)`
+would overturn #427's ruling that a second acceptance of a version already held
+is a second row, since `legal-acceptance-immutability.test.ts` asserted exactly
+that. #427 never ruled it. **That test inserts straight into the table, past
+both services**, so what it asserted was a *schema* fact — there is no unique key
+to collide on — and a schema fact is not a statement about what the product
+permits. A test that writes past the code cannot say what the code decided. The
+code had decided: `acceptTerms` and `acceptVendorAgreement` both return the
+status without inserting when the version is already held, under the comment
+*"Already held: answer, do not write"*, and `terms.routes.test.ts` asserts it
+twice. **One row per person, per document, per version was already the intent —
+the service's early return was simply advisory, with nothing behind it.**
+
+**The general rule: a test that bypasses the code under test records the schema,
+not the ruling.** Citing one as a product decision is how a lane invents a
+question the account holder never had to answer — this one sat as a P1 for a day
+waiting on a person for a ruling that already existed in two service comments.
+
+So #442 added `legal_acceptances_user_document_version_key` (`0039`) and made
+the losing insert of a race lose *harmlessly*: `insertAcceptance` is
+`ON CONFLICT DO NOTHING` and returns `null`, and both writers re-read the status
+afterwards, which is identical whichever insert won. `DO NOTHING` rather than
+`DO UPDATE` because the row is immutable and the trigger would refuse the update
+anyway. **`vendor_id` is deliberately outside the key**: `vendor_profiles_user_id_key`
+makes a profile unique per user, so it is functionally determined by
+`accepted_by_user_id` — and leaving it out keeps every column of the index
+`NOT NULL`, which matters, because Postgres treats nulls as *distinct* in a
+unique index and a key carrying `vendor_id` would therefore not have constrained
+the Terms rows at all. No duplicate pairs existed anywhere the migration runs:
+`legal_acceptances` is absent from the local development database and from both
+Neon branches, checked before the index was written.
+
+**The race also hid a second one, on the account row.** Driving eight
+simultaneous first-sign-in acceptances 500s about a quarter of the time, and the
+index neither caused that nor fixed it: `users` carries two unique indexes and
+one identity signing in twice at once collides on **both**, so
+`insertUserIfAbsent`'s `DO NOTHING` targeted at `users_clerk_user_id_key` let
+the `users_email_key` violation through as a 23505. Neither obvious repair was
+available: `ON CONFLICT (a, b)` names one arbiter *index* over those columns and
+there is no unique index on that pair, so the target could not be widened — and
+the violation could not be caught and retried either, because the first-sign-in
+caller runs inside `db.transaction`, where a raised error aborts the transaction
+and every statement after it fails with 25P02. Not raising is the only shape
+that works there.
+
+**So the target is gone, and the declined path then asks which constraint
+declined it** — because widening what is swallowed must not make it silent. If
+the Clerk id is already in the table the identity met itself (the race, or a
+retired row) and `null` is the answer every caller expects; if it is not, some
+other index arbitrated, meaning an address that belongs to somebody else, and
+`insertUserIfAbsent` **throws** naming that Clerk id. That last part is the
+rule worth keeping: **a `null` returned from a write path must mean something
+the caller can act on, or it is a defect wearing a return value.** The 23505 it
+replaced carried `constraint` and `table` into the log through
+`log-error-serializer`, so a replacement carrying only a sentence would have
+been quieter than what it replaced, on the one path where knowing whose address
+collided is the entire remedy.
+
+**The security pass on #442 then found who actually reaches that throw, and it
+is not who the code said.** The comment claimed a live account holding the
+address needs two Clerk identities sharing one, which Clerk refuses — true, and
+it made the case read as a seeding accident. But a **retired** account holding
+it is ordinary: `retireUserWhere` writes only `deleted_at`, and `users_email_key`
+carries no `WHERE deleted_at IS NULL`, so a closed account keeps its address in
+the index while Clerk frees it. **Anyone who closes their account and signs up
+again with the same address arrives with a new Clerk id and collides**, and has
+done since the row could first be retired — the targeted `DO NOTHING` raised a
+23505 at the same statement, so this is a pre-existing 500 that #442 changed the
+shape of rather than caused. #451's partial index is what lets that person back
+in, which is why #442 lands after it rather than beside it.
+
+**The rule: a soft delete that leaves a value under an unconditional unique
+index has reserved that value for ever.** The index is what decides whether the
+row can come back, so an assertion about the outcome belongs to whoever owns the
+index — pinning "throws" in #442 would have pinned the defect and gone red the
+moment #451 fixed it.
 
 **5. Acceptance is an unticked box, and the record says so.** `acceptance_method`
 distinguishes `clickwrap_checkbox` from `seed_fixture`, because a seeded row

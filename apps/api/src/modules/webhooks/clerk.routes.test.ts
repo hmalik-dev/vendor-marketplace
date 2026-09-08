@@ -104,6 +104,34 @@ describe('POST /webhooks/clerk', () => {
     expect(rows).toHaveLength(1);
   });
 
+  /**
+   * The branch #442's untargeted `DO NOTHING` opened, pinned so it stays
+   * deliberate — and stays **loud**.
+   *
+   * `insertUserIfAbsent` stopped naming `users_clerk_user_id_key` as its
+   * conflict target, because one identity signing in twice at once collides on
+   * `users_email_key` as well and a targeted `DO NOTHING` let that one through
+   * as a 23505. The cost of dropping the target is this case: a **different**
+   * Clerk identity arriving with an address somebody already holds. Widening
+   * what is swallowed must not turn it into `null` — a webhook answering
+   * `ignored` would let Clerk mark the delivery done and leave an
+   * operator-actionable collision with nothing anywhere to say it happened.
+   * It stays a 500, exactly as loud as the violation it replaced, and no row is
+   * merged onto the account that holds the address.
+   */
+  it('refuses a new identity whose email another account already holds', async () => {
+    await post(harness, userCreated());
+
+    const response = await post(harness, userCreated({ id: 'user_webhook_twin' }));
+
+    expect(response.statusCode).toBe(500);
+
+    const rows = await harness.database.db.select().from(users);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.clerkUserId).toBe(CLERK_ID);
+  });
+
   it('does not let user.created escalate the role through unsafe metadata', async () => {
     await post(harness, userCreated({ unsafe_metadata: { role: 'admin' } }));
 
