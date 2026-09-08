@@ -555,6 +555,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   462: ['auth', 'email'], // a failed email update leaves users.email stale and mail keeps going there
   463: ['auth'], // admin detail views drawn to Pattern B and C and built to neither
   464: ['auth'], // sign-up hangs silently when the Turnstile challenge cannot complete
+  465: ['auth'], // post-sign-up routing, and a no-dead-routes sweep at every role
+  466: [], // For vendors should open an informational page, not the sign-up form
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
