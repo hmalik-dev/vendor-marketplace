@@ -263,6 +263,7 @@ storefront, each of which tells the reader something untrue. |
 | **459** | **Every lane's `pnpm install` rewrites four lockfile keys nobody asked it to** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by lane #445, which paid it and reverted it by hand.** The lockfile's `eslint-plugin-import` / `eslint-import-resolver-typescript` peer suffixes are stored in an **older, abbreviated form** than the installed pnpm writes, so *any* `pnpm add` or `pnpm install` that rewrites `pnpm-lock.yaml` expands four keys — `eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(...)` becomes the fully-qualified spelling, plus the three snapshot entries that reference it. **The resolutions do not change**, and `pnpm install --frozen-lockfile` accepts both forms, so nothing fails — the cost is that every lane touching a dependency carries an unrelated 19-line diff into its PR, and two lanes doing so conflict on lines neither of them meant to write. Reverting it is a step each lane has to know about and none of them is told. **Land the re-serialisation once, deliberately, on `main`** — a lone `pnpm install` commit touching only these keys — so the stored form matches what the installed pnpm writes and the churn stops being generated. Verify with `--frozen-lockfile` before and after, and check no second copy of any package appears. |
 | **460** | **Closing an operator account needs a hurdle, not a refusal** | P3 | M6 | **P2 Medium** | **Backlog** | — | **#451** — the 403 this relaxes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 on the account holder's ruling** — *"handle this as best practice possible — admin deletion should have additional verification/hurdles — very rare to do."* #451 makes closure **delete the Clerk identity**, so it is irreversible against a real identity provider, and it therefore answers **403 for an admin target** as the conservative direction while the question was open. The ruling is **not a refusal**: an operator account must stay closable — people leave — but with friction proportionate to being unrecoverable. Build a **typed confirmation** (the target's email, so the control cannot be cleared absently by a tired person clicking a second button), a **structural refusal when no other live admin would remain** rather than the incidental one `actorId === userId` gives today, a dialog stating the sign-in is restorable **only from Clerk's dashboard** because `role = 'admin'` is unreachable from inside the product, and a **distinct `admin_actions` value** so the audit can answer *"who removed our colleague's access"* without joining to a role the closure just retired. **Do not read this as loosen the guard**: the 403 stays until the hurdle exists, and both halves land in one commit. |
 | **461** | **A live error type routes around #445's log sink** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #451's `security-auditor`. Nothing leaks today** — it is filed because a path #445 documented as *unreachable* turns out to be reachable, and the next error type to travel it will not be as harmless. `ClerkAPIResponseError` carries an own enumerable **`errors`** array; `pino-std-serializers` copies it to **`aggregateErrors`** without passing it through `log-error-serializer.ts`, so its contents reach the log stream having been through none of the redaction. Contents today are Clerk's `{code, message, longMessage, meta}` — no credential, no bound parameter. **That is exactly why to fix it now**: #445's claim is that the sink is total and *nobody needs to know the hazard exists to be safe from it*, and a known hole with benign contents is one that gets forgotten before something else flows through it. #445 already follows `cause` and `err.errors`; this is the same array arriving under a different key, from the library rather than from our own recursion. **Fix the sink again, not this error type** — a `ClerkAPIResponseError` special case would be the fourth per-call-site guard in a story whose point was that per-call-site guards are how a rule becomes a special case. |
+| **462** | **A failed email update leaves `users.email` stale for ever, and notifications keep going there** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #451's partial index removes one trigger, not the defect | `core` `auth` `email` | **Filed 2026-09-07 by #442's `security-auditor`**, pre-existing and found while auditing something else. `updateUserByClerkId` sets `email` with **no conflict handling**, so a `user.updated` carrying an address another row holds raises a **23505**, the handler 500s, svix exhausts its retries, and `users.email` stays at the **old** value permanently — with nothing surfacing it, because the failure is upstream and the row looks ordinary. **Then the stale column is used to send mail**: `notification-email.dao.ts` picks the recipient from it, so every notification for that account — carrying **counterparty PII**, names, event dates, booking details, message excerpts — keeps going to an address the account holder **no longer controls**, indefinitely, because nothing ever retries the update. The 500 is a nuisance; the mail is a disclosure. Catch the 23505 on that one statement — it is **not** inside a transaction, unlike `insertUserIfAbsent`'s path, which is why #442 needed a different shape there — and let the webhook **succeed**, since a retry cannot help a collision that is a fact about another row. Record the divergence where an operator sees it, the way `refundsFailed` and `identityDeleted` already are. **Then ask** what mail should do while the column is known-stale; continuing to send is the actual harm and is a product decision. Not fixed by #451 (that clears only the retired-row trigger; live-versus-live remains) and not the same defect as #442 (different caller, different transaction shape, different consequence). |
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #458 landed: 17 rows — 14 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's, #447's and #458's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`) and #458 (`affd481c`) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 is closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07; **#454** is the row that consumes them, and it is what unblocked **#437**, whose second hold was the missing detail frame. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
 
@@ -2766,3 +2767,81 @@ that per-call-site guards are how a rule becomes a special case.
 - [ ] Assert on the **serialised output**, not on the serialiser's return value
       in isolation: the defect is a library copying a property before ours runs,
       so a unit test of our function alone cannot reach it.
+
+### #462: A failed email update leaves `users.email` stale for ever, and notifications keep going there
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `email`
+**Blocked by:** None — #451's partial index removes one trigger, not the defect
+
+**Filed 2026-09-07 by #442's `security-auditor`.** Pre-existing, and it was found
+while auditing something else.
+
+#### The chain
+
+`updateUserByClerkId` sets `email` with **no conflict handling**. So a
+`user.updated` webhook carrying an address that another row already holds raises
+a **23505**, the handler 500s, svix retries, retries are exhausted, and
+`users.email` stays at the **old** value permanently. Nothing surfaces it: the
+webhook's failure is upstream, and the row looks ordinary.
+
+**Then the stale column is used to send mail.** `notification-email.dao.ts`
+picks the recipient from `users.email`, so every notification for that account —
+carrying **counterparty PII**: names, event dates, booking details, message
+excerpts — keeps going to an address the account holder **no longer controls**.
+
+That is the harm. The 500 is a nuisance; mail to a relinquished address is a
+disclosure, and it continues indefinitely because nothing ever retries the
+update again.
+
+#### What to build
+
+**Catch the 23505 on that one statement and record a divergence.** It is not
+inside a transaction, so catching it there is available and does not abort
+anything — unlike `insertUserIfAbsent`'s first-sign-in path, where the caller's
+`db.transaction` is why #442 had to reach for a different shape.
+
+The webhook must then **succeed** rather than 500: a retry cannot help, because
+the collision is a fact about another row and will be true again next time.
+Exhausting svix's retries is how a permanent condition currently gets treated as
+a transient one.
+
+**Record the divergence somewhere an operator sees it.** A log line alone is a
+line nobody reads. The console already has the vocabulary — this is the same
+class as `refundsFailed` and `identityDeleted`, a thing that went wrong after a
+committed operation and has to be *reported* rather than only logged.
+
+**Decide what mail should do while the column is known-stale.** Continuing to
+send to an address the person has abandoned is the actual harm, and it is a
+product decision rather than a lane's: hold notifications for that account, send
+to nothing, or send and accept it. **Ask before choosing.**
+
+#### What this is not
+
+**Not fixed by #451's partial index.** That removes the *retired-row* trigger —
+a closed account no longer holds its address in the index — which is one way two
+rows can collide on an address. The live-versus-live case remains, and so does
+every other reason the update could fail.
+
+**Not the same defect as #442.** That one is `insertUserIfAbsent` on the
+first-sign-in path. This is `updateUserByClerkId` on the webhook path, with a
+different caller, a different transaction shape and a different consequence.
+
+#### Acceptance
+
+1. A `user.updated` whose new address collides does **not** 500, and does not
+   exhaust svix's retries.
+2. The divergence is recorded where an operator can see it, not only in a log.
+3. `users.email` is never left silently disagreeing with Clerk with nothing
+   saying so.
+4. Whatever is ruled for notifications while the column is stale is implemented
+   and stated at the send site.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 1 driven against the **real** unique index, with a second row
+      genuinely holding the address — a mocked rejection proves the catch and
+      not that the catch is reachable.
+- [ ] Acceptance 3 asserted by reading the row **and** the divergence record
+      together: a test that only checks the row passes against a version that
+      silently discards the update.

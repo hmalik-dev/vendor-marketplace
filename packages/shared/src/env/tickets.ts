@@ -552,6 +552,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   459: [], // every lane's pnpm install rewrites four lockfile peer-suffix keys
   460: ['auth'], // closing an operator account needs a typed confirmation, not a refusal
   461: ['auth'], // ClerkAPIResponseError.errors routes around #445's log sink
+  462: ['auth', 'email'], // a failed email update leaves users.email stale and mail keeps going there
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
