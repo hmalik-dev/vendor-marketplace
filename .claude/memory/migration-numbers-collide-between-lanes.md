@@ -86,3 +86,17 @@ lane database.
 
 The tell is a `db:migrate` that reports nothing to do on a tree that visibly has
 new migrations in it. Recorded 2026-09-08, lane #457.
+
+## Renumber immediately before pushing, not before the gate
+
+Lane #457 renumbered **three times in one session**: generated `0039`, rebased to
+`0041`, and by the time the gate finished `main` had landed its own `0041`, so it
+became `0042`. **Each renumber before a gate costs the whole gate again.**
+
+**Do the renumber as the last step before pushing.** The number is only a fact
+about the moment it lands.
+
+**And make the undo script idempotent.** The lane re-ran its own undo to check its
+work and it cheerfully undid the migration a second time — dropping columns that
+were no longer there to drop, or deleting a `__drizzle_migrations` row that
+belonged to something else.

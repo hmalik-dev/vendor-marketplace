@@ -560,6 +560,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   467: [], // violatesConstraint's field arm never matches the real driver
   468: ['auth'], // FilteredEmpty promises a widening it does not always offer
   469: ['email'], // what mail does while users.email is known-stale — needs a ruling
+  470: ['auth'], // duplicate row-action accessible name, and a silent admin publish
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
