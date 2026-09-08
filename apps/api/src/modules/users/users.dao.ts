@@ -1,12 +1,14 @@
 import { and, eq, exists, isNull, sql, type SQL } from 'drizzle-orm';
 import {
   legalAcceptances,
+  USERS_EMAIL_UNIQUE_INDEX,
   users,
   vendorProfiles,
   type NewUserRow,
   type UserRow,
 } from '@vendor-marketplace/db/schema';
 import type { LegalAcceptanceDocument } from '@vendor-marketplace/shared';
+import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import type { AppDatabase } from '../../lib/database.js';
 
 /** Live users only — a Clerk-deleted identity must not resolve to a session. */
@@ -262,19 +264,146 @@ export async function updateUserById(
   return updated?.[0] ?? null;
 }
 
-/** Mirrors a Clerk `user.updated` event onto the local row, if one exists. */
+/**
+ * What a mirrored `user.updated` did to the row.
+ *
+ * `emailDiverged` is the half the caller cannot infer from the row: it says the
+ * address Clerk sent could not be written, so `email` below is the **old** one
+ * and `pendingEmail` is what it should have been.
+ */
+export interface ClerkMirrorResult {
+  user: UserRow;
+  emailDiverged: boolean;
+}
+
+/**
+ * The two divergence columns, written together or not at all.
+ *
+ * A union rather than two optional fields, because the only three legal writes
+ * are "record a divergence", "clear one" and "leave them alone", and half of a
+ * divergence — an address with no timestamp, or the reverse — is a state the
+ * console would have to guess about.
+ */
+type EmailDivergenceWrite =
+  | { pendingEmail: string; emailSyncFailedAt: SQL }
+  | { pendingEmail: null; emailSyncFailedAt: null }
+  | Record<string, never>;
+
+/**
+ * Mirrors a Clerk `user.updated` event onto the local row, if one exists.
+ *
+ * **The email write can be declined, and abandoning it silently is the defect
+ * this shape exists to prevent** (#462). `users_email_key` covers `email`, so a
+ * `user.updated` carrying an address some other row already holds raises a
+ * 23505 here. That used to escape: the webhook answered 500, svix redelivered
+ * until it gave up, and `users.email` kept the **old** address for ever with
+ * nothing anywhere saying so — while `notification-email.dao.ts` went on
+ * sending booking detail about other people to it.
+ *
+ * **Retrying cannot help**, which is why the event is not failed. The collision
+ * is a fact about a different row and will be exactly as true on the next
+ * delivery; exhausting svix's retries only turns a permanent condition into a
+ * permanent condition nobody was told about. So the address is recorded as
+ * pending, everything else in the patch is still mirrored, and the handler
+ * reports success.
+ *
+ * **Catching it here is available and inside `insertUserIfAbsent` it is not.**
+ * That path runs under the first-sign-in caller's `db.transaction`, where a
+ * raised 23505 aborts the transaction and every later statement fails 25P02 —
+ * which is why #442 had to reach for an untargeted `DO NOTHING` there instead.
+ * This statement has no transaction around it, so the error is catchable and
+ * the follow-up write is possible.
+ *
+ * **A successful email write clears the record**, so `pending_email` always
+ * means *currently* diverged. That is what makes the repair observable: when
+ * the other row releases the address, the next `user.updated` — or a
+ * `pnpm reconcile:clerk` pass, which drives this same function — writes the
+ * address and the flag goes away on its own.
+ *
+ * **Rows that diverged before this landed carry neither column**, and no
+ * migration backfills them: the old code never learnt which address it failed
+ * to write, so there is nothing in the database to backfill *from*. The repair
+ * is `pnpm reconcile:clerk`, which reads every live row's current address out
+ * of Clerk and hands it to this function — a diverged row records its pending
+ * address on that pass, and an agreeing one is left alone.
+ */
 export async function updateUserByClerkId(
   db: AppDatabase,
   clerkUserId: string,
   patch: Partial<NewUserRow>,
-): Promise<UserRow | null> {
+): Promise<ClerkMirrorResult | null> {
   if (!clerkUserId || Object.keys(patch).length === 0) {
     return null;
   }
 
+  const { email, ...rest } = patch;
+
+  /*
+   * An event carrying **no** address leaves the divergence columns alone, and
+   * that distinction is load-bearing rather than incidental: clearing them on
+   * a name or avatar change would be a repair nothing performed — the address
+   * would still disagree with Clerk and the console would have stopped saying
+   * so. Only a write that actually lands the address resolves the divergence.
+   *
+   * Nothing else differs between the two, and a patch with no `email` cannot
+   * raise `users_email_key` at all, so both go through the one statement.
+   */
+  const resolving: EmailDivergenceWrite =
+    email === undefined ? {} : { pendingEmail: null, emailSyncFailedAt: null };
+
+  try {
+    const user = await writeClerkPatch(db, clerkUserId, patch, resolving);
+
+    return user ? { user, emailDiverged: false } : null;
+  } catch (error) {
+    /*
+     * Narrow on purpose, and the **strict** reader rather than
+     * `violatesConstraint`: this catch swallows the error, so a match on the
+     * wrapper's message would let any failure of this statement — a deadlock,
+     * a timeout, a dropped connection — be recorded as a collision and
+     * answered 200, for an account whose own name happened to contain the
+     * index's name. `violatesUniqueConstraint` matches the SQLSTATE and an
+     * exact constraint name and nothing else.
+     *
+     * Anything wider than `users_email_key` has to keep failing loudly, and
+     * the constraint name comes from the schema rather than being spelled
+     * again here, so renaming the index moves both ends.
+     *
+     * A patch carrying no address cannot have raised that constraint at all,
+     * so it is rethrown for the same reason: whatever failed there is not this.
+     */
+    if (email === undefined || !violatesUniqueConstraint(error, USERS_EMAIL_UNIQUE_INDEX)) {
+      throw error;
+    }
+
+    /*
+     * The rest of the patch still applies — a name change that arrived in the
+     * same event is not in dispute, and dropping it would make one contested
+     * address freeze every other mirrored field on the account.
+     *
+     * `coalesce` keeps the timestamp at the **first** failure across
+     * redeliveries and across later events that collide again, so it answers
+     * "since when has this been wrong" rather than "when did we last look".
+     */
+    const user = await writeClerkPatch(db, clerkUserId, rest, {
+      pendingEmail: email,
+      emailSyncFailedAt: sql`coalesce(${users.emailSyncFailedAt}, now())`,
+    });
+
+    return user ? { user, emailDiverged: true } : null;
+  }
+}
+
+/** The one `UPDATE` both branches above run, so they cannot drift apart. */
+async function writeClerkPatch(
+  db: AppDatabase,
+  clerkUserId: string,
+  patch: Partial<NewUserRow>,
+  divergence: EmailDivergenceWrite,
+): Promise<UserRow | null> {
   const updated = await db
     .update(users)
-    .set({ ...patch, updatedAt: sql`now()` })
+    .set({ ...patch, ...divergence, updatedAt: sql`now()` })
     .where(and(eq(users.clerkUserId, clerkUserId), notDeleted))
     .returning();
 

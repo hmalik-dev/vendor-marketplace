@@ -288,6 +288,13 @@
       "when": 1788840623464,
       "tag": "0040_complete_dazzler",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788843154043,
+      "tag": "0041_abandoned_matthew_murdock",
+      "breakpoints": true
     }
   ]
 }
