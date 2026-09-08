@@ -78,3 +78,18 @@ is the actual question.
 [[diverged-lane-branch-needs-a-new-name]] — an unscoped or wrongly-based diff
 against `origin/main` answers a different question than the one being asked, and
 answers it confidently. Two different commands, one mistake.
+
+## The Status Board conflict: resolve by id, not by side
+
+Recorded 2026-09-07, when a lane rebased and found a peer's freshly filed row on
+the line directly after its own. **Naive resolution in either direction loses a
+row** — take yours and the peer's filing vanishes; take theirs and your own
+transition does.
+
+It arrives disguised as an ordinary two-line conflict, with nothing to say that
+one side is a **filing nobody else has a copy of**. No test catches the loss: the
+contiguity guard passes because ids stay contiguous either way.
+
+**How to apply:** resolve the Status Board **by id**. Take main's rows in main's
+order, let only your own row win, and **assert every id present on either side
+survives** before writing the file.
