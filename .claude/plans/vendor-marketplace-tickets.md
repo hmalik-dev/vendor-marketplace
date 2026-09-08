@@ -2826,6 +2826,15 @@ every other reason the update could fail.
 first-sign-in path. This is `updateUserByClerkId` on the webhook path, with a
 different caller, a different transaction shape and a different consequence.
 
+**But it is the same root, and that is worth knowing before you fix it** (#451b,
+2026-09-07): **two writers on `users` with no conflict handling, differing only
+in which row they meet.** `insertUserIfAbsent` meets the identity's own row;
+`updateUserByClerkId` meets somebody else's. The fix shapes diverge — one cannot
+catch the 23505 because its caller holds a transaction, this one can — which is
+why merging the two rows would be wrong. **Check the third writer while you are
+here**: if any other statement sets a column under a unique index with no
+`onConflict` clause, it belongs in this row rather than in a fourth.
+
 #### Acceptance
 
 1. A `user.updated` whose new address collides does **not** 500, and does not
