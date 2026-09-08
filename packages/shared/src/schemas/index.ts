@@ -3273,6 +3273,17 @@ export const adminCloseAccountResultSchema = z.object({
    */
   refundsFailed: z.int(),
   profileRetired: z.boolean(),
+  /**
+   * Whether the Clerk identity behind the account was actually deleted (#451).
+   *
+   * Closure ends the identity, not just its sessions, because the local row's
+   * address is released on closure and the two systems must not disagree about
+   * who holds it. Clerk is a network call the retirement cannot roll back, so
+   * a failure there leaves an account that is closed here and still signed in
+   * there — reported rather than swallowed, exactly like `refundsFailed`, so
+   * the console can tell an operator the one thing still owed.
+   */
+  identityDeleted: z.boolean(),
 });
 export type AdminCloseAccountResult = z.infer<typeof adminCloseAccountResultSchema>;
 

@@ -37,17 +37,26 @@ export type AdminContext = BookingContext;
  * a second copy of this body — which is what it started as — would have been
  * the same drift again, one ticket later. It is the **last** parameter so the
  * two notification callers keep the shape they already had.
+ *
+ * #451 gave it a third kind: an outbound call to Clerk, after the retirement
+ * it follows has committed. So this is no longer only about notifications —
+ * it is about any work that follows a committed operation the caller cannot
+ * repeat. That caller needs to **report** the failure rather than only log it,
+ * which is why the answer is a boolean; the four callers that only log ignore
+ * it, exactly as they did when it returned nothing.
  */
 export async function bestEffortNotice(
   context: AdminContext,
   subject: Record<string, string>,
   work: () => Promise<void>,
   message: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     await work();
+    return true;
   } catch (error) {
     context.log.error({ ...subject, err: error }, message);
+    return false;
   }
 }
 

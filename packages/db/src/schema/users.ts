@@ -62,7 +62,22 @@ export const users = pgTable(
   },
   (table) => [
     uniqueIndex('users_clerk_user_id_key').on(table.clerkUserId),
-    uniqueIndex('users_email_key').on(table.email),
+    /**
+     * One live account per address — and only the live ones (#451).
+     *
+     * Partial because closing an account gives the address back. Someone who
+     * closes their account and later wants to return is the same person with
+     * the same email, and a full unique index would hold that address forever
+     * under a row they asked us to retire: their sign-up would collide, and
+     * they would be locked out of the marketplace by their own decision to
+     * leave. Two rows sharing an address across time is the correct record of
+     * what happened to that person, not a collision. The retired row itself
+     * cannot go — bookings, reviews and messages reference it — so releasing
+     * the address is the only way to let them back in.
+     */
+    uniqueIndex('users_email_key')
+      .on(table.email)
+      .where(sql`${table.deletedAt} is null`),
     index('users_role_idx').on(table.role),
     /**
      * The retired accounts, and only those (#433).

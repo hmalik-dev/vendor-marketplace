@@ -1,13 +1,53 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { WireAdminCloseBlocker } from '@/lib/wire-schemas';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WireAdminCloseAccountResult, WireAdminCloseBlocker } from '@/lib/wire-schemas';
 
-vi.mock('@/lib/use-api', () => ({ useApi: () => vi.fn() }));
+/**
+ * What `POST /admin/users/:id/close` answers, for the tests that press it.
+ *
+ * A settable module value rather than a per-test mock factory, because
+ * `vi.mock` is hoisted above every `let` this file could close over otherwise.
+ */
+let closeResult: WireAdminCloseAccountResult = {} as WireAdminCloseAccountResult;
+
+vi.mock('@/lib/use-api', () => ({
+  useApi: () => async () => closeResult,
+}));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const { DataRightsActions } = await import('./data-rights-actions');
 
 afterEach(cleanup);
+
+const CLEAN_CLOSURE: WireAdminCloseAccountResult = {
+  userId: '55555555-5555-4555-8555-555555555555',
+  closedAt: new Date('2026-09-07T11:31:00.000Z'),
+  requestsDeclined: 0,
+  bookingsCancelled: 0,
+  bookingsLeftForReview: 0,
+  refundsIssued: 0,
+  refundsFailed: 0,
+  profileRetired: false,
+  identityDeleted: true,
+};
+
+beforeEach(() => {
+  closeResult = CLEAN_CLOSURE;
+});
+
+/**
+ * Presses the destructive control through its confirmation dialog.
+ *
+ * Scoped with `within`, because the trigger and the dialog's confirm button
+ * carry the same accessible name and a bare query would match both.
+ */
+async function confirmClosure(): Promise<void> {
+  const dialog = openConfirmation();
+
+  await act(async () => {
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close account' }));
+  });
+}
 
 const BLOCKER: WireAdminCloseBlocker = {
   bookingId: '44444444-4444-4444-8444-444444444444',
@@ -204,6 +244,49 @@ describe('the data-rights closure control', () => {
     expect(reason.textContent).toContain("Can't close: this is your own account.");
     expect(reason.textContent).toContain('recorded against the operator who took it');
     expect(reason.textContent).not.toContain('confirmed booking');
+  });
+
+  /**
+   * The dialog has to describe what the closure now actually does (#451).
+   *
+   * Deleting the sign-in and releasing the address are the two consequences an
+   * operator on a support call has to be able to state before they press it —
+   * the second one especially, because "you can sign up again with that email"
+   * is the answer the person on the phone is waiting for.
+   */
+  it('says the sign-in is deleted and the address released', () => {
+    renderActions({});
+
+    const dialog = openConfirmation();
+
+    expect(dialog.textContent).toContain('deletes their sign-in');
+    expect(dialog.textContent).toContain('releases their email address');
+  });
+
+  /**
+   * The two owed items are **orthogonal**, so both are reported (#400, #451).
+   *
+   * An earlier shape let the money warning shadow the identity one, which told
+   * an operator about the refund and left them believing the person had been
+   * signed out. Asserted together, because together is the case that regressed.
+   */
+  it('reports a stranded refund and an undeleted sign-in together', async () => {
+    closeResult = { ...CLEAN_CLOSURE, refundsFailed: 1, identityDeleted: false };
+    renderActions({});
+
+    await confirmClosure();
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('1 booking is still confirmed and unrefunded');
+    expect(alert.textContent).toContain('Their sign-in could not be deleted');
+  });
+
+  it('says nothing when the closure landed in full', async () => {
+    renderActions({});
+
+    await confirmClosure();
+
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('still offers the export on the operator own record', () => {

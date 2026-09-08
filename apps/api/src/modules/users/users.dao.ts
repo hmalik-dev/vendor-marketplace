@@ -164,22 +164,20 @@ export async function findUserById(db: AppDatabase, id: string): Promise<UserRow
  * unreachable, and the seeds are where it happens, which is why all three say
  * so where they explain that a fixture may not invent a Clerk id.
  *
- * A **retired** account holding it is ordinary and reachable by anybody:
- * `retireUserWhere` writes only `deleted_at`, and `users_email_key` carries no
- * `WHERE deleted_at IS NULL`, so a closed account keeps its address in the
- * index while Clerk frees it. The same person signing up again gets a new Clerk
- * id, collides on that retained address, and lands here. **That failure is not
- * new** — the targeted `DO NOTHING` raised a 23505 at the same statement, so
- * re-registration after closure has been a 500 since the row could first be
- * retired; this changes which error it is, not whether it happens.
+ * A **retired** account holding it *was* the ordinary case and is no longer
+ * reachable at all. #442 wrote that `retireUserWhere` writes only `deleted_at`
+ * while `users_email_key` carried no predicate, so a closed account kept its
+ * address in the index while Clerk freed it, and the same person signing up
+ * again collided on that retained address and landed here — a 500 that had been
+ * true since the row could first be retired. #442 named the repair as #451's
+ * and outstanding; **#451 has since landed it.** `users_email_key` is now
+ * `UNIQUE (email) WHERE deleted_at IS NULL`, so a retired row's address does
+ * not participate, that insert **does not conflict**, and this function returns
+ * the new row from `inserted[0]` without ever reaching the reads below.
  *
- * **It is also not repaired here, and nothing in this file should be read as
- * saying it is.** Letting that person back in means making `users_email_key`
- * partial, which is #451's to do and is outstanding as this lands. Until it
- * does, closure remains one-way for anybody wanting to return under the same
- * address — so the message below names the account that holds it, which is the
- * operator's actual question and the one thing the 23505 could not answer
- * either.
+ * Which leaves the live-account case as the only way here, and it is the one
+ * that genuinely wants an operator. That is why the throw stays: it is not
+ * softened by the repair, it is *narrowed* to the case it was written for.
  */
 export async function insertUserIfAbsent(
   db: AppDatabase,

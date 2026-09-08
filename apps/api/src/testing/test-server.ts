@@ -774,6 +774,18 @@ export interface TestHarness<TDatabase extends HarnessDatabase = TestDatabase> {
   flushEmail: () => Promise<void>;
   /** Simulates the storage bucket going away, for the readiness probe. */
   setStorageAvailable: (available: boolean) => void;
+  /**
+   * Clerk identities the fake deleter ended, in order (#451).
+   *
+   * Also the fake's record of **who is gone**: the token verifier refuses an
+   * id in this list, and the deleter drops it from `clerkUsers` as well, so an
+   * identity a closure ended stops resolving on both paths. That is what makes
+   * "that person is signed out now" assertable rather than assumed. Clearing
+   * it between tests brings those identities back.
+   */
+  deletedClerkUsers: string[];
+  /** Simulates Clerk refusing the deletion, for the half-closed account case. */
+  setClerkDeletionFails: (fails: boolean) => void;
   close: () => Promise<void>;
 }
 
@@ -809,6 +821,8 @@ export async function createTestHarness(
   const storedObjects: RecordedObject[] = [];
 
   let storageAvailable = true;
+  let clerkDeletionFails = false;
+  const deletedClerkUsers: string[] = [];
 
   const storage: ObjectStorage = {
     put: async (key, body, contentType) => {
@@ -865,6 +879,22 @@ export async function createTestHarness(
          * is left alone: the plugin then finds no account, which is the gated
          * state, and a suite asserting on an unknown token still sees a refusal.
          */
+        /*
+         * An identity a closure deleted stops verifying, which is the whole
+         * point of deleting it rather than revoking sessions.
+         *
+         * Without this the fake could not tell #451's change from the state it
+         * replaced: the local row is retired either way, so the gate 401s on
+         * `deletedAt` and a suite asserting only the status code passes with
+         * the Clerk deletion removed. Clerk answers a token for a deleted user
+         * by refusing to verify it, so that is what this does — and the two
+         * refusals carry different messages, which is what lets a suite say
+         * which one it got.
+         */
+        if (deletedClerkUsers.includes(clerkUserId)) {
+          throw new Error(`Test Clerk identity ${clerkUserId} was deleted`);
+        }
+
         if (acceptTerms) {
           await ensureAcceptedAccount(database.db, clerkUsers.get(clerkUserId));
         }
@@ -877,6 +907,23 @@ export async function createTestHarness(
           throw new Error(`No test Clerk identity registered for ${clerkUserId}`);
         }
         return snapshot;
+      },
+      /*
+       * The identity really goes, rather than being counted.
+       *
+       * It is recorded in `deletedClerkUsers`, which the token verifier above
+       * refuses, and dropped from `clerkUsers`, which the lazy-sync loader
+       * reads — so a suite can present the deleted person's token afterwards
+       * and watch it fail the way a deleted Clerk session does, instead of
+       * asserting only that a function was called.
+       */
+      deleteClerkUser: async (clerkUserId) => {
+        if (clerkDeletionFails) {
+          throw new Error('Test Clerk deletion refused');
+        }
+
+        deletedClerkUsers.push(clerkUserId);
+        clerkUsers.delete(clerkUserId);
       },
     },
     webhooks: {
@@ -902,6 +949,10 @@ export async function createTestHarness(
     flushEmail: () => app.background.drain(),
     setStorageAvailable: (available) => {
       storageAvailable = available;
+    },
+    deletedClerkUsers,
+    setClerkDeletionFails: (fails) => {
+      clerkDeletionFails = fails;
     },
     close: async () => {
       await app.close();
