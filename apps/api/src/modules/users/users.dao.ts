@@ -21,8 +21,9 @@ const notDeleted = isNull(users.deletedAt);
  * yet" from "account erased": since #429 the absence of a row means "has not
  * accepted, send them to the interstitial", and a Clerk-deleted identity
  * offered that interstitial would try to bring its erased account back, where
- * `insertUserIfAbsent` collides on `clerk_user_id`. A retired identity keeps
- * getting the 401 it always got.
+ * `insertUserIfAbsent` finds the retired row under the same `clerk_user_id` and
+ * answers `null` rather than reviving it. A retired identity keeps getting the
+ * 401 it always got.
  */
 export async function findUserByClerkIdIncludingRetired(
   db: AppDatabase,
@@ -117,18 +118,132 @@ export async function findUserById(db: AppDatabase, id: string): Promise<UserRow
 /**
  * Inserts a user, tolerating the race between the Clerk webhook and the user's
  * own first API call. Returns the winning row either way.
+ *
+ * **The `DO NOTHING` names no target, and that is the whole point** (#442).
+ * `users` carries two unique indexes — `users_clerk_user_id_key` and
+ * `users_email_key` — and one identity signing in twice at once collides on
+ * *both*, because the two inserts carry the same Clerk id and the same address.
+ * A targeted `DO NOTHING` arbitrates only the index it names, so whenever
+ * Postgres reached the email index first the loser raised a 23505 that the
+ * acceptance endpoint answered as an opaque 500. Reproduced at roughly one run
+ * in four by `legal-acceptance-race.contention.test.ts` before this line
+ * changed; the unique index that ticket adds neither caused it nor fixed it.
+ *
+ * **Naming both keys is not available**, which is why the target is dropped
+ * rather than widened: `ON CONFLICT (a, b)` names one arbiter *index* over
+ * those columns, and there is no unique index on `(clerk_user_id, email)`. Nor
+ * can the email violation be caught and retried — the first-sign-in caller runs
+ * this inside `db.transaction`, and a raised 23505 aborts the whole transaction,
+ * so every statement after it fails with 25P02. Not raising is the only shape
+ * that works there.
+ *
+ * **Widening what is swallowed is not the same as swallowing it silently, and
+ * the difference is the last read below.** A declined insert has exactly two
+ * causes and they are not alike. If this Clerk id is already in the table the
+ * conflict was this identity meeting itself — the race, or a retired row — and
+ * `null` is the answer every caller already expects. If it is *not* in the
+ * table, the arbiter was some other unique index, which means an address that
+ * belongs to **somebody else**, and answering `null` there would report an
+ * operator-actionable data problem as the ordinary "this identity has no
+ * account yet". So it throws instead.
+ *
+ * **The message carries the Clerk id because the 23505 it replaces carried
+ * more than a sentence.** `log-error-serializer.ts` strips a pg error's
+ * value-bearing `detail` and deliberately keeps `code`, `constraint` and
+ * `table` — what says *what to fix* — so the old failure named
+ * `users_email_key` in the record. A bare `Error` carries none of that, and a
+ * 500 saying only that some constraint declined some insert is quieter than
+ * what it replaced, on the one path where knowing *whose* address collided is
+ * the entire remedy. Bare rather than an `AppError` all the same: nothing about
+ * it is the caller's to fix or the reader's to see, so it stays an opaque 500
+ * and the identifier goes only to the log.
+ *
+ * **Two ways to reach it, and the second is not a fixture problem.** A *live*
+ * account holding the address needs two Clerk identities sharing one address,
+ * which Clerk refuses within an instance — so through the product that half is
+ * unreachable, and the seeds are where it happens, which is why all three say
+ * so where they explain that a fixture may not invent a Clerk id.
+ *
+ * A **retired** account holding it is ordinary and reachable by anybody:
+ * `retireUserWhere` writes only `deleted_at`, and `users_email_key` carries no
+ * `WHERE deleted_at IS NULL`, so a closed account keeps its address in the
+ * index while Clerk frees it. The same person signing up again gets a new Clerk
+ * id, collides on that retained address, and lands here. **That failure is not
+ * new** — the targeted `DO NOTHING` raised a 23505 at the same statement, so
+ * re-registration after closure has been a 500 since the row could first be
+ * retired; this changes which error it is, not whether it happens.
+ *
+ * **It is also not repaired here, and nothing in this file should be read as
+ * saying it is.** Letting that person back in means making `users_email_key`
+ * partial, which is #451's to do and is outstanding as this lands. Until it
+ * does, closure remains one-way for anybody wanting to return under the same
+ * address — so the message below names the account that holds it, which is the
+ * operator's actual question and the one thing the 23505 could not answer
+ * either.
  */
 export async function insertUserIfAbsent(
   db: AppDatabase,
   values: NewUserRow,
 ): Promise<UserRow | null> {
-  const inserted = await db
-    .insert(users)
-    .values(values)
-    .onConflictDoNothing({ target: users.clerkUserId })
-    .returning();
+  const inserted = await db.insert(users).values(values).onConflictDoNothing().returning();
 
-  return inserted?.[0] ?? (await findUserByClerkId(db, values.clerkUserId));
+  if (inserted?.[0]) {
+    return inserted[0];
+  }
+
+  /*
+   * Retired rows included, deliberately: a Clerk-deleted identity signing in
+   * again is the one case that must read as "no account" rather than as a
+   * collision, and it is the reason this is not simply `findUserByClerkId`.
+   */
+  const held = await findUserByClerkIdIncludingRetired(db, values.clerkUserId);
+
+  if (held) {
+    return held.deletedAt ? null : held;
+  }
+
+  /*
+   * Read back who holds the address before giving up, because "which row holds
+   * this?" is the whole of the operator's question and neither the 23505 nor a
+   * sentence answers it. Only on this path, which is the one that is about to
+   * throw anyway.
+   *
+   * The address itself is not interpolated. It is the one value here that is
+   * personal data rather than a pseudonymous identifier, the log is the wrong
+   * place to copy it to, and it is already known to whoever is reading — they
+   * arrived holding it. The holder's Clerk id and whether that account is
+   * retired are what they do not have, and `retired` is the answer that says
+   * this is closure-then-return rather than a genuine clash.
+   */
+  const holder = await findUserByEmailIncludingRetired(db, values.email);
+
+  throw new Error(
+    `users: the insert for ${values.clerkUserId} was declined — its address is held by ` +
+      (holder
+        ? `${holder.clerkUserId} (${holder.deletedAt ? 'retired' : 'live'})`
+        : 'a row this read could not find'),
+  );
+}
+
+/**
+ * Who holds an address, retired accounts included — the diagnosis behind the
+ * throw above, and deliberately not exported.
+ *
+ * Retired rows are the point rather than an inclusion: they are the ones
+ * `users_email_key` keeps reserved and the ones a live-only read would report
+ * as "nobody", which is the least useful answer available.
+ */
+async function findUserByEmailIncludingRetired(
+  db: AppDatabase,
+  email: string,
+): Promise<UserRow | null> {
+  if (!email) {
+    return null;
+  }
+
+  const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
+
+  return rows?.[0] ?? null;
 }
 
 export async function updateUserById(

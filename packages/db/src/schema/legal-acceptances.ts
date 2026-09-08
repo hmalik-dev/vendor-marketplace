@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { index, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import {
+  index,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import {
   LEGAL_ACCEPTANCE_DOCUMENTS,
   LEGAL_ACCEPTANCE_METHODS,
@@ -124,15 +133,71 @@ export const legalAcceptances = pgTable(
       table.acceptedAt.desc(),
     ),
     /*
-     * The read the acceptance gate performs on **every authenticated request**:
-     * does this user hold the current version of this document. Anchored on the
-     * user rather than the vendor because a customer has no vendor profile, and
-     * because since #429 the user is what a row is about.
+     * "The newest acceptance of this document by this person", which since #442
+     * is the only read that still wants the `accepted_at` ordering:
+     * `findLatestAcceptance` uses it, while the two readers that name a version
+     * — `findAcceptanceOfVersion` and the gate's correlated `EXISTS` in
+     * `findSessionSubject` — moved to the unique key below, whose three columns
+     * are exactly their three equality predicates. Kept rather than dropped for
+     * that one caller; the sort it saves is now over a handful of rows, because
+     * the key caps this pair at one row per version.
+     *
+     * Anchored on the user rather than the vendor because a customer has no
+     * vendor profile, and because since #429 the user is what a row is about.
      */
     index('legal_acceptances_user_document_idx').on(
       table.acceptedByUserId,
       table.document,
       table.acceptedAt.desc(),
+    ),
+    /*
+     * One row per person, per document, per version — enforced here rather than
+     * believed in the services (#442).
+     *
+     * Both writers already refuse a repeat: `acceptTerms` and
+     * `acceptVendorAgreement` each read the held version and return early under
+     * the comment *"Already held: answer, do not write"*. That read is a
+     * check-then-insert with nothing behind it, so two submissions racing from
+     * one session both read *not held* and both insert — into the one table a
+     * trigger makes permanent. This turns the early return from a courtesy into
+     * the guarantee those two comments already believe they have.
+     *
+     * **`vendor_id` is deliberately not in the key.** A vendor-agreement row
+     * carries one and a Terms row carries `null`, but `vendor_profiles_user_id_key`
+     * makes a profile unique per user, so `vendor_id` is functionally determined
+     * by `accepted_by_user_id` and adds nothing to the key. Leaving it out also
+     * keeps every column of this index `NOT NULL`, which matters: Postgres
+     * treats nulls as *distinct* in a unique index, so a key carrying
+     * `vendor_id` would not constrain Terms rows at all — every one of them
+     * would be unique to itself and the race would stay open on the writer that
+     * has the most traffic.
+     *
+     * A **new version** still adds its row, which is the case the append-only
+     * rule exists for: the version is in the key.
+     *
+     * **`0039` deliberately ships no dedupe ahead of this, unlike `0008` and
+     * `0023`.** Both of those cleared colliding rows in the migration before
+     * the index, and the bar `0023` sets for doing so is the reason this does
+     * not: it spends its header saying exactly what each deleted row discards
+     * and who is affected, and ends *"if a duplicate is ever found in a real
+     * database, do not run this as written"*. That justification cannot be
+     * made here. These rows are legal evidence, `legal_acceptances_no_delete`
+     * refuses to remove one while the person exists, and clearing a loser would
+     * mean a migration running `DISABLE TRIGGER` over the one table whose value
+     * is that it cannot be edited. #442 was explicit that such a repair is a
+     * decision rather than a migration.
+     *
+     * So the deploy stopping is the intended behaviour, and it was checked
+     * rather than hoped for: `legal_acceptances` does not exist in the local
+     * development database or in either Neon branch, and the only database that
+     * has it holds no colliding pair. If `pnpm db:migrate` ever fails here,
+     * that is the check reporting a state nobody has ruled on — hand it to a
+     * person rather than disabling the trigger.
+     */
+    uniqueIndex('legal_acceptances_user_document_version_key').on(
+      table.acceptedByUserId,
+      table.document,
+      table.version,
     ),
   ],
 );

@@ -30,5 +30,31 @@ partial index still covers), call the function and assert it resolves. Then
 mutations must run in one transaction, so an unwrapped sequence leaves the
 half-written state the failure above produces.
 
+**Under concurrency the arbiter is chosen by timing, so the same statement is
+right three runs in four (#442).** `insertUserIfAbsent` was
+`onConflictDoNothing({ target: users.clerkUserId })`; `users` also has
+`users_email_key`, and one identity signing in twice at once carries the same
+value for both. Postgres pre-checks only the _arbiter_ index: if it finds the
+conflict there it absorbs it silently, but if the peer's row is not visible yet
+the insert proceeds speculatively and the unique violation surfaces from
+`users_email_key` during index insertion — which **raises**, because that index
+is not the arbiter. Eight concurrent first-sign-in acceptances 500'd about one
+run in four. Consequences for review:
+
+- A targeted `DO NOTHING` on a table with two unique indexes over the _same_
+  logical identity is a race, not a bug you can see in a single-threaded test.
+- Two targets are not available: `ON CONFLICT (a, b)` names one index over both
+  columns, and there usually is not one. Catching the 23505 is also unavailable
+  when the caller runs inside `db.transaction` — the raise aborts it and every
+  later statement fails 25P02. Dropping the target is the only shape that works,
+  and then the _fallback read_ is what has to tell "this identity met itself"
+  from "some other index arbitrated".
+- **The regression guard is then probabilistic.** Restoring the target leaves a
+  1-in-4 race test green three runs in four, and the red run reads as flake. Ask
+  for a deterministic pin (assert the emitted SQL has no `ON CONFLICT (...)`, or
+  repeat the race inside the case) before accepting the coverage.
+
 Related: [[review-checklist-read-time-overlay-vs-sibling-write]] — same family,
-the rule that governs the row lives in a file the diff never touches.
+the rule that governs the row lives in a file the diff never touches. And
+[[review-checklist-pglite-serialises-transactions]] — the arbiter race is
+invisible to `pnpm test` for the same reason a lock is.
