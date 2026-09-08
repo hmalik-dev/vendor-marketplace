@@ -34,3 +34,25 @@ The same shape as [[verify-with-a-differently-shaped-check]] and
 [[source-grep-guards-match-their-own-comment]]: a guard whose passing condition
 is entailed by its own inputs. See
 [[a-lane-web-build-must-be-made-under-the-lane-env]] for the instance.
+
+## Second instance, and a sibling worth pairing with it
+
+Lane #457, 2026-09-08. A moderation hold's no-op check (`if (current ===
+requested) 409`) compared **one** of the two columns its route writes. Result:
+the hold could not be set on a storefront the vendor had already paused — **the
+lever worked on everyone except whoever thought to take themselves down first**,
+which is precisely the person it exists for.
+
+**Its sibling, found in the same audit: a guard that reads and a statement that
+writes are not one operation.** The hold was checked several statements before an
+unlocked write, so a publish already in flight overwrote the takedown and left
+the row **published *and* held** — live in search, `Held` in the console, and the
+operator's own republish answering 409. Closed by carrying the hold in the
+**`WHERE` of the write** rather than in a prior read. Measured: the contention
+test fails 3 runs out of 3 with that option removed.
+
+**Two questions to ask together**, because they catch different halves of the
+same class:
+
+1. Does this idempotence check compare **everything the call would write**?
+2. Between this guard's read and its write, **what else can commit**?
