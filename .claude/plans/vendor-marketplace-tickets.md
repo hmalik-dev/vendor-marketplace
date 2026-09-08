@@ -251,7 +251,6 @@ storefront, each of which tells the reader something untrue. |
 | **442** | **A repeat Terms acceptance can write two permanent rows — the read has no index behind it** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — the product question this row invented was false, corrected 2026-09-07 | `core` `auth` | **Filed 2026-09-07 from #429's security pass, which found it and deliberately did not close it.** `acceptTerms` reads *"already accepted"* and then inserts, with **no unique index behind the read**, so two submissions from one session can each write a row into a table nothing can delete. **There is no product question and this row was wrong to claim one.** Both writers already refuse a repeat — `acceptTerms` and `acceptVendorAgreement` each return early under the comment *"Already held: answer, do not write"*, and `terms.routes.test.ts` asserts it twice. The cited `legal-acceptance-immutability.test.ts:248` **inserts directly into the table**, so it asserts a schema fact — *"there is no unique key to collide on"* — and not a ruling that the product permits two acceptances. A test that writes past the code cannot say what the code decided. So the intent is already one row per person, per document, per version, and the service's early return is merely **advisory**: nothing at the database level holds it. Add the unique index and let the losing insert of a race lose harmlessly. Check three things first — existing duplicates would block the index in a table the trigger will not let you tidy; `vendor_id` is left out of the key, which is safe only if one user can never hold two vendor profiles; and both writers must be covered. The window is small — it closes on the first commit — and rate-limited, but **it reopens at every version bump, the rows are permanent, and the identical shape has been live on the vendor agreement since #427**, so the fix must cover both writers. Reasoning is written up in **D38** on `main` |
 | **443** | **Frame `13`'s parity residue, including two access findings nothing else checks** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 from #433's parity pass**, which returned MATCH on all six axes for its own change and correctly declined to attribute these six to itself. **Two are access findings** — the search field has an `aria-label` but no visible `<label>`, and the row checkbox is `22x44` against `04-laws.md`'s 44px minimum — and the parity pass is the **only** gate on the accessibility laws and the contrast table, so an unfiled access finding is not caught later, it evaporates. The other four: the header is 1px short, the wordmark renders 24px against 23px, the four filter dropdowns carry a 2px padding asymmetry left over from the caret D25 removed (**correct the padding, do not restore the caret**), and the filtered empty state offers no way out where every other console empty state does. Batched by surface per the filing convention rather than filed as six rows. D30 binds: corroborate each transcribed number against the neighbouring widths before building it. |
 | **444** | **An unwind declines the accepted request behind a completed booking** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #438**, which tripped over it building account closure, verified it was pre-existing rather than its own, and pinned current behaviour in a test rather than widening scope. Confirmed independently before filing. `declineOpenRequests` (`admin.dao.ts:484`) sets `status: 'declined'` where status is in `['pending','quoted','accepted']` — **unconditionally**. But `accepted` is exactly the status a request holds *after checkout*, so an unwind flips the accepted request behind an **already-completed** booking to `declined`: the event happened, the vendor was paid, and the customer's requests screen now says it was declined. That is rewriting history, not unwinding it. **Reachable from any ban**, so it predates #433 and #438 both. The neighbouring `findConfirmedBookingsToUnwind` gets it right and is the model — it bounds on `event_date > today`; the request decline has no equivalent bound. Do **not** simply drop `accepted`: a request accepted but never paid for is a real open commitment. |
-| **445** | **A failed query logs every bound parameter, and the redact list cannot reach it** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 after two lanes hit it independently** — #431's security pass and #439's review — which makes it a shape rather than an incident. Drizzle 0.45.2's `DrizzleQueryError` puts the statement's bound parameters in its `message` **and** in an own enumerable `params` property; pino's `err` serialiser copies own properties, so any `log.*({ err })` on a failed query writes every bound value into the log stream. **`server.ts`'s redact list is path-based on `req.headers.*` and never reaches it.** Caller-triggerable, which is why it is P0: `freeText()` does not strip `U+0000`, Postgres refuses it with `22021`, and the insert is on the **public unauthenticated** `POST /support/messages` — so a stranger picks when the write fails, six times an hour, and up to 4,000 characters of what they typed plus their reply-to address is logged. **Fix the sink, not the source**: a custom pino `err` serialiser covers every existing and future call site, where narrowing `freeText()` closes one trigger and leaves the class open. Two lanes have already written per-call-site guards; a third would make it a habit rather than a law. |
 | **446** | **The app declares no body text size, so every unsized block renders at 16px** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's parity pass, which hit it as a worked example.** `globals.css` sets `line-height` on `html` and its own comment explains why a per-call-site fix cannot close that class — *"an element with no text utility at all still inherits, so the per-site route cannot close the class"* — and then **stops one property short**. Nothing declares `font-size`, so every block element carrying no `text-*` utility inherits the browser's **16px**, which is `--text-lg`, not the 13.5px `--text-base` body step. **The worked example**: #441 set the footer's 13px on the `<a>`, and each `<li>`'s own line box stayed 16px because an inline child does not shrink its block. Rows measured 31px against the frame's 27, the footer was **25px taller** than it draws, and the legal row's copyright sat 1.5px off the links' baseline. #441 fixed the footer by moving the size onto the `<ul>`; the class is still open everywhere else. **Scope is the fix *plus* the sweep, not the fix with a caveat.** `body { font-size: var(--text-base) }` in the same `@layer base` block — on `body`, never `html`, which would rescale every rem-based spacing utility in the product — rescales **every currently-unsized block** from 16px to 13.5px. Anyone picking this up needs to know that before they start rather than discover it: it wants a parity pass over every frame-carrying screen, and it may well surface sites that were silently relying on the 16px. |
 | **447** | **A border or surface token used as text on ink — four instances, three per-call-site guards, no law** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441, which was the third instance.** The recurring mistake is not "a border token used as text" but ***the nearest hex is not the right role***, and it has now bitten four times: `stone-400` as text on ink twice (#430's closing band, #441's admin header), `stone-0` as a border on ink once (#441's legal hairline), and the 78%-alpha-of-`stone-50` that `theme.css` records as the defect which minted the ink-ground ramp in the first place. Three of those now carry **three separately hand-written per-call-site guards** — `page.test.tsx` for the band, `admin-header.test.tsx` and `site-footer.test.tsx` for #441 — and no law. A fourth guard would make it a habit. **#441 looked for the cheap guard and reports that there is not one**, which is the part that should stop the next person rediscovering it: a blanket ban on `text-stone-400` needs **four legitimate exemptions** (`ui/empty-state.tsx`, `vendors/profile/review-form.tsx`, and two in `packages/package-manager.tsx` — all decorative glyphs on a light ground), and a file-level "this file has an ink ground" rule matches **14 files**, most of which use `bg-stone-900` for a scrim, a chip or one button variant. So the guard has to know the *ground an element renders on*, which no source scan can see. Options worth weighing: extend `theme-tokens.test.ts`'s contrast table into a role table naming which tokens may be `text-*` at all; or assert it in the browser during the parity pass, where the ground **is** observable. |
 | **449** | **The screens document is content-box and every delta bundle is border-box, so the logo mark paints 19px where the frame draws 17** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's `diff-reviewer` pass, and it overturns a standing assumption rather than finding drift.** `design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing` hits are inline opt-ins — which is what #250 measured when it ruled `box-content` for the logo mark. **Every delta bundle opens with `* { box-sizing: border-box; }`**: `delta-band`, `delta-legal` and `contact-support` all do. So the closing-band frame draws the footer mark as two **equal footprints** — a 17px outline circle with its 1.3px stroke inside, beside a 17px disc — where `logo.tsx` paints a **19px** outline circle at x=7.64, 2px larger than the disc and 2px low. Measured in Chromium against the frame's own markup under its own reset. **#441 deliberately did not fix it**: `box-content` is #250's ruling, taken from the screens document and measured there, and overturning it moves the mark on the desktop header, the auth panel, the favicon and the app icon on one bundle's authority. That is a design adjudication. It is written up at the `box-content` comment in `logo.tsx`, and `logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at D=17 — a diameter taken from a border-box frame — so the two guards in that file read the same contract two incompatible ways until this is settled. **RULED 2026-09-07: `box-content` stands and #250 is upheld** — the screens document is the primary contract and the bundles are supplements, so nothing moves on the header, the auth panel, the favicon or the app icon. The corroboration was closer than the filing implied: `design/delta-admin/` arrived the same day shipping **no `*` reset** either, making it **two content-box documents against three border-box bundles**. What remains open is the contradiction *inside* `logo.test.tsx` — a `box-content` guard pinned at a diameter transcribed from a border-box frame — plus recording the ruling in `web-design-parity.md` and at the `logo.tsx` call site. **A `delta-band` parity read measuring 19-against-17 is looking at this ruling, not at drift.** |
@@ -263,8 +262,9 @@ storefront, each of which tells the reader something untrue. |
 | **456** | **Two moderation labels disagree with the frame that now draws them** | P3 | M6 | **P2 Medium** | **Backlog** | — | **#454** (the frames land with it) | `core` `auth` | **Filed 2026-09-07 by #435, against its own surface.** #435 shipped `Unpublish storefront` and `Suspend account` before any frame drew the vendor detail view; `design/delta-admin/Orla-Admin-Views.html` then arrived naming them **`Unpublish profile`** and **`Suspend vendor`** in the Actions card. `web-design-parity.md` is explicit that "same composition with reworded copy has failed too", so this is a text-parity defect rather than a preference. The *descriptions* already agree — both say existing bookings stand and the vendor keeps their dashboard — so this is two labels, in `vendor-table.tsx` and their four assertions. **Do not fix before #454 lands** or the frame is not yet in the repository to match. See design question 3 in #454 before touching the suspend copy: the card also says suspend "holds payouts" where the code refunds in full, and that is unresolved. |
 | **457** | **A moderation hold the moderated vendor cannot lift** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#454** (the vendor detail Actions card is where the control lives) | `core` `auth` | **Filed 2026-09-07 by #435's security audit.** #435 shipped unpublish and package deactivation, and both write columns **the vendor also writes**: `PUT /vendor/profile` accepts `isPublished: true` checking only `publishBlockers`, and `PUT /vendor/packages/:id` accepts `isActive`. There is no hold column on `vendor_profiles` or `service_packages`, so an operator takes a storefront down for a policy violation and the vendor puts it back from their own dashboard seconds later — no block, no notification, nothing but an `admin_actions` row. #435's acceptance 1 was corrected to say it is advisory; **ban remains the only enforcing lever until this lands.** Review hiding and portfolio removal are unaffected and do hold. Carries the unapproved review-moderation copy as a dependency: `Hide review` / `Unhide review` / `Delete review` appear in no frame and in no voice file — the admin delta covers the vendor detail card and says nothing about reviews. |
 | **458** | **A vendor is offered a Report control on their own storefront** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #436's browser pass, against #436's own surface.** The report controls on `/vendors/[slug]` take `signedIn` and nothing else, so a vendor viewing their own storefront is offered *Report this profile*, *Report this photo* and *Report this review* on their own work. Filing one succeeds: `/reports` checks that the subject resolves and, for a conversation, that the caller is a party — a public subject is reportable by anyone signed in, deliberately, because restricting a storefront report would only stop the passer-by who noticed. **The cost is a real case in the operations queue naming a vendor as their own reporter**, which an operator has to open to dismiss. Not a security issue and not urgent: the vendor can only report themselves. **The fix is a viewer check, not a server refusal** — the pane knows the slug and the page already resolves `viewerRole`, so it wants the vendor's own profile id threaded in and the control hidden when they match. Refusing it at the API instead would need `/reports` to answer 403 to the one caller whose complaint is least likely to be malicious, and would leak the owner's identity to anybody probing. |
+| **459** | **Every lane's `pnpm install` rewrites four lockfile keys nobody asked it to** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by lane #445, which paid it and reverted it by hand.** The lockfile's `eslint-plugin-import` / `eslint-import-resolver-typescript` peer suffixes are stored in an **older, abbreviated form** than the installed pnpm writes, so *any* `pnpm add` or `pnpm install` that rewrites `pnpm-lock.yaml` expands four keys — `eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(...)` becomes the fully-qualified spelling, plus the three snapshot entries that reference it. **The resolutions do not change**, and `pnpm install --frozen-lockfile` accepts both forms, so nothing fails — the cost is that every lane touching a dependency carries an unrelated 19-line diff into its PR, and two lanes doing so conflict on lines neither of them meant to write. Reverting it is a step each lane has to know about and none of them is told. **Land the re-serialisation once, deliberately, on `main`** — a lone `pnpm install` commit touching only these keys — so the stored form matches what the installed pnpm writes and the churn stops being generated. Verify with `--frozen-lockfile` before and after, and check no second copy of any package appears. |
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #436 landed: 19 rows — 16 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's and #436's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`) and #436 (`3ccfe8db`) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 is closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07; **#454** is the row that consumes them, and it is what unblocked **#437**, whose second hold was the missing detail frame. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #445 landed and #459 was filed: 19 rows — 16 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's and #445's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`) and #445 (`758430f1`) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446**, **#447** and **#449**, all filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 is closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07; **#454** is the row that consumes them, and it is what unblocked **#437**, whose second hold was the missing detail frame. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
 
 **#448 landed a bigger finding than either half it was filed for, and that finding is the one to carry forward.** The filed halves were `renderLaneEnv` not writing `API_URL` and `lane:exec` handing every child the API's `PORT`; the first had already landed inside #432 (`1e899ae1`) before the lane branched, which is the board's own rule about trusting the repository over the ticket, arriving again. The real defect was **`laneEnvAgreesWith` comparing a subset of what `renderLaneEnv` writes** — it checked the two ports and `NEXT_PUBLIC_API_URL` and nothing else, so a `.env.lane` written before `API_URL` existed still *agreed* with its manifest, was never rewritten, and every long-running lane resumed onto the stale file for ever while `lane:up` printed ✓ over it. **A check that cannot fail for the state it exists to detect is worse than no check**, because it is also the thing that stops anyone else looking. It now compares every origin the file writes, and that is what makes **`pnpm lane:up <n>` the repair for a stale lane env — in place, database kept.** Do not tell a lane to `lane:down` for this. `pnpm preflight` now also fails a lane whose `.env.lane` omits `API_URL` **and** one whose `apps/web` build was made outside `lane:exec` — the second read out of `routes-manifest.json` rather than by curling the web port, because preflight runs *before* the dev servers, so a request probe finds nothing listening in the very flow it gates and cannot tell that from a server still cold-compiling. It would have to pass both, reproducing #448's own defect inside #448's fix.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
@@ -1779,85 +1779,6 @@ ticket rather than picking the least-wrong word silently.
       a row hand-set to `completed`, so the fixture cannot drift from what the
       payment path actually produces.
 
-### #445: A failed query logs every bound parameter, and the redact list cannot reach it
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core`
-**Blocked by:** None
-
-**Filed 2026-09-07 after two lanes hit it independently** — #431's security pass
-and #439's review — which is what makes it a shape rather than an incident.
-Neither was looking for it.
-
-#### The defect
-
-Drizzle 0.45.2 wraps a failed statement in a `DrizzleQueryError` whose `message`
-is `Failed query: … params: <every bound parameter>`, **and** which carries
-`params` as an **own enumerable property**. Pino's `err` serialiser copies own
-properties. So any `log.*({ err })` on a failed query writes every bound value
-of that statement into the log stream.
-
-**`server.ts`'s redact list cannot help.** It is path-based on `req.headers.*`
-and never reaches a property hanging off a serialised error.
-
-**It is caller-triggerable, which is what makes it P0 rather than hygiene.**
-#431 found the reachable instance: `freeText()` does not strip `U+0000`,
-Postgres refuses that with `22021`, and the insert is on the **public,
-unauthenticated** `POST /support/messages` — so a stranger chooses when the
-write fails, six times an hour, and up to 4,000 characters of what they typed
-plus their reply-to address goes into the logs. Every field on that form is
-user-supplied.
-
-#### Why a per-call-site fix is not the answer
-
-Both lanes fixed their own write paths — #431 now logs the driver code and never
-the error, #439 avoided the shape on its path. That is three hand-written
-guards across the API and no law, which is the same trajectory the colour-role
-class is on (#446). The next `log.error({ err })` written against a query
-failure reintroduces it, and nothing fails.
-
-#### What to build
-
-**A serialiser-level fix, so the guard is structural rather than remembered.**
-Options, in the order worth trying:
-
-1. **A custom pino `err` serialiser** that strips `params` and truncates
-   `message` at the `params:` boundary for `DrizzleQueryError`, applied once at
-   the logger. Every existing and future call site is covered without edits.
-2. Failing that, a narrow error-mapping helper every DAO catch uses, plus a lint
-   rule or a source guard that fails on `{ err }` in a catch around a query.
-
-**Assert it over the whole serialised output, not field by field.** The
-prohibition is "no bound parameter appears anywhere in what is logged" — the
-same shape #434's `admin_actions` content test uses, and for the same reason: a
-field-by-field check passes while the payload leaks through a field nobody
-listed.
-
-**Do not widen `freeText()` to strip `U+0000` and call it done.** That closes
-the one reachable trigger and leaves the class open — any query failure on any
-user-supplied value still leaks. Fix the sink; narrowing the source is a
-defence-in-depth extra, worth doing second.
-
-#### Acceptance
-
-1. A failed query logged via `log.*({ err })` emits **no bound parameter** —
-   asserted against the whole serialised record, not named fields.
-2. The `message` no longer carries the `params:` tail.
-3. The driver error code and the statement's identity are still logged, so the
-   failure remains diagnosable.
-4. A `U+0000` payload to `POST /support/messages` leaks nothing, driven through
-   the real route.
-5. The guard is structural — a new `log.error({ err })` around a query written
-   after this ticket is covered without the author knowing about it.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, **watched failing first** against the current
-      serialiser — this is a security fix, so the failing test is the evidence.
-- [ ] Acceptance 1 asserted by searching the serialised output for a sentinel
-      value bound into the failing statement, rather than by inspecting keys.
-- [ ] Acceptance 4 driven end to end through the public route, not by calling
-      the DAO.
-
 ### #446: The app declares no body text size, so every unsized block renders at 16px
 
 **Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
@@ -2677,3 +2598,62 @@ about in prose.
 - [ ] Acceptances 1 and 2 asserted on the status code **and the resulting public
       surface**. The bug this fixes is a write that succeeded, so a test reading
       only the API's answer would have passed against the broken version.
+
+### #459: Every lane's `pnpm install` rewrites four lockfile keys nobody asked it to
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None
+
+**Filed 2026-09-07 by lane #445**, which hit it adding `pino` as an explicit
+dependency, watched a three-line change arrive as a nineteen-line diff, and
+reverted the other sixteen by hand.
+
+#### The defect
+
+`pnpm-lock.yaml` stores four peer-suffixed keys in an **abbreviated form** that
+the installed pnpm (10.32.1) no longer writes:
+
+```
+eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@…)
+```
+
+becomes the fully-qualified spelling, in which the `eslint-plugin-import`
+suffix carries its own suffixes. Three snapshot entries reference that key and
+are rewritten with it: the `eslint-config-next` importer's optional
+dependencies, `eslint-module-utils@2.14.0`, and `eslint-plugin-import@2.32.0`
+itself.
+
+**Nothing is wrong with either form.** The resolutions are identical,
+`pnpm install --frozen-lockfile` accepts both, and CI is green either way —
+which is exactly why it persists. The cost is entirely in the diffs:
+
+- Any lane that adds, removes or bumps a dependency ships sixteen lines of
+  unrelated churn in its PR, where a reviewer has to establish that the
+  resolutions did not move.
+- Two lanes doing that at once **conflict on lines neither of them wrote**.
+- The only remedy today is to know it happens and revert those hunks by hand,
+  which is a step nothing tells a lane about and every lane has to repeat.
+
+#### What to build
+
+**Land the re-serialisation once, on purpose.** A single commit on `main`
+containing nothing but the rewritten keys, with no `package.json` change beside
+it — so the stored form matches what the installed pnpm writes, and the churn
+stops being generated rather than being reverted forever.
+
+#### Acceptance
+
+1. `pnpm-lock.yaml`'s four keys are in the form the installed pnpm writes, and a
+   subsequent `pnpm install` leaves the file **byte-identical**.
+2. `pnpm install --frozen-lockfile` succeeds before and after.
+3. No package gains a second copy: the `node_modules/.pnpm` entry count for
+   `eslint-plugin-import` and `eslint-import-resolver-typescript` is unchanged.
+4. `pnpm lint` still passes — the plugin and resolver are the subject, so a
+   resolution that silently moved would show up there first.
+
+#### Tests (required)
+
+- [ ] No new unit test; this is a lockfile serialisation change. The evidence is
+      the **idempotence check** in acceptance 1 — run `pnpm install` twice and
+      diff — plus `--frozen-lockfile`, `pnpm lint` and the `.pnpm` entry count,
+      each recorded in the PR with its output.

@@ -549,6 +549,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   456: ['auth'], // two moderation labels disagree with the frame that now draws them
   457: ['auth'], // a moderation hold the moderated vendor cannot lift
   458: ['auth'], // a vendor is offered a Report control on their own storefront
+  459: [], // every lane's pnpm install rewrites four lockfile peer-suffix keys
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
