@@ -38,6 +38,19 @@ the usual `NODE_ENV=production` / protected-Neon-branch refusals in
 `seed-e2e.ts` do not apply because the script never touches the database — it
 drives a browser at whatever origin `resolveBaseUrl` returns.
 
+**The committed suite drives sign-up as of #464.** `auth.spec.ts`'s docblock
+records the older ruling — no sign-up journey, because it "would mint real
+users in the shared Clerk development instance on every run" — and
+`e2e/sign-up-challenge.spec.ts` reverses it for two cases that stop short of an
+account: one blackholes `challenges.cloudflare.com` so clerk-js never sends the
+create, and one aborts it so Clerk refuses the create with no captcha token.
+The second rests on bot protection staying **on** in the Clerk dashboard. It
+fails loudly rather than silently if that changes — a successful create
+navigates to the verification card and `input[name="emailAddress"]` disappears,
+so the spec's `toBeEnabled()` times out — but the attempt would already have
+been made against the instance production shares. Addresses are `@example.com`
+(IANA-reserved), so the verification mail goes nowhere.
+
 **How to apply:** any change that widens what an E2E script does by default is
 a production-privilege question, not a fixtures question. Ask what the default
 does when `E2E_BASE_URL` names the deployed origin. If a guard is added, parse

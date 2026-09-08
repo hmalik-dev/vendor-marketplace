@@ -1,6 +1,13 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  CHALLENGE_STALL_BODY,
+  CHALLENGE_STALL_RETRY,
+  CHALLENGE_STALL_TITLE,
+  SIGN_UP_CHALLENGE_RECHECK_MS,
+  SIGN_UP_CHALLENGE_TIMEOUT_MS,
+} from './challenge-stall';
 
 const signUpProps = vi.fn<(props: Record<string, unknown>) => void>();
 
@@ -11,12 +18,31 @@ const signUpProps = vi.fn<(props: Record<string, unknown>) => void>();
  * is what the component sees **after** Clerk's email-verification step, which
  * is a path navigation that remounts this component with its local state gone.
  */
-let attempt: { status: string; unsafeMetadata: Record<string, unknown> } | null = null;
+let attempt: { id?: string; status: string; unsafeMetadata: Record<string, unknown> } | null = null;
+
+/**
+ * Whether Clerk's card has locked itself, which is what it does while it waits
+ * on the bot challenge — and, when the challenge never answers, for ever.
+ *
+ * The stub renders the real card's shape rather than a marker div, because the
+ * bounded wait in #464 reads the DOM: it asks whether the person can still act
+ * on the form. A stub with no fields would answer that question by accident.
+ */
+let clerkCardLocked = false;
 
 vi.mock('@clerk/nextjs', () => ({
   SignUp: (props: Record<string, unknown>) => {
     signUpProps(props);
-    return <div data-testid="clerk-sign-up" />;
+    return (
+      <div data-testid="clerk-sign-up">
+        <form onSubmit={(event) => event.preventDefault()}>
+          <input name="emailAddress" aria-label="Email" disabled={clerkCardLocked} />
+          <button type="submit" disabled={clerkCardLocked}>
+            Create my account
+          </button>
+        </form>
+      </div>
+    );
   },
   useSignUp: () => ({ isLoaded: true, signUp: attempt }),
 }));
@@ -42,6 +68,7 @@ describe('SignUpForm', () => {
     cleanup();
     signUpProps.mockClear();
     attempt = null;
+    clerkCardLocked = false;
   });
 
   /*
@@ -396,6 +423,164 @@ describe('SignUpForm', () => {
       render(<SignUpForm initialRole={null} />);
 
       expect(screen.queryByRole('radio', { name: new RegExp(CUSTOMER) })).not.toBeNull();
+    });
+  });
+
+  /*
+   * #464. The bot challenge can hang for ever, and while it does Clerk's card
+   * disables every control and says nothing. These cover the bounded wait and
+   * the recovery; the network condition that causes it is reproduced for real
+   * in `e2e/sign-up-challenge.spec.ts`, because a mock that rejects has already
+   * done the thing the product fails to do.
+   *
+   * `fireEvent` rather than `userEvent` throughout, because the wait is a timer
+   * and these tests own the clock. `userEvent` schedules its own work on the
+   * timers it is asked to advance, and pairing the two deadlocked all five of
+   * these at 60s apiece before they asserted anything.
+   */
+  describe('when the bot challenge never answers', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function submitButton(): HTMLButtonElement {
+      return screen.getByRole('button', { name: 'Create my account' }) as HTMLButtonElement;
+    }
+
+    function emailField(): HTMLInputElement {
+      return screen.getByLabelText('Email') as HTMLInputElement;
+    }
+
+    /** Press submit, then leave the card locked exactly as clerk-js leaves it. */
+    function pressSubmitAndHang(): { rerender: (ui: React.ReactElement) => void } {
+      vi.useFakeTimers();
+      const { rerender } = render(<SignUpForm initialRole="customer" />);
+
+      fireEvent.change(emailField(), { target: { value: 'someone@example.com' } });
+      fireEvent.submit(submitButton().closest('form') as HTMLFormElement);
+
+      clerkCardLocked = true;
+      rerender(<SignUpForm initialRole="customer" />);
+
+      return { rerender };
+    }
+
+    function waitOut(ms: number): void {
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    }
+
+    it('says nothing until the wait is actually up', () => {
+      pressSubmitAndHang();
+
+      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS - 1);
+
+      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
+    });
+
+    it('states the failure and what to do about it once the wait is up', () => {
+      pressSubmitAndHang();
+
+      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS);
+
+      expect(screen.getByText(CHALLENGE_STALL_TITLE)).toBeDefined();
+      expect(screen.getByText(CHALLENGE_STALL_BODY)).toBeDefined();
+      /* `40-states.md`: it failed, so it is red. `Banner` derives the colour
+         from the meaning, so asserting the meaning is asserting the colour. */
+      expect(screen.getByRole('status').getAttribute('data-status')).toBe('failed');
+    });
+
+    /*
+     * Acceptance 2. The retry is a control, not a reload — and it has to give
+     * back a card that works, which means remounting Clerk's rather than
+     * re-rendering the disabled one.
+     */
+    it('gives back a working form when the retry is pressed', () => {
+      pressSubmitAndHang();
+
+      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS);
+
+      clerkCardLocked = false;
+      fireEvent.click(screen.getByRole('button', { name: CHALLENGE_STALL_RETRY }));
+
+      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
+      expect(submitButton().disabled).toBe(false);
+      expect(emailField().disabled).toBe(false);
+      // A remount, not a re-render: the field the person typed into is gone.
+      expect(emailField().value).toBe('');
+    });
+
+    /*
+     * The banner is a live reading, not a verdict. Clerk can report something
+     * of its own after the bound has passed — a taken email address renders in
+     * the same card with no navigation, so this component never remounts — and
+     * two errors about one press is exactly what the refused-host case exists
+     * to prevent. Latching the first true would walk around that.
+     */
+    it('takes the banner back when Clerk gives the card back', () => {
+      const { rerender } = pressSubmitAndHang();
+
+      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS);
+      expect(screen.getByText(CHALLENGE_STALL_TITLE)).toBeDefined();
+
+      clerkCardLocked = false;
+      rerender(<SignUpForm initialRole="customer" />);
+      waitOut(SIGN_UP_CHALLENGE_RECHECK_MS);
+
+      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
+    });
+
+    /* And when the create lands late, which is the other way the screen moves
+       on underneath a banner that was true when it was drawn. */
+    it('takes the banner back when the attempt lands late', () => {
+      const { rerender } = pressSubmitAndHang();
+
+      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS);
+      expect(screen.getByText(CHALLENGE_STALL_TITLE)).toBeDefined();
+
+      attempt = { id: 'sua_464_late', status: 'missing_requirements', unsafeMetadata: {} };
+      rerender(<SignUpForm initialRole="customer" />);
+      waitOut(SIGN_UP_CHALLENGE_RECHECK_MS);
+
+      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
+    });
+
+    /*
+     * When the challenge host refuses rather than drops, Clerk gives up on its
+     * own, attempts the create and reports the failure in the card with the
+     * fields still live. A second error on top of that is the product talking
+     * over itself.
+     */
+    it('stays quiet when the form is still usable', () => {
+      vi.useFakeTimers();
+      render(<SignUpForm initialRole="customer" />);
+
+      fireEvent.submit(submitButton().closest('form') as HTMLFormElement);
+
+      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS * 2);
+
+      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
+    });
+
+    /*
+     * Past the create, submit belongs to the verification step. That fails for
+     * its own reasons, and none of them is a challenge that never came.
+     */
+    it('does not watch the verification step', () => {
+      attempt = { id: 'sua_464', status: 'missing_requirements', unsafeMetadata: {} };
+
+      vi.useFakeTimers();
+      const { rerender } = render(<SignUpForm initialRole="customer" />);
+
+      fireEvent.submit(submitButton().closest('form') as HTMLFormElement);
+
+      clerkCardLocked = true;
+      rerender(<SignUpForm initialRole="customer" />);
+
+      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS * 2);
+
+      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
     });
   });
 });
