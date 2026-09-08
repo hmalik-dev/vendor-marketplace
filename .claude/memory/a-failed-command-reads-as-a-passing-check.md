@@ -31,3 +31,22 @@ before trusting any check: *what state would make this fail?* If the answer is
 Related: [[verify-with-a-differently-shaped-check]],
 [[source-grep-guards-match-their-own-comment]] and
 [[turbo-serves-a-green-you-did-not-earn]].
+
+## The inverse: a check too loud to mean anything
+
+Same night, opposite direction. A lane armed a PR watch that grepped for **any**
+`FAILURE` and fired on Vercel's standing rate-limit red within thirty seconds —
+then would have fired again every thirty seconds for the whole run.
+
+**That is worse than not watching.** A real gate failure arriving later would
+have been indistinguishable from the standing one, and the reader learns to
+ignore the channel that was supposed to carry it.
+
+Both failures end in the same place — **a human trusting a signal that carries no
+information** — and the fix is the same in both directions: make the watch say
+**what** it found, and report **only when the answer changes**.
+
+**How to apply:** name the gate explicitly rather than matching a class
+(`Typecheck, lint, build, test`, not "any red"), exclude known-standing failures
+with the reason written in the script, and emit once per state change rather than
+once per poll.
