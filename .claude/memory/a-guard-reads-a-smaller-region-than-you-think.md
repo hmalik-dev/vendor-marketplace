@@ -47,3 +47,25 @@ left the pinned file list unchanged.
 Related: [[verify-with-a-differently-shaped-check]],
 [[source-grep-guards-match-their-own-comment]] and
 [[a-failed-command-reads-as-a-passing-check]] — same family, different mechanism.
+
+## Content versus reach — the one sentence that unifies these
+
+Three guards failed on one night in three different surfaces, and #454 named
+what they share: **the guard's *content* was asserted and its *reach* never was.**
+
+- **#447** — the scan walked a smaller subtree than anyone believed, so it
+  answered *clean* about source it had never read.
+- **#442b** — the race test caught its defect one run in four, so restoring the
+  bug left the suite green three times out of four and the red read as flake.
+- **#454** — a colour table read the shared presentation map; the *screen* under
+  test kept a **private copy** of that map, so a table-driven guard could not see
+  a defect living in a table it does not read.
+
+The fix in each case was an assertion about **absence or extent**, not about
+values: pin every route into the region; assert deterministically on something
+the fix changes definitely; assert **the screen has no second map at all**.
+
+**A guard that only ever asserts what it read has established nothing about what
+it did not read.** Ask, of every new guard: *which inputs can change without this
+firing?* If the honest answer includes the defect you are guarding, the guard is
+about content and needs a claim about reach beside it.
