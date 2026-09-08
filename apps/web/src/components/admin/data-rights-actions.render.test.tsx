@@ -83,9 +83,35 @@ describe('the data-rights closure control', () => {
      * first four words tell an operator this is a rule rather than a fault.
      */
     const warning = panel();
-    expect(warning.textContent).toContain("Can't close: 1 confirmed booking on 2099-06-01.");
+    expect(warning.textContent).toContain("Can't close: 1 confirmed booking on June 1, 2099.");
     expect(warning.textContent).toContain('Cancel or complete it first');
-    expect(warning.textContent).toContain('2099-06-01 with Sunlit Studio');
+    expect(warning.textContent).toContain('June 1, 2099 with Sunlit Studio');
+  });
+
+  /**
+   * The dates are **written out**, not printed as the column holds them.
+   *
+   * The panel rendered `2026-06-01` twice — once in the headline and once in
+   * the list — on a console where every other date is formatted, and on the one
+   * screen #454 ruled to US English. Found by a browser pass, in this ticket's
+   * own code.
+   *
+   * `formatEventDate` is the single implementation for exactly this (#412 found
+   * three private copies agreeing by coincidence), and it anchors at UTC
+   * midnight because an event date is a Postgres `DATE` that must not be
+   * re-read in the viewer's zone — a raw string cannot move a day, but a
+   * carelessly formatted one can.
+   *
+   * The negative assertion is the half that can fail: the ISO form must not
+   * survive anywhere in the panel.
+   */
+  it('writes the blocking booking dates out rather than printing the column', () => {
+    renderActions({ closeBlockers: [BLOCKER] });
+
+    const text = panel().textContent ?? '';
+
+    expect(text).toContain('June 1, 2099');
+    expect(text).not.toContain('2099-06-01');
   });
 
   /**
@@ -121,8 +147,8 @@ describe('the data-rights closure control', () => {
     const warning = panel();
     expect(warning.textContent).toContain('2 confirmed bookings');
     expect(warning.textContent).toContain('Cancel or complete them first');
-    expect(warning.textContent).toContain('2099-06-01 with Sunlit Studio');
-    expect(warning.textContent).toContain('2099-07-04 with Ada Pell');
+    expect(warning.textContent).toContain('June 1, 2099 with Sunlit Studio');
+    expect(warning.textContent).toContain('July 4, 2099 with Ada Pell');
   });
 
   /**

@@ -1,6 +1,16 @@
 'use client';
 
 import { BRAND_NAME, toDateString } from '@vendor-marketplace/shared';
+/*
+ * `formatEventDate`, not the raw column. An event date is a Postgres `DATE`
+ * that travels as a `YYYY-MM-DD` string (`.claude/rules/shared-contracts.md`),
+ * and this panel printed it unformatted — `2026-10-08` — on a console where
+ * every other date is written out, and on the one screen this ticket ruled to
+ * US English. That helper is deliberately the single implementation: #412 found
+ * three private copies agreeing by coincidence of construction, and it anchors
+ * at UTC midnight so the date cannot move a day for a reader west of UTC.
+ */
+import { formatEventDate } from '@/lib/booking-entries';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmAction } from '@/components/admin/confirm-action';
@@ -153,7 +163,7 @@ export function DataRightsActions({
               <strong className="font-semibold">
                 Can&apos;t close: {closeBlockers.length} confirmed{' '}
                 {closeBlockers.length === 1 ? 'booking' : 'bookings'} on{' '}
-                {closeBlockers.map((booking) => booking.eventDate).join(', ')}.
+                {closeBlockers.map((booking) => formatEventDate(booking.eventDate)).join(', ')}.
               </strong>{' '}
               Cancel or complete {closeBlockers.length === 1 ? 'it' : 'them'} first, from the
               booking screens, where the refund is priced.
@@ -172,7 +182,7 @@ export function DataRightsActions({
               <ul className="mt-1.5 flex flex-col gap-0.5 text-stone-700">
                 {closeBlockers.map((booking) => (
                   <li key={booking.bookingId}>
-                    {booking.eventDate} with {booking.counterpartyName}
+                    {formatEventDate(booking.eventDate)} with {booking.counterpartyName}
                   </li>
                 ))}
               </ul>
