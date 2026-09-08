@@ -157,3 +157,29 @@ A loop waiting on a flag *you* intend to set later is a leak by construction,
 because your session can end first. And when clearing someone else's: confirm the
 owning job is absent from the live-session list, **list the PIDs and read them**,
 then kill scoped to that job's own path — never an unscoped `pkill`.
+
+## A review agent can confirm coverage that does not exist
+
+Lane #444 threaded a list of cancelled booking ids into a predicate so it could
+decline a request only when *this* unwind had ended the booking behind it. The
+quality agent read the diff and reported a test shape as **covering** that arm.
+
+**The arm was dead.** `cancelBookingAndFreeDate` already moves the request
+`accepted -> cancelled` in the same transaction as the cancellation — and has
+since #400, deliberately, so `syncHeldDate` cannot read an accepted request off a
+date whose booking is gone and mark the day permanently unsellable. The unwind
+runs that cancellation **before** `declineOpenRequests`, so the ids could never
+match anything.
+
+**The agent read the intent; only driving the row read the data.** It was found
+by adding the third fixture shape to close an untested branch, not by review.
+
+**How to apply:** a reviewer's "this test covers that branch" is a claim about
+what the code *means*. Ask instead what state reaches the branch, and build a
+fixture that arrives there through the product's own path — here, an accepted,
+paid, **future** booking that the ban actually cancels. If nothing can reach it,
+the branch is dead and the coverage was imaginary.
+
+**And the product may already have decided.** #444 was about to write *"declined
+is the least wrong word we have"*; the answer was `cancelled`, chosen by #400 for
+a different reason. Look for the existing decision before inventing one.

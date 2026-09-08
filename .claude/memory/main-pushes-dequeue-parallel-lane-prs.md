@@ -83,6 +83,37 @@ pushing: a peer's armed PR lands on its own and dequeues yours. Watch the PR to 
 terminal state rather than returning, and release the hold with a second message
 as soon as it lands. Related: [[ticket-worktree-merge-immediately]].
 
+## `mergeStateStatus` cannot tell stalled from slow — read `autoMergeRequest`
+
+**`BEHIND` looks identical whether a merge is armed or nothing is armed at all.**
+A supervisor watched two PRs read `BEHIND` for forty minutes believing they were
+"merging", while `origin/main` had not moved: `autoMergeRequest` was `null` on
+both. Nothing was going to merge them when their checks finished.
+
+**The field that distinguishes them is `autoMergeRequest`, and it is not the one
+anybody watches.** A PR watch built on `mergeStateStatus` alone reports a stalled
+queue and a busy one with the same word — a check that cannot fail for the state
+it exists to detect.
+
+    gh pr view <n> --json autoMergeRequest,mergeStateStatus
+
+Found 2026-09-08 by the lane being held behind it, which read the API rather than
+trusting the supervisor's account of it.
+
+**But `autoMergeRequest: null` has two causes and does not distinguish them
+either.** It means *nothing is armed*, which covers both "abandoned" and "the
+lane is still working and was told not to arm". Here it was the second: the lane
+was mid-gate, absorbing two main pushes, and re-running the whole gate after each
+rather than pushing a green earned against a tree that no longer existed. **No
+field answers this. Ask the lane.** A status API describes the PR; only its owner
+knows whether anyone is still working on it.
+
+**And the supervisor caused the delay it was diagnosing.** Three separate docs
+commits pushed to `main` while that lane was gating forced three merge-and-regate
+cycles. **Batch supervisory commits, or hold them while a lane is at its gate** —
+every push to `main` costs each gating lane a full re-run, and the cost is
+invisible from the pushing side.
+
 ## An armed auto-merge is not a merge that will happen
 
 A lane armed `--auto`, saw `autoMergeRequest` non-null, and would have waited
@@ -124,3 +155,54 @@ distinction that keeps producing wrong answers here.
 **How to apply: drop `--delete-branch` from the lane recipe.** Merge plainly,
 then delete the remote branch explicitly during teardown. Every lane landing from
 a worktree hits this otherwise.
+
+## The merge recipe for this repo, corrected 2026-09-08
+
+**`--auto` is mandatory here, not optional.** Three rules compose into a
+constraint that makes a plain `--squash` possible only inside a race:
+
+1. **Force-push is banned** by the hook, so a **rebased** branch can never reach
+   its own PR.
+2. **Branch protection requires an up-to-date head** — exactly what rebasing
+   would have provided.
+3. So **`gh pr update-branch` is mandatory**: it merges `main` *into* the branch,
+   a new commit with no history rewrite, so no hook fires. **A local rebase is
+   verification only, never something you can deliver.**
+
+`update-branch` **re-triggers the required check**, so the only window for a plain
+merge is between CI going green and the next push to `main`. Arming
+`--squash --auto` is not "letting a queue decide" — it is the only way to merge
+without hand-timing that race, and it satisfies the repo's own law against
+merging by hand.
+
+**The hazard that made me ban `--auto` is real but belongs to the supervisor**:
+an armed auto-merge is silently *dequeued* by a push to `main`. The remedy is
+**hold supervisory pushes while a lane is landing**, not have lanes time merges.
+
+**Two steps that make it sound, both from lane #462:**
+
+- After `update-branch`, `git reset --hard origin/<branch>` and confirm with
+  `git diff --stat` that it is **byte-identical** to the tree you gated —
+  otherwise `update-branch` quietly changes what merges and your green describes
+  a different tree.
+- Confirm the arming by **reading `autoMergeRequest` back** (`ARMED SQUASH`),
+  never by trusting the exit code — **but read `state` and `mergeCommit`
+  alongside it.** That field was `null` before arming, `null` after the merge
+  consumed the arming, and `null` when nothing was ever armed: **three states,
+  one value.** Alone it cannot tell "never armed" from "armed and done".
+  `state: MERGED` with a `mergeCommit` is the answer; `autoMergeRequest` only
+  distinguishes armed-and-waiting from not-armed-and-waiting.
+
+**And arming is never the slower path.** With the required check already green,
+`--squash --auto` collapses to an immediate merge — so there is no case where
+hand-timing a plain merge is better, and one (the check still running) where it
+is the only thing that works.
+
+**Three states, three different remedies — all hit in one night:**
+
+| Reading | Means | Remedy |
+| --- | --- | --- |
+| `BEHIND` + `autoMergeRequest: null` | nobody will merge it | ask the lane; arm or merge |
+| `BEHIND` + armed | waiting on the branch being updated | `update-branch` |
+| `BLOCKED` | armed or armable, required check unfinished | wait, by name |
+
