@@ -131,12 +131,55 @@ describe('UnpublishConsequence, against the dialog it sits beside', () => {
 
   it('offers the way back, where suspension says its damage is not undone', () => {
     expect(copyOf(<UnpublishConsequence subject="Their storefront" />)).toMatch(
-      /Publish it again from this menu/,
+      /this menu can publish it again/,
     );
     cleanup();
     expect(copyOf(<SuspensionConsequence subject="Their storefront" />)).toMatch(
       /the bookings are not restored/,
     );
+  });
+
+  /**
+   * The way back is the **operator's**, and the copy has to say so (#457).
+   *
+   * This sentence read *"Publish it again from this menu whenever you like"*
+   * until the moderation hold landed, at which point it described — on the
+   * control that removes the ability, to the operator, at the instant of the
+   * press — the exact ability it removes. A consequence line that contradicts
+   * the consequence is worse than no line.
+   *
+   * Both directions, because only one of them catches the regression that
+   * matters. Asserting the new clause alone would pass a copy edit that added
+   * it and left the old promise standing beside it, which is the likeliest way
+   * this comes back: someone restoring a sentence that reads reassuring and is
+   * false. `31-content-voice.md` carries the ruling and points here.
+   */
+  it('says the vendor cannot put it back, and does not promise them they can', () => {
+    const copy = copyOf(<UnpublishConsequence subject="Their storefront" />);
+
+    expect(copy).toMatch(/the vendor cannot put it back themselves/);
+    expect(copy).not.toMatch(/whenever you like/);
+  });
+
+  /*
+   * The approved-strings file makes the same claim, matched on the claim rather
+   * than on the wording — the table cell is a summary and the dialog is prose,
+   * so they are deliberately different lengths and an equality check between
+   * them would only ever be noise. What must not drift is which of the two
+   * parties can undo this.
+   */
+  it('agrees with the approved consequence line in 31-content-voice.md', () => {
+    const voice = readFileSync(
+      join(process.cwd(), '../../design/design-plan/31-content-voice.md'),
+      'utf8',
+    );
+    const row = voice
+      .split('\n')
+      .find((line) => line.includes('**Unpublish profile**') && line.startsWith('|'));
+
+    expect(row, 'the Unpublish profile row is missing from the approved-copy table').toBeDefined();
+    expect(row).toMatch(/only an operator can/i);
+    expect(row).not.toMatch(/whenever you like/);
   });
 
   it('takes its subject from the caller, like its neighbour', () => {

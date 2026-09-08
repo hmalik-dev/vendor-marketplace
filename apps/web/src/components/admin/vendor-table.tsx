@@ -90,6 +90,15 @@ export function SuspensionConsequence({ subject }: { subject: string }): React.R
  * though they had suspended the account has been misled by the copy, not by the
  * API. So it names the three unwinds a ban performs and says none of them
  * happens here, in the same register the suspension copy uses.
+ *
+ * **The last sentence was corrected by #457 and the correction is the point of
+ * that ticket.** It read *"Publish it again from this menu whenever you like"* —
+ * true when #435 wrote it, and false the moment the moderation hold landed,
+ * because the vendor could no longer put the storefront back. A consequence line
+ * that contradicts the consequence is worse than no line, and this is the one
+ * string in the product read at the instant the button is pressed. The sentence
+ * keeps what was still true — an operator undoes this from here — and states
+ * what changed. `31-content-voice.md` carries the ruling.
  */
 export function UnpublishConsequence({ subject }: { subject: string }): React.ReactElement {
   return (
@@ -97,7 +106,8 @@ export function UnpublishConsequence({ subject }: { subject: string }): React.Re
       {subject} comes off search and its page stops loading.{' '}
       <strong className="font-semibold">Nothing is cancelled and no money moves</strong>: open
       requests stand, confirmed bookings stand, and no refund is issued. They can still sign in and
-      run the bookings they have. Publish it again from this menu whenever you like.
+      run the bookings they have. Only this menu can publish it again — the vendor cannot put it
+      back themselves.
     </>
   );
 }
