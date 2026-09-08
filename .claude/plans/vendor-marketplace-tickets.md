@@ -260,10 +260,9 @@ storefront, each of which tells the reader something untrue. |
 | **455** | **The `Apply filters` button clears the filter it should apply, and no pointer can reach it** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #435's browser pass, reproduced twice.** On `/admin/reviews` the Direction select auto-applies on change (`?type=vendor_to_customer`, 14 rows, all "The customer"). Activating the `sr-only` submit **navigates to `/admin/reviews` with no query at all** — 15 rows, mixed directions — so the control named "Apply filters" is the one control that discards them. It is also pointer-intercepted by the Direction combobox, so a mouse cannot reach it. That button exists for the keyboard and no-JS path, which means it fails **precisely** the users it was added for and nobody else, and they have no workaround because the auto-apply it shadows is a JS change event. Not cosmetic: the filter bar is the only way to narrow six admin tables. |
 | **456** | **Two moderation labels disagree with the frame that now draws them** | P3 | M6 | **P2 Medium** | **Backlog** | — | **#454** (the frames land with it) | `core` `auth` | **Filed 2026-09-07 by #435, against its own surface.** #435 shipped `Unpublish storefront` and `Suspend account` before any frame drew the vendor detail view; `design/delta-admin/Orla-Admin-Views.html` then arrived naming them **`Unpublish profile`** and **`Suspend vendor`** in the Actions card. `web-design-parity.md` is explicit that "same composition with reworded copy has failed too", so this is a text-parity defect rather than a preference. The *descriptions* already agree — both say existing bookings stand and the vendor keeps their dashboard — so this is two labels, in `vendor-table.tsx` and their four assertions. **Do not fix before #454 lands** or the frame is not yet in the repository to match. See design question 3 in #454 before touching the suspend copy: the card also says suspend "holds payouts" where the code refunds in full, and that is unresolved. |
 | **457** | **A moderation hold the moderated vendor cannot lift** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#454** (the vendor detail Actions card is where the control lives) | `core` `auth` | **Filed 2026-09-07 by #435's security audit.** #435 shipped unpublish and package deactivation, and both write columns **the vendor also writes**: `PUT /vendor/profile` accepts `isPublished: true` checking only `publishBlockers`, and `PUT /vendor/packages/:id` accepts `isActive`. There is no hold column on `vendor_profiles` or `service_packages`, so an operator takes a storefront down for a policy violation and the vendor puts it back from their own dashboard seconds later — no block, no notification, nothing but an `admin_actions` row. #435's acceptance 1 was corrected to say it is advisory; **ban remains the only enforcing lever until this lands.** Review hiding and portfolio removal are unaffected and do hold. Carries the unapproved review-moderation copy as a dependency: `Hide review` / `Unhide review` / `Delete review` appear in no frame and in no voice file — the admin delta covers the vendor detail card and says nothing about reviews. |
-| **458** | **A vendor is offered a Report control on their own storefront** | P3 | M6 | **P3 Low** | **In Progress** | `worktree-458` | **None** | `core` `auth` | **Filed 2026-09-07 by #436's browser pass, against #436's own surface.** The report controls on `/vendors/[slug]` take `signedIn` and nothing else, so a vendor viewing their own storefront is offered *Report this profile*, *Report this photo* and *Report this review* on their own work. Filing one succeeds: `/reports` checks that the subject resolves and, for a conversation, that the caller is a party — a public subject is reportable by anyone signed in, deliberately, because restricting a storefront report would only stop the passer-by who noticed. **The cost is a real case in the operations queue naming a vendor as their own reporter**, which an operator has to open to dismiss. Not a security issue and not urgent: the vendor can only report themselves. **The fix is a viewer check, not a server refusal** — the pane knows the slug and the page already resolves `viewerRole`, so it wants the vendor's own profile id threaded in and the control hidden when they match. Refusing it at the API instead would need `/reports` to answer 403 to the one caller whose complaint is least likely to be malicious, and would leak the owner's identity to anybody probing. |
 | **459** | **Every lane's `pnpm install` rewrites four lockfile keys nobody asked it to** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by lane #445, which paid it and reverted it by hand.** The lockfile's `eslint-plugin-import` / `eslint-import-resolver-typescript` peer suffixes are stored in an **older, abbreviated form** than the installed pnpm writes, so *any* `pnpm add` or `pnpm install` that rewrites `pnpm-lock.yaml` expands four keys — `eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(...)` becomes the fully-qualified spelling, plus the three snapshot entries that reference it. **The resolutions do not change**, and `pnpm install --frozen-lockfile` accepts both forms, so nothing fails — the cost is that every lane touching a dependency carries an unrelated 19-line diff into its PR, and two lanes doing so conflict on lines neither of them meant to write. Reverting it is a step each lane has to know about and none of them is told. **Land the re-serialisation once, deliberately, on `main`** — a lone `pnpm install` commit touching only these keys — so the stored form matches what the installed pnpm writes and the churn stops being generated. Verify with `--frozen-lockfile` before and after, and check no second copy of any package appears. |
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-07 after #447 landed: 18 rows — 15 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's and #447's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`) and #447 (`ec537047`) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 is closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07; **#454** is the row that consumes them, and it is what unblocked **#437**, whose second hold was the missing detail frame. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #458 landed: 17 rows — 14 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's, #447's and #458's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`) and #458 (`affd481c`) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 is closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07; **#454** is the row that consumes them, and it is what unblocked **#437**, whose second hold was the missing detail frame. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
 
 **#448 landed a bigger finding than either half it was filed for, and that finding is the one to carry forward.** The filed halves were `renderLaneEnv` not writing `API_URL` and `lane:exec` handing every child the API's `PORT`; the first had already landed inside #432 (`1e899ae1`) before the lane branched, which is the board's own rule about trusting the repository over the ticket, arriving again. The real defect was **`laneEnvAgreesWith` comparing a subset of what `renderLaneEnv` writes** — it checked the two ports and `NEXT_PUBLIC_API_URL` and nothing else, so a `.env.lane` written before `API_URL` existed still *agreed* with its manifest, was never rewritten, and every long-running lane resumed onto the stale file for ever while `lane:up` printed ✓ over it. **A check that cannot fail for the state it exists to detect is worse than no check**, because it is also the thing that stops anyone else looking. It now compares every origin the file writes, and that is what makes **`pnpm lane:up <n>` the repair for a stale lane env — in place, database kept.** Do not tell a lane to `lane:down` for this. `pnpm preflight` now also fails a lane whose `.env.lane` omits `API_URL` **and** one whose `apps/web` build was made outside `lane:exec` — the second read out of `routes-manifest.json` rather than by curling the web port, because preflight runs *before* the dev servers, so a request probe finds nothing listening in the very flow it gates and cannot tell that from a server still cold-compiling. It would have to pass both, reproducing #448's own defect inside #448's fix.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
@@ -2573,100 +2572,6 @@ about in prose.
       surface**. The bug this fixes is a write that succeeded, so a test reading
       only the API's answer would have passed against the broken version.
 
-
-### #458: A vendor is offered a Report control on their own storefront
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P3 Low | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** None
-
-**Filed 2026-09-07 by #436's browser pass, against #436's own surface.** The
-report controls on `/vendors/[slug]` take `signedIn` and nothing else, so a
-vendor viewing their own storefront is offered *Report this profile*, *Report
-this photo* and *Report this review* on their own work — and filing one
-succeeds.
-
-`/reports` checks that the subject resolves and, for a conversation, that the
-caller is a party. A public subject is reportable by anyone signed in, and that
-is **deliberate**: restricting a storefront report would only stop the
-passer-by who noticed something, who is the person the feature exists for.
-
-Not a security issue and not urgent — a vendor can only report themselves. The
-cost is a real case in the operations queue naming a vendor as their own
-reporter, which an operator has to open in order to dismiss.
-
-#### Two of the three controls, not all three — ruled 2026-09-07
-
-**Hide the control on the profile and the portfolio. Keep it on reviews.** The
-row as filed said "their own storefront" and meant all three; that is right for
-two of them and wrong for the third, and the difference is the subject.
-
-- **Profile and photo** — the subject is the vendor's **own record**. The case
-  names them as their own reporter about their own work, and there is nothing
-  for an operator to do but close it. This is the noise the row was filed about.
-- **A review** — the subject is a **customer's** content, written *about* them.
-  A vendor objecting to it is not self-reporting; it is the ordinary case of a
-  person objecting to what somebody else published about them, and that case
-  belongs in the queue.
-
-**And it is their only channel.** `apps/web/src/app/vendor/` has no reviews
-route, so a vendor has no surface of their own on which a review appears at all.
-Hiding the report control would leave someone facing a defamatory or
-extortionate review with no route to raise it — **trading a dismissible case for
-a real one nobody can file.** That is a worse defect than the one being fixed.
-
-#### The fix is a viewer check, not a server refusal
-
-The pane knows the slug and the page already resolves `viewerRole`, so thread
-the vendor's own profile id in and hide the control where they match.
-
-**Do not refuse it at the API.** `/reports` answering 403 to the owner would
-refuse the one caller whose complaint is least likely to be malicious, and — the
-part that matters — it would **leak the owner's identity to anybody probing**: a
-403-on-owner turns the endpoint into an oracle for who owns a storefront. Add no
-server-side owner check as belt-and-braces; the belt is what does the damage.
-
-**Read the owner's profile id with a read that cannot redirect.** The protected
-`getOwnVendorProfile` redirects on an expired session, a suspension or the terms
-gate — and calling it from a **public** storefront turns a stranger's page load
-into somebody else's redirect, which is the #33 class. Use a read that degrades
-to `null`, and let `null` mean *not the owner*, so a failed read leaves today's
-behaviour rather than hiding the control from every visitor. Gate the call on
-`viewerRole === 'vendor'` so no customer or signed-out visitor pays a
-`/vendor/profile` round trip on the one page that is public and hot.
-
-#### Acceptance
-
-1. A vendor viewing their own storefront is offered **no** report control on the
-   about pane or the portfolio pane.
-2. That same vendor **is** still offered a report control on each review.
-3. A different signed-in user viewing that storefront is offered all three.
-4. A signed-out visitor sees the sign-in affordance, unchanged.
-5. `/reports` is **untouched** — no owner check reaches the API, and the route's
-   diff is empty.
-6. `/vendor/profile` is not requested for a signed-out, customer or admin viewer.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] **Assert positive content before asserting absence.** "No control" and
-      "the pane did not render" are indistinguishable otherwise — the trap #436
-      hit on this same surface the same day, where an unseeded reviews tab read
-      as a missing control. Anchor each owner case on real content from that
-      pane (the bio, the portfolio tiles, a reviewer's name) first.
-- [ ] **Acceptance 2 is the one most likely to be faked**, because a test
-      asserting a control is *present* passes against a page that renders it for
-      everyone. Pair it with acceptance 3 over the same fixture.
-- [ ] Mutation-check the guard: flipping it must fail exactly the owner cases
-      and nothing else.
-- [ ] Browser: the owner and a different signed-in user, against the same URL.
-
-#### What this ticket does not cover
-
-**A vendor has no reviews surface of their own** — no route under
-`apps/web/src/app/vendor/` shows the reviews written about them, which is why
-the report control on the public storefront is their only channel. That is a
-real absence and a pre-existing one, unrelated in size to this P3. If it is
-worth a row it is worth its own; do not widen this one into it.
 
 ### #459: Every lane's `pnpm install` rewrites four lockfile keys nobody asked it to
 
