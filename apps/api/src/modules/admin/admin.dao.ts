@@ -67,6 +67,8 @@ export interface AdminVendorProjection {
   reviewCount: number;
   bookingsCount: number;
   isPublished: boolean;
+  /** Set by the console's unpublish lever; the vendor cannot clear it (#457). */
+  moderationHold: boolean;
   stripeOnboarded: boolean;
   /** The connected account, so the row can link out to Stripe (#432). */
   stripeAccountId: string | null;
@@ -130,14 +132,30 @@ function statusCondition(status: AdminVendorStatus) {
     return and(NOT_RETIRED, eq(users.isBanned, true));
   }
 
+  /*
+   * Ahead of `live`, `paused` and `review` for the same reason `retired` is
+   * ahead of everything: `deriveVendorStatus` tests the hold before all three,
+   * so each of them has to exclude it or the filter would list a row the table
+   * then labels `Held`.
+   */
+  if (status === 'held') {
+    return and(NOT_RETIRED, eq(users.isBanned, false), eq(vendorProfiles.moderationHold, true));
+  }
+
   if (status === 'live') {
-    return and(NOT_RETIRED, eq(users.isBanned, false), eq(vendorProfiles.isPublished, true));
+    return and(
+      NOT_RETIRED,
+      eq(users.isBanned, false),
+      eq(vendorProfiles.moderationHold, false),
+      eq(vendorProfiles.isPublished, true),
+    );
   }
 
   if (status === 'paused') {
     return and(
       NOT_RETIRED,
       eq(users.isBanned, false),
+      eq(vendorProfiles.moderationHold, false),
       eq(vendorProfiles.isPublished, false),
       eq(vendorProfiles.stripeOnboarded, true),
     );
@@ -146,6 +164,7 @@ function statusCondition(status: AdminVendorStatus) {
   return and(
     NOT_RETIRED,
     eq(users.isBanned, false),
+    eq(vendorProfiles.moderationHold, false),
     eq(vendorProfiles.isPublished, false),
     eq(vendorProfiles.stripeOnboarded, false),
   );
@@ -284,6 +303,7 @@ export async function findAdminVendors(
       reviewCount: vendorProfiles.reviewCount,
       bookingsCount: bookingsCountExpression,
       isPublished: vendorProfiles.isPublished,
+      moderationHold: vendorProfiles.moderationHold,
       stripeOnboarded: vendorProfiles.stripeOnboarded,
       stripeAccountId: vendorProfiles.stripeAccountId,
       stripeDisabledReason: vendorProfiles.stripeDisabledReason,
@@ -620,7 +640,13 @@ export async function lockVendorProfile(db: AppDatabase, vendorId: string): Prom
 export async function findServicePackageForModeration(
   db: AppDatabase,
   packageId: string,
-): Promise<{ id: string; vendorId: string; isActive: boolean } | null> {
+): Promise<{
+  id: string;
+  vendorId: string;
+  isActive: boolean;
+  /** The other column the lever writes, so its no-op check can read both (#457). */
+  moderationHold: boolean;
+} | null> {
   if (!packageId) {
     return null;
   }
@@ -630,6 +656,7 @@ export async function findServicePackageForModeration(
       id: servicePackages.id,
       vendorId: servicePackages.vendorId,
       isActive: servicePackages.isActive,
+      moderationHold: servicePackages.moderationHold,
     })
     .from(servicePackages)
     .where(eq(servicePackages.id, packageId))

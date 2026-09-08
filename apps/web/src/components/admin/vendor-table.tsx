@@ -39,12 +39,20 @@ const STUCK_REFUNDS_PATH = '/admin/bookings?flag=refund-stuck';
  * told apart by its label rather than by a fifth colour nobody specified. A new
  * token pair here would be inventing design, which is the plan's job and not
  * this ticket's.
+ *
+ * `Held` (#457) arrives the same way and takes the same route: `needsYou`, the
+ * tone `Flagged` already spends, because both are the console saying *an
+ * operator did this and only an operator can undo it*. Sharing a tone with the
+ * other moderation state is the point — the pair a reader must not confuse is
+ * `Held` and `Paused`, and those are now a colour apart where before they were
+ * the same label.
  */
 const STATUS_TONES: Record<AdminVendorStatus, StatusTone> = {
   live: 'confirmed',
   review: 'pending',
   flagged: 'needsYou',
   paused: 'inert',
+  held: 'needsYou',
   retired: 'inert',
 };
 
@@ -441,7 +449,7 @@ function VendorRowActions({
   onDone: () => void;
 }): React.ReactElement | null {
   const call = useApi();
-  const [open, setOpen] = useState<'ban' | 'publish' | null>(null);
+  const [open, setOpen] = useState<'ban' | 'publish' | 'unpublish' | null>(null);
 
   /*
     A retired account gets no control at all (#433), and #435 does not give it
@@ -462,7 +470,8 @@ function VendorRowActions({
   }
 
   const flagged = row.status === 'flagged';
-  const published = row.status === 'live';
+  const held = row.status === 'held';
+  const unpublishing = open === 'unpublish';
 
   async function setPublished(isPublished: boolean): Promise<void> {
     await call(`/admin/vendors/${row.id}/publish`, {
@@ -472,14 +481,42 @@ function VendorRowActions({
     });
   }
 
+  /*
+    The two directions are two items, not one item that flips (#457).
+
+    They used to be one, labelled from `status === 'live'`, which meant an
+    already-down storefront offered only **Publish profile** — and Unpublish is
+    now the control that sets the moderation hold. So the one vendor an operator
+    could not moderate was the one who had taken themselves down first, which is
+    the wrong half of the population and the evasion the hold exists to close.
+
+    Order is least → most severe, per the admin delta's Pattern B: putting a
+    storefront back, taking one down, ending the account. A `live` row still
+    shows exactly the two the frame draws; only a row that is already down gains
+    the second, and a `held` one drops Unpublish because the hold already
+    stands.
+  */
   const items = flagged
     ? [{ key: 'ban', label: 'Lift suspension', onSelect: () => setOpen('ban') }]
     : [
-        {
-          key: 'publish',
-          label: published ? 'Unpublish profile' : 'Publish profile',
-          onSelect: () => setOpen('publish'),
-        },
+        ...(row.status === 'live'
+          ? []
+          : [
+              {
+                key: 'publish',
+                label: 'Publish profile',
+                onSelect: () => setOpen('publish'),
+              },
+            ]),
+        ...(held
+          ? []
+          : [
+              {
+                key: 'unpublish',
+                label: 'Unpublish profile',
+                onSelect: () => setOpen('unpublish'),
+              },
+            ]),
         {
           key: 'ban',
           label: 'Suspend vendor',
@@ -529,26 +566,26 @@ function VendorRowActions({
         cannot be undone, and this one is undone by the item above it — dressing
         it in the same red is how the two become interchangeable at a glance.
       */}
-          {open === 'publish' ? (
+          {open === 'publish' || open === 'unpublish' ? (
             <ConfirmAction
               open
-              onOpenChange={(next) => setOpen(next ? 'publish' : null)}
+              onOpenChange={(next) => setOpen(next ? open : null)}
               restoreFocus={restoreFocus}
               title={
-                published
+                unpublishing
                   ? `Unpublish ${row.businessName}'s storefront?`
                   : `Publish ${row.businessName}'s storefront?`
               }
               description={
-                published ? (
+                unpublishing ? (
                   <UnpublishConsequence subject="Their storefront" />
                 ) : (
                   <RepublishConsequence subject="Their storefront" />
                 )
               }
-              confirmLabel={published ? 'Unpublish profile' : 'Publish profile'}
+              confirmLabel={unpublishing ? 'Unpublish profile' : 'Publish profile'}
               onConfirm={async () => {
-                await setPublished(!published);
+                await setPublished(!unpublishing);
                 onDone();
               }}
             />

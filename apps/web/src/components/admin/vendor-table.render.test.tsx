@@ -163,9 +163,26 @@ describe('VendorRowActions', () => {
   it('offers Unpublish on a live storefront and Publish on an unpublished one', () => {
     expect(menuLabelsFor('live')).toEqual(['Unpublish profile', 'Suspend vendor']);
     cleanup();
-    expect(menuLabelsFor('paused')).toEqual(['Publish profile', 'Suspend vendor']);
+    /*
+     * Both directions on a row that is already down (#457). Unpublish is what
+     * sets the moderation hold, so a menu that offered only Publish here left
+     * the one vendor an operator could not moderate as the one who had taken
+     * themselves down first — which is the evasion the hold exists to close,
+     * and is reachable in one request from the vendor's own dashboard.
+     *
+     * Order is least → most severe, per the admin delta's Pattern B.
+     */
+    expect(menuLabelsFor('paused')).toEqual([
+      'Publish profile',
+      'Unpublish profile',
+      'Suspend vendor',
+    ]);
     cleanup();
-    expect(menuLabelsFor('review')).toEqual(['Publish profile', 'Suspend vendor']);
+    expect(menuLabelsFor('review')).toEqual([
+      'Publish profile',
+      'Unpublish profile',
+      'Suspend vendor',
+    ]);
   });
 
   /*
@@ -246,8 +263,17 @@ describe('VendorRowActions', () => {
  * same column. So the console can offer Publish on a row it cannot explain, and
  * the operator can put a business back on the marketplace against its owner's
  * own choice. Flagged by the adversarial review as the mirror of the recorded
- * acceptance-1 amendment; the copy is what is available until an action log
- * makes the question answerable.
+ * acceptance-1 amendment.
+ *
+ * **#457 answered half of it and the copy still stands for the other half.**
+ * A storefront moderated from now on reads `Held` in the row's own status, so
+ * that case explains itself before the dialog opens. Every row that reads
+ * `Paused` or `Review` is still the ambiguous one — the vendor's own pause and
+ * every moderation taken before the hold column existed both land there, and
+ * nothing distinguishes them. So this warning is not stale; it is now the
+ * warning for the rows that are still unexplained, and the dialog's own
+ * justification clause is the part that has narrowed. Rewording it is a copy
+ * change the design pass owns, filed with #457's other two unratified strings.
  */
 describe('RepublishConsequence', () => {
   it('warns that the storefront may have been paused by its own owner', () => {
@@ -262,5 +288,52 @@ describe('RepublishConsequence', () => {
     expect(copyOf(<RepublishConsequence subject="Their storefront" />)).toMatch(
       /a category, a bio, a reply time and one bookable package/,
     );
+  });
+});
+
+/**
+ * The moderation hold's one console-facing requirement (#457, acceptance 6).
+ *
+ * `is_published` recorded that a storefront was down and never who put it
+ * down, so an operator arriving at an unpublished row could not tell their
+ * colleague's moderation from the vendor's own pause — the ambiguity
+ * `RepublishConsequence` warns about in prose because nothing on the row could
+ * answer it. `moderation_hold` answers it, and `Held` is how the table says so.
+ */
+describe('the held status (#457)', () => {
+  /** The pill's own attribute, so the assertion survives a Tailwind class edit. */
+  function pillFor(status: AdminVendorStatus): { label: string; tone: string } {
+    render(<VendorTable filtered={false} rows={[vendorRow(status)]} />);
+    const [pill] = document.querySelectorAll('[data-slot="status-pill"]');
+
+    return {
+      label: pill?.textContent ?? '',
+      tone: pill?.getAttribute('data-tone') ?? '',
+    };
+  }
+
+  /*
+   * Fails on a `held: 'inert'` entry, which is the mistake worth guarding: it
+   * would draw a moderated storefront in the same grey as one the vendor
+   * paused, which is the exact confusion this status exists to end.
+   */
+  it('draws Held apart from Paused, in the tone the other moderation state spends', () => {
+    expect(pillFor('held')).toEqual({ label: 'Held', tone: 'needsYou' });
+    cleanup();
+    expect(pillFor('paused')).toEqual({ label: 'Paused', tone: 'inert' });
+    cleanup();
+    /* Shared with `Flagged` deliberately — both say an operator did this. */
+    expect(pillFor('flagged')).toEqual({ label: 'Flagged', tone: 'needsYou' });
+  });
+
+  /*
+   * The clearing lever. A held storefront is unpublished, so the menu offers
+   * the publish direction — and `PUT /admin/vendors/:id/publish` is the only
+   * writer that clears the hold, which makes this menu item the whole of
+   * acceptance 3's operator path.
+   */
+  it('offers the operator the publish direction on a held row, and only that', () => {
+    /* No Unpublish: the hold it would set already stands. */
+    expect(menuLabelsFor('held')).toEqual(['Publish profile', 'Suspend vendor']);
   });
 });

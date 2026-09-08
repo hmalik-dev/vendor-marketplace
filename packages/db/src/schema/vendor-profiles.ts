@@ -101,6 +101,35 @@ export const vendorProfiles = pgTable(
     stripeRequirementsDue: jsonb('stripe_requirements_due').$type<string[]>().notNull().default([]),
     /** Vendor-controlled public visibility. */
     isPublished: boolean('is_published').notNull().default(false),
+    /**
+     * An operator took this storefront down and only an operator may put it
+     * back (#457).
+     *
+     * `is_published` is written by two parties — the console's moderation lever
+     * and the vendor's own editor — so before this column existed the second
+     * one silently undid the first: an operator unpublished a storefront for a
+     * policy breach and the vendor republished it from their dashboard seconds
+     * later, with no refusal and no notification. The lever was advisory, and a
+     * ban was the only thing that actually held.
+     *
+     * Set and cleared by `PUT /admin/vendors/:vendorId/publish` alone. No
+     * vendor-facing write may touch it, and no cascade sets it: the automatic
+     * unpublish that follows deactivating a vendor's last package is a
+     * consequence, not a decision about the storefront.
+     *
+     * **The rows that predate it are not backfilled, and that is a decision
+     * rather than an omission.** A storefront an operator unpublished before
+     * this column existed arrives `false`, so it is liftable exactly as it was.
+     * `admin_actions` cannot say otherwise: it records every operator
+     * unpublish, but a vendor republishing writes no row at all, so the most
+     * recent `vendor_unpublished` does not mean the takedown still stands — and
+     * a backfill from it would hold storefronts whose owners had already put
+     * them back and then paused them for their own reasons. The lever answers
+     * it instead: since this ticket the console can unpublish a storefront that
+     * is already down, which sets the hold in one press on precisely those
+     * rows.
+     */
+    moderationHold: boolean('moderation_hold').notNull().default(false),
     /** Soft delete — preserves booking history integrity. */
     isDeleted: boolean('is_deleted').notNull().default(false),
     /** Derived from reviews; never written directly by an endpoint. */

@@ -1669,6 +1669,17 @@ export const vendorProfileDetailSchema = vendorProfileSchema.extend({
    * public listing. Empty means the publish toggle is safe to turn on.
    */
   publishBlockers: z.array(z.enum(PUBLISH_BLOCKER_KEYS)),
+  /**
+   * An operator has taken this storefront down and only an operator can put it
+   * back (#457).
+   *
+   * On the vendor's **own** detail read and nowhere else — it is a fact about
+   * them, and `publicVendorProfileSchema` is a separate shape that does not
+   * name it. Here because a toggle that reads *"Ready to publish"* over a
+   * storefront the server will refuse is a worse refusal than the 403: the
+   * vendor learns it by being told no, having been told yes a moment earlier.
+   */
+  moderationHold: z.boolean(),
 });
 export type VendorProfileDetail = z.infer<typeof vendorProfileDetailSchema>;
 
@@ -2279,6 +2290,7 @@ export type FieldErrorDetails = z.infer<typeof fieldErrorDetailsSchema>;
  * | Status    | Condition                                                          |
  * | --------- | ------------------------------------------------------------------ |
  * | `flagged` | the account is banned — the one moderation state there is          |
+ * | `held`    | an operator unpublished it and only an operator can undo that      |
  * | `live`    | the profile is published                                           |
  * | `paused`  | unpublished, but payouts are connected — set up and taken down     |
  * | `review`  | unpublished and never onboarded — a draft that has never been live |
@@ -2301,14 +2313,29 @@ export const adminPaginationShape = {
 /**
  * `retired` is the account, not the listing (#433).
  *
- * The other four are all states a vendor can move between: a paused storefront
- * publishes again, a flagged one is reinstated. `retired` is none of those — the
+ * `held` is the moderation state `paused` could not express (#457). Both are an
+ * unpublished storefront, and until `vendor_profiles.moderation_hold` existed
+ * nothing on the row said whether the vendor had paused their own trading or an
+ * operator had taken them down — the ambiguity the republish dialog warns about
+ * in prose. It is derived from the hold column, so it is still state the product
+ * already holds rather than a status somebody types into the table.
+ *
+ * The others are all states a row can move between: a paused storefront
+ * publishes again, a flagged one is reinstated, a held one is republished by
+ * the operator who held it. `retired` is none of those — the
  * owner deleted their Clerk identity, nothing in the product can undo it, and
  * the operator's only useful question about the row is which of their bookings
  * it unwound. Without it a deleted account read as `review`, which is the label
  * for a vendor still waiting to be let in.
  */
-export const ADMIN_VENDOR_STATUSES = ['live', 'review', 'flagged', 'paused', 'retired'] as const;
+export const ADMIN_VENDOR_STATUSES = [
+  'live',
+  'review',
+  'flagged',
+  'paused',
+  'held',
+  'retired',
+] as const;
 export const adminVendorStatusSchema = z.enum(ADMIN_VENDOR_STATUSES);
 export type AdminVendorStatus = (typeof ADMIN_VENDOR_STATUSES)[number];
 
@@ -2325,6 +2352,7 @@ export const ADMIN_VENDOR_STATUS_LABELS: Record<AdminVendorStatus, string> = {
   review: 'Review',
   flagged: 'Flagged',
   paused: 'Paused',
+  held: 'Held',
   retired: 'Retired',
 };
 
