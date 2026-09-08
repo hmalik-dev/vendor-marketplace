@@ -82,3 +82,27 @@ still. Ask them to disarm any competing `--auto`, not just to refrain from
 pushing: a peer's armed PR lands on its own and dequeues yours. Watch the PR to a
 terminal state rather than returning, and release the hold with a second message
 as soon as it lands. Related: [[ticket-worktree-merge-immediately]].
+
+## An armed auto-merge is not a merge that will happen
+
+A lane armed `--auto`, saw `autoMergeRequest` non-null, and would have waited
+**indefinitely**: the PR sat at `mergeStateStatus: BEHIND`, and this repo's
+**"Create or update the branch" job reports `skipping`** — so nothing was ever
+going to advance the branch. It looked armed the whole time.
+
+**The tell is `BEHIND` plus an armed auto-merge and no update job.** Arming is a
+state, not a process; on a repo with no merge queue and no auto-update, something
+still has to move the branch.
+
+**How to apply:** after arming, check `mergeStateStatus`. If it is `BEHIND`,
+`git merge origin/main` into the lane branch and push normally — the merge commit
+disappears at squash time and no force is needed. `gh pr update-branch` does the
+same and also only fast-forwards; neither can clear a `DIRTY`, which needs a
+local merge.
+
+**And do not reach for a branch rename after a rebase that only re-parented.**
+A non-fast-forward push rejection looks like rewritten history, but the rename
+rule is for history that genuinely changed. Compare **the commit's own patch
+against its parent on both sides** first — if they are byte-identical, the rebase
+moved the commit onto new docs commits and changed nothing that reached the diff,
+so realigning to the pushed branch loses nothing.
