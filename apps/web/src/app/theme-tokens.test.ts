@@ -3,6 +3,8 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { STONE_ROLES } from '../testing/token-roles';
+
 const require = createRequire(import.meta.url);
 const themeCss = readFileSync(
   require.resolve('@vendor-marketplace/config/tailwind/theme.css'),
@@ -186,10 +188,15 @@ describe('contrast rules', () => {
     ['steel-600', 'steel-50', 'information'],
     ['error-500', 'error-50', 'went wrong'],
     ['stone-600', 'stone-200', 'inert status pill'],
-    ['stone-480', 'stone-900', "the closing band's pitch and step numerals on the band ground"],
-    ['stone-560', 'stone-950', 'footer micro-labels and tagline on the footer ground'],
-    ['stone-520', 'stone-950', 'footer link columns on the footer ground'],
-    ['stone-0', 'stone-950', 'the footer wordmark and a hovered link'],
+    /*
+     * The ink half is spread from `STONE_ROLES` rather than listed again, so a
+     * step added to the ramp arrives here with its ground already named. These
+     * four were hand-written until #447, and `stone-540` — the band's muted
+     * copy — was the one they had quietly missed.
+     */
+    ...Object.entries(STONE_ROLES).flatMap(([token, { onInk }]) =>
+      onInk === undefined ? [] : [[token, onInk.ground, onInk.use]],
+    ),
   ])('%s on %s clears 4.5:1 — %s', (foreground, background) => {
     expect(contrast(foreground, background)).toBeGreaterThanOrEqual(AA_NORMAL);
   });
@@ -212,6 +219,39 @@ describe('contrast rules', () => {
 
   it('records that stone-500 is the one token allowed to fail, for inert content', () => {
     expect(contrast('stone-500', 'stone-0')).toBeLessThan(AA_NORMAL);
+  });
+});
+
+/*
+ * #447. Four times a token was chosen by nearest hex rather than by role —
+ * `stone-400` as text on ink twice, `stone-0` as a border on ink once, and an
+ * alpha of `stone-50` standing in for a value the ramp now holds outright. Each
+ * grew its own per-call-site guard and none of them was a law.
+ *
+ * `testing/token-roles.ts` is the law. This is the half that keeps it honest
+ * about the vocabulary: a step cannot enter the ramp without a role, and a step
+ * declared for ink text has to survive the ground it claims.
+ * `token-role-guard.test.ts` is the half that reads the call sites.
+ */
+describe('token roles', () => {
+  const STONE_TOKENS = [...COLOR_TOKENS.keys()].filter((token) => token.startsWith('stone-'));
+
+  it('classifies every stone token, and invents none', () => {
+    expect(Object.keys(STONE_ROLES).sort()).toEqual([...STONE_TOKENS].sort());
+  });
+
+  it('gives every ink-text token the ground it is pinned to, and no other token one', () => {
+    for (const [token, { roles, onInk }] of Object.entries(STONE_ROLES)) {
+      expect(onInk !== undefined, `${token}`).toBe(roles.includes('ink-text'));
+    }
+  });
+
+  it('pins each ink-text token to a ground that is itself an ink ground', () => {
+    for (const { onInk } of Object.values(STONE_ROLES)) {
+      if (onInk === undefined) continue;
+
+      expect(STONE_ROLES[onInk.ground]?.roles).toContain('ink-ground');
+    }
   });
 });
 
