@@ -181,10 +181,24 @@ an armed auto-merge is silently *dequeued* by a push to `main`. The remedy is
 
 **Two steps that make it sound, both from lane #462:**
 
-- After `update-branch`, `git reset --hard origin/<branch>` and confirm with
-  `git diff --stat` that it is **byte-identical** to the tree you gated —
-  otherwise `update-branch` quietly changes what merges and your green describes
-  a different tree.
+- After `update-branch`, **diff the new head against the head you gated and
+  re-gate only if the delta touches code, config or the lockfile.**
+  `git diff --stat <gated-head> <new-head>` — a markdown-only delta (tracker,
+  memory, agent-memory) cannot change a suite result, and re-running twenty
+  minutes of tests to prove that is waste. Byte-identical is the strong case;
+  docs-only is the common one. **What you must never do is skip the diff and
+  assume.** Lane #462, 2026-09-08 — it re-gated the update that pulled in #157
+  because that one moved code, and the web suite went 3095 → 3117, which is what
+  a real delta looks like.
+
+  **Two lanes derived this from opposite cases the same night, which is what
+  makes it a rule rather than a preference.** #462's update was three markdown
+  files and re-gating would have proved nothing. #444's *first* update brought
+  **~1085 insertions of another lane's code** — a sign-up form, a new module, its
+  tests and an E2E spec — so the green it had earned did not cover the tree that
+  would merge, and without the diff it would have merged a tree it had never
+  built. **Byte-identical is the check, not the expectation.** A landing lane's
+  close-out carries whatever landed before it, code included.
 - Confirm the arming by **reading `autoMergeRequest` back** (`ARMED SQUASH`),
   never by trusting the exit code — **but read `state` and `mergeCommit`
   alongside it.** That field was `null` before arming, `null` after the merge
@@ -204,5 +218,31 @@ is the only thing that works.
 | --- | --- | --- |
 | `BEHIND` + `autoMergeRequest: null` | nobody will merge it | ask the lane; arm or merge |
 | `BEHIND` + armed | waiting on the branch being updated | `update-branch` |
-| `BLOCKED` | armed or armable, required check unfinished | wait, by name |
+| `BLOCKED` | armed and a required check is running | wait, by name — the only one where waiting is correct |
+
+**`mergeStateStatus` has a fourth reading the table cannot answer: `UNKNOWN`**,
+while GitHub recomputes after an update. Waiting for it to settle costs a cycle.
+
+**Decide locally instead — it is immediate and cannot be `UNKNOWN`:**
+
+    git fetch origin main <branch>
+    git merge-base --is-ancestor origin/main origin/<branch>
+
+Exit 0 = the branch already contains `main`. Non-zero = it needs
+`update-branch`. Pure git over refs you already have, so it answers while the API
+is still thinking.
+
+**`mergeStateStatus` is the reporting field; `merge-base --is-ancestor` is the
+deciding one.** Use the API to understand *why* something is stuck; use git to
+decide *whether to act*. Lane #462, 2026-09-08.
+
+**`BEHIND` + armed is the one that looks like progress and is not**, and it is
+**re-enterable**: every push to `main` puts an armed PR back into it. So the lane
+loop is `update-branch → diff → re-gate if code moved → wait`, repeated until it
+lands. **Arm-and-forget does not work here** — the lane has to keep watching.
+
+**And for the supervisor: holding your own commit is not the same as `main`
+holding still.** A landing lane's close-out rebase can carry your commit along
+and push it, moving `main` without you doing anything. Tell lanes *before* a
+landing, not after.
 
