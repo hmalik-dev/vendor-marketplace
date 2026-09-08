@@ -729,6 +729,28 @@ export async function findAdminCustomers(
     .offset(offset);
 }
 
+/**
+ * The one filter the customers table can be narrowed by.
+ *
+ * `role = 'customer'` and the deleted-account exclusion are the screen's
+ * *domain*, not filters — widening past either would list vendors, or accounts
+ * that no longer exist, on a screen about customers.
+ */
+export const CUSTOMER_FILTER_KEYS = ['q'] as const;
+export type CustomerFilterKey = (typeof CUSTOMER_FILTER_KEYS)[number];
+
+/** How many customers dropping the search would reveal, in one scan (#454). */
+export async function countCustomerWidenings(
+  db: AppDatabase,
+  q: string | undefined,
+): Promise<FilterWidening[]> {
+  return countWidenings<CustomerFilterKey>({
+    active: q === undefined ? [] : CUSTOMER_FILTER_KEYS,
+    conditionWithout: () => customerCondition(undefined),
+    scan: (selection) => db.select(selection).from(users),
+  });
+}
+
 export async function countAdminCustomers(db: AppDatabase, q: string | undefined): Promise<number> {
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
@@ -874,6 +896,35 @@ function bookingFilterCondition(filters: AdminBookingFilters): SQL | undefined {
   );
 }
 
+/** The two filters the bookings table can be narrowed by. */
+export const BOOKING_FILTER_KEYS = ['status', 'flag'] as const;
+export type BookingFilterKey = (typeof BOOKING_FILTER_KEYS)[number];
+
+/**
+ * How many bookings each single widening would reveal, in one scan (#454).
+ *
+ * The `FROM` repeats the list's joins and has to: `refundStuck` reads
+ * `users.isBanned` and `vendorOwner.deletedAt`, so a scan of `bookings` alone
+ * could not build the predicate at all. The `vendorProfiles` join is what
+ * `vendorOwner` hangs off, which is why all three are here.
+ */
+export async function countBookingWidenings(
+  db: AppDatabase,
+  filters: AdminBookingFilters,
+): Promise<FilterWidening[]> {
+  return countWidenings<BookingFilterKey>({
+    active: BOOKING_FILTER_KEYS.filter((key) => filters[key] !== undefined),
+    conditionWithout: (dropped) => bookingFilterCondition({ ...filters, [dropped]: undefined }),
+    scan: (selection) =>
+      db
+        .select(selection)
+        .from(bookings)
+        .innerJoin(users, eq(users.id, bookings.customerId))
+        .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
+        .innerJoin(vendorOwner, eq(vendorOwner.id, vendorProfiles.userId)),
+  });
+}
+
 export async function findAdminBookings(
   db: AppDatabase,
   filters: AdminBookingFilters,
@@ -941,6 +992,33 @@ function paymentFilterCondition(flag: AdminPaymentFlag | undefined): SQL | undef
     sql`${bookings.paidAt} is not null`,
     ...(flag === 'payout-failing' ? payoutFailingClauses() : []),
   );
+}
+
+/**
+ * The one filter the payments table can be narrowed by.
+ *
+ * `paid_at is not null` is not on this list and must not be: it is the screen's
+ * *domain* rather than a filter an operator applied, so offering to widen past
+ * it would offer a payments list containing bookings nobody has paid for.
+ */
+export const PAYMENT_FILTER_KEYS = ['flag'] as const;
+export type PaymentFilterKey = (typeof PAYMENT_FILTER_KEYS)[number];
+
+/** How many payments dropping the flag would reveal, in one scan (#454). */
+export async function countPaymentWidenings(
+  db: AppDatabase,
+  flag: AdminPaymentFlag | undefined,
+): Promise<FilterWidening[]> {
+  return countWidenings<PaymentFilterKey>({
+    active: flag === undefined ? [] : PAYMENT_FILTER_KEYS,
+    conditionWithout: () => paymentFilterCondition(undefined),
+    scan: (selection) =>
+      db
+        .select(selection)
+        .from(bookings)
+        .innerJoin(users, eq(users.id, bookings.customerId))
+        .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId)),
+  });
 }
 
 export async function findAdminPayments(
@@ -1016,6 +1094,27 @@ export async function findAdminReviews(
     .orderBy(desc(reviews.createdAt))
     .limit(limit)
     .offset(offset);
+}
+
+/**
+ * The one filter the reviews table can be narrowed by.
+ *
+ * `isPublic` is deliberately absent: hiding a review is a moderation *state*
+ * the table renders, not a filter the bar offers, so there is nothing to widen.
+ */
+export const REVIEW_FILTER_KEYS = ['type'] as const;
+export type ReviewFilterKey = (typeof REVIEW_FILTER_KEYS)[number];
+
+/** How many reviews dropping the direction would reveal, in one scan (#454). */
+export async function countReviewWidenings(
+  db: AppDatabase,
+  type: ReviewType | undefined,
+): Promise<FilterWidening[]> {
+  return countWidenings<ReviewFilterKey>({
+    active: type === undefined ? [] : REVIEW_FILTER_KEYS,
+    conditionWithout: () => undefined,
+    scan: (selection) => db.select(selection).from(reviews),
+  });
 }
 
 export async function countAdminReviews(

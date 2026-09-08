@@ -558,8 +558,15 @@ export async function listCases(db: AppDatabase, query: AdminCaseQuery): Promise
    * Sequential rather than folded into the `Promise.all` above: it costs an
    * unfiltered scan and the overwhelming majority of requests to this route
    * return rows, where that scan buys nothing at all.
+   *
+   * **Page one only, and that is a correctness condition rather than a saving.**
+   * `rows.length === 0` is also true for every page past the last one, where
+   * the filter is revealing plenty — so without it `?page=2` on a queue holding
+   * four open cases renders "No open cases", which is false, above a count of
+   * rows the operator can already see on page one.
    */
-  const widenings = rows.length === 0 ? await countCaseWidenings(db, query) : [];
+  const widenings =
+    rows.length === 0 && query.page === 1 ? await countCaseWidenings(db, query) : [];
 
   return {
     items: rows.map(toCaseRow),

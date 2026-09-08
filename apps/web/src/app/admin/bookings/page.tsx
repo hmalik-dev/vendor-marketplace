@@ -4,6 +4,7 @@ import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { StatusPill } from '@/components/ui/status-pill';
 import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
 import { getAdminBookings } from '@/lib/admin-data';
@@ -70,6 +71,19 @@ export default async function AdminBookingsPage({
               description: 'A booking appears here the moment a customer pays.',
             };
 
+  /*
+   * The counted ways out (#454). Two filters, and the pairing that produces
+   * nothing by construction — `refund-stuck` is always `confirmed`, so any
+   * other status with it returns zero — is exactly where a counted widening
+   * earns itself: dropping the status is the route that pays, and the number
+   * says so before the operator clicks.
+   */
+  const filtered = Boolean(status ?? flag);
+  const active: ActiveFilter[] = [
+    { key: 'status', widening: 'Any status', carried: { flag } },
+    { key: 'flag', widening: 'Any booking', carried: { status } },
+  ].filter((filter) => (filter.key === 'status' ? status : flag) !== undefined);
+
   return (
     <AdminSurface
       heading="Bookings"
@@ -116,7 +130,18 @@ export default async function AdminBookingsPage({
       <DataTable
         rows={bookings.items}
         rowKey={(row) => row.id}
-        empty={<EmptyState headline={empty.headline} description={empty.description} />}
+        empty={
+          filtered ? (
+            <FilteredEmpty
+              headline={empty.headline}
+              path={PATH}
+              filters={active}
+              widenings={bookings.widenings}
+            />
+          ) : (
+            <EmptyState headline={empty.headline} description={empty.description} />
+          )
+        }
         columns={[
           {
             key: 'vendor',

@@ -74,9 +74,13 @@ import {
   countActionWidenings,
   countAdminActions,
   countAdminBookings,
+  countBookingWidenings,
   countAdminCustomers,
+  countCustomerWidenings,
   countAdminPayments,
+  countPaymentWidenings,
   countAdminReviews,
+  countReviewWidenings,
   countAdminTagSuggestions,
   countAdminVendors,
   countVendorWidenings,
@@ -200,12 +204,17 @@ export async function listActivity(
   ]);
 
   /*
-   * The counted ways out, and only for an empty page (#454). Sequential rather
-   * than folded into the `Promise.all` above, because it costs an unfiltered
-   * scan that buys nothing on the overwhelming majority of requests, which
-   * return rows.
+   * The counted ways out, and only for an empty **first** page (#454).
+   * Sequential rather than folded into the `Promise.all` above, because it
+   * costs an unfiltered scan that buys nothing on the overwhelming majority of
+   * requests, which return rows.
+   *
+   * The `page === 1` half is correctness, not thrift: an empty page past the
+   * last one is not a filtered-empty view, and treating it as one prints "no
+   * rows match" over a filter that is matching plenty.
    */
-  const widenings = rows.length === 0 ? await countActionWidenings(db, query) : [];
+  const widenings =
+    rows.length === 0 && query.page === 1 ? await countActionWidenings(db, query) : [];
 
   return {
     widenings,
@@ -310,10 +319,13 @@ export async function listVendors(
   ]);
 
   /*
-   * The counted ways out, and only for an empty page (#454) — the screen #443's
-   * sixth finding was filed against, and the one with five filters to widen.
+   * The counted ways out, and only for an empty **first** page (#454) — the
+   * screen #443's sixth finding was filed against, and the one with five
+   * filters to widen. See `listAdminActivity` for why the page number is part
+   * of the condition rather than an optimisation.
    */
-  const widenings = rows.length === 0 ? await countVendorWidenings(db, filters) : [];
+  const widenings =
+    rows.length === 0 && query.page === 1 ? await countVendorWidenings(db, filters) : [];
 
   return {
     items: rows.map(toVendorRow),
@@ -572,7 +584,16 @@ export async function listCustomers(
     countAdminCustomers(db, query.q),
   ]);
 
-  return { items: rows, total, page: query.page, pageSize: query.pageSize };
+  /*
+   * The counted ways out, and only for an empty **first** page (#454). See
+   * `listAdminActivity` for why the page number is part of the condition
+   * rather than an optimisation, and why this is not folded into the
+   * `Promise.all` above.
+   */
+  const widenings =
+    rows.length === 0 && query.page === 1 ? await countCustomerWidenings(db, query.q) : [];
+
+  return { items: rows, total, page: query.page, pageSize: query.pageSize, widenings };
 }
 
 /**
@@ -604,7 +625,17 @@ export async function listBookings(
     countAdminBookings(db, filters),
   ]);
 
+  /*
+   * The counted ways out, and only for an empty **first** page (#454). See
+   * `listAdminActivity` for why the page number is part of the condition
+   * rather than an optimisation, and why this is not folded into the
+   * `Promise.all` above.
+   */
+  const widenings =
+    rows.length === 0 && query.page === 1 ? await countBookingWidenings(db, filters) : [];
+
   return {
+    widenings,
     items: rows.map((row) => ({
       id: row.id,
       status: row.status,
@@ -632,7 +663,17 @@ export async function listPayments(
     countAdminPayments(db, query.flag),
   ]);
 
+  /*
+   * The counted ways out, and only for an empty **first** page (#454). See
+   * `listAdminActivity` for why the page number is part of the condition
+   * rather than an optimisation, and why this is not folded into the
+   * `Promise.all` above.
+   */
+  const widenings =
+    rows.length === 0 && query.page === 1 ? await countPaymentWidenings(db, query.flag) : [];
+
   return {
+    widenings,
     items: rows.map((row) => ({
       bookingId: row.id,
       status: row.status,
@@ -723,7 +764,17 @@ export async function listReviews(
     countAdminReviews(db, query.type),
   ]);
 
+  /*
+   * The counted ways out, and only for an empty **first** page (#454). See
+   * `listAdminActivity` for why the page number is part of the condition
+   * rather than an optimisation, and why this is not folded into the
+   * `Promise.all` above.
+   */
+  const widenings =
+    rows.length === 0 && query.page === 1 ? await countReviewWidenings(db, query.type) : [];
+
   return {
+    widenings,
     items: rows.map((row) => ({
       id: row.id,
       rating: row.rating,

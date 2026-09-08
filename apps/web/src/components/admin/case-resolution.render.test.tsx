@@ -49,6 +49,11 @@ const CASE: WireAdminCaseDetail = {
   senderName: 'Maya Rivera',
   senderEmail: 'maya.rivera@fastmail.com',
   bookingId: BOOKING.id,
+  // `null` on a chargeback: the three report fields belong to #436's in-product
+  // origin, and a card network fills none of them in.
+  subjectType: null,
+  subjectId: null,
+  reportReason: null,
   createdAt: new Date('2026-09-04T09:12:00.000Z'),
   message: 'Nobody arrived.',
   holdRefusal: null,

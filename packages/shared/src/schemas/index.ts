@@ -2738,7 +2738,8 @@ export const adminVendorFacetsSchema = z.object({
 export type AdminVendorFacets = z.infer<typeof adminVendorFacetsSchema>;
 
 export type AdminCustomerQuery = z.infer<typeof adminCustomerQuerySchema>;
-export const adminCustomerPageSchema = paginatedSchema(adminCustomerRowSchema);
+export const adminCustomerPageSchema =
+  paginatedSchema(adminCustomerRowSchema).extend(wideningShape);
 export type AdminCustomerPage = z.infer<typeof adminCustomerPageSchema>;
 
 export const adminBookingQuerySchema = z.object({
@@ -2747,7 +2748,7 @@ export const adminBookingQuerySchema = z.object({
   flag: adminBookingFlagSchema.optional(),
 });
 export type AdminBookingQuery = z.infer<typeof adminBookingQuerySchema>;
-export const adminBookingPageSchema = paginatedSchema(adminBookingRowSchema);
+export const adminBookingPageSchema = paginatedSchema(adminBookingRowSchema).extend(wideningShape);
 export type AdminBookingPage = z.infer<typeof adminBookingPageSchema>;
 
 /**
@@ -2764,7 +2765,7 @@ export const adminPaymentQuerySchema = z.object({
   flag: adminPaymentFlagSchema.optional(),
 });
 export type AdminPaymentQuery = z.infer<typeof adminPaymentQuerySchema>;
-export const adminPaymentPageSchema = paginatedSchema(adminPaymentRowSchema);
+export const adminPaymentPageSchema = paginatedSchema(adminPaymentRowSchema).extend(wideningShape);
 export type AdminPaymentPage = z.infer<typeof adminPaymentPageSchema>;
 
 /**
@@ -2801,7 +2802,7 @@ export const adminReviewQuerySchema = z.object({
   type: reviewTypeSchema.optional(),
 });
 export type AdminReviewQuery = z.infer<typeof adminReviewQuerySchema>;
-export const adminReviewPageSchema = paginatedSchema(adminReviewRowSchema);
+export const adminReviewPageSchema = paginatedSchema(adminReviewRowSchema).extend(wideningShape);
 export type AdminReviewPage = z.infer<typeof adminReviewPageSchema>;
 
 export type AdminTagSuggestionQuery = z.infer<typeof adminTagSuggestionQuerySchema>;

@@ -1,6 +1,7 @@
 import { ADMIN_PAYMENT_FLAGS, formatPrice } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
+import { FilteredEmpty } from '@/components/admin/filtered-empty';
 import { PaymentTable } from '@/components/admin/payment-table';
 import { PAYOUT_FAILING_LABEL } from '@/lib/booking-entries';
 import { getAdminPayments } from '@/lib/admin-data';
@@ -88,7 +89,26 @@ export default async function AdminPaymentsPage({
         total: payments.total,
       }}
     >
-      <PaymentTable rows={payments.items} empty={empty} />
+      <PaymentTable
+        rows={payments.items}
+        empty={empty}
+        /*
+         * One filter, so one counted way out (#454). `paid_at is not null` is
+         * this screen's domain rather than a filter, so it is not offered:
+         * widening past it would list bookings nobody has paid for on the
+         * screen about payments.
+         */
+        filteredEmpty={
+          flag ? (
+            <FilteredEmpty
+              headline={`No payments match "${PAYOUT_FAILING_LABEL}"`}
+              path={PATH}
+              filters={[{ key: 'flag', widening: 'Every payment', carried: {} }]}
+              widenings={payments.widenings}
+            />
+          ) : undefined
+        }
+      />
     </AdminSurface>
   );
 }

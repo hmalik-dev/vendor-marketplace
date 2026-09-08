@@ -59,16 +59,24 @@ export default async function AdminCasesPage({
   /*
    * The filters currently narrowing the view, in the order the bar shows them.
    *
-   * `status` is always one of them even though the bar offers no "any": the
-   * schema defaults it to `open`, and that default *is* a narrowing — the
-   * delta's own worked example is "Open cases instead (4)" from a resolved
-   * view. `booking` is only active when it was set.
+   * **`status` is a switch, not a drop, and this queue is the only screen where
+   * that is true.** `adminCaseQuerySchema` defaults it to `open`, so clearing
+   * the parameter lands back on open — which is exactly why the filter bar
+   * offers no "any status", and an `Any status` widening would be the same
+   * control the bar deliberately does not have: on the default view it would
+   * link straight back to the empty page it was offered from. So it navigates
+   * to the *other* status and the API counts that status, which is what the
+   * delta's own worked example draws — `Open cases instead (4)`, seen from a
+   * resolved view.
+   *
+   * `booking` is a genuine drop, and is only active when it was set.
    */
+  const other = showing === 'open' ? 'resolved' : 'open';
   const active: ActiveFilter[] = [
     {
       key: 'status',
-      widening: 'Any status',
-      carried: { booking },
+      widening: `${CASE_PRESENTATION[other].label} cases instead`,
+      carried: { status: other, booking },
     },
     ...(booking
       ? [
@@ -83,8 +91,8 @@ export default async function AdminCasesPage({
 
   /*
    * The heading recites the filters as the operator set them, which is why it
-   * is written here rather than joined from `phrase` inside the component: a
-   * generic join reads "No resolved and about a booking cases", and this
+   * is written here rather than assembled from fragments inside the component:
+   * a generic join reads "No resolved and about a booking cases", and this
    * sentence is the part of the state that has to sound like a person wrote it.
    */
   const filteredHeadline = booking
@@ -174,11 +182,17 @@ export default async function AdminCasesPage({
            * the platform simply has no cases. `widenings.length > 0` decides it
            * on its own for the ordinary case — the API only counts routes that
            * exist — and the two explicit parameters cover the one it cannot:
-           * an operator who set both filters, where dropping either *alone*
+           * an operator who set both filters, where widening either *alone*
            * still finds nothing. That state has a heading and an escape to
            * offer even with no counted route.
+           *
+           * `status`, not `raw.status`: the parsed value, like every other read
+           * on this page. `?status=nonsense` is a parameter the screen has
+           * already told the operator it ignored (`dropped`), so treating it as
+           * a filter would put the *filtered*-empty copy on a view nothing is
+           * filtering.
            */
-          cases.widenings.length > 0 || raw.status !== undefined || booking !== undefined ? (
+          cases.widenings.length > 0 || status !== undefined || booking !== undefined ? (
             <FilteredEmpty
               headline={filteredHeadline}
               path={PATH}

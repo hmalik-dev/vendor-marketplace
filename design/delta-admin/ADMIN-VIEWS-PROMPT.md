@@ -37,6 +37,17 @@ disagreeing. They are not open questions and are not to be re-asked.
    is the difference between two outcomes for somebody's money, not a wording
    preference. Nothing here changes what a suspension does.
 
+4. **`quoted` is steel and `accepted` is clay — this bundle's table is
+   overruled on both.** It rules them gold and sage. `03-components.md` line 29
+   rules `QUOTED steel-50 / steel-600` product-wide, and `accepted` is the one
+   status that spends clay: `needsYou` means _waiting on this user_, and an
+   accepted request is waiting on the customer to pay. Both pills are drawn on
+   the customer hub and the request detail as well as the console, so an _admin_
+   bundle is not the authority that restyles them — and `/admin/requests`, the
+   only surface here that would show either, does not exist yet (#437). Ruled by
+   the account holder; the table above is corrected, nothing in the product
+   changes, and `web-design-parity.md` records both.
+
 ## 0 — Shell corrections
 
 **The rail is nine rows, not eight.** The brief lists eight ending in Activity
@@ -61,15 +72,16 @@ text + inset 3px clay bar; content on a 12px gutter with a 1px right border.
 steel = information · gold = waiting on someone · red = failed · sage = settled.
 Consequences for the statuses in this delta:
 
-| Status                                            | Colour | Why                                     |
-| ------------------------------------------------- | ------ | --------------------------------------- |
-| pending, quoted                                   | gold   | waiting on someone                      |
-| accepted                                          | sage   | settled                                 |
-| declined, cancelled, expired                      | stone  | resolved, nothing failed, no clock left |
-| payout attempt failed, chargeback, dispute reason | red    | it failed                               |
-| case open                                         | gold   | waiting on us                           |
-| case resolved                                     | sage   | settled                                 |
-| case age ≥72h                                     | red    | the SLA failed (not the case)           |
+| Status                                            | Colour | Why                                      |
+| ------------------------------------------------- | ------ | ---------------------------------------- |
+| pending                                           | gold   | waiting on someone                       |
+| quoted                                            | steel  | the vendor sent a number (correction 4)  |
+| accepted                                          | clay   | waiting on the customer to pay (corr. 4) |
+| declined, cancelled, expired                      | stone  | resolved, nothing failed, no clock left  |
+| payout attempt failed, chargeback, dispute reason | red    | it failed                                |
+| case open                                         | gold   | waiting on us                            |
+| case resolved                                     | sage   | settled                                  |
+| case age ≥72h                                     | red    | the SLA failed (not the case)            |
 
 Expired is **not** red. A clock running out is not a failure.
 

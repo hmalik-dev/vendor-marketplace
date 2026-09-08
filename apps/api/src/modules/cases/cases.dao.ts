@@ -125,23 +125,43 @@ export async function findSupportCases(
 }
 
 /**
- * The two filters this queue can be narrowed by, and the widening each drops.
+ * The two filters this queue can be narrowed by.
  *
- * `status` is on the list even though `adminCaseQuerySchema` defaults it to
- * `open` and the filter bar offers no "any". That default *is* a narrowing —
- * the drawn example is literally "Open cases instead (4)" from a resolved
- * view — and an operator staring at an empty resolved list needs the way back
- * to open more than anyone needs it anywhere else on the console.
+ * `status` is on the list even though the filter bar offers no "any", and it is
+ * the one that needs explaining. `adminCaseQuerySchema` defaults it to `open`,
+ * so **there is no URL that means "any status" here** — clearing the parameter
+ * lands back on open, which is the reason the bar has no such choice. The
+ * widening is therefore a *switch to the other status*, not a drop, and the
+ * delta's own worked example is exactly that: `Open cases instead (4)`, seen
+ * from a resolved view.
+ *
+ * That distinction is load-bearing rather than pedantic. Counting `status` as a
+ * drop counts every row of both statuses — a set no destination can show — so
+ * the button would print a number the page it opens does not have, and on the
+ * console's default view it would link straight back to the empty page it was
+ * offered from.
  */
 export const CASE_FILTER_KEYS = ['status', 'booking'] as const;
 export type CaseFilterKey = (typeof CASE_FILTER_KEYS)[number];
 
+/** The status a `status` widening actually navigates to. Two members, so it is the other one. */
+export function otherCaseStatus(status: SupportCaseStatus): SupportCaseStatus {
+  return status === 'open' ? 'resolved' : 'open';
+}
+
 /**
  * How many cases each single widening would reveal, in one scan (#454).
  *
- * Only called for an empty page, and the caller is what enforces that: see
- * `countWidenings`. The scan is unfiltered because dropping a filter widens,
- * so every row being counted is outside the current `WHERE` by construction.
+ * Only called for an empty first page — the caller enforces that. The scan is
+ * unfiltered because a widening reaches rows outside the current `WHERE` by
+ * construction, and one `count(*) filter (where …)` per key is what keeps it a
+ * single pass rather than a query per filter.
+ *
+ * **Every count is the count of the page its button opens.** `status` counts
+ * the *other* status rather than both, because that is where its link goes;
+ * `booking` is a genuine drop and counts the status held. A count that
+ * described a different set from the destination would be worse than no number
+ * at all — the operator would click it and find fewer rows than promised.
  *
  * No sender join, for the reason `countSupportCases` gives: nothing in
  * `caseFilterCondition` leaves `support_cases`, and a left join cannot change a
@@ -155,7 +175,7 @@ export async function countCaseWidenings(
     active: CASE_FILTER_KEYS.filter((key) => key !== 'booking' || query.booking !== undefined),
     conditionWithout: (dropped) =>
       caseFilterCondition({
-        status: dropped === 'status' ? undefined : query.status,
+        status: dropped === 'status' ? otherCaseStatus(query.status) : query.status,
         booking: dropped === 'booking' ? undefined : query.booking,
       }),
     scan: (selection) => db.select(selection).from(supportCases),

@@ -136,6 +136,47 @@ describe('the counted filtered-empty routes on /admin/cases', () => {
   });
 
   /**
+   * The `status` route counts the page its button opens, and the arithmetic
+   * says so even where the two readings coincide.
+   *
+   * This queue's `status` widening is a **switch**, not a drop: the schema
+   * defaults the parameter to `open`, so no URL means "any status", and a
+   * button offering one would link back to the page it was offered from.
+   *
+   * The numbers happen to agree in every reachable state, and that is worth
+   * writing down rather than discovering twice. The page is empty exactly when
+   * `count(current ∧ rest) = 0`, so `count(rest)` — the drop — is
+   * `0 + count(other ∧ rest)`, which *is* the switch. **What differed was never
+   * the count but the destination**, and that is asserted on the surface, where
+   * the href is built.
+   */
+  it('counts the status route at the status it switches to', async () => {
+    await insertCase('ORL-WXYZ-B2', 'open');
+
+    // Four resolved, one open, none linked. From resolved+with, the switch to
+    // open still holds `booking=with`, which no case satisfies.
+    const page = await readCases('?status=resolved&booking=with');
+
+    expect(page.items).toHaveLength(0);
+    expect(page.widenings).toEqual([{ key: 'booking', count: 4 }]);
+  });
+
+  /**
+   * An empty page past the last one is **not** a filtered-empty view.
+   *
+   * `rows.length === 0` is true there too, and treating it as the empty state
+   * printed "no rows match" over a filter that is matching plenty — with a
+   * widening count beside it describing rows the operator can already see on
+   * page one.
+   */
+  it('offers no route on a page past the last one', async () => {
+    const page = await readCases('?status=resolved&page=2');
+
+    expect(page.items).toHaveLength(0);
+    expect(page.widenings).toEqual([]);
+  });
+
+  /**
    * A page that has rows pays nothing for this.
    *
    * The scan is unfiltered by construction, so it is the one query on this

@@ -264,15 +264,26 @@ holds — none of them is drift, and a parity pass reports all four as expected.
   in the product goes through. Changing it is a product-wide decision, not a
   console parity fix.
 
-**One colour disagreement is unresolved and is not this ticket's to settle.**
-The delta's table rules `quoted` **gold**; `03-components.md` line 29 rules it
-`steel-50 / steel-600`, product-wide, and the pill is drawn on the customer hub
-and the request detail as well as the console. The surface where the delta would
-show it — `/admin/requests` — **does not exist yet and is #437's**. So this is a
-design adjudication between two contract files, the same shape as #449, and
-restyling three customer screens off an admin bundle is not a call a lane makes.
-`admin-delta-parity.test.ts` pins the current value with this reasoning beside
-it, so changing it is deliberate rather than incidental.
+**Two colour entries in the delta are overruled, and both are ruled rather than
+open (#454, 2026-09-07).** The bundle is an _admin_ bundle and these pills are
+drawn on the customer hub and the request detail as well as the console;
+`/admin/requests`, the only surface where either would show, does not exist yet
+and is #437's. So the product-wide file wins in both cases, and the bundle's
+table is corrected as transcription drift under D30 — the same direction its
+`holds payouts` line went.
+
+- **`quoted` stays steel.** `03-components.md` line 29 rules
+  `QUOTED steel-50 / steel-600`; the delta's table says gold. Ruled by the
+  account holder: `03-components.md` stands, nothing is restyled, and
+  `/admin/requests` will draw steel when #437 builds it.
+- **`accepted` stays clay.** The delta calls it _settled_ and colours it sage.
+  `needsYou` is the only tone that spends clay and it means **waiting on this
+  user** — an accepted request is waiting on the customer to pay, which is
+  exactly why the hub draws it that way. Sage would say the transaction is done
+  on the screen where it is least done.
+
+Neither is a finding and neither is re-litigated per screen.
+`admin-delta-parity.test.ts` pins both with the ruling beside them.
 
 ## A one-shot read is a sample, not a measurement
 

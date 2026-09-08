@@ -157,6 +157,18 @@ export function DataRightsActions({
               </strong>{' '}
               Cancel or complete {closeBlockers.length === 1 ? 'it' : 'them'} first, from the
               booking screens, where the refund is priced.
+              {/*
+                **Named but not linked, and #437 owes the link.**
+
+                Pattern B draws this panel with the blocking booking linked, and
+                `closeBlockers` carries the `bookingId` to link it with. The
+                destination is `/admin/bookings/[id]`, which **does not exist
+                yet** — it is one of the five detail routes #437 builds. A link
+                to a 404 is worse than no link: it tells an operator the console
+                has somewhere to send them and then does not. So the booking is
+                named and dated here, and the anchor goes on when the route it
+                would point at is real.
+              */}
               <ul className="mt-1.5 flex flex-col gap-0.5 text-stone-700">
                 {closeBlockers.map((booking) => (
                   <li key={booking.bookingId}>

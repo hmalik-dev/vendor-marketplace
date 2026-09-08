@@ -353,9 +353,29 @@ export default async function AdminCasePage({
               />
             </div>
 
+            {/*
+              **Red, and called by its own name** — Pattern C (#454).
+
+              The delta draws this field as `Dispute reason` with the value in
+              red, and it is one of exactly three things in the whole delta that
+              earn red: a payout attempt that failed, a chargeback, and this.
+              `40-states.md` reserves red for failure and this is the sentence
+              saying what failed — the reason a card network or a customer gave
+              for the money being in dispute.
+
+              It rendered as a plain `Hold reason`, which is the platform's
+              word for the *consequence* rather than the network's word for the
+              cause; an operator comparing this screen to Stripe's dashboard was
+              reading two names for one field.
+            */}
             {booking.disputeReason ? (
               <div className="mt-3.5">
-                <Field label="Hold reason" value={booking.disputeReason} />
+                <Field
+                  label="Dispute reason"
+                  value={
+                    <span className="font-semibold text-error-500">{booking.disputeReason}</span>
+                  }
+                />
               </div>
             ) : null}
           </Card>

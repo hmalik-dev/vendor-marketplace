@@ -344,22 +344,34 @@ describe('the delta colour vocabulary', () => {
 
     return (family?.[1] ?? 'unknown').replace('error', 'red');
   };
+  const toneOf = (entry: { tone: keyof typeof STATUS_TONES } | undefined): string =>
+    tone(STATUS_TONES[entry?.tone as keyof typeof STATUS_TONES] ?? '');
 
-  const DELTA_STATUSES: ReadonlyArray<readonly [string, string, string]> = [
-    ['request', 'pending', 'gold'],
-    ['request', 'accepted', 'clay'],
-    ['request', 'declined', 'stone'],
-    ['request', 'cancelled', 'stone'],
-    ['request', 'expired', 'stone'],
-    ['booking', 'confirmed', 'sage'],
-    ['booking', 'completed', 'sage'],
-    ['booking', 'cancelled', 'stone'],
-    ['booking', 'disputed', 'red'],
-    ['case', 'open', 'gold'],
-    ['case', 'resolved', 'sage'],
-    ['payout', 'pending', 'gold'],
-    ['payout', 'held', 'clay'],
-    ['payout', 'released', 'sage'],
+  /**
+   * Every status the delta's table names, with the colour **this console
+   * draws** and whether that agrees with the delta.
+   *
+   * The fourth column is the point. Two entries disagree with the bundle, and
+   * both are ruled overrides rather than transcription — writing the code's
+   * value into a table headed "what the delta rules" is how a test comes to
+   * verify the falsehood it was written to catch.
+   */
+  const DELTA_STATUSES: ReadonlyArray<readonly [string, string, string, 'agrees' | 'override']> = [
+    ['request', 'pending', 'gold', 'agrees'],
+    ['request', 'quoted', 'steel', 'override'],
+    ['request', 'accepted', 'clay', 'override'],
+    ['request', 'declined', 'stone', 'agrees'],
+    ['request', 'cancelled', 'stone', 'agrees'],
+    ['request', 'expired', 'stone', 'agrees'],
+    ['booking', 'confirmed', 'sage', 'agrees'],
+    ['booking', 'completed', 'sage', 'agrees'],
+    ['booking', 'cancelled', 'stone', 'agrees'],
+    ['booking', 'disputed', 'red', 'agrees'],
+    ['case', 'open', 'gold', 'agrees'],
+    ['case', 'resolved', 'sage', 'agrees'],
+    ['payout', 'pending', 'gold', 'agrees'],
+    ['payout', 'held', 'clay', 'agrees'],
+    ['payout', 'released', 'sage', 'agrees'],
   ];
 
   const MAPS: Record<string, Record<string, { tone: keyof typeof STATUS_TONES }>> = {
@@ -372,7 +384,7 @@ describe('the delta colour vocabulary', () => {
   it.each(DELTA_STATUSES)('draws a %s %s in %s', (domain, status, expected) => {
     const entry = MAPS[domain as string]?.[status as string];
     expect(entry, `${domain} ${status} has no presentation`).toBeDefined();
-    expect(tone(STATUS_TONES[entry?.tone as keyof typeof STATUS_TONES])).toBe(expected);
+    expect(toneOf(entry)).toBe(expected);
   });
 
   /**
@@ -383,49 +395,127 @@ describe('the delta colour vocabulary', () => {
    * anything wrong, and the request simply has no time left.
    */
   it('draws expired stone, never red', () => {
-    expect(tone(STATUS_TONES[REQUEST_PRESENTATION.expired?.tone as 'inert'])).toBe('stone');
+    expect(toneOf(REQUEST_PRESENTATION.expired)).toBe('stone');
   });
 
   /**
-   * Red is reserved, and this is the assertion that fails when it stops being.
+   * Red is reserved, and this reads it out of the **presentation maps** rather
+   * than out of the table above.
    *
-   * Only three things in this delta are failures: a payout attempt that failed,
-   * a chargeback, and a dispute reason. Every other status above is checked to
-   * be *not* red, which is what makes a status quietly taking `failed` visible.
+   * The version this replaces filtered `DELTA_STATUSES` for its own `'red'`
+   * literals and asserted on the result — a tautology that could not fail for
+   * any change to any tone, because nothing it touched came from the product.
+   * This walks every entry of all four maps and names the ones that resolve to
+   * red, so a status quietly taking `failed` fails here by appearing in the
+   * list.
+   *
+   * `40-states.md` reserves red for failure, and in this delta exactly three
+   * things have failed: a **payout attempt**, a **chargeback**, and a **dispute
+   * reason**. Only one of the three is a *status* in these maps — a booking's
+   * `disputed`. The other two are not statuses at all, which is why they are
+   * asserted separately below rather than wedged into a status table.
    */
-  it('spends red on nothing but the three failures', () => {
-    const red = DELTA_STATUSES.filter(([, , expected]) => expected === 'red').map(
-      ([domain, status]) => `${domain} ${status}`,
+  it('spends red on no status but a disputed booking', () => {
+    const red = Object.entries(MAPS).flatMap(([domain, map]) =>
+      Object.entries(map)
+        .filter(([, entry]) => toneOf(entry) === 'red')
+        .map(([status]) => `${domain} ${status}`),
     );
 
     expect(red).toEqual(['booking disputed']);
   });
 
   /**
-   * The one place this console diverges from the delta's colour table, recorded
-   * rather than silently applied.
+   * The delta's other two reds, which are flags rather than statuses.
    *
-   * The delta rules `quoted` **gold**; `03-components.md` line 29 rules it
-   * **steel**, product-wide, and the pill is drawn on the customer hub and the
-   * request detail as well as the console. The surface where the delta would
-   * show it — `/admin/requests` — does not exist and is #437's. So this is a
-   * design adjudication between two contract files rather than a parity fix in
-   * this lane, the same shape as #449, and restyling three customer screens
-   * from an admin bundle is not a call a lane makes.
-   *
-   * The assertion pins the current, ruled value so that changing it is a
-   * deliberate act with this comment in the diff — not a test pinning a
-   * falsehood, because steel *is* what `03-components.md` rules today.
+   * A payout attempt that failed and a dispute reason are the two the table
+   * above structurally cannot cover, and leaving them out of the acceptance
+   * because of that would be a coverage gap dressed as a scope decision.
    */
-  it('leaves quoted steel, and records the delta disagreeing', () => {
-    expect(tone(STATUS_TONES[REQUEST_PRESENTATION.quoted?.tone as 'quoted'])).toBe('steel');
+  it('draws a failing payout red, and the dispute reason red', () => {
+    const paymentTable = sourceWithoutComments('src/components/admin/payment-table.tsx');
+    expect(paymentTable).toContain('<StatusPill tone="failed">{PAYOUT_FAILING_LABEL}</StatusPill>');
+
+    const caseDetail = sourceWithoutComments('src/app/admin/cases/[caseId]/page.tsx');
+    expect(caseDetail).toMatch(/disputeReason[\s\S]{0,600}text-error-500/);
+  });
+
+  /**
+   * The two places this console diverges from the delta's colour table, each
+   * **ruled** rather than left open, and recorded in `web-design-parity.md`.
+   *
+   * Both are the same shape and were settled the same way: the delta is an
+   * *admin* bundle, and these pills are drawn on the customer hub and the
+   * request detail as well as the console. `/admin/requests`, the only surface
+   * where the delta would show either, does not exist yet and is #437's — so
+   * restyling three customer screens on an admin bundle's authority is an
+   * adjudication rather than a parity fix, and the product-wide file wins.
+   *
+   * - **`quoted` stays steel.** `03-components.md` rules `QUOTED steel-50 /
+   *   steel-600`; the delta's table says gold. Ruled 2026-09-07 by the account
+   *   holder: `03-components.md` stands and the bundle's table is corrected as
+   *   transcription drift under D30.
+   * - **`accepted` stays clay.** The delta calls it *settled* and colours it
+   *   sage. `needsYou` is the only tone that spends clay and it means *waiting
+   *   on this user* — an accepted request is waiting on the customer to pay,
+   *   which is the whole reason the hub draws it that way.
+   *
+   * These assertions pin the ruled values and cross-check each against the file
+   * that rules it, so neither is a test pinning a copy of the code it grades.
+   */
+  it('keeps quoted steel and accepted clay, against the delta, as ruled', () => {
+    expect(toneOf(REQUEST_PRESENTATION.quoted)).toBe('steel');
+    expect(toneOf(REQUEST_PRESENTATION.accepted)).toBe('clay');
 
     const components = readFileSync(
       join(process.cwd(), '../../design/design-plan/03-components.md'),
       'utf8',
     );
     expect(components).toMatch(/\| QUOTED\s+\|\s+`steel-50`/);
-    expect(prompt).toMatch(/\| pending, quoted\s+\|\s+gold/);
+
+    const rules = readFileSync(
+      join(process.cwd(), '../../.claude/rules/web-design-parity.md'),
+      'utf8',
+    );
+    expect(rules).toContain('`quoted` stays steel');
+    expect(rules).toContain('`accepted` stays clay');
+  });
+});
+
+/*
+ * The defect a count cannot catch: a widening whose link leads nowhere.
+ *
+ * `/admin/cases` is the one console screen where a filter has **no "any"
+ * URL** — `adminCaseQuerySchema` defaults `status` to `open`, which is why the
+ * filter bar deliberately offers no `Any status` choice. A widening built as a
+ * plain drop therefore renders `/admin/cases`, and on the default view that is
+ * the page it was offered from: a filled primary button promising rows, that
+ * re-renders the identical empty state, next to a `Clear all filters` link
+ * pointing at the same URL. Both exits dead.
+ *
+ * **The counts never disagreed** — the page is empty exactly when the current
+ * status contributes nothing, so the drop and the switch total the same. Only
+ * the destination was wrong, which is why it is asserted here rather than in
+ * the API suite.
+ */
+describe('a widening always leads somewhere', () => {
+  const cases = sourceWithoutComments('src/app/admin/cases/page.tsx');
+
+  it('sends the case queue status route to the other status, not to no status', () => {
+    // The `carried` object is what `adminQueryString` builds the href from; a
+    // `status` absent from it is a link back to the default view.
+    expect(cases).toContain('carried: { status: other, booking }');
+    expect(cases).toContain("const other = showing === 'open' ? 'resolved' : 'open'");
+  });
+
+  /**
+   * And the label follows the destination. `Any status` was the words for the
+   * broken version; a switch says which status it switches to, which is what
+   * the delta draws — `Open cases instead (4)`.
+   */
+  it('names the status it switches to', () => {
+    expect(cases).toContain('cases instead`');
+    expect(cases).not.toContain("widening: 'Any status'");
   });
 });
 
@@ -462,15 +552,27 @@ describe('the corrections this bundle landed with', () => {
    * inline, which puts it with the screens document and against the other three
    * delta bundles. A measurement taken off it corroborates the *opposite* side
    * to the one its provenance suggests.
+   *
+   * **The rule half is asserted on the substance, not on a sentence.** It was a
+   * `toContain` of the exact wording this ticket first wrote, and #449's ruling
+   * then landed on main saying the same thing better — *"two content-box
+   * documents against three border-box bundles"* — so a rebase that correctly
+   * took the newer paragraph turned the guard red. A parity test that pins
+   * prose verbatim fails when somebody improves the sentence, which is a guard
+   * on the wrong thing and trains the next reader to loosen it carelessly. What
+   * has to hold is that the file names this bundle **and** says it ships no
+   * reset, in whatever words.
    */
-  it('is content-box, and the parity rules say so beside the #449 paragraph', () => {
+  it('is content-box, and the parity rules record that beside #449', () => {
     expect(drawn).not.toContain('box-sizing');
 
     const rules = readFileSync(
       join(process.cwd(), '../../.claude/rules/web-design-parity.md'),
       'utf8',
     );
-    expect(rules).toContain('`design/delta-admin/` is content-box');
-    expect(rules).toContain('#449');
+
+    const paragraph = rules.slice(rules.indexOf('#449'), rules.indexOf('#419'));
+    expect(paragraph, 'the #449 paragraph no longer mentions delta-admin').toContain('delta-admin');
+    expect(paragraph).toMatch(/no reset|content-box|zero `box-sizing`/);
   });
 });

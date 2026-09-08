@@ -103,6 +103,13 @@ export function retryNotice(
 export interface PaymentTableProps {
   rows: readonly WireAdminPaymentRow[];
   empty: { headline: string; description: string };
+  /**
+   * The counted filtered-empty state (#454), supplied by the page.
+   *
+   * Here rather than built in this component because the words on the widening
+   * button are the screen's copy. The true empty below stays this component's.
+   */
+  filteredEmpty?: React.ReactNode;
 }
 
 /**
@@ -113,7 +120,11 @@ export interface PaymentTableProps {
  * control does (`22-admin.md`), and the row has to redraw from the answer
  * afterwards.
  */
-export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactElement {
+export function PaymentTable({
+  rows,
+  empty,
+  filteredEmpty,
+}: PaymentTableProps): React.ReactElement {
   const router = useRouter();
   const call = useApi();
   /** What the last retry answered, so a `busy` or `failed` result is not silent. */
@@ -154,7 +165,9 @@ export function PaymentTable({ rows, empty }: PaymentTableProps): React.ReactEle
       <DataTable
         rows={rows}
         rowKey={(row) => row.bookingId}
-        empty={<EmptyState headline={empty.headline} description={empty.description} />}
+        empty={
+          filteredEmpty ?? <EmptyState headline={empty.headline} description={empty.description} />
+        }
         columns={[
           {
             key: 'vendor',
