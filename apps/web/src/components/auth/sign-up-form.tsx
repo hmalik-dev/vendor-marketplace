@@ -1,9 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SignUp, useSignUp } from '@clerk/nextjs';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { AuthScreen } from '@/components/auth/auth-screen';
+import {
+  CHALLENGE_STALL_BODY,
+  CHALLENGE_STALL_RETRY,
+  CHALLENGE_STALL_TITLE,
+  observeChallengeHost,
+  SIGN_UP_CHALLENGE_RECHECK_MS,
+  SIGN_UP_CHALLENGE_TIMEOUT_MS,
+  signUpStalled,
+} from '@/components/auth/challenge-stall';
+import { Banner } from '@/components/ui/banner';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export type SignUpRole = Extract<UserRole, 'customer' | 'vendor'>;
@@ -109,6 +120,51 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
      someone finishes with none and the API narrows them to `customer`. */
   const pickerSuppressed = role === null && attemptedRole !== null;
 
+  /*
+    #464. Clerk's bot challenge can hang for ever, and while it does the card
+    disables every field and says nothing — a button that eats the click. The
+    wait is bounded here rather than inside clerk-js, which is not ours to
+    change: submit arms a timer, and if the create request still has not left
+    the browser when it fires, the failure is stated and the form is offered
+    back. `challenge-stall.ts` holds the check and the copy.
+  */
+  const formRef = useRef<HTMLDivElement>(null);
+  const stallWatch = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [challengeStalled, setChallengeStalled] = useState(false);
+  /* Latched for the life of the page: once the host has answered anything, it
+     is not the host that is unreachable, whatever happens after. */
+  const challengeHostAnswered = useRef(false);
+
+  useEffect(() => observeChallengeHost(() => (challengeHostAnswered.current = true)), []);
+  /* Bumping this remounts Clerk's card, which is the only way to clear the
+     internal state that left it disabled — the alternative is asking someone
+     to reload the page, which is the thing the ticket calls a dead end. */
+  const [formGeneration, setFormGeneration] = useState(0);
+
+  /* Read inside the timer callback, which closes over the render that armed it
+     and would otherwise never see the attempt Clerk started meanwhile. */
+  const attemptId = signUp?.id;
+  const attemptIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    attemptIdRef.current = attemptId;
+  }, [attemptId]);
+
+  const clearStallWatch = useCallback((): void => {
+    if (stallWatch.current !== null) {
+      clearInterval(stallWatch.current);
+      stallWatch.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearStallWatch, [clearStallWatch]);
+
+  const retryAfterStall = useCallback((): void => {
+    clearStallWatch();
+    setChallengeStalled(false);
+    setFormGeneration((generation) => generation + 1);
+  }, [clearStallWatch]);
+
   return (
     <AuthScreen
       headline="Let's get you set up"
@@ -207,6 +263,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
         disabled treatment off. See design/design-plan/21-sign-up.md.
       */}
       <div
+        ref={formRef}
         className="flex flex-col"
         data-role-pending={chosenRole === null ? '' : undefined}
         onSubmitCapture={(event) => {
@@ -214,10 +271,65 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             event.preventDefault();
             event.stopPropagation();
             setRoleMissing(true);
+            return;
           }
+
+          /* Only the create submit is watched. The verification step submits
+             the same way, and by then the attempt exists — a stall there is a
+             different failure with a different cause. */
+          if (attemptIdRef.current !== undefined) {
+            return;
+          }
+
+          const submittedAt = performance.now();
+
+          clearStallWatch();
+          /* Retaken every second rather than answered once. The reading at the
+             bound is not a verdict — Clerk can report something of its own at
+             sixteen seconds, or the create can land — and the banner has to go
+             away again when it does, or it stands over a screen that has moved
+             on. Two errors about one press is the failure mode the refused-host
+             case exists to prevent, and latching would reintroduce it. */
+          stallWatch.current = setInterval(() => {
+            const created = attemptIdRef.current !== undefined;
+
+            setChallengeStalled(
+              performance.now() - submittedAt >= SIGN_UP_CHALLENGE_TIMEOUT_MS &&
+                signUpStalled(formRef.current, {
+                  created,
+                  challengeHostAnswered: challengeHostAnswered.current,
+                }),
+            );
+
+            /* Past the create there is nothing left for this watch to see. */
+            if (created) {
+              clearStallWatch();
+            }
+          }, SIGN_UP_CHALLENGE_RECHECK_MS);
         }}
       >
+        {/*
+          Above the card, because it explains why the card below it stopped
+          responding. `40-states.md`: one banner, one action — the retry is the
+          only thing to do, and it is held right of the sentence.
+        */}
+        {challengeStalled ? (
+          <Banner
+            status="failed"
+            title={CHALLENGE_STALL_TITLE}
+            className="mb-4"
+            action={
+              <Button variant="secondary" size="sm" onClick={retryAfterStall}>
+                {CHALLENGE_STALL_RETRY}
+              </Button>
+            }
+          >
+            {CHALLENGE_STALL_BODY}
+          </Banner>
+        ) : null}
+
         <SignUp
+          key={formGeneration}
           unsafeMetadata={chosenRole ? { role: chosenRole } : {}}
           fallbackRedirectUrl="/after-sign-in"
         />
