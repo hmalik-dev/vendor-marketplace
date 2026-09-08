@@ -29,6 +29,7 @@ import {
 import { countMessages, findMessages } from '../messaging/messaging.dao.js';
 import { findConversationParties } from '../reports/reports.dao.js';
 import {
+  countCaseWidenings,
   countSupportCases,
   findBookingForDispute,
   findCaseBooking,
@@ -544,7 +545,36 @@ export async function listCases(db: AppDatabase, query: AdminCaseQuery): Promise
     countSupportCases(db, query),
   ]);
 
-  return { items: rows.map(toCaseRow), total, page: query.page, pageSize: query.pageSize };
+  /*
+   * The counted ways out, and **only** for an empty page (#454).
+   *
+   * Pattern A's filtered-empty offers one widening per filter, each carrying
+   * the rows it would reveal, so an operator picks the widening that pays
+   * rather than clearing everything and rebuilding the query. The count has to
+   * exist before the button is drawn — a route revealing zero is never
+   * offered — which is why it rides home with the list rather than being
+   * fetched per button.
+   *
+   * Sequential rather than folded into the `Promise.all` above: it costs an
+   * unfiltered scan and the overwhelming majority of requests to this route
+   * return rows, where that scan buys nothing at all.
+   *
+   * **Page one only, and that is a correctness condition rather than a saving.**
+   * `rows.length === 0` is also true for every page past the last one, where
+   * the filter is revealing plenty — so without it `?page=2` on a queue holding
+   * four open cases renders "No open cases", which is false, above a count of
+   * rows the operator can already see on page one.
+   */
+  const widenings =
+    rows.length === 0 && query.page === 1 ? await countCaseWidenings(db, query) : [];
+
+  return {
+    items: rows.map(toCaseRow),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+    widenings,
+  };
 }
 
 /** One case, with the booking's money beside it. */

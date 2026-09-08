@@ -240,6 +240,51 @@ Catering · Cake` and render `Decor · Live music · Catering · Carts`. Two of
 A parity pass over any of the three reports these as expected deviations. The
 frames are corrected by a design pass, not by a ticket.
 
+**The admin delta's four live overrides (#454, 2026-09-07).** Each is a case
+where the bundle and a _product-wide_ rule disagree, and the product-wide rule
+holds — none of them is drift, and a parity pass reports all four as expected.
+
+- **`/admin/activity` prints `Sep 7, 2026` where the bundle draws `7 Sep
+2026`.** `31-content-voice.md` rules the product US English and the day-first
+  order is the British form. The **24-hour clock is taken** from the bundle: it
+  is what "absolute to the minute" means, and `2:02 PM` is a form a reader has
+  to disambiguate before comparing two rows.
+- **The same column keeps its `UTC` suffix, which the bundle draws without.**
+  The frame's is a mock timestamp rather than a ruling against a zone, and the
+  reason the zone is there is unaddressed by it: the console renders in UTC
+  throughout, so a stamp quoted out of this table into a support thread is off
+  by the reader's offset unless the zone travels with it.
+- **A `—` renders `stone-600` where the bundle's `.dz` is `#C9C1B5`.** That hex
+  is this theme's `stone-500`, annotated _disabled text ONLY — fails AA by
+  design_. On `/admin/cases` the dash is the **entire content** of the Booking
+  cell rather than an adornment beside something legible, so `04-laws.md`'s
+  contrast floor governs.
+- **Money prints `$2,314` where the bundle draws `$2,314.00`.** `formatPrice`
+  drops the cents on a round amount, and it is the shared formatter every price
+  in the product goes through. Changing it is a product-wide decision, not a
+  console parity fix.
+
+**Two colour entries in the delta are overruled, and both are ruled rather than
+open (#454, 2026-09-07).** The bundle is an _admin_ bundle and these pills are
+drawn on the customer hub and the request detail as well as the console;
+`/admin/requests`, the only surface where either would show, does not exist yet
+and is #437's. So the product-wide file wins in both cases, and the bundle's
+table is corrected as transcription drift under D30 — the same direction its
+`holds payouts` line went.
+
+- **`quoted` stays steel.** `03-components.md` line 29 rules
+  `QUOTED steel-50 / steel-600`; the delta's table says gold. Ruled by the
+  account holder: `03-components.md` stands, nothing is restyled, and
+  `/admin/requests` will draw steel when #437 builds it.
+- **`accepted` stays clay.** The delta calls it _settled_ and colours it sage.
+  `needsYou` is the only tone that spends clay and it means **waiting on this
+  user** — an accepted request is waiting on the customer to pay, which is
+  exactly why the hub draws it that way. Sage would say the transaction is done
+  on the screen where it is least done.
+
+Neither is a finding and neither is re-litigated per screen.
+`admin-delta-parity.test.ts` pins both with the ruling beside them.
+
 ## A one-shot read is a sample, not a measurement
 
 An animated property has no single computed value. Read it once, in the same

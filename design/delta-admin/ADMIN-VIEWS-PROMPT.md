@@ -5,6 +5,49 @@ pill vocabulary are unchanged and are the base for everything here. Drawn in
 `delta-admin/Orla-Admin-Views.html`. Supersedes the single line in
 `22-admin.md` §Detail views.
 
+## Corrections — ruled 2026-09-07 while landing this bundle (#454)
+
+Three things this bundle raised were put to the account holder rather than
+guessed at in a lane. All three are answered, and the answers are recorded
+**here, in the bundle**, so the artifact and the code cannot be read as
+disagreeing. They are not open questions and are not to be re-asked.
+
+1. **`/admin/activity` keeps its `What changed` column — five columns, not the
+   four Pattern A lists.** The bundle was written at pattern level and the
+   column was not considered. The same paragraph that forbids rounding a
+   timestamp settles it: a trail that records _that_ something changed but not
+   _what_ fails that test harder than a rounded clock does. The grid is
+   `Actor 1.2fr · Action 1fr · Subject 1.6fr · What changed 1.7fr · When .9fr`.
+
+2. **The route stays `/admin/tags`.** This bundle names it `/admin/categories`
+   and nothing drawn depends on the path. A rename breaks operator bookmarks
+   and every `admin_actions` subject link already written against the old one,
+   for no drawn difference. Read every `/admin/categories` below as
+   `/admin/tags`; the rail label is unchanged (`Categories & tags`).
+
+3. **Suspending a vendor refunds in full. It does not hold payouts.** The
+   drawn Actions card read _"Unpublishes, cancels 2 pending requests and holds
+   payouts"_ — that is loose copy about an action it was summarising, and the
+   consequence line has been corrected in the frame. **D31 (#416) is
+   unchanged**: a suspension declines every open request, cancels every future
+   confirmed booking and **refunds it in full**, reversing the vendor's share
+   out of their Stripe balance, which can leave it negative. Holding and
+   refunding are not the same action — a hold is reversible and leaves the
+   customer's money where it is; a full refund is neither — so this correction
+   is the difference between two outcomes for somebody's money, not a wording
+   preference. Nothing here changes what a suspension does.
+
+4. **`quoted` is steel and `accepted` is clay — this bundle's table is
+   overruled on both.** It rules them gold and sage. `03-components.md` line 29
+   rules `QUOTED steel-50 / steel-600` product-wide, and `accepted` is the one
+   status that spends clay: `needsYou` means _waiting on this user_, and an
+   accepted request is waiting on the customer to pay. Both pills are drawn on
+   the customer hub and the request detail as well as the console, so an _admin_
+   bundle is not the authority that restyles them — and `/admin/requests`, the
+   only surface here that would show either, does not exist yet (#437). Ruled by
+   the account holder; the table above is corrected, nothing in the product
+   changes, and `web-design-parity.md` records both.
+
 ## 0 — Shell corrections
 
 **The rail is nine rows, not eight.** The brief lists eight ending in Activity
@@ -29,15 +72,16 @@ text + inset 3px clay bar; content on a 12px gutter with a 1px right border.
 steel = information · gold = waiting on someone · red = failed · sage = settled.
 Consequences for the statuses in this delta:
 
-| Status                                            | Colour | Why                                     |
-| ------------------------------------------------- | ------ | --------------------------------------- |
-| pending, quoted                                   | gold   | waiting on someone                      |
-| accepted                                          | sage   | settled                                 |
-| declined, cancelled, expired                      | stone  | resolved, nothing failed, no clock left |
-| payout attempt failed, chargeback, dispute reason | red    | it failed                               |
-| case open                                         | gold   | waiting on us                           |
-| case resolved                                     | sage   | settled                                 |
-| case age ≥72h                                     | red    | the SLA failed (not the case)           |
+| Status                                            | Colour | Why                                      |
+| ------------------------------------------------- | ------ | ---------------------------------------- |
+| pending                                           | gold   | waiting on someone                       |
+| quoted                                            | steel  | the vendor sent a number (correction 4)  |
+| accepted                                          | clay   | waiting on the customer to pay (corr. 4) |
+| declined, cancelled, expired                      | stone  | resolved, nothing failed, no clock left  |
+| payout attempt failed, chargeback, dispute reason | red    | it failed                                |
+| case open                                         | gold   | waiting on us                            |
+| case resolved                                     | sage   | settled                                  |
+| case age ≥72h                                     | red    | the SLA failed (not the case)            |
 
 Expired is **not** red. A clock running out is not a failure.
 
@@ -49,7 +93,8 @@ Reuse frame 13 exactly. Only these differ.
 
 ### `/admin/activity`
 
-- Columns: `Actor 1.2fr · Action 1fr · Subject 1.6fr · When .9fr`
+- Columns: `Actor 1.2fr · Action 1fr · Subject 1.6fr · What changed 1.7fr ·
+When .9fr` — five, per correction 1; `What changed` is kept.
 - **No checkbox column, no overflow menu, no bulk bar.** Nothing here is acted
   on; removing both action columns is what makes it read as a log.
 - Subject is type + id in one cell: type in `stone-600`, id in mono
@@ -81,7 +126,7 @@ Expires .9fr · Status .9fr`
   countdown is a lie.
 - Quoted price right-aligned, tabular mono; unquoted `—`.
 
-### `/admin/categories`
+### `/admin/categories` — served at `/admin/tags` (correction 2)
 
 - The existing tag table, plus: `⠿ 22px · Name 1.6fr · Slug 1.4fr ·
 Active 80px · Order 80px · ··· 70px`
@@ -149,7 +194,9 @@ requirements — labelled read-only, mirrored, with sync age) → **Packages**
 (name · price · active) → **Portfolio** (horizontal strip, cover badged, remove
 per image) → **Availability locks** (date · hold · held by; booked = sage,
 pending = gold with its expiry, blocked = stone with the vendor's note).
-Right: Identity, Actions (Unpublish profile → Suspend vendor).
+Right: Identity, Actions (Unpublish profile → Suspend vendor). The suspend
+consequence line names the **full refund**, per correction 3 — never a payout
+hold.
 
 ### `/admin/customers/[id]`
 

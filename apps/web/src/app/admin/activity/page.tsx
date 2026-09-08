@@ -3,6 +3,7 @@ import { ADMIN_ACTIONS } from '@vendor-marketplace/shared';
 import { ACTION_LABELS, ActivityTable } from '@/components/admin/activity-table';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
+import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { getAdminActivity } from '@/lib/admin-data';
 import {
   adminQueryString,
@@ -66,6 +67,32 @@ export default async function AdminActivityPage({
     { key: 'subject', label: 'Clear subject filter', href: { ...params, subject: undefined } },
   ].filter((chip) => params[chip.key as 'actor' | 'subject'] !== undefined);
 
+  /*
+   * The active filters, each paired with the words that drop it (#454).
+   *
+   * The two identity filters are uuids an operator arrived at by clicking a
+   * row, so the widening reads `Any operator` / `Any subject` rather than
+   * naming the id: nobody recognises `33333333`, and repeating it on the button
+   * would say less than the word does.
+   */
+  const active: ActiveFilter[] = [
+    { key: 'action', widening: 'Any action' },
+    { key: 'actor', widening: 'Any operator' },
+    { key: 'subject', widening: 'Any subject' },
+  ]
+    .filter((filter) => params[filter.key as keyof typeof params] !== undefined)
+    .map((filter) => ({ ...filter, carried: { ...params, [filter.key]: undefined } }));
+
+  /*
+   * The heading recites what is narrowing the view, in the operator's words.
+   * `ACTION_LABELS` is the sentence the filter bar and the row already print,
+   * so the state names the filter the way it was set rather than by its
+   * parameter name.
+   */
+  const filteredHeadline = params.action
+    ? `No "${ACTION_LABELS[params.action]}" actions match the rest of these filters`
+    : 'No console activity matches these filters';
+
   return (
     <AdminSurface
       heading="Activity"
@@ -114,7 +141,24 @@ export default async function AdminActivityPage({
         total: activity.total,
       }}
     >
-      <ActivityTable rows={activity.items} path={PATH} filtered={filtered} />
+      <ActivityTable
+        rows={activity.items}
+        path={PATH}
+        filtered={filtered}
+        /*
+         * The counted way out, built here rather than inside the table: the
+         * words on each button are this screen's copy, and the table renders
+         * three surfaces' worth of rows with no business knowing any of them.
+         */
+        filteredEmpty={
+          <FilteredEmpty
+            headline={filteredHeadline}
+            path={PATH}
+            filters={active}
+            widenings={activity.widenings}
+          />
+        }
+      />
     </AdminSurface>
   );
 }

@@ -4,15 +4,31 @@ import type { ReactNode } from 'react';
 import { formatPrice, REPORT_SUBJECT_LABELS, uuidSchema } from '@vendor-marketplace/shared';
 import { CaseConversation } from '@/components/admin/case-conversation';
 import { CaseResolution } from '@/components/admin/case-resolution';
-import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
-import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
+import { StatusPill } from '@/components/ui/status-pill';
+import { BOOKING_PRESENTATION, PAYOUT_PRESENTATION } from '@/lib/booking-entries';
 import { getAdminCase } from '@/lib/admin-data';
 import { CASE_ARRIVAL, CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
-import type { WireAdminCaseBooking } from '@/lib/wire-schemas';
+import { cn } from '@/lib/utils';
 
+/*
+ * **24-hour, like `/admin/activity` and like Pattern C** (#454).
+ *
+ * `timeStyle: 'short'` renders `12:16 AM`, and the frame draws `opened 4 Sep
+ * 2026, 09:12`. The argument the delta makes for the activity log applies
+ * unchanged here — `2:02 PM` is a form a reader has to disambiguate before
+ * comparing two rows — and the two screens are one click apart, so a console
+ * that switched conventions between them would be worse than either alone.
+ *
+ * Written out rather than `timeStyle`, which has no 24-hour option that also
+ * keeps a medium date.
+ */
 const FILED = new Intl.DateTimeFormat('en-US', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
   timeZone: 'UTC',
 });
 
@@ -23,23 +39,63 @@ const EVENT_DATE = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 
-/** The three payout states, in the vocabulary `40-states.md` assigns them. */
-const PAYOUT_TONES: Record<WireAdminCaseBooking['payoutStatus'], StatusTone> = {
-  pending: 'pending',
-  held: 'failed',
-  released: 'confirmed',
-};
+/*
+ * The payout pill reads `PAYOUT_PRESENTATION`, and the private copy this
+ * replaces is exactly the drift that map's own docstring warns about (#454).
+ *
+ * **It painted `held` red.** `40-states.md` reserves red for failure and the
+ * delta's colour table spends it on three things — a payout attempt that
+ * failed, a chargeback, a dispute reason. A hold is none of them: it is
+ * deliberate, correct, and the frame draws it **gold** (`$2,314.00 · held`).
+ * Telling an operator that a working hold has failed is the exact sentence
+ * `PAYOUT_PRESENTATION` says it exists to prevent — *"painting it as a failure
+ * would tell an operator to fix something that is working."*
+ *
+ * It also carried a second vocabulary — `On hold` / `Awaiting the sweep` /
+ * `Paid out` against the shared `Held` / `Awaiting release` / `Released` — so
+ * this screen and `/admin/payments` named one state three different ways
+ * between them. That map is exported from `booking-entries.ts` rather than
+ * from the client `payment-table.tsx` precisely so a Server Component like this
+ * one can read it.
+ */
 
-const PAYOUT_LABELS: Record<WireAdminCaseBooking['payoutStatus'], string> = {
-  pending: 'Awaiting the sweep',
-  held: 'On hold',
-  released: 'Paid out',
-};
-
-function Card({ title, children }: { title: string; children: ReactNode }): React.ReactElement {
+/**
+ * A card, and — for the three that make up Pattern C — its region number.
+ *
+ * **The numbers are visible on purpose.** The delta stacks the complaint, the
+ * booking it froze and the resolve control in the order an operator has to read
+ * them to be allowed to act, and puts the control last so it is reachable only
+ * past the evidence: *the scroll is half the safeguard and the copy is the
+ * other half*. Numbering them is what lets somebody who jumped straight to the
+ * bottom see what they skipped — an unnumbered stack in the right order looks
+ * identical to one in the wrong order.
+ *
+ * The chargeback card carries no number. It is conditional — most cases have
+ * none — and a numbered sequence that gains and loses a member depending on the
+ * row is not a sequence.
+ *
+ * `3` is drawn on a clay edge, because it is the one that moves money.
+ */
+function Card({
+  title,
+  region,
+  children,
+}: {
+  title: string;
+  region?: 1 | 2 | 3;
+  children: ReactNode;
+}): React.ReactElement {
   return (
-    <section className="rounded-xl border border-stone-300 bg-stone-0 p-4">
-      <h2 className="text-label font-semibold tracking-label text-stone-600 uppercase">{title}</h2>
+    <section
+      className={cn(
+        'rounded-xl border bg-stone-0 p-4',
+        region === 3 ? 'border-clay-200' : 'border-stone-300',
+      )}
+    >
+      <h2 className="text-label font-semibold tracking-label text-stone-600 uppercase">
+        {region ? <span className="text-stone-900">{region} · </span> : null}
+        {title}
+      </h2>
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -125,7 +181,7 @@ export default async function AdminCasePage({
       </p>
 
       <div className="mt-4 flex flex-col gap-3">
-        <Card title="The message">
+        <Card region={1} title="The complaint">
           {/*
             `whitespace-pre-wrap`: this is what somebody typed into a textarea,
             and collapsing their paragraphs would make a four-paragraph account
@@ -250,7 +306,7 @@ export default async function AdminCasePage({
         ) : null}
 
         {booking ? (
-          <Card title="The booking">
+          <Card region={2} title="The booking it froze">
             <div className="flex flex-wrap items-baseline gap-2.5">
               <Link
                 href={`/vendors/${booking.vendorSlug}`}
@@ -262,8 +318,8 @@ export default async function AdminCasePage({
               <StatusPill tone={BOOKING_PRESENTATION[booking.status].tone}>
                 {BOOKING_PRESENTATION[booking.status].label}
               </StatusPill>
-              <StatusPill tone={PAYOUT_TONES[booking.payoutStatus]}>
-                {PAYOUT_LABELS[booking.payoutStatus]}
+              <StatusPill tone={PAYOUT_PRESENTATION[booking.payoutStatus].tone}>
+                {PAYOUT_PRESENTATION[booking.payoutStatus].label}
               </StatusPill>
             </div>
 
@@ -319,15 +375,35 @@ export default async function AdminCasePage({
               />
             </div>
 
+            {/*
+              **Red, and called by its own name** — Pattern C (#454).
+
+              The delta draws this field as `Dispute reason` with the value in
+              red, and it is one of exactly three things in the whole delta that
+              earn red: a payout attempt that failed, a chargeback, and this.
+              `40-states.md` reserves red for failure and this is the sentence
+              saying what failed — the reason a card network or a customer gave
+              for the money being in dispute.
+
+              It rendered as a plain `Hold reason`, which is the platform's
+              word for the *consequence* rather than the network's word for the
+              cause; an operator comparing this screen to Stripe's dashboard was
+              reading two names for one field.
+            */}
             {booking.disputeReason ? (
               <div className="mt-3.5">
-                <Field label="Hold reason" value={booking.disputeReason} />
+                <Field
+                  label="Dispute reason"
+                  value={
+                    <span className="font-semibold text-error-500">{booking.disputeReason}</span>
+                  }
+                />
               </div>
             ) : null}
           </Card>
         ) : null}
 
-        <Card title="Resolution">
+        <Card region={3} title="Resolve">
           <CaseResolution supportCase={supportCase} />
         </Card>
       </div>

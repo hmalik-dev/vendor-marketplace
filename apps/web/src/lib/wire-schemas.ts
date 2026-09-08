@@ -10,6 +10,7 @@ import {
   customerReviewSchema,
   notificationItemSchema,
   paginatedSchema,
+  wideningShape,
   sendMessageResultSchema,
   vendorDashboardSchema,
   termsAcceptanceStatusSchema,
@@ -396,6 +397,7 @@ export type WireAdminVendorRow = z.infer<typeof wireAdminVendorRowSchema>;
 
 export const wireAdminVendorPageSchema = paginatedSchema(wireAdminVendorRowSchema).extend({
   awaitingReview: z.int(),
+  ...wideningShape,
 });
 export type WireAdminVendorPage = z.infer<typeof wireAdminVendorPageSchema>;
 
@@ -406,14 +408,17 @@ export const wireAdminCustomerRowSchema = adminCustomerRowSchema.extend({
   createdAt: z.coerce.date(),
 });
 export type WireAdminCustomerRow = z.infer<typeof wireAdminCustomerRowSchema>;
-export const wireAdminCustomerPageSchema = paginatedSchema(wireAdminCustomerRowSchema);
+export const wireAdminCustomerPageSchema = paginatedSchema(wireAdminCustomerRowSchema).extend(
+  wideningShape,
+);
 export type WireAdminCustomerPage = z.infer<typeof wireAdminCustomerPageSchema>;
 
 export const wireAdminBookingRowSchema = adminBookingRowSchema.extend({
   createdAt: z.coerce.date(),
 });
 export type WireAdminBookingRow = z.infer<typeof wireAdminBookingRowSchema>;
-export const wireAdminBookingPageSchema = paginatedSchema(wireAdminBookingRowSchema);
+export const wireAdminBookingPageSchema =
+  paginatedSchema(wireAdminBookingRowSchema).extend(wideningShape);
 export type WireAdminBookingPage = z.infer<typeof wireAdminBookingPageSchema>;
 
 /**
@@ -429,7 +434,8 @@ export const wireAdminPaymentRowSchema = adminPaymentRowSchema.extend({
   payoutReleasedAt: z.coerce.date().nullable(),
 });
 export type WireAdminPaymentRow = z.infer<typeof wireAdminPaymentRowSchema>;
-export const wireAdminPaymentPageSchema = paginatedSchema(wireAdminPaymentRowSchema);
+export const wireAdminPaymentPageSchema =
+  paginatedSchema(wireAdminPaymentRowSchema).extend(wideningShape);
 export type WireAdminPaymentPage = z.infer<typeof wireAdminPaymentPageSchema>;
 
 /**
@@ -451,7 +457,8 @@ export const wireAdminReviewRowSchema = adminReviewRowSchema.extend({
   createdAt: z.coerce.date(),
 });
 export type WireAdminReviewRow = z.infer<typeof wireAdminReviewRowSchema>;
-export const wireAdminReviewPageSchema = paginatedSchema(wireAdminReviewRowSchema);
+export const wireAdminReviewPageSchema =
+  paginatedSchema(wireAdminReviewRowSchema).extend(wideningShape);
 export type WireAdminReviewPage = z.infer<typeof wireAdminReviewPageSchema>;
 
 export const wireAdminTagSuggestionRowSchema = adminTagSuggestionRowSchema.extend({
@@ -479,7 +486,9 @@ export const wireAdminActivityRowSchema = adminActivityRowSchema.extend({
   createdAt: z.coerce.date(),
 });
 export type WireAdminActivityRow = z.infer<typeof wireAdminActivityRowSchema>;
-export const wireAdminActivityPageSchema = paginatedSchema(wireAdminActivityRowSchema);
+export const wireAdminActivityPageSchema = paginatedSchema(wireAdminActivityRowSchema).extend(
+  wideningShape,
+);
 export type WireAdminActivityPage = z.infer<typeof wireAdminActivityPageSchema>;
 
 /**
@@ -495,7 +504,8 @@ export const wireAdminCaseRowSchema = adminCaseRowSchema.extend({
   createdAt: z.coerce.date(),
 });
 export type WireAdminCaseRow = z.infer<typeof wireAdminCaseRowSchema>;
-export const wireAdminCasePageSchema = paginatedSchema(wireAdminCaseRowSchema);
+export const wireAdminCasePageSchema =
+  paginatedSchema(wireAdminCaseRowSchema).extend(wideningShape);
 export type WireAdminCasePage = z.infer<typeof wireAdminCasePageSchema>;
 
 export const wireAdminCaseBookingSchema = adminCaseBookingSchema.extend({

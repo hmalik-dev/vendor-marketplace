@@ -17,30 +17,47 @@ export interface AdminNavProps {
 }
 
 /**
- * The order frame `13 Admin` draws, which is also the order an operator works
- * in: the shape of the platform first, then the two sides of it, then what they
- * transacted, then what they said, then the vocabulary that files it all.
+ * The order frame `13 Admin` draws, extended by the two rows it does not:
+ * the shape of the platform first, then the two sides of it, then what they
+ * transacted and what is disputed about it, then the money, then what they
+ * said, then the vocabulary that files it all.
  *
- * **Cases is a ninth row and Activity an eighth, neither of which frame `13`
- * draws** — both ruled into `22-admin.md`'s rail, which is the spec the frame
- * answers to. `Cases` sits between `Payments` and `Reviews` because that is
- * where it belongs in the order an operator works: it is money, and it is the
- * only row on the rail where the platform owes somebody an answer.
+ * **`Cases` sits directly after `Bookings` — ruled 2026-09-07 by the admin
+ * delta (#454), overturning #431.** A case is always *about* a booking, so the
+ * rail reads in the order the work arrives rather than in the order the money
+ * does. #431 had put it between `Payments` and `Reviews` on the argument that
+ * it is money; that argument is recorded in `22-admin.md` as what was
+ * overturned, and is deliberately not restated here as a live one.
  *
- * **Activity is an eighth row the frame does not draw**, added with #434 and
- * ruled into `22-admin.md`'s rail, which is the spec the frame answers to — the
- * same direction D30 settled when the frame and that file disagreed about the
- * row count. It sits last because it is the only item that is not a working
- * surface: nothing here is acted on, it is what the other seven leave behind.
- * The rail scrolls (`lg:overflow-y-auto`), so an eighth row costs nothing.
+ * **Nine rows before the move and nine after — it is an order change, not a
+ * count change.** The delta's own preamble reasons from a stale brief of eight
+ * rows and concludes the rail "needs nine so Cases can carry a badge"; #431 had
+ * already given Cases its row. A reader who takes that preamble literally adds
+ * a tenth.
+ *
+ * **`Activity` is a row the frame does not draw**, added with #434 and ruled
+ * into `22-admin.md`'s rail — the same direction D30 settled when the frame and
+ * that file disagreed about the row count. It sits last because it is the only
+ * item that is not a working surface: nothing here is acted on, it is what the
+ * others leave behind. The rail scrolls (`lg:overflow-y-auto`), so it costs no
+ * composition.
+ *
+ * **`/admin/requests` gets no row.** The delta rules it a tab inside `Bookings`
+ * — a request is a booking before it exists — and that surface is #437's.
+ *
+ * Not exported, and the order is asserted by *rendering* the rail rather than
+ * by grepping this file: a `toContain` over the source matches the prose above
+ * as readily as the array, so a source guard for "Cases sits after Bookings"
+ * passes on the sentence that says so and cannot fail for a row in the wrong
+ * place.
  */
 const ITEMS = [
   { href: '/admin', label: 'Overview' },
   { href: '/admin/vendors', label: 'Vendors' },
   { href: '/admin/customers', label: 'Customers' },
   { href: '/admin/bookings', label: 'Bookings' },
-  { href: '/admin/payments', label: 'Payments' },
   { href: '/admin/cases', label: 'Cases' },
+  { href: '/admin/payments', label: 'Payments' },
   { href: '/admin/reviews', label: 'Reviews' },
   { href: '/admin/tags', label: 'Categories & tags' },
   { href: '/admin/activity', label: 'Activity' },

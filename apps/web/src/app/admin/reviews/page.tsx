@@ -1,6 +1,7 @@
 import { REVIEW_TYPES } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
+import { FilteredEmpty } from '@/components/admin/filtered-empty';
 import { ReviewTable } from '@/components/admin/review-table';
 import { getAdminReviews } from '@/lib/admin-data';
 import {
@@ -56,7 +57,25 @@ export default async function AdminReviewsPage({
         total: reviews.total,
       }}
     >
-      <ReviewTable rows={reviews.items} filtered={Boolean(type)} />
+      <ReviewTable
+        rows={reviews.items}
+        filtered={Boolean(type)}
+        /*
+         * One filter, so one counted way out (#454). `isPublic` is a moderation
+         * state this table renders rather than a filter the bar offers, so
+         * there is nothing else to widen.
+         */
+        filteredEmpty={
+          type ? (
+            <FilteredEmpty
+              headline={`No ${(TYPE_LABELS[type] ?? type).toLowerCase()} reviews`}
+              path={PATH}
+              filters={[{ key: 'type', widening: 'Both directions', carried: {} }]}
+              widenings={reviews.widenings}
+            />
+          ) : undefined
+        }
+      />
     </AdminSurface>
   );
 }

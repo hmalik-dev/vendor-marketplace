@@ -3,10 +3,11 @@ import { ADMIN_CASE_BOOKING_FILTERS, SUPPORT_CASE_STATUSES } from '@vendor-marke
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
+import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAdminCases } from '@/lib/admin-data';
-import { CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
+import { ageInDays, ageTone, CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
 import {
   adminQueryString,
   droppedKeys,
@@ -16,26 +17,6 @@ import {
 } from '@/lib/admin-params';
 
 const PATH = '/admin/cases';
-
-const FILED = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-
-/**
- * How long a case has been waiting, in whole days.
- *
- * The number the screen exists for, and it is computed rather than stored: the
- * age of the oldest open case is money somebody is not being paid, and a column
- * holding it would be wrong the moment nobody wrote to it. Whole days because
- * that is the granularity an operator acts on — nothing changes between "four
- * hours" and "seven hours", and everything changes at "eleven days".
- */
-function ageInDays(createdAt: Date, now: number): number {
-  return Math.max(0, Math.floor((now - createdAt.getTime()) / 86_400_000));
-}
 
 /**
  * The case queue (#431) — one inbox for every dispute, however it arrived.
@@ -75,23 +56,66 @@ export default async function AdminCasesPage({
   const oldest = cases.page === 1 ? cases.items[0] : undefined;
   const showing = status ?? 'open';
 
-  const empty =
-    booking && showing === 'open'
-      ? {
-          headline:
-            booking === 'with' ? 'No open cases about a booking' : 'No open general questions',
-          description: 'Clear the filter to see every open case.',
-        }
-      : showing === 'resolved'
-        ? {
-            headline: 'Nothing resolved yet',
-            description: 'A case is resolved when an operator rules on it.',
-          }
-        : {
-            headline: 'Nothing waiting',
-            description:
-              'A case appears here when somebody reports a problem or a card network opens a chargeback.',
-          };
+  /*
+   * The filters currently narrowing the view, in the order the bar shows them.
+   *
+   * **`status` is a switch, not a drop, and this queue is the only screen where
+   * that is true.** `adminCaseQuerySchema` defaults it to `open`, so clearing
+   * the parameter lands back on open — which is exactly why the filter bar
+   * offers no "any status", and an `Any status` widening would be the same
+   * control the bar deliberately does not have: on the default view it would
+   * link straight back to the empty page it was offered from. So it navigates
+   * to the *other* status and the API counts that status, which is what the
+   * delta's own worked example draws — `Open cases instead (4)`, seen from a
+   * resolved view.
+   *
+   * `booking` is a genuine drop, and is only active when it was set.
+   */
+  const other = showing === 'open' ? 'resolved' : 'open';
+  const active: ActiveFilter[] = [
+    {
+      key: 'status',
+      widening: `${CASE_PRESENTATION[other].label} cases instead`,
+      carried: { status: other, booking },
+    },
+    ...(booking
+      ? [
+          {
+            key: 'booking',
+            widening: 'Any kind',
+            carried: { status },
+          },
+        ]
+      : []),
+  ];
+
+  /*
+   * The heading recites the filters as the operator set them, which is why it
+   * is written here rather than assembled from fragments inside the component:
+   * a generic join reads "No resolved and about a booking cases", and this
+   * sentence is the part of the state that has to sound like a person wrote it.
+   */
+  const filteredHeadline = booking
+    ? `No ${showing} cases ${booking === 'with' ? 'about a booking' : 'that are general questions'}`
+    : `No ${showing} cases`;
+
+  /*
+   * **True empty carries no button** — the delta is explicit, and this is the
+   * screen it says it about. Nothing an operator does creates a case, so a
+   * control here would offer an action that cannot help; the copy's whole job
+   * is to say where cases come from, so the silence reads as calm rather than
+   * broken.
+   *
+   * `widenings` is what tells the two apart, and it is the honest test: the API
+   * returns routes only when a filter is narrowing the view *and* widening one
+   * would reveal something. A list that is empty because the platform has no
+   * cases gets none, whatever the URL says.
+   */
+  const trueEmpty = {
+    headline: 'Nothing is disputed',
+    description:
+      'A case appears here when somebody reports a problem or a card network opens a chargeback.',
+  };
 
   return (
     <AdminSurface
@@ -152,11 +176,37 @@ export default async function AdminCasesPage({
       <DataTable
         rows={cases.items}
         rowKey={(row) => row.id}
-        empty={<EmptyState headline={empty.headline} description={empty.description} />}
+        empty={
+          /*
+           * Filtered-empty when a filter is narrowing the view, true empty when
+           * the platform simply has no cases. `widenings.length > 0` decides it
+           * on its own for the ordinary case — the API only counts routes that
+           * exist — and the two explicit parameters cover the one it cannot:
+           * an operator who set both filters, where widening either *alone*
+           * still finds nothing. That state has a heading and an escape to
+           * offer even with no counted route.
+           *
+           * `status`, not `raw.status`: the parsed value, like every other read
+           * on this page. `?status=nonsense` is a parameter the screen has
+           * already told the operator it ignored (`dropped`), so treating it as
+           * a filter would put the *filtered*-empty copy on a view nothing is
+           * filtering.
+           */
+          cases.widenings.length > 0 || status !== undefined || booking !== undefined ? (
+            <FilteredEmpty
+              headline={filteredHeadline}
+              path={PATH}
+              filters={active}
+              widenings={cases.widenings}
+            />
+          ) : (
+            <EmptyState headline={trueEmpty.headline} description={trueEmpty.description} />
+          )
+        }
         columns={[
           {
             key: 'reference',
-            width: '1.1fr',
+            width: '.9fr',
             header: 'Reference',
             className: 'font-mono font-semibold text-stone-900',
             cell: (row) => (
@@ -166,21 +216,28 @@ export default async function AdminCasesPage({
             ),
           },
           {
-            key: 'who',
-            width: '1.4fr',
-            header: 'Who',
+            key: 'sender',
+            width: '1.2fr',
+            header: 'Sender',
             /*
              * The name where the sender has an account, the reply-to address
              * where they do not, and `—` for a chargeback with neither. Three
              * genuinely different states rather than one blank.
+             *
+             * `Sender` rather than `Who`, per Pattern A. The delta draws the
+             * dash at `.dz` — `#C9C1B5`, which is this theme's `stone-500` —
+             * and it stays `stone-600` here: the token is annotated *disabled
+             * text ONLY, fails AA by design*, and this dash is the entire
+             * content of the cell rather than an adornment beside something
+             * legible. Recorded as a live override in `web-design-parity.md`.
              */
             cell: (row) =>
               row.senderName ?? row.senderEmail ?? <span className="text-stone-600">—</span>,
           },
-          { key: 'subject', width: '1.2fr', header: 'Subject', cell: caseSubject },
+          { key: 'subject', width: '1.8fr', header: 'Subject', cell: caseSubject },
           {
             key: 'booking',
-            width: '1fr',
+            width: '.9fr',
             header: 'Booking',
             /*
              * Text, not a link. It said `Linked` and pointed at the unfiltered
@@ -195,20 +252,28 @@ export default async function AdminCasesPage({
           },
           {
             key: 'age',
-            width: '.8fr',
+            width: '.6fr',
             header: 'Age',
             className: 'font-mono',
-            cell: (row) => `${ageInDays(row.createdAt, now)}d`,
+            cell: (row) => {
+              const days = ageInDays(row.createdAt, now);
+
+              return <span className={ageTone(days)}>{days}d</span>;
+            },
           },
-          {
-            key: 'filed',
-            width: '1fr',
-            header: 'Filed',
-            cell: (row) => FILED.format(row.createdAt),
-          },
+          /*
+           * `Filed` is gone, and Age is what replaces it.
+           *
+           * Pattern A draws six columns and this was the seventh. The absolute
+           * date is not lost — the case detail opens on `opened 4 Sep 2026,
+           * 09:12` — and unlike `/admin/activity`, which keeps `What changed`
+           * because an audit trail that drops data is not an audit trail, this
+           * is a work queue: the question it answers is *how long has this been
+           * waiting*, which is the column that now carries a colour.
+           */
           {
             key: 'status',
-            width: '.9fr',
+            width: '.8fr',
             header: 'Status',
             cell: (row) => (
               <StatusPill tone={CASE_PRESENTATION[row.status].tone}>

@@ -26,9 +26,15 @@ const NO_CONTENT = z.null();
 export function ReviewTable({
   rows,
   filtered,
+  filteredEmpty,
 }: {
   rows: readonly WireAdminReviewRow[];
   filtered: boolean;
+  /**
+   * The counted filtered-empty state (#454), supplied by the page — the words
+   * on the widening button are the screen's copy, not this component's.
+   */
+  filteredEmpty?: React.ReactNode;
 }): React.ReactElement {
   const router = useRouter();
 
@@ -37,14 +43,18 @@ export function ReviewTable({
       rows={rows}
       rowKey={(row) => row.id}
       empty={
-        <EmptyState
-          headline={filtered ? 'No reviews of that kind' : 'No reviews yet'}
-          description={
-            filtered
-              ? 'Clear the filter to see every review.'
-              : 'A review can only be written after a booking has been completed.'
-          }
-        />
+        filtered && filteredEmpty ? (
+          filteredEmpty
+        ) : (
+          <EmptyState
+            headline={filtered ? 'No reviews of that kind' : 'No reviews yet'}
+            description={
+              filtered
+                ? 'Clear the filter to see every review.'
+                : 'A review can only be written after a booking has been completed.'
+            }
+          />
+        )
       }
       columns={[
         {

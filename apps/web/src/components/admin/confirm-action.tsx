@@ -40,6 +40,28 @@ export interface ConfirmActionProps {
    */
   description: ReactNode;
   confirmLabel: string;
+  /**
+   * What dismissing returns you to, where "Cancel" would be ambiguous.
+   *
+   * Drawn by Pattern C of the admin delta (#454): the case-detail confirms
+   * dismiss with **Keep the case open**, because "Cancel" on a screen about
+   * refunding a booking is a verb about money and reads as the action rather
+   * than the escape from it. The same rule already gave the customer's booking
+   * dialog "Keep booking". Defaults to `Cancel`, which is right everywhere the
+   * word is unambiguous.
+   */
+  cancelLabel?: string;
+  /**
+   * The thing operators get wrong, in a gold panel below the description.
+   *
+   * `40-states.md`: gold is waiting on someone, and every caution drawn here is
+   * about something still in flight after the press — a refund that takes days
+   * to settle, a bank dispute that a refund does not withdraw. It is separated
+   * from the description because a confirm that **restates** rather than
+   * summarises has two jobs, and running them into one paragraph is how the
+   * second one stops being read.
+   */
+  caution?: ReactNode;
   /** `true` when the action is irreversible, which is what earns the red fill. */
   destructive?: boolean;
   onConfirm: () => Promise<void>;
@@ -61,6 +83,8 @@ export function ConfirmAction({
   title,
   description,
   confirmLabel,
+  cancelLabel = 'Cancel',
+  caution,
   destructive = false,
   onConfirm,
 }: ConfirmActionProps): React.ReactElement {
@@ -130,6 +154,12 @@ export function ConfirmAction({
             <div className="mt-2 text-base leading-prose text-stone-700">{description}</div>
           </AlertDialog.Description>
 
+          {caution ? (
+            <div className="mt-3.5 rounded-lg bg-gold-50 px-3 py-2.5 text-sm leading-prose text-stone-700">
+              {caution}
+            </div>
+          ) : null}
+
           {error ? (
             <p role="alert" className="mt-3 text-sm text-error-500">
               {error}
@@ -139,7 +169,7 @@ export function ConfirmAction({
           <div className="mt-5 flex justify-end gap-2">
             <AlertDialog.Cancel asChild>
               <Button type="button" variant="secondary" size="sm" disabled={busy}>
-                Cancel
+                {cancelLabel}
               </Button>
             </AlertDialog.Cancel>
             {/*

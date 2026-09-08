@@ -5,6 +5,7 @@ import {
   ADMIN_VENDOR_STATUS_LABELS,
 } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
+import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { VendorTable } from '@/components/admin/vendor-table';
 import { getAdminVendorFacets, getAdminVendors } from '@/lib/admin-data';
@@ -74,6 +75,55 @@ export default async function AdminVendorsPage({
   const filtered = Boolean(
     params.q || params.category || params.city || params.payouts || params.status,
   );
+
+  /*
+   * The five filters, each paired with the words that drop it (#454).
+   *
+   * `phrase` is how the filter reads inside the heading and `widening` is what
+   * the button says, and they are deliberately different sentences: "No
+   * **published Austin** vendors matching 'kessler'" reads one way and "Any
+   * city" reads another. Built from the same label maps the filter bar uses, so
+   * the state names each filter the way the operator set it.
+   */
+  const active: ActiveFilter[] = [
+    { key: 'q', widening: 'Any search term' },
+    { key: 'category', widening: 'Any category' },
+    { key: 'city', widening: 'Any city' },
+    { key: 'payouts', widening: 'Any payout state' },
+    { key: 'status', widening: 'Any status' },
+  ]
+    .filter((filter) => params[filter.key as keyof typeof params] !== undefined)
+    .map((filter) => ({ ...filter, carried: { ...params, [filter.key]: undefined } }));
+
+  /*
+   * One sentence, assembled from the filters that are actually set.
+   *
+   * A join is right *here* and wrong inside the component: these adjectives all
+   * qualify the same noun, so "No live Austin Photo & film vendors matching
+   * 'kessler'" is a real sentence — where a generic join of two unrelated
+   * clauses, as on `/admin/cases`, is not.
+   *
+   * **The words are the labels, never the parameters.** `category` is a slug
+   * and `payouts` is `not-connected`; reciting a filter in the operator's own
+   * words means the words the filter bar showed them, which is what these three
+   * maps hold.
+   */
+  const categoryName = facets.categories.find(
+    (category) => category.slug === params.category,
+  )?.name;
+  const adjectives = [
+    params.status ? ADMIN_VENDOR_STATUS_LABELS[params.status] : undefined,
+    params.payouts ? PAYOUT_LABELS[params.payouts] : undefined,
+    params.city,
+    categoryName,
+  ].filter((word): word is string => word !== undefined);
+
+  const filteredHeadline = [
+    'No',
+    ...adjectives,
+    'vendors',
+    ...(params.q ? [`matching "${params.q}"`] : []),
+  ].join(' ');
 
   return (
     <AdminSurface
@@ -194,7 +244,18 @@ export default async function AdminVendorsPage({
         total: vendors.total,
       }}
     >
-      <VendorTable rows={vendors.items} filtered={filtered} />
+      <VendorTable
+        rows={vendors.items}
+        filtered={filtered}
+        filteredEmpty={
+          <FilteredEmpty
+            headline={filteredHeadline}
+            path={PATH}
+            filters={active}
+            widenings={vendors.widenings}
+          />
+        }
+      />
     </AdminSurface>
   );
 }

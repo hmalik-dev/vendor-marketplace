@@ -3,6 +3,7 @@ import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar } from '@/components/admin/filter-bar';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FilteredEmpty } from '@/components/admin/filtered-empty';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAdminCustomers } from '@/lib/admin-data';
 import { adminQueryString, boundedText, pageNumber, type RawParam } from '@/lib/admin-params';
@@ -44,14 +45,26 @@ export default async function AdminCustomersPage({
         rows={customers.items}
         rowKey={(row) => row.id}
         empty={
-          <EmptyState
-            headline={q ? 'No customers match that search' : 'No customers yet'}
-            description={
-              q
-                ? 'Try a different name or email.'
-                : 'Customers appear here as soon as they create an account.'
-            }
-          />
+          /*
+           * One filter, so one counted way out (#454). `role = 'customer'` and
+           * the deleted-account exclusion are the screen's domain rather than
+           * filters, so neither is offered: widening past them would list
+           * vendors, or accounts that no longer exist, on a screen about
+           * customers.
+           */
+          q ? (
+            <FilteredEmpty
+              headline={`No customers match "${q}"`}
+              path={PATH}
+              filters={[{ key: 'q', widening: 'Any name or email', carried: {} }]}
+              widenings={customers.widenings}
+            />
+          ) : (
+            <EmptyState
+              headline="No customers yet"
+              description="Customers appear here as soon as they create an account."
+            />
+          )
         }
         columns={[
           {

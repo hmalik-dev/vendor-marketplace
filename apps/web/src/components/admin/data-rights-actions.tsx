@@ -1,6 +1,16 @@
 'use client';
 
 import { BRAND_NAME, toDateString } from '@vendor-marketplace/shared';
+/*
+ * `formatEventDate`, not the raw column. An event date is a Postgres `DATE`
+ * that travels as a `YYYY-MM-DD` string (`.claude/rules/shared-contracts.md`),
+ * and this panel printed it unformatted — `2026-10-08` — on a console where
+ * every other date is written out, and on the one screen this ticket ruled to
+ * US English. That helper is deliberately the single implementation: #412 found
+ * three private copies agreeing by coincidence of construction, and it anchors
+ * at UTC midnight so the date cannot move a day for a reader west of UTC.
+ */
+import { formatEventDate } from '@/lib/booking-entries';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmAction } from '@/components/admin/confirm-action';
@@ -127,6 +137,60 @@ export function DataRightsActions({
 
   return (
     <div className="flex flex-col gap-2">
+      {/*
+        The refusal, drawn **above** the control it refuses (Pattern B, #454).
+
+        #438 built the prevention and this changes only where it is drawn and
+        what colour it is, which is not cosmetic: the explanation sat *below*
+        the button, so an operator read a disabled control first and the reason
+        second, and a disabled button with no visible cause is indistinguishable
+        from a broken one. Gold because `40-states.md` reserves it for waiting on
+        someone — this account is waiting on a booking, and nothing has failed.
+
+        **D39's 409 is shown before the press, never as an error after it.** The
+        API's refusal is the guarantee; this is the explanation.
+      */}
+      {!closedAt && (isSelf || closeBlockers.length > 0) ? (
+        <div className="rounded-lg border border-gold-200 bg-gold-50 px-3.5 py-3 text-sm leading-prose text-stone-900">
+          {isSelf ? (
+            <>
+              <strong className="font-semibold">Can&apos;t close: this is your own account.</strong>{' '}
+              Every action on this console is recorded against the operator who took it, and an
+              audit trail its own actor can end is not one.
+            </>
+          ) : (
+            <>
+              <strong className="font-semibold">
+                Can&apos;t close: {closeBlockers.length} confirmed{' '}
+                {closeBlockers.length === 1 ? 'booking' : 'bookings'} on{' '}
+                {closeBlockers.map((booking) => formatEventDate(booking.eventDate)).join(', ')}.
+              </strong>{' '}
+              Cancel or complete {closeBlockers.length === 1 ? 'it' : 'them'} first, from the
+              booking screens, where the refund is priced.
+              {/*
+                **Named but not linked, and #437 owes the link.**
+
+                Pattern B draws this panel with the blocking booking linked, and
+                `closeBlockers` carries the `bookingId` to link it with. The
+                destination is `/admin/bookings/[id]`, which **does not exist
+                yet** — it is one of the five detail routes #437 builds. A link
+                to a 404 is worse than no link: it tells an operator the console
+                has somewhere to send them and then does not. So the booking is
+                named and dated here, and the anchor goes on when the route it
+                would point at is real.
+              */}
+              <ul className="mt-1.5 flex flex-col gap-0.5 text-stone-700">
+                {closeBlockers.map((booking) => (
+                  <li key={booking.bookingId}>
+                    {formatEventDate(booking.eventDate)} with {booking.counterpartyName}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
@@ -147,7 +211,21 @@ export function DataRightsActions({
         ) : (
           <ConfirmAction
             trigger={
-              <Button type="button" variant="destructive" size="sm">
+              /*
+               * **Outlined red, never filled** — Pattern B rule 4 (#454).
+               *
+               * This was the `destructive` variant, which is a red *fill*. The
+               * rule is explicit about why: "a filled red button in a corner is
+               * a mis-click waiting". The fill is earned at the confirm below,
+               * which is the last thing before the account is retired, and
+               * `ConfirmAction` still paints it there.
+               */
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="border-error-200 text-error-500 hover:bg-error-50"
+              >
                 Close account
               </Button>
             }
@@ -175,27 +253,6 @@ export function DataRightsActions({
           />
         )}
       </div>
-
-      {isSelf && !closedAt ? (
-        <p className="text-sm text-stone-700">
-          You cannot close your own account. Every action on this console is recorded against the
-          operator who took it, and an audit trail its own actor can end is not one.
-        </p>
-      ) : null}
-
-      {!isSelf && closeBlockers.length > 0 && !closedAt ? (
-        <p className="text-sm text-stone-700">
-          This account cannot be closed while it holds{' '}
-          {closeBlockers.length === 1
-            ? 'an upcoming confirmed booking'
-            : 'upcoming confirmed bookings'}
-          . They have to be cancelled from the booking screens first, where the refund is priced:{' '}
-          {closeBlockers
-            .map((booking) => `${booking.eventDate} with ${booking.counterpartyName}`)
-            .join(', ')}
-          .
-        </p>
-      ) : null}
 
       {error ? (
         <p role="alert" className="text-sm text-error-500">
