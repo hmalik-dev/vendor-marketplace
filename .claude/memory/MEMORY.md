@@ -67,3 +67,4 @@
 - [Turbo serves a green you did not earn](turbo-serves-a-green-you-did-not-earn.md) — a fast green on inputs you just changed is not a green, and passThrough env vars are outside the cache key
 - [A failed command reads as a passing check](a-failed-command-reads-as-a-passing-check.md) — `grep -c` on a command that errored prints a confident zero; make the check print what it found
 - [A guard reads a smaller region than you think](a-guard-reads-a-smaller-region-than-you-think.md) — a source scan answers clean about code it never looked at; pin the reach with mutations in the real files
+- [Closure destroys a real Clerk identity](closure-destroys-a-real-clerk-identity.md) — never close a seeded E2E account; the seed resolves Clerk ids and cannot rebuild one
