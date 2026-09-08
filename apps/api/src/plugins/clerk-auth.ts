@@ -26,6 +26,11 @@ export interface ClerkIdentity {
 }
 
 declare module 'fastify' {
+  interface FastifyInstance {
+    /** Ends a Clerk identity outright; see `ClerkUserDeleter`. */
+    deleteClerkUser: ClerkUserDeleter;
+  }
+
   interface FastifyRequest {
     auth: AuthenticatedUser | null;
     /** Set whenever a valid session token was presented. */
@@ -44,11 +49,27 @@ export type TokenVerifier = (token: string) => Promise<string>;
 /** Loads the Clerk identity behind a subject, for the lazy-sync cold path. */
 export type ClerkUserLoader = (clerkUserId: string) => Promise<ClerkUserSnapshot>;
 
+/**
+ * Deletes a Clerk identity — the identity itself, not just its sessions (#451).
+ *
+ * Closure releases the person's email address on our side, so the identity
+ * holding that address at Clerk's end has to go with it; revoking sessions
+ * alone would leave the two systems disagreeing about the same person, and
+ * would still lock them out of signing up again. Deleting also ends the ghost
+ * session the retired row would otherwise leave running: `<UserButton />`
+ * chrome over an application that 401s every read.
+ *
+ * Idempotent by contract — an identity that is already gone is a success, not
+ * an error, because Clerk's own self-serve deletion can have got there first.
+ */
+export type ClerkUserDeleter = (clerkUserId: string) => Promise<void>;
+
 export interface ClerkAuthPluginOptions {
   secretKey: string;
   /** Overridden by the route suites so they never reach Clerk's network. */
   verifySessionToken?: TokenVerifier;
   loadClerkUser?: ClerkUserLoader;
+  deleteClerkUser?: ClerkUserDeleter;
 }
 
 const BEARER_PREFIX = 'Bearer ';
@@ -72,9 +93,15 @@ function defaultVerifier(secretKey: string): TokenVerifier {
   };
 }
 
-function defaultLoader(secretKey: string): ClerkUserLoader {
-  const clerk = createClerkClient({ secretKey });
+/**
+ * The Clerk backend client, named once so both seams below take the same one.
+ *
+ * `ReturnType` rather than an imported type: the SDK's client type is not part
+ * of what this file needs to name, and deriving it cannot drift.
+ */
+type ClerkBackendClient = ReturnType<typeof createClerkClient>;
 
+function defaultLoader(clerk: ClerkBackendClient): ClerkUserLoader {
   return async (clerkUserId) => {
     const user = await clerk.users.getUser(clerkUserId);
     const primaryEmail =
@@ -97,6 +124,36 @@ function defaultLoader(secretKey: string): ClerkUserLoader {
 }
 
 /**
+ * Clerk answers 404 for an identity that is not there, and this treats that as
+ * done rather than as a failure: the person may have deleted themselves
+ * through `<UserButton />` moments before an operator closed the account, and
+ * both routes want the same end state. Read structurally rather than through
+ * Clerk's error class so the check does not depend on the SDK's internals.
+ */
+function isAlreadyGone(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    (error as { status: unknown }).status === 404
+  );
+}
+
+function defaultDeleter(clerk: ClerkBackendClient): ClerkUserDeleter {
+  return async (clerkUserId) => {
+    try {
+      await clerk.users.deleteUser(clerkUserId);
+    } catch (error) {
+      if (isAlreadyGone(error)) {
+        return;
+      }
+
+      throw error;
+    }
+  };
+}
+
+/**
  * Resolves the caller on every request that presents a bearer token. A token
  * that is present but unusable fails the request outright rather than falling
  * back to anonymous access, so a stale session can never be mistaken for a
@@ -104,8 +161,17 @@ function defaultLoader(secretKey: string): ClerkUserLoader {
  */
 export const clerkAuthPlugin = fp<ClerkAuthPluginOptions>(
   async (app, options) => {
+    /*
+     * One client, shared by both seams that reach Clerk's backend API. Built
+     * from the same secret twice, they would be two places for a client option
+     * — an `apiUrl`, a proxy, a timeout — to be added to one and not the other,
+     * with nothing failing to say so.
+     */
+    const clerk = createClerkClient({ secretKey: options.secretKey });
     const verify = options.verifySessionToken ?? defaultVerifier(options.secretKey);
-    const loadClerkUser = options.loadClerkUser ?? defaultLoader(options.secretKey);
+    const loadClerkUser = options.loadClerkUser ?? defaultLoader(clerk);
+
+    app.decorate('deleteClerkUser', options.deleteClerkUser ?? defaultDeleter(clerk));
 
     app.decorateRequest('auth', null);
     app.decorateRequest('clerkIdentity', null);

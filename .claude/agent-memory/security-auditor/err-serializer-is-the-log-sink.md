@@ -28,10 +28,16 @@ errSerializer(val)`, also unsanitised. And a query error nested inside a
    plain-object property is copied whole and JSON-stringified with its `params`.
 
 All three verified by probe against the real `DrizzleQueryError` and
-`pino-std-serializers`. None is reachable in the tree as of 2026-09-07 (no
-`AggregateError`, no error stored under a named property), so it was reported as
-defence-in-depth — but the ticket's whole thesis is that a future author is
-covered without knowing the hazard exists.
+`pino-std-serializers`. It was reported as defence-in-depth — but the ticket's
+whole thesis is that a future author is covered without knowing the hazard
+exists.
+
+**Door 2 stopped being hypothetical with #451.** `bestEffortNotice` now logs a
+`ClerkAPIResponseError` from `deleteClerkUser`, and that class carries an own
+enumerable `errors` array, so pino copies it to `aggregateErrors` **unsanitised**.
+Contents are Clerk's own `{code, message, longMessage, meta}` — no credential,
+no bound DB parameter — so it is not a leak today, but the "nothing reaches
+door 2" claim is no longer true and the next such error object may carry more.
 
 Settled non-leaks, do not re-report:
 

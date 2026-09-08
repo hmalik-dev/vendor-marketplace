@@ -281,6 +281,13 @@
       "when": 1788827507474,
       "tag": "0039_classy_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788840623464,
+      "tag": "0040_complete_dazzler",
+      "breakpoints": true
     }
   ]
 }

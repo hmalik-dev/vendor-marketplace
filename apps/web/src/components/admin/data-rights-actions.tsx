@@ -20,6 +20,7 @@ import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error
 import {
   wireAdminCloseAccountResultSchema,
   wireAdminUserExportSchema,
+  type WireAdminCloseAccountResult,
   type WireAdminCloseBlocker,
 } from '@/lib/wire-schemas';
 
@@ -37,6 +38,39 @@ export interface DataRightsActionsProps {
   bookingsRefundedOnClose: number;
   /** `true` where this record is the signed-in operator's own account. */
   isSelf: boolean;
+}
+
+/**
+ * What a closure finished without doing — one sentence per owed item.
+ *
+ * A list rather than a message, because there are now two of these and they are
+ * **orthogonal**: a stranded refund and an undeleted sign-in can happen in the
+ * same closure, and the branch that reported only the first would leave an
+ * operator believing the person had been signed out. Both are the same kind of
+ * fact — the account is closed either way, and only a human can finish the
+ * rest — so a silent refresh would show a success that is only partly one.
+ *
+ * #400 established the shape for the money half; #451 added the identity half.
+ */
+function closureLeftOwed(result: WireAdminCloseAccountResult): string[] {
+  const owed: string[] = [];
+  const stranded = result.refundsFailed + result.bookingsLeftForReview;
+
+  if (stranded > 0) {
+    owed.push(
+      `${stranded} ${
+        stranded === 1 ? 'booking is' : 'bookings are'
+      } still confirmed and unrefunded — the money is still at Stripe and the customer has not been told.`,
+    );
+  }
+
+  if (!result.identityDeleted) {
+    owed.push(
+      'Their sign-in could not be deleted — they are still signed in, and their email address has been released underneath them.',
+    );
+  }
+
+  return owed;
 }
 
 /**
@@ -117,19 +151,13 @@ export function DataRightsActions({
       schema: wireAdminCloseAccountResultSchema,
     });
 
-    /*
-     * #400's signal, on this route too. A closure whose refunds did not all
-     * issue leaves money at Stripe, a customer untold and a date still held —
-     * and the account is closed either way, so a silent refresh would show an
-     * operator a success that is only partly one.
-     */
-    const stranded = result.refundsFailed + result.bookingsLeftForReview;
+    const owed = closureLeftOwed(result);
 
     setError(
-      stranded > 0
-        ? `The account is closed, but ${stranded} ${
-            stranded === 1 ? 'booking is' : 'bookings are'
-          } still confirmed and unrefunded. That needs a person: the money is still at Stripe and the customer has not been told.`
+      owed.length > 0
+        ? `The account is closed, but not everything it should have done landed. This needs a person. ${owed.join(
+            ' ',
+          )}`
         : null,
     );
     router.refresh();
@@ -234,7 +262,9 @@ export function DataRightsActions({
             description={
               <>
                 This retires the account and takes any storefront off the marketplace immediately,
-                and declines every request still open against it.{' '}
+                and declines every request still open against it. It deletes their sign-in, so they
+                are signed out everywhere, and releases their email address so they can register
+                again later if they want to.{' '}
                 {bookingsRefundedOnClose > 0
                   ? `It also cancels the ${bookingsRefundedOnClose} upcoming confirmed ${
                       bookingsRefundedOnClose === 1 ? 'booking' : 'bookings'
