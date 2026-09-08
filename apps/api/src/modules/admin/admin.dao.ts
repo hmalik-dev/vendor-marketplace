@@ -1,4 +1,17 @@
-import { and, asc, desc, eq, gt, gte, inArray, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  notExists,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
@@ -24,6 +37,7 @@ import type {
   AdminActionDetail,
   AdminActionSubject,
   AdminBookingFlag,
+  AdminCustomerFlag,
   AdminPaymentFlag,
   AdminPayoutFilter,
   PayoutModel,
@@ -519,6 +533,46 @@ export async function findConfirmedBookingsToUnwind(
  * Requests that have not become bookings yet. They carry no money, so they are
  * declined rather than refunded — but leaving them pending would keep a banned
  * account in someone's queue as if it could still answer.
+ *
+ * **`accepted` is bounded, and this is what #444 fixed.** `accepted` used to sit
+ * in the status list unconditionally, but it is exactly the status a request
+ * holds *after* checkout — `bookings` carries a unique index on `request_id`
+ * because one accepted request becomes one booking, and nothing moves the
+ * request again while that booking stands. So every unwind flipped the accepted
+ * request behind an **already-completed** booking to `declined`: the event
+ * happened, the vendor was paid, and the customer's screen then said the request
+ * had been declined.
+ * That is rewriting history rather than unwinding it, and it was reachable from
+ * any ban, so it predated both #433's deletion path and #438's closure.
+ *
+ * The bound is the same one the whole unwind works to — *undo what has not
+ * happened yet* — and it is the neighbouring `findConfirmedBookingsToUnwind`'s
+ * rule stated for requests: **an accepted request is declined only when there is
+ * no booking behind it at all**, which is the genuine mid-checkout case, and the
+ * only one where nothing else records what happened. Dropping `accepted`
+ * outright would have been the other wrong answer: a request accepted but never
+ * paid for is a real open commitment, and leaving it standing holds a vendor's
+ * date for an account that no longer trades.
+ *
+ * **The request behind a booking this unwind *cancels* never arrives here as
+ * `accepted`, and that is why this predicate needs no third case (#444's third
+ * acceptance).** `cancelBookingAndFreeDate` settles it to `cancelled` in the
+ * same transaction as the cancellation, and has since #400 — deliberately, so
+ * `syncHeldDate` cannot read an accepted request off a date whose booking is
+ * gone and mark it booked again. The unwind runs that cancellation for every
+ * booking it ends *before* it reaches this call, so by the time the UPDATE runs
+ * those requests are `cancelled` and outside every arm of the predicate.
+ *
+ * So the ticket's open question — what the customer's screen should say for one
+ * of those — is already answered by the product, and not by this function:
+ * `cancelled`, which the hub renders as **"Withdrawn"**. That word is wrong for
+ * a platform unwind, but it is #400's wording of an existing state rather than
+ * anything decided here, and it costs little because the *booking* row is where
+ * this story is actually told: it carries `cancelled_by = 'admin'` and its
+ * cancellation reason, and #415 made the customer's sentence come from that
+ * narrative rather than from a status lookup. Naming the act honestly would
+ * take a new `BOOKING_REQUEST_STATUSES` member — a schema, vocabulary and design
+ * change, and a ticket of its own.
  */
 export async function declineOpenRequests(
   db: AppDatabase,
@@ -534,10 +588,28 @@ export async function declineOpenRequests(
     return 0;
   }
 
+  /*
+   * The booking this request became, if it ever became one. The correlation is
+   * on `booking_requests.id`, so it reads the row the UPDATE is deciding about;
+   * `bookings_request_id_key` makes it at most one row.
+   */
+  const bookingBehindRequest = db
+    .select({ present: sql`1` })
+    .from(bookings)
+    .where(eq(bookings.requestId, bookingRequests.id));
+
   const declined = await db
     .update(bookingRequests)
     .set({ status: 'declined', updatedAt: now })
-    .where(and(inArray(bookingRequests.status, ['pending', 'quoted', 'accepted']), sides))
+    .where(
+      and(
+        or(
+          inArray(bookingRequests.status, ['pending', 'quoted']),
+          and(eq(bookingRequests.status, 'accepted'), notExists(bookingBehindRequest)),
+        ),
+        sides,
+      ),
+    )
     .returning({ id: bookingRequests.id });
 
   return declined.length;
@@ -678,7 +750,13 @@ export interface AdminCustomerProjection {
   state: string | null;
   totalBookingsCount: number;
   isBanned: boolean;
+  pendingEmail: string | null;
   createdAt: Date;
+}
+
+interface AdminCustomerFilters {
+  q: string | undefined;
+  flag: AdminCustomerFlag | undefined;
 }
 
 /**
@@ -686,14 +764,14 @@ export interface AdminCustomerProjection {
  * Soft-deleted accounts are excluded for the same reason deleted vendors are:
  * an operator moderating an account that no longer exists can only cause harm.
  */
-function customerCondition(q: string | undefined) {
+function customerCondition(filters: AdminCustomerFilters) {
   const conditions = [eq(users.role, 'customer'), sql`${users.deletedAt} is null`];
 
-  if (q) {
+  if (filters.q) {
     const match = or(
-      containsInsensitive(users.email, q),
-      containsInsensitive(users.firstName, q),
-      containsInsensitive(users.lastName, q),
+      containsInsensitive(users.email, filters.q),
+      containsInsensitive(users.firstName, filters.q),
+      containsInsensitive(users.lastName, filters.q),
     );
 
     if (match) {
@@ -701,12 +779,28 @@ function customerCondition(q: string | undefined) {
     }
   }
 
+  /*
+   * The accounts whose stored address the identity provider has already moved
+   * on from (#462).
+   *
+   * Stored rather than derived, unlike `refundStuck`: nothing else in the
+   * database knows what Clerk currently believes, so `pending_email` — written
+   * by `updateUserByClerkId` when `users_email_key` refuses the new address —
+   * is the only record that the two disagree. Keyed on it rather than on
+   * `email_sync_failed_at` because it is the column the console prints, and a
+   * filter that can select a row the table then renders as blank is a filter
+   * that lies.
+   */
+  if (filters.flag === 'email-stale') {
+    conditions.push(isNotNull(users.pendingEmail));
+  }
+
   return and(...conditions);
 }
 
 export async function findAdminCustomers(
   db: AppDatabase,
-  q: string | undefined,
+  filters: AdminCustomerFilters,
   limit: number,
   offset: number,
 ): Promise<AdminCustomerProjection[]> {
@@ -720,42 +814,46 @@ export async function findAdminCustomers(
       state: users.state,
       totalBookingsCount: users.totalBookingsCount,
       isBanned: users.isBanned,
+      pendingEmail: users.pendingEmail,
       createdAt: users.createdAt,
     })
     .from(users)
-    .where(customerCondition(q))
+    .where(customerCondition(filters))
     .orderBy(desc(users.createdAt))
     .limit(limit)
     .offset(offset);
 }
 
 /**
- * The one filter the customers table can be narrowed by.
+ * The filters the customers table can be narrowed by.
  *
  * `role = 'customer'` and the deleted-account exclusion are the screen's
  * *domain*, not filters — widening past either would list vendors, or accounts
  * that no longer exist, on a screen about customers.
  */
-export const CUSTOMER_FILTER_KEYS = ['q'] as const;
+export const CUSTOMER_FILTER_KEYS = ['q', 'flag'] as const;
 export type CustomerFilterKey = (typeof CUSTOMER_FILTER_KEYS)[number];
 
-/** How many customers dropping the search would reveal, in one scan (#454). */
+/** How many customers each single widening would reveal, in one scan (#454). */
 export async function countCustomerWidenings(
   db: AppDatabase,
-  q: string | undefined,
+  filters: AdminCustomerFilters,
 ): Promise<FilterWidening[]> {
   return countWidenings<CustomerFilterKey>({
-    active: q === undefined ? [] : CUSTOMER_FILTER_KEYS,
-    conditionWithout: () => customerCondition(undefined),
+    active: CUSTOMER_FILTER_KEYS.filter((key) => filters[key] !== undefined),
+    conditionWithout: (dropped) => customerCondition({ ...filters, [dropped]: undefined }),
     scan: (selection) => db.select(selection).from(users),
   });
 }
 
-export async function countAdminCustomers(db: AppDatabase, q: string | undefined): Promise<number> {
+export async function countAdminCustomers(
+  db: AppDatabase,
+  filters: AdminCustomerFilters,
+): Promise<number> {
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(users)
-    .where(customerCondition(q));
+    .where(customerCondition(filters));
 
   return rows?.[0]?.total ?? 0;
 }

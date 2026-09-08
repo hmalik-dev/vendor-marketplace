@@ -579,9 +579,10 @@ export async function listCustomers(
   query: AdminCustomerQuery,
 ): Promise<AdminCustomerPage> {
   const offset = offsetOf(query);
+  const filters = { q: query.q, flag: query.flag };
   const [rows, total] = await Promise.all([
-    findAdminCustomers(db, query.q, query.pageSize, offset),
-    countAdminCustomers(db, query.q),
+    findAdminCustomers(db, filters, query.pageSize, offset),
+    countAdminCustomers(db, filters),
   ]);
 
   /*
@@ -591,7 +592,7 @@ export async function listCustomers(
    * `Promise.all` above.
    */
   const widenings =
-    rows.length === 0 && query.page === 1 ? await countCustomerWidenings(db, query.q) : [];
+    rows.length === 0 && query.page === 1 ? await countCustomerWidenings(db, filters) : [];
 
   return { items: rows, total, page: query.page, pageSize: query.pageSize, widenings };
 }

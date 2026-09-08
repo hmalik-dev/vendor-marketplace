@@ -54,3 +54,37 @@ The second is usually right. The mistake is believing option zero exists.
 
 Related: [[commit-ticket-changes-immediately]],
 [[main-pushes-dequeue-parallel-lane-prs]].
+
+## The deadlock is symmetric, and batching is the exit
+
+Two well-behaved sessions can lock each other out of the shared checkout: one
+edit **staged**, the other **unstaged**, and the hook refuses both commits —
+each session sees "unstaged or untracked files remain" and neither is the one
+holding it up. It is not "the second commit waits for the first".
+
+**The only exit that discards nobody's work is one commit taking both halves**,
+with the message naming whose each half is. That is the sanctioned resolution
+here, not an exception — the hook will produce this again whenever a supervisor
+writes to the tree while a lane is closing out.
+
+**Better still: do not write into the shared checkout while a lane is landing.**
+Hold the edit until the lane reports its push. Recorded 2026-09-08 after I did
+exactly this minutes after warning three lanes about it.
+
+## A teardown that fails on a busy database means a process survived
+
+`lane:down` refusing with *"database is being accessed by other users"* is not a
+transient to retry. **Ask which session is holding it**: `pg_stat_activity`
+showed an idle connection whose last statement was a `bookings` status query —
+the **payout sweep**, which ticks every fifteen minutes and had outlived the dev
+servers the lane believed it had killed. Seven processes were still alive under
+the worktree path.
+
+Kill scoped to the **worktree path** in the command line, never by process name:
+an unscoped `pkill` here would have reached four other running lanes. Then
+`lane:down` succeeds first try.
+
+And `git push origin --delete <branch>` erroring with *"remote ref does not
+exist"* is the merge having already removed it — **an error reporting the state
+you wanted**, same family as `gh`'s post-merge exit code. Check `git ls-remote`
+rather than reading the exit status.

@@ -8,11 +8,18 @@ import type {
 } from '@vendor-marketplace/shared';
 import type { LegalAcceptanceRow, UserRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import type { ClerkUserDeleter } from '../../plugins/clerk-auth.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import { retireUserById } from '../users/users.dao.js';
+import { isClerkIdentity } from '../webhooks/clerk.reconcile.js';
 import { findConfirmedBookingsToUnwind } from './admin.dao.js';
 import { fullName, recordAdminActionBestEffort } from './admin.service.js';
-import { CLOSURE_UNWIND, unwindAccountBookings, type AdminContext } from './account-unwind.js';
+import {
+  bestEffortNotice,
+  CLOSURE_UNWIND,
+  unwindAccountBookings,
+  type AdminContext,
+} from './account-unwind.js';
 import {
   findBookingEventDates,
   findCounterparties,
@@ -228,6 +235,8 @@ export async function exportUserData(
       avatarUrl: user.avatarUrl,
       stripeCustomerId: user.stripeCustomerId,
       isBanned: user.isBanned,
+      pendingEmail: user.pendingEmail,
+      emailSyncFailedAt: user.emailSyncFailedAt,
       deletedAt: user.deletedAt,
       createdAt: user.createdAt,
     },
@@ -454,12 +463,31 @@ async function vendorSideRefundsOnClose(
  * instance, not a line of code in this repository, so this route is the
  * refusing door and the webhook is the one that cannot refuse — where it leaves
  * the booking confirmed, payable and logged for a human, which decides nothing.
+ *
+ * ---
+ *
+ * **NEVER DRIVE THIS ROUTE AGAINST A SEEDED E2E ACCOUNT.** Since #451 a closure
+ * **deletes the Clerk identity**, and that deletion is not recoverable from
+ * this repository. `db:seed:e2e` *resolves* the Clerk ids behind the E2E
+ * customer, vendor and admin emails rather than creating them — deliberately,
+ * because a `users` row carrying an E2E email under an invented id locks that
+ * account out on its next sign-in — so re-seeding cannot put a deleted identity
+ * back. Only a person with the Clerk dashboard can. The admin fixture is the
+ * worst case: it is the only route to `/admin` at all, because `role = 'admin'`
+ * is unreachable from inside the product.
+ *
+ * Verify against a throwaway `+clerk_test` sign-up instead. The **refusal**
+ * path is safe and is what most passes actually want — D39 answers 409 while
+ * the account holds a future confirmed booking, and the console disables the
+ * button before it can be pressed — so verifying the refusal never reaches the
+ * deletion.
  */
 export async function closeAccount(
   context: AdminContext,
   actorId: string,
   userId: string,
   now: Date,
+  deleteClerkUser: ClerkUserDeleter,
 ): Promise<AdminCloseAccountResult> {
   if (actorId === userId) {
     /*
@@ -475,6 +503,35 @@ export async function closeAccount(
 
   if (!user) {
     throw notFound('No account with that id');
+  }
+
+  if (user.role === 'admin') {
+    /*
+     * A second refusal, and #451 is what earns it.
+     *
+     * Closing another operator used to be a reversible soft-delete. It now
+     * **destroys their Clerk identity**, and nothing in this repository can put
+     * one back: `db:seed:e2e` resolves the Clerk ids behind its accounts rather
+     * than creating them, and `role = 'admin'` is unreachable from inside the
+     * product, so the only recovery is a person provisioning a user in the
+     * Clerk dashboard by hand. The self-closure refusal above already says an
+     * audit trail its own actor can erase is not one; the same argument is
+     * stronger for a peer now that the erasure cannot be undone.
+     *
+     * **Ruled 2026-09-07: hurdles, not refusal — and the hurdles are #460.**
+     * An operator account must stay closable, because people leave; the
+     * friction just has to be proportionate to being unrecoverable. So this
+     * refusal is the *default until that friction exists*, not the destination:
+     * #460 builds a typed confirmation on the target's own email, a structural
+     * refusal when no other live admin would remain, a dialog saying the
+     * sign-in comes back only from Clerk's dashboard, and its own
+     * `admin_actions` value. Delete this refusal **in the same commit** that
+     * adds them — relaxing it first would leave the console worse than it is
+     * today, which is the one outcome neither direction wants.
+     */
+    throw forbidden(
+      'An operator account cannot be closed here. Closing it would delete a sign-in that only the identity provider can restore.',
+    );
   }
 
   if (user.deletedAt) {
@@ -530,6 +587,46 @@ export async function closeAccount(
     );
   }
 
+  /*
+   * The identity itself goes, not just its sessions — last, and deliberately.
+   *
+   * Deleting the Clerk user fires `user.deleted` straight back at our own
+   * webhook, so the local row has to be retired and the marketplace already
+   * tidied by the time that arrives. It is: `applyUserDeleted` looks for a
+   * **live** row and finds none, and `retireUserByClerkId` would fail its
+   * `notDeleted` predicate anyway. The redelivery is therefore `ignored` and
+   * cannot unwind this account a second time or refund anything twice, which
+   * is #433's replay guard doing exactly the job it was built for.
+   *
+   * Reported rather than thrown, through the same helper the audit write and
+   * the unwind's notifications use: the retirement has already committed and
+   * an operator cannot repeat a closure — the route answers 409 on a closed
+   * account — so a network failure at Clerk must not answer 500 and tell them
+   * nothing happened. It comes back as `identityDeleted: false`, and the
+   * console asks for a person, the shape a refused refund already takes.
+   */
+  const identityDeleted = isClerkIdentity(user.clerkUserId)
+    ? await bestEffortNotice(
+        context,
+        { userId },
+        () => deleteClerkUser(user.clerkUserId),
+        'An account closure could not delete its Clerk identity; that person is still signed in',
+      )
+    : /*
+       * A row Clerk never issued has no identity to end, so there is nothing
+       * owed and nothing to call. `isClerkIdentity` is the predicate the
+       * reconcile pass already owns for this exact distinction — *"a row Clerk
+       * never issued is not a row Clerk deleted"* — and the seeded marketplace
+       * accounts (`seed_mkt_…`) are live, listed on `/admin/customers`, and
+       * closable. Without it, closing one sends a fabricated id to Clerk and
+       * reports whatever Clerk says about it: a 404 becomes `true`, telling an
+       * operator a sign-in was deleted that never existed, and a 400 becomes
+       * `false`, sending them to the dashboard to hunt for it. Both answers are
+       * written into `admin_actions`, which carries an immutability trigger, so
+       * the false record cannot be corrected afterwards.
+       */
+      true;
+
   await recordAdminActionBestEffort(context, {
     actorId,
     action: 'user_closed',
@@ -542,6 +639,7 @@ export async function closeAccount(
       refundsIssued: unwound.refundsIssued,
       refundsFailed: unwound.refundsFailed,
       profileRetired: retired.profileRetired,
+      identityDeleted,
     },
   });
 
@@ -554,6 +652,7 @@ export async function closeAccount(
     refundsIssued: unwound.refundsIssued,
     refundsFailed: unwound.refundsFailed,
     profileRetired: retired.profileRetired,
+    identityDeleted,
   };
 }
 
@@ -588,6 +687,8 @@ export async function readUserDataRights(
     name: fullName(user.firstName, user.lastName),
     role: user.role,
     isBanned: user.isBanned,
+    pendingEmail: user.pendingEmail,
+    emailSyncFailedAt: user.emailSyncFailedAt,
     closedAt: user.deletedAt,
     vendorProfileId: record.profile?.id ?? null,
     vendorSlug: record.profile?.slug ?? null,

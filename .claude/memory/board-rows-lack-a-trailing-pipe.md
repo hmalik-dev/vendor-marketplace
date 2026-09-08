@@ -25,3 +25,24 @@ a pipe. Then run `pnpm test --force` — the board is not a turbo task input, so
 cached green proves nothing (see [[filing-a-ticket-is-a-three-file-change]]).
 Related: [[tracker-board-rows-are-bold]], which is the other place this table's
 irregular formatting has produced a confident wrong answer.
+
+## `awk`'s `$n` is python's `parts[n-1]` — never carry a column index between tools
+
+Lane #462, 2026-09-08. It inspected the board with `awk` to find the Status
+column, then wrote the edit in python using the same number. `awk`'s `$7` is
+python's `parts[6]`, so the write was aimed one column left.
+
+**The assertion is what caught it.** The script asserted the old value before
+replacing — `parts[7] == '**Backlog**'` returned `' — '` and it stopped. Without
+that, it would have written `**Done**` into the **Branch** column and the branch
+name into **Blocked By**, on a row that still looks plausible at a glance and
+that no test reads closely enough to reject.
+
+**Same family as the `parts[-2]` note above, in a new disguise:** not off the end
+this time, but **off by one between two tools that both call it "field 7"**.
+
+**How to apply:** never carry a column index from one tool to another —
+**re-derive it in the tool doing the write**, and **assert the old value before
+replacing it**. The index alone is never trustworthy; the assertion is what makes
+the mistake loud. Verify afterwards that the row still has 12 fields and that the
+cell the off-by-one would have eaten still reads what it should.

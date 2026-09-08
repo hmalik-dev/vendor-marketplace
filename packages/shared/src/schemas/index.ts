@@ -2392,6 +2392,25 @@ export const adminVendorPageSchema = paginatedSchema(adminVendorRowSchema).exten
 });
 export type AdminVendorPage = z.infer<typeof adminVendorPageSchema>;
 
+/**
+ * Accounts whose stored address no longer matches the identity provider (#462).
+ *
+ * Shaped like `refund-stuck` because it names the same kind of thing: a state
+ * that is invisible, permanent until somebody acts, and about a thing that
+ * silently kept happening afterwards. A `user.updated` carrying an address some
+ * other row already holds cannot be written — `users_email_key` refuses it —
+ * and retrying will meet the same row, so the webhook records the address as
+ * pending and succeeds. `users.email` then holds an address the account holder
+ * has already moved off, and every notification for that account goes there.
+ *
+ * Unlike `refund-stuck` this is **stored** rather than derived: nothing else in
+ * the database knows what Clerk currently believes, so `pending_email` is the
+ * only record that the two disagree.
+ */
+export const ADMIN_CUSTOMER_FLAGS = ['email-stale'] as const;
+export const adminCustomerFlagSchema = z.enum(ADMIN_CUSTOMER_FLAGS);
+export type AdminCustomerFlag = (typeof ADMIN_CUSTOMER_FLAGS)[number];
+
 export const adminCustomerRowSchema = z.object({
   id: uuidSchema,
   email: z.string(),
@@ -2401,6 +2420,18 @@ export const adminCustomerRowSchema = z.object({
   state: z.string().nullable(),
   totalBookingsCount: z.int(),
   isBanned: z.boolean(),
+  /**
+   * The address the identity provider holds and this row could not be given,
+   * or `null` when the two agree. Carried on every row rather than only on the
+   * filtered list, for the reason `refundStuck` is: an operator scanning the
+   * unfiltered table sees it without having to know the filter exists.
+   *
+   * The matching `email_sync_failed_at` is deliberately **not** here. A list
+   * answers "which accounts", and how long one has been wrong is a question
+   * about a single account — `adminUserDataRightsSchema` carries it, and
+   * `/admin/users/[userId]` is where it is read.
+   */
+  pendingEmail: z.string().nullable(),
   createdAt: z.date(),
 });
 export type AdminCustomerRow = z.infer<typeof adminCustomerRowSchema>;
@@ -2408,6 +2439,7 @@ export type AdminCustomerRow = z.infer<typeof adminCustomerRowSchema>;
 export const adminCustomerQuerySchema = z.object({
   ...adminPaginationShape,
   q: trimmedString(MAX_NAME_LENGTH).optional(),
+  flag: adminCustomerFlagSchema.optional(),
 });
 
 /**
@@ -3190,6 +3222,17 @@ export const adminUserExportSchema = z.object({
      */
     stripeCustomerId: z.string().nullable(),
     isBanned: z.boolean(),
+    /**
+     * The address the identity provider holds that this account could not be
+     * given, and when the two stopped agreeing (#462).
+     *
+     * Here because the console shows it and the export must not hand over a
+     * smaller record than staff can see. It is the subject's own address, held
+     * by this platform, and it survives closure — `retireUserById` writes only
+     * `deleted_at` — so an access request has to enumerate it.
+     */
+    pendingEmail: z.string().nullable(),
+    emailSyncFailedAt: z.coerce.date().nullable(),
     /** Set where the account was closed; the row is retained, never erased. */
     deletedAt: z.coerce.date().nullable(),
     createdAt: z.coerce.date(),
@@ -3273,6 +3316,17 @@ export const adminCloseAccountResultSchema = z.object({
    */
   refundsFailed: z.int(),
   profileRetired: z.boolean(),
+  /**
+   * Whether the Clerk identity behind the account was actually deleted (#451).
+   *
+   * Closure ends the identity, not just its sessions, because the local row's
+   * address is released on closure and the two systems must not disagree about
+   * who holds it. Clerk is a network call the retirement cannot roll back, so
+   * a failure there leaves an account that is closed here and still signed in
+   * there — reported rather than swallowed, exactly like `refundsFailed`, so
+   * the console can tell an operator the one thing still owed.
+   */
+  identityDeleted: z.boolean(),
 });
 export type AdminCloseAccountResult = z.infer<typeof adminCloseAccountResultSchema>;
 
@@ -3290,6 +3344,18 @@ export const adminUserDataRightsSchema = z.object({
   name: z.string(),
   role: z.string(),
   isBanned: z.boolean(),
+  /**
+   * The address the identity provider holds that `email` above could not be
+   * given, and when the two stopped agreeing (#462). Both `null` when they
+   * agree, which is every account that has never hit the collision.
+   *
+   * On this screen rather than only on `/admin/customers?flag=email-stale`
+   * because a **vendor** can diverge the same way, and the customers table is
+   * `role = 'customer'` by domain. This page is the one console surface every
+   * role reaches.
+   */
+  pendingEmail: z.string().nullable(),
+  emailSyncFailedAt: z.coerce.date().nullable(),
   closedAt: z.coerce.date().nullable(),
   vendorProfileId: uuidSchema.nullable(),
   vendorSlug: z.string().nullable(),

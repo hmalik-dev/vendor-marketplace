@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataRightsActions } from '@/components/admin/data-rights-actions';
 import { DataTable } from '@/components/admin/data-table';
+import { Banner } from '@/components/ui/banner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ApiClientError } from '@/lib/api-client';
@@ -20,6 +21,16 @@ const ACCEPTED = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
   timeZone: 'UTC',
 });
+
+/**
+ * Why the two addresses disagree, said once (#462).
+ *
+ * A sentence rather than a link to the mechanism: the operator reading it is
+ * deciding what to do about one account, and what they need is that neither
+ * side is broken and that the repair is on the other row.
+ */
+const ADDRESS_HELD_BY_ANOTHER_ACCOUNT =
+  'The identity provider has a new address for this account, and another account already holds it — so it could not be written and every notification still goes to the old one. Freeing the address on the other account lets the next profile change through.';
 
 const RETAINED_LABELS: Record<string, string> = {
   bookingRequests: 'Booking requests',
@@ -85,6 +96,30 @@ export default async function AdminUserDataRightsPage({
       ]}
     >
       <div className="flex flex-col gap-6 overflow-y-auto pb-6">
+        {/*
+          The account's address stopped agreeing with the identity provider and
+          nothing could say so before this (#462). It is first on the page and
+          not inside a card about something else, because every other section
+          here describes the record while this one says the record is wrong —
+          and because it is read from the row rather than derived, an operator
+          has no other way to learn it.
+
+          `failed` rather than `pending`: `40-states.md` reserves gold for
+          waiting on somebody and red for a thing that failed, and this is a
+          write that was refused, not one still in flight. `Banner` derives the
+          colour from that word, so it is not a choice made here.
+        */}
+        {rights.pendingEmail === null ? null : (
+          <Banner status="failed" title="This address is out of date">
+            {ADDRESS_HELD_BY_ANOTHER_ACCOUNT} Mail goes to {rights.email}; the identity provider
+            holds {rights.pendingEmail}
+            {rights.emailSyncFailedAt === null
+              ? ''
+              : `, and has since ${ACCEPTED.format(rights.emailSyncFailedAt)}`}
+            .
+          </Banner>
+        )}
+
         <section className="rounded-xl border border-stone-300 bg-stone-0 p-4">
           <h2 className="display-heading text-display-sm text-stone-900">Data rights</h2>
           <p className="mt-1 mb-3 text-sm leading-prose text-stone-700">

@@ -221,3 +221,29 @@ product question about the empty state, not a number.
 
 **Whoever takes it:** the frames are corroborated and internally consistent, so
 build to the ruling, not to the frames.
+
+## Should sign-up offer a path that skips the bot challenge?
+
+Raised by #464, deferred to the account holder 2026-09-08, and **not blocking
+anything that shipped** — the bounded wait, the stated error and the retry
+landed without it.
+
+Clerk runs a Cloudflare bot challenge before it will create an account. When the
+challenge host is dropped rather than refused, clerk-js waits for a token that
+never comes; #464 bounds that wait and gives the person a message and a retry.
+What it does not do is give them a way through, because there may not be one
+worth having: **Clerk supports email-code sign-up without a password**, which
+routes around the challenge entirely, and that is exactly what bot protection
+exists to stop.
+
+The trade is not close to obvious in either direction. Someone on a filtering
+school or corporate network currently cannot create an account at all, and the
+message now tells them to change networks — which is real advice, and also the
+kind a determined person can follow and a casual one cannot. Against that, a
+challenge-free path is available to every script as well, and this is a
+two-sided marketplace where a fake vendor costs a customer money.
+
+**What would settle it:** whether unverified sign-ups are cheap to moderate at
+this stage — a bot that gets an account still cannot publish a storefront
+without Stripe onboarding, and cannot book without a card. If that gate is the
+real one, the challenge is defending a door that is not the door.

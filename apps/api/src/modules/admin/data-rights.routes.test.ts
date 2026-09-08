@@ -19,9 +19,14 @@ import {
   CURRENT_VENDOR_AGREEMENT_VERSION,
   legalDocumentSha256,
 } from '@vendor-marketplace/shared';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { CLOSURE_UNWIND, DELETION_UNWIND, SUSPENSION_UNWIND } from './account-unwind.js';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  SVIX_HEADERS,
+  type TestHarness,
+} from '../../testing/test-server.js';
 
 /**
  * Data rights — #438.
@@ -44,6 +49,8 @@ const ADMIN = 'user_rights_admin';
 const VENDOR = 'user_rights_vendor';
 const CUSTOMER = 'user_rights_customer';
 const OUTSIDER = 'user_rights_outsider';
+/** The closed customer, back later with a new identity and the same address. */
+const RETURNING = 'user_rights_returning';
 
 describe('data rights', () => {
   let harness: TestHarness;
@@ -158,24 +165,39 @@ describe('data rights', () => {
     return harness.database.db.select().from(adminActions);
   }
 
-  beforeAll(async () => {
-    harness = await createTestHarness();
+  function registerIdentity(clerkUserId: string, role: 'customer' | 'vendor', email: string): void {
+    harness.clerkUsers.set(clerkUserId, {
+      clerkUserId,
+      email,
+      firstName: 'Test',
+      lastName: 'User',
+      roleHint: role,
+      avatarUrl: null,
+    });
+  }
 
+  /**
+   * Re-registers the four fixture identities before every test, not once.
+   *
+   * Closure now **deletes** the Clerk identity (#451), and the harness's fake
+   * deletes it from `clerkUsers` rather than only counting the call — so an
+   * identity a closure ended stops resolving, and a `beforeAll` registration
+   * would leave every later test in the file signing in as somebody who no
+   * longer exists.
+   */
+  function registerFixtureIdentities(): void {
     for (const [clerkUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
       [OUTSIDER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
-        firstName: 'Test',
-        lastName: 'User',
-        roleHint: role,
-        avatarUrl: null,
-      });
+      registerIdentity(clerkUserId, role, `${clerkUserId}@example.com`);
     }
+  }
+
+  beforeAll(async () => {
+    harness = await createTestHarness();
 
     const rows = await harness.database.db
       .select({ id: categories.id })
@@ -183,6 +205,12 @@ describe('data rights', () => {
       .where(eq(categories.slug, 'photography'))
       .limit(1);
     photographyId = rows[0]!.id;
+  });
+
+  beforeEach(() => {
+    registerFixtureIdentities();
+    harness.deletedClerkUsers.length = 0;
+    harness.setClerkDeletionFails(false);
   });
 
   afterEach(async () => {
@@ -443,7 +471,12 @@ describe('data rights', () => {
       const vendor = await createVendorProfile();
 
       /* A past booking does not block; an open request is the unwind's work. */
-      await createBooking(customerId, vendor.profileId, '2020-06-01', 'completed');
+      const settledBookingId = await createBooking(
+        customerId,
+        vendor.profileId,
+        '2020-06-01',
+        'completed',
+      );
       const openRequest = await harness.database.db
         .insert(bookingRequests)
         .values({
@@ -462,19 +495,35 @@ describe('data rights', () => {
 
       expect(response.statusCode).toBe(200);
       /*
-       * Two, not one: the completed booking's own request is still `accepted`,
-       * and `declineOpenRequests` selects `pending | quoted | accepted` on both
-       * sides. That is #433's existing behaviour rather than this route's, and
-       * pinning it here is what would catch a closure that quietly grew its own
-       * narrower unwind.
+       * **One, and it used to be two (#444).** The second was the completed
+       * booking's own request, still `accepted` because that is the status
+       * checkout leaves behind — and `declineOpenRequests` took `accepted`
+       * unconditionally, so closing the account told the customer that a
+       * request whose event had happened and been paid for had been *declined*.
+       * #438 pinned that here as the behaviour it found rather than widening
+       * its own scope to fix it; #444 narrowed the predicate, and this number
+       * moving is what makes the change visible as a change.
        */
       expect(response.json()).toMatchObject({
         userId: customerId,
-        requestsDeclined: 2,
+        requestsDeclined: 1,
         bookingsCancelled: 0,
         bookingsLeftForReview: 0,
         profileRetired: false,
       });
+
+      /*
+       * The settled booking's own request kept its history on the closure path
+       * too — the half of #444 that must survive, asserted here as well as on
+       * the ban path, because #433 extracted the unwind and #438's closure
+       * shares it.
+       */
+      const [settled] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests)
+        .innerJoin(bookings, eq(bookings.requestId, bookingRequests.id))
+        .where(eq(bookings.id, settledBookingId));
+      expect(settled!.status).toBe('accepted');
 
       /*
        * `requestsDeclined` above is the assertion that this ran **#433's path**
@@ -756,6 +805,286 @@ describe('data rights', () => {
       ).toEqual(['user_closed']);
     });
 
+    /**
+     * Acceptance 1 — #451.
+     *
+     * The retirement used to stop at `deleted_at`, which left the Clerk session
+     * alive: every read 401'd while the browser kept rendering signed-in
+     * chrome, indefinitely, with nothing to prompt a sign-out. Ending the
+     * identity is what makes the two halves agree, and the fake really removes
+     * it, so presenting that person's token afterwards fails the way a deleted
+     * Clerk session does rather than merely being counted.
+     */
+    it('deletes the Clerk identity behind the account, ending its session', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${customerId}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ identityDeleted: true });
+      expect(harness.deletedClerkUsers).toEqual([CUSTOMER]);
+      expect(harness.clerkUsers.has(CUSTOMER)).toBe(false);
+
+      /*
+       * The refusal has to come from the **identity being gone**, not from the
+       * retired row — those are different fixes and only one of them is this
+       * ticket's. `clerk-auth.ts` answers the retired row with "No account is
+       * linked to this session", which is the behaviour that already existed
+       * and which the ticket names as the bug: every read 401s while the
+       * browser keeps rendering signed-in chrome. A token Clerk will no longer
+       * verify answers "Session token is invalid or expired" instead, and that
+       * is the one that ends the session. Asserting the status code alone
+       * cannot tell them apart, and would pass with the Clerk deletion removed.
+       */
+      const after = await harness.app.inject({
+        method: 'GET',
+        url: '/users/me',
+        headers: bearer(CUSTOMER),
+      });
+      expect(after.statusCode).toBe(401);
+      expect(after.json().message).toBe('Session token is invalid or expired');
+
+      const rows = await actionRows();
+      expect(rows[0]?.detail).toMatchObject({ identityDeleted: true });
+    });
+
+    /**
+     * Acceptance 2 — #451, asserted rather than assumed.
+     *
+     * Deleting the Clerk user fires `user.deleted` straight back at our own
+     * webhook, so closure now provokes the redelivery it has to survive. #433's
+     * guard is what survives it: `applyUserDeleted` reads a **live** row, finds
+     * the one it just retired, and answers `ignored` — so the money moves once.
+     * The refund count is the assertion that matters; an outcome of `ignored`
+     * with a second refund behind it would still be the bug.
+     */
+    it('does not refund twice when its own deletion replays as user.deleted', async () => {
+      await signIn(ADMIN, true);
+      await signIn(VENDOR);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile();
+
+      await createBooking(
+        customerId,
+        vendor.profileId,
+        '2099-06-01',
+        'confirmed',
+        'pi_test_replay',
+      );
+
+      /*
+       * A baseline rather than a literal: the fake Stripe accumulates across
+       * the whole file, so `toHaveLength(1)` would be asserting what the tests
+       * before this one happened to refund.
+       */
+      const refundsBefore = harness.stripe.refunds.length;
+
+      const closed = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${vendor.userId}/close`,
+        headers: bearer(ADMIN),
+      });
+      expect(closed.statusCode).toBe(200);
+      expect(closed.json()).toMatchObject({ refundsIssued: 1, identityDeleted: true });
+      expect(harness.stripe.refunds).toHaveLength(refundsBefore + 1);
+
+      const replay = await harness.app.inject({
+        method: 'POST',
+        url: '/webhooks/clerk',
+        headers: { ...SVIX_HEADERS, 'content-type': 'application/json' },
+        payload: JSON.stringify({ type: 'user.deleted', data: { id: VENDOR, deleted: true } }),
+      });
+
+      expect(replay.json()).toEqual({ received: true, outcome: 'ignored' });
+      expect(harness.stripe.refunds).toHaveLength(refundsBefore + 1);
+    });
+
+    /**
+     * Acceptances 3 and 4 — #451, against the real partial index.
+     *
+     * `users_email_key` is now `UNIQUE (email) WHERE deleted_at IS NULL`, and
+     * this runs the whole sign-up path — `syncUserFromClerk` into
+     * `insertUserIfAbsent`, whose `onConflictDoNothing` targets `clerk_user_id`
+     * and therefore does **not** swallow an email collision — against the real
+     * engine. A mocked insert could not tell a partial index from a full one,
+     * which is the entire content of the change.
+     */
+    it("lets a closed account's address register again, as a new account", async () => {
+      await signIn(ADMIN, true);
+      const closedId = await signIn(CUSTOMER);
+      const address = `${CUSTOMER}@example.com`;
+
+      const closed = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${closedId}/close`,
+        headers: bearer(ADMIN),
+      });
+      expect(closed.statusCode).toBe(200);
+
+      /* The same person, back with a new Clerk identity and the same address. */
+      registerIdentity(RETURNING, 'customer', address);
+      const returningId = await signIn(RETURNING);
+
+      expect(returningId).not.toBe(closedId);
+
+      const rows = await harness.database.db
+        .select({
+          id: users.id,
+          email: users.email,
+          clerkUserId: users.clerkUserId,
+          deletedAt: users.deletedAt,
+        })
+        .from(users)
+        .where(eq(users.email, address));
+
+      expect(rows).toHaveLength(2);
+
+      const retired = rows.find((row) => row.id === closedId);
+      const returning = rows.find((row) => row.id === returningId);
+
+      /* The retired row stays retired, and stays readable under its address. */
+      expect(retired).toMatchObject({ email: address, clerkUserId: CUSTOMER });
+      expect(retired?.deletedAt).not.toBeNull();
+      expect(returning).toMatchObject({
+        email: address,
+        clerkUserId: RETURNING,
+        deletedAt: null,
+      });
+    });
+
+    /**
+     * The other half of acceptance 3, differently shaped.
+     *
+     * Releasing the address on closure must not be the same thing as dropping
+     * the constraint: two **live** accounts sharing an address is still the
+     * collision it always was. Without this, deleting `users_email_key`
+     * outright would pass the test above.
+     */
+    it('still refuses two live accounts holding the same address', async () => {
+      const address = `${CUSTOMER}@example.com`;
+      await signIn(CUSTOMER);
+
+      await expect(
+        harness.database.db.insert(users).values({
+          clerkUserId: 'user_rights_duplicate',
+          email: address,
+          role: 'customer',
+          firstName: 'Test',
+          lastName: 'User',
+        }),
+      ).rejects.toThrow();
+    });
+
+    /**
+     * The identity half of #400's shape, for #451.
+     *
+     * Clerk is a network call the committed retirement cannot roll back, so a
+     * refusal there leaves an account closed here and signed in there. That is
+     * reported rather than thrown: a 500 would tell an operator nothing had
+     * happened, when in fact everything except the identity had.
+     */
+    it('reports a Clerk deletion it could not make, and closes the account anyway', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      harness.setClerkDeletionFails(true);
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${customerId}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ identityDeleted: false });
+      expect(harness.deletedClerkUsers).toEqual([]);
+
+      const [account] = await harness.database.db
+        .select({ deletedAt: users.deletedAt })
+        .from(users)
+        .where(eq(users.id, customerId));
+      expect(account!.deletedAt).not.toBeNull();
+
+      const rows = await actionRows();
+      expect(rows[0]?.detail).toMatchObject({ identityDeleted: false });
+    });
+
+    /**
+     * A row Clerk never issued has no identity to end (#451).
+     *
+     * The seeded marketplace accounts carry `seed_mkt_…` ids, are live, and are
+     * listed and closable on `/admin/customers`. Handing one to Clerk asks it
+     * about a user it has never heard of, and then reports its answer as fact:
+     * a 404 reads as "deleted" and a 400 reads as "still signed in", and both
+     * are written into `admin_actions`, which cannot be corrected afterwards.
+     * `isClerkIdentity` is the predicate the reconcile pass already owns for
+     * exactly this distinction.
+     */
+    it('does not ask Clerk about a row Clerk never issued', async () => {
+      await signIn(ADMIN, true);
+
+      const seeded = await harness.database.db
+        .insert(users)
+        .values({
+          clerkUserId: 'seed_mkt_customer_0',
+          email: 'seed_mkt_customer_0@example.com',
+          role: 'customer',
+          firstName: 'Seeded',
+          lastName: 'Customer',
+        })
+        .returning({ id: users.id });
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${seeded[0]!.id}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      /* Nothing is owed, because there was never a sign-in to delete. */
+      expect(response.json()).toMatchObject({ identityDeleted: true });
+      expect(harness.deletedClerkUsers).toEqual([]);
+    });
+
+    /**
+     * The second refusal #451 earns.
+     *
+     * Closing another operator was a reversible soft-delete until closure began
+     * deleting the Clerk identity. Now it destroys a sign-in that only the
+     * identity provider can restore — `db:seed:e2e` resolves Clerk ids rather
+     * than creating them, and `role = 'admin'` is unreachable from inside the
+     * product — so the console refuses it and the dashboard is where it goes.
+     *
+     * **This test is the one #460 replaces, not one it breaks.** The ruling is
+     * hurdles rather than refusal, so when the typed confirmation and the
+     * last-admin check land, this expectation becomes an assertion about
+     * *those* — in the same commit, never before them.
+     */
+    it('refuses to close another operator, because that deletion is unrecoverable', async () => {
+      await signIn(ADMIN, true);
+      const peerId = await signIn(OUTSIDER, true);
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${peerId}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().message).toContain('operator account cannot be closed');
+      expect(harness.deletedClerkUsers).toEqual([]);
+
+      const [account] = await harness.database.db
+        .select({ deletedAt: users.deletedAt })
+        .from(users)
+        .where(eq(users.id, peerId));
+      expect(account!.deletedAt).toBeNull();
+    });
+
     it('refuses a second closure of the same account', async () => {
       await signIn(ADMIN, true);
       const customerId = await signIn(CUSTOMER);
@@ -930,6 +1259,46 @@ describe('data rights', () => {
       });
       /* A closed account has nothing left to block a closure. */
       expect(body.closeBlockers).toEqual([]);
+    });
+
+    /**
+     * The divergence #462 records, on the one console surface **every** role
+     * reaches — `/admin/customers?flag=email-stale` is `role = 'customer'` by
+     * domain, so a vendor whose address went stale is only visible here.
+     *
+     * The export is asserted in the same test rather than a second one,
+     * because the two are one rule: this file's own contract is that the
+     * console cannot report a record the export does not hand over, and these
+     * two fields are personal data that survives closure.
+     */
+    it('reports a stale address to the operator and to the subject alike', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+
+      await harness.database.db
+        .update(users)
+        .set({ pendingEmail: 'moved@example.com', emailSyncFailedAt: new Date('2026-09-01') })
+        .where(eq(users.id, customerId));
+
+      const rights = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/users/${customerId}/data-rights`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(rights.statusCode).toBe(200);
+      expect(rights.json().pendingEmail).toBe('moved@example.com');
+      expect(new Date(rights.json().emailSyncFailedAt as string)).toEqual(new Date('2026-09-01'));
+
+      const exported = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${customerId}/export`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(exported.statusCode).toBe(200);
+      expect(exported.json().subject.pendingEmail).toBe('moved@example.com');
+      expect(exported.json().subject.emailSyncFailedAt).not.toBeNull();
     });
 
     it('counts exactly what the export enumerates', async () => {

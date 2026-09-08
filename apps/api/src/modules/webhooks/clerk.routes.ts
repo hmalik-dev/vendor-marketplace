@@ -24,7 +24,7 @@ export interface ClerkWebhookRoutesOptions {
 
 const webhookResponseSchema = z.object({
   received: z.literal(true),
-  outcome: z.enum(['created', 'updated', 'deleted', 'ignored']),
+  outcome: z.enum(['created', 'updated', 'deleted', 'ignored', 'diverged']),
 });
 
 export const clerkWebhookRoutes: FastifyPluginAsyncZod<ClerkWebhookRoutesOptions> = async (

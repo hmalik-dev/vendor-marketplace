@@ -249,24 +249,25 @@ storefront, each of which tells the reader something untrue. |
 | **437** | **Admin detail views, and the entities the console cannot see** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #435 landed 2026-09-07 (`d83d374b`) and the Pattern B detail frame this row was held for arrived the same day in `design/delta-admin/` (#454) | `core` `auth` | **Filed 2026-09-07 by the admin-panel investigation.** Seven list screens, zero detail screens, against a design plan that specifies *"detail views: card-based groupings with prominent actions"* (`22-admin.md`). Consequence: `refund_amount_cents`, `cancellation_reason`, `dispute_reason`, `cancelled_by`, `payout_released_at` and `banned_at` appear on no row schema and no screen. Whole entities are absent — `booking_requests` (the entire pre-payment funnel), `service_packages`, `portfolio_items`, `availability`, `notifications`, `categories` — several of which the plan's own authorization matrix (§7) already grants admin. |
 | **440** | **Operator-initiated refunds and credits** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder: whether an operator may move money outside D3, D31 and D35, and on what authority** | `core` `auth` `stripe` | **Filed 2026-09-07 by the admin-panel investigation.** Money only moves on rails today — ban (full refund), customer cancellation (D3 tiers), dispute resolved for the customer. Partial refund, goodwill credit, fee waiver and correction do not exist, so every off-script case is settled in the Stripe Dashboard, after which the `bookings` row is wrong. **Deferred rather than Backlog because building it decides policy**: D3 fixes the cancellation tiers platform-wide, D31 makes a cancellation a full unwind, D35 fixes the 72-hour hold, and an operator lever is a fourth path none of them contemplates. Needs a decision entry before a line of code. |
 | **443** | **Frame `13`'s parity residue, including two access findings nothing else checks** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 from #433's parity pass**, which returned MATCH on all six axes for its own change and correctly declined to attribute these six to itself. **Two are access findings** — the search field has an `aria-label` but no visible `<label>`, and the row checkbox is `22x44` against `04-laws.md`'s 44px minimum — and the parity pass is the **only** gate on the accessibility laws and the contrast table, so an unfiled access finding is not caught later, it evaporates. The other four: the header is 1px short, the wordmark renders 24px against 23px, the four filter dropdowns carry a 2px padding asymmetry left over from the caret D25 removed (**correct the padding, do not restore the caret**), and the filtered empty state offers no way out where every other console empty state does. Batched by surface per the filing convention rather than filed as six rows. D30 binds: corroborate each transcribed number against the neighbouring widths before building it. |
-| **444** | **An unwind declines the accepted request behind a completed booking** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #438**, which tripped over it building account closure, verified it was pre-existing rather than its own, and pinned current behaviour in a test rather than widening scope. Confirmed independently before filing. `declineOpenRequests` (`admin.dao.ts:484`) sets `status: 'declined'` where status is in `['pending','quoted','accepted']` — **unconditionally**. But `accepted` is exactly the status a request holds *after checkout*, so an unwind flips the accepted request behind an **already-completed** booking to `declined`: the event happened, the vendor was paid, and the customer's requests screen now says it was declined. That is rewriting history, not unwinding it. **Reachable from any ban**, so it predates #433 and #438 both. The neighbouring `findConfirmedBookingsToUnwind` gets it right and is the model — it bounds on `event_date > today`; the request decline has no equivalent bound. Do **not** simply drop `accepted`: a request accepted but never paid for is a real open commitment. |
 | **446** | **The app declares no body text size, so every unsized block renders at 16px** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's parity pass, which hit it as a worked example.** `globals.css` sets `line-height` on `html` and its own comment explains why a per-call-site fix cannot close that class — *"an element with no text utility at all still inherits, so the per-site route cannot close the class"* — and then **stops one property short**. Nothing declares `font-size`, so every block element carrying no `text-*` utility inherits the browser's **16px**, which is `--text-lg`, not the 13.5px `--text-base` body step. **The worked example**: #441 set the footer's 13px on the `<a>`, and each `<li>`'s own line box stayed 16px because an inline child does not shrink its block. Rows measured 31px against the frame's 27, the footer was **25px taller** than it draws, and the legal row's copyright sat 1.5px off the links' baseline. #441 fixed the footer by moving the size onto the `<ul>`; the class is still open everywhere else. **Scope is the fix *plus* the sweep, not the fix with a caveat.** `body { font-size: var(--text-base) }` in the same `@layer base` block — on `body`, never `html`, which would rescale every rem-based spacing utility in the product — rescales **every currently-unsized block** from 16px to 13.5px. Anyone picking this up needs to know that before they start rather than discover it: it wants a parity pass over every frame-carrying screen, and it may well surface sites that were silently relying on the 16px. |
 | **449** | **The screens document is content-box and every delta bundle is border-box, so the logo mark paints 19px where the frame draws 17** | P1 | M3 | **P2 Medium** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by #441's `diff-reviewer` pass, and it overturns a standing assumption rather than finding drift.** `design/Orla - Screens.dc.html` ships **no `*` reset** — its 33 `box-sizing` hits are inline opt-ins — which is what #250 measured when it ruled `box-content` for the logo mark. **Every delta bundle opens with `* { box-sizing: border-box; }`**: `delta-band`, `delta-legal` and `contact-support` all do. So the closing-band frame draws the footer mark as two **equal footprints** — a 17px outline circle with its 1.3px stroke inside, beside a 17px disc — where `logo.tsx` paints a **19px** outline circle at x=7.64, 2px larger than the disc and 2px low. Measured in Chromium against the frame's own markup under its own reset. **#441 deliberately did not fix it**: `box-content` is #250's ruling, taken from the screens document and measured there, and overturning it moves the mark on the desktop header, the auth panel, the favicon and the app icon on one bundle's authority. That is a design adjudication. It is written up at the `box-content` comment in `logo.tsx`, and `logo.test.tsx`'s `it.each(EVERY_SIZE)` guard now pins `box-content` at D=17 — a diameter taken from a border-box frame — so the two guards in that file read the same contract two incompatible ways until this is settled. **RULED 2026-09-07: `box-content` stands and #250 is upheld** — the screens document is the primary contract and the bundles are supplements, so nothing moves on the header, the auth panel, the favicon or the app icon. The corroboration was closer than the filing implied: `design/delta-admin/` arrived the same day shipping **no `*` reset** either, making it **two content-box documents against three border-box bundles**. What remains open is the contradiction *inside* `logo.test.tsx` — a `box-content` guard pinned at a diameter transcribed from a border-box frame — plus recording the ruling in `web-design-parity.md` and at the `logo.tsx` call site. **A `delta-band` parity read measuring 19-against-17 is looking at this ruling, not at drift.** |
 | **450** | **A closed account vanishes from the only screen it can be reached from** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #438 landed 2026-09-07 (`c7228e77`) | `core` `auth` | **Filed 2026-09-07 by lane #438's `diff-reviewer`**, which correctly declined to fix it in scope: the defect is in an **existing** surface's query. `/admin/customers` filters `deleted_at is null` (`admin.dao.ts:490`) and closure sets `deleted_at` — while `/admin/users/[userId]`, the data-rights page carrying the export, the retained counts and the legal acceptance record, is reachable **from that table and by direct URL and nowhere else**. So closing an account removes the page needed to audit the closure. **It is worst exactly when it matters**: a subject-access request, a regulator, or a dispute about whether closure did what was promised all arrive *after* the closure and none come with the uuid in hand. Fix with a deliberate way to ask for closed accounts — not by dropping the predicate, which correctly makes live accounts the default. |
-| **451** | **Closing an account leaves its Clerk identity live, and its email locked** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #438 landed 2026-09-07 (`c7228e77`) | `core` `auth` | **Filed 2026-09-07 by lane #438's `/code-review high`**, held out of scope correctly: closure soft-deleting is the ruled behaviour and revoking a Clerk session is a new integration call. Two defects from one omission. **The person stays signed in to an application that refuses them** — `clerk-auth.ts:164` 401s a request whose local row is retired, but the Clerk session is still valid, so the browser renders **signed-in header chrome over a signed-out application** indefinitely, with no sign-out prompt because nothing knows to show one. **And their email is locked under the retired row** — `users_email_key` does not care about `deleted_at`, so a re-registration with the same address collides on insert. That is the same state `CLAUDE.md` already warns about for the E2E seed; closure creates it deliberately. **RULED 2026-09-07: release the address.** The unique index becomes partial (`WHERE deleted_at IS NULL`) so a closed account’s address frees up, and closure therefore **deletes the Clerk user** rather than only revoking its sessions — revoking alone would leave the identity holding the address at Clerk’s end while ours had released it. That fires `user.deleted` back at our own webhook, so the handler must be **asserted** idempotent against a retirement it just performed; #433’s replay guard already provides it. The address is not burned, so nothing reaches the privacy text and #374’s wording gate is not on this path. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
 | **455** | **The `Apply filters` button clears the filter it should apply, and no pointer can reach it** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #435's browser pass, reproduced twice.** On `/admin/reviews` the Direction select auto-applies on change (`?type=vendor_to_customer`, 14 rows, all "The customer"). Activating the `sr-only` submit **navigates to `/admin/reviews` with no query at all** — 15 rows, mixed directions — so the control named "Apply filters" is the one control that discards them. It is also pointer-intercepted by the Direction combobox, so a mouse cannot reach it. That button exists for the keyboard and no-JS path, which means it fails **precisely** the users it was added for and nobody else, and they have no workaround because the auto-apply it shadows is a JS change event. Not cosmetic: the filter bar is the only way to narrow six admin tables. |
 | **457** | **A moderation hold the moderated vendor cannot lift** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** — #454 landed 2026-09-08 (`32fa9bd4`) and drew the Actions card this control belongs in | `core` `auth` | **Filed 2026-09-07 by #435's security audit.** #435 shipped unpublish and package deactivation, and both write columns **the vendor also writes**: `PUT /vendor/profile` accepts `isPublished: true` checking only `publishBlockers`, and `PUT /vendor/packages/:id` accepts `isActive`. There is no hold column on `vendor_profiles` or `service_packages`, so an operator takes a storefront down for a policy violation and the vendor puts it back from their own dashboard seconds later — no block, no notification, nothing but an `admin_actions` row. #435's acceptance 1 was corrected to say it is advisory; **ban remains the only enforcing lever until this lands.** Review hiding and portfolio removal are unaffected and do hold. Carries the unapproved review-moderation copy as a dependency: `Hide review` / `Unhide review` / `Delete review` appear in no frame and in no voice file — the admin delta covers the vendor detail card and says nothing about reviews. |
 | **459** | **Every lane's `pnpm install` rewrites four lockfile keys nobody asked it to** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by lane #445, which paid it and reverted it by hand.** The lockfile's `eslint-plugin-import` / `eslint-import-resolver-typescript` peer suffixes are stored in an **older, abbreviated form** than the installed pnpm writes, so *any* `pnpm add` or `pnpm install` that rewrites `pnpm-lock.yaml` expands four keys — `eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(...)` becomes the fully-qualified spelling, plus the three snapshot entries that reference it. **The resolutions do not change**, and `pnpm install --frozen-lockfile` accepts both forms, so nothing fails — the cost is that every lane touching a dependency carries an unrelated 19-line diff into its PR, and two lanes doing so conflict on lines neither of them meant to write. Reverting it is a step each lane has to know about and none of them is told. **Land the re-serialisation once, deliberately, on `main`** — a lone `pnpm install` commit touching only these keys — so the stored form matches what the installed pnpm writes and the churn stops being generated. Verify with `--frozen-lockfile` before and after, and check no second copy of any package appears. |
-| **460** | **Closing an operator account needs a hurdle, not a refusal** | P3 | M6 | **P2 Medium** | **Backlog** | — | **#451** — the 403 this relaxes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 on the account holder's ruling** — *"handle this as best practice possible — admin deletion should have additional verification/hurdles — very rare to do."* #451 makes closure **delete the Clerk identity**, so it is irreversible against a real identity provider, and it therefore answers **403 for an admin target** as the conservative direction while the question was open. The ruling is **not a refusal**: an operator account must stay closable — people leave — but with friction proportionate to being unrecoverable. Build a **typed confirmation** (the target's email, so the control cannot be cleared absently by a tired person clicking a second button), a **structural refusal when no other live admin would remain** rather than the incidental one `actorId === userId` gives today, a dialog stating the sign-in is restorable **only from Clerk's dashboard** because `role = 'admin'` is unreachable from inside the product, and a **distinct `admin_actions` value** so the audit can answer *"who removed our colleague's access"* without joining to a role the closure just retired. **Do not read this as loosen the guard**: the 403 stays until the hurdle exists, and both halves land in one commit. |
+| **460** | **Closing an operator account needs a hurdle, not a refusal** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** — #451 landed 2026-09-08 (`4ef527e8`), so the 403 this relaxes now exists | `core` `auth` | **Filed 2026-09-07 on the account holder's ruling** — *"handle this as best practice possible — admin deletion should have additional verification/hurdles — very rare to do."* #451 makes closure **delete the Clerk identity**, so it is irreversible against a real identity provider, and it therefore answers **403 for an admin target** as the conservative direction while the question was open. The ruling is **not a refusal**: an operator account must stay closable — people leave — but with friction proportionate to being unrecoverable. Build a **typed confirmation** (the target's email, so the control cannot be cleared absently by a tired person clicking a second button), a **structural refusal when no other live admin would remain** rather than the incidental one `actorId === userId` gives today, a dialog stating the sign-in is restorable **only from Clerk's dashboard** because `role = 'admin'` is unreachable from inside the product, and a **distinct `admin_actions` value** so the audit can answer *"who removed our colleague's access"* without joining to a role the closure just retired. **Do not read this as loosen the guard**: the 403 stays until the hurdle exists, and both halves land in one commit. |
 | **461** | **A live error type routes around #445's log sink** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #451's `security-auditor`. Nothing leaks today** — it is filed because a path #445 documented as *unreachable* turns out to be reachable, and the next error type to travel it will not be as harmless. `ClerkAPIResponseError` carries an own enumerable **`errors`** array; `pino-std-serializers` copies it to **`aggregateErrors`** without passing it through `log-error-serializer.ts`, so its contents reach the log stream having been through none of the redaction. Contents today are Clerk's `{code, message, longMessage, meta}` — no credential, no bound parameter. **That is exactly why to fix it now**: #445's claim is that the sink is total and *nobody needs to know the hazard exists to be safe from it*, and a known hole with benign contents is one that gets forgotten before something else flows through it. #445 already follows `cause` and `err.errors`; this is the same array arriving under a different key, from the library rather than from our own recursion. **Fix the sink again, not this error type** — a `ClerkAPIResponseError` special case would be the fourth per-call-site guard in a story whose point was that per-call-site guards are how a rule becomes a special case. |
-| **462** | **A failed email update leaves `users.email` stale for ever, and notifications keep going there** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #451's partial index removes one trigger, not the defect | `core` `auth` `email` | **Filed 2026-09-07 by #442's `security-auditor`**, pre-existing and found while auditing something else. `updateUserByClerkId` sets `email` with **no conflict handling**, so a `user.updated` carrying an address another row holds raises a **23505**, the handler 500s, svix exhausts its retries, and `users.email` stays at the **old** value permanently — with nothing surfacing it, because the failure is upstream and the row looks ordinary. **Then the stale column is used to send mail**: `notification-email.dao.ts` picks the recipient from it, so every notification for that account — carrying **counterparty PII**, names, event dates, booking details, message excerpts — keeps going to an address the account holder **no longer controls**, indefinitely, because nothing ever retries the update. The 500 is a nuisance; the mail is a disclosure. Catch the 23505 on that one statement — it is **not** inside a transaction, unlike `insertUserIfAbsent`'s path, which is why #442 needed a different shape there — and let the webhook **succeed**, since a retry cannot help a collision that is a fact about another row. Record the divergence where an operator sees it, the way `refundsFailed` and `identityDeleted` already are. **Then ask** what mail should do while the column is known-stale; continuing to send is the actual harm and is a product decision. Not fixed by #451 (that clears only the retired-row trigger; live-versus-live remains) and not the same defect as #442 (different caller, different transaction shape, different consequence). |
+| **462** | **A failed email update leaves `users.email` stale for ever, and notifications keep going there** | P3 | M6 | **P1 High** | **Done** | `worktree-462` | **None** — #451's partial index removes one trigger, not the defect | `core` `auth` `email` | **Filed 2026-09-07 by #442's `security-auditor`**, pre-existing and found while auditing something else. `updateUserByClerkId` sets `email` with **no conflict handling**, so a `user.updated` carrying an address another row holds raises a **23505**, the handler 500s, svix exhausts its retries, and `users.email` stays at the **old** value permanently — with nothing surfacing it, because the failure is upstream and the row looks ordinary. **Then the stale column is used to send mail**: `notification-email.dao.ts` picks the recipient from it, so every notification for that account — carrying **counterparty PII**, names, event dates, booking details, message excerpts — keeps going to an address the account holder **no longer controls**, indefinitely, because nothing ever retries the update. The 500 is a nuisance; the mail is a disclosure. Catch the 23505 on that one statement — it is **not** inside a transaction, unlike `insertUserIfAbsent`'s path, which is why #442 needed a different shape there — and let the webhook **succeed**, since a retry cannot help a collision that is a fact about another row. Record the divergence where an operator sees it, the way `refundsFailed` and `identityDeleted` already are. **Then ask** what mail should do while the column is known-stale; continuing to send is the actual harm and is a product decision. Not fixed by #451 (that clears only the retired-row trigger; live-versus-live remains) and not the same defect as #442 (different caller, different transaction shape, different consequence). **Landed 2026-09-08 as `dd703848` (PR #158).** The catch is narrow by SQLSTATE **and** exact constraint name via a new `violatesUniqueConstraint`: drizzle's wrapper message inlines every bound parameter, so the existing `violatesConstraint` would have read any failure of that statement — deadlock, timeout, dropped connection — as a collision for a person whose own name contained `users_email_key`. `named()` also learnt postgres.js's **`constraint_name`**, the spelling production raises, which had never once matched outside the PGlite suites. **Acceptance 4 is deliberately unmet** and is #469: what mail does while the column is known-stale is a disclosure ruling, not a delivery one. The `FilteredEmpty` copy defect the browser pass found is #468. |
 | **463** | **The admin detail views are drawn to Pattern B and C and built to neither** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** — the patterns are in the repository (#454) | `core` `auth` | **Filed 2026-09-08 by #454's parity pass**, which measured four console screens on six axes. #454 took the four findings inside its own acceptances and scoped this out in as many words: *"Neither is a rebuild. Both were built to a convention and now have a contract."* This is that rebuild. **`/admin/cases/[caseId]` renders one column where Pattern C draws two** — regions 1 and 3 left, region 2 right — and the **case-scoped reported-thread card is absent entirely**, which is a *required* part of region 2 rather than decoration: #436 built the conversation read and Pattern C asks for it scoped to the event date with the steel `Case-scoped read` chip. Region 1 has no sender block (avatar, role, id) and no `stone-50` inset around the message; label/value pairs stack where Pattern B rule 2 puts a fixed 150px label column beside a `minmax(0,1fr)` value. **`/admin/users/[userId]` has no 320px right column**, so `Export data` and `Close account` sit inside the first content card instead of a right-column Actions card below Identity, with no hairline between tiers and no per-action consequence line — rule 4's *literal* half. **Its spirit half already passes and must keep passing**: the two genuinely read-only cards contain zero interactive elements. Neither screen draws the `.ach` header band (`#F4F0E8` on a `1px #E4DDD1` rule), so region 3's *"Moves money. Both positions confirm first."* note has nowhere to live; card radii are 14px against `.ac`'s 12px throughout. **Values render 13.5px where rule 2 says 13px, and money and dates 13.5px sans where it says mono 12px.** Smaller and separable: `/admin/activity`'s filter bar carries one facet where Pattern A names three (Actor, Subject type, date range), `/admin/cases` has no search field though the bundle draws one, both lack frame `13`'s `Export CSV`, the Cases status filters carry no counts, and the `READ-ONLY` marker is stone where `40-states.md` makes information steel. **Read `web-design-parity.md` before measuring** — #454's four live overrides and two ruled colour entries are expected deviations, not drift. |
-| **464** | **Sign-up dead-ends silently when the bot challenge cannot complete** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by lane #451b's browser pass and reproduced independently on `localhost:3000` in a real browser** — this is product behaviour, not a test-environment obstacle. Pick a role, type an email and password, press **Create my account**: `POST /v1/client/sign_ups` is **never sent** (verified by request interception — the only traffic is `challenges.cloudflare.com`), clerk-js waits on a Turnstile token that never arrives (`Error: 600010`), the form **disables every field permanently**, and the Clerk card then unmounts leaving the role picker. **No error, no timeout, no message, no retry — the button eats the click.** Sign-in is unaffected. **P0 because the people it hits are real and it is the only route into the product**: a privacy extension blocking `challenges.cloudflare.com`, a corporate or school network doing the same, third-party frames disabled, or Cloudflare failing — and there is no support path because there is no error to quote. **Ruled out already, do not re-derive**: headless (re-run under real Chrome), bundled Chromium, the network (Cloudflare's own demo page solved from the same machine), Clerk bot protection (a testing token made the widget vanish and submit **still** hung), and lane env (reproduced on `:3000`). **Not archived #226**, which recorded the same symptom as a *testing* obstacle on 2026-08-29 — `auth.spec.ts:9-14` still excludes sign-up for that reason — and that deferral is why the product half went unnoticed for nine days. Build a **bounded wait**, an **actionable error** in approved copy under `40-states.md`'s failure tone, and a **form that is usable again** rather than one needing a reload; then **ask** whether a challenge-free fallback is wanted, since that trades off against what bot protection exists to stop. **A second half was found 2026-09-08 and it is worse**: a sign-up that *succeeds* can still strand you. The account holder completed one by hand — role picked, email verified, Clerk identity created with `role: customer` — and landed back on the **role picker**, because `/after-sign-in` resolves to `/sign-in` rather than to the Terms interstitial. `getCurrentUser()` returns `null`, which means no token or a 401/404 from `/users/me`, where `clerk-auth.ts` should be answering `TERMS_REQUIRED` for a session with no row. **Diagnose which before fixing** — a browser left without an active session, or the gate not being reached — since the symptom is identical and the fixes are not. This half creates a **real verified account** and then shows the person the sign-up screen again, so they retry, meet *"that email is taken"*, and conclude the product is broken while holding an account they cannot tell exists. |
 | **465** | **Post-sign-up routing, and no dead routes for any role** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-08 at the account holder's request** after they completed a sign-up by hand and were returned to the role picker. **#464 is the sign-up form's own failure; this row is where sign-up *sends* you.** Role picked, email verified, **Clerk identity created correctly** (`unsafe_metadata: {"role":"customer"}`) — and then `/after-sign-in` resolves to **`/sign-in`** rather than the Terms interstitial, because `getCurrentUser()` returns `null`, which means no token or a 401/404 from `/users/me`. Neither is what a session with no `users` row should produce: `clerk-auth.ts` sets `termsRequired = true` for exactly that state and `signedInFailurePath` turns it into the interstitial. **Diagnose which branch before fixing** — no active session after `setActive()`, or the gate never reached — since the symptom is identical and the fixes are not. **P0 because the person now holds a real verified account and has been shown the sign-up screen again**: they retry, meet *"that email is taken"*, and conclude the product is broken. **The wider requirement is the account holder's**: *"must be Playwright verified as all users to prevent this issue. No dead routes."* So build a **route-landing sweep** over roles × targets — signed out, customer, vendor, admin, and a **newly verified account with no `users` row**, which no fixture represents — against every router segment and every literal redirect destination, asserting a terminal status, a rendered screen and the role's own chrome. **Enumerate targets from the source**, never a hand-maintained list, and assert unreachable cells as refusals rather than skipping them. |
 | **466** | **"For vendors" sends a visitor to a sign-up form instead of an informational page** | P3 | M6 | **P1 High** | **Backlog** | — | **The account holder — the page needs a frame or a ruling before it is built** | `core` | **Filed 2026-09-08 at the account holder's request**: *"the 'for vendors' link should take users to a dedicated `/for-vendors` informational route not sign up again."* Today `marketing-nav.tsx:43` is `{ label: 'For vendors', href: '/sign-up?role=vendor' }`, so the one nav item addressed to vendors **asks them to create an account before telling them anything** — and a visitor who already has one is shown a sign-up screen again, which is #465's confusion from another direction. Build an **informational** `/for-vendors`: what it costs, how payouts work, what a storefront looks like, then the call to action carrying `?role=vendor` into sign-up. The deep link **keeps working** — `SignUpForm`'s `initialRole` exists for it — so what changes is which door the *nav* opens. **Blocked because there is no frame**: neither `Orla - Screens.dc.html` nor `design/design-plan/` has a vendor marketing page, and a lane building one would be inventing a public surface with nothing for the parity gate to compare against. The account holder picks: a frame, or a ruling that it composes from the landing page's existing vocabulary with the strings recorded in `31-content-voice.md` first. **No invented numbers** — this is the surface most likely to reach for *"vendors earn on average…"*, and MVP forbids every one of those. |
+| **467** | **A 409 that probably never fires in production — verify what `violatesConstraint` matches against a real driver** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — but #462 must land first, since it repairs the helper this verifies | `core` | **Filed 2026-09-08 by lane #462's security pass**, which found the cause, fixed the helper, and deliberately did **not** claim the consequence. `violatesConstraint`'s field arm reads `error.constraint`; **postgres.js spells it `constraint_name`** while **PGlite — what the suites run on — spells it `constraint`**, so that arm passes every test and matches **nothing** against the real driver. The message arm is therefore the only one that fires in production, and drizzle's message is `Failed query: ${query}\nparams: ${params}` — **every bound parameter inlined**, so a person whose name or address contains the constraint's name turns any failure of that statement (deadlock, timeout, dropped connection) into a false match. #462 taught `named()` both spellings and added `violatesUniqueConstraint` (SQLSTATE **and** an exact name, no message text). **What is unverified is the consequence**: `reviews.service.ts:225` uses it to translate a concurrent double review into a 409, so that translation probably never happened and **a double review is likely still a 500 in production despite #399**. Verify under `pnpm test:contention` against the real Postgres driver — **a PGlite test cannot fail for this defect**, because it spells the field the way the broken code expects, which is exactly why a green suite carried it. Then enumerate every caller from the source and rule on each. |
+| **468** | **`FilteredEmpty` promises that any widening finds something, and draws buttons only for the ones that do** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-08 by lane #462**, which found it, held it out of scope correctly and did not fix it. `apps/web/src/components/admin/filtered-empty.tsx` (#454) prints *"Widening any one of them finds something"* whenever `routes.length > 0`, but a route is only **offered** when it would reveal rows — that was the whole point of the counted widenings. So with **two filters active and one productive widening**, the sentence is false: the reader is told any of them works and given one button. Pre-existing and shared across **all seven** admin lists, several already multi-filter; #462 only makes it newly reachable on `/admin/customers`, which had one filter before. The fix is copy that counts — say how many of the active filters have a widening that pays, or drop the promise and let the buttons speak — and it changes text on seven screens, which is why it belongs in its own row rather than in the lane that noticed. **`31-content-voice.md` governs the replacement string.** |
+| **469** | **What should mail do while `users.email` is known-stale?** | P3 | M6 | **P1 High** | **Deferred — needs a human** | — | **The account holder — a product decision about who receives somebody else's details** | `core` `email` | **Filed 2026-09-08 from #462**, which built the detection and deliberately changed no behaviour. After #462 the column can be **known** to disagree with Clerk — the webhook's update was refused by a unique index and the divergence is recorded — while `notification-email.dao.ts` keeps picking the recipient from it. So notifications carrying **counterparty PII** (names, event dates, booking details) continue going to an address the account holder no longer controls. **#462 closes with this acceptance outstanding**, and it must not be read as fully satisfied. Three options: **hold** notifications for that account until the address is reconciled, which stops the disclosure and also stops the person hearing about their own bookings; **send to nothing**, which is the same silence without the queue; or **send and accept it**, which is today's behaviour and is a decision worth taking deliberately rather than by omission. The question is stated at `findUserEmail`, which is where the ruling lands. Note it is a **disclosure** question rather than a delivery one: the harm is what a stranger reads, not what our user misses. |
+| **470** | **Two pre-existing defects on `/admin/vendors` — a duplicated accessible name, and a silent action** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-08 from lane #457's browser pass**, both pre-existing and neither caused by it; the lane could not file them itself because a tracker edit must not ride in a code PR. **(1)** `DataTable` renders every `cell` **twice** — the desktop grid row and the `md:hidden` card list — so two buttons carry the accessible name `Actions for <vendor>`. The second measures **0x0 at 1440** and is unreachable, so it is not a user-facing duplicate; what it breaks is **every `getByRole` locator on that table**, which goes ambiguous under strict mode for the suite and for any agent driving the console — on the surface most likely to be driven by a verification pass. **This is the same DOM `web-design-parity.md` already warns about** in #435's Tab-order note, biting from the accessibility side instead of the focus side: one cause, two symptoms recorded a day apart. **Do not rename one of them** — two controls doing the same thing to the same row must not have different names; either the hidden one should not render below its breakpoint, or the pair is one control the layout moves. **(2)** Admin publish/unpublish produces **no toast** where the vendor-side equivalents do — polled ten seconds after each, no `[data-sonner-toast]`, no `aria-live` text. Pre-existing from #435, and the asymmetry is the tell: the same action from the other side of the product already confirms. `40-states.md` binds. |
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #442 landed: 21 rows — 18 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's, #447's, #458's, #454's, #456's and #442's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`), #458 (`affd481c`), #454 (`32fa9bd4`, which closed #456 with it) and #442 (`dcf8728c`) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 was closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07. **#454 consumed them and landed 2026-09-08 (`32fa9bd4`)**, closing **#456** with it and taking the counted filtered-empty pattern to all seven console lists. That unblocks **#437** — the Pattern B detail frame it was held for is now in the repository — and **#457** with it. What #454 deliberately did not build is filed as **#463**: it landed the rulings and the parity fixes inside its own acceptances, and Pattern B and C's **composition** is a rebuild rather than a parity fix. **#442 landed 2026-09-08 (`dcf8728c`), and the ruling it was waiting on never existed.** The row claimed #427 had ruled that a second acceptance of a version already held is a second row, citing `legal-acceptance-immutability.test.ts` — but that test **inserts straight into the table, past both services**, so it recorded a schema fact and not a decision. Both writers had refused a repeat since #427 and #429. So the fix enforced a policy that already existed rather than settling one: a unique index on `(accepted_by_user_id, document, version)`, with `ON CONFLICT DO NOTHING` so the losing insert of a race loses harmlessly. **No Backlog row now waits on a person** — the three `Deferred` rows (#362, #374, #440) still do, and #370 is blocked behind #362.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #444 landed: 22 rows — 17 Backlog, 4 `Deferred — needs a human` and 1 `Done`.** The `Done` row is **#462's**, left in place by its own lane where every other closed ticket here was deleted — flagged rather than tidied away by a passing lane, because which of the two is the rule is not this row's to decide. #438's, #448's, #452's, #436's, #445's, #447's, #458's, #454's, #456's, #442's, #451's, #464's and #444's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`), #458 (`affd481c`), #454 (`32fa9bd4`, which closed #456 with it) and #442 (`dcf8728c`) have all landed**, and **#451 landed 2026-09-08 (`4ef527e8`)** — so **#437** and **#443** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 is startable too** — it was filed against a closure that did not exist yet, and #438 landing cleared its only blocker. **#451 landed 2026-09-08 (`4ef527e8`)**: `users_email_key` is now partial, so closing an account releases its address and the person can register again, and closure deletes the Clerk identity rather than leaving a live session over an application that refuses it. That makes **#460** real rather than hypothetical — closure now answers 403 for an operator target, and #460 is the row that replaces that refusal with the ruled hurdles. **#453 was closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07. **#454 consumed them and landed 2026-09-08 (`32fa9bd4`)**, closing **#456** with it and taking the counted filtered-empty pattern to all seven console lists. That unblocks **#437** — the Pattern B detail frame it was held for is now in the repository — and **#457** with it. What #454 deliberately did not build is filed as **#463**: it landed the rulings and the parity fixes inside its own acceptances, and Pattern B and C's **composition** is a rebuild rather than a parity fix. **#442 landed 2026-09-08 (`dcf8728c`), and the ruling it was waiting on never existed.** The row claimed #427 had ruled that a second acceptance of a version already held is a second row, citing `legal-acceptance-immutability.test.ts` — but that test **inserts straight into the table, past both services**, so it recorded a schema fact and not a decision. Both writers had refused a repeat since #427 and #429. So the fix enforced a policy that already existed rather than settling one: a unique index on `(accepted_by_user_id, document, version)`, with `ON CONFLICT DO NOTHING` so the losing insert of a race loses harmlessly. **#464 landed 2026-09-08 (`8557c518`), and it fixes one of three failure modes on purpose.** The row described "the bot challenge cannot complete" as one thing; driving it showed three, separated by whether anything from `challenges.cloudflare.com` ever finished loading. **Dropped** — the request accepted and never answered, which is what a filtering corporate or school network does — is the filed dead end: no create is sent, every field and the submit button go dead, and nothing is rendered. **Refused** — answered with a reset, which is what several privacy extensions do — is already survivable: Clerk gives up, attempts the create, is rejected, and reports it in its own words with the fields live. **Reachable but unsolved** — the challenge loads and declines to issue a token — leaves the card dead in exactly the same way and is a third thing again. So the bounded wait, the banner and the retry fire on the first only, and **Clerk's own error still appearing in the second is correct rather than a gap**: a banner over it would be the product talking over a working message, and on the third it would blame a network that is fine. What #464 did **not** verify is that sign-up still succeeds when the challenge *can* complete — the challenge does not complete in any automated browser on this machine, headless or headed, with or without a minted Clerk testing token, which is archived #226's condition rather than anything the fix caused. **That acceptance needs one manual sign-up on a real browser.** Whether a challenge-free path should exist at all is deferred to the account holder in `99-open-questions.md`. **#465 is untouched by it** — that row owns where sign-up *sends* you, which is a different defect. **#444 landed 2026-09-08 (`9d373bce`, PR #159), and the security audit found a worse defect underneath the one filed.** The row was written as a correctness-of-record problem — an unwind flipping the `accepted` request behind an already-completed booking to `declined`, so the customer is told a paid, finished event was refused. Underneath it is money: `hasRivalAcceptanceOn` and `syncHeldDate` key on the **literal `accepted`**, so declining that request freed the vendor and the date for a rival acceptance **on a day already sold**. The bound is the request-side twin of `findConfirmedBookingsToUnwind`'s — decline an `accepted` request only where no booking exists behind it — and it needs no case for a booking the unwind itself cancels, because `cancelBookingAndFreeDate` has settled that request to `cancelled` in the same transaction since #400. So the row's open question about wording was **already answered by the product**: `cancelled`, rendered as "Withdrawn", with the booking's `cancelled_by = 'admin'` carrying the real narrative (#415). Naming the act honestly needs a new `BOOKING_REQUEST_STATUSES` member — schema, vocabulary and design — and is not filed, because nothing currently renders the request's own status for these. **No Backlog row now waits on a person** — the three `Deferred` rows (#362, #374, #440) still do, and #370 is blocked behind #362.
 
 **#448 landed a bigger finding than either half it was filed for, and that finding is the one to carry forward.** The filed halves were `renderLaneEnv` not writing `API_URL` and `lane:exec` handing every child the API's `PORT`; the first had already landed inside #432 (`1e899ae1`) before the lane branched, which is the board's own rule about trusting the repository over the ticket, arriving again. The real defect was **`laneEnvAgreesWith` comparing a subset of what `renderLaneEnv` writes** — it checked the two ports and `NEXT_PUBLIC_API_URL` and nothing else, so a `.env.lane` written before `API_URL` existed still *agreed* with its manifest, was never rewritten, and every long-running lane resumed onto the stale file for ever while `lane:up` printed ✓ over it. **A check that cannot fail for the state it exists to detect is worse than no check**, because it is also the thing that stops anyone else looking. It now compares every origin the file writes, and that is what makes **`pnpm lane:up <n>` the repair for a stale lane env — in place, database kept.** Do not tell a lane to `lane:down` for this. `pnpm preflight` now also fails a lane whose `.env.lane` omits `API_URL` **and** one whose `apps/web` build was made outside `lane:exec` — the second read out of `routes-manifest.json` rather than by curling the web port, because preflight runs *before* the dev servers, so a request probe finds nothing listening in the very flow it gates and cannot tell that from a server still cold-compiling. It would have to pass both, reproducing #448's own defect inside #448's fix.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
@@ -1597,81 +1598,6 @@ held. None of those is a finding.
       `className` substring check is not a measurement of a hit area.
 - [ ] The parity pass delegated to `parity-checker`, not eyeballed.
 
-### #444: An unwind declines the accepted request behind a completed booking
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** None
-
-**Filed 2026-09-07 by lane #438**, which tripped over it while building account
-closure, verified it was pre-existing rather than its own, pinned the current
-behaviour in a test with a comment, and correctly declined to widen its scope to
-fix it. Confirmed independently against the code before filing.
-
-#### The defect
-
-`declineOpenRequests` (`apps/api/src/modules/admin/admin.dao.ts:484`) writes:
-
-    .set({ status: 'declined', updatedAt: now })
-    .where(and(inArray(bookingRequests.status, ['pending', 'quoted', 'accepted']), sides))
-
-`accepted` is in that set unconditionally. But an accepted request is exactly the
-one that **has a booking behind it** — `accepted` is the status a request holds
-after checkout, and `bookings` carries a unique index on `request_id` precisely
-because one accepted request becomes one booking.
-
-So an unwind flips the accepted request behind an **already-completed** booking
-to `declined`. The event happened, the vendor was paid, and the customer's
-requests screen now says the request was declined. That is rewriting history, not
-unwinding it.
-
-**It is reachable today and it is not new.** `unwindAccountBookings` is called
-from `setUserBanned` — so any ban does this — and now also from the `user.deleted`
-path (#433) and account closure (#438). It predates all three.
-
-The neighbouring code gets this right and is the model: `findConfirmedBookingsToUnwind`
-bounds on `status = 'confirmed' AND event_date > today`, so it only ever touches
-bookings that have not happened. The request decline has no equivalent bound.
-
-#### What to build
-
-**Narrow the predicate so an accepted request whose booking is settled is left
-alone.** The rule the rest of the unwind already follows is "unwind what has not
-happened yet", so an accepted request should be declined only where its booking
-is one the unwind is itself cancelling — or where there is no booking at all,
-which is the genuine mid-checkout case.
-
-Do not simply drop `accepted` from the list: a request that was accepted but
-never paid for is a real open commitment and should still be declined, or the
-vendor is left holding a date for an account that no longer exists.
-
-**Decide and state what the customer's screen should say** for a request whose
-booking the unwind *did* cancel. `declined` is arguably wrong there too — the
-vendor did not decline it, the platform cancelled it — but `BOOKING_REQUEST_STATUSES`
-has no member for that, and adding one is a schema and design change. If the
-honest answer is that the existing vocabulary cannot express it, say so in the
-ticket rather than picking the least-wrong word silently.
-
-#### Acceptance
-
-1. An unwind leaves the `accepted` request behind a **completed** booking
-   untouched, and a test asserts the status is unchanged.
-2. An unwind still declines an `accepted` request with **no** booking behind it.
-3. An unwind's treatment of an `accepted` request whose booking it cancelled is
-   deliberate and documented at the predicate, not incidental.
-4. `pending` and `quoted` are unaffected.
-5. Asserted through **`setUserBanned`**, not only through the newer closure
-   path — the ban is where this has been reachable longest.
-6. #438's test pinning the current behaviour is updated rather than deleted, so
-   the change is visible as a change.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, **watched failing first** — this is a bug fix, so
-      the failing test is the evidence the defect was real.
-- [ ] The completed-booking case asserted against a real completed booking, not
-      a row hand-set to `completed`, so the fixture cannot drift from what the
-      payment path actually produces.
-
 ### #446: The app declares no body text size, so every unsized block renders at 16px
 
 **Milestone:** M3 | **Phase:** P1 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core`
@@ -1865,95 +1791,6 @@ and leaving the reader to guess about the rest.
 - [ ] Acceptance 5 driven through the real closure route, not a row hand-set
       with `deleted_at`, so the fixture cannot drift from what closure produces.
 
-### #451: Closing an account leaves its Clerk identity live, and its email locked
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** None — #438 landed 2026-09-07 (`c7228e77`), so the closure this describes now exists
-
-**Filed 2026-09-07 by lane #438's `/code-review high`**, which correctly held it
-out of scope: closure soft-deleting is the **ruled** behaviour (D39 and the
-retire-never-remove rule), and revoking a Clerk session is a new integration
-call, not a fix to the ticket that surfaced it.
-
-#### Two defects from one omission
-
-Closure sets `users.deleted_at` and stops. Nothing tells Clerk.
-
-**1. The person stays signed in to an application that refuses them.**
-`clerk-auth.ts:164` 401s a request whose local row is retired — but the Clerk
-session itself is still valid, so the browser keeps rendering **signed-in header
-chrome over a signed-out application**, indefinitely, until that session ages
-out on its own. Every read fails; the shell says they are logged in. There is no
-sign-out prompt because nothing knows to show one.
-
-**2. Their email is locked under the retired row.** `users_email_key` is a unique
-index that does not care about `deleted_at`, so a closed account's address is
-held forever. A person who closes an account and later returns cannot
-re-register with the same email — the insert collides, and the failure surfaces
-wherever the sync path reports it rather than as anything a user could act on.
-
-This is the same class the E2E-seed note in `CLAUDE.md` already warns about:
-*"a `users` row carrying an E2E email under a made-up id makes that account's
-next sign-in collide on the email index and locks it out."* Closure creates that
-state deliberately.
-
-#### What to build
-
-**Revoke the Clerk identity as part of closure**, in the same operation that
-retires the row — Clerk's backend API can revoke sessions or delete the user.
-Decide and state which:
-
-- **Revoking sessions** ends the ghost-session half and leaves the identity, so
-  the email stays locked.
-- **Deleting the Clerk user** ends both halves, and fires `user.deleted` back at
-  our own webhook — so the handler must be idempotent against a retirement it
-  just performed, which #433's replay guard already provides.
-
-**RULED 2026-09-07 by the account holder: release the address on closure.**
-Both halves are settled and neither is the lane's to reopen.
-
-- **The unique index becomes partial** — `UNIQUE (email) WHERE deleted_at IS
-  NULL` — so a closed account's address frees up and that person can sign up
-  again with it. Two rows sharing an address across time is the correct record
-  of what happened, not a collision.
-- **Closure therefore deletes the Clerk user**, not merely its sessions. That is
-  the half that follows from the first: revoking sessions alone would end the
-  ghost session but leave the identity holding the address at Clerk's end while
-  ours had released it, which is the two systems disagreeing about the same
-  person. Deleting fires `user.deleted` back at our own webhook, so **the
-  handler must be idempotent against a retirement it just performed** —
-  #433's replay guard already provides that, and this must be asserted rather
-  than assumed.
-
-The privacy policy consequence disappears with the ruling: the address is not
-burned, so there is nothing to add to the policy text and #374's wording gate is
-not on this path. Say in the schema comment **why** the index is partial, since
-a bare `WHERE deleted_at IS NULL` reads as an optimisation rather than a
-decision about people.
-
-#### Acceptance
-
-1. Closure revokes the Clerk identity, and a browser holding that session lands
-   somewhere coherent rather than on signed-in chrome over a dead application.
-2. Whichever Clerk call is used, our own `user.deleted` handler is idempotent
-   against a retirement already performed.
-3. The email index is **partial** (`WHERE deleted_at IS NULL`) and the schema
-   comment says why, in terms of the person rather than the query plan.
-4. A re-registration with a closed account's email **succeeds**, creating a new
-   row rather than resurrecting or colliding with the retired one, and the
-   retired row stays retired and readable.
-5. Asserted end to end through #438's closure route.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] Acceptance 2 asserted by replaying the webhook after a closure — a double
-      retirement must not double-refund, which is #433's guard doing its job.
-- [ ] Acceptance 4 asserted **against the real partial index** rather than a
-      mocked insert — a mock cannot distinguish a partial index from a full one,
-      which is the entire content of the change.
-
-
 ### #455: The `Apply filters` button clears the filter it should apply, and no pointer can reach it
 
 **Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
@@ -2142,7 +1979,7 @@ stops being generated rather than being reverted forever.
 ### #460: Closing an operator account needs a hurdle, not a refusal
 
 **Milestone:** M6 | **Phase:** P3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** #451 — the 403 this relaxes does not exist until that lands
+**Blocked by:** None — #451 landed 2026-09-08 (`4ef527e8`); the 403 this relaxes is now real, and the line to delete is named in `closeAccount`
 
 **Filed 2026-09-07 on the account holder's ruling**, in answer to a question
 #451's `security-auditor` and `diff-reviewer` both raised: *"handle this as best
@@ -2274,7 +2111,7 @@ that per-call-site guards are how a rule becomes a special case.
 
 ### #462: A failed email update leaves `users.email` stale for ever, and notifications keep going there
 
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth` `email`
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Done | **Capabilities:** `core` `auth` `email`
 **Blocked by:** None — #451's partial index removes one trigger, not the defect
 
 **Filed 2026-09-07 by #442's `security-auditor`.** Pre-existing, and it was found
@@ -2485,127 +2322,6 @@ it is content-box. That is the distinction #449 turns on.
       the kind of thing a `toContain` on a class string cannot see.
 - [ ] Browser: both detail screens driven at 1440x900, and the resolve control
       still reachable only past the evidence after the recomposition.
-
-### #464: Sign-up dead-ends silently when the bot challenge cannot complete
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** None
-
-**Filed 2026-09-07 by lane #451b's browser pass, then reproduced independently
-by the supervising session on `localhost:3000` in a real browser.** This is not a
-test-environment problem. **Nobody can create an account whose browser cannot
-complete the Cloudflare Turnstile challenge, and the product says nothing.**
-
-#### What happens
-
-Pick a role, type an email and a password, press **Create my account**:
-
-- `POST /v1/client/sign_ups` is **never sent**. Verified by request interception
-  — the only network traffic is `challenges.cloudflare.com`.
-- clerk-js waits on a Turnstile token that never arrives (`Error: 600010`,
-  `challenges.cloudflare.com` `ERR_ABORTED`).
-- **The form disables every field permanently**, then the Clerk card unmounts,
-  leaving the role picker and a *"Already with us? Sign in"* link.
-- **No error, no timeout, no message, no retry.** The button eats the click.
-
-**Sign-in is unaffected** and works normally.
-
-#### Why this is P0 rather than an automation nuisance
-
-The people it hits are real: a privacy extension that blocks
-`challenges.cloudflare.com`, a corporate or school network that does the same, a
-browser with third-party frames disabled, or Cloudflare simply failing. **They
-get a sign-up button that does nothing, for ever, with nothing to read and
-nothing to try.** There is no support path because there is no error to quote.
-
-It is also **the only route into the product.** A vendor cannot list and a
-customer cannot book without an account, so this is the top of every funnel.
-
-#### The second half, found 2026-09-08: sign-up can *succeed* and still strand you
-
-The account holder completed a sign-up by hand — role picked, email verified —
-and **landed back on the role picker**, with no indication anything had worked.
-
-Checked rather than inferred:
-
-- **The Clerk identity was created correctly**: verified email,
-  `unsafe_metadata: {"role":"customer"}`. Round one genuinely succeeded.
-- **No `users` row exists**, which is correct — since #429 the acceptance gate is
-  the only writer on the product path, so a new account is *supposed* to be held
-  at the interstitial.
-- **But `/after-sign-in` resolves to `/sign-in`**, not to the Terms interstitial.
-  `getCurrentUser()` returned `null`, which happens on **no token** or on a
-  **401/404** from `/users/me` — and neither is what a session with no row should
-  produce. `clerk-auth.ts` sets `termsRequired = true` for exactly that state and
-  `requireAuth` throws `termsRequiredError()`, which `signedInFailurePath` turns
-  into the interstitial. That path is not being taken.
-
-**Diagnose which of the two it is before fixing** — a browser left without an
-active session after `setActive()`, or a `/users/me` answering 401/404 where the
-gate should answer `TERMS_REQUIRED`. They have different fixes and the symptom is
-identical.
-
-**This half is worse than the hang.** The hang at least does nothing. This one
-**creates a real, verified account** and then shows the person the sign-up screen
-again — so they try again, hit *"that email is taken"*, and conclude the product
-is broken while holding an account they cannot tell exists. Add it to acceptance
-1's sibling: a completed sign-up must land somewhere that reflects it.
-
-#### What was ruled out, so nobody re-derives it
-
-Lane #451b's pass eliminated, in order: headless mode (re-ran under real Chrome),
-the bundled Chromium, the network (solved Cloudflare's own demo page from the
-same machine), and Clerk bot protection (minted a Clerk testing token — the
-widget vanished and submit **still** hung). The supervising session then
-reproduced it on `:3000` rather than a lane port, so it is not lane env either.
-
-**Do not confuse this with archived #226.** That recorded the same Turnstile
-symptom on 2026-08-29 and deferred it **as a test-environment obstacle** —
-`apps/web/e2e/auth.spec.ts:9-14` still says sign-up is deliberately absent from
-the suite for that reason. This row is the **product behaviour**: what a person
-experiences when the challenge cannot complete. Same cause, different subject,
-and the deferral of the first is why the second went unnoticed for nine days.
-
-#### What to build
-
-**The failure must become visible and recoverable.** At minimum:
-
-1. **A bounded wait.** If the challenge has not produced a token within a stated
-   timeout, stop waiting and say so. An indefinite wait is what turns a failure
-   into a dead end.
-2. **An error the person can act on**, in approved copy from
-   `31-content-voice.md` — what happened, in their words, and one action.
-   `40-states.md` binds: this is a failure, so it is red, and it needs the one
-   action the state offers.
-3. **The form must not stay disabled.** Re-enable the fields so the attempt can
-   be retried, and offer the retry explicitly rather than requiring a reload.
-4. **Decide whether a fallback exists.** Clerk supports email-code sign-up
-   without a password, and a Turnstile-free path may or may not be acceptable
-   given what bot protection is there to stop. **This is a product decision —
-   ask before choosing.** Shipping (1)–(3) without it is still a strict
-   improvement on silence.
-
-#### Acceptance
-
-1. With `challenges.cloudflare.com` blocked, pressing **Create my account**
-   surfaces a stated error within a bounded time rather than hanging.
-2. The form is usable again afterwards — fields enabled, a retry offered.
-3. The error copy is in `31-content-voice.md` and follows `40-states.md`'s
-   failure tone.
-4. Sign-up still succeeds normally when the challenge **can** complete.
-5. Whatever is ruled for a fallback path is implemented, or the row records that
-   none is wanted and why.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] **Acceptance 1 asserted with the challenge host actually blocked** — route
-      interception on `challenges.cloudflare.com`, not a mocked clerk-js
-      rejection. The defect is that a real network condition produces no
-      response at all, and a mock that rejects *has already done the thing the
-      product fails to do*.
-- [ ] Acceptance 4 driven in a browser, because the whole class of defect here is
-      one no unit test reached for nine days.
 
 ### #465: Post-sign-up routing, and no dead routes for any role
 
@@ -2856,3 +2572,138 @@ request time or a fact about the product's own mechanics.
 - [ ] Acceptance 3 asserted after the nav change, since the deep link and the nav
       target are now different things and a regression would silently merge them
       back.
+
+### #467: A 409 that probably never fires in production — verify what `violatesConstraint` matches against a real driver
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core`
+**Blocked by:** None — but **#462 must land first**, since it repairs the helper this row verifies
+
+**Filed 2026-09-08 by lane #462's security pass**, which found the cause, fixed
+the helper, and deliberately did **not** claim the consequence. This row is the
+twenty minutes of verification it declined to fake.
+
+#### The cause, which #462 has already fixed
+
+`violatesConstraint` in `apps/api/src/lib/constraint-violation.ts` has two arms:
+
+- **The field arm** reads `error.constraint`. **postgres.js spells it
+  `constraint_name`** (`src/connection.js:46` maps field `n`). **PGlite — what
+  the suites run on — spells it `constraint`.** So the field arm passes every
+  test and matches **nothing** against the real driver.
+- **The message arm** is therefore the only one that ever fires in production,
+  and drizzle's `DrizzleQueryError` message is
+  `` `Failed query: ${query}\nparams: ${params}` `` — **every bound parameter
+  inlined**.
+
+**That is a check that passes its tests and cannot fire where it matters**, plus
+a substring match against text containing user-supplied values: a person whose
+name or address happens to contain the constraint's name turns *any* failure of
+that statement — deadlock, timeout, dropped connection — into a false match.
+
+#462 taught `named()` both spellings, added `violatesUniqueConstraint`
+(SQLSTATE `23505` **and** an exact name, no message text) for the swallow case,
+and pinned the discriminating case.
+
+#### What this row is for
+
+**`reviews.service.ts:225` uses it to translate a concurrent double review into
+a 409.** If the field arm never matched under postgres.js, that translation
+probably never happened, and **a concurrent double review is still a 500 in
+production despite #399**. #462 did not verify that and did not assert it.
+
+**Verify it against a real connection, not PGlite.** `pnpm test:contention` runs
+on the Docker Postgres with two connections, which is the only place this is
+observable — the suites cannot see it by construction, which is exactly why it
+survived.
+
+**Then sweep for the other callers.** Any site using `violatesConstraint` to
+*swallow* an error rather than reshape one has been swallowing on a substring
+match over inlined parameters. Enumerate them from the source and rule on each.
+
+#### Acceptance
+
+1. A concurrent double review answers **409**, asserted against the real
+   Postgres driver under `test:contention` — not PGlite, and not a mocked error.
+2. The same test **fails** against the pre-#462 helper, so it discriminates on
+   the fix rather than on the endpoint existing.
+3. Every caller of `violatesConstraint` is enumerated from the source, and each
+   is either moved to `violatesUniqueConstraint` or recorded as deliberately
+   using the message arm with a reason.
+4. No production path decides control flow on a substring of a message that
+   contains bound parameters.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] **Acceptance 1 under `test:contention`.** A PGlite test cannot fail for
+      this defect — it spells the field the way the broken code expects, which is
+      the entire reason the bug survived a green suite.
+- [ ] Acceptance 4 asserted by a guard over the source, so a fifth caller added
+      later cannot reintroduce it silently.
+
+### #470: Two pre-existing defects on `/admin/vendors` — a duplicated accessible name, and a silent action
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-09-08 from lane #457's browser pass.** Both are **pre-existing**,
+neither is caused by #457, and the lane could not file them itself — a tracker
+edit must not ride in a code PR, and a worktree cannot write to the main
+checkout. Recorded here so they do not die in a transcript.
+
+#### 1. Two buttons share the accessible name `Actions for <vendor>`
+
+`DataTable` renders every `cell` **twice** — once in the desktop grid row and
+once in the `md:hidden` card list — so the row-actions trigger exists twice with
+the same accessible name. The second measures **0×0 at 1440** and is unreachable
+by pointer or keyboard, so it is not a user-facing duplicate.
+
+**What it breaks is every `getByRole` locator on that table**, which becomes
+ambiguous under Playwright's strict mode — for the test suite and for any agent
+driving the console. That is a real cost: it is the surface most likely to be
+driven by a verification pass, and an ambiguous locator makes a pass fail for a
+reason that has nothing to do with what it is checking.
+
+**This is the same DOM `web-design-parity.md` already warns about** in the
+Tab-order note from #435 — *"the admin table renders every row action twice (the
+grid and the `md:hidden` card list), which is precisely the DOM that makes a
+naive next-focusable query select the wrong element"* — now biting from the
+accessibility side rather than the focus side. **One cause, two symptoms
+recorded a day apart.**
+
+**Do not fix it by renaming one of them.** Two controls that do the same thing to
+the same row should not have different names. Either the hidden one should not
+render at all below its breakpoint, or the pair should be one control the layout
+moves — decide which, and say why at the call site, because the next person will
+meet the Tab-order note and this one and needs to know they are the same thing.
+
+#### 2. Admin publish/unpublish produces no toast
+
+The vendor-side equivalents confirm; the admin ones do not. The table updates
+silently. Measured: polled ten seconds after each action, no `[data-sonner-toast]`
+and no `aria-live` text. Pre-existing from #435.
+
+`40-states.md` binds — a state change the operator caused should say so — and the
+asymmetry is the tell: the same action, taken from the other side of the product,
+already confirms.
+
+#### Acceptance
+
+1. `/admin/vendors` exposes **one** control per row with the accessible name
+   `Actions for <vendor>`, at every viewport.
+2. A `getByRole('button', { name: /Actions for/ })` locator resolves uniquely
+   under strict mode at 1440x900 **and** at a mobile width.
+3. Admin publish and unpublish each surface a confirmation the operator can read,
+   in approved copy, matching the vendor-side treatment.
+4. The `web-design-parity.md` Tab-order note and this fix reference each other,
+   so the shared cause is visible from either end.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 2 asserted **at two viewports** — the defect is that one of the
+      two renders only below a breakpoint, so a single-width test passes while
+      the duplicate survives.
+- [ ] Acceptance 3 asserted on the **rendered confirmation**, not on the call
+      that would produce it: a mocked toast helper proves the call and not that
+      anything reached the screen.
