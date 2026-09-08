@@ -256,16 +256,15 @@ storefront, each of which tells the reader something untrue. |
 | **450** | **A closed account vanishes from the only screen it can be reached from** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #438 landed 2026-09-07 (`c7228e77`) | `core` `auth` | **Filed 2026-09-07 by lane #438's `diff-reviewer`**, which correctly declined to fix it in scope: the defect is in an **existing** surface's query. `/admin/customers` filters `deleted_at is null` (`admin.dao.ts:490`) and closure sets `deleted_at` — while `/admin/users/[userId]`, the data-rights page carrying the export, the retained counts and the legal acceptance record, is reachable **from that table and by direct URL and nowhere else**. So closing an account removes the page needed to audit the closure. **It is worst exactly when it matters**: a subject-access request, a regulator, or a dispute about whether closure did what was promised all arrive *after* the closure and none come with the uuid in hand. Fix with a deliberate way to ask for closed accounts — not by dropping the predicate, which correctly makes live accounts the default. |
 | **451** | **Closing an account leaves its Clerk identity live, and its email locked** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #438 landed 2026-09-07 (`c7228e77`) | `core` `auth` | **Filed 2026-09-07 by lane #438's `/code-review high`**, held out of scope correctly: closure soft-deleting is the ruled behaviour and revoking a Clerk session is a new integration call. Two defects from one omission. **The person stays signed in to an application that refuses them** — `clerk-auth.ts:164` 401s a request whose local row is retired, but the Clerk session is still valid, so the browser renders **signed-in header chrome over a signed-out application** indefinitely, with no sign-out prompt because nothing knows to show one. **And their email is locked under the retired row** — `users_email_key` does not care about `deleted_at`, so a re-registration with the same address collides on insert. That is the same state `CLAUDE.md` already warns about for the E2E seed; closure creates it deliberately. **RULED 2026-09-07: release the address.** The unique index becomes partial (`WHERE deleted_at IS NULL`) so a closed account’s address frees up, and closure therefore **deletes the Clerk user** rather than only revoking its sessions — revoking alone would leave the identity holding the address at Clerk’s end while ours had released it. That fires `user.deleted` back at our own webhook, so the handler must be **asserted** idempotent against a retirement it just performed; #433’s replay guard already provides it. The address is not burned, so nothing reaches the privacy text and #374’s wording gate is not on this path. |
 **This board carries open work only, and closed rows are now DELETED rather than kept.** Changed 2026-09-06 on the account holder's instruction: *"clear out all completed tickets - delete them - no need to maintain any memory of them - it is confusing new tickets."* 33 closed rows and their 33 detail sections were removed in one commit, taking the file from 4,115 lines to under 1,100. **The registry in `packages/shared/src/env/tickets.ts` was NOT touched** — its ids must stay contiguous from 0, and `pnpm preflight --ticket <old n>` still gates correctly for any older branch or commit message. `git log` holds the deleted prose if it is ever wanted; nothing else does. **The pre-2026-08-30 archive still exists** at `.claude/plans/vendor-marketplace-tickets-archive.md` and is read by `tickets.board.test.ts` alongside this file — it was left alone because it is a separate file that no longer competes with open work for a reader's attention.
-| **454** | **Land the admin design delta — the drawn frames for every unframed console screen** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — the frames arrived 2026-09-07 and this row is what consumes them | `core` `auth` | **Filed 2026-09-07. The account holder supplied `design/delta-admin/` in answer to #453**, which asked for frames and per `design-is-a-contract-not-code` deliberately did not attempt them — so **#453 is closed by that delivery**, not by this row. The bundle is **three patterns, two drawn frames and one ruling**: **A** rules that the four list routes reuse frame `13`'s table verbatim and gives their column grids, defaults, colour and empty behaviour; **B** draws one detail frame on `/admin/vendors/[id]` settling card order, label/value typography, long-field wrapping and where destructive actions may sit; **C** draws `/admin/cases/[caseId]` in full, including the two-position resolve control and its `ConfirmAction`. **This row takes the surfaces already on `main`** — the rail order, `/admin/activity`, `/admin/cases`, and a parity pass over `/admin/cases/[caseId]` and `/admin/users/[userId]` — plus the contract reconciliation and the **filtered-empty pattern**, which is a new shared component and closes one of #443's six findings. **#437 is unblocked by this filing** and builds the five routes that do not exist yet against Pattern B. **The rail change is an *order* change, not a count change** — the bundle reasons from a stale brief of eight rows, but `22-admin.md` already gave Cases a row (#431) and the app renders nine; what actually moves is Cases, from between `Payments` and `Reviews` to directly after `Bookings`, overturning #431. **All three design questions were answered by the account holder on 2026-09-07 and nothing is open** — the money one settled that `Suspend vendor` **keeps refunding in full** per D31/#416 and the frame’s *"holds payouts"* is loose copy to be corrected, `/admin/activity` **keeps** its `What changed` column for five in total, and the route stays `/admin/tags`. All three corrections edit the **bundle**, in the design pass’s own commit. |
 | **455** | **The `Apply filters` button clears the filter it should apply, and no pointer can reach it** | P3 | M6 | **P1 High** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #435's browser pass, reproduced twice.** On `/admin/reviews` the Direction select auto-applies on change (`?type=vendor_to_customer`, 14 rows, all "The customer"). Activating the `sr-only` submit **navigates to `/admin/reviews` with no query at all** — 15 rows, mixed directions — so the control named "Apply filters" is the one control that discards them. It is also pointer-intercepted by the Direction combobox, so a mouse cannot reach it. That button exists for the keyboard and no-JS path, which means it fails **precisely** the users it was added for and nobody else, and they have no workaround because the auto-apply it shadows is a JS change event. Not cosmetic: the filter bar is the only way to narrow six admin tables. |
-| **456** | **Two moderation labels disagree with the frame that now draws them** | P3 | M6 | **P2 Medium** | **Backlog** | — | **#454** (the frames land with it) | `core` `auth` | **Filed 2026-09-07 by #435, against its own surface.** #435 shipped `Unpublish storefront` and `Suspend account` before any frame drew the vendor detail view; `design/delta-admin/Orla-Admin-Views.html` then arrived naming them **`Unpublish profile`** and **`Suspend vendor`** in the Actions card. `web-design-parity.md` is explicit that "same composition with reworded copy has failed too", so this is a text-parity defect rather than a preference. The *descriptions* already agree — both say existing bookings stand and the vendor keeps their dashboard — so this is two labels, in `vendor-table.tsx` and their four assertions. **Do not fix before #454 lands** or the frame is not yet in the repository to match. See design question 3 in #454 before touching the suspend copy: the card also says suspend "holds payouts" where the code refunds in full, and that is unresolved. |
-| **457** | **A moderation hold the moderated vendor cannot lift** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#454** (the vendor detail Actions card is where the control lives) | `core` `auth` | **Filed 2026-09-07 by #435's security audit.** #435 shipped unpublish and package deactivation, and both write columns **the vendor also writes**: `PUT /vendor/profile` accepts `isPublished: true` checking only `publishBlockers`, and `PUT /vendor/packages/:id` accepts `isActive`. There is no hold column on `vendor_profiles` or `service_packages`, so an operator takes a storefront down for a policy violation and the vendor puts it back from their own dashboard seconds later — no block, no notification, nothing but an `admin_actions` row. #435's acceptance 1 was corrected to say it is advisory; **ban remains the only enforcing lever until this lands.** Review hiding and portfolio removal are unaffected and do hold. Carries the unapproved review-moderation copy as a dependency: `Hide review` / `Unhide review` / `Delete review` appear in no frame and in no voice file — the admin delta covers the vendor detail card and says nothing about reviews. |
+| **457** | **A moderation hold the moderated vendor cannot lift** | P3 | M6 | **P0 Critical** | **Backlog** | — | **None** — #454 landed 2026-09-08 (`32fa9bd4`) and drew the Actions card this control belongs in | `core` `auth` | **Filed 2026-09-07 by #435's security audit.** #435 shipped unpublish and package deactivation, and both write columns **the vendor also writes**: `PUT /vendor/profile` accepts `isPublished: true` checking only `publishBlockers`, and `PUT /vendor/packages/:id` accepts `isActive`. There is no hold column on `vendor_profiles` or `service_packages`, so an operator takes a storefront down for a policy violation and the vendor puts it back from their own dashboard seconds later — no block, no notification, nothing but an `admin_actions` row. #435's acceptance 1 was corrected to say it is advisory; **ban remains the only enforcing lever until this lands.** Review hiding and portfolio removal are unaffected and do hold. Carries the unapproved review-moderation copy as a dependency: `Hide review` / `Unhide review` / `Delete review` appear in no frame and in no voice file — the admin delta covers the vendor detail card and says nothing about reviews. |
 | **459** | **Every lane's `pnpm install` rewrites four lockfile keys nobody asked it to** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by lane #445, which paid it and reverted it by hand.** The lockfile's `eslint-plugin-import` / `eslint-import-resolver-typescript` peer suffixes are stored in an **older, abbreviated form** than the installed pnpm writes, so *any* `pnpm add` or `pnpm install` that rewrites `pnpm-lock.yaml` expands four keys — `eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(...)` becomes the fully-qualified spelling, plus the three snapshot entries that reference it. **The resolutions do not change**, and `pnpm install --frozen-lockfile` accepts both forms, so nothing fails — the cost is that every lane touching a dependency carries an unrelated 19-line diff into its PR, and two lanes doing so conflict on lines neither of them meant to write. Reverting it is a step each lane has to know about and none of them is told. **Land the re-serialisation once, deliberately, on `main`** — a lone `pnpm install` commit touching only these keys — so the stored form matches what the installed pnpm writes and the churn stops being generated. Verify with `--frozen-lockfile` before and after, and check no second copy of any package appears. |
 | **460** | **Closing an operator account needs a hurdle, not a refusal** | P3 | M6 | **P2 Medium** | **Backlog** | — | **#451** — the 403 this relaxes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 on the account holder's ruling** — *"handle this as best practice possible — admin deletion should have additional verification/hurdles — very rare to do."* #451 makes closure **delete the Clerk identity**, so it is irreversible against a real identity provider, and it therefore answers **403 for an admin target** as the conservative direction while the question was open. The ruling is **not a refusal**: an operator account must stay closable — people leave — but with friction proportionate to being unrecoverable. Build a **typed confirmation** (the target's email, so the control cannot be cleared absently by a tired person clicking a second button), a **structural refusal when no other live admin would remain** rather than the incidental one `actorId === userId` gives today, a dialog stating the sign-in is restorable **only from Clerk's dashboard** because `role = 'admin'` is unreachable from inside the product, and a **distinct `admin_actions` value** so the audit can answer *"who removed our colleague's access"* without joining to a role the closure just retired. **Do not read this as loosen the guard**: the 403 stays until the hurdle exists, and both halves land in one commit. |
 | **461** | **A live error type routes around #445's log sink** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #451's `security-auditor`. Nothing leaks today** — it is filed because a path #445 documented as *unreachable* turns out to be reachable, and the next error type to travel it will not be as harmless. `ClerkAPIResponseError` carries an own enumerable **`errors`** array; `pino-std-serializers` copies it to **`aggregateErrors`** without passing it through `log-error-serializer.ts`, so its contents reach the log stream having been through none of the redaction. Contents today are Clerk's `{code, message, longMessage, meta}` — no credential, no bound parameter. **That is exactly why to fix it now**: #445's claim is that the sink is total and *nobody needs to know the hazard exists to be safe from it*, and a known hole with benign contents is one that gets forgotten before something else flows through it. #445 already follows `cause` and `err.errors`; this is the same array arriving under a different key, from the library rather than from our own recursion. **Fix the sink again, not this error type** — a `ClerkAPIResponseError` special case would be the fourth per-call-site guard in a story whose point was that per-call-site guards are how a rule becomes a special case. |
 | **462** | **A failed email update leaves `users.email` stale for ever, and notifications keep going there** | P3 | M6 | **P1 High** | **Backlog** | — | **None** — #451's partial index removes one trigger, not the defect | `core` `auth` `email` | **Filed 2026-09-07 by #442's `security-auditor`**, pre-existing and found while auditing something else. `updateUserByClerkId` sets `email` with **no conflict handling**, so a `user.updated` carrying an address another row holds raises a **23505**, the handler 500s, svix exhausts its retries, and `users.email` stays at the **old** value permanently — with nothing surfacing it, because the failure is upstream and the row looks ordinary. **Then the stale column is used to send mail**: `notification-email.dao.ts` picks the recipient from it, so every notification for that account — carrying **counterparty PII**, names, event dates, booking details, message excerpts — keeps going to an address the account holder **no longer controls**, indefinitely, because nothing ever retries the update. The 500 is a nuisance; the mail is a disclosure. Catch the 23505 on that one statement — it is **not** inside a transaction, unlike `insertUserIfAbsent`'s path, which is why #442 needed a different shape there — and let the webhook **succeed**, since a retry cannot help a collision that is a fact about another row. Record the divergence where an operator sees it, the way `refundsFailed` and `identityDeleted` already are. **Then ask** what mail should do while the column is known-stale; continuing to send is the actual harm and is a product decision. Not fixed by #451 (that clears only the retired-row trigger; live-versus-live remains) and not the same defect as #442 (different caller, different transaction shape, different consequence). |
+| **463** | **The admin detail views are drawn to Pattern B and C and built to neither** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** — the patterns are in the repository (#454) | `core` `auth` | **Filed 2026-09-08 by #454's parity pass**, which measured four console screens on six axes. #454 took the four findings inside its own acceptances and scoped this out in as many words: *"Neither is a rebuild. Both were built to a convention and now have a contract."* This is that rebuild. **`/admin/cases/[caseId]` renders one column where Pattern C draws two** — regions 1 and 3 left, region 2 right — and the **case-scoped reported-thread card is absent entirely**, which is a *required* part of region 2 rather than decoration: #436 built the conversation read and Pattern C asks for it scoped to the event date with the steel `Case-scoped read` chip. Region 1 has no sender block (avatar, role, id) and no `stone-50` inset around the message; label/value pairs stack where Pattern B rule 2 puts a fixed 150px label column beside a `minmax(0,1fr)` value. **`/admin/users/[userId]` has no 320px right column**, so `Export data` and `Close account` sit inside the first content card instead of a right-column Actions card below Identity, with no hairline between tiers and no per-action consequence line — rule 4's *literal* half. **Its spirit half already passes and must keep passing**: the two genuinely read-only cards contain zero interactive elements. Neither screen draws the `.ach` header band (`#F4F0E8` on a `1px #E4DDD1` rule), so region 3's *"Moves money. Both positions confirm first."* note has nowhere to live; card radii are 14px against `.ac`'s 12px throughout. **Values render 13.5px where rule 2 says 13px, and money and dates 13.5px sans where it says mono 12px.** Smaller and separable: `/admin/activity`'s filter bar carries one facet where Pattern A names three (Actor, Subject type, date range), `/admin/cases` has no search field though the bundle draws one, both lack frame `13`'s `Export CSV`, the Cases status filters carry no counts, and the `READ-ONLY` marker is stone where `40-states.md` makes information steel. **Read `web-design-parity.md` before measuring** — #454's four live overrides and two ruled colour entries are expected deviations, not drift. |
 
-Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #458 landed: 17 rows — 14 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's, #447's and #458's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`) and #458 (`affd481c`) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 is closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07; **#454** is the row that consumes them, and it is what unblocked **#437**, whose second hold was the missing detail frame. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
+Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #454 landed: 19 rows — 16 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's, #447's, #458's, #454's and #456's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`), #458 (`affd481c`) and #454 (`32fa9bd4`, which closed #456 with it) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 was closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07. **#454 consumed them and landed 2026-09-08 (`32fa9bd4`)**, closing **#456** with it and taking the counted filtered-empty pattern to all seven console lists. That unblocks **#437** — the Pattern B detail frame it was held for is now in the repository — and **#457** with it. What #454 deliberately did not build is filed as **#463**: it landed the rulings and the parity fixes inside its own acceptances, and Pattern B and C's **composition** is a rebuild rather than a parity fix. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
 
 **#448 landed a bigger finding than either half it was filed for, and that finding is the one to carry forward.** The filed halves were `renderLaneEnv` not writing `API_URL` and `lane:exec` handing every child the API's `PORT`; the first had already landed inside #432 (`1e899ae1`) before the lane branched, which is the board's own rule about trusting the repository over the ticket, arriving again. The real defect was **`laneEnvAgreesWith` comparing a subset of what `renderLaneEnv` writes** — it checked the two ports and `NEXT_PUBLIC_API_URL` and nothing else, so a `.env.lane` written before `API_URL` existed still *agreed* with its manifest, was never rewritten, and every long-running lane resumed onto the stale file for ever while `lane:up` printed ✓ over it. **A check that cannot fail for the state it exists to detect is worse than no check**, because it is also the thing that stops anyone else looking. It now compares every origin the file writes, and that is what makes **`pnpm lane:up <n>` the repair for a stale lane env — in place, database kept.** Do not tell a lane to `lane:down` for this. `pnpm preflight` now also fails a lane whose `.env.lane` omits `API_URL` **and** one whose `apps/web` build was made outside `lane:exec` — the second read out of `routes-manifest.json` rather than by curling the web port, because preflight runs *before* the dev servers, so a request probe finds nothing listening in the very flow it gates and cannot tell that from a server still cold-compiling. It would have to pass both, reproducing #448's own defect inside #448's fix.
 **Phase `INFRA` / Milestone `M-OPS` marks platform work, not product work.** A row
@@ -2077,335 +2076,6 @@ decision about people.
       which is the entire content of the change.
 
 
-### #454: Land the admin design delta — the drawn frames for every unframed console screen
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** None — the frames arrived 2026-09-07 and this ticket is what consumes them
-
-**Filed 2026-09-07. The account holder supplied `design/delta-admin/` in answer
-to #453**, which asked for frames and, per `design-is-a-contract-not-code`,
-deliberately did not attempt them. The ask is now met: a build prompt
-(`ADMIN-VIEWS-PROMPT.md`) and a drawn bundle (`Orla-Admin-Views.html`) covering
-every admin route frame `13` never drew. **#453 is closed by that delivery, not
-by this ticket.**
-
-The bundle is **three patterns, two drawn frames and one ruling** — deliberately,
-because nine screens do not need nine frames:
-
-- **Pattern A — the four list routes** (`/admin/activity`, `/admin/cases`,
-  `/admin/requests`, `/admin/categories`) reuse frame `13`'s table verbatim. This
-  is the ruling #453's third ask requested. Only column grids, defaults, colour
-  and empty behaviour differ, and the bundle states each.
-- **Pattern B — one detail frame**, drawn on `/admin/vendors/[id]`, settling card
-  order, label/value typography, long-field wrapping and where destructive
-  actions may sit. The other three detail routes are given as card orders against
-  it.
-- **Pattern C — `/admin/cases/[caseId]`**, drawn in full including the
-  two-position resolve control and its `ConfirmAction`.
-
-#### This ticket takes the surfaces that already exist. #437 takes the five that do not
-
-The split is the existing one and this ticket does not move it. **#437 is
-unblocked by this filing** and builds `/admin/vendors/[id]`,
-`/admin/customers/[id]`, `/admin/bookings/[id]`, `/admin/requests` and
-`/admin/categories` against Pattern B — that was the frame it was held for, and
-it now exists. Everything below is a surface on `main` today.
-
-**Do not build a rail row for `/admin/requests`.** The bundle rules it a **tab
-inside Bookings** (`Bookings · Requests`), because a request is a booking before
-it exists and an operator reaches it while looking at bookings. That constraint
-belongs to #437 and is recorded here so it is not lost between the two rows.
-
-#### 1 — Reconcile the contract before touching code
-
-`orla-design-reimport-is-a-merge` binds: the bundle is newer than
-`22-admin.md` in the places it speaks to and silent everywhere else. Do the
-design pass first, as its own commit, so the code that follows has something to
-be measured against.
-
-- **`22-admin.md` §Detail views is superseded.** It currently reads, in full,
-  *"card-based groupings with the actions prominent. Every destructive action
-  goes through an AlertDialog naming the consequence."* That single sentence was
-  the entire spec five screens would have been invented from. Replace it with a
-  pointer to Pattern B rather than a paraphrase.
-- **The rail correction is an *order* change, not a count change.** The bundle's
-  preamble reasons from a brief of eight rows and concludes the rail needs nine
-  so Cases can carry a badge. **That premise is already stale**: `22-admin.md`
-  gave Cases its own row on 2026-09-07 (#431) and `admin-nav.tsx` renders nine.
-  What the bundle actually changes is **where Cases sits** — directly after
-  `Bookings`, where the work arrives — against #431's ruling that it sits between
-  `Payments` and `Reviews`. **The bundle wins**, and `22-admin.md`'s paragraph is
-  rewritten to say so and to record what it overturned. A lane that reads this as
-  "add a ninth row" will add a tenth.
-- **Record that this bundle ships no `* { box-sizing: border-box }` reset.**
-  Grepped and confirmed: its 0 `box-sizing` declarations put it with
-  `Orla - Screens.dc.html` and *against* `delta-band`, `delta-legal` and
-  `contact-support`. **#449 turns on exactly this distinction**, so a measurement
-  taken off this bundle is content-box and must not be quoted at #449 as though
-  it corroborated the border-box side. Add the line to
-  `.claude/rules/web-design-parity.md` beside the existing #449 paragraph.
-- **The action copy is now drawn, which changes #435's open filing.** The frame
-  names `Unpublish profile` and `Suspend vendor`. #435 shipped
-  `Unpublish storefront` and `Suspend account`. Those are no longer unapproved
-  strings awaiting a design pass — they are **text-parity findings against a
-  frame**, which is a different and smaller thing. Fix them here, in the design
-  pass's own commit, and record them in `31-content-voice.md`.
-
-#### 2 — The rail, and the two list screens that already exist
-
-- **Move `Cases` to sit directly after `Bookings`.** One line in `ITEMS`, and the
-  comment block above it currently argues at length for the position being
-  replaced — rewrite it, do not leave a comment defending a decision the frame
-  overturned.
-- **`/admin/activity`.** Already correct on the thing that matters most: it
-  carries no checkbox column and no `···` column, which is what makes it read as
-  a log, and `22-admin.md` already gives the reason (the table is append-only in
-  the database, so a control would offer something Postgres refuses). Outstanding
-  against Pattern A: the column grid becomes
-  `Actor 1.2fr · Action 1fr · Subject 1.6fr · When .9fr`, `Subject` becomes type
-  + id in **one** cell (type `stone-600`, id mono `stone-900` — `booking ·
-  BKG-8821`), and timestamps go **absolute to the minute** (`7 Sep 2026, 14:02`),
-  never relative — an audit trail that rounds is not an audit trail. **See the
-  design question below before deleting the `What changed` column.**
-- **`/admin/cases`.** Columns become `Reference .9fr · Sender 1.2fr ·
-  Subject 1.8fr · Booking .9fr · Age .6fr · Status .8fr`. Reference is mono and
-  **is the row link**. A case with no linked booking renders `—` in `stone-500`,
-  never blank. **`Age` is the pressure column** and carries the only new colour
-  rule on this screen: stone under 24h, gold at 24h, red at 72h — and the red is
-  the **SLA** failing, not the case. Two status pills only: Open (gold), Resolved
-  (sage). Default filter open, oldest first, which is already the built
-  behaviour (#431) and must survive the change.
-
-#### 3 — Colour, which is fixed and not re-litigated per screen
-
-`40-states.md` already binds — steel information, gold waiting on someone, red
-failed, sage settled. The bundle only draws the consequences, and one of them is
-the trap:
-
-| Status | Colour |
-| --- | --- |
-| `pending`, `quoted` | gold |
-| `accepted` | sage |
-| `declined`, `cancelled`, `expired` | stone |
-| payout attempt failed, chargeback, dispute reason | red |
-| case open | gold · case resolved | sage · case age ≥72h | red |
-
-**`expired` is stone, not red.** A clock running out is not a failure, and it is
-the one every implementation gets wrong. Assert it.
-
-#### 4 — The filtered-empty pattern, which is the hard part
-
-This is a **new shared component**, not a per-screen string, and it partially
-closes **#443** — that ticket's sixth finding is *"the filtered empty state
-offers no way out where every other console empty state does"*. **File nothing
-new for it; amend #443's row to record that this ticket closed that one finding
-and leave its other five open.**
-
-Both empties are drawn.
-
-**True empty carries no button.** Nothing an operator does creates a case or an
-activity row, so a button would offer an action that cannot help. The copy's job
-is to say where rows come from, so that silence reads as calm rather than broken.
-Serif 21px line plus one `stone-600` line.
-
-**Filtered-empty has four requirements and they are hard on purpose:**
-
-1. The heading **recites the active filters in the operator's own words** —
-   *"No resolved chargeback cases for 'kessler' in the last 7 days."*
-2. One line stating how many filters are narrowing the view.
-3. **One button per filter, each dropping exactly that filter and carrying the
-   count it would reveal** — `Open cases instead (4)`, `Any origin (2)`,
-   `All time (9)`. Highest count is primary. **A route that would reveal zero is
-   never offered as a button.**
-4. `Clear all filters` last, as a ghost link — the escape, not the suggestion.
-
-The counted routes are the entire point: an operator picks the widening that
-*pays* instead of clearing everything and rebuilding the query from scratch.
-
-**This needs count queries the API does not have.** Each button's number is one
-count with that single filter dropped and the others held — so a screen with
-three active filters costs three counts. Do it in **one** round trip per screen,
-not N, and do not compute it in the web layer by over-fetching rows. And note
-the shape of the requirement: a button that would reveal zero must not render,
-so the count has to be known **before** the button is drawn, not after.
-
-#### 5 — Parity on the two detail screens that already exist
-
-Neither is a rebuild. Both were built to a convention and now have a contract.
-
-- **`/admin/users/[userId]` against Pattern B.** The one thing to check hardest
-  is **the closure refusal**, because the frame draws it as *prevention*: with a
-  future confirmed booking the button is **disabled**, and a gold panel above it
-  reads *"Can't close: 1 confirmed booking on 12 Sep 2026. Cancel or complete it
-  first."*, linking the booking. **D39's 409 is shown before the press, never as
-  an error after it.** #438 built the refusal; this checks it is drawn as the
-  frame draws it. Also Pattern B's rule 4 — no destructive control inside a
-  read-only card — and rule 3, that the legal-acceptance record's identifiers
-  wrap rather than truncate.
-- **`/admin/cases/[caseId]` against Pattern C.** Three **numbered** regions with
-  the numbers visible, and the resolve control **last**, reachable only past the
-  evidence: *the scroll is half the safeguard and the copy is the other half*.
-  The two positions are **equal weight, side by side** — not a primary and a
-  secondary, because the operator's job is to judge and a filled clay button on
-  one side would be the product voting. Each names its consequence in money
-  **and what the other party gets**, with the payout date by name. The
-  `ConfirmAction` **restates rather than summarises**: amount in the title, the
-  counterparty's zero in the body, the field that will be written
-  (`cancelled_by = admin`), the thing operators get wrong in a gold panel
-  (*"Refunds settle in 5–10 days. Stripe's dispute stays open until the bank
-  closes it — refunding does not withdraw it."*), and a cancel button reading
-  **"Keep the case open"** — because "Cancel" on this screen is a verb about
-  money.
-
-#### Design questions — ALL THREE ANSWERED 2026-09-07 by the account holder
-
-**Nothing here is open. Build the rulings; do not re-ask.** The questions are
-kept with their answers because each one records what was overturned, and a lane
-that finds the frame disagreeing with the code needs to know which way it was
-settled rather than rediscovering the conflict.
-
-**1. `Suspend vendor` keeps refunding in full — the frame's copy is loose.**
-The drawn Actions card says a suspension *"holds payouts"*. It does not, and it
-must not start to: D31 (#416) ruled that the unwind refunds every future
-confirmed booking in full and reverses the vendor's share out of their Stripe
-balance, which can leave it negative — and being told that was the point of the
-dialog. **Correct the bundle's description to say what suspension does**, and
-record it in `.claude/rules/web-design-parity.md` as transcription drift under
-D30, the same direction every other frame-versus-ruling disagreement has gone.
-`account-unwind.ts` is untouched by this ticket. **A later pass reading
-"holds payouts" in the bundle is reading the record of a correction, not a
-finding** — which is exactly the failure this answer exists to prevent, because
-a frame in the repository saying one thing beside code doing another gets
-implemented by whoever reads the frame first.
-
-**2. `/admin/activity` keeps its `What changed` column — five columns, not
-four.** Pattern A lists four and the built screen has five. The fifth stays: the
-same Pattern A paragraph forbids rounding a timestamp on the grounds that *an
-audit trail that rounds is not an audit trail*, and a trail recording that
-something changed but not what fails that test harder. Take the rest of Pattern
-A's ruling — the `Actor · Action · Subject · When` ordering, Subject as type +
-id in one cell, absolute timestamps — and fit `What changed` after `Subject`,
-keeping its existing `1.7fr`. Correct the bundle to draw five.
-
-**3. The route stays `/admin/tags`.** The bundle calls it `/admin/categories`;
-nothing drawn depends on the path, and a rename breaks operator bookmarks and
-any `admin_actions` subject link already written against the old one. Correct
-the bundle's route name. The rail label `Categories & tags` is unchanged.
-
-Each of the three corrections above edits the **bundle**, which is a design
-pass, and they belong in the same commit as the `22-admin.md` reconciliation in
-step 1 — not scattered through the code commits.
-
-#### The three questions as they were asked
-
-1. **Does `/admin/activity` lose its `What changed` column?** Pattern A lists
-   four columns and does not include it; the built screen has five, and
-   `22-admin.md` specifies `When · Operator · Action · Subject · What changed`.
-   The recommendation is **keep it**: the same paragraph forbids rounding a
-   timestamp on the grounds that an audit trail that rounds is not an audit
-   trail, and a trail that records *that* something changed but not *what* fails
-   the same test harder. Most likely the bundle was written at pattern level and
-   the column was not considered. **Confirm before deleting data from a log.**
-2. **Does `/admin/tags` become `/admin/categories`?** The bundle names the route
-   `/admin/categories`; the app serves `/admin/tags` and the rail says
-   `Categories & tags`. Nothing drawn depends on the path. The recommendation is
-   **keep `/admin/tags`** — a rename breaks operator bookmarks and any
-   `admin_actions` subject link already written against it, for no drawn
-   difference. Confirm rather than assume, since the bundle does name a path.
-
-3. **Does `Suspend vendor` hold payouts or refund in full?** This one is about
-   money and must not be guessed. The drawn Actions card reads *"Unpublishes,
-   cancels 2 pending requests and **holds payouts**. Confirms first."* The
-   implementation does something materially different and always has: a ban
-   declines every open request, cancels every future confirmed booking and
-   **refunds it in full** — and D31 (#416) deliberately made that refund reverse
-   the vendor's share out of their Stripe balance, which can leave it negative.
-   That is why the shipped dialog says so at length; being told was the ruled
-   requirement.
-
-   **Holding and refunding are not the same action.** A hold is reversible and
-   leaves the customer's money where it is; a full refund is neither. So either
-   the card's copy is loose about an action it is summarising, or the intended
-   behaviour of suspension has changed and the unwind is now wrong.
-
-   **The risk of leaving it unanswered is the reason it is a blocker for this
-   part of the ticket and not a footnote**: a frame in the repository saying
-   suspend holds payouts, sitting beside code that refunds in full, will be read
-   by the next lane as the spec — and it will change what a suspension does to
-   somebody's money without anyone deciding to. It reaches past #435, because
-   #433 extracted that same unwind into `account-unwind.ts`.
-
-   Everything else in this ticket is buildable while this is open. Do not build
-   the Actions card's consequence lines until it is answered.
-
-#### Acceptance
-
-1. `22-admin.md` §Detail views points at Pattern B rather than describing detail
-   views in one sentence, and its rail paragraph records that Cases moved and
-   what that overturned.
-2. The rail renders `Overview · Vendors · Customers · Bookings · Cases (badge) ·
-   Payments · Reviews (badge) · Categories & tags · Activity` — nine rows, badges
-   on Cases and Reviews only.
-3. `/admin/activity` matches Pattern A's grid, renders Subject as type + id in
-   one cell, and prints timestamps absolute to the minute.
-4. `/admin/cases` matches Pattern A's grid; Reference is the row link; a case
-   with no booking renders `—`; Age is stone/gold/red at the drawn thresholds;
-   open + oldest-first survives.
-5. `expired` renders stone, and no status in this delta renders red except a
-   payout failure, a chargeback and a dispute reason.
-6. Every filtered-empty state offers one widening button **per active filter**,
-   each carrying the count it would reveal, never offering a zero-count route,
-   with `Clear all filters` last as a ghost link. **"Every" means all seven
-   console lists** — `/admin/cases`, `/admin/activity`, `/admin/vendors`,
-   `/admin/bookings`, `/admin/customers`, `/admin/payments` and
-   `/admin/reviews` — confirmed 2026-09-07 when the lane asked whether the
-   first three were the scope. **A half-applied pattern is worse than either
-   state**: an operator who learns on one screen that a dead end offers counted
-   ways out reads its absence on another as the screen being broken. If a
-   filter's count will not fit the single-scan `count(*) filter (where …)`
-   shape, stop at the ones that do and file the rest — do not force a query
-   shape to satisfy the word "every"; and **say in the commit which screens
-   have it and which do not**, because implicit coverage is what turned #443's
-   sixth finding into a rediscovery.
-7. `/admin/users/[userId]` draws the closure refusal as a disabled button plus a
-   gold panel naming the blocking booking and linking it — before the press.
-8. `/admin/cases/[caseId]` draws three numbered regions with the resolve control
-   last and its two positions at equal weight, each stating its own figure and
-   the other party's.
-9. Both resolve confirms name `cancelled_by` and the payout sweep date
-   explicitly, and cancel reads `Keep the case open`.
-10. `31-content-voice.md` records the drawn action copy, and the shipped
-    `Unpublish storefront` / `Suspend account` are corrected to the frame's
-    `Unpublish profile` / `Suspend vendor`.
-11. `.claude/rules/web-design-parity.md` records that this bundle is
-    **content-box**, beside the #449 paragraph that turns on it.
-12. The bundle's `Suspend vendor` description says what a suspension does — a
-    full refund under D31 — and `web-design-parity.md` records the correction as
-    a live override so no later pass re-finds it.
-13. `/admin/activity` renders **five** columns with `What changed` after
-    `Subject`, and the bundle draws five.
-14. The category route is still `/admin/tags`, and the bundle names it that.
-
-#### Tests (required)
-
-- [ ] A test per acceptance, watched failing first.
-- [ ] Acceptance 5 asserted as a **table over every status in the delta**, not as
-      one case — the defect this guards is a whole-vocabulary mistake, and a
-      single `expired` assertion passes while five siblings are wrong.
-- [ ] Acceptance 6 asserted with a fixture where **one widening reveals zero**,
-      so the test fails if a zero-count button renders. A fixture where every
-      route reveals rows cannot fail that requirement — it is the
-      `verify-with-a-differently-shaped-check` shape, and this is the acceptance
-      most likely to be faked by a happy fixture.
-- [ ] Acceptance 7 driven through a real account **holding a future confirmed
-      booking**, so the disabled state is observed rather than the enabled one.
-      An account with no bookings renders the button enabled and proves nothing.
-- [ ] Parity: `parity-checker` at 1440x900 against `Orla-Admin-Views.html` for
-      `/admin/cases/[caseId]` and `/admin/users/[userId]`, and against frame `13`
-      for `/admin/activity` and `/admin/cases`. Six axes.
-- [ ] Browser: both list screens at a filtered-empty state, and the case detail
-      driven to **both** resolve confirms without pressing either.
-
 ### #455: The `Apply filters` button clears the filter it should apply, and no pointer can reach it
 
 **Milestone:** M6 | **Phase:** P3 | **Priority:** P1 High | **Status:** Backlog | **Capabilities:** `core` `auth`
@@ -2449,55 +2119,11 @@ cannot fail on this.
 - [ ] The keyboard path end to end: focus the select, choose, tab to the submit,
       activate, and assert the narrowed table.
 
-### #456: Two moderation labels disagree with the frame that now draws them
-
-**Milestone:** M6 | **Phase:** P3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** #454 — the frames land with it
-
-#### The mismatch
-
-| Shipped by #435 | Drawn by `design/delta-admin/Orla-Admin-Views.html` |
-| --- | --- |
-| `Unpublish storefront` | **`Unpublish profile`** |
-| `Suspend account` | **`Suspend vendor`** |
-
-#### Why this is a defect and not a preference
-
-`web-design-parity.md`: *"Same composition with reworded copy has failed too —
-the words **are** the design."* The frame is the acceptance criterion.
-
-**The sequencing is the excuse and also the lesson.** #435 wrote these strings
-when no frame drew the vendor detail view and `31-content-voice.md` recorded
-nothing for them; the lane deliberately refused to add them to the voice file
-itself, because a ticket writes code and a design pass edits the plan. The frame
-arrived afterwards. Nothing was done wrong — the strings simply predate their
-own contract, and now that it exists they have to match it.
-
-The **descriptions** already agree in substance: #435's unpublish copy says open
-requests stand, confirmed bookings stand, no refund is issued and the vendor can
-still sign in; the card says existing bookings stand and the vendor keeps their
-dashboard. Same promise. This ticket is the two labels and the four assertions
-that pin them.
-
-#### Read this before touching the suspend copy
-
-The same card describes **Suspend vendor** as *"Unpublishes, cancels 2 pending
-requests and **holds payouts**"*, where the implemented ban cancels and **refunds
-in full**, reversing the vendor's share out of their Stripe balance (D31/#416).
-That contradiction is **design question 3 in #454** and is not settled. Change the
-label here; do not change what the dialog promises about money until it is.
-
-#### Tests (required)
-
-- [ ] The menu item, dialog title and confirm label all read the frame's word —
-      one verb per action, asserted across all of them.
-- [ ] The existing "cannot be confused with the suspend dialog" assertions still
-      hold with the new labels.
-
 ### #457: A moderation hold the moderated vendor cannot lift
 
 **Milestone:** M6 | **Phase:** P3 | **Priority:** P0 Critical | **Status:** Backlog | **Capabilities:** `core` `auth`
-**Blocked by:** #454 — the vendor detail Actions card is where the control lives
+**Blocked by:** None — #454 landed 2026-09-08 (`32fa9bd4`), and the vendor
+detail Actions card it drew is where this control belongs
 
 #### The state today
 
@@ -2854,3 +2480,130 @@ here**: if any other statement sets a column under a unique index with no
 - [ ] Acceptance 3 asserted by reading the row **and** the divergence record
       together: a test that only checks the row passes against a version that
       silently discards the update.
+
+### #463: The admin detail views are drawn to Pattern B and C and built to neither
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None — the patterns landed with #454 (`32fa9bd4`)
+
+**Filed 2026-09-08 by #454's parity pass.** That pass measured `/admin/activity`,
+`/admin/cases`, `/admin/cases/[caseId]` and `/admin/users/[userId]` at 1440x900
+on all six axes. #454 took the four findings that fell inside its own
+acceptances — a payout hold painted red, a 12-hour clock, a filled destructive
+button, an ellipsised identifier — and scoped the rest out in as many words:
+*"Neither is a rebuild. Both were built to a convention and now have a
+contract."* **This ticket is that rebuild**, and it is filed rather than folded
+in because it is a build.
+
+#### The two detail screens, which is most of the work
+
+**`/admin/cases/[caseId]` against Pattern C.**
+
+- **One column where the frame draws two.** Pattern C is
+  `grid-template-columns: minmax(0,1.35fr) minmax(0,1fr)` with regions **1 and 3
+  stacked left** and **region 2 in the right column**. Everything currently
+  stacks in one 1157px column.
+- **The reported-thread card is absent.** This is not decoration — Pattern C §2
+  requires the case-scoped read of the thread, read-only, scoped to the event
+  date, with the steel `Case-scoped read · 12 Sep only` chip and the line saying
+  operators see the messages the case is about rather than the whole
+  relationship. **#436 already built the conversation read** (`CaseConversation`),
+  so this is composition rather than new capability.
+- **Region 1 has no sender block.** The frame draws a 30px monogram, the name at
+  13px/600, and `Customer · CUS-5518 · email` at 11.5px `stone-600`. The screen
+  renders a three-up `From / Reply to / Arrived by` trio instead — no avatar, no
+  role, no id.
+- **The message body has no inset.** The frame puts it on `#F8F5EF` with a `1px
+  #EFE9E0` hairline at a 10px radius and 13px/15px padding, with a character
+  count beneath. It renders as a bare paragraph.
+
+**`/admin/users/[userId]` against Pattern B.**
+
+- **No 320px right column.** Pattern B is "left = the record, right = identity +
+  actions", and *everything that changes state lives in the right column and
+  nowhere else*.
+- **Rule 4's literal half fails.** `Export data` and `Close account` sit inside
+  the first content card at the top of the page, not in a right-column Actions
+  card below Identity, with no hairline between tiers and no per-action
+  consequence line — one shared paragraph instead.
+- **Rule 4's spirit half already passes, and a test must keep it passing.** The
+  two genuinely read-only cards — *What is still held* and *Legal acceptances* —
+  contain **zero** interactive elements. A rebuild that moves the actions must
+  not regress that.
+- **Card order is inverted.** Pattern B for this route is retained-data counts as
+  a **table**, then legal acceptance as read-only fields. It renders the counts
+  as a `grid-cols-4` of `dt`/`dd` pairs and the acceptances as the admin table —
+  each in the other's form.
+- `Export their record` should read **`Export data`**, which is what Pattern B
+  names it.
+
+#### Shared between both detail screens
+
+- **No `.ach` header band.** The frame's card header is `padding:10px 16px` on
+  `#F4F0E8` with a `1px #E4DDD1` bottom rule and a right-hand note. Region 3's
+  note — *"Moves money. Both positions confirm first."* — has nowhere to live
+  without it, and neither does Stripe's *"Read-only — mirrored from Stripe, 6m
+  ago"*.
+- **Card radius is 14px** (`rounded-xl`) against `.ac`'s **12px**, on every card.
+- **Rule 2's type scale.** Values render 13.5px where the rule says 13px, and
+  identifiers, dates and money render 13.5px sans where it says **mono 12px**.
+  `text-base` resolving to 13.5px is the cause, so this needs a deliberate step
+  rather than a per-site override.
+
+#### The list-screen items, which are separable and could be their own pass
+
+- **`/admin/activity`'s filter bar carries one facet.** Pattern A names three —
+  `Actor ▾`, `Subject type ▾`, date range. Only `Action` exists; actor and
+  subject filtering are reachable *only* by clicking a row cell.
+- **`/admin/cases` has no search field**, though the bundle draws one in both of
+  its Cases panels: `max-width:280px`, placeholder *"Search reference or
+  sender…"*.
+- **Neither list draws frame `13`'s `Export CSV`**, right-anchored in the filter
+  bar.
+- **The Cases status filters carry no counts.** The bundle draws `Open (4)` /
+  `Resolved (0)` as counted pills; the screen renders two uncounted dropdowns.
+  The dropdown *shape* is an accepted deviation (#433); the missing counts are
+  not covered by that entry.
+- **The `READ-ONLY` marker is stone, not steel.** `40-states.md` makes steel
+  information, and a read-only marker is information. The frame draws
+  `#3D6A8C` on `#EEF3FA`.
+
+#### Before measuring anything
+
+**Read `.claude/rules/web-design-parity.md` first.** #454 added four live
+overrides — US month-first dates, the retained `UTC` suffix, the `stone-600` em
+dash, and money without cents — plus two ruled colour entries (`quoted` steel,
+`accepted` clay). All six are **expected deviations, not findings**, and a pass
+that re-files them is re-litigating a ruling.
+
+`design/delta-admin/` ships **no `box-sizing` reset**, so every bordered box in
+it is content-box. That is the distinction #449 turns on.
+
+#### Acceptance
+
+1. `/admin/cases/[caseId]` renders two columns at 1440x900, regions 1 and 3
+   left, region 2 right, and carries the case-scoped reported-thread card.
+2. Region 1 draws the sender block and the message on its `stone-50` inset with
+   a character count.
+3. `/admin/users/[userId]` renders a 320px right column holding Identity and one
+   Actions card, ordered least to most severe with a hairline between tiers and
+   one consequence line per action.
+4. **No interactive element appears inside a read-only card on either screen** —
+   asserted, because this currently passes and a rebuild is what would break it.
+5. Both screens draw the `.ach` card header band, and card radius is 12px.
+6. Label/value pairs render as a fixed 150px label column beside a
+   `minmax(0,1fr)` value; identifiers, dates and money render mono 12px.
+7. `parity-checker` returns MATCH on all six axes for both detail screens, with
+   #454's six recorded deviations reported as expected.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 4 asserted by **querying for interactive descendants** of each
+      read-only card rather than by naming the controls that exist today — a
+      list of known controls cannot fail for a control added later.
+- [ ] Acceptance 6 asserted on `getComputedStyle`, not on class names: the
+      defect is a resolved size, and `text-base` resolving to 13.5px is exactly
+      the kind of thing a `toContain` on a class string cannot see.
+- [ ] Browser: both detail screens driven at 1440x900, and the resolve control
+      still reachable only past the evidence after the recomposition.

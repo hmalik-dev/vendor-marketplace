@@ -553,6 +553,7 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   460: ['auth'], // closing an operator account needs a typed confirmation, not a refusal
   461: ['auth'], // ClerkAPIResponseError.errors routes around #445's log sink
   462: ['auth', 'email'], // a failed email update leaves users.email stale and mail keeps going there
+  463: ['auth'], // admin detail views drawn to Pattern B and C and built to neither
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
