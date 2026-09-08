@@ -95,3 +95,24 @@ deliberately as its environment.** "The page rendered" and "the page rendered th
 state the frame draws" are different claims, and only the second is a
 measurement. Before comparing, confirm the surface is showing rows rather than an
 empty state — an empty table matches an empty table on all six axes.
+
+## Block on the condition, never on arithmetic about time
+
+A lane reported CI elapsed times that were wrong **in both directions** — once
+polling flat out while believing it was sleeping, once reading a job as 45
+minutes old when it had restarted and was 4 minutes in.
+
+The mechanism: **`wait` in a shell that never started the job has no child to
+wait for, so it returns immediately.** In this harness shell state does not
+persist between Bash calls, so a job started in one call is unreachable by `wait`
+in the next **by construction**. Every "elapsed" figure derived from that loop is
+arithmetic on an assumption, and the tell is that the call never blocks.
+
+Neither error reached a diff. Both reached the supervisor, who was ordering lanes
+partly on how long work appeared to be taking — a healthy lane reading as
+45-minutes-stalled is how a good session gets replaced.
+
+**How to apply:** wait on the **real condition**, not on a timer or a timestamp
+difference — an `until` loop testing the thing itself (`until gh pr checks … |
+grep -q …; do sleep 30; done`), or a Monitor whose script exits when the state
+flips. And treat any duration you did not observe a process block for as a guess.
