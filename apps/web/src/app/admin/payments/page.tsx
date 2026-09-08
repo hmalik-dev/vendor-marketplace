@@ -64,7 +64,7 @@ export default async function AdminPaymentsPage({
       ]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH}>
+        <FilterBar action={PATH} params={{ flag }}>
           {/*
             The state this screen could not show (#432). Both columns behind it
             were written by the release sweep and read by nothing, so a vendor

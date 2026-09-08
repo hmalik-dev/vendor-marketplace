@@ -2,7 +2,7 @@
 
 import { MAX_NAME_LENGTH } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { adminQueryString } from '@/lib/admin-params';
 import { FIELD_FOCUS } from '@/lib/focus';
@@ -98,6 +98,36 @@ export function FilterSelect({
 export interface FilterBarProps {
   /** Where the form submits — the surface's own path, so filters stay in the URL. */
   action: string;
+  /**
+   * **The filters this bar is refining, narrowed** — the same object the
+   * surface hands its `Pager`.
+   *
+   * Every one of them travels with the submit as a hidden field, which is the
+   * only reason activating `Apply filters` applies anything (#455). Without it
+   * the form had **no successful controls at all** on five of the six console
+   * surfaces that carry a dropdown: the triggers are `<button>`s in a listbox
+   * and navigate on change, so they are not form controls, and `/admin/reviews`
+   * — one dropdown and nothing else — submitted to the bare path and discarded
+   * the filter the control is named for.
+   *
+   * It takes the whole set rather than letting each `FilterSelect` write its
+   * own field, because **not every filter has a dropdown**: `/admin/activity`
+   * filters on `actor` and `subject`, two uuids that arrive from a row and are
+   * deliberately drawn as dismiss chips rather than as a list of every operator
+   * on the platform. A per-control field would have left that surface with
+   * exactly the defect this fixes, and no future filter-without-a-control could
+   * be added safely either.
+   *
+   * `page` is absent from every caller's object and must stay absent: a
+   * narrower filter has to land on page 1, not on a page that no longer exists.
+   *
+   * **Required, and that is the guard.** Optional, it was a prop six of the
+   * seven surfaces could quietly omit — the compiler, the linter, the unit
+   * suite and the end-to-end suite would all have stayed green while that one
+   * bar went back to discarding its filters, because nothing else reads a
+   * page's JSX. A surface with nothing to carry passes `{}` and says so.
+   */
+  params: Record<string, string | undefined>;
   /** Placeholder for the search field. Omitted where a surface has no search. */
   searchPlaceholder?: string;
   searchValue?: string;
@@ -111,20 +141,53 @@ export interface FilterBarProps {
  * The Refine bar, above the table and never a modal.
  *
  * `method="get"`, so every filter is a URL the operator can paste into a
- * support thread and the server can render without a round trip. Changing a
- * dropdown submits the form; the search field submits on Enter.
+ * support thread and the server can render without a round trip. A dropdown
+ * navigates on change rather than submitting; the search field submits on
+ * Enter, and `Apply filters` submits whatever `params` holds.
  */
 export function FilterBar({
   action,
+  params,
   searchPlaceholder,
   searchValue,
   children,
   trailing,
 }: FilterBarProps): React.ReactElement {
-  const form = useRef<HTMLFormElement>(null);
-
   return (
-    <form ref={form} action={action} method="get" className="flex items-center gap-2">
+    /*
+      `relative` so the visually-hidden submit below has something to anchor to.
+      It changes no painting: the bar has no positioned descendant that was
+      resolving against an ancestor, and the dropdown panels are `fixed`.
+    */
+    <form action={action} method="get" className="relative flex items-center gap-2">
+      {/*
+        The filters, as fields the form actually submits.
+
+        `q` is skipped where the search field exists, because that input already
+        carries the name — two controls under one name submit `?q=a&q=b`, which
+        `admin-params.ts` reads as one intent but is a URL nobody meant. Empty
+        values are omitted rather than sent blank, matching `adminQueryString`:
+        `?type=` is a different URL from no `type` at all, and the dropdown's
+        change handler never produces one.
+
+        **That last rule holds for these fields and not for the search input,
+        which is a limit of GET forms rather than a choice.** A text input is a
+        successful control whether or not it has a value, so submitting an empty
+        search box appends a bare `q=` — visible on `/admin/vendors` and
+        `/admin/customers`, and true of pressing Enter in that box long before
+        `Apply filters` worked. Suppressing it would take a submit handler, and
+        a submit that needs JavaScript is the one thing this control must not
+        be. `boundedText` reads `''` as no filter, so the results are identical
+        and the cost is a meaningless parameter in a pasted URL.
+
+        `input[type=hidden]` is `display:none`, so these are flex children that
+        take no space and add no gap.
+      */}
+      {Object.entries(params).map(([key, value]) =>
+        value && !(searchPlaceholder && key === 'q') ? (
+          <input key={key} type="hidden" name={key} value={value} />
+        ) : null,
+      )}
       {searchPlaceholder ? (
         <input
           type="search"
@@ -180,8 +243,27 @@ export function FilterBar({
           left a keyboard stop between `Payouts` and `Export CSV` that painted
           nothing at all — a focus ring on a 1px clipped box — which is the same
           defect class as a clipped ring, arrived at from the other direction.
+
+          **`bottom-0 left-0 translate-y-full` while hidden (#455).** `sr-only`
+          is `position:absolute` with no offsets, so the box resolved to its
+          *static* position — the flex container's content start — and every
+          console surface ended up with a 1px control sitting on top of the
+          first one in the bar. Measured at 1440x900 on all seven Refine bars:
+          `elementFromPoint` at the submit's own centre returned the `Direction`
+          combobox on `/admin/reviews`, `Status` on `/admin/bookings`, the
+          search field on `/admin/vendors`, and so on — which is the report that
+          "no pointer can reach it", and why every sighted mouse test passed.
+
+          The offsets move that box to just below the bar, where it covers
+          nothing. It stays unreachable to a pointer *while hidden*, which is
+          what `sr-only` means; the state a user can reach it in is the focused
+          one, and `not-sr-only` returns it to the flow there — hit-testable at
+          its centre and clickable with a real mouse, which is what
+          `admin-filters.spec.ts` asserts. `focus-visible:translate-y-0` undoes
+          the transform, since `not-sr-only` resets `position` but a transform
+          is not an offset and survives it.
         */
-        className="sr-only focus-visible:not-sr-only focus-visible:rounded-md focus-visible:border focus-visible:border-stone-300 focus-visible:bg-stone-0 focus-visible:px-3.5 focus-visible:py-2 focus-visible:text-sm focus-visible:font-semibold focus-visible:text-stone-900"
+        className="sr-only bottom-0 left-0 translate-y-full focus-visible:not-sr-only focus-visible:translate-y-0 focus-visible:rounded-md focus-visible:border focus-visible:border-stone-300 focus-visible:bg-stone-0 focus-visible:px-3.5 focus-visible:py-2 focus-visible:text-sm focus-visible:font-semibold focus-visible:text-stone-900"
       >
         Apply filters
       </button>

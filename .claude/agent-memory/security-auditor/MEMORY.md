@@ -76,4 +76,5 @@
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking in full with an empty `closeBlockers`; copy that says "refunds nothing" is true of one side only
 - [Moderation levers are undoable by their subject](moderation-levers-are-undoable-by-their-subject.md) — #435’s unpublish and deactivate write the vendor’s own columns; only ban and review-hide stick
 - [Retired users keep their email in the unique index](retired-users-keep-their-email-in-the-unique-index.md) — closure never releases the address, so re-registering the same email is a permanent opaque 500
+- [FilterBar's `params` is a narrowing contract](filter-bar-params-is-a-narrowing-contract.md) — it re-emits admin searchParams as hidden fields and its type cannot tell narrowed from raw; `page` must stay out
 - [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino reaches nested errors through three doors, all three closed in #445; `PostgresError.detail` is redacted there too

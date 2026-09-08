@@ -31,7 +31,12 @@ export default async function AdminCustomersPage({
       heading="Customers"
       counts={[`${customers.total} total`]}
       filters={
-        <FilterBar action={PATH} searchPlaceholder="Search name or email…" searchValue={q} />
+        <FilterBar
+          action={PATH}
+          params={{ q }}
+          searchPlaceholder="Search name or email…"
+          searchValue={q}
+        />
       }
       pager={{
         path: PATH,
