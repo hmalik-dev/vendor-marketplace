@@ -561,6 +561,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   468: ['auth'], // FilteredEmpty promises a widening it does not always offer
   469: ['email'], // what mail does while users.email is known-stale — needs a ruling
   470: ['auth'], // duplicate row-action accessible name, and a silent admin publish
+  471: [], // two committed Playwright specs are red on a fresh lane
+  472: ['auth'], // carried is hand-maintained across seven Refine bars
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */
