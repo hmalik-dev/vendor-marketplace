@@ -54,7 +54,7 @@
 - [Class assertions need the split list](class-assertions-need-the-split-list.md) — `toContain` on `className` is a substring match, so `min-[90rem]:text-[11px]` satisfies a check meant to pin `text-[11px]`
 - [Stripe caches failed idempotent results](stripe-caches-failed-idempotent-results.md) — a retry key needs the attempt number; `request_log_url` is the tell (D36)
 - [A z.date() needs a wire coercion](zdate-needs-a-wire-coercion.md) — else that screen 500s, conditionally, with the whole local gate green
-- [A clean rebase is not a compiling rebase](rebase-auto-merges-are-not-compile-checked.md) — git merges text, not signatures; re-run typecheck and the suites after every rebase
+- [A clean rebase is not a compiling rebase](rebase-auto-merges-are-not-compile-checked.md) — git merges text, not signatures; and it can be non-**installable** too, so `pnpm install` after every rebase, before the gate
 - [A stale whole-file copy silently reverts](stale-whole-file-copy-silently-reverts.md) — a code PR carrying an old tracker/registry copy erases other lanes' filings; no conflict, and the contiguity guard passes the damage
 - [The payout sweep ticks under your test](the-payout-sweep-ticks-under-your-test.md) — it runs every 15 min on real rows; assert the count increased, never that it equals 9
 - [`rebase --continue` blames conflicts for unstaged changes](rebase-continue-blames-conflicts-for-unstaged-changes.md) — a review agent writing to `.claude/agent-memory/` mid-rebase stalls it with a message about conflicts that are not there

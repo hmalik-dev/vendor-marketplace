@@ -59,3 +59,24 @@ not there — check `git status` for unstaged paths first, and believe those ove
 the message.
 
 Measured by lane 432 while landing #432.
+
+## A clean rebase can also be a non-installable rebase
+
+Third variant, found in lane 447 on 2026-09-07. The rebase brought source that
+imports a dependency the lane never installed:
+
+    src/lib/log-error-serializer.ts(1,32): error TS2307: Cannot find module 'pino'
+
+`pino` was added by #445, which landed **after** that lane ran `lane:up`. So the
+worktree had the file and not the `node_modules` entry.
+
+**Why it is worth a paragraph:** it fails **only in the lane**. Main and CI are
+green, because they installed after the dependency landed — which is exactly the
+profile that gets misread as *"my diff broke the API"* and sends someone hunting
+through their own changes for an import they never wrote.
+
+**How to apply: `pnpm install` after every rebase, before the `--force` gate.**
+One idempotent line, and it removes the class.
+
+Related: [[worktree-env-copies-drift]] — same family, where a stale copy in the
+worktree fails nowhere else.
