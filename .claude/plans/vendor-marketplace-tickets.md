@@ -2671,6 +2671,57 @@ and `/dashboard` never appear as a final location for any role, including the
 no-row state. That is one line in the sweep below and it is the line that would
 have caught this.
 
+#### The sweep has been run. Here is what it found — 2026-09-08
+
+**Four personas x 32 routes, driven in Playwright against a production build**
+(`next build && next start`, so nothing measured compile time), each in its own
+browser context. Results are the narrowing this ticket needed.
+
+**The routing is correct, and that was not what I expected.** Every gated route
+bounces to the role's own destination, and `/after-sign-in` resolves exactly as
+`role-routes.ts` says it should: customer → `/`, vendor → `/vendor/dashboard`,
+admin → `/admin`. **No 500s, no error boundaries, no dead routes, at any of the
+four auth states.** The account holder's requirement — *"signing in should take
+me based on my role"* — is already met for an **established** account.
+
+**So the defect is narrower than the row first claimed: it is specific to a
+brand-new account with no `users` row.** That is the state no fixture represents
+and the only one the sweep could not cover, because automated sign-up cannot
+complete (#464). Fix that branch; do not go looking for a general routing fault,
+because there is not one.
+
+**Two real findings, both signed-out:**
+
+1. **`/bookings` and `/messages` render the sign-in screen at their own URL
+   instead of redirecting.** Every other gated route answers
+   `/sign-in?returnTo=<path>`; these two return 200 with the sign-in page while
+   the address bar still reads `/bookings`. **The `returnTo` is lost**, so
+   signing in from there does not send the person back where they were going —
+   and the URL disagrees with the screen, which is its own defect.
+2. **`/search` renders `Searching…` as its `h1`** on first paint. Probably a
+   streamed loading state rather than a fault, but it is what a crawler and a
+   slow connection see, so confirm it resolves rather than assuming.
+
+**Three things about the instrument, because they cost four attempts and the
+next person should not repeat them:**
+
+- **A dev server measures compile time, not the product.** The first sweep timed
+  out on nearly every route at 45s; `/cookies` alone took 45.4s to compile. The
+  same sweep against `next start` finished in 90 seconds with 20ms responses.
+- **A context's first navigation lands on `/sign-in` even with a valid storage
+  state**, because the Clerk handshake outlasts it. Without a warm-up loop the
+  sweep reported **every authenticated route as signed-out** — a confident,
+  uniform, completely wrong result. The memory warned about this and the script
+  still shipped without it.
+- **Every fixture is held at `/accept-terms` until it ticks the box.** A sweep
+  that stops there proves the gate works and nothing about the screens behind
+  it. The script now clears the gate the way a person does.
+
+The script is `.playwright-mcp/sweep.mjs`. **Promote it into the repository as
+the acceptance below requires** — it is currently a scratch file in an ignored
+directory, which is the wrong home for the thing that proves this class stays
+fixed.
+
 #### The wider requirement: no dead routes, for any role
 
 The account holder's instruction is that this class must not recur:
