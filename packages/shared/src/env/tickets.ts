@@ -550,6 +550,8 @@ export const TICKET_CAPABILITIES: Readonly<Record<number, readonly Capability[]>
   457: ['auth'], // a moderation hold the moderated vendor cannot lift
   458: ['auth'], // a vendor is offered a Report control on their own storefront
   459: [], // every lane's pnpm install rewrites four lockfile peer-suffix keys
+  460: ['auth'], // closing an operator account needs a typed confirmation, not a refusal
+  461: ['auth'], // ClerkAPIResponseError.errors routes around #445's log sink
 };
 
 /** Capabilities checked when preflight runs without a `--ticket`. */

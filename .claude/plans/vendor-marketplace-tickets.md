@@ -261,6 +261,8 @@ storefront, each of which tells the reader something untrue. |
 | **456** | **Two moderation labels disagree with the frame that now draws them** | P3 | M6 | **P2 Medium** | **Backlog** | — | **#454** (the frames land with it) | `core` `auth` | **Filed 2026-09-07 by #435, against its own surface.** #435 shipped `Unpublish storefront` and `Suspend account` before any frame drew the vendor detail view; `design/delta-admin/Orla-Admin-Views.html` then arrived naming them **`Unpublish profile`** and **`Suspend vendor`** in the Actions card. `web-design-parity.md` is explicit that "same composition with reworded copy has failed too", so this is a text-parity defect rather than a preference. The *descriptions* already agree — both say existing bookings stand and the vendor keeps their dashboard — so this is two labels, in `vendor-table.tsx` and their four assertions. **Do not fix before #454 lands** or the frame is not yet in the repository to match. See design question 3 in #454 before touching the suspend copy: the card also says suspend "holds payouts" where the code refunds in full, and that is unresolved. |
 | **457** | **A moderation hold the moderated vendor cannot lift** | P3 | M6 | **P0 Critical** | **Backlog** | — | **#454** (the vendor detail Actions card is where the control lives) | `core` `auth` | **Filed 2026-09-07 by #435's security audit.** #435 shipped unpublish and package deactivation, and both write columns **the vendor also writes**: `PUT /vendor/profile` accepts `isPublished: true` checking only `publishBlockers`, and `PUT /vendor/packages/:id` accepts `isActive`. There is no hold column on `vendor_profiles` or `service_packages`, so an operator takes a storefront down for a policy violation and the vendor puts it back from their own dashboard seconds later — no block, no notification, nothing but an `admin_actions` row. #435's acceptance 1 was corrected to say it is advisory; **ban remains the only enforcing lever until this lands.** Review hiding and portfolio removal are unaffected and do hold. Carries the unapproved review-moderation copy as a dependency: `Hide review` / `Unhide review` / `Delete review` appear in no frame and in no voice file — the admin delta covers the vendor detail card and says nothing about reviews. |
 | **459** | **Every lane's `pnpm install` rewrites four lockfile keys nobody asked it to** | P3 | M6 | **P3 Low** | **Backlog** | — | **None** | `core` | **Filed 2026-09-07 by lane #445, which paid it and reverted it by hand.** The lockfile's `eslint-plugin-import` / `eslint-import-resolver-typescript` peer suffixes are stored in an **older, abbreviated form** than the installed pnpm writes, so *any* `pnpm add` or `pnpm install` that rewrites `pnpm-lock.yaml` expands four keys — `eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(...)` becomes the fully-qualified spelling, plus the three snapshot entries that reference it. **The resolutions do not change**, and `pnpm install --frozen-lockfile` accepts both forms, so nothing fails — the cost is that every lane touching a dependency carries an unrelated 19-line diff into its PR, and two lanes doing so conflict on lines neither of them meant to write. Reverting it is a step each lane has to know about and none of them is told. **Land the re-serialisation once, deliberately, on `main`** — a lone `pnpm install` commit touching only these keys — so the stored form matches what the installed pnpm writes and the churn stops being generated. Verify with `--frozen-lockfile` before and after, and check no second copy of any package appears. |
+| **460** | **Closing an operator account needs a hurdle, not a refusal** | P3 | M6 | **P2 Medium** | **Backlog** | — | **#451** — the 403 this relaxes does not exist until that lands | `core` `auth` | **Filed 2026-09-07 on the account holder's ruling** — *"handle this as best practice possible — admin deletion should have additional verification/hurdles — very rare to do."* #451 makes closure **delete the Clerk identity**, so it is irreversible against a real identity provider, and it therefore answers **403 for an admin target** as the conservative direction while the question was open. The ruling is **not a refusal**: an operator account must stay closable — people leave — but with friction proportionate to being unrecoverable. Build a **typed confirmation** (the target's email, so the control cannot be cleared absently by a tired person clicking a second button), a **structural refusal when no other live admin would remain** rather than the incidental one `actorId === userId` gives today, a dialog stating the sign-in is restorable **only from Clerk's dashboard** because `role = 'admin'` is unreachable from inside the product, and a **distinct `admin_actions` value** so the audit can answer *"who removed our colleague's access"* without joining to a role the closure just retired. **Do not read this as loosen the guard**: the 403 stays until the hurdle exists, and both halves land in one commit. |
+| **461** | **A live error type routes around #445's log sink** | P3 | M6 | **P2 Medium** | **Backlog** | — | **None** | `core` `auth` | **Filed 2026-09-07 by #451's `security-auditor`. Nothing leaks today** — it is filed because a path #445 documented as *unreachable* turns out to be reachable, and the next error type to travel it will not be as harmless. `ClerkAPIResponseError` carries an own enumerable **`errors`** array; `pino-std-serializers` copies it to **`aggregateErrors`** without passing it through `log-error-serializer.ts`, so its contents reach the log stream having been through none of the redaction. Contents today are Clerk's `{code, message, longMessage, meta}` — no credential, no bound parameter. **That is exactly why to fix it now**: #445's claim is that the sink is total and *nobody needs to know the hazard exists to be safe from it*, and a known hole with benign contents is one that gets forgotten before something else flows through it. #445 already follows `cause` and `err.errors`; this is the same array arriving under a different key, from the library rather than from our own recursion. **Fix the sink again, not this error type** — a `ClerkAPIResponseError` special case would be the fourth per-call-site guard in a story whose point was that per-call-site guards are how a rule becomes a special case. |
 
 Rows are ordered by build sequence, not by ticket number. **Recounted programmatically 2026-09-08 after #458 landed: 17 rows — 14 Backlog and 3 `Deferred — needs a human`.** #438's, #448's, #452's, #436's, #445's, #447's and #458's rows and detail sections are **deleted** by their own lanes, per the rule above — the squash SHA is in the landed list below, which is where a closed ticket is recorded now that the row is gone. The board tripled in one sitting: **#431–#440** are the admin-panel investigation, and **#434 (`1f8011a`), #433 (`ad1b179`), #439 (`efe1ef73`), #441 (`1b8435f3`), #431 (`54fa7e64`), #432 (`1e899ae1`), #438 (`c7228e77`), #435 (`d83d374b`), #448 (`36683a21`), #452 (`46a85a52`), #436 (`3ccfe8db`), #445 (`758430f1`), #447 (`ec537047`) and #458 (`affd481c`) have all landed** — so **#437**, **#443**, **#444** and **#445** are startable unattended today, as are **#446** and **#449**, both filed by #441 on the way past. **#437 is the one #439 unblocked**: the delivery record, the provider webhook and the `email_deliveries` read paths now exist, so the delivery history on the customer, vendor and booking views — #439's acceptances 5 and 6, deliberately left — is data work rather than schema work. **#440 is `Deferred` because it decides policy, not because it is hard** — an operator money lever contradicts D3, D31 and D35 and needs a decision entry before any code. #370 is still blocked behind #362, and #362, #374 and #440 all need the account holder. **D39 is now built** (#438, `c7228e77`): closure answers 409 while the account holds a future confirmed booking **of its own**, and a vendor's closure refunds their customers in full through #433's unwind rather than a fork of it — the two halves the ruling divides, with the console and the privacy policy stating both. **Do not hand-maintain this number, recount it.** **#450 and #451 are startable too** — both were filed against a closure that did not exist yet, and #438 landing cleared their only blocker. **#453 is closed by delivery rather than by a commit** — it *was* the request for frames, and the account holder supplied `design/delta-admin/` on 2026-09-07; **#454** is the row that consumes them, and it is what unblocked **#437**, whose second hold was the missing detail frame. **#442 is the only Backlog row still waiting on a person** for the ruling D38 sets out.
 
@@ -2631,3 +2633,136 @@ stops being generated rather than being reverted forever.
       the **idempotence check** in acceptance 1 — run `pnpm install` twice and
       diff — plus `--frozen-lockfile`, `pnpm lint` and the `.pnpm` entry count,
       each recorded in the PR with its output.
+
+### #460: Closing an operator account needs a hurdle, not a refusal
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** #451 — the 403 this relaxes does not exist until that lands
+
+**Filed 2026-09-07 on the account holder's ruling**, in answer to a question
+#451's `security-auditor` and `diff-reviewer` both raised: *"handle this as best
+practice possible — admin deletion should have additional verification/hurdles —
+very rare to do."*
+
+#### What #451 shipped, and why it is not the answer
+
+`closeAccount` now **deletes the Clerk identity**, so closure is irreversible
+against a real identity provider. #451 therefore answers **403 for an admin
+target** — the conservative direction, taken deliberately while the question was
+open, with a comment naming the line to delete once it was ruled.
+
+**It has now been ruled, and the ruling is not a refusal.** An operator account
+must remain closable — people leave — but the act needs friction proportionate
+to being unrecoverable. So this row replaces the flat 403 with a hurdled path.
+
+**Do not read this as "loosen the guard".** The 403 stays until the hurdle is
+built. Landing a relaxation without the friction would leave the console strictly
+worse than it is today.
+
+#### What to build
+
+1. **A typed confirmation, not a second button.** The `ConfirmAction` for an
+   admin target requires the operator to type the target's **email address**
+   before the destructive control enables. A dialog that only needs a second
+   click is a hurdle a tired person clears without reading; typing an identifier
+   is the standard best practice precisely because it cannot be done absently.
+2. **Refuse when no other live admin would remain.** `closeAccount` already
+   refuses `actorId === userId`, which makes lockout unreachable *incidentally* —
+   an actor always survives. Make it structural: count live admins and refuse
+   when closing this one would leave none. It fires in a case the self-closure
+   refusal already prevents, and that is the point — a guard that depends on a
+   different guard's side effect breaks silently when that one is changed.
+3. **Say what is irreversible, in the dialog, in money-and-consequence terms**
+   the way #454's resolve control does: their sign-in is deleted at Clerk and
+   **cannot be restored from this application** — only from the Clerk dashboard,
+   by someone with access to it. `role = 'admin'` is unreachable from inside the
+   product, so a mistakenly closed operator cannot be re-made by an operator.
+4. **Record it distinctly in `admin_actions`.** Closing an operator is not the
+   same event as closing a customer, and an audit trail that cannot distinguish
+   them cannot answer *"who removed our colleague's access"* without a join to a
+   `role` that the closure itself has just retired. Note the immutability
+   trigger: a wrong value here **cannot be corrected**.
+
+#### Acceptance
+
+1. An admin can close another admin's account through the console, and only
+   after typing the target's email address exactly.
+2. The destructive control is disabled until that input matches, and the
+   mismatch state says so rather than failing on press.
+3. Closure of the last live admin is refused with a 409 naming why, whether or
+   not the actor is the target.
+4. The dialog states that the Clerk sign-in is deleted and restorable only from
+   Clerk's dashboard.
+5. `admin_actions` distinguishes an operator closure from an ordinary one.
+6. #451's flat 403 for admin targets is removed **in the same commit** that adds
+   the hurdle, never before it.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first.
+- [ ] Acceptance 2 asserted on the **disabled** state with a near-miss string —
+      a test that types the correct email proves the happy path and nothing about
+      the guard.
+- [ ] Acceptance 3 driven with **two** live admins and then one, so the refusal
+      is observed firing and not firing. A fixture with one admin passes the
+      refusal for the wrong reason.
+- [ ] Acceptance 6 asserted by grepping for the 403 branch's absence, so the two
+      halves cannot separate across a rebase.
+
+### #461: A live error type routes around #445's log sink
+
+**Milestone:** M6 | **Phase:** P3 | **Priority:** P2 Medium | **Status:** Backlog | **Capabilities:** `core` `auth`
+**Blocked by:** None
+
+**Filed 2026-09-07 by #451's `security-auditor`.** Nothing leaks today. It is
+filed because **a path #445 documented as unreachable turns out to be reachable**,
+and the next error type to travel it will not be as harmless.
+
+#### The gap
+
+#445 closed the bound-parameter leak at the **sink** rather than per call site —
+a custom pino `err` serialiser plus a `formatters.log` hook — and its whole claim
+is that *nobody needs to know the hazard exists to be safe from it*.
+
+`ClerkAPIResponseError` carries an own enumerable **`errors`** array.
+`pino-std-serializers` copies it to **`aggregateErrors`** without passing it
+through `log-error-serializer.ts`. So its contents reach the log stream having
+been through none of the redaction.
+
+**Today that is harmless**: the contents are Clerk's `{code, message,
+longMessage, meta}` — no credential, no bound parameter, nothing a caller chose.
+**That is exactly why it should be fixed now.** The claim #445 makes is about the
+sink being total, and a known hole with benign contents is a hole that gets
+forgotten before something else flows through it.
+
+#### What to build
+
+Bring `aggregateErrors` under the same serialiser as every other nested-error
+route. #445 already follows `cause` **and** `err.errors` for the `AggregateError`
+case — this is the same array arriving under a different key, from
+`pino-std-serializers` rather than from our own recursion, which is why the
+existing coverage misses it.
+
+**Fix the sink again, not this error type.** A `ClerkAPIResponseError` special
+case would be the fourth per-call-site guard in a story whose whole point was
+that per-call-site guards are how a rule becomes a special case.
+
+#### Acceptance
+
+1. An error carrying an own enumerable `errors` array is serialised through
+   `log-error-serializer.ts` regardless of which key `pino-std-serializers` files
+   it under.
+2. Asserted with a **real** `ClerkAPIResponseError` shape, not a hand-rolled
+   object — the bug is in how a specific library copies a specific property.
+3. Asserted with a **synthetic** error whose `errors` array carries a sentinel
+   that must not appear in the output, so the test fails if the redaction is
+   skipped rather than merely if the key is missing.
+4. #445's existing coverage of `cause` and `err.errors` still passes unchanged.
+
+#### Tests (required)
+
+- [ ] A test per acceptance, watched failing first — the sentinel test must fail
+      against `main` before the fix.
+- [ ] Assert on the **serialised output**, not on the serialiser's return value
+      in isolation: the defect is a library copying a property before ours runs,
+      so a unit test of our function alone cannot reach it.
