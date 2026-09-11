@@ -553,6 +553,195 @@ describe('data rights', () => {
       });
     });
 
+    /*
+     * #450, acceptance 5 — and it is driven through **this** route on purpose.
+     *
+     * The state under test is "what closure produces", and a row hand-set with
+     * `deleted_at` is a guess at that. Closure writes `deleted_at`, unpublishes
+     * and tombstones a storefront, declines open requests and deletes the Clerk
+     * identity; a fixture that wrote one column would keep passing on the day
+     * closure started writing a second one the list reads.
+     */
+    it('leaves a closed account reachable from the customers table, and only when asked (#450)', async () => {
+      await signIn(ADMIN, true);
+      const closedId = await signIn(CUSTOMER);
+      const liveId = await signIn(OUTSIDER);
+
+      const closed = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${closedId}/close`,
+        headers: bearer(ADMIN),
+      });
+      expect(closed.statusCode).toBe(200);
+
+      /* Acceptance 3: the default view is live accounts, and still is. */
+      const byDefault = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers',
+        headers: bearer(ADMIN),
+      });
+      expect(byDefault.statusCode).toBe(200);
+      expect(byDefault.json().items.map((row: { id: string }) => row.id)).toEqual([liveId]);
+
+      /*
+       * Acceptances 1 and 2: asking for closed accounts finds it, and the row
+       * carries the status the table marks it with rather than leaving the
+       * screen to infer one.
+       */
+      const asked = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers?status=closed',
+        headers: bearer(ADMIN),
+      });
+      expect(asked.statusCode).toBe(200);
+      expect(asked.json().total).toBe(1);
+      expect(asked.json().items[0]).toMatchObject({ id: closedId, status: 'closed' });
+
+      /*
+       * The whole point of the row: the link in it lands on a data-rights page
+       * that still answers. Reaching it needed the uuid before this, and none
+       * of the reasons to open it — a subject-access request, a regulator, a
+       * dispute — arrives carrying one.
+       */
+      const rights = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/users/${closedId}/data-rights`,
+        headers: bearer(ADMIN),
+      });
+      expect(rights.statusCode).toBe(200);
+      expect(rights.json().closedAt).not.toBeNull();
+    });
+
+    /**
+     * The route out of an empty **default** view, which is the state #450 is
+     * really about.
+     *
+     * An operator working a subject-access request has a name and no uuid.
+     * They search it on `/admin/customers`, the account was closed last week,
+     * and the list comes back empty. Before this the screen had nothing to say
+     * — and when the search was the only filter, `filtered-empty.tsx` printed
+     * *"widening any single one of them still finds nothing"* while the row sat
+     * one query string away. That is a false claim on exactly the run where the
+     * operator most needs the truth.
+     *
+     * The fixture is built to make that claim reachable: the search term
+     * matches the **closed** account and nothing live, so the `q` route reveals
+     * zero and is dropped, and `status` is the only route left. A fixture where
+     * both routes paid could not tell this fix from the version it replaces.
+     */
+    it('routes an empty default-view search to the closed account it is hiding', async () => {
+      await signIn(ADMIN, true);
+      const closedId = await signIn(CUSTOMER);
+      await signIn(OUTSIDER);
+
+      const closed = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${closedId}/close`,
+        headers: bearer(ADMIN),
+      });
+      expect(closed.statusCode).toBe(200);
+
+      const empty = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/customers?q=${CUSTOMER}`,
+        headers: bearer(ADMIN),
+      });
+      expect(empty.statusCode).toBe(200);
+      expect(empty.json().total).toBe(0);
+      /*
+       * One route, and it is the toggle into the closed set. `q` widens to the
+       * live outsider — a real row — so it is offered too; the assertion is on
+       * both, because a test that read only `status` would pass with the `q`
+       * route silently broken.
+       */
+      expect(
+        [...empty.json().widenings].sort((first: { key: string }, second: { key: string }) =>
+          first.key.localeCompare(second.key),
+        ),
+      ).toEqual([
+        { key: 'q', count: 1 },
+        { key: 'status', count: 1 },
+      ]);
+
+      /* And the route the count promises really lands on that row. */
+      const followed = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/customers?q=${CUSTOMER}&status=closed`,
+        headers: bearer(ADMIN),
+      });
+      expect(followed.json().total).toBe(1);
+      expect(followed.json().items[0]).toMatchObject({ id: closedId, status: 'closed' });
+    });
+
+    /*
+     * The other direction, and the count is the rows its link lands on.
+     *
+     * From `status=closed` the `status` route goes back to the live default
+     * rather than to "everything": this screen has no URL spanning both sets,
+     * so a count over that union would promise a page no link produces.
+     */
+    it('routes an empty closed view back to the live accounts it excluded', async () => {
+      await signIn(ADMIN, true);
+      const closedId = await signIn(CUSTOMER);
+      await signIn(OUTSIDER);
+
+      const closed = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${closedId}/close`,
+        headers: bearer(ADMIN),
+      });
+      expect(closed.statusCode).toBe(200);
+
+      const empty = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/customers?status=closed&q=${OUTSIDER}`,
+        headers: bearer(ADMIN),
+      });
+      expect(empty.statusCode).toBe(200);
+      expect(empty.json().total).toBe(0);
+      /*
+       * `q` reveals the one closed account; `status` reveals the live outsider
+       * the term matches. Sorted, because the order is the API's iteration
+       * order rather than a contract — the component sorts by count itself.
+       */
+      expect(
+        [...empty.json().widenings].sort((first: { key: string }, second: { key: string }) =>
+          first.key.localeCompare(second.key),
+        ),
+      ).toEqual([
+        { key: 'q', count: 1 },
+        { key: 'status', count: 1 },
+      ]);
+    });
+
+    /*
+     * A bare `/admin/customers` with nothing to show is the **true** empty, and
+     * `filtered-empty.tsx` is explicit that it must not be given counted routes
+     * — a control there offers a move that cannot help. So the API offers none,
+     * even on a database whose only customer is closed, which is the one state
+     * where a route would otherwise look tempting.
+     */
+    it('offers no route out of an unfiltered empty list, even with a closed account behind it', async () => {
+      await signIn(ADMIN, true);
+      const closedId = await signIn(CUSTOMER);
+
+      const closed = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${closedId}/close`,
+        headers: bearer(ADMIN),
+      });
+      expect(closed.statusCode).toBe(200);
+
+      const empty = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers',
+        headers: bearer(ADMIN),
+      });
+      expect(empty.statusCode).toBe(200);
+      expect(empty.json().total).toBe(0);
+      expect(empty.json().widenings).toEqual([]);
+    });
+
     it("retires a vendor's storefront, and their slug 404s", async () => {
       await signIn(ADMIN, true);
       await signIn(VENDOR);

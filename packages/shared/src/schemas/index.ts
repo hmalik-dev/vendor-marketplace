@@ -2421,6 +2421,38 @@ export const adminVendorPageSchema = paginatedSchema(adminVendorRowSchema).exten
 export type AdminVendorPage = z.infer<typeof adminVendorPageSchema>;
 
 /**
+ * `closed` is the account, not the person (#450).
+ *
+ * The customers table read `deleted_at is null` from the day it was written,
+ * back when the only thing that set the column was a Clerk webhook nobody
+ * drove. Closure (#438) sets it deliberately — and `/admin/users/[userId]`, the
+ * data-rights page carrying the export, the retained counts and the legal
+ * acceptance record, is reachable from this table and by direct URL and from
+ * nowhere else. So the row an operator needs *after* a closure — a
+ * subject-access request, a regulator, a dispute about whether closure did what
+ * was promised — was the one row the screen could not show them.
+ *
+ * Three states rather than two, because `flagged` already existed as a pill and
+ * a status that could not name it would be a filter that disagreed with the
+ * column beside it. `active` is the default view's set, so choosing it lands on
+ * what a bare `/admin/customers` already shows.
+ */
+export const ADMIN_CUSTOMER_STATUSES = ['active', 'flagged', 'closed'] as const;
+export const adminCustomerStatusSchema = z.enum(ADMIN_CUSTOMER_STATUSES);
+export type AdminCustomerStatus = (typeof ADMIN_CUSTOMER_STATUSES)[number];
+
+/**
+ * What each status is called on screen — the pill in the table and the option in
+ * the filter, from one place, the same way `ADMIN_VENDOR_STATUS_LABELS` holds
+ * the vendor side's.
+ */
+export const ADMIN_CUSTOMER_STATUS_LABELS: Record<AdminCustomerStatus, string> = {
+  active: 'Active',
+  flagged: 'Flagged',
+  closed: 'Closed',
+};
+
+/**
  * Accounts whose stored address no longer matches the identity provider (#462).
  *
  * Shaped like `refund-stuck` because it names the same kind of thing: a state
@@ -2447,7 +2479,21 @@ export const adminCustomerRowSchema = z.object({
   city: z.string().nullable(),
   state: z.string().nullable(),
   totalBookingsCount: z.int(),
+  /**
+   * Kept alongside `status`, which collapses it (#450).
+   *
+   * A closed account that was suspended before it closed reads `closed` — the
+   * status names the fact that leads — and this carries the other one. **It is
+   * not the only record of the ban**: `/admin/activity` filters `admin_actions`
+   * by subject and holds the `user_banned` row with its operator and timestamp,
+   * which is more than a boolean says. So this is pre-existing wire the table
+   * no longer renders, kept because it is a real column on a projection an
+   * audit reads and removing it is a contract change #450 has no reason to
+   * make — not because the console would otherwise lose the fact.
+   */
   isBanned: z.boolean(),
+  /** Derived, never stored — the same shape as `adminVendorRowSchema.status`. */
+  status: adminCustomerStatusSchema,
   /**
    * The address the identity provider holds and this row could not be given,
    * or `null` when the two agree. Carried on every row rather than only on the
@@ -2467,6 +2513,18 @@ export type AdminCustomerRow = z.infer<typeof adminCustomerRowSchema>;
 export const adminCustomerQuerySchema = z.object({
   ...adminPaginationShape,
   q: trimmedString(MAX_NAME_LENGTH).optional(),
+  /**
+   * Absent means live accounts, which is the right default (#450): closure is
+   * rare and the console's ordinary work is with people who still have an
+   * account. Asking for the other set is a deliberate act, not the removal of
+   * the distinction.
+   *
+   * Orthogonal to `flag` (#462): `status` is which **set** of accounts, and
+   * `flag` is a fault on an account within it. They compose — a closed account
+   * can hold a stale address, and that combination is exactly the one an
+   * operator auditing a closure wants to see.
+   */
+  status: adminCustomerStatusSchema.optional(),
   flag: adminCustomerFlagSchema.optional(),
 });
 

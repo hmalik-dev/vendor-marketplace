@@ -83,3 +83,4 @@
 - [Closure deletes the Clerk identity](closure-deletes-the-clerk-identity.md) — the console's only irreversible action; its self-inflicted `user.deleted` replay is sound, its admin-target and `seed_mkt_` gaps are not
 - [`violatesConstraint` matches bound parameters](violates-constraint-matches-bound-parameters.md) — `named()` is dead under postgres.js (`constraint_name`), so only the message matches, and drizzle puts every param in it
 - [The data-rights export is hand-enumerated](data-rights-export-is-hand-enumerated.md) — a new `users` PII column reaches the console and not the subject's own DSAR file
+- [Closure hides, it does not scrub](closed-accounts-are-listed-not-scrubbed.md) — name and email survive `deleted_at`; the six admin `deleted_at` reads are a settled census, and the customers table is links-only by design

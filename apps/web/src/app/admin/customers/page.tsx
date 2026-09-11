@@ -1,11 +1,17 @@
 import Link from 'next/link';
-import { ADMIN_CUSTOMER_FLAGS } from '@vendor-marketplace/shared';
+import {
+  ADMIN_CUSTOMER_FLAGS,
+  ADMIN_CUSTOMER_STATUSES,
+  ADMIN_CUSTOMER_STATUS_LABELS,
+  type AdminCustomerFlag,
+  type AdminCustomerStatus,
+} from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
-import { StatusPill } from '@/components/ui/status-pill';
+import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { getAdminCustomers } from '@/lib/admin-data';
 import {
   adminQueryString,
@@ -28,43 +34,120 @@ const JOINED = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 
+/**
+ * The two statuses that draw a pill, and the tones are the frame's own (#450).
+ *
+ * `Flagged` keeps `needsYou`, which is what frame `13` spends on a flagged
+ * account on the vendors table. `Closed` takes `inert` — the vocabulary's
+ * "this account is not trading", the same tone `vendor-table.tsx` gives
+ * `Retired` for the same state — and is told apart by its label rather than by
+ * a colour nobody specified. Minting a token pair here would be inventing
+ * design, which is the plan's job and not this ticket's.
+ *
+ * `active` is deliberately absent: that row prints its join date, which is the
+ * more useful fact and what the screen has always shown. A pill reading
+ * `Active` on every row would say nothing and crowd out the one that does.
+ */
+const STATUS_TONES: Partial<Record<AdminCustomerStatus, StatusTone>> = {
+  flagged: 'needsYou',
+  closed: 'inert',
+};
+
+type SearchParams = Record<'q' | 'status' | 'flag' | 'page', RawParam>;
+
+/**
+ * The filtered-empty sentence, reciting the filters in the operator's own words.
+ *
+ * Three filters and therefore three clauses, assembled rather than enumerated —
+ * but `flag` **on its own** keeps the sentence #462 wrote for it, because "No
+ * customers with an out-of-date email" answers a question nobody asked. An
+ * operator filtering for that fault wants to know whether the fault exists, not
+ * whether customers do.
+ */
+function customersHeadline(
+  status: AdminCustomerStatus | undefined,
+  q: string | undefined,
+  flag: AdminCustomerFlag | undefined,
+): string {
+  const subject =
+    status === undefined
+      ? 'customers'
+      : `${ADMIN_CUSTOMER_STATUS_LABELS[status].toLowerCase()} customers`;
+
+  if (q !== undefined) {
+    return flag === undefined
+      ? `No ${subject} match "${q}"`
+      : `No ${subject} match "${q}" with an out-of-date email`;
+  }
+
+  if (flag !== undefined) {
+    return status === undefined
+      ? 'No addresses are out of date'
+      : `No ${subject} have an out-of-date email`;
+  }
+
+  return `No ${subject}`;
+}
+
 export default async function AdminCustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: RawParam; flag?: RawParam; page?: RawParam }>;
+  searchParams: Promise<Partial<SearchParams>>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
-  const q = boundedText(raw.q);
-  const flag = oneOf(raw.flag, ADMIN_CUSTOMER_FLAGS);
-  const dropped = droppedKeys(raw, { q, flag });
+  const params = {
+    q: boundedText(raw.q),
+    status: oneOf(raw.status, ADMIN_CUSTOMER_STATUSES),
+    flag: oneOf(raw.flag, ADMIN_CUSTOMER_FLAGS),
+  };
+  // What was in the URL and could not be used, so the screen can say so.
+  const dropped = droppedKeys(raw, params);
   const customers = await getAdminCustomers(
-    adminQueryString({ q, flag, page: pageNumber(raw.page) }),
+    adminQueryString({ ...params, page: pageNumber(raw.page) }),
   );
 
+  const closedView = params.status === 'closed';
   /*
-   * Both filters are read, not just the search (#462). Pairing a search with
-   * the flag is two clicks away and returns nothing whenever the person being
-   * searched for is not one of the diverged accounts — and answering that with
-   * "No customers match ada" would send an operator looking for a typo rather
-   * than at the filter they left on.
+   * Filtered means the operator asked something. A bare `/admin/customers` on a
+   * platform with no customers is the **true** empty, and `filtered-empty.tsx`
+   * is explicit that it must not be used as one: its counted routes would offer
+   * moves that cannot help.
    */
-  const headline =
-    q && flag
-      ? `No customers match "${q}" with an out-of-date email`
-      : flag
-        ? 'No addresses are out of date'
-        : `No customers match "${q}"`;
+  const filtered =
+    params.q !== undefined || params.status !== undefined || params.flag !== undefined;
 
   /*
-   * Built by spreading each filter in only when it is set, rather than by
-   * filtering a fixed pair on a key-conditional: that shape is only correct
-   * while there are exactly two entries, and a third would silently take the
-   * last arm's value.
+   * The counted ways out (#454, widened by #462 and #450), and the `status` one
+   * is a **toggle** rather than a dropped parameter.
+   *
+   * `role = 'customer'` is the screen's domain rather than a filter — widening
+   * past it would list vendors on a screen about customers — so it is not
+   * offered. `status` is, and it cannot be *dropped*: this screen has two
+   * domains, live accounts and closed ones, and no URL spanning both, so the
+   * only honest route is to the other one. From the default view that route is
+   * **into** the closed set, which is the whole of #450 — an operator searching
+   * a name after that person closed their account gets an empty list, and the
+   * row they want is one query string away with nothing on the screen saying so.
+   *
+   * `q` and `flag` are spread in only when set, rather than a fixed list
+   * filtered on a key-conditional: that shape is only correct while there are
+   * exactly two entries, and a third would silently take the last arm's value.
    */
-  const active: ActiveFilter[] = [
-    ...(q === undefined ? [] : [{ key: 'q', widening: 'Any name or email', carried: { flag } }]),
-    ...(flag === undefined ? [] : [{ key: 'flag', widening: 'Any account', carried: { q } }]),
-  ];
+  const active: ActiveFilter[] = !filtered
+    ? []
+    : [
+        ...(params.q === undefined
+          ? []
+          : [{ key: 'q', widening: 'Any name or email', carried: { ...params, q: undefined } }]),
+        {
+          key: 'status',
+          widening: closedView ? 'Live accounts' : 'Closed accounts',
+          carried: { ...params, status: closedView ? undefined : 'closed' },
+        },
+        ...(params.flag === undefined
+          ? []
+          : [{ key: 'flag', widening: 'Any account', carried: { ...params, flag: undefined } }]),
+      ];
 
   return (
     <AdminSurface
@@ -72,7 +155,35 @@ export default async function AdminCustomersPage({
       counts={[`${customers.total} total`]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH} searchPlaceholder="Search name or email…" searchValue={q}>
+        <FilterBar action={PATH} searchPlaceholder="Search name or email…" searchValue={params.q}>
+          {/*
+            The control #450 exists for.
+
+            `/admin/users/[userId]` — the export, the retained counts and the
+            legal acceptance record — is reachable from this table and by direct
+            URL and nowhere else, so before this there was no way to navigate to
+            a closed account's data-rights page at all. Every reason to open one
+            arrives *after* the closure and none of them carries a uuid.
+          */}
+          <FilterSelect
+            action={PATH}
+            carried={params}
+            name="status"
+            label="Status"
+            value={params.status ?? ''}
+            options={ADMIN_CUSTOMER_STATUSES.map((status) => ({
+              value: status,
+              label: ADMIN_CUSTOMER_STATUS_LABELS[status],
+            }))}
+            /*
+              Named, not `Any status`. Clearing this parameter lands on live
+              accounts, and `Closed` is one of the choices in the same list — so
+              a control reading "Any status" would take an operator looking at
+              closed accounts to a set those accounts are not in, silently. That
+              is #450's own symptom, one click from #450's fix.
+            */
+            anyLabel="Live accounts"
+          />
           {/*
             The state an operator could not find (#462). A `user.updated`
             carrying an address another account already holds cannot be
@@ -81,25 +192,28 @@ export default async function AdminCustomersPage({
           */}
           <FilterSelect
             action={PATH}
-            carried={{ q }}
+            carried={params}
             name="flag"
             label="Needs attention"
-            value={flag ?? ''}
+            value={params.flag ?? ''}
             options={[{ value: 'email-stale', label: EMAIL_STALE_LABEL }]}
           />
           {/*
-            The flag travels with the search form as a hidden field. Submitting
-            a GET form sends only its own controls, and the dropdown navigates
-            on its own — so without this, pressing Enter in the search box would
-            silently clear the flag and answer with every customer, which is the
-            opposite of what an operator filtering for a problem wants.
+            Both dropdowns navigate on choice, so they sit outside the form's
+            submit path. A GET form submits only its own controls — so without
+            these hidden fields, pressing Enter in the search box would silently
+            clear the status and the flag the operator had chosen and answer
+            with every live customer, which is the opposite of what somebody
+            filtering for a problem wants.
           */}
-          {flag ? <input type="hidden" name="flag" value={flag} /> : null}
+          {(['status', 'flag'] as const).map((key) =>
+            params[key] ? <input key={key} type="hidden" name={key} value={params[key]} /> : null,
+          )}
         </FilterBar>
       }
       pager={{
         path: PATH,
-        params: { q, flag },
+        params,
         page: customers.page,
         pageSize: customers.pageSize,
         total: customers.total,
@@ -109,16 +223,9 @@ export default async function AdminCustomersPage({
         rows={customers.items}
         rowKey={(row) => row.id}
         empty={
-          /*
-           * Two counted ways out (#454, widened by #462). `role = 'customer'`
-           * and the deleted-account exclusion are the screen's domain rather
-           * than filters, so neither is offered: widening past them would list
-           * vendors, or accounts that no longer exist, on a screen about
-           * customers.
-           */
-          active.length > 0 ? (
+          filtered ? (
             <FilteredEmpty
-              headline={headline}
+              headline={customersHeadline(params.status, params.q, params.flag)}
               path={PATH}
               filters={active}
               widenings={customers.widenings}
@@ -141,6 +248,10 @@ export default async function AdminCustomersPage({
              * closure request arrives naming a person, and this table is where
              * an operator finds them — so the name is the link rather than a
              * second control in a column nobody would look in.
+             *
+             * It is a link on a closed row too (#450), and that is the whole
+             * ticket: the page is what answers "did closure do what it
+             * promised", and the account being gone is the reason to ask.
              */
             cell: (row) => (
               <Link href={`/admin/users/${row.id}`} className="hover:underline">
@@ -190,12 +301,15 @@ export default async function AdminCustomersPage({
             key: 'status',
             width: '1fr',
             header: 'Status',
-            cell: (row) =>
-              row.isBanned ? (
-                <StatusPill tone="needsYou">Flagged</StatusPill>
+            cell: (row) => {
+              const tone = STATUS_TONES[row.status];
+
+              return tone ? (
+                <StatusPill tone={tone}>{ADMIN_CUSTOMER_STATUS_LABELS[row.status]}</StatusPill>
               ) : (
                 <span className="text-stone-600">Joined {JOINED.format(row.createdAt)}</span>
-              ),
+              );
+            },
           },
         ]}
       />

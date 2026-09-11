@@ -13,6 +13,8 @@ import type {
   AdminBookingQuery,
   AdminCustomerPage,
   AdminCustomerQuery,
+  AdminCustomerRow,
+  AdminCustomerStatus,
   AdminMetrics,
   AdminPackageActiveResult,
   AdminPaymentPage,
@@ -113,6 +115,7 @@ import {
   setBanned,
   updateTagRow,
   type AdminActionRecord,
+  type AdminCustomerProjection,
   type AdminTagSuggestionProjection,
   type AdminVendorFilters,
   type AdminVendorProjection,
@@ -587,12 +590,47 @@ export async function resolveBookingDispute(
   return booking;
 }
 
+/**
+ * The customers table's three states, derived rather than stored (#450).
+ *
+ * Order matters and is the same order `customerStatusCondition` filters in.
+ * `closed` is tested first for the reason `retired` is on the vendor side: an
+ * account whose Clerk identity is deleted cannot be moderated or reinstated, so
+ * "this account is gone" is the fact that makes the ban beside it history
+ * rather than a lever. A closed account that was banned before it closed still
+ * carries `isBanned`, and the row hands that through — the status says which
+ * fact leads, not which facts exist.
+ */
+function deriveCustomerStatus(row: { isClosed: boolean; isBanned: boolean }): AdminCustomerStatus {
+  if (row.isClosed) {
+    return 'closed';
+  }
+
+  return row.isBanned ? 'flagged' : 'active';
+}
+
+function toCustomerRow(row: AdminCustomerProjection): AdminCustomerRow {
+  return {
+    id: row.id,
+    email: row.email,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    city: row.city,
+    state: row.state,
+    totalBookingsCount: row.totalBookingsCount,
+    isBanned: row.isBanned,
+    status: deriveCustomerStatus(row),
+    pendingEmail: row.pendingEmail,
+    createdAt: row.createdAt,
+  };
+}
+
 export async function listCustomers(
   db: AppDatabase,
   query: AdminCustomerQuery,
 ): Promise<AdminCustomerPage> {
   const offset = offsetOf(query);
-  const filters = { q: query.q, flag: query.flag };
+  const filters = { q: query.q, status: query.status, flag: query.flag };
   const [rows, total] = await Promise.all([
     findAdminCustomers(db, filters, query.pageSize, offset),
     countAdminCustomers(db, filters),
@@ -607,7 +645,13 @@ export async function listCustomers(
   const widenings =
     rows.length === 0 && query.page === 1 ? await countCustomerWidenings(db, filters) : [];
 
-  return { items: rows, total, page: query.page, pageSize: query.pageSize, widenings };
+  return {
+    items: rows.map(toCustomerRow),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+    widenings,
+  };
 }
 
 /**
