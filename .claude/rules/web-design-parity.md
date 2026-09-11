@@ -203,7 +203,7 @@ site got it wrong once — history the law does not carry.
 lazy. Do not read it as closing the whole class.** On an ink ground the ground is
 observable, so a wrong role is decidable. On a **light** ground it is not:
 `stone-400` is legitimate `text-*` at four sites (`ui/empty-state.tsx`,
-`vendors/profile/review-form.tsx`, and two in `packages/package-manager.tsx` —
+`vendors/profile/review-form.tsx`, and two in `components/packages/package-manager.tsx` —
 all decorative glyphs), and no source scan can separate those from a mistake. So
 **"wrong role on a light ground" remains entirely unguarded** — no test, no lint,
 nothing. A fifth instance of _that_ shape is a new finding and not a regression

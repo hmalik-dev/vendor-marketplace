@@ -24,13 +24,10 @@ pass before reporting the work done. `PENDING_MERGE` is **not** a terminal state
 and `/land-lanes` is **not** a handoff the invoking session may defer to — it
 exists only for lanes whose session died before the queue reached them.
 
-`~/.claude/orchestration-policy.md` and
-`~/.claude/skills/ticket/references/workflow.md` section 7 now encode this —
-"Land the lane — the default ending, not a follow-up". **Both were rewritten on
-2026-08-29 while lane 198 was running**, so a session that read them at startup
-is holding the older text that said a lane exits at `PENDING_MERGE`. That is how
-198 got it wrong. Re-read section 7 before delivering rather than trusting the
-copy read at session start.
+`~/.claude/skills/ticket/references/workflow.md` step 7 encodes this (rewritten
+2026-09-11: `wait-merge.sh` blocks until the PR merges, then the session lands).
+A session that read an older copy at startup should re-read step 7 before
+delivering.
 
 **Why:** a lane that stops at the enqueue leaves the ticket row saying
 `In Progress` on `origin/main`, the worktree on disk, and the branch alive — so
