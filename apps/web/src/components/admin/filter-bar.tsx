@@ -36,6 +36,21 @@ export interface FilterSelectProps {
    * case ever filed.
    */
   allowAny?: boolean;
+  /**
+   * What the clearing choice says, where `Any <label>` would misdescribe where
+   * it lands. Defaults to `Any <label>`, which is right wherever the absence of
+   * the parameter really is "no filter".
+   *
+   * `/admin/customers` is the exception and needed one (#450): its `status`
+   * absent means **live accounts**, and `closed` is one of the values in the
+   * same list — so a choice reading "Any status" would take an operator looking
+   * at closed accounts back to a set those accounts are not in, which is the
+   * defect that ticket exists to fix, one click from the fix. Naming the set is
+   * the whole repair; suppressing the choice the way `/admin/cases` does would
+   * leave no way back to the default at all, because the default there is one
+   * of the options and here it is the union of two.
+   */
+  anyLabel?: string;
 }
 
 /**
@@ -60,6 +75,7 @@ export function FilterSelect({
   action,
   carried,
   allowAny = true,
+  anyLabel,
 }: FilterSelectProps): React.ReactElement {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -71,7 +87,9 @@ export function FilterSelect({
       onOpenChange={setOpen}
       label={label}
       options={
-        allowAny ? [{ value: '', label: `Any ${label.toLowerCase()}` }, ...options] : options
+        allowAny
+          ? [{ value: '', label: anyLabel ?? `Any ${label.toLowerCase()}` }, ...options]
+          : options
       }
       value={value || null}
       onChange={(next) => {

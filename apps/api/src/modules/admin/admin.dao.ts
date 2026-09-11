@@ -24,6 +24,7 @@ import type {
   AdminActionDetail,
   AdminActionSubject,
   AdminBookingFlag,
+  AdminCustomerStatus,
   AdminPaymentFlag,
   AdminPayoutFilter,
   PayoutModel,
@@ -51,6 +52,32 @@ import { payoutFailingClauses } from '../payments/payouts.dao.js';
 /**
  * Every read and write the admin portal makes. Policy lives in the service; this
  * file only knows how to ask Postgres.
+ *
+ * ## Where a closed account is visible, and where it is not (#450)
+ *
+ * `users.deleted_at` is read in six places here. They were all written when the
+ * only thing that set the column was a Clerk webhook, so "excluded" meant
+ * "cannot happen"; closure (#438) made every one of them a decision. Each is
+ * settled at its own site with its reasoning, and this is the census, so a
+ * reader who changes one can see the other five without grepping:
+ *
+ * | Read | Closed accounts | Why |
+ * | --- | --- | --- |
+ * | `RETIRED` / `NOT_RETIRED` in `statusCondition` and `vendorFilterCondition` (vendors list) | **listed**, as `retired` | #433 — the console is where "what happened to this account" is answered |
+ * | `NOT_RETIRED` in `findAdminMetricTotals`'s published-vendor count | excluded | it counts storefronts trading now; documented at that call site |
+ * | `findUserById` (the ban and publish target) | excluded | a write, not a read: there is nothing left to moderate |
+ * | `customerCondition` (customers list) | **listed** behind `status=closed` | #450 — the data-rights page is reachable from this table and nowhere else |
+ * | `refundStuck` (stranded-money flag on bookings) | **included** | #438 — a closure strands money the same two ways a ban does |
+ * | `findAdminMetricTotals`'s `usersCount` | excluded | the Overview draws it as `Accounts`; it counts who holds one now |
+ * | `findAdminMetricSeries`'s `signupsByDay` | excluded | the `Signups` chart has to describe the same set as that card |
+ *
+ * **`NOT_RETIRED` has three call sites and they do not all agree**, which is
+ * why it is two rows rather than one — a reader who changed it on the strength
+ * of a single row would move the metric with the list.
+ *
+ * The pattern: a **list an operator navigates** shows closed accounts, because
+ * that is how the record is reached. A **count that claims a present-tense
+ * fact** does not. A **lookup behind a write** does not.
  */
 
 /** The projection the Vendors table renders, before the status is derived. */
@@ -408,6 +435,14 @@ export async function findVendorFilterFacets(db: AppDatabase): Promise<{
  * from every other read. It is deliberately **not** the wider read it looks
  * like: a deleted account has nothing left to ban, and letting one resolve here
  * would let an operator "suspend" a row no other surface believes exists.
+ *
+ * **Deliberately unchanged by #450**, which widened the customers *list* to
+ * closed accounts. That was a read; this is the lookup behind two writes, and
+ * they want opposite things. `setUserBanned` and `setVendorPublished` both come
+ * through here, and both would be acting on an account whose Clerk identity is
+ * deleted and whose bookings are already unwound — which is exactly why
+ * `vendor-table.tsx` draws no row-actions control on a retired row. Widening
+ * this would replace a clean 404 with a write that means nothing.
  */
 export async function findUserById(db: AppDatabase, userId: string): Promise<UserRow | null> {
   if (!userId) {
@@ -678,22 +713,80 @@ export interface AdminCustomerProjection {
   state: string | null;
   totalBookingsCount: number;
   isBanned: boolean;
+  /** Whether the account has been closed (#450), so the row can read `closed`. */
+  isClosed: boolean;
   createdAt: Date;
+}
+
+export interface AdminCustomerFilters {
+  q?: string | undefined;
+  status?: AdminCustomerStatus | undefined;
+}
+
+/**
+ * The account is gone — the console's `closed` (#450).
+ *
+ * One expression, used as both the filter and the projected column, so the rows
+ * a `status=closed` query returns and the status those rows report can never
+ * disagree about what "closed" means.
+ */
+const CLOSED = sql<boolean>`${users.deletedAt} is not null`;
+const NOT_CLOSED = sql`${users.deletedAt} is null`;
+
+/**
+ * One status, as the predicate that produces it.
+ *
+ * The statuses are **derived**, not stored, so filtering by one is expressed as
+ * the same conditions `deriveCustomerStatus` reads — the vendor side's
+ * `statusCondition` for the same reason, and with the same trap avoided:
+ * `flagged` and `active` both exclude closed rows, because the derivation
+ * answers `closed` for them ahead of everything else. Without that a closed,
+ * banned account would filter in under `Flagged` and then render `Closed`, and
+ * the count above the table would describe a different set from the rows under
+ * it.
+ */
+function customerStatusCondition(status: AdminCustomerStatus): SQL | undefined {
+  if (status === 'closed') {
+    return CLOSED;
+  }
+
+  return and(NOT_CLOSED, eq(users.isBanned, status === 'flagged'));
 }
 
 /**
  * Customers are `users` with the customer role — there is no second table.
- * Soft-deleted accounts are excluded for the same reason deleted vendors are:
- * an operator moderating an account that no longer exists can only cause harm.
+ *
+ * **`role = 'customer'` is the screen's domain; the closed-account exclusion is
+ * now a filter (#450).** It began as domain, and while nothing but a Clerk
+ * webhook could set `deleted_at` that was liveable: the rows it hid were
+ * accidents. Closure made it a decision, and the row it hid became the row an
+ * operator most needs — `/admin/users/[userId]` is reachable from this table
+ * and by direct URL and nowhere else, so a closed account's data-rights page
+ * stopped being reachable by navigation at the exact moment the closure created
+ * a reason to open it.
+ *
+ * The predicate is still here and still the **default**: no `status` means live
+ * accounts, which is right. What changed is that there is now a way to ask for
+ * the other set.
  */
-function customerCondition(q: string | undefined) {
-  const conditions = [eq(users.role, 'customer'), sql`${users.deletedAt} is null`];
+function customerCondition(filters: AdminCustomerFilters) {
+  const conditions: SQL[] = [eq(users.role, 'customer')];
+  const status =
+    filters.status === undefined ? NOT_CLOSED : customerStatusCondition(filters.status);
 
-  if (q) {
+  if (status) {
+    conditions.push(status);
+  }
+
+  if (filters.q) {
+    /*
+     * `containsInsensitive`, never Drizzle's `ilike` — the term is user text and
+     * `ilike` has no `ESCAPE`, so a bare `%` would match every customer.
+     */
     const match = or(
-      containsInsensitive(users.email, q),
-      containsInsensitive(users.firstName, q),
-      containsInsensitive(users.lastName, q),
+      containsInsensitive(users.email, filters.q),
+      containsInsensitive(users.firstName, filters.q),
+      containsInsensitive(users.lastName, filters.q),
     );
 
     if (match) {
@@ -706,7 +799,7 @@ function customerCondition(q: string | undefined) {
 
 export async function findAdminCustomers(
   db: AppDatabase,
-  q: string | undefined,
+  filters: AdminCustomerFilters,
   limit: number,
   offset: number,
 ): Promise<AdminCustomerProjection[]> {
@@ -720,42 +813,84 @@ export async function findAdminCustomers(
       state: users.state,
       totalBookingsCount: users.totalBookingsCount,
       isBanned: users.isBanned,
+      isClosed: CLOSED,
       createdAt: users.createdAt,
     })
     .from(users)
-    .where(customerCondition(q))
+    .where(customerCondition(filters))
     .orderBy(desc(users.createdAt))
     .limit(limit)
     .offset(offset);
 }
 
 /**
- * The one filter the customers table can be narrowed by.
+ * The two routes out of an empty customers list (#450).
  *
- * `role = 'customer'` and the deleted-account exclusion are the screen's
- * *domain*, not filters — widening past either would list vendors, or accounts
- * that no longer exist, on a screen about customers.
+ * `role = 'customer'` is the screen's *domain* rather than a filter — widening
+ * past it would list vendors on a screen about customers — so it is not here
+ * and there is no route out of it.
+ *
+ * **`status` is not a route that drops a parameter; it is a route to the other
+ * set.** This screen has exactly two domains — live accounts and closed ones —
+ * and no URL that spans both, so "drop the filter" is not a move it can make.
+ * The route therefore *toggles*: from `closed` it goes back to the live
+ * default, and from the live default it goes to `closed`.
+ *
+ * The second direction is the one #450 is about. An operator searching a name
+ * on the default view after that person's account was closed sees an empty
+ * list, and before this the screen had nothing to say about it — worse, when
+ * dropping the search revealed nothing either, `FilteredEmpty` printed
+ * *"widening any single one of them still finds nothing"* while the closed row
+ * sat one query string away. A subject-access request, a regulator and a
+ * dispute all arrive by name, after the closure; that is the state the screen
+ * has to answer in.
  */
-export const CUSTOMER_FILTER_KEYS = ['q'] as const;
+export const CUSTOMER_FILTER_KEYS = ['q', 'status'] as const;
 export type CustomerFilterKey = (typeof CUSTOMER_FILTER_KEYS)[number];
 
-/** How many customers dropping the search would reveal, in one scan (#454). */
+/**
+ * The other set, for the `status` route.
+ *
+ * Not `{ ...filters, status: undefined }` like every other key: dropping this
+ * one lands on the live default, which is where an operator already is
+ * whenever they have not asked for `closed`.
+ */
+function customerStatusRoute(filters: AdminCustomerFilters): AdminCustomerFilters {
+  return { ...filters, status: filters.status === 'closed' ? undefined : 'closed' };
+}
+
+/** How many customers each route out would reveal, in one scan (#454). */
 export async function countCustomerWidenings(
   db: AppDatabase,
-  q: string | undefined,
+  filters: AdminCustomerFilters,
 ): Promise<FilterWidening[]> {
   return countWidenings<CustomerFilterKey>({
-    active: q === undefined ? [] : CUSTOMER_FILTER_KEYS,
-    conditionWithout: () => customerCondition(undefined),
+    /*
+     * `status` is offered whenever anything is filtered, including when the
+     * parameter itself is absent — that is the default view, and the closed set
+     * is exactly what it is hiding. It is **not** offered on a bare
+     * `/admin/customers`, where the screen draws the true-empty state and has
+     * no button to put a count on: a route the surface will not render is a
+     * query nobody reads.
+     */
+    active:
+      filters.q === undefined && filters.status === undefined ? [] : CUSTOMER_FILTER_KEYS.slice(),
+    conditionWithout: (dropped) =>
+      customerCondition(
+        dropped === 'status' ? customerStatusRoute(filters) : { ...filters, q: undefined },
+      ),
     scan: (selection) => db.select(selection).from(users),
   });
 }
 
-export async function countAdminCustomers(db: AppDatabase, q: string | undefined): Promise<number> {
+export async function countAdminCustomers(
+  db: AppDatabase,
+  filters: AdminCustomerFilters,
+): Promise<number> {
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(users)
-    .where(customerCondition(q));
+    .where(customerCondition(filters));
 
   return rows?.[0]?.total ?? 0;
 }
@@ -1494,6 +1629,17 @@ export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetri
          * as an active vendor while every public read already hid it.
          */
         .where(and(NOT_RETIRED, eq(vendorProfiles.isPublished, true), eq(users.isBanned, false))),
+      /*
+       * Live accounts only, and **deliberately unchanged by #450**. The
+       * Overview draws this as `Accounts`, a claim about how many people hold
+       * one right now; counting closed accounts into it would make the number
+       * rise on the day somebody leaves. It has no role predicate, so it spans
+       * customers, vendors and operators — wider than the customers list it
+       * links to, which is pre-existing and is why the card is not labelled
+       * with a role. The closed rows are found by asking for them on
+       * `/admin/customers?status=closed`, which is a different question and now
+       * has its own answer.
+       */
       db
         .select({ total: sql<number>`count(*)::int` })
         .from(users)
@@ -1560,6 +1706,13 @@ export async function findAdminMetricSeries(
       PAID_AND_KEPT,
     ),
     dailySeries(db, bookings, bookings.createdAt, sql<number>`count(*)::int`, since),
+    /*
+     * Signups, live accounts only — **deliberately unchanged by #450**. This is
+     * the same set as `usersCount` above and has to stay the same set: the
+     * `Accounts` card and the `Signups` chart describe one number over time,
+     * and a series that counted closed accounts while the card did not would
+     * draw a chart that disagrees with the figure beside it.
+     */
     dailySeries(
       db,
       users,

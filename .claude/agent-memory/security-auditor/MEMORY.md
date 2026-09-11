@@ -80,3 +80,4 @@
 - [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino reaches nested errors through three doors, all three closed in #445; `PostgresError.detail` is redacted there too
 - [Email is a label, `clerk_user_id` is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial since #451; audited, nothing in the tree resolves a person by email
 - [Closure deletes the Clerk identity](closure-deletes-the-clerk-identity.md) — the console's only irreversible action; its self-inflicted `user.deleted` replay is sound, its admin-target and `seed_mkt_` gaps are not
+- [Closure hides, it does not scrub](closed-accounts-are-listed-not-scrubbed.md) — name and email survive `deleted_at`; the six admin `deleted_at` reads are a settled census, and the customers table is links-only by design

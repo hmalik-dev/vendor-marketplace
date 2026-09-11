@@ -26,6 +26,8 @@ const ADMIN = 'user_admin';
 const OTHER_ADMIN = 'user_admin_two';
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
+/** A second customer, so the status filter has both live states to tell apart (#450). */
+const BANNED_CUSTOMER = 'user_customer_banned';
 
 describe('admin routes', () => {
   let harness: TestHarness;
@@ -133,6 +135,7 @@ describe('admin routes', () => {
       [OTHER_ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
+      [BANNED_CUSTOMER, 'customer'],
     ] as const) {
       harness.clerkUsers.set(clerkUserId, {
         clerkUserId,
@@ -1151,6 +1154,64 @@ describe('admin routes', () => {
       });
       expect(filtered.json().total).toBe(1);
       expect(filtered.json().items[0].email).toBe(`${CUSTOMER}@example.com`);
+    });
+
+    /*
+     * The live half of #450's status filter.
+     *
+     * The `closed` half is **not** here on purpose: it has to be driven through
+     * the real closure route, and closing an account in this file would delete
+     * the Clerk identity every later test signs in with. It lives in
+     * `data-rights.routes.test.ts`, beside the route that produces the state.
+     */
+    it('splits live customers into active and flagged, and refuses a status it does not have', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const bannedId = await signIn(BANNED_CUSTOMER);
+
+      await harness.database.db.update(users).set({ isBanned: true }).where(eq(users.id, bannedId));
+
+      const listed = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers',
+        headers: bearer(ADMIN),
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(
+        listed
+          .json()
+          .items.map((row: { id: string; status: string }) => [row.id, row.status])
+          .sort(),
+      ).toEqual(
+        [
+          [customerId, 'active'],
+          [bannedId, 'flagged'],
+        ].sort(),
+      );
+
+      const flagged = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers?status=flagged',
+        headers: bearer(ADMIN),
+      });
+      expect(flagged.json().total).toBe(1);
+      expect(flagged.json().items[0].id).toBe(bannedId);
+
+      const active = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers?status=active',
+        headers: bearer(ADMIN),
+      });
+      expect(active.json().total).toBe(1);
+      expect(active.json().items[0].id).toBe(customerId);
+
+      /* The boundary is untrusted input: an unknown status is a 400, not a 500. */
+      const bogus = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers?status=retired',
+        headers: bearer(ADMIN),
+      });
+      expect(bogus.statusCode).toBe(400);
     });
   });
 
