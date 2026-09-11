@@ -1,7 +1,7 @@
-import { expect, test } from './fixtures.js';
+import { expect, test, waitForHydration } from './fixtures.js';
 import { E2E_VENDOR_SLUG } from './fixtures-data.js';
 
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 /**
  * One focus indicator per keyboard stop, everywhere (#383).
@@ -282,6 +282,42 @@ async function walk(page: Page, settled?: string): Promise<Stop[]> {
 }
 
 /**
+ * Focus an element and wait until the browser agrees that it is focused.
+ *
+ * A single `focus()` is not enough on a route that is still arriving. `goto`
+ * resolves when the shell loads, the App Router streams the rest in, and React
+ * renders it on the client — replacing the node this locator resolved to and
+ * dropping the focus with it. What the reads below then measure is an
+ * *unfocused* field: `--tw-ring-shadow: 0 0 #0000`, which is stable, so
+ * `settledStyle` agrees with itself on the first two samples and reports it as
+ * a measurement. That is what #471 was filed as "the field paints no ring";
+ * the field paints `0 0 0 calc(3px + 0px) …` correctly once the page is there.
+ *
+ * Re-applying focus until the element itself reports `:focus-visible` is what
+ * makes each measurement below be of the state it claims to measure. It is
+ * also why every one of these treatments is asserted with `focused` alongside
+ * the colours: a focus that is dropped mid-read must fail saying so, not
+ * disguise itself as a missing indicator.
+ */
+async function focusUntilVisible(locator: Locator): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        await locator.focus();
+
+        return locator.evaluate(
+          (element) => document.activeElement === element && element.matches(':focus-visible'),
+        );
+      },
+      {
+        message:
+          'the element never held keyboard focus — the route was still hydrating underneath it',
+      },
+    )
+    .toBe(true);
+}
+
+/**
  * A colour read once, mid-transition, is a keyframe reported as a fact.
  *
  * These controls carry `transition-colors`, which in Tailwind v4 covers
@@ -395,14 +431,25 @@ test.describe('one focus indicator per keyboard stop', () => {
      * keyboard dance, and the Shift+Tab/Tab one it had was landing on the
      * control *before* this field and measuring that instead.
      */
+    /*
+     * Hydrated first, then focused. Re-applying focus recovers from a node
+     * that was already replaced, but on its own it can also *win* the race —
+     * land on the doomed node, see `:focus-visible`, and return before the
+     * swap — and then `settledStyle` reads the loss instead. That is an honest
+     * red rather than a silent one, and still a red. Waiting for React to own
+     * the field is what removes the window rather than shrinking it.
+     */
+    await waitForHydration(customerPage, 'input[data-slot="input"]');
+
     const field = customerPage.locator('input[data-slot="input"]').first();
-    await field.focus();
+    await focusUntilVisible(field);
 
     const style = await settledStyle(customerPage, () =>
       field.evaluate((element) => {
         const computed = getComputedStyle(element);
 
         return {
+          focused: element.matches(':focus-visible'),
           ring: computed.getPropertyValue('--tw-ring-shadow').trim(),
           offset: computed.getPropertyValue('--tw-ring-offset-shadow').trim(),
           outline: computed.outlineStyle,
@@ -411,6 +458,7 @@ test.describe('one focus indicator per keyboard stop', () => {
       }),
     );
 
+    expect(style.focused, 'the field lost focus before its indicator was read').toBe(true);
     expect(style.ring).not.toBe('');
     expect(style.ring).toContain('3px');
     // The bordered treatment has no offset band, and darkens the edge instead.
@@ -429,13 +477,14 @@ test.describe('one focus indicator per keyboard stop', () => {
 
     const field = page.locator('.cl-formFieldInput').first();
     await field.waitFor({ state: 'visible' });
-    await field.focus();
+    await focusUntilVisible(field);
 
     const style = await settledStyle(page, () =>
       field.evaluate((element) => {
         const computed = getComputedStyle(element);
 
         return {
+          focused: element.matches(':focus-visible'),
           ring: computed.getPropertyValue('--tw-ring-shadow').trim(),
           offset: computed.getPropertyValue('--tw-ring-offset-shadow').trim(),
           border: computed.borderTopColor,
@@ -444,6 +493,7 @@ test.describe('one focus indicator per keyboard stop', () => {
       }),
     );
 
+    expect(style.focused, 'the field lost focus before its indicator was read').toBe(true);
     expect(style.ring).toContain('3px');
     // `ring-offset-0` on Clerk's field leaves a real declaration at zero width.
     expect(style.offset).toMatch(PAINTS_NOTHING);
@@ -454,8 +504,10 @@ test.describe('one focus indicator per keyboard stop', () => {
   test('gives a search segment a fill and nothing else', async ({ page }) => {
     await page.goto('/search');
 
+    await waitForHydration(page, 'input[data-slot="combobox-input"]');
+
     const segment = page.locator('input[data-slot="combobox-input"]').first();
-    await segment.focus();
+    await focusUntilVisible(segment);
 
     /*
      * The colour itself, not a boolean about it. Settling on `field === target`
@@ -493,7 +545,16 @@ test.describe('one focus indicator per keyboard stop', () => {
      */
     const stop = await readStop(page);
 
-    expect(stop?.indicators ?? ['not focused']).toHaveLength(1);
+    /*
+     * Named before it is counted. `stop` is `null` whenever focus has gone back
+     * to `<body>`, and the `?? ['not focused']` this replaces had length 1 —
+     * so a lost focus satisfied the count below and the run went red one line
+     * later, on the fill, as though the segment painted the wrong colour. That
+     * is the impersonation the `focused` reads on the other two treatments
+     * exist to stop, and it belongs here too.
+     */
+    expect(stop, 'the segment lost focus before its indicator was read').not.toBeNull();
+    expect(stop?.indicators).toHaveLength(1);
     expect(stop?.indicators[0]).toContain('fill on');
     expect(stop?.indicators[0]).toContain('rgb(239, 233, 224)');
   });

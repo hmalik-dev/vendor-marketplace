@@ -74,6 +74,69 @@ export async function expectSignedIn(page: Page): Promise<void> {
 }
 
 /**
+ * Wait until React has taken over the server-rendered markup for a selector.
+ *
+ * `page.goto` resolves when the shell has loaded. The App Router streams the
+ * rest of the route in afterwards and React renders it on the client, so
+ * anything a spec does in that window is aimed at markup React does not own
+ * yet: a `change` event reaches an input whose `onChange` is not attached, and
+ * a `focus()` is dropped when the node it landed on is replaced.
+ *
+ * Neither failure looks like a race, which is why both were filed against the
+ * product (#471). The first reads as a vendor with no photographs — measured
+ * at two uploads lost in three runs on `/vendor/portfolio`, with no request
+ * reaching `POST /upload/image` at all. The second reads as a field that
+ * paints no focus ring, and reads it *stably*, so sampling twice agrees with
+ * itself; on `/customer/profile` the input's `useId` changes from
+ * `_R_7inpfivafb_-city` to `_r_0_-city` between two reads 150ms apart.
+ *
+ * The signal is React's own bookkeeping: it stamps `__reactFiber$…` and
+ * `__reactProps$…` onto every host node it owns, so a node carrying one has
+ * been hydrated rather than merely parsed. Pass a selector for an element
+ * *inside* the boundary being driven — the header is interactive long before
+ * the route's own content is.
+ *
+ * **Every** match has to be React's, not merely one of them. Mid-swap the
+ * route holds both copies of the uploader at once, and a spec that acted on
+ * the first React-owned node it saw hit `strict mode violation: …resolved to 2
+ * elements` instead — the same race wearing a third face. Requiring the whole
+ * set is what waits for the stale copy to go.
+ */
+export async function waitForHydration(page: Page, selector: string): Promise<void> {
+  try {
+    await page.waitForFunction(
+      (target: string) => {
+        const nodes = Array.from(document.querySelectorAll(target));
+
+        return (
+          nodes.length > 0 &&
+          nodes.every((node) => Object.keys(node).some((key) => key.startsWith('__react')))
+        );
+      },
+      selector,
+      { timeout: 30_000 },
+    );
+  } catch (cause) {
+    /*
+     * A bare `waitForFunction: Timeout 30000ms exceeded` names nothing, and
+     * replacing a red that lies with a red that is silent is not an
+     * improvement. All three reachable causes are worth naming: the route is
+     * genuinely still arriving; it redirected and the selector is not on the
+     * page it landed on (a vendor with no `vendor_profiles` row is sent from
+     * every `/vendor` route to the profile form); or React renamed the
+     * properties this reads, in which case the predicate is permanently false
+     * rather than wrong — it fails closed, but it still has to say so.
+     */
+    throw new Error(
+      `React never took over ${selector} at ${page.url()}. Either the route did not ` +
+        `finish arriving, it redirected somewhere that selector does not exist, or ` +
+        `React no longer stamps __reactFiber$/__reactProps$ onto the nodes it owns.`,
+      { cause },
+    );
+  }
+}
+
+/**
  * Pages that saw the API refuse a request with 429.
  *
  * The API rate-limits at `RATE_LIMIT_MAX` requests a minute (120 by default),

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import { expect, test } from './fixtures.js';
+import { expect, test, waitForHydration } from './fixtures.js';
 
 import type { Page } from '@playwright/test';
 
@@ -136,6 +136,16 @@ test.describe('image fallback', () => {
     vendorPage,
   }) => {
     await vendorPage.goto('/vendor/portfolio');
+
+    /*
+     * The uploader is a client component and `goto` resolves before React has
+     * attached to it, so `setInputFiles` below fires a `change` event at an
+     * input whose `onChange` does not exist yet. The upload never starts, the
+     * wait below spends its full minute on a photograph nobody sent, and the
+     * red reads as "no lane seed provides a portfolio image" rather than as a
+     * race — which is how #471 was filed. Two of three runs lost the upload.
+     */
+    await waitForHydration(vendorPage, 'input[aria-label="Add portfolio photos"]');
 
     const tile = vendorPage
       .locator('img[src*="/uploads/"], img[src*="vendor-marketplace"]')
