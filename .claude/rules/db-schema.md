@@ -5,12 +5,13 @@ paths:
 
 # Database and migrations
 
-## The application database is a Neon branch
+## Which database is which
 
-Local development must never point at `production`; `pnpm preflight` refuses to
-start a ticket that does. The Postgres service in `docker-compose.yml` exists
-only for offline work — it is not the app database, and the pre-#17 Docker data
-was deleted in the rename.
+Local development and every lane run on the Docker Postgres from
+`docker-compose.yml` (`pnpm lane:up` creates `vendor_marketplace_lane_<n>` on
+it). Staging and production are Neon branches; `pnpm preflight` refuses to start
+a ticket whose `DATABASE_URL` points at `production`. The compose image tracks
+the major version Neon runs, and a drift test enforces it.
 
 ## Changing the schema
 

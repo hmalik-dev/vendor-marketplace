@@ -51,6 +51,18 @@ export interface ReconcileSummary {
   deleted: number;
   /** Rows already agreeing with Clerk. On a second run this is all of them. */
   unchanged: number;
+  /**
+   * Rows this pass could **not** repair: Clerk's address is held by another
+   * account, so `users.email` still disagrees (#462).
+   *
+   * Counted apart from `updated` because it is the opposite of a correction,
+   * and apart from `unchanged` because something did change — the divergence is
+   * now recorded on the row and listed at
+   * `/admin/customers?flag=email-stale`. Folded into either one, the CLI would
+   * report a repair that did not happen, on every run, since the row stays
+   * drifted for as long as the other account holds the address.
+   */
+  diverged: number;
   /** Rows Clerk never issued — seeded demo accounts — left untouched. */
   skipped: number;
 }
@@ -134,6 +146,7 @@ export async function reconcileClerkUsers(
     updated: 0,
     deleted: 0,
     unchanged: 0,
+    diverged: 0,
     skipped: rows.length - local.length,
   };
 
@@ -220,6 +233,8 @@ export async function reconcileClerkUsers(
 
     if (outcome === 'updated') {
       summary.updated += 1;
+    } else if (outcome === 'diverged') {
+      summary.diverged += 1;
     } else {
       summary.unchanged += 1;
     }

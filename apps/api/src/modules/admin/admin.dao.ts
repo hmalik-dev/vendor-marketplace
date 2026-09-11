@@ -1,4 +1,17 @@
-import { and, asc, desc, eq, gt, gte, inArray, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  notExists,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import {
@@ -24,6 +37,7 @@ import type {
   AdminActionDetail,
   AdminActionSubject,
   AdminBookingFlag,
+  AdminCustomerFlag,
   AdminCustomerStatus,
   AdminPaymentFlag,
   AdminPayoutFilter,
@@ -93,6 +107,8 @@ export interface AdminVendorProjection {
   reviewCount: number;
   bookingsCount: number;
   isPublished: boolean;
+  /** Set by the console's unpublish lever; the vendor cannot clear it (#457). */
+  moderationHold: boolean;
   stripeOnboarded: boolean;
   /** The connected account, so the row can link out to Stripe (#432). */
   stripeAccountId: string | null;
@@ -156,14 +172,30 @@ function statusCondition(status: AdminVendorStatus) {
     return and(NOT_RETIRED, eq(users.isBanned, true));
   }
 
+  /*
+   * Ahead of `live`, `paused` and `review` for the same reason `retired` is
+   * ahead of everything: `deriveVendorStatus` tests the hold before all three,
+   * so each of them has to exclude it or the filter would list a row the table
+   * then labels `Held`.
+   */
+  if (status === 'held') {
+    return and(NOT_RETIRED, eq(users.isBanned, false), eq(vendorProfiles.moderationHold, true));
+  }
+
   if (status === 'live') {
-    return and(NOT_RETIRED, eq(users.isBanned, false), eq(vendorProfiles.isPublished, true));
+    return and(
+      NOT_RETIRED,
+      eq(users.isBanned, false),
+      eq(vendorProfiles.moderationHold, false),
+      eq(vendorProfiles.isPublished, true),
+    );
   }
 
   if (status === 'paused') {
     return and(
       NOT_RETIRED,
       eq(users.isBanned, false),
+      eq(vendorProfiles.moderationHold, false),
       eq(vendorProfiles.isPublished, false),
       eq(vendorProfiles.stripeOnboarded, true),
     );
@@ -172,6 +204,7 @@ function statusCondition(status: AdminVendorStatus) {
   return and(
     NOT_RETIRED,
     eq(users.isBanned, false),
+    eq(vendorProfiles.moderationHold, false),
     eq(vendorProfiles.isPublished, false),
     eq(vendorProfiles.stripeOnboarded, false),
   );
@@ -310,6 +343,7 @@ export async function findAdminVendors(
       reviewCount: vendorProfiles.reviewCount,
       bookingsCount: bookingsCountExpression,
       isPublished: vendorProfiles.isPublished,
+      moderationHold: vendorProfiles.moderationHold,
       stripeOnboarded: vendorProfiles.stripeOnboarded,
       stripeAccountId: vendorProfiles.stripeAccountId,
       stripeDisabledReason: vendorProfiles.stripeDisabledReason,
@@ -554,6 +588,46 @@ export async function findConfirmedBookingsToUnwind(
  * Requests that have not become bookings yet. They carry no money, so they are
  * declined rather than refunded — but leaving them pending would keep a banned
  * account in someone's queue as if it could still answer.
+ *
+ * **`accepted` is bounded, and this is what #444 fixed.** `accepted` used to sit
+ * in the status list unconditionally, but it is exactly the status a request
+ * holds *after* checkout — `bookings` carries a unique index on `request_id`
+ * because one accepted request becomes one booking, and nothing moves the
+ * request again while that booking stands. So every unwind flipped the accepted
+ * request behind an **already-completed** booking to `declined`: the event
+ * happened, the vendor was paid, and the customer's screen then said the request
+ * had been declined.
+ * That is rewriting history rather than unwinding it, and it was reachable from
+ * any ban, so it predated both #433's deletion path and #438's closure.
+ *
+ * The bound is the same one the whole unwind works to — *undo what has not
+ * happened yet* — and it is the neighbouring `findConfirmedBookingsToUnwind`'s
+ * rule stated for requests: **an accepted request is declined only when there is
+ * no booking behind it at all**, which is the genuine mid-checkout case, and the
+ * only one where nothing else records what happened. Dropping `accepted`
+ * outright would have been the other wrong answer: a request accepted but never
+ * paid for is a real open commitment, and leaving it standing holds a vendor's
+ * date for an account that no longer trades.
+ *
+ * **The request behind a booking this unwind *cancels* never arrives here as
+ * `accepted`, and that is why this predicate needs no third case (#444's third
+ * acceptance).** `cancelBookingAndFreeDate` settles it to `cancelled` in the
+ * same transaction as the cancellation, and has since #400 — deliberately, so
+ * `syncHeldDate` cannot read an accepted request off a date whose booking is
+ * gone and mark it booked again. The unwind runs that cancellation for every
+ * booking it ends *before* it reaches this call, so by the time the UPDATE runs
+ * those requests are `cancelled` and outside every arm of the predicate.
+ *
+ * So the ticket's open question — what the customer's screen should say for one
+ * of those — is already answered by the product, and not by this function:
+ * `cancelled`, which the hub renders as **"Withdrawn"**. That word is wrong for
+ * a platform unwind, but it is #400's wording of an existing state rather than
+ * anything decided here, and it costs little because the *booking* row is where
+ * this story is actually told: it carries `cancelled_by = 'admin'` and its
+ * cancellation reason, and #415 made the customer's sentence come from that
+ * narrative rather than from a status lookup. Naming the act honestly would
+ * take a new `BOOKING_REQUEST_STATUSES` member — a schema, vocabulary and design
+ * change, and a ticket of its own.
  */
 export async function declineOpenRequests(
   db: AppDatabase,
@@ -569,10 +643,28 @@ export async function declineOpenRequests(
     return 0;
   }
 
+  /*
+   * The booking this request became, if it ever became one. The correlation is
+   * on `booking_requests.id`, so it reads the row the UPDATE is deciding about;
+   * `bookings_request_id_key` makes it at most one row.
+   */
+  const bookingBehindRequest = db
+    .select({ present: sql`1` })
+    .from(bookings)
+    .where(eq(bookings.requestId, bookingRequests.id));
+
   const declined = await db
     .update(bookingRequests)
     .set({ status: 'declined', updatedAt: now })
-    .where(and(inArray(bookingRequests.status, ['pending', 'quoted', 'accepted']), sides))
+    .where(
+      and(
+        or(
+          inArray(bookingRequests.status, ['pending', 'quoted']),
+          and(eq(bookingRequests.status, 'accepted'), notExists(bookingBehindRequest)),
+        ),
+        sides,
+      ),
+    )
     .returning({ id: bookingRequests.id });
 
   return declined.length;
@@ -654,7 +746,13 @@ export async function lockVendorProfile(db: AppDatabase, vendorId: string): Prom
 export async function findServicePackageForModeration(
   db: AppDatabase,
   packageId: string,
-): Promise<{ id: string; vendorId: string; isActive: boolean } | null> {
+): Promise<{
+  id: string;
+  vendorId: string;
+  isActive: boolean;
+  /** The other column the lever writes, so its no-op check can read both (#457). */
+  moderationHold: boolean;
+} | null> {
   if (!packageId) {
     return null;
   }
@@ -664,6 +762,7 @@ export async function findServicePackageForModeration(
       id: servicePackages.id,
       vendorId: servicePackages.vendorId,
       isActive: servicePackages.isActive,
+      moderationHold: servicePackages.moderationHold,
     })
     .from(servicePackages)
     .where(eq(servicePackages.id, packageId))
@@ -715,12 +814,22 @@ export interface AdminCustomerProjection {
   isBanned: boolean;
   /** Whether the account has been closed (#450), so the row can read `closed`. */
   isClosed: boolean;
+  pendingEmail: string | null;
   createdAt: Date;
 }
 
-export interface AdminCustomerFilters {
-  q?: string | undefined;
-  status?: AdminCustomerStatus | undefined;
+/**
+ * `status` and `flag` are orthogonal and compose (#450 with #462).
+ *
+ * `status` chooses the **set** — live accounts by default, or the closed ones.
+ * `flag` names a fault on an account inside whichever set is chosen. A closed
+ * account can hold a stale address, and an operator auditing a closure is
+ * exactly who wants to see that combination, so neither excludes the other.
+ */
+interface AdminCustomerFilters {
+  q: string | undefined;
+  status: AdminCustomerStatus | undefined;
+  flag: AdminCustomerFlag | undefined;
 }
 
 /**
@@ -794,6 +903,22 @@ function customerCondition(filters: AdminCustomerFilters) {
     }
   }
 
+  /*
+   * The accounts whose stored address the identity provider has already moved
+   * on from (#462).
+   *
+   * Stored rather than derived, unlike `refundStuck`: nothing else in the
+   * database knows what Clerk currently believes, so `pending_email` — written
+   * by `updateUserByClerkId` when `users_email_key` refuses the new address —
+   * is the only record that the two disagree. Keyed on it rather than on
+   * `email_sync_failed_at` because it is the column the console prints, and a
+   * filter that can select a row the table then renders as blank is a filter
+   * that lies.
+   */
+  if (filters.flag === 'email-stale') {
+    conditions.push(isNotNull(users.pendingEmail));
+  }
+
   return and(...conditions);
 }
 
@@ -814,6 +939,7 @@ export async function findAdminCustomers(
       totalBookingsCount: users.totalBookingsCount,
       isBanned: users.isBanned,
       isClosed: CLOSED,
+      pendingEmail: users.pendingEmail,
       createdAt: users.createdAt,
     })
     .from(users)
@@ -824,7 +950,7 @@ export async function findAdminCustomers(
 }
 
 /**
- * The two routes out of an empty customers list (#450).
+ * The routes out of an empty customers list (#450, #462).
  *
  * `role = 'customer'` is the screen's *domain* rather than a filter — widening
  * past it would list vendors on a screen about customers — so it is not here
@@ -845,14 +971,14 @@ export async function findAdminCustomers(
  * dispute all arrive by name, after the closure; that is the state the screen
  * has to answer in.
  */
-export const CUSTOMER_FILTER_KEYS = ['q', 'status'] as const;
+export const CUSTOMER_FILTER_KEYS = ['q', 'status', 'flag'] as const;
 export type CustomerFilterKey = (typeof CUSTOMER_FILTER_KEYS)[number];
 
 /**
  * The other set, for the `status` route.
  *
- * Not `{ ...filters, status: undefined }` like every other key: dropping this
- * one lands on the live default, which is where an operator already is
+ * Not `{ ...filters, status: undefined }` like the other two keys: dropping
+ * this one lands on the live default, which is where an operator already is
  * whenever they have not asked for `closed`.
  */
 function customerStatusRoute(filters: AdminCustomerFilters): AdminCustomerFilters {
@@ -872,12 +998,20 @@ export async function countCustomerWidenings(
      * `/admin/customers`, where the screen draws the true-empty state and has
      * no button to put a count on: a route the surface will not render is a
      * query nobody reads.
+     *
+     * `q` and `flag` are listed unconditionally alongside it and cost nothing
+     * when unset: dropping a key that is already absent rebuilds the predicate
+     * the empty list was produced by, so the count is zero and `countWidenings`
+     * drops the route. One rule rather than two, and the arithmetic enforces it
+     * rather than a second `filter` having to agree with this one.
      */
     active:
-      filters.q === undefined && filters.status === undefined ? [] : CUSTOMER_FILTER_KEYS.slice(),
+      filters.q === undefined && filters.status === undefined && filters.flag === undefined
+        ? []
+        : CUSTOMER_FILTER_KEYS.slice(),
     conditionWithout: (dropped) =>
       customerCondition(
-        dropped === 'status' ? customerStatusRoute(filters) : { ...filters, q: undefined },
+        dropped === 'status' ? customerStatusRoute(filters) : { ...filters, [dropped]: undefined },
       ),
     scan: (selection) => db.select(selection).from(users),
   });

@@ -1,204 +1,85 @@
-# Vendor Marketplace — Project Instructions
+# Vendor Marketplace — project instructions
 
-Two-sided marketplace connecting customers with event service vendors
-(photographers, DJs, caterers, florists). Turborepo + pnpm monorepo.
-
-The repo and every package are named `vendor-marketplace`. **The user-facing
-product is Orla**, read from `BRAND_NAME` and never written as a literal.
+Two-sided marketplace connecting customers with event vendors. Turborepo + pnpm
+monorepo; repo and packages are named `vendor-marketplace`, the product is
+**Orla**, read from `BRAND_NAME` and never written as a literal.
 
 ## Where things are
 
-| What                           | Where                                                                                                                          |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| Ticket queue                   | `.claude/plans/vendor-marketplace-tickets.md` — the Status Board table, **open rows only**                                     |
-| Closed tickets                 | `.claude/plans/vendor-marketplace-tickets-archive.md` — every `Done` and `Superseded` row and detail section, moved 2026-08-30 |
-| Plan                           | `.claude/plans/vendor-marketplace-plan.md`                                                                                     |
-| Decisions                      | `.claude/plans/vendor-marketplace-decisions.md`                                                                                |
-| Design contract                | `design/` — `Orla - Screens.dc.html` holds the 1440x900 frames and is the acceptance criterion; `design-plan/` explains them   |
-| Path-scoped conventions        | `.claude/rules/` — loaded automatically when you touch matching files                                                          |
-| Auto-memory                    | `.claude/memory/` — `~/.claude/projects/<slug>/memory` is a symlink to it, so what a session writes is committable             |
-| Review and verification agents | `.claude/agents/` and `~/.claude/agents/`                                                                                      |
+| What                     | Where                                                                                                                                                |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ticket board (open rows) | `.claude/plans/vendor-marketplace-tickets.md` — read and write only through `node scripts/board.mjs` (`depth`, `list`, `get`, `next`, `set`, `add`)  |
+| Closed tickets           | `.claude/plans/vendor-marketplace-tickets-archive.md`                                                                                                |
+| Plan · decisions         | `.claude/plans/vendor-marketplace-plan.md` · `.claude/plans/vendor-marketplace-decisions.md`                                                         |
+| Design contract          | `design/Orla - Screens.dc.html` (1440×900 frames, the acceptance criterion); `design/design-plan/` explains them                                     |
+| Path-scoped rules        | `.claude/rules/` — load automatically when you open a matching file; not duplicated here                                                             |
+| Agents                   | `.claude/agents/`: `browser-verifier`, `parity-checker`, `bug-hunter`, `unhappy-path-hunter`; global: `Explore`, `diff-reviewer`, `security-auditor` |
+| Auto-memory              | `.claude/memory/` (symlinked from `~/.claude/projects/<slug>/memory`)                                                                                |
 
-## Ticket queue
+There is no Linear project. Do not add one.
 
-This project's queue is the **local markdown tracker** above. There is no Linear
-project here and no Linear MCP server: one was configured once, never connected,
-and was removed on 2026-08-28. Do not re-add it.
-`/next-ticket` and `/ticket` read eligibility, priority and `Blocked By` from the
-Status Board table and write transitions back to it (Backlog -> In Progress ->
-Done), filling the Branch column and recording the commit SHA in Notes.
+## Commands (repo root; turbo fans out per package)
 
-The `## Overnight queue` section was **deleted on 2026-08-29**, along with the
-backlog shape that made it necessary. It existed because the queue held ~90
-single-measurement parity findings that priority-then-oldest ordering would have
-worked one at a time, behind three unblockers; those unblockers (#74, #165, #198,
-#235) have all landed, and the findings are now batched by frame. Raw
-`/next-ticket` and `/orchestrate` are safe on this board again — do not
-reintroduce a hand-ordered queue.
+| Task                              | Command                                                                                                                                                         |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Verify a change (once, scoped)    | `node ~/.claude/scripts/verify.mjs --lane <id> --ticket <id>`                                                                                                   |
+| Lane up / run in / enqueue / down | `pnpm lane:up <id>` · `pnpm lane:exec <id> -- <cmd>` · `pnpm lane:pr <id> <url>` · `pnpm lane:down <id>`                                                        |
+| Full suites (what CI runs)        | `pnpm format:check && pnpm typecheck && pnpm lint && pnpm build && pnpm test && pnpm test:contention && pnpm test:agents`                                       |
+| Preflight gate for a ticket       | `pnpm preflight --ticket <n>`                                                                                                                                   |
+| Dev servers                       | `pnpm dev` — web 3000, API 4000 (lanes get their own ports)                                                                                                     |
+| Database                          | `docker compose up -d` (Postgres + MinIO) · `pnpm db:generate` after editing `packages/db/src/schema` · `pnpm db:migrate` · `pnpm db:seed` · `pnpm db:seed:e2e` |
+| Env registry                      | `pnpm env:example` regenerates `.env.example` and `turbo.json` passthrough; never hand-edit them                                                                |
+| Secret scan                       | `pnpm secrets:scan` (staged) · `pnpm secrets:scan:all`                                                                                                          |
 
-**Read the ticket before starting it anyway.** Several carry an explicit order
-inside them: the change order goes first within its frame (#287 in #298, #288 in
-#299, #166 in #301, #169 in #304), the parity tickets open by **re-measuring**
-rather than fixing, and #73 and #306 build primitives and rulings that other
-tickets consume. An unattended run still needs worktree isolation, `pnpm
-preflight` before every ticket, and defer-rather-than-guess.
-
-**Trust the repository over the ticket's prose.** A ticket's "current state"
-section goes stale the moment another ticket touches the same files. Verify each
-claim before implementing it.
-
-## Commands
-
-Run from the repository root; Turborepo fans each task out across packages.
-
-| Task            | Command                                                                                      |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| Install         | `pnpm install`                                                                               |
-| Build all       | `pnpm build` (`--force` when the change touches anything the build _resolves_)               |
-| Typecheck all   | `pnpm typecheck`                                                                             |
-| Lint all        | `pnpm lint`                                                                                  |
-| Test all        | `pnpm test`                                                                                  |
-| Contention test | `pnpm test:contention` — needs the Docker Postgres up; two connections, so PGlite cannot     |
-| Format          | `pnpm format` (check with `pnpm format:check`)                                               |
-| Preflight gate  | `pnpm preflight --ticket <n>`                                                                |
-| Regenerate env  | `pnpm env:example`                                                                           |
-| Secret scan     | `pnpm secrets:scan` (staged) · `pnpm secrets:scan:all` (whole tree)                          |
-| Dev servers     | `pnpm dev` — web on 3000, API on 4000                                                        |
-| Build API image | `docker build -f apps/api/Dockerfile -t vendor-marketplace-api .` (context is the repo root) |
-| Single package  | `pnpm --filter @vendor-marketplace/db <script>`                                              |
-
-Database:
-
-| Task                 | Command                                                      |
-| -------------------- | ------------------------------------------------------------ |
-| Start local services | `docker compose up -d` (Postgres + MinIO; both used locally) |
-| Generate a migration | `pnpm db:generate` (after editing `packages/db/src/schema`)  |
-| Apply migrations     | `pnpm db:migrate`                                            |
-| Seed reference data  | `pnpm db:seed`                                               |
-| Seed E2E fixtures    | `pnpm db:seed:e2e` — see below                               |
-| Browse data          | `pnpm db:studio`                                             |
-
-**`pnpm db:seed:e2e` is what makes a vendor surface reachable.** Signing in
-creates a `users` row and nothing else — `vendor_profiles` is only ever written
-by `POST /vendor/profile` — so without it the E2E vendor lands on an empty
-profile form and every `/vendor` route redirects there. It gives that account a
-published storefront, one package, one live booking request, and a **real
-Stripe test-mode connected account**, so neither `accept` nor checkout is
-blocked by the 402.
-
-**The connected account is provisioned, not invented (#387).** The fixture used
-to write `acct_e2e_fixture_not_a_real_account`, which every column-shaped check
-read as payment-capable and Stripe refused as `transfer_data.destination` — so
-`/bookings/<id>/checkout` answered 404 for the only account an automated pass can
-drive, and every browser run stopped one click short of the money path. The seed
-now creates the account through Stripe, waits for its capabilities, and reuses it
-on later runs. Without `STRIPE_SECRET_KEY` it leaves the vendor **not onboarded**
-rather than writing a placeholder. Pin the account across lanes by adding
-`E2E_VENDOR_STRIPE_ACCOUNT_ID` to `.env.e2e.local`; without it every fresh lane
-database provisions its own. A live key is refused outright.
-
-**It also seeds the admin account, and that is the only way `/admin` is reachable
-at all.** `role = 'admin'` cannot be reached from inside the product: it is read
-from Clerk's `unsafeMetadata` at first sign-in, falls back to `customer`, and is
-immutable afterwards — so no sign-up flow produces one, and `seed-demo.ts` gives
-its admin a synthetic `clerk_user_id` that cannot authenticate. Before the
-account existed, the only route to frame `13`'s screens was promoting a customer
-in the database by hand, which is a privileged write nobody should make to run a
-test. `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD` are in `.env.e2e.local` alongside
-the other two; the account is **persistent by intent — do not delete it**. The
-key is optional, so a checkout whose env file predates it still seeds.
-
-It needs `pnpm db:seed` first (for categories), `.env.e2e.local` for the account
-emails, and `CLERK_SECRET_KEY` for the **same Clerk instance those accounts live
-in** — it resolves their real Clerk ids rather than inventing them, because a
-`users` row carrying an E2E email under a made-up id makes that account's next
-sign-in collide on the email index and locks it out. It refuses to run against
-`NODE_ENV=production` or a protected Neon branch, and `lane:up` runs it for
-every lane. `pnpm preflight` **fails** when the accounts cannot reach their
-surfaces — and for a ticket declaring the `stripe` capability it asks Stripe
-whether the connected account is real, rather than trusting the column.
+`pnpm db:seed:e2e` (after `db:seed`) is what makes vendor and admin surfaces
+reachable: it gives the E2E vendor a published storefront, a package, a live
+booking request and a **real Stripe test-mode connected account**, and seeds the
+persistent admin account (the only way `/admin` is reachable; never delete it).
+It needs `.env.e2e.local` and a `CLERK_SECRET_KEY` for the same Clerk instance,
+refuses production and protected Neon branches, and `lane:up` runs it per lane.
+Pin the connected account across lanes with `E2E_VENDOR_STRIPE_ACCOUNT_ID`.
 
 Deployed web: `web-gules-eta-41.vercel.app` — the parity target after every push.
 
 ## Layout
 
 ```
-apps/
-  web/        Next.js 15 (App Router, RSC) frontend      — port 3000
-  api/        Fastify 5 backend                          — port 4000
-design/       The Orla design contract
-packages/
-  shared/     Zod schemas, inferred types, constants, utilities, env registry
-  db/         Drizzle schema, client, migrations, seed
-  preflight/  `pnpm preflight` — the pre-ticket environment gate
-  config/     Shared TypeScript, ESLint, and Tailwind configs
+apps/web            Next.js 15 (App Router, RSC)         apps/api          Fastify 5
+packages/shared     Zod schemas, constants, env registry packages/db       Drizzle schema, migrations, seeds
+packages/preflight  pnpm preflight + the lane CLI        packages/config   shared TS / ESLint / Tailwind config
+design/             the Orla design contract
 ```
 
-**Dependency direction is one-way: `apps -> packages`.**
+Dependency direction is one-way: `apps -> packages`.
 
 ## Laws that apply everywhere
 
-Anything narrower than this lives in `.claude/rules/` and loads when you open a
-matching file. Do not duplicate it here.
+- **Credentials never reach git or Claude configuration.** `.gitignore` covers
+  `.env.*`; a pre-commit hook scans staged blobs; CI scans every tracked file.
+  A value that fired the scan is rotated, not deleted.
+- **Local development and every lane run on the Docker Postgres.** Staging and
+  production are Neon branches; never point local work at them.
+- **Never commit generated output**: `packages/db/drizzle/`, `.env.example`,
+  `turbo.json` passthrough — edit the source and regenerate.
+- **A development default must never reach production**: derive it from what the
+  platform sets, or throw; assert the production branch in a test.
+- **One ticket per worktree.** The commit hook refuses a dirty tree, so two
+  sessions in one checkout deadlock. `EnterWorktree` branches from
+  `origin/main` and carries no uncommitted work.
+- **MVP only.** Nothing from a screen file's Post-MVP section; no invented
+  numbers on a public page.
+- **Verification is delegated, not asserted.** `browser-verifier` for every
+  user-reachable change, `parity-checker` for every screen with a frame, at
+  1440×900, all six axes. Whole-app sweep: `/hunt-bugs` (needs the stack up).
 
-- **Credentials never reach git.** `.gitignore` covers `.env.*` and re-admits only
-  `.env.example`; a pre-commit hook scans staged blobs; CI scans every tracked
-  file so `--no-verify` cannot bypass it. The rules, the fixture allowlist and the
-  `secret-scan:allow` pragma live in `packages/preflight/src/secrets/`. **If the
-  scan fires on a real value, rotate it — deleting it is not enough.**
-- **Credentials never reach Claude configuration either.** Not inline in a
-  command, not in `.claude/settings*.json`, not in an agent, skill or rule. They
-  live in `.env` files and are read from the environment. A `PreToolUse` hook
-  blocks both routes.
-- **Local development runs on the Docker Postgres; staging and production are
-  Neon branches.** Never point local development at `production`. The compose
-  image tracks the major version Neon runs, and a drift test enforces it.
-- **Never commit generated output.** `packages/db/drizzle/`, `.env.example` and
-  `turbo.json`'s `globalPassThroughEnv` are all generated; edit the source and
-  regenerate.
-- **A development default must never be able to reach production.** Derive it from
-  something the platform sets, or throw.
-- **One ticket per worktree — the staging hook makes it mandatory, not advisory.**
-  The hook refuses any commit while _any_ unrelated path in the tree is dirty, so
-  two sessions with work in flight in the same checkout can never both commit:
-  each one's edits block the other's, in both directions. Verified 2026-08-30,
-  when two overnight lanes deadlocked in the shared checkout. Stage explicit
-  paths in their own command too — the hook reads the tree before the command
-  runs, so `git add X && git commit` is refused where the same two steps
-  separately succeed. Also: `EnterWorktree` branches fresh from `origin/main` and
-  does **not** carry uncommitted work across, whatever its description says —
-  commit WIP to a branch before moving, and check `git status` inside the new
-  worktree before trusting it.
-- **MVP only.** No ticket implements anything from a screen file's Post-MVP
-  section, and no invented numbers reach a public page.
+## Merging
 
-## Verification is delegated, not asserted
-
-Claiming a change works is not verifying it. Use the agents:
-
-| Agent                 | Use for                                                                            |
-| --------------------- | ---------------------------------------------------------------------------------- |
-| `diff-reviewer`       | Adversarial read of the finished diff, in fresh context                            |
-| `security-auditor`    | Any diff touching auth, input, data access, uploads, redirects, secrets or logging |
-| `browser-verifier`    | Every user-reachable change, driven end to end at both auth states                 |
-| `parity-checker`      | Every screen carrying an Orla frame, at 1440x900, on all six axes                  |
-| `Explore`             | File discovery and symbol tracing, so results stay out of this context             |
-| `bug-hunter`          | Read-only defect hunt along one dimension, inside a sweep                          |
-| `unhappy-path-hunter` | Driving one flow in the browser trying to break it                                 |
-
-To sweep the whole application rather than one change, run **`/hunt-bugs`** — a
-workflow that fans read-only hunters across nine defect dimensions, drives seven
-user flows in the browser hunting unhappy paths, and puts every candidate through
-three skeptics before reporting it as a ticket. It needs the dev stack up, so run
-`/start` first. Pass `{"drive": false}` to skip the browser phase, or
-`{"dimensions": [...]}` / `{"flows": [...]}` to narrow it.
-
-Global engineering standards (type safety, defensive code, commit format,
-pre-commit gate) live in `~/.claude/CLAUDE.md` and
-`~/.claude/references/code-standards.md`.
+No merge queue. `main` requires the CI check, an up-to-date branch and linear
+history; auto-merge is on. `gh pr merge --squash --auto` then
+`~/.claude/scripts/wait-merge.sh <pr>` (it updates a BEHIND branch). Tracker
+edits ride on `main` directly, never inside a code PR.
 
 ## Stack
 
-Next.js 15 · Fastify 5 · Drizzle ORM · PostgreSQL 18 (Neon; Docker locally) · Clerk ·
-Stripe Connect · Cloudflare R2 · Resend · Tailwind CSS 4 + shadcn/ui · Zod ·
-Vitest · Playwright
+Next.js 15 · Fastify 5 · Drizzle · PostgreSQL 18 (Neon; Docker locally) · Clerk ·
+Stripe Connect · Cloudflare R2 · Resend · Tailwind 4 + shadcn/ui · Zod · Vitest · Playwright

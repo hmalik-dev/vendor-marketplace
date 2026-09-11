@@ -31,6 +31,7 @@ function customer(overrides: Partial<WireAdminCustomerRow> = {}): WireAdminCusto
     totalBookingsCount: 2,
     isBanned: false,
     status: 'active',
+    pendingEmail: null,
     createdAt: new Date('2026-01-05T00:00:00Z'),
     ...overrides,
   };
@@ -181,8 +182,8 @@ describe('AdminCustomersPage', () => {
 
     await renderPage({ status: 'closed', q: 'kessler' });
 
-    expect(screen.getByText('No closed customers matching "kessler"').textContent).toBe(
-      'No closed customers matching "kessler"',
+    expect(screen.getByText('No closed customers match "kessler"').textContent).toBe(
+      'No closed customers match "kessler"',
     );
     /*
      * The counted way out, and the count is the API's (#454). From the closed

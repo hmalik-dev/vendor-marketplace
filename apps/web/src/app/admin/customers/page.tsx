@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import {
+  ADMIN_CUSTOMER_FLAGS,
   ADMIN_CUSTOMER_STATUSES,
   ADMIN_CUSTOMER_STATUS_LABELS,
+  type AdminCustomerFlag,
   type AdminCustomerStatus,
 } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
@@ -21,6 +23,9 @@ import {
 } from '@/lib/admin-params';
 
 const PATH = '/admin/customers';
+
+/** The flag's label, so the filter option and the row pill cannot drift. */
+const EMAIL_STALE_LABEL = 'Email out of date';
 
 const JOINED = new Intl.DateTimeFormat('en-US', {
   month: 'short',
@@ -48,7 +53,41 @@ const STATUS_TONES: Partial<Record<AdminCustomerStatus, StatusTone>> = {
   closed: 'inert',
 };
 
-type SearchParams = Record<'q' | 'status' | 'page', RawParam>;
+type SearchParams = Record<'q' | 'status' | 'flag' | 'page', RawParam>;
+
+/**
+ * The filtered-empty sentence, reciting the filters in the operator's own words.
+ *
+ * Three filters and therefore three clauses, assembled rather than enumerated —
+ * but `flag` **on its own** keeps the sentence #462 wrote for it, because "No
+ * customers with an out-of-date email" answers a question nobody asked. An
+ * operator filtering for that fault wants to know whether the fault exists, not
+ * whether customers do.
+ */
+function customersHeadline(
+  status: AdminCustomerStatus | undefined,
+  q: string | undefined,
+  flag: AdminCustomerFlag | undefined,
+): string {
+  const subject =
+    status === undefined
+      ? 'customers'
+      : `${ADMIN_CUSTOMER_STATUS_LABELS[status].toLowerCase()} customers`;
+
+  if (q !== undefined) {
+    return flag === undefined
+      ? `No ${subject} match "${q}"`
+      : `No ${subject} match "${q}" with an out-of-date email`;
+  }
+
+  if (flag !== undefined) {
+    return status === undefined
+      ? 'No addresses are out of date'
+      : `No ${subject} have an out-of-date email`;
+  }
+
+  return `No ${subject}`;
+}
 
 export default async function AdminCustomersPage({
   searchParams,
@@ -59,6 +98,7 @@ export default async function AdminCustomersPage({
   const params = {
     q: boundedText(raw.q),
     status: oneOf(raw.status, ADMIN_CUSTOMER_STATUSES),
+    flag: oneOf(raw.flag, ADMIN_CUSTOMER_FLAGS),
   };
   // What was in the URL and could not be used, so the screen can say so.
   const dropped = droppedKeys(raw, params);
@@ -67,51 +107,47 @@ export default async function AdminCustomersPage({
   );
 
   const closedView = params.status === 'closed';
+  /*
+   * Filtered means the operator asked something. A bare `/admin/customers` on a
+   * platform with no customers is the **true** empty, and `filtered-empty.tsx`
+   * is explicit that it must not be used as one: its counted routes would offer
+   * moves that cannot help.
+   */
+  const filtered =
+    params.q !== undefined || params.status !== undefined || params.flag !== undefined;
 
   /*
-   * The counted ways out (#454), and the `status` one is a **toggle** rather
-   * than a dropped parameter.
+   * The counted ways out (#454, widened by #462 and #450), and the `status` one
+   * is a **toggle** rather than a dropped parameter.
    *
    * `role = 'customer'` is the screen's domain rather than a filter — widening
    * past it would list vendors on a screen about customers — so it is not
-   * offered. `status` is: this screen has two domains, live accounts and closed
-   * ones, and no URL spanning both, so the only honest route is to the other
-   * one. From the default view that route is **into** the closed set, which is
-   * the whole of #450: an operator searching a name after that person closed
-   * their account gets an empty list, and the row they want is one query string
-   * away with nothing on the screen saying so.
+   * offered. `status` is, and it cannot be *dropped*: this screen has two
+   * domains, live accounts and closed ones, and no URL spanning both, so the
+   * only honest route is to the other one. From the default view that route is
+   * **into** the closed set, which is the whole of #450 — an operator searching
+   * a name after that person closed their account gets an empty list, and the
+   * row they want is one query string away with nothing on the screen saying so.
    *
-   * `q` is only a route when it is set. The API drops a zero-count route, and a
-   * `q` that is already absent reveals exactly the rows already on screen —
-   * none — so it drops itself; this list says so rather than relying on that.
+   * `q` and `flag` are spread in only when set, rather than a fixed list
+   * filtered on a key-conditional: that shape is only correct while there are
+   * exactly two entries, and a third would silently take the last arm's value.
    */
-  const active: ActiveFilter[] = [
-    ...(params.q === undefined
-      ? []
-      : [
-          {
-            key: 'q',
-            widening: 'Any name or email',
-            carried: { ...params, q: undefined },
-          },
-        ]),
-    {
-      key: 'status',
-      widening: closedView ? 'Live accounts' : 'Closed accounts',
-      carried: { ...params, status: closedView ? undefined : 'closed' },
-    },
-  ];
-
-  /*
-   * One sentence, assembled from the filters that are set — and the words are
-   * the labels the filter bar showed, never the parameter values.
-   */
-  const filteredHeadline = [
-    'No',
-    ...(params.status ? [ADMIN_CUSTOMER_STATUS_LABELS[params.status].toLowerCase()] : []),
-    'customers',
-    ...(params.q ? [`matching "${params.q}"`] : []),
-  ].join(' ');
+  const active: ActiveFilter[] = !filtered
+    ? []
+    : [
+        ...(params.q === undefined
+          ? []
+          : [{ key: 'q', widening: 'Any name or email', carried: { ...params, q: undefined } }]),
+        {
+          key: 'status',
+          widening: closedView ? 'Live accounts' : 'Closed accounts',
+          carried: { ...params, status: closedView ? undefined : 'closed' },
+        },
+        ...(params.flag === undefined
+          ? []
+          : [{ key: 'flag', widening: 'Any account', carried: { ...params, flag: undefined } }]),
+      ];
 
   return (
     <AdminSurface
@@ -149,11 +185,30 @@ export default async function AdminCustomersPage({
             anyLabel="Live accounts"
           />
           {/*
-            The dropdown navigates on choice, so it is outside the form's submit
-            path — without this hidden field, pressing Enter in the search box
-            would silently clear the status the operator had chosen.
+            The state an operator could not find (#462). A `user.updated`
+            carrying an address another account already holds cannot be
+            written, so the row keeps the **old** address and every
+            notification for it goes there. Nothing said so before this.
           */}
-          {params.status ? <input type="hidden" name="status" value={params.status} /> : null}
+          <FilterSelect
+            action={PATH}
+            carried={params}
+            name="flag"
+            label="Needs attention"
+            value={params.flag ?? ''}
+            options={[{ value: 'email-stale', label: EMAIL_STALE_LABEL }]}
+          />
+          {/*
+            Both dropdowns navigate on choice, so they sit outside the form's
+            submit path. A GET form submits only its own controls — so without
+            these hidden fields, pressing Enter in the search box would silently
+            clear the status and the flag the operator had chosen and answer
+            with every live customer, which is the opposite of what somebody
+            filtering for a problem wants.
+          */}
+          {(['status', 'flag'] as const).map((key) =>
+            params[key] ? <input key={key} type="hidden" name={key} value={params[key]} /> : null,
+          )}
         </FilterBar>
       }
       pager={{
@@ -168,16 +223,9 @@ export default async function AdminCustomersPage({
         rows={customers.items}
         rowKey={(row) => row.id}
         empty={
-          /*
-           * Filtered means the operator asked something. A bare
-           * `/admin/customers` on a platform with no customers is the true
-           * empty, and `filtered-empty.tsx` is explicit that it must not be
-           * used as one — its counted routes would offer moves that cannot
-           * help.
-           */
-          params.q !== undefined || params.status !== undefined ? (
+          filtered ? (
             <FilteredEmpty
-              headline={filteredHeadline}
+              headline={customersHeadline(params.status, params.q, params.flag)}
               path={PATH}
               filters={active}
               widenings={customers.widenings}
@@ -211,7 +259,32 @@ export default async function AdminCustomersPage({
               </Link>
             ),
           },
-          { key: 'email', width: '1.6fr', header: 'Email', cell: (row) => row.email },
+          {
+            key: 'email',
+            width: '1.6fr',
+            header: 'Email',
+            /*
+              Marked in the column it is about rather than in one of its own,
+              and on every row rather than only inside the filter — an operator
+              scanning the table finds these without having to already know the
+              filter exists, which is the whole failure this replaces.
+
+              Both addresses are printed because the repair needs both: the one
+              mail is going to, and the one Clerk says it should be going to.
+            */
+            cell: (row) =>
+              row.pendingEmail === null ? (
+                row.email
+              ) : (
+                <span className="flex flex-col gap-0.5">
+                  <span>{row.email}</span>
+                  <span className="flex items-center gap-1.5">
+                    <StatusPill tone="failed">{EMAIL_STALE_LABEL}</StatusPill>
+                    <span className="text-stone-600">{row.pendingEmail}</span>
+                  </span>
+                </span>
+              ),
+          },
           {
             key: 'location',
             width: '1.2fr',

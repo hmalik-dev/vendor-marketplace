@@ -1097,6 +1097,30 @@ export const HELD_PAYOUT_STATUSES = ['disputed'] as const;
  * is derived from this rather than re-spelled as a literal union — which the
  * same rule calls a defect even when the two currently match.
  */
+/**
+ * What a vendor is told when they try to undo a moderation decision (#457).
+ *
+ * **Unratified copy, and deliberately in one place so it stays that way.**
+ * `31-content-voice.md` has no register for a moderation refusal — the nearest
+ * approved rows are the publish blocker and the payout gate, and both are about
+ * something the vendor can go and fix, which this is not. These follow their
+ * shape (second person, name the obstacle, name the one next step) and are
+ * flagged for a design pass; whoever ratifies them edits here and both the API's
+ * 403 and the editor's own line change together.
+ *
+ * Shared rather than duplicated because the storefront editor states the refusal
+ * *before* the press as well as after it. Two copies would drift, and a toggle
+ * whose helper text disagreed with the toast it produces is worse than either
+ * sentence alone. They say who took it down and where to go, and promise no
+ * notification the product does not send.
+ */
+export const VENDOR_PROFILE_MODERATION_HOLD_MESSAGE =
+  "You can't publish this storefront — our team took it off search. Contact support and we'll go through it with you.";
+
+/** `VENDOR_PROFILE_MODERATION_HOLD_MESSAGE`'s twin, for a package (#457). */
+export const SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE =
+  "You can't switch this package back on — our team took it off your storefront. Contact support and we'll go through it with you.";
+
 export const RESOLVE_DISPUTE_OUTCOMES = ['vendor', 'customer'] as const;
 export type DisputeOutcome = (typeof RESOLVE_DISPUTE_OUTCOMES)[number];
 

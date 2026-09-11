@@ -14,8 +14,8 @@ For the `vendor-marketplace` repo, the ticket queue lives at `.claude/plans/vend
 
 Companion planning docs in the same directory: `vendor-marketplace-plan.md` (architecture, data model, API contracts), `vendor-marketplace-decisions.md` (settled tech + business decisions). The design plan is **not** in this directory — it lives in the repo at `design/design-plan/`.
 
-**Why:** `~/.claude/orchestration-policy.md` says to resolve the active project from a `Linear project:` entry in the repo CLAUDE.md, but the Linear MCP connector is unauthenticated in this environment and the user explicitly designated the markdown file as the tracker.
+**Why:** the user explicitly designated the markdown file as the tracker; there is no Linear project and the Linear plugin is disabled (2026-09-11).
 
-**How to apply:** Skip the Linear resolution step for this repo entirely — do not return BLOCKED for a missing `Linear project:` entry. Read the markdown tracker, apply the policy's queue order (highest priority, In Progress before ready, respect Blocked By), and record the commit SHA in the Notes column when marking Done.
+**How to apply:** since 2026-09-11 every read and write goes through `node scripts/board.mjs` (`depth`, `list --ready`, `get`, `next`, `set`, `add`), which applies the queue order, treats a ticket with an active lane manifest as in flight, and records branch, SHA and PR when marking Done. Never grep or sed the board file.
 
 Related: [[vendor-marketplace-no-docker]]

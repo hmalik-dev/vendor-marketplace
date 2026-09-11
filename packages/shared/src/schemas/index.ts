@@ -1669,6 +1669,17 @@ export const vendorProfileDetailSchema = vendorProfileSchema.extend({
    * public listing. Empty means the publish toggle is safe to turn on.
    */
   publishBlockers: z.array(z.enum(PUBLISH_BLOCKER_KEYS)),
+  /**
+   * An operator has taken this storefront down and only an operator can put it
+   * back (#457).
+   *
+   * On the vendor's **own** detail read and nowhere else — it is a fact about
+   * them, and `publicVendorProfileSchema` is a separate shape that does not
+   * name it. Here because a toggle that reads *"Ready to publish"* over a
+   * storefront the server will refuse is a worse refusal than the 403: the
+   * vendor learns it by being told no, having been told yes a moment earlier.
+   */
+  moderationHold: z.boolean(),
 });
 export type VendorProfileDetail = z.infer<typeof vendorProfileDetailSchema>;
 
@@ -2279,6 +2290,7 @@ export type FieldErrorDetails = z.infer<typeof fieldErrorDetailsSchema>;
  * | Status    | Condition                                                          |
  * | --------- | ------------------------------------------------------------------ |
  * | `flagged` | the account is banned — the one moderation state there is          |
+ * | `held`    | an operator unpublished it and only an operator can undo that      |
  * | `live`    | the profile is published                                           |
  * | `paused`  | unpublished, but payouts are connected — set up and taken down     |
  * | `review`  | unpublished and never onboarded — a draft that has never been live |
@@ -2301,14 +2313,29 @@ export const adminPaginationShape = {
 /**
  * `retired` is the account, not the listing (#433).
  *
- * The other four are all states a vendor can move between: a paused storefront
- * publishes again, a flagged one is reinstated. `retired` is none of those — the
+ * `held` is the moderation state `paused` could not express (#457). Both are an
+ * unpublished storefront, and until `vendor_profiles.moderation_hold` existed
+ * nothing on the row said whether the vendor had paused their own trading or an
+ * operator had taken them down — the ambiguity the republish dialog warns about
+ * in prose. It is derived from the hold column, so it is still state the product
+ * already holds rather than a status somebody types into the table.
+ *
+ * The others are all states a row can move between: a paused storefront
+ * publishes again, a flagged one is reinstated, a held one is republished by
+ * the operator who held it. `retired` is none of those — the
  * owner deleted their Clerk identity, nothing in the product can undo it, and
  * the operator's only useful question about the row is which of their bookings
  * it unwound. Without it a deleted account read as `review`, which is the label
  * for a vendor still waiting to be let in.
  */
-export const ADMIN_VENDOR_STATUSES = ['live', 'review', 'flagged', 'paused', 'retired'] as const;
+export const ADMIN_VENDOR_STATUSES = [
+  'live',
+  'review',
+  'flagged',
+  'paused',
+  'held',
+  'retired',
+] as const;
 export const adminVendorStatusSchema = z.enum(ADMIN_VENDOR_STATUSES);
 export type AdminVendorStatus = (typeof ADMIN_VENDOR_STATUSES)[number];
 
@@ -2325,6 +2352,7 @@ export const ADMIN_VENDOR_STATUS_LABELS: Record<AdminVendorStatus, string> = {
   review: 'Review',
   flagged: 'Flagged',
   paused: 'Paused',
+  held: 'Held',
   retired: 'Retired',
 };
 
@@ -2424,6 +2452,25 @@ export const ADMIN_CUSTOMER_STATUS_LABELS: Record<AdminCustomerStatus, string> =
   closed: 'Closed',
 };
 
+/**
+ * Accounts whose stored address no longer matches the identity provider (#462).
+ *
+ * Shaped like `refund-stuck` because it names the same kind of thing: a state
+ * that is invisible, permanent until somebody acts, and about a thing that
+ * silently kept happening afterwards. A `user.updated` carrying an address some
+ * other row already holds cannot be written — `users_email_key` refuses it —
+ * and retrying will meet the same row, so the webhook records the address as
+ * pending and succeeds. `users.email` then holds an address the account holder
+ * has already moved off, and every notification for that account goes there.
+ *
+ * Unlike `refund-stuck` this is **stored** rather than derived: nothing else in
+ * the database knows what Clerk currently believes, so `pending_email` is the
+ * only record that the two disagree.
+ */
+export const ADMIN_CUSTOMER_FLAGS = ['email-stale'] as const;
+export const adminCustomerFlagSchema = z.enum(ADMIN_CUSTOMER_FLAGS);
+export type AdminCustomerFlag = (typeof ADMIN_CUSTOMER_FLAGS)[number];
+
 export const adminCustomerRowSchema = z.object({
   id: uuidSchema,
   email: z.string(),
@@ -2447,6 +2494,18 @@ export const adminCustomerRowSchema = z.object({
   isBanned: z.boolean(),
   /** Derived, never stored — the same shape as `adminVendorRowSchema.status`. */
   status: adminCustomerStatusSchema,
+  /**
+   * The address the identity provider holds and this row could not be given,
+   * or `null` when the two agree. Carried on every row rather than only on the
+   * filtered list, for the reason `refundStuck` is: an operator scanning the
+   * unfiltered table sees it without having to know the filter exists.
+   *
+   * The matching `email_sync_failed_at` is deliberately **not** here. A list
+   * answers "which accounts", and how long one has been wrong is a question
+   * about a single account — `adminUserDataRightsSchema` carries it, and
+   * `/admin/users/[userId]` is where it is read.
+   */
+  pendingEmail: z.string().nullable(),
   createdAt: z.date(),
 });
 export type AdminCustomerRow = z.infer<typeof adminCustomerRowSchema>;
@@ -2459,8 +2518,14 @@ export const adminCustomerQuerySchema = z.object({
    * rare and the console's ordinary work is with people who still have an
    * account. Asking for the other set is a deliberate act, not the removal of
    * the distinction.
+   *
+   * Orthogonal to `flag` (#462): `status` is which **set** of accounts, and
+   * `flag` is a fault on an account within it. They compose — a closed account
+   * can hold a stale address, and that combination is exactly the one an
+   * operator auditing a closure wants to see.
    */
   status: adminCustomerStatusSchema.optional(),
+  flag: adminCustomerFlagSchema.optional(),
 });
 
 /**
@@ -3243,6 +3308,17 @@ export const adminUserExportSchema = z.object({
      */
     stripeCustomerId: z.string().nullable(),
     isBanned: z.boolean(),
+    /**
+     * The address the identity provider holds that this account could not be
+     * given, and when the two stopped agreeing (#462).
+     *
+     * Here because the console shows it and the export must not hand over a
+     * smaller record than staff can see. It is the subject's own address, held
+     * by this platform, and it survives closure — `retireUserById` writes only
+     * `deleted_at` — so an access request has to enumerate it.
+     */
+    pendingEmail: z.string().nullable(),
+    emailSyncFailedAt: z.coerce.date().nullable(),
     /** Set where the account was closed; the row is retained, never erased. */
     deletedAt: z.coerce.date().nullable(),
     createdAt: z.coerce.date(),
@@ -3354,6 +3430,18 @@ export const adminUserDataRightsSchema = z.object({
   name: z.string(),
   role: z.string(),
   isBanned: z.boolean(),
+  /**
+   * The address the identity provider holds that `email` above could not be
+   * given, and when the two stopped agreeing (#462). Both `null` when they
+   * agree, which is every account that has never hit the collision.
+   *
+   * On this screen rather than only on `/admin/customers?flag=email-stale`
+   * because a **vendor** can diverge the same way, and the customers table is
+   * `role = 'customer'` by domain. This page is the one console surface every
+   * role reaches.
+   */
+  pendingEmail: z.string().nullable(),
+  emailSyncFailedAt: z.coerce.date().nullable(),
   closedAt: z.coerce.date().nullable(),
   vendorProfileId: uuidSchema.nullable(),
   vendorSlug: z.string().nullable(),

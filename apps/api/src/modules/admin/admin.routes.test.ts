@@ -26,6 +26,7 @@ const ADMIN = 'user_admin';
 const OTHER_ADMIN = 'user_admin_two';
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
+const OTHER_CUSTOMER = 'user_customer_two';
 /** A second customer, so the status filter has both live states to tell apart (#450). */
 const BANNED_CUSTOMER = 'user_customer_banned';
 
@@ -1154,6 +1155,75 @@ describe('admin routes', () => {
       });
       expect(filtered.json().total).toBe(1);
       expect(filtered.json().items[0].email).toBe(`${CUSTOMER}@example.com`);
+    });
+
+    /**
+     * **Acceptance 2 of #462: the divergence is somewhere an operator sees it.**
+     *
+     * A `user.updated` whose address another row holds cannot be written, so
+     * the row keeps the old address and every notification keeps going there.
+     * A log line is not a surface — nobody reads it, and nothing in the console
+     * could name the affected accounts before this filter existed.
+     *
+     * The row's own fields are asserted alongside the filter because the
+     * repair needs both addresses: the one mail is reaching, and the one the
+     * identity provider says it should be reaching.
+     */
+    it('finds the accounts whose stored address is behind the identity provider', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      // A second customer, so the filter has something to exclude.
+      await harness.database.db.insert(users).values({
+        clerkUserId: OTHER_CUSTOMER,
+        email: `${OTHER_CUSTOMER}@example.com`,
+        role: 'customer',
+        firstName: 'Dorothy',
+        lastName: 'Vaughan',
+      });
+
+      await harness.database.db
+        .update(users)
+        .set({ pendingEmail: 'moved@example.com', emailSyncFailedAt: new Date() })
+        .where(eq(users.id, customerId));
+
+      const unfiltered = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers',
+        headers: bearer(ADMIN),
+      });
+
+      // Carried on every row, so an operator scanning the table sees it
+      // without having to already know the filter exists.
+      expect(unfiltered.json().total).toBe(2);
+      const other = unfiltered
+        .json()
+        .items.find((row: { email: string }) => row.email === `${OTHER_CUSTOMER}@example.com`);
+      expect(other.pendingEmail).toBeNull();
+
+      const flagged = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers?flag=email-stale',
+        headers: bearer(ADMIN),
+      });
+
+      expect(flagged.statusCode).toBe(200);
+      expect(flagged.json().total).toBe(1);
+      expect(flagged.json().items[0]).toMatchObject({
+        id: customerId,
+        email: `${CUSTOMER}@example.com`,
+        pendingEmail: 'moved@example.com',
+      });
+      /*
+       * The timestamp is not on the list — a list answers "which accounts" —
+       * so it is read from the row, which is also what keeps this assertion
+       * from passing against a version that recorded only half a divergence.
+       */
+      const [row] = await harness.database.db
+        .select({ emailSyncFailedAt: users.emailSyncFailedAt })
+        .from(users)
+        .where(eq(users.id, customerId));
+
+      expect(row?.emailSyncFailedAt).toBeInstanceOf(Date);
     });
 
     /*
