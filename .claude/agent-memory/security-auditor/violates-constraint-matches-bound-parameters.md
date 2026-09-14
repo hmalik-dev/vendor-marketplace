@@ -1,48 +1,32 @@
 ---
 name: violates-constraint-matches-bound-parameters
-description: violatesConstraint's name check is dead under postgres.js, so it matches only the message — and DrizzleQueryError's message contains every bound parameter, making the match attacker-influenceable
+description: FIXED in VEN-385 — the message-substring constraint reader is gone; violatesUniqueConstraint reads SQLSTATE 23505 + constraint/constraint_name only. Do not re-report.
 metadata:
   type: project
 ---
 
-`apps/api/src/lib/constraint-violation.ts` decides whether a failed statement is
-a named constraint violation. Two facts make it wider than every call site's
-doc comment claims:
+**Status: FIXED (VEN-385, audited 2026-09-14).** `violatesConstraint` was deleted.
+`apps/api/src/lib/constraint-violation.ts` now exports only
+`violatesUniqueConstraint`: `code === '23505'` AND `named(link) === constraint`,
+where `named()` reads `constraint` (PGlite) or `constraint_name` (postgres.js).
+No message text anywhere. Both spellings are pinned by a real violation through
+each driver (`constraint-violation.test.ts`, `constraint-violation.contention.test.ts`).
 
-- **The `constraint` field never exists in production.** postgres.js 3.4.9 maps
-  Postgres error field `n` to **`constraint_name`**
-  (`node_modules/.pnpm/postgres@3.4.9/.../src/connection.js:46`, and
-  `PostgresError` is `Object.assign(this, x)`), not `constraint`. `named()`
-  reads `link.constraint`, so it returns `null` for every real driver error and
-  the **message substring is the only matcher that ever fires**. The unit test
-  passes anyway because the first case takes a real error whose message _does_
-  carry the name, and the second case hand-builds `{ constraint: … }`.
-- **The message carries the bound values.** drizzle 0.45.2
-  (`drizzle-orm/errors.js:10-19`) builds `DrizzleQueryError`'s message as
-  `Failed query: ${query}\nparams: ${params}` — array `toString()`, every
-  value verbatim. `chainOf(...).some(link => link.message.includes(constraint))`
-  therefore returns **true for any failure of that statement** whenever a bound
-  parameter contains the constraint name as a substring. The wrapper is the
-  outermost link, so it is checked before the driver error.
+The original hole: drizzle 0.45.2 builds `DrizzleQueryError.message` as
+`Failed query: ${query}\nparams: ${params}`, so a bound value (Clerk name, review
+text) containing the index name turned any failure of that statement (40P01,
+57014, connection loss) into a match. The dead `constraint` read under
+postgres.js made the substring the only arm that fired. An intermediate repair
+read `constraintName`, which no driver writes.
 
-**Why:** #462 leaned on this to decide whether to swallow a failed identity
-mirror on the svix-verified Clerk webhook and answer 200. A user who puts
-`users_email_key` in their Clerk first name, last name or email arms every
-transient failure of that `UPDATE` (40P01, 40001, 57014, connection loss) to be
-read as an email collision: the true error is discarded, svix never redelivers
-because the reply is 200, `users.email` stays stale, and the console shows a
-fabricated "Email out of date" flag. `reviews.service.ts:225`
-(`reviews_booking_reviewer_key`) has the same shape over review text.
+**Why:** callers were `users.dao.ts` (Clerk webhook swallow, answered 200) and
+`reviews.service.ts` createReview (409 "already reviewed", nothing logged).
 
-Not directly weaponisable into a silent swallow through a _forced_ error,
-because the retry re-binds every field except `email` and fails again — so a
-poisoned over-long name or a NUL still 500s. It is the transient-error case
-that swallows.
-
-**How to apply:** any new `violatesConstraint` call site that decides whether to
-_continue_ rather than _translate a status code_ must also pin the SQLSTATE —
-`driverCodeOf(error) === '23505'`, the same cause walk
-[[err-serializer-is-the-log-sink]] already implements — or the substring arm has
-to go and `named()` has to read `constraint_name` too. Related:
-[[retired-users-keep-their-email-in-the-unique-index]] (why the collision exists
-at all), [[clerk-webhook-is-now-a-money-mover]].
+**How to apply:** a new constraint-classification call must use
+`violatesUniqueConstraint` (or pin SQLSTATE + driver field). The backstop is
+`error-message-control-flow-guard.test.ts`, a regex source scan of
+`apps/api/src` for `.message` comparisons; it does not catch `String(err)`,
+`` `${err}` ``, a destructured `message`, or `.detail`, and its `/* */` strip
+can swallow code after a string containing `/*` — see
+[[a-guard-reads-a-smaller-region-than-you-think]]. Treat it as a tripwire, not
+proof. Related: [[err-serializer-is-the-log-sink]].
