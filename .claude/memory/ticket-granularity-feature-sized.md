@@ -19,4 +19,4 @@ That is ~44% of all filed tickets spent on filing and re-filing.
 recognise?" If it is a measurement, an axis, or one line of copy, append it to an
 existing surface ticket instead. Audit and parity sweeps report **grouped by
 surface**, one ticket per surface, not one per finding. See
-[[record-findings-in-backlog]] and [[filing-a-ticket-is-a-three-file-change]].
+[[record-findings-in-backlog]] and [[vendor-marketplace-linear-tracker]].

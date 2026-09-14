@@ -263,7 +263,7 @@ export interface LaneUpDeps {
  * `EnterWorktree` names the branch `worktree-<ticket>`. `/land-lanes` resolves
  * a lane to its PR through this field, so the wrong name reads as a lane whose
  * branch is gone — abandoned work it correctly refuses to touch, leaving a
- * finished ticket sitting on the board. Read it from git instead of composing
+ * finished ticket still open in Linear. Read it from git instead of composing
  * it from a convention the branch does not follow.
  */
 export function currentBranch(worktreePath: string): string {

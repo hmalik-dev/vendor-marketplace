@@ -1,12 +1,13 @@
 import {
   BASELINE_CAPABILITIES,
+  CAPABILITIES,
   type Capability,
-  capabilitiesForTicket,
+  isCapability,
 } from '@vendor-marketplace/shared/env';
 import type { Target } from './types.js';
 
 export interface ParsedArgs {
-  readonly ticket?: number;
+  readonly capabilities: readonly Capability[];
   readonly target: Target;
   readonly help: boolean;
 }
@@ -24,8 +25,36 @@ function isTarget(value: string): value is Target {
   return (TARGETS as readonly string[]).includes(value);
 }
 
+/**
+ * Parses a comma-separated capability list. The ticket's `cap:<name>` labels in
+ * Linear are the source; the caller copies them here without the prefix.
+ */
+function parseCapabilities(value: string | undefined): readonly Capability[] {
+  if (!value || value.startsWith('--')) {
+    throw new ArgumentError(
+      '--capabilities needs a comma-separated list, e.g. `--capabilities auth,stripe`.',
+    );
+  }
+
+  const names = value
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  const known = names.filter(isCapability);
+  const unknown = names.filter((name) => !isCapability(name));
+
+  if (names.length === 0 || unknown.length > 0) {
+    throw new ArgumentError(
+      `--capabilities accepts only ${CAPABILITIES.join(', ')}` +
+        (unknown.length > 0 ? `; got ${unknown.join(', ')}.` : '.'),
+    );
+  }
+
+  return known;
+}
+
 export function parseArgs(argv: readonly string[]): ParsedArgs {
-  let ticket: number | undefined;
+  const requested = new Set<Capability>();
   let target: Target = 'local';
   let help = false;
 
@@ -38,17 +67,19 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
         help = true;
         break;
 
-      case '--ticket': {
-        const value = argv[index + 1];
-        index += 1;
-
-        if (!value || !/^\d+$/.test(value)) {
-          throw new ArgumentError('--ticket needs a ticket number, e.g. `--ticket 9`.');
+      case '--capabilities': {
+        for (const capability of parseCapabilities(argv[index + 1])) {
+          requested.add(capability);
         }
-
-        ticket = Number.parseInt(value, 10);
+        index += 1;
         break;
       }
+
+      case '--all':
+        for (const capability of CAPABILITIES) {
+          requested.add(capability);
+        }
+        break;
 
       case '--env': {
         const value = argv[index + 1];
@@ -67,23 +98,28 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     }
   }
 
-  return ticket === undefined ? { target, help } : { ticket, target, help };
+  return { capabilities: resolveCapabilities(requested), target, help };
 }
 
 /**
- * Capabilities a run checks. Without a ticket that is the baseline only, so a
- * bare `pnpm preflight` never demands credentials for work nobody is doing.
+ * The baseline plus whatever was asked for, in registry order, so a bare
+ * `pnpm preflight` never demands credentials for work nobody is doing and no
+ * run ever checks less than the baseline.
  */
-export function resolveCapabilities(args: ParsedArgs): readonly Capability[] {
-  return args.ticket === undefined ? BASELINE_CAPABILITIES : capabilitiesForTicket(args.ticket);
+function resolveCapabilities(requested: ReadonlySet<Capability>): readonly Capability[] {
+  const wanted = new Set<Capability>([...BASELINE_CAPABILITIES, ...requested]);
+  return CAPABILITIES.filter((capability) => wanted.has(capability));
 }
 
-export const USAGE = `Usage: pnpm preflight [--ticket <n>] [--env local|production]
+export const USAGE = `Usage: pnpm preflight [--capabilities <a,b>] [--all] [--env local|production]
 
-  --ticket <n>   Check only the capabilities ticket #n declares.
-                 Without it, only the baseline (${BASELINE_CAPABILITIES.join(', ')}) is checked.
-  --env <target> Value set to check. Defaults to local; production reads
-                 .env.production.local and applies the stricter shapes.
-  --help         Show this message.
+  --capabilities <a,b>  Also check these capabilities — the ticket's \`cap:*\`
+                        labels in Linear, without the prefix. One of:
+                        ${CAPABILITIES.join(', ')}.
+                        Without it, only the baseline (${BASELINE_CAPABILITIES.join(', ')}) is checked.
+  --all                 Check every capability.
+  --env <target>        Value set to check. Defaults to local; production reads
+                        .env.production.local and applies the stricter shapes.
+  --help                Show this message.
 
 Exits 0 when every check passes, 1 otherwise.`;

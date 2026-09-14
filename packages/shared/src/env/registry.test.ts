@@ -1,6 +1,7 @@
 import { BRAND_DOMAIN } from '../constants/brand.js';
 import { describe, expect, it } from 'vitest';
 import {
+  BASELINE_CAPABILITIES,
   CAPABILITIES,
   CAPABILITY_LABELS,
   COMPOSE_SERVICES,
@@ -17,13 +18,6 @@ import {
   requiresExplicitValue,
   shapeFor,
 } from './registry.js';
-import {
-  BASELINE_CAPABILITIES,
-  HIGHEST_REGISTERED_TICKET,
-  TICKET_CAPABILITIES,
-  capabilitiesForTicket,
-  isRegisteredTicket,
-} from './tickets.js';
 import { registryKeys, registrySchemaShape } from './schema.js';
 
 /**
@@ -268,104 +262,12 @@ describe('capability index', () => {
   });
 });
 
-describe('capabilitiesForTicket', () => {
-  it('always includes the implicit core and e2e capabilities', () => {
-    expect(capabilitiesForTicket(17)).toEqual(['core', 'e2e']);
+describe('BASELINE_CAPABILITIES', () => {
+  // Every ticket touches the app and every ticket is browser-verified, so a bare
+  // `pnpm preflight` checks exactly these two and demands no paid credential.
+  it('is core and e2e, in registry order', () => {
     expect(BASELINE_CAPABILITIES).toEqual(['core', 'e2e']);
-  });
-
-  it('adds the declared capabilities for a payments ticket', () => {
-    expect(capabilitiesForTicket(9)).toEqual(['core', 'auth', 'stripe', 'e2e']);
-  });
-
-  it('resolves a ticket that needs every capability', () => {
-    expect(capabilitiesForTicket(19)).toEqual([...CAPABILITIES]);
-  });
-
-  it('resolves the two design-revision tickets added on 2026-08-27', () => {
-    // #23 rebuilds the search screen and touches uploaded vendor imagery;
-    // #24 is a copy-only change behind auth. Neither needs a paid service, so
-    // both must start without Stripe, Resend or Sentry keys.
-    expect(capabilitiesForTicket(23)).toEqual(['core', 'auth', 'storage', 'e2e']);
-    expect(capabilitiesForTicket(24)).toEqual(['core', 'auth', 'e2e']);
-    expect(capabilitiesForTicket(25)).toEqual(['core', 'auth', 'e2e']);
-    // #26 and #27 merged into one Chrome Parity ticket on 2026-08-27. The merged
-    // ticket carries `auth` because the Clerk pin half touches the auth screens;
-    // #27 is retired but still resolves, so the old number cannot silently throw.
-    expect(capabilitiesForTicket(26)).toEqual(['core', 'auth', 'e2e']);
-    expect(capabilitiesForTicket(27)).toEqual(['core', 'auth', 'e2e']);
-    expect(capabilitiesForTicket(28)).toEqual(['core', 'e2e']);
-    expect(capabilitiesForTicket(29)).toEqual(['core', 'auth', 'storage', 'e2e']);
-    expect(capabilitiesForTicket(30)).toEqual(['core', 'e2e']);
-    expect(capabilitiesForTicket(31)).toEqual(['core', 'auth', 'e2e']);
-    expect(capabilitiesForTicket(32)).toEqual(['core', 'e2e']);
-  });
-
-  // The three tickets opened by the 2026-08-27 production outage, when the API
-  // answered 500 on every route for ~19h behind a deployment Vercel called Ready.
-  it('resolves the tickets opened by the 2026-08-27 outage', () => {
-    // #33 is a web-tier resilience change and #35 is a CI check; neither reaches
-    // a paid service. #34 needs `storage` because half its scope is deciding how
-    // uploads cross the platform's 4.5MB request-body cap.
-    expect(capabilitiesForTicket(33)).toEqual(['core', 'e2e']);
-    expect(capabilitiesForTicket(34)).toEqual(['core', 'storage', 'e2e']);
-    expect(capabilitiesForTicket(35)).toEqual(['core', 'e2e']);
-  });
-
-  it('resolves the two design-revision tickets from the 2026-08-27 frame import', () => {
-    // #36 and #37 carry frames `01` and `18`. Parity work on imagery and a
-    // control shape needs no external service, so both start on `core` alone.
-    expect(capabilitiesForTicket(36)).toEqual(['core', 'e2e']);
-    expect(capabilitiesForTicket(37)).toEqual(['core', 'e2e']);
-  });
-
-  // #26 and #27 sat on the status board for a day with no registry row, so
-  // `preflight --ticket 26` threw UnknownTicketError instead of gating the work.
-  // A ticket that cannot be preflighted cannot be started, so the board and the
-  // registry have to be checked against each other, not just each on its own.
-  it('registers a contiguous ticket range with no gaps', () => {
-    const numbers = Object.keys(TICKET_CAPABILITIES)
-      .map(Number)
-      .sort((a, b) => a - b);
-
-    expect(numbers[0]).toBe(0);
-    expect(numbers).toEqual(Array.from({ length: numbers.length }, (_value, index) => index));
-  });
-
-  // Unknown numbers used to throw. That turned a stale registry into a hard stop
-  // on starting any work, which is how it fell 192 rows behind the board without
-  // anyone being forced to fix it. The fallback is the baseline — never nothing —
-  // and `tickets.board.test.ts` is what now fails when a row is genuinely missing.
-  it('falls back to the baseline on an unregistered ticket rather than throwing', () => {
-    expect(isRegisteredTicket(999)).toBe(false);
-    expect(capabilitiesForTicket(999)).toEqual(['core', 'e2e']);
-  });
-
-  it('reports a registered ticket as registered and keeps its declared capabilities', () => {
-    expect(isRegisteredTicket(165)).toBe(true);
-    expect(isRegisteredTicket(229)).toBe(true);
-    expect(capabilitiesForTicket(68)).toEqual(['core', 'auth', 'stripe', 'e2e']);
-    expect(capabilitiesForTicket(170)).toEqual(['core', 'storage', 'e2e']);
-  });
-
-  it('never returns fewer than the baseline, for any registered ticket', () => {
-    for (const key of Object.keys(TICKET_CAPABILITIES)) {
-      const resolved = capabilitiesForTicket(Number(key));
-      expect(resolved, `ticket ${key}`).toContain('core');
-      expect(resolved, `ticket ${key}`).toContain('e2e');
-    }
-  });
-
-  it('tracks the highest registered ticket', () => {
-    expect(HIGHEST_REGISTERED_TICKET).toBe(472);
-  });
-
-  it('declares only known capabilities for every ticket', () => {
-    for (const [ticket, capabilities] of Object.entries(TICKET_CAPABILITIES)) {
-      for (const capability of capabilities) {
-        expect(isCapability(capability), `ticket ${ticket}`).toBe(true);
-      }
-    }
+    expect(BASELINE_CAPABILITIES.every(isCapability)).toBe(true);
   });
 });
 

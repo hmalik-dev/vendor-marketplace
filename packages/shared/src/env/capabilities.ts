@@ -6,8 +6,9 @@ import { ENV_REGISTRY, type EnvVariable } from './registry.js';
 /**
  * A capability names an external service or toolchain concern that some slice
  * of the product depends on. Every environment variable belongs to exactly one
- * capability, and every ticket declares the capabilities it needs — so a ticket
- * that never touches Stripe is never blocked on Stripe credentials.
+ * capability, and every Linear ticket carries a `cap:<name>` label for each one
+ * it needs — so a ticket that never touches Stripe is never blocked on Stripe
+ * credentials. `pnpm preflight --capabilities <a,b>` checks those labels' worth.
  */
 export const CAPABILITIES = [
   'core',
@@ -20,6 +21,12 @@ export const CAPABILITIES = [
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
+
+/**
+ * Checked on every run. `core` because every ticket touches the app, `e2e`
+ * because every ticket is browser-verified — so neither needs a label.
+ */
+export const BASELINE_CAPABILITIES: readonly Capability[] = ['core', 'e2e'];
 
 /** Human-readable heading used when preflight and `.env.example` group by capability. */
 export const CAPABILITY_LABELS: Readonly<Record<Capability, string>> = {

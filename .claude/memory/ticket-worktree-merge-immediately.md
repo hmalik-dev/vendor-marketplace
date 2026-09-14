@@ -29,8 +29,8 @@ exists only for lanes whose session died before the queue reached them.
 A session that read an older copy at startup should re-read step 7 before
 delivering.
 
-**Why:** a lane that stops at the enqueue leaves the ticket row saying
-`In Progress` on `origin/main`, the worktree on disk, and the branch alive — so
+**Why:** a lane that stops at the enqueue leaves the Linear issue saying
+`In Progress`, the worktree on disk, and the branch alive — so
 the next unattended batch re-selects work that is already written, and the
 operator cannot tell finished work from abandoned work. Lane 198 was reported as
 delivered while `main` still had none of it.
@@ -48,16 +48,15 @@ same local `main`.
 
 **Every merge is followed by landing it, in the same session** — stated by the
 user 2026-08-29 after #231 merged and was left half-landed: bring the default
-branch up to date, and move the ticket to **Done** in the tracker. Not "later",
-not "`/land-lanes` will". A merged PR whose row still reads `Backlog` or
-`In Progress` on `origin/main` is work the next unattended batch will start over.
+branch up to date, and move the issue to **Done** in Linear with the squash SHA
+in a comment. Not "later", not "`/land-lanes` will". A merged PR whose issue
+still reads `Backlog` or `In Progress` is work the next unattended batch will
+start over.
 
-The main checkout is routinely diverged at that moment: the lane branched before
-the session's own tracker commit, so local `main` holds an unpushed transition
-while the remote holds the squash. `git rebase origin/main` — `git pull
+The main checkout may be diverged at that moment if a peer left a commit on
+local `main` while the remote holds the squash. `git rebase origin/main` — `git pull
 --ff-only` just fails there, and `reset --hard` drops the local commit silently.
-Squash a superseded `In Progress` commit into the landing commit instead of
-pushing both. Finish by checking `git rev-list --left-right --count
+Finish by checking `git rev-list --left-right --count
 main...origin/main` reads `0 0`. Encoded in `~/.claude/skills/ticket/references/workflow.md`
 section 7 and the status-record rules in `~/.claude/orchestration-policy.md`.
 
@@ -81,4 +80,4 @@ section 7 and the status-record rules in `~/.claude/orchestration-policy.md`.
   separate deliberate fast-forward of the `production` branch — see
   [[vendor-marketplace-vercel-deployment]].
 
-Related: [[adhoc-work-single-commit]], [[commit-ticket-changes-immediately]]
+Related: [[adhoc-work-single-commit]], [[vendor-marketplace-linear-tracker]]

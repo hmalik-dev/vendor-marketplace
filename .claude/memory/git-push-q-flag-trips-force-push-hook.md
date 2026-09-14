@@ -17,4 +17,4 @@ command. It also aborts the whole compound command, so a chained
 
 **How to apply:** push with no short flags. Keep commit and push as separate
 Bash calls so a hook rejection on one cannot silently swallow the other.
-Related: [[adhoc-work-single-commit]], [[commit-ticket-changes-immediately]].
+Related: [[adhoc-work-single-commit]].

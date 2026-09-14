@@ -1,4 +1,4 @@
-- [Local ticket tracker, not Linear](vendor-marketplace-local-ticket-tracker.md) — the queue lives in a markdown file in the repo
+- [The tracker is Linear: team VEN, project Vendor Marketplace](vendor-marketplace-linear-tracker.md) — since 2026-09-14; ids `VEN-n`, capabilities are `cap:*` labels, `blocked` marks a human gate; the markdown board and ticket registry are deleted
 - [Docker Postgres IS the local app database](vendor-marketplace-no-docker.md) — postgres:18-alpine on 5432; migrate/seed go there, not Neon. MinIO matters too
 - [Playwright browser verification is mandatory](vendor-marketplace-playwright-verification.md) — every ticket flow gets driven in a real browser before Done
 - [E2E test accounts, one per role](vendor-marketplace-e2e-credentials.md) — customer + vendor credentials in the gitignored .env.e2e.local, never in the repo
@@ -16,26 +16,22 @@
 - [Production API is intentionally down](production-api-intentionally-down.md) — Railway service removed on purpose; `Application not found` is expected, not an outage
 - [Vercel deployment URL](vendor-marketplace-vercel-deployment.md) — web-gules-eta-41.vercel.app follows `production`, not `main`; parity is checked against localhost
 - [Demo deployment is deferred](demo-deployment-deferred.md) — render.yaml and docs/demo.md are on main and current, but deliberately not stood up until the queue and MVP are done
-- [Record findings in the backlog](record-findings-in-backlog.md) — chat reports scroll away; the tracker is the durable queue
+- [Record findings in the backlog](record-findings-in-backlog.md) — chat reports scroll away; Linear is the durable queue
 - [Credentials live in env files only](credentials-env-files-only.md) — never inline in a command, never in Claude config; the Neon URL that leaked still needs rotating
 - [Global config repo: claude-workflow](claude-workflow-config-repo.md) — ~/.claude is git-tracked in a private repo; its .gitignore is deny-by-default
-- [Commit ticket changes immediately](commit-ticket-changes-immediately.md) — tracker edits go straight to main, never left dirty
 - [Main pushes dequeue queued lane PRs](main-pushes-dequeue-parallel-lane-prs.md) — branch protection is strict; ask the other lanes to hold before `gh pr merge --auto`, and release them when it lands
 - [The shared checkout's working tree is a tripwire](shared-checkout-working-tree-is-a-tripwire.md) — uncommitted work there is ownerless and blocks everyone's rebase; commit immediately, hold only the push
 - [Worktree env copies drift](worktree-env-copies-drift.md) — .worktreeinclude snapshots .env at creation; a stale copy or stale dist fails tests only in the worktree
 - [Ticket = branch + worktree, merge immediately](ticket-worktree-merge-immediately.md) — **hard gate every invoke: merge, close the lane, bring main up**; PENDING_MERGE is not terminal and /land-lanes is not a handoff
-- [Filing a ticket is a four-file change](filing-a-ticket-is-a-three-file-change.md) — contiguous ids race between lanes: allocate last, check a peer hasn't filed it already; `pnpm test` caches a green over tracker edits, use --force
 - [Dev and build contend over .next](dev-and-build-contend-over-next.md) — a stray `pnpm build` silently kills the web dev server; and `turbo typecheck build` in one call races `.next/types` into 37 phantom TS6053s
 - [Source-grep guards match their own comment](source-grep-guards-match-their-own-comment.md) — a `toContain` needle taken from the code is usually in the prose beside it, so the guard cannot fail
 - [Lane manifests drift from reality](lane-manifest-branch-drifts.md) — `lane:pr` fixes `prUrl` but **not `branch`**; after a rebase rename the manifest lies and `/land-lanes` reads the lane as abandoned
 - [Diverged lane branch needs a new name](diverged-lane-branch-needs-a-new-name.md) — rename only when history was **rewritten**; merely BEHIND is cleared by auto-merge, and renaming it drifts the manifest for nothing
 - [Lead, do not narrate](lead-dont-narrate.md) — short answers, state the call, no option surveys
-- [Detached lane ticket ids collide silently](detached-lane-ticket-ids-collide-silently.md) — merging a stopped lane duplicates board rows and drops registry rows with no conflict
-- [Check for an existing branch before starting](check-for-an-existing-branch-before-starting-a-ticket.md) — a ticket's Branch column may already name pushed work; read it before rebuilding
+- [Check for an existing branch before starting](check-for-an-existing-branch-before-starting-a-ticket.md) — an issue's description, comments or PR may already name pushed work; read them before rebuilding
 - [Cite the frame and the route in design questions](design-questions-cite-frame-and-route.md) — give the .dc.html frame + line and the live route before asking, so the user can verify
 - [Never abort a rebase you did not start](never-abort-a-rebase-you-did-not-start.md) — with many sessions in the shared checkout, possession of the live rebase decides ownership, not authorship
 - [Verify with a differently shaped check](verify-with-a-differently-shaped-check.md) — a grep that silently over- or under-matches returns a confident wrong answer; re-run differently, do not re-read
-- [Board rows mix bolded and plain ids](tracker-board-rows-are-bold.md) — never key a match on bolding; it has now caused a confident wrong answer in both directions
 - [Pathspec when a peer has work staged](pathspec-when-a-peer-has-work-staged.md) — the index is shared; `git add` + plain commit steals their staged work under your message
 - [CI and the deploy check are pre-launch](vercel-deploy-check-always-fails.md) — never wait on them or read their red as a finding; land on the local gate
 - [`git ls-tree -r` is cwd-scoped](git-ls-tree-is-cwd-scoped.md) — without `--full-tree` it lists only the current directory, and the Bash cwd persists across calls
@@ -44,18 +40,15 @@
 - [Lane .auth/ arrives expired](lane-auth-state-arrives-expired.md) — copied from the main checkout, minted on port 3000; regenerate in-lane first
 - [`git push -q` trips the force-push hook](git-push-q-flag-trips-force-push-hook.md) — push with no short flags, and keep commit and push as separate calls
 - [The worktree guard refuses inline heredocs](worktree-guard-refuses-inline-heredoc-bodies.md) — `gh pr create` bodies and scratch scripts go in a file outside the repo, passed by path
-- [Board rows do not all end with `|`](board-rows-lack-a-trailing-pipe.md) — `parts[-2]` silently writes into Capabilities; the board guard reports it as a bogus capability name
 - [Kill dev servers by lane port, never by name](kill-dev-servers-by-lane-port.md) — an unscoped pkill reaches every lane; it took down two mid-pass
 - [MCP Playwright and storage state](mcp-playwright-cannot-load-storage-state.md) — no MCP *tool* takes one, but `browser_run_code_unsafe` does; never `networkidle`
 - [Guard a delegated browser pass with a liveness watch](guard-a-delegated-browser-pass-with-a-liveness-watch.md) — a dev server that dies mid-pass makes the agent report nothing and look clean
-- [The Done row cannot ride in the code PR](the-done-row-cannot-ride-in-the-code-pr.md) — the row records the squash SHA, which does not exist until the queue merges; batch across lanes, not within one
 - [Clerk localization is scoped by route only](clerk-localization-is-scoped-by-route-only.md) — a nested `ClerkProvider` silently drops every prop; branch on `usePathname()` in `ClerkShell`
 - [Migration numbers collide between lanes](migration-numbers-collide-between-lanes.md) — two lanes both claim `0025`; regenerate against the landed snapshot, never rename your own
 - [Class assertions need the split list](class-assertions-need-the-split-list.md) — `toContain` on `className` is a substring match, so `min-[90rem]:text-[11px]` satisfies a check meant to pin `text-[11px]`
 - [Stripe caches failed idempotent results](stripe-caches-failed-idempotent-results.md) — a retry key needs the attempt number; `request_log_url` is the tell (D36)
 - [A z.date() needs a wire coercion](zdate-needs-a-wire-coercion.md) — else that screen 500s, conditionally, with the whole local gate green
 - [A clean rebase is not a compiling rebase](rebase-auto-merges-are-not-compile-checked.md) — git merges text, not signatures; and it can be non-**installable** too, so `pnpm install` after every rebase, before the gate
-- [A stale whole-file copy silently reverts](stale-whole-file-copy-silently-reverts.md) — a code PR carrying an old tracker/registry copy erases other lanes' filings; no conflict, and the contiguity guard passes the damage
 - [The payout sweep ticks under your test](the-payout-sweep-ticks-under-your-test.md) — it runs every 15 min on real rows; assert the count increased, never that it equals 9
 - [`rebase --continue` blames conflicts for unstaged changes](rebase-continue-blames-conflicts-for-unstaged-changes.md) — a review agent writing to `.claude/agent-memory/` mid-rebase stalls it with a message about conflicts that are not there
 - [`next dev` hits EMFILE with many lanes](next-dev-hits-emfile-with-many-lanes.md) — every page 500s while the API is fine; build and `next start` for a browser pass
@@ -70,3 +63,4 @@
 - [A failed command reads as a passing check](a-failed-command-reads-as-a-passing-check.md) — `grep -c` on a command that errored prints a confident zero; make the check print what it found
 - [A guard reads a smaller region than you think](a-guard-reads-a-smaller-region-than-you-think.md) — a source scan answers clean about code it never looked at; pin the reach with mutations in the real files
 - [Closure destroys a real Clerk identity](closure-destroys-a-real-clerk-identity.md) — never close a seeded E2E account; the seed resolves Clerk ids and cannot rebuild one
+- [TaskStop cannot stop a peer session](taskstop-cannot-stop-peer-sessions.md) — kill the `bg-spare` child, scoped by its cwd; name matching hits every repo

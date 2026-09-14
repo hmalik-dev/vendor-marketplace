@@ -21,10 +21,11 @@ schemas from the same rows, so presence, shape and defaults cannot disagree.
 
 ## Capabilities
 
-Every ticket declares its capabilities — `core`, `auth`, `storage`, `stripe`,
-`email`, `sentry`; `e2e` is implicit — in `packages/shared/src/env/tickets.ts`.
-`pnpm preflight --ticket <n>` checks only those, so a ticket that never touches
-Stripe is never blocked on Stripe keys.
+Every Linear ticket carries a `cap:<name>` label for each capability it needs —
+`auth`, `storage`, `stripe`, `email`, `sentry`; `core` and `e2e` are implicit.
+`pnpm preflight --capabilities <a,b>` checks only those (plus the baseline), so a
+ticket that never touches Stripe is never blocked on Stripe keys. A new
+capability is a row in `CAPABILITIES` and a matching `cap:` label on the team.
 
 ## A development default must never be able to reach production
 

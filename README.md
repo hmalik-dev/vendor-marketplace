@@ -68,7 +68,7 @@ test in `packages/shared` fails the build if they drift.
 
 ```bash
 pnpm preflight                # baseline: core + browser verification
-pnpm preflight --ticket 9     # only what ticket #9 needs — Stripe included
+pnpm preflight --capabilities auth,stripe  # the ticket's cap:* labels, Stripe included
 pnpm preflight --env production  # production value set, stricter shapes
 ```
 
