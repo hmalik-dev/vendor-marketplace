@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
 
-import { AUTH_DIR, expect, expectSignedIn, test } from './fixtures';
+import { expect, expectSignedIn, storageStatePath, test } from './fixtures';
 
 /**
  * VEN-382: a closed account stays reachable from `/admin/customers`.
@@ -13,7 +12,7 @@ import { AUTH_DIR, expect, expectSignedIn, test } from './fixtures';
  * real sign-in the seed cannot rebuild. The closure is permanent in the lane
  * database, so the spec picks whichever seed customer is still closable.
  */
-const ADMIN_STATE = resolve(AUTH_DIR, 'admin.json');
+const ADMIN_STATE = storageStatePath('admin');
 const SEED_CUSTOMER_DOMAIN = '@orla-demo.example';
 
 test('an operator closes an account, then reaches its data-rights page from the customers screen', async ({
