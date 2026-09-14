@@ -44,6 +44,12 @@ const EXAMPLE_PRICE_CENTS = 260_000;
 /** Same gutter ladder as the landing page and the header. */
 const CONTAINER = 'mx-auto w-full max-w-[1440px] px-5 lg:px-7 min-[90rem]:px-10';
 
+/**
+ * "an <brand> balance", with the article following the brand rather than typed
+ * beside it — the name is read from `BRAND_NAME`, so the article must be too.
+ */
+const BRAND_BALANCE = `${/^[aeiou]/i.test(BRAND_NAME) ? 'an' : 'a'} ${BRAND_NAME} balance`;
+
 const EYEBROW = 'text-xs font-semibold tracking-[0.11em] text-clay-600 uppercase';
 
 /** A config figure. Gold, because each one names a wait (40-states.md). */
@@ -243,7 +249,7 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
             </div>
             <p className="max-w-85 text-action leading-[1.7] text-stone-600 max-lg:hidden">
               Nothing is invoiced and nothing is chased. Stripe holds the money in <em>your</em>{' '}
-              account — not a {BRAND_NAME} balance — the whole time.
+              account — not {BRAND_BALANCE} — the whole time.
             </p>
           </div>
 
@@ -316,7 +322,7 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
             */}
             <Button
               variant="secondary"
-              className="order-1 mt-0 min-h-12 px-6 text-cta lg:order-2 lg:min-h-0 lg:rounded-[9px] lg:text-base"
+              className="order-1 mt-0 min-h-12 px-6 py-3.25 text-cta lg:order-2 lg:min-h-0 lg:rounded-[9px] lg:text-base"
               asChild
             >
               <Link href={SIGN_UP_PATH}>Start taking bookings</Link>

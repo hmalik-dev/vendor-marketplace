@@ -1,4 +1,8 @@
-import { PAYOUT_RELEASE_HOURS, VENDOR_AGREEMENT_PATH } from '@vendor-marketplace/shared';
+import {
+  BRAND_NAME,
+  PAYOUT_RELEASE_HOURS,
+  VENDOR_AGREEMENT_PATH,
+} from '@vendor-marketplace/shared';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -168,6 +172,16 @@ describe('/for-vendors', () => {
     expect(
       steps.slice(0, 3).every((step) => step.className.split(/\s+/).includes('bg-stone-50')),
     ).toBe(true);
+  });
+
+  it('puts the right article before the brand in the payouts note', async () => {
+    await renderPage();
+
+    const article = /^[aeiou]/i.test(BRAND_NAME) ? 'an' : 'a';
+    expect(document.getElementById('payouts')?.textContent).toContain(
+      `not ${article} ${BRAND_NAME} balance`,
+    );
+    expect(document.body.textContent).not.toMatch(/\ba [AEIOU]\w* balance/);
   });
 
   it('links the vendor agreement from the closing band', async () => {

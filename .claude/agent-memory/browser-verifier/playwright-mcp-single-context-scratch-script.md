@@ -28,3 +28,16 @@ booleans/status codes/sanitized paths (strip query strings — they can carry
 Clerk handshake tokens), then delete the script immediately after. This is
 report-only tooling, not a code change to the app. For the anonymous
 (signed-out) state, the same pattern works with no `storageState` at all.
+
+**Do not "solve" the single-context limit with `browser_run_code_unsafe` +
+`context.addCookies(<literal cookies read from .auth/*.json>)`.** Tried on lane
+384: `require`/dynamic `import` are unavailable inside that tool's execution
+context (it errors before reading the file), so the only way to get the cookies
+in is to embed them as a JSON literal in the `code` string — and the tool's own
+response always echoes back the exact code it ran (`### Ran Playwright code`),
+printing the full `__session` JWT into the transcript. This is a real exposure
+by the project's own rule, not just noise. If it happens, treat that role's
+session as burned and re-run `pnpm e2e:auth <role>` before the stored state is
+reused again. The separate-process script above is the only route that avoids
+this, because the cookie values never have to pass through a tool argument that
+gets echoed.
