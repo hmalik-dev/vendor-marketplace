@@ -64,4 +64,5 @@
 - [A guard reads a smaller region than you think](a-guard-reads-a-smaller-region-than-you-think.md) — a source scan answers clean about code it never looked at; pin the reach with mutations in the real files
 - [Closure destroys a real Clerk identity](closure-destroys-a-real-clerk-identity.md) — never close a seeded E2E account; the seed resolves Clerk ids and cannot rebuild one
 - [TaskStop cannot stop a peer session](taskstop-cannot-stop-peer-sessions.md) — kill the `bg-spare` child, scoped by its cwd; name matching hits every repo
+- [Users never access Clerk](users-never-access-clerk.md) — no Clerk account menu, portal or self-serve delete; account changes go through the app, the owner runs Clerk (VEN-403)
 - [Linear has an archived sibling project](linear-has-an-archived-sibling-project.md) — lowercase `vendor-marketplace`, ~200 archived layer-split rows from the Prisma era; filter to the project in project.json, never clean it up
