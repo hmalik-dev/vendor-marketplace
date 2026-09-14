@@ -53,7 +53,27 @@ function clerkSecretKey(): string {
     );
   }
 
+  // Never mint or delete people in a live instance, whatever an env file holds.
+  if (!value.startsWith('sk_test_')) {
+    throw new Error(`${name} is not a development-instance key; the no-row persona refuses it.`);
+  }
+
   return value;
+}
+
+/**
+ * The same refusal `scripts/e2e-roles.mjs` makes: the deployed site shares this
+ * Clerk development instance, so aiming `E2E_BASE_URL` at it must not be enough
+ * to create an account there. Exact hostnames, never a substring test.
+ */
+export function assertLoopbackOrigin(baseUrl: string): void {
+  const { hostname } = new URL(baseUrl);
+
+  if (!['localhost', '127.0.0.1', '[::1]', '::1'].includes(hostname)) {
+    throw new Error(
+      `The no-row persona mints a Clerk identity, so it runs against loopback only — not ${hostname}.`,
+    );
+  }
 }
 
 async function clerk(path: string, init: { method: string; body?: unknown }): Promise<Response> {

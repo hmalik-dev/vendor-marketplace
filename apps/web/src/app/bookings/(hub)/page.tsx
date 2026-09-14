@@ -81,7 +81,7 @@ export default async function BookingsPage({
 
   /*
    * The tab travels through sign-in, so a link to a specific tab still lands on
-   * that tab afterwards. In practice `bookings/layout.tsx` refuses a signed-out
+   * that tab afterwards. In practice the layout beside this page refuses a signed-out
    * or gated session first, carrying the stamped request path — an
    * unrecognised `?tab=` rides along and is dropped above on the way back in.
    * This call still narrows the reader to a customer for the render below.

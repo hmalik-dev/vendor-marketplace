@@ -130,6 +130,24 @@ const REDIRECT_CALLS = [
   /^\s*(?:customer|vendor|admin):\s*(['"`])(\/[^'"`$]*)\1/gm,
 ];
 
+/*
+ * Comments out first: prose here quotes retired destinations by design
+ * ("`/customer/dashboard` used to…"), and a sweep that visited those would
+ * fail on history rather than on code.
+ */
+export function stripComments(code: string): string {
+  return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
+/** The literal pathnames a source file redirects to. */
+export function literalRedirectDestinations(code: string): string[] {
+  const stripped = stripComments(code);
+
+  return REDIRECT_CALLS.flatMap((pattern) =>
+    [...stripped.matchAll(pattern)].map((match) => pathnameOf(match[2] ?? '')),
+  );
+}
+
 const SHARED_PATH_CONSTANT = /^export const [A-Z_]+_PATH = (['"`])(\/[^'"`$]*)\1/gm;
 
 export function enumerateRouteTargets(roots: RouteTargetRoots): RouteTarget[] {
@@ -161,19 +179,8 @@ export function enumerateRouteTargets(roots: RouteTargetRoots): RouteTarget[] {
   for (const file of walk(roots.webSourceDir).filter(
     (candidate) => /\.tsx?$/.test(candidate) && !IS_TEST.test(candidate),
   )) {
-    /*
-     * Comments out first: prose here quotes retired destinations by design
-     * ("`/customer/dashboard` used to…"), and a sweep that visited those would
-     * fail on history rather than on code.
-     */
-    const code = readFileSync(file, 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
-
-    for (const pattern of REDIRECT_CALLS) {
-      for (const match of code.matchAll(pattern)) {
-        add(pathnameOf(match[2] ?? ''), file, 'redirect');
-      }
+    for (const destination of literalRedirectDestinations(readFileSync(file, 'utf8'))) {
+      add(destination, file, 'redirect');
     }
   }
 

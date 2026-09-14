@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type { BrowserContext, Page } from '@playwright/test';
@@ -13,12 +13,18 @@ import {
 import { resolveE2EBaseUrl } from './base-url.js';
 import { AUTH_DIR, expect, storageStatePath, test } from './fixtures.js';
 import {
+  assertLoopbackOrigin,
   deleteNoRowAccount,
   mintNoRowAccount,
   signInThroughTheForm,
   type NoRowAccount,
 } from './no-row-account.js';
-import { enumerateRouteTargets, type RouteTarget } from './route-targets.js';
+import {
+  enumerateRouteTargets,
+  literalRedirectDestinations,
+  stripComments,
+  type RouteTarget,
+} from './route-targets.js';
 
 /**
  * Every role × every route and redirect destination lands on a rendered screen
@@ -70,19 +76,66 @@ function isRoleGated(path: string): boolean {
 
 const APP_ORIGIN = new URL(resolveE2EBaseUrl()).origin;
 
+const APP_DIR = join(REPO_ROOT, 'apps/web/src/app');
+
+/** A segment's own `page.tsx` or `route.ts` — the first source the enumerator records for it. */
+function segmentFile(target: RouteTarget): string | null {
+  return target.kinds.includes('segment') ? join(REPO_ROOT, target.sources[0] ?? '') : null;
+}
+
+function codeOf(file: string): string {
+  return existsSync(file) ? stripComments(readFileSync(file, 'utf8')) : '';
+}
+
+/** The segment's file and every `layout.tsx` above it — everything that runs to render it. */
+function renderChain(target: RouteTarget): string[] {
+  const file = segmentFile(target);
+  if (file === null) return [];
+
+  const chain = [file];
+  for (
+    let directory = dirname(file);
+    directory.startsWith(APP_DIR);
+    directory = dirname(directory)
+  ) {
+    chain.push(join(directory, 'layout.tsx'));
+  }
+  return chain;
+}
+
 /**
- * A route whose own source redirects — `/sign-in` sending a live session on,
- * `/accept-terms` releasing an account that has already accepted — may send a
- * permitted reader elsewhere. Read from the file, like the targets themselves,
- * so a page that starts bouncing people without a redirect in it still fails.
+ * A route that refuses a caller without a usable session — a `requireRole` or a
+ * `requireCurrentUser` anywhere in its render chain. `ROLE_ROUTE_RULES` names
+ * only the role gates, and `/messages` admits every role, so without this a
+ * signed-out `/messages` could render and still pass.
  */
-function mayForward(target: RouteTarget): boolean {
-  return (
-    target.kinds.includes('segment') &&
-    target.sources.some((source) =>
-      /\bredirect\w*\(/.test(readFileSync(join(REPO_ROOT, source), 'utf8')),
-    )
+function isSessionGated(target: RouteTarget): boolean {
+  return renderChain(target).some((file) =>
+    /\b(?:requireRole|requireCurrentUser)\(/.test(codeOf(file)),
   );
+}
+
+/**
+ * Where a route's **own** source may send a reader it admits: the literal
+ * destinations its file redirects to, plus the role's two starts when it hands
+ * a live session on through a helper or a forwarder — `/sign-in` via
+ * `redirectIfSignedIn`, `/accept-terms` via `/after-sign-in`. Any other landing
+ * is a bounce the source does not explain.
+ */
+function ownForwards(target: RouteTarget, role: SignedInRole | null): Set<string> {
+  const file = segmentFile(target);
+  const code = file === null ? '' : codeOf(file);
+  const destinations = new Set(literalRedirectDestinations(code));
+  const handsOn =
+    /\b(?:redirectIfSignedIn|redirectVendorToDashboard)\(/.test(code) ||
+    [...FORWARDERS].some((forwarder) => destinations.has(forwarder));
+
+  if (role !== null && handsOn) {
+    destinations.add(DASHBOARD_PATH_BY_ROLE[role]);
+    destinations.add(POST_SIGN_IN_PATH_BY_ROLE[role]);
+  }
+
+  return destinations;
 }
 
 interface Refusal {
@@ -105,7 +158,7 @@ function expectationFor(
     if (path === '/after-sign-in')
       return { renders: false, refusal: { to: '/sign-in', returnTo: null } };
     const toSignIn = { to: '/sign-in', returnTo: path };
-    return isRoleGated(path) || path === '/dashboard'
+    return isRoleGated(path) || isSessionGated(target) || path === '/dashboard'
       ? { renders: false, refusal: toSignIn }
       : { renders: true, refusal: toSignIn };
   }
@@ -116,7 +169,7 @@ function expectationFor(
       return { renders: false, refusal: { to: '/accept-terms', returnTo: null } };
     }
     const toGate = { to: '/accept-terms', returnTo: path };
-    return isRoleGated(path) || path === '/dashboard'
+    return isRoleGated(path) || isSessionGated(target) || path === '/dashboard'
       ? { renders: false, refusal: toGate }
       : { renders: true, refusal: toGate };
   }
@@ -207,7 +260,10 @@ async function landCell(
         : new URL(landed.searchParams.get(RETURN_PATH_PARAM) ?? '/', landed).pathname ===
           refusal.returnTo);
 
-    if (!matchesRefusal && !(renders && mayForward(target))) {
+    const role = 'role' in persona ? persona.role : null;
+    const sourceForwarded = renders && ownForwards(target, role).has(landed.pathname);
+
+    if (!matchesRefusal && !sourceForwarded) {
       fail(
         refusal
           ? `landed on ${describeUrl(landed)}, expected ${refusal.to}${refusal.returnTo ? `?returnTo=${refusal.returnTo}` : ''}`
@@ -335,6 +391,7 @@ test.describe('route landing, every persona × every source-derived target', () 
    * gated URL, which the matrix below asserts cell by cell.
    */
   test('a newly verified account with no users row', async ({ browser }) => {
+    assertLoopbackOrigin(APP_ORIGIN);
     const account: NoRowAccount = await mintNoRowAccount();
     const context = await browser.newContext();
 

@@ -51,6 +51,16 @@ so the spec's `toBeEnabled()` times out — but the attempt would already have
 been made against the instance production shares. Addresses are `@example.com`
 (IANA-reserved), so the verification mail goes nowhere.
 
+**VEN-379 went further and actually creates one (2026-09-14, reported).**
+`route-landing.spec.ts`'s no-row persona calls Clerk's Backend API
+(`e2e/no-row-account.ts`) to create a `+clerk_test` user, signs it in on
+`baseURL` and deletes it in `finally`. It sits in the default `playwright test`
+match with no loopback check on `baseURL` and no `sk_test_` check on the key, so
+`E2E_BASE_URL=<vercel>` creates a throwaway identity on the instance production
+shares. It also contradicts `.claude/rules/e2e-auth.md` "Do not create throwaway
+accounts". Suggested fix: `test.skip`/throw unless the parsed hostname is
+loopback and the key starts `sk_test_`.
+
 **How to apply:** any change that widens what an E2E script does by default is
 a production-privilege question, not a fixtures question. Ask what the default
 does when `E2E_BASE_URL` names the deployed origin. If a guard is added, parse
