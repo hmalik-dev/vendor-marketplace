@@ -2,7 +2,7 @@
 
 import { MAX_NAME_LENGTH } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { adminQueryString } from '@/lib/admin-params';
 import { FIELD_FOCUS } from '@/lib/focus';
@@ -98,6 +98,19 @@ export function FilterSelect({
 export interface FilterBarProps {
   /** Where the form submits — the surface's own path, so filters stay in the URL. */
   action: string;
+  /**
+   * The filters this bar refines, **narrowed** — the object the surface hands
+   * its `Pager`, never raw `searchParams`. Each non-empty entry is submitted as
+   * a hidden field, which is the only reason `Apply filters` applies anything
+   * (VEN-383): the dropdowns navigate on change and are not form controls, so
+   * without these the GET form had no successful controls and landed on the
+   * bare path. The bar owns the fields rather than each `FilterSelect` because
+   * `/admin/activity`'s `actor` and `subject` have no control of their own.
+   *
+   * `page` must stay absent, so a narrower filter lands on page 1. Omitted only
+   * where a surface still writes its own hidden fields.
+   */
+  params?: Record<string, string | undefined>;
   /** Placeholder for the search field. Omitted where a surface has no search. */
   searchPlaceholder?: string;
   searchValue?: string;
@@ -111,20 +124,32 @@ export interface FilterBarProps {
  * The Refine bar, above the table and never a modal.
  *
  * `method="get"`, so every filter is a URL the operator can paste into a
- * support thread and the server can render without a round trip. Changing a
- * dropdown submits the form; the search field submits on Enter.
+ * support thread and the server can render without a round trip. A dropdown
+ * navigates on change; the search field submits on Enter, and `Apply filters`
+ * submits whatever `params` holds.
  */
 export function FilterBar({
   action,
+  params = {},
   searchPlaceholder,
   searchValue,
   children,
   trailing,
 }: FilterBarProps): React.ReactElement {
-  const form = useRef<HTMLFormElement>(null);
-
   return (
-    <form ref={form} action={action} method="get" className="flex items-center gap-2">
+    // `relative` anchors the visually-hidden submit's offsets below.
+    <form action={action} method="get" className="relative flex items-center gap-2">
+      {/*
+        `q` is skipped where the search field exists — that input already
+        carries the name, and two would submit `?q=a&q=b`. Empty values are
+        omitted, matching `adminQueryString`: `?type=` is not the URL the
+        dropdown's change handler would build.
+      */}
+      {Object.entries(params).map(([key, value]) =>
+        value && !(searchPlaceholder && key === 'q') ? (
+          <input key={key} type="hidden" name={key} value={value} />
+        ) : null,
+      )}
       {searchPlaceholder ? (
         <input
           type="search"
@@ -180,8 +205,16 @@ export function FilterBar({
           left a keyboard stop between `Payouts` and `Export CSV` that painted
           nothing at all — a focus ring on a 1px clipped box — which is the same
           defect class as a clipped ring, arrived at from the other direction.
+
+          `bottom-0 left-0 translate-y-full` while hidden (VEN-383): `sr-only` is
+          `position:absolute` with no offsets, so the 1px box resolved to the
+          flex container's content start and sat on top of the first control —
+          `elementFromPoint` at its centre returned the `Direction` combobox.
+          The offsets park it just below the bar, over nothing. Focused,
+          `not-sr-only` returns it to the flow; `focus-visible:translate-y-0`
+          undoes the transform, which `not-sr-only` does not reset.
         */
-        className="sr-only focus-visible:not-sr-only focus-visible:rounded-md focus-visible:border focus-visible:border-stone-300 focus-visible:bg-stone-0 focus-visible:px-3.5 focus-visible:py-2 focus-visible:text-sm focus-visible:font-semibold focus-visible:text-stone-900"
+        className="sr-only bottom-0 left-0 translate-y-full focus-visible:not-sr-only focus-visible:translate-y-0 focus-visible:rounded-md focus-visible:border focus-visible:border-stone-300 focus-visible:bg-stone-0 focus-visible:px-3.5 focus-visible:py-2 focus-visible:text-sm focus-visible:font-semibold focus-visible:text-stone-900"
       >
         Apply filters
       </button>

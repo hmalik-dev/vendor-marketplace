@@ -35,7 +35,7 @@ export default async function AdminReviewsPage({
       counts={[`${reviews.total} total`]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH}>
+        <FilterBar action={PATH} params={{ type }}>
           <FilterSelect
             action={PATH}
             carried={{ type }}

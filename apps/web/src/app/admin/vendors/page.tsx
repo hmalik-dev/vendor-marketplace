@@ -133,6 +133,7 @@ export default async function AdminVendorsPage({
       filters={
         <FilterBar
           action={PATH}
+          params={params}
           searchPlaceholder="Search name, email or slug…"
           searchValue={params.q}
           trailing={
@@ -224,16 +225,6 @@ export default async function AdminVendorsPage({
               label: PAYOUT_LABELS[filter],
             }))}
           />
-          {/*
-            Every filter the search form does not own travels with it as a
-            hidden field. Submitting a GET form sends only its own controls, and
-            the three dropdowns now navigate on their own — so without these,
-            pressing Enter in the search box would silently clear the category,
-            the city, the payout state and the saved filter.
-          */}
-          {(['category', 'city', 'payouts', 'status'] as const).map((key) =>
-            params[key] ? <input key={key} type="hidden" name={key} value={params[key]} /> : null,
-          )}
         </FilterBar>
       }
       pager={{

@@ -131,7 +131,7 @@ export default async function AdminCasesPage({
       ]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH}>
+        <FilterBar action={PATH} params={{ status, booking }}>
           {/*
             `allowAny={false}`, and it is the only filter in the console that
             says so. `adminCaseQuerySchema` defaults `status` to `open` — the
