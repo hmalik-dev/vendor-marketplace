@@ -134,8 +134,8 @@ export async function SiteHeader(): Promise<React.ReactElement> {
               already the fork, and a second header button — a named vendor
               link beside this pill — duplicated that decision in the one place
               a visitor has the least context to make it. Vendors reach the same
-              screen through "For vendors" in the nav, which deep-links with the
-              role pre-selected. See design/design-plan/21-sign-up.md.
+              screen through "For vendors" in the nav, whose page's CTA deep-links
+              with the role pre-selected. See design/design-plan/21-sign-up.md.
 
               `ink` is the marketing header's sign-up action and lives nowhere
               else in the product — design/design-plan/03-components.md. It is

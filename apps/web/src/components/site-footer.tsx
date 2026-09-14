@@ -6,12 +6,15 @@ import {
   LANDING_JUMP_CATEGORY_SLUGS,
   CATEGORY_SEEDS,
   SUPPORT_PATH,
+  VENDOR_AGREEMENT_PATH,
 } from '@vendor-marketplace/shared';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { cn } from '@/lib/utils';
 import { readRoleForChrome } from '@/lib/current-user';
 import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
+import { OnPath } from '@/components/on-path';
+import { FOR_VENDORS_PATH } from '@/lib/for-vendors';
 
 /**
  * The line the whole brand is aimed at. It is about the vendors, not the
@@ -36,7 +39,7 @@ interface FooterLinkSpec {
 }
 
 /**
- * The vendor links carry `?role=vendor` — see design/design-plan/21-sign-up.md.
+ * `For vendors` opens `/for-vendors`, the same destination as the header nav.
  *
  * `Contact support` sits here rather than in Account because it is true for
  * everyone: it is the one row of this footer a signed-out visitor and a
@@ -45,7 +48,7 @@ interface FooterLinkSpec {
  * so nothing here reads as a working channel that is not one.
  */
 const COMPANY_LINKS = [
-  { href: '/sign-up?role=vendor', label: 'For vendors' },
+  { href: FOR_VENDORS_PATH, label: 'For vendors' },
   /*
    * `emphasis` is the frame singling this row out, not a decoration: both
    * footers in the closing-band frame in `design/delta-band/` draw every link at
@@ -375,6 +378,17 @@ export async function SiteFooter(): Promise<React.ReactElement> {
                 </Link>
               </li>
             ))}
+            {/*
+              `/for-vendors` only: the one page where a visitor wants the
+              vendor agreement *before* signing up (FOR-VENDORS-PROMPT.md §0).
+            */}
+            <OnPath path={FOR_VENDORS_PATH}>
+              <li>
+                <Link href={VENDOR_AGREEMENT_PATH} className={LEGAL_CLASS}>
+                  Vendor agreement
+                </Link>
+              </li>
+            </OnPath>
           </ul>
           {/* The wordmark is read, never written out. */}
           <p className="text-meta text-stone-560">{`© ${BRAND_NAME} ${copyrightYear()}`}</p>

@@ -539,20 +539,29 @@ describe('HomePage', () => {
   });
 
   /*
-   * Both controls **and** the nav link share one destination. A band whose
-   * headline CTA and whose "how it works" link disagree is two doors into one
-   * room. `/for-vendors` does not exist yet, so the documented fallback is the
-   * signup form with the role pre-selected — 21-sign-up.md.
+   * Both controls open `/for-vendors` (VEN-384): the CTA the page, the payouts
+   * link its second section. The `TODO` naming the page is gone with the
+   * fallback it described.
    */
-  it('points both band controls at one vendor destination', async () => {
+  it('points both band controls at /for-vendors', async () => {
     render(await HomePage());
 
-    for (const name of ['Start taking bookings', 'See how payouts work']) {
-      expect(screen.getByRole('link', { name }), name).toHaveProperty(
-        'href',
-        'http://localhost:3000/sign-up?role=vendor',
-      );
-    }
+    expect(screen.getByRole('link', { name: 'Start taking bookings' })).toHaveProperty(
+      'href',
+      'http://localhost:3000/for-vendors',
+    );
+    expect(screen.getByRole('link', { name: 'See how payouts work' })).toHaveProperty(
+      'href',
+      'http://localhost:3000/for-vendors#payouts',
+    );
+  });
+
+  it('carries no TODO naming /for-vendors', () => {
+    const source = readFileSync(join(process.cwd(), 'src/app/page.tsx'), 'utf8');
+
+    // The page had exactly one TODO, and it was this one.
+    expect(source.length).toBeGreaterThan(0);
+    expect(source).not.toContain('TODO');
   });
 
   /*

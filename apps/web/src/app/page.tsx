@@ -18,6 +18,7 @@ import { StockPhoto } from '@/components/ui/stock-photo';
 import { VendorCard } from '@/components/vendors/vendor-card';
 import { siteOrigin } from '@/config/env';
 import { readRoleForChrome, redirectVendorToDashboard } from '@/lib/current-user';
+import { FOR_VENDORS_PATH, FOR_VENDORS_PAYOUTS_ANCHOR } from '@/lib/for-vendors';
 import { GENERIC_TRUST_COPY } from '@/lib/landing-status';
 import type { TrustTitle } from '@/lib/landing-status';
 import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
@@ -125,17 +126,13 @@ const VENDOR_STEPS = [
 ] as const;
 
 /**
- * Where the closing band's two controls send a vendor.
- *
- * TODO(#428): both should land on **`/for-vendors`** — a page that states what
- * a vendor keeps, when they are paid, what it costs and how availability works,
- * *then* asks them to sign up. It does not exist yet, so both fall back to the
- * signup form with the role pre-selected, which is where the nav's `For
- * vendors` link already goes. **One destination, never two**: a band whose
- * headline CTA and whose "how it works" link disagree is two doors into one
- * room, and the reason the fallback is written once here.
+ * Where the closing band's two controls send a vendor: `/for-vendors`, which
+ * states what a vendor keeps and when they are paid *before* asking them to
+ * sign up. The headline CTA opens the page and the payouts link opens its
+ * second section — one destination, so the two controls never disagree.
  */
-const VENDOR_ENTRY_PATH = '/sign-up?role=vendor';
+const VENDOR_ENTRY_PATH = FOR_VENDORS_PATH;
+const VENDOR_PAYOUTS_PATH = `${FOR_VENDORS_PATH}#${FOR_VENDORS_PAYOUTS_ANCHOR}`;
 
 const DESCRIPTION = `Compare real availability and pricing from event vendors near you, send one request, and pay securely once the date is locked in. Now booking in ${LAUNCH_CITY}.`;
 
@@ -756,9 +753,9 @@ export default async function HomePage(): Promise<React.ReactElement> {
         A signed-in vendor never reaches this page at all.
 
         `for-vendors` stays as the anchor id: nothing points at it today — the
-        nav, the footer and both controls below all go to `VENDOR_ENTRY_PATH` —
-        but it is the fragment the page has advertised, and dropping it would
-        break any link already written down.
+        nav, the footer and both controls below all go to `/for-vendors` — but
+        it is the fragment the page has advertised, and dropping it would break
+        any link already written down.
       */}
       <Show when="signed-out">
         <section
@@ -796,7 +793,8 @@ export default async function HomePage(): Promise<React.ReactElement> {
               </div>
 
               {/*
-                Both controls, one destination — see `VENDOR_ENTRY_PATH`. The
+                Both controls, one destination — see `VENDOR_ENTRY_PATH`; the
+                payouts link lands on that page's second section. The
                 link comes first so the button is the outermost element in the
                 band and the strongest control sits at the page's gutter. The
                 button is the cream fill the frame draws rather than clay: clay
@@ -805,7 +803,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
               */}
               <div className="flex flex-none flex-wrap items-center gap-5 sm:pb-0.75">
                 <Link
-                  href={VENDOR_ENTRY_PATH}
+                  href={VENDOR_PAYOUTS_PATH}
                   className="text-base font-semibold text-stone-50 underline-offset-4 transition-colors duration-(--duration-fast) hover:underline"
                 >
                   See how payouts work

@@ -46,6 +46,7 @@
   --color-sage-600: #4b5940; /* sage as text */
 
   /* Gold — waiting on someone. */
+  --color-gold-25: #fdf6ea; /* the tint on the step a vendor waits for — /for-vendors step 04 */
   --color-gold-50: #f5eedc;
   --color-gold-150: #f9e2bd; /* the italic accent over a scrimmed photograph — D30 */
   --color-gold-200: #f3c98b; /* pale gold — the italic accent on an ink ground */
@@ -71,6 +72,7 @@
   --color-stone-150: #f1ece4; /* input fill, nested surfaces */
   --color-stone-200: #efe9e0; /* hairline dividers inside cards */
   --color-stone-250: #ece6dc; /* image ground — behind every cover, and a coverless one */
+  --color-stone-275: #e9e1d4; /* section rules between full-bleed bands — /for-vendors */
   --color-stone-300: #e4ddd1; /* borders */
   --color-stone-400: #d5cec2; /* stronger borders, unchecked controls */
   --color-stone-500: #c9c1b5; /* disabled text ONLY — fails AA by design */

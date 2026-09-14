@@ -26,13 +26,33 @@ describe('MarketingNav', () => {
       'href',
       'http://localhost:3000/#how-it-works',
     );
-    // The header carries one sign-up control, so this is the vendor door — and
-    // it deep-links with the role pre-selected rather than scrolling to a
-    // section. See design/design-plan/21-sign-up.md.
+    // The vendor door opens the page that says what a vendor keeps, not a
+    // sign-up form an account holder would be bounced out of (VEN-384).
     expect(screen.getByRole('link', { name: 'For vendors' })).toHaveProperty(
       'href',
-      'http://localhost:3000/sign-up?role=vendor',
+      'http://localhost:3000/for-vendors',
     );
+  });
+
+  it('draws on /for-vendors with that link marked as the current page', () => {
+    pathname = '/for-vendors';
+
+    render(<MarketingNav />);
+
+    const active = screen.getByRole('link', { name: 'For vendors' });
+    expect(active.getAttribute('aria-current')).toBe('page');
+    expect(active.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['font-semibold', 'text-clay-600', 'before:bg-clay-400']),
+    );
+    expect(screen.getByRole('link', { name: 'Browse' }).getAttribute('aria-current')).toBeNull();
+  });
+
+  it('marks no link current on the landing page', () => {
+    render(<MarketingNav />);
+
+    for (const name of ['Browse', 'How it works', 'For vendors']) {
+      expect(screen.getByRole('link', { name }).getAttribute('aria-current'), name).toBeNull();
+    }
   });
 
   it('keeps the on-page anchor absolute so it resolves from the landing page itself', () => {
