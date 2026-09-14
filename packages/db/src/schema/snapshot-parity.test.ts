@@ -16,6 +16,8 @@ import {
   PAYOUT_MODELS,
   PRICE_TYPES,
   REVIEW_TYPES,
+  OPERATOR_ALERT_KINDS,
+  OPERATOR_ALERT_OUTCOMES,
   REPORT_REASONS,
   REPORT_SUBJECTS,
   SUPPORT_CASE_ORIGINS,
@@ -90,6 +92,8 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'support_topic', values: SUPPORT_TOPICS },
     { enumName: 'report_subject', values: REPORT_SUBJECTS },
     { enumName: 'report_reason', values: REPORT_REASONS },
+    { enumName: 'operator_alert_kind', values: OPERATOR_ALERT_KINDS },
+    { enumName: 'operator_alert_outcome', values: OPERATOR_ALERT_OUTCOMES },
   ];
 
   it.each(cases)(

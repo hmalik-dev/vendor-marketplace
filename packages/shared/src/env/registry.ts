@@ -687,6 +687,38 @@ export const ENV_REGISTRY = [
     description: 'Where the /support form sends. A deployment must state the monitored address.',
     setup: RESEND_SETUP,
   },
+  {
+    /*
+     * Where operator alerts and the morning digest go (VEN-405). No default,
+     * unlike `SUPPORT_EMAIL_TO`: a laptop has nobody to page, so development
+     * boots without it and logs each alert instead, while a deployment refuses
+     * to start — an alert address that silently defaulted would be a pager
+     * wired to nobody.
+     */
+    key: 'OPERATOR_ALERT_EMAIL',
+    capability: 'email',
+    audience: 'server',
+    consumers: ['api'],
+    environments: 'per-environment',
+    optionalFor: ['baseline', 'local'],
+    shape: /^[^\s@,]+@[^\s@,]+\.[A-Za-z]{2,}$/,
+    placeholder: 'operator@...',
+    description:
+      'Where operator alerts (disputes, failed payouts and refunds) and the daily digest are sent. Required on a deployment; development logs alerts instead.',
+    setup: RESEND_SETUP,
+  },
+  {
+    /* The zone whose 07:00 the daily digest waits for. */
+    key: 'OPERATOR_TIMEZONE',
+    capability: 'email',
+    audience: 'server',
+    consumers: ['api'],
+    environments: 'shared',
+    shape: /^[A-Za-z]+(?:\/[A-Za-z0-9_+-]+)*$/,
+    defaultValue: 'America/New_York',
+    description: 'IANA time zone of the operator; the daily digest is sent at 07:00 there.',
+    setup: RESEND_SETUP,
+  },
 
   // --- sentry --------------------------------------------------------------
   {

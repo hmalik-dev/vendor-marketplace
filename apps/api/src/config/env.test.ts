@@ -14,6 +14,7 @@ const REQUIRED: NodeJS.ProcessEnv = {
   S3_SECRET_ACCESS_KEY: 'vendor_marketplace_dev',
   S3_BUCKET: 'vendor-marketplace-uploads',
   S3_PUBLIC_URL: 'http://localhost:9000/vendor-marketplace-uploads',
+  OPERATOR_ALERT_EMAIL: 'operator@example.com',
 };
 
 /*
@@ -438,6 +439,31 @@ describe('parseEnv on a deployment', () => {
     const env = parseEnv({ ...DEPLOYED, WEB_URL: 'https://orla.test, https://www.orla.test' });
 
     expect(allowedOrigins(env)).toEqual(['https://orla.test', 'https://www.orla.test']);
+  });
+
+  /*
+   * VEN-405: a laptop has nobody to page and logs each alert, but a deployment
+   * with no operator address would send its disputes and failed payouts to
+   * nobody, so it refuses to start.
+   */
+  it('refuses a deployment with no operator alert address', () => {
+    const source = { ...DEPLOYED };
+    delete source.OPERATOR_ALERT_EMAIL;
+
+    expect(() => parseEnv(source)).toThrow(/OPERATOR_ALERT_EMAIL is required/);
+    expect(parseEnv(DEPLOYED).OPERATOR_ALERT_EMAIL).toBe('operator@example.com');
+  });
+
+  it('boots development with no operator alert address, and the digest zone defaulted', () => {
+    const development = { ...REQUIRED };
+    delete development.OPERATOR_ALERT_EMAIL;
+    const env = parseEnv(development);
+
+    expect(env.OPERATOR_ALERT_EMAIL).toBeUndefined();
+    expect(env.OPERATOR_TIMEZONE).toBe('America/New_York');
+    expect(() => parseEnv({ ...REQUIRED, OPERATOR_ALERT_EMAIL: 'not-an-address' })).toThrow(
+      /OPERATOR_ALERT_EMAIL/,
+    );
   });
 
   it('keeps the shared defaults, which do not differ per environment', () => {

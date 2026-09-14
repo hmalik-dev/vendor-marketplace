@@ -15,3 +15,4 @@ export * from './notifications.js';
 export * from './email-deliveries.js';
 export * from './us-cities.js';
 export * from './support-cases.js';
+export * from './operator-alerts.js';

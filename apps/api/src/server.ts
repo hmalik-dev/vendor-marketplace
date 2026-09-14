@@ -10,7 +10,11 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { createDatabase, loadEnv } from '@vendor-marketplace/db';
-import { MAX_UPLOAD_BYTES, PAYOUT_SWEEP_INTERVAL_MS } from '@vendor-marketplace/shared';
+import {
+  MAX_UPLOAD_BYTES,
+  OPERATOR_DIGEST_POLL_INTERVAL_MS,
+  PAYOUT_SWEEP_INTERVAL_MS,
+} from '@vendor-marketplace/shared';
 import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
 import { allowedOrigins, canonicalWebOrigin, parseEnv, type ApiEnv } from './config/env.js';
 import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.js';
@@ -26,6 +30,7 @@ import { clockPlugin, type Clock } from './plugins/clock.js';
 import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { eventsPlugin } from './plugins/events.js';
+import { operatorAlertsPlugin } from './plugins/operator-alerts.js';
 import { payoutReleasePlugin } from './plugins/payout-release.js';
 import { storagePlugin } from './plugins/storage.js';
 import { emailPlugin } from './plugins/email.js';
@@ -101,6 +106,11 @@ export interface BuildServerOptions {
    * go red, which is a failure that reports itself.
    */
   payoutSweepIntervalMs?: number;
+  /**
+   * How often each instance asks whether the operator digest is due; `0`
+   * disables it. On by default for `payoutSweepIntervalMs`'s reason.
+   */
+  operatorDigestIntervalMs?: number;
 }
 
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
@@ -226,6 +236,12 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(clerkAuthPlugin, {
     secretKey: env.CLERK_SECRET_KEY,
     ...options.auth,
+  });
+  await app.register(operatorAlertsPlugin, {
+    to: env.OPERATOR_ALERT_EMAIL,
+    webOrigin: canonicalWebOrigin(env),
+    timeZone: env.OPERATOR_TIMEZONE,
+    digestIntervalMs: options.operatorDigestIntervalMs ?? OPERATOR_DIGEST_POLL_INTERVAL_MS,
   });
   await app.register(payoutReleasePlugin, {
     intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,

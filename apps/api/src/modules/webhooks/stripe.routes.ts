@@ -7,6 +7,12 @@ import {
   recordChargebackOutcome,
   type ChargebackOutcome,
 } from '../cases/cases.service.js';
+import {
+  createFailureWindow,
+  disputeOpenedAlert,
+  stripeWebhookFailingAlert,
+  vendorPayoutsDisabledAlert,
+} from '../operator-alerts/operator-alerts.service.js';
 import { bookingContextFor, recordSuccessfulPayment } from '../payments/payments.service.js';
 import { generateSupportReference } from '../support/support.service.js';
 import {
@@ -142,6 +148,26 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
   options,
 ) => {
   keepRawJsonBody(app);
+
+  /*
+   * A webhook refused on its signature or failing with a 5xx is the one money
+   * path that fails silently: Stripe retries and nothing here is recorded
+   * (VEN-405). A 401 from this route is only ever a signature failure. Scoped
+   * to this plugin, so no other route's errors are counted.
+   */
+  const failures = createFailureWindow(app.clock);
+
+  app.addHook('onResponse', async (_request, reply) => {
+    if (reply.statusCode !== 401 && reply.statusCode < 500) {
+      return;
+    }
+
+    const crossed = failures.record();
+
+    if (crossed !== null) {
+      app.operatorAlerts.dispatch(stripeWebhookFailingAlert(crossed));
+    }
+  });
 
   app.post(
     '/webhooks/stripe',
@@ -283,6 +309,18 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           generateSupportReference(),
           app.clock(),
         );
+      }
+
+      /*
+       * Only the transitions, never a replay: `already-recorded` and
+       * `unchanged` are what a redelivery answers, so they alert nobody.
+       */
+      const { accountId, objectId } = event;
+
+      if (outcome === 'dispute-opened' && objectId) {
+        app.operatorAlerts.dispatch(() => disputeOpenedAlert(app.db, objectId));
+      } else if (outcome === 'not-onboarded' && accountId) {
+        app.operatorAlerts.dispatch(() => vendorPayoutsDisabledAlert(app.db, accountId));
       }
 
       request.log.info({ stripeEvent: event.type, outcome }, 'Applied a Stripe webhook');

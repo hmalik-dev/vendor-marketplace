@@ -10,6 +10,10 @@ import type { AppDatabase } from '../../lib/database.js';
 import type { FastifyBaseLogger } from 'fastify';
 import { conflict, notFound } from '../../lib/errors.js';
 import { transferGroupFor, type StripeConnectGateway } from '../../lib/stripe.js';
+import {
+  payoutFailedAlert,
+  type OperatorAlerts,
+} from '../operator-alerts/operator-alerts.service.js';
 import { findBookingById } from './payments.dao.js';
 import {
   claimReleasableBooking,
@@ -33,6 +37,12 @@ export interface PayoutContext {
   db: AppDatabase;
   stripe: StripeConnectGateway;
   log: FastifyBaseLogger;
+  /**
+   * Where a payout that keeps failing is reported (VEN-405). The scheduled
+   * sweep passes it; an operator's own retry does not, because the operator is
+   * already looking at the result.
+   */
+  alerts?: Pick<OperatorAlerts, 'dispatch'>;
 }
 
 /** What one sweep did, for the log line and for the tests to assert on. */
@@ -254,6 +264,7 @@ async function releaseOnePayout(
    * exact outcome the catch block was written to prevent.
    */
   let failure: string | null = null;
+  let owedCents = 0;
 
   const outcome = await context.db.transaction(async (tx) => {
     const booking = await claimReleasableBooking(tx, bookingId, dueThroughDate);
@@ -261,6 +272,8 @@ async function releaseOnePayout(
     if (!booking) {
       return 'skipped';
     }
+
+    owedCents = booking.vendorPayoutCents;
 
     /*
      * A vendor whose account is not able to receive a transfer is a failure and
@@ -343,7 +356,17 @@ async function releaseOnePayout(
      * one whose attempt was.
      */
     try {
-      await recordPayoutFailure(context.db, bookingId, failure);
+      const attempts = await recordPayoutFailure(context.db, bookingId, failure);
+      const alert = payoutFailedAlert({
+        bookingId,
+        attempts,
+        amountCents: owedCents,
+        reason: failure,
+      });
+
+      if (alert) {
+        context.alerts?.dispatch(alert);
+      }
     } catch (error) {
       context.log.error({ bookingId, err: error }, 'Could not record a failed payout attempt');
     }

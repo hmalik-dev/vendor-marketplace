@@ -12,6 +12,10 @@ import type { EmailGateway } from '../../lib/email.js';
 import { AppError, notFound, unauthorized } from '../../lib/errors.js';
 import { openReportCase, recordCaseSendFailure } from '../cases/cases.service.js';
 import { findUserEmail } from '../notifications/notification-email.dao.js';
+import {
+  reportFiledAlert,
+  type OperatorAlerts,
+} from '../operator-alerts/operator-alerts.service.js';
 import { renderReportNotice } from '../support/support-email.js';
 import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
 import { findReportSubject, type ReportSubjectProjection } from './reports.dao.js';
@@ -58,6 +62,8 @@ export interface ReportDeps {
   log: FastifyBaseLogger;
   /** `SUPPORT_EMAIL_TO`. Never a literal — see the registry row. */
   to: string;
+  /** The operator's own pager (VEN-405), separate from the support inbox. */
+  alerts: Pick<OperatorAlerts, 'dispatch'>;
 }
 
 /**
@@ -167,6 +173,20 @@ export async function createReport(
       'We could not file that report. Try again in a moment.',
     );
   }
+
+  /*
+   * Ids, labels and the storefront only — never the reporter's address or
+   * their own words, which can name anybody.
+   */
+  deps.alerts.dispatch(
+    reportFiledAlert({
+      caseId: reportCase.id,
+      reference,
+      subjectLabel: REPORT_SUBJECT_LABELS[input.subjectType],
+      reasonLabel: REPORT_REASON_LABELS[input.reason],
+      vendorBusinessName: subject.vendorBusinessName,
+    }),
+  );
 
   const notice = renderReportNotice({
     reference,

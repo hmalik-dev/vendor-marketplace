@@ -57,7 +57,10 @@ export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
       running = true;
 
       try {
-        await releaseDuePayouts({ db: app.db, stripe: app.stripe, log: app.log }, app.clock());
+        await releaseDuePayouts(
+          { db: app.db, stripe: app.stripe, log: app.log, alerts: app.operatorAlerts },
+          app.clock(),
+        );
       } catch (error) {
         // Logged and swallowed: an unhandled rejection here would take the
         // process down over a job whose next run repairs it.
@@ -74,5 +77,5 @@ export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
       clearInterval(timer);
     });
   },
-  { name: 'payout-release', dependencies: ['clock'] },
+  { name: 'payout-release', dependencies: ['clock', 'operator-alerts'] },
 );
