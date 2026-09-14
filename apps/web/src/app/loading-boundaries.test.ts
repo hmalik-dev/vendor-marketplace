@@ -40,6 +40,20 @@ const NOT_FOUND_PAGES = ROUTE_FILES.filter(
     readFileSync(join(APP_DIR, file.path), 'utf8').includes('notFound()'),
 );
 
+/** The two calls a Server Component turns a refused session away with. */
+const SESSION_GATE = /\b(?:requireRole|requireCurrentUser)\(/;
+
+function filesCalling(name: 'page.tsx' | 'layout.tsx', pattern: RegExp): RouteFile[] {
+  return ROUTE_FILES.filter(
+    (file) =>
+      (file.path === name || file.path.endsWith(`${sep}${name}`)) &&
+      pattern.test(readFileSync(join(APP_DIR, file.path), 'utf8')),
+  );
+}
+
+const GATED_PAGES = filesCalling('page.tsx', SESSION_GATE);
+const GATED_LAYOUT_SEGMENTS = filesCalling('layout.tsx', SESSION_GATE).map((file) => file.segments);
+
 /** Is `ancestor` the same segment as `descendant`, or above it? */
 function contains(ancestor: string[], descendant: string[]): boolean {
   return ancestor.every((segment, index) => descendant[index] === segment);
@@ -76,4 +90,42 @@ describe('loading boundaries never wrap a notFound() route', () => {
 
     expect(offenders.map((segments) => segments.join('/'))).toEqual([]);
   });
+});
+
+/*
+ * The same streaming, meeting a `redirect()` instead of a `notFound()` (VEN-379).
+ *
+ * A gate that runs inside a loading boundary cannot answer 307 any more: the
+ * 200 shell has already gone, so the redirect travels in the stream as a meta
+ * refresh the client router acts on after hydration. `/bookings` and `/messages`
+ * both did this — a signed-out visitor, or a brand-new account that has not
+ * accepted the Terms, got HTTP 200 at the gated URL, and until the client caught
+ * up the address bar kept the gated path while the body was already sign-in.
+ *
+ * A layout's gate runs before the boundary it wraps, which is why `/vendor` and
+ * `/customer` — each with a `loading.tsx` beside a gating `layout.tsx` — always
+ * answered a real 307. So the rule: a page that gates, under a loading boundary,
+ * needs a gating layout at or above that boundary.
+ */
+describe('loading boundaries never stream a gated page’s redirect', () => {
+  const streamed = GATED_PAGES.flatMap((page) =>
+    LOADING_SEGMENTS.filter((loading) => contains(loading, page.segments)).map((loading) => ({
+      page: page.path,
+      loading,
+    })),
+  );
+
+  it('finds gated pages under a loading boundary, so it cannot pass vacuously', () => {
+    expect(streamed.length).toBeGreaterThan(0);
+  });
+
+  it.each(streamed.map(({ page, loading }) => [page, loading.join('/')] as const))(
+    'gates %s in a layout at or above its loading boundary at %s',
+    (_page, loadingPath) => {
+      const loading = loadingPath.split('/');
+      const covering = GATED_LAYOUT_SEGMENTS.filter((layout) => contains(layout, loading));
+
+      expect(covering.map((segments) => segments.join('/') || '(root)')).not.toEqual([]);
+    },
+  );
 });
