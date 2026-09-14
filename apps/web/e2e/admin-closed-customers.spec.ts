@@ -34,7 +34,10 @@ test('an operator closes an account, then reaches its data-rights page from the 
 
   // Every row renders twice (grid + card list); dedupe by href.
   const links = page.locator('a[href^="/admin/users/"]');
-  await expect(links.first()).toBeVisible();
+  await expect(
+    links.first(),
+    'no marketing seed customers — run `pnpm lane:exec <ticket> -- pnpm db:seed:marketing`',
+  ).toBeVisible();
   const candidates = [
     ...new Map(
       await links.evaluateAll((anchors) =>
@@ -74,7 +77,7 @@ test('an operator closes an account, then reaches its data-rights page from the 
 
   // The default view is live accounts only, so the closed row is gone from it.
   await page.goto(search);
-  await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Customers', exact: true })).toBeVisible();
   await expect(targetLink).toHaveCount(0);
 
   // Asked for deliberately, through the Status filter.
@@ -90,7 +93,7 @@ test('an operator closes an account, then reaches its data-rights page from the 
 
   await row.click();
   await expect(page).toHaveURL(href);
-  await expect(page.getByRole('button', { name: 'Close account' })).toBeDisabled();
+  await expect(page.getByText(/^Closed \d{4}-\d{2}-\d{2}$/)).toBeVisible();
 
   await context.close();
 });
