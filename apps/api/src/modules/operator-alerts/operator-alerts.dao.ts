@@ -12,7 +12,20 @@ import type {
   OperatorAlertOutcome,
   UserRole,
 } from '@vendor-marketplace/shared';
-import { and, asc, count, eq, gt, gte, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gt,
+  gte,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { AppDatabase } from '../../lib/database.js';
 
@@ -183,7 +196,7 @@ export interface DigestWindow {
 
 const MS_PER_DAY = 24 * 60 * 60_000;
 
-function tally(amount: AnyPgColumn) {
+function tally(amount: AnyPgColumn): { count: SQL<number>; totalCents: SQL<number> } {
   return {
     count: count(),
     totalCents: sql<number>`coalesce(sum(${amount}), 0)`.mapWith(Number),
