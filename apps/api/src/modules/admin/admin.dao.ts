@@ -38,6 +38,7 @@ import type {
   AdminActionSubject,
   AdminBookingFlag,
   AdminCustomerFlag,
+  AdminCustomerStatus,
   AdminPaymentFlag,
   AdminPayoutFilter,
   PayoutModel,
@@ -65,6 +66,23 @@ import { payoutFailingClauses } from '../payments/payouts.dao.js';
 /**
  * Every read and write the admin portal makes. Policy lives in the service; this
  * file only knows how to ask Postgres.
+ *
+ * ## Where a closed account shows, and where it does not (VEN-382)
+ *
+ * Every `users.deleted_at` read here predates account closure (#438), when only
+ * a Clerk webhook set the column. Each is now a decision, ruled at its site:
+ *
+ * | Read | Closed accounts | Why |
+ * | --- | --- | --- |
+ * | `RETIRED` / `NOT_RETIRED` (vendors list and filters) | listed, as `retired` | #433 |
+ * | `customerCondition` (customers list) | listed behind `status=closed` | the data-rights page is reached from that table |
+ * | `refundStuck` | included | a closure strands money the way a ban does |
+ * | `findUserById` (ban / publish target) | excluded | a lookup behind a write; nothing is left to moderate |
+ * | `findAdminMetricTotals` (`NOT_RETIRED` vendors, `usersCount`) | excluded | present-tense counts |
+ * | `findAdminMetricSeries` (`signupsByDay`) | excluded | must stay the set the accounts card counts |
+ *
+ * A list an operator navigates shows closed accounts; a present-tense count and
+ * a lookup behind a write do not.
  */
 
 /** The projection the Vendors table renders, before the status is derived. */
@@ -442,6 +460,10 @@ export async function findVendorFilterFacets(db: AppDatabase): Promise<{
  * from every other read. It is deliberately **not** the wider read it looks
  * like: a deleted account has nothing left to ban, and letting one resolve here
  * would let an operator "suspend" a row no other surface believes exists.
+ *
+ * Deliberately unchanged by VEN-382, which lists closed customers: that is a
+ * read, and this is the lookup behind `setUserBanned` and `setVendorPublished`,
+ * where a closed account should stay a clean 404.
  */
 export async function findUserById(db: AppDatabase, userId: string): Promise<UserRow | null> {
   if (!userId) {
@@ -777,22 +799,32 @@ export interface AdminCustomerProjection {
   state: string | null;
   totalBookingsCount: number;
   isBanned: boolean;
+  isClosed: boolean;
   pendingEmail: string | null;
   createdAt: Date;
 }
 
 interface AdminCustomerFilters {
   q: string | undefined;
+  status: AdminCustomerStatus | undefined;
   flag: AdminCustomerFlag | undefined;
 }
 
+/** One expression for the filter and the projected column, so they cannot disagree. */
+const CUSTOMER_CLOSED = sql<boolean>`${users.deletedAt} is not null`;
+
 /**
  * Customers are `users` with the customer role — there is no second table.
- * Soft-deleted accounts are excluded for the same reason deleted vendors are:
- * an operator moderating an account that no longer exists can only cause harm.
+ *
+ * Live accounts are the default set (VEN-382). Closure sets `deleted_at`, and
+ * `status=closed` is the deliberate way to ask for those rows instead — never
+ * both at once, so the distinction survives and the default is unchanged.
  */
 function customerCondition(filters: AdminCustomerFilters) {
-  const conditions = [eq(users.role, 'customer'), sql`${users.deletedAt} is null`];
+  const conditions = [
+    eq(users.role, 'customer'),
+    filters.status === 'closed' ? CUSTOMER_CLOSED : sql`${users.deletedAt} is null`,
+  ];
 
   if (filters.q) {
     const match = or(
@@ -841,6 +873,7 @@ export async function findAdminCustomers(
       state: users.state,
       totalBookingsCount: users.totalBookingsCount,
       isBanned: users.isBanned,
+      isClosed: CUSTOMER_CLOSED,
       pendingEmail: users.pendingEmail,
       createdAt: users.createdAt,
     })
@@ -854,11 +887,15 @@ export async function findAdminCustomers(
 /**
  * The filters the customers table can be narrowed by.
  *
- * `role = 'customer'` and the deleted-account exclusion are the screen's
- * *domain*, not filters — widening past either would list vendors, or accounts
- * that no longer exist, on a screen about customers.
+ * `role = 'customer'` is the screen's *domain*, not a filter — widening past it
+ * would list vendors on a screen about customers.
+ *
+ * `status` cannot be dropped, because no URL spans live and closed accounts, so
+ * its route *toggles* to the other set (VEN-382). It is offered whenever the
+ * operator filtered anything: a name searched on the live view after that
+ * person's account closed is the case it exists for.
  */
-export const CUSTOMER_FILTER_KEYS = ['q', 'flag'] as const;
+export const CUSTOMER_FILTER_KEYS = ['q', 'status', 'flag'] as const;
 export type CustomerFilterKey = (typeof CUSTOMER_FILTER_KEYS)[number];
 
 /** How many customers each single widening would reveal, in one scan (#454). */
@@ -866,9 +903,18 @@ export async function countCustomerWidenings(
   db: AppDatabase,
   filters: AdminCustomerFilters,
 ): Promise<FilterWidening[]> {
+  const filtered = CUSTOMER_FILTER_KEYS.some((key) => filters[key] !== undefined);
+
   return countWidenings<CustomerFilterKey>({
-    active: CUSTOMER_FILTER_KEYS.filter((key) => filters[key] !== undefined),
-    conditionWithout: (dropped) => customerCondition({ ...filters, [dropped]: undefined }),
+    active: CUSTOMER_FILTER_KEYS.filter(
+      (key) => filters[key] !== undefined || (key === 'status' && filtered),
+    ),
+    conditionWithout: (dropped) =>
+      customerCondition(
+        dropped === 'status'
+          ? { ...filters, status: filters.status === 'closed' ? undefined : 'closed' }
+          : { ...filters, [dropped]: undefined },
+      ),
     scan: (selection) => db.select(selection).from(users),
   });
 }
@@ -1619,6 +1665,11 @@ export async function findAdminMetricTotals(db: AppDatabase): Promise<AdminMetri
          * as an active vendor while every public read already hid it.
          */
         .where(and(NOT_RETIRED, eq(vendorProfiles.isPublished, true), eq(users.isBanned, false))),
+      /*
+       * Live accounts only, deliberately unchanged by VEN-382: the Overview
+       * draws this as a present-tense count, which must not rise when somebody
+       * leaves. Closed accounts are found on `/admin/customers?status=closed`.
+       */
       db
         .select({ total: sql<number>`count(*)::int` })
         .from(users)
@@ -1685,6 +1736,7 @@ export async function findAdminMetricSeries(
       PAID_AND_KEPT,
     ),
     dailySeries(db, bookings, bookings.createdAt, sql<number>`count(*)::int`, since),
+    /* Live accounts only, deliberately unchanged by VEN-382 — the same set as `usersCount`. */
     dailySeries(
       db,
       users,

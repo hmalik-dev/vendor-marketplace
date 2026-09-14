@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ADMIN_CUSTOMER_FLAGS } from '@vendor-marketplace/shared';
+import { ADMIN_CUSTOMER_FLAGS, ADMIN_CUSTOMER_STATUSES } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
@@ -31,39 +31,69 @@ const JOINED = new Intl.DateTimeFormat('en-US', {
 export default async function AdminCustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: RawParam; flag?: RawParam; page?: RawParam }>;
+  searchParams: Promise<{ q?: RawParam; status?: RawParam; flag?: RawParam; page?: RawParam }>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   const q = boundedText(raw.q);
+  const parsedStatus = oneOf(raw.status, ADMIN_CUSTOMER_STATUSES);
+  /*
+   * Live accounts are the default set (VEN-382), so `status=live` is carried
+   * exactly as its absence is: only `closed` reaches the API or the URL.
+   */
+  const status = parsedStatus === 'closed' ? parsedStatus : undefined;
   const flag = oneOf(raw.flag, ADMIN_CUSTOMER_FLAGS);
-  const dropped = droppedKeys(raw, { q, flag });
+  const dropped = droppedKeys(raw, { q, status: parsedStatus, flag });
   const customers = await getAdminCustomers(
-    adminQueryString({ q, flag, page: pageNumber(raw.page) }),
+    adminQueryString({ q, status, flag, page: pageNumber(raw.page) }),
   );
 
   /*
-   * Both filters are read, not just the search (#462). Pairing a search with
+   * Every filter is read, not just the search (#462). Pairing a search with
    * the flag is two clicks away and returns nothing whenever the person being
    * searched for is not one of the diverged accounts — and answering that with
    * "No customers match ada" would send an operator looking for a typo rather
    * than at the filter they left on.
    */
-  const headline =
-    q && flag
-      ? `No customers match "${q}" with an out-of-date email`
-      : flag
-        ? 'No addresses are out of date'
-        : `No customers match "${q}"`;
+  const subject = status ? 'closed customers' : 'customers';
+  let headline: string;
+  if (q && flag) {
+    headline = `No ${subject} match "${q}" with an out-of-date email`;
+  } else if (flag) {
+    headline = status
+      ? 'No closed customers have an out-of-date email'
+      : 'No addresses are out of date';
+  } else if (q) {
+    headline = `No ${subject} match "${q}"`;
+  } else {
+    headline = `No ${subject}`;
+  }
+
+  const filtered = q !== undefined || status !== undefined || flag !== undefined;
 
   /*
    * Built by spreading each filter in only when it is set, rather than by
-   * filtering a fixed pair on a key-conditional: that shape is only correct
-   * while there are exactly two entries, and a third would silently take the
-   * last arm's value.
+   * filtering a fixed list on a key-conditional.
+   *
+   * `status` is toggled rather than dropped (VEN-382): no URL spans live and
+   * closed accounts, so its route goes to the other set — and from a live-view
+   * search that finds nobody, into the closed accounts it may be hiding.
    */
   const active: ActiveFilter[] = [
-    ...(q === undefined ? [] : [{ key: 'q', widening: 'Any name or email', carried: { flag } }]),
-    ...(flag === undefined ? [] : [{ key: 'flag', widening: 'Any account', carried: { q } }]),
+    ...(q === undefined
+      ? []
+      : [{ key: 'q', widening: 'Any name or email', carried: { status, flag } }]),
+    ...(filtered
+      ? [
+          {
+            key: 'status',
+            widening: status ? 'Live accounts' : 'Closed accounts',
+            carried: { q, status: status ? undefined : 'closed', flag },
+          },
+        ]
+      : []),
+    ...(flag === undefined
+      ? []
+      : [{ key: 'flag', widening: 'Any account', carried: { q, status } }]),
   ];
 
   return (
@@ -74,6 +104,23 @@ export default async function AdminCustomersPage({
       filters={
         <FilterBar action={PATH} searchPlaceholder="Search name or email…" searchValue={q}>
           {/*
+            Closed accounts, asked for deliberately (VEN-382). No `Any status`
+            choice: clearing the parameter lands on live accounts, which `Live`
+            already names.
+          */}
+          <FilterSelect
+            action={PATH}
+            carried={{ q, flag }}
+            name="status"
+            label="Status"
+            value={status ?? ''}
+            allowAny={false}
+            options={[
+              { value: 'live', label: 'Live' },
+              { value: 'closed', label: 'Closed' },
+            ]}
+          />
+          {/*
             The state an operator could not find (#462). A `user.updated`
             carrying an address another account already holds cannot be
             written, so the row keeps the **old** address and every
@@ -81,25 +128,26 @@ export default async function AdminCustomersPage({
           */}
           <FilterSelect
             action={PATH}
-            carried={{ q }}
+            carried={{ q, status }}
             name="flag"
             label="Needs attention"
             value={flag ?? ''}
             options={[{ value: 'email-stale', label: EMAIL_STALE_LABEL }]}
           />
           {/*
-            The flag travels with the search form as a hidden field. Submitting
-            a GET form sends only its own controls, and the dropdown navigates
-            on its own — so without this, pressing Enter in the search box would
-            silently clear the flag and answer with every customer, which is the
+            The status and flag travel with the search form as hidden fields.
+            Submitting a GET form sends only its own controls, and the dropdowns
+            navigate on their own — so without these, pressing Enter in the search
+            box would silently clear them and answer with every customer, which is the
             opposite of what an operator filtering for a problem wants.
           */}
+          {status ? <input type="hidden" name="status" value={status} /> : null}
           {flag ? <input type="hidden" name="flag" value={flag} /> : null}
         </FilterBar>
       }
       pager={{
         path: PATH,
-        params: { q, flag },
+        params: { q, status, flag },
         page: customers.page,
         pageSize: customers.pageSize,
         total: customers.total,
@@ -110,13 +158,11 @@ export default async function AdminCustomersPage({
         rowKey={(row) => row.id}
         empty={
           /*
-           * Two counted ways out (#454, widened by #462). `role = 'customer'`
-           * and the deleted-account exclusion are the screen's domain rather
-           * than filters, so neither is offered: widening past them would list
-           * vendors, or accounts that no longer exist, on a screen about
-           * customers.
+           * Counted ways out (#454, widened by #462 and VEN-382).
+           * `role = 'customer'` is the screen's domain rather than a filter, so
+           * it is not offered: widening past it would list vendors.
            */
-          active.length > 0 ? (
+          filtered ? (
             <FilteredEmpty
               headline={headline}
               path={PATH}
@@ -190,8 +236,14 @@ export default async function AdminCustomersPage({
             key: 'status',
             width: '1fr',
             header: 'Status',
+            /*
+              Closed leads a ban: an account that is gone cannot be moderated.
+              `inert` is the tone `Retired` takes on the vendors table.
+            */
             cell: (row) =>
-              row.isBanned ? (
+              row.isClosed ? (
+                <StatusPill tone="inert">Closed</StatusPill>
+              ) : row.isBanned ? (
                 <StatusPill tone="needsYou">Flagged</StatusPill>
               ) : (
                 <span className="text-stone-600">Joined {JOINED.format(row.createdAt)}</span>

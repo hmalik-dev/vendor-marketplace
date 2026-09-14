@@ -592,7 +592,9 @@ export async function listCustomers(
   query: AdminCustomerQuery,
 ): Promise<AdminCustomerPage> {
   const offset = offsetOf(query);
-  const filters = { q: query.q, flag: query.flag };
+  // `status=live` names the default set, so it filters exactly as its absence does.
+  const status = query.status === 'closed' ? query.status : undefined;
+  const filters = { q: query.q, status, flag: query.flag };
   const [rows, total] = await Promise.all([
     findAdminCustomers(db, filters, query.pageSize, offset),
     countAdminCustomers(db, filters),
