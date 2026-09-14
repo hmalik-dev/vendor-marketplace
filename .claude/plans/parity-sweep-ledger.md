@@ -83,6 +83,7 @@ browser alongside the live screen; compare, never recall.
 | 44 | 31 Cookie notice | `/cookies` | guest + customer | 1440x900 | todo | #427 |
 | 45 | 32 Vendor agreement | `/vendor/agreement` | vendor | 1440x900 | todo | #427 |
 | 46 | 33 Refund schedule at checkout | `/bookings/[requestId]/checkout` | customer | 1440x900 | todo | #427 |
+| 47 | 34 For vendors (`design/delta-vendors/Orla-For-Vendors.html`) | `/for-vendors` | guest + customer | 1440x900 | todo | VEN-384 |
 
 ## Findings log
 

@@ -78,6 +78,7 @@ export const STONE_ROLES: Readonly<Record<string, StoneToken>> = {
   'stone-150': { roles: ['surface'] },
   'stone-200': { roles: ['border'] },
   'stone-250': { roles: ['surface'] },
+  'stone-275': { roles: ['border'] },
   'stone-300': { roles: ['border'] },
   'stone-400': { roles: ['border', 'text'] },
   'stone-480': {

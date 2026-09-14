@@ -8,7 +8,7 @@ import {
   LANDING_JUMP_CATEGORY_SLUGS,
   SUPPORT_PATH,
 } from '@vendor-marketplace/shared';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deltaFrame } from '@/testing/design-frames';
 
@@ -65,12 +65,48 @@ vi.mock('@/lib/current-user', () => ({
   readRoleForChrome: async () => currentRole,
 }));
 
+let pathname = '/';
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => pathname,
+}));
+
 const { SiteFooter } = await import('./site-footer');
 
 describe('SiteFooter', () => {
   beforeEach(() => {
     authState = 'signed-out';
     currentRole = null;
+    pathname = '/';
+  });
+
+  /*
+   * VEN-384. `For vendors` opens the page, and the legal row gains the vendor
+   * agreement on that page only — the one place a visitor wants it before
+   * signing up.
+   */
+  it('sends For vendors to /for-vendors', async () => {
+    render(await SiteFooter());
+
+    expect(screen.getByRole('link', { name: 'For vendors' })).toHaveProperty(
+      'href',
+      'http://localhost:3000/for-vendors',
+    );
+  });
+
+  it('adds the vendor agreement to the legal row on /for-vendors only', async () => {
+    const { unmount } = render(await SiteFooter());
+
+    expect(screen.queryByRole('link', { name: 'Vendor agreement' })).toBeNull();
+    unmount();
+
+    pathname = '/for-vendors';
+    const rendered = render(await SiteFooter());
+    const legalRow = rendered.container.querySelector<HTMLElement>('[data-slot="footer-legal"]');
+
+    expect(
+      within(legalRow as HTMLElement).getByRole('link', { name: 'Vendor agreement' }),
+    ).toHaveProperty('href', 'http://localhost:3000/vendor/agreement');
   });
 
   afterEach(() => {

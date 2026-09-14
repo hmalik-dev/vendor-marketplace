@@ -113,6 +113,8 @@ export const ROLE_ROUTE_RULES: ReadonlyArray<{
    * out of it, and it is the customer's own start.
    */
   { pattern: /^\/$/, roles: ['customer', 'admin'] },
+  // `/for-vendors` — `redirectVendorToDashboard`: its only ask is sign-up.
+  { pattern: /^\/for-vendors\/?$/, roles: ['customer', 'admin'] },
 ];
 
 /**

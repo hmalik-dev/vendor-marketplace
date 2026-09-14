@@ -122,7 +122,8 @@ describe('the role-route table against the gates in app/', () => {
     expect(gates.filter((gate) => gate.admits === 'vendor').length).toBeGreaterThan(0);
     expect(gates.filter((gate) => gate.admits === 'customer').length).toBeGreaterThan(0);
     expect(gates.filter((gate) => gate.admits === 'admin').length).toBeGreaterThan(0);
-    expect(gates.filter((gate) => gate.denies === 'vendor').length).toBe(1);
+    // `/` and `/for-vendors`, the two `redirectVendorToDashboard` pages.
+    expect(gates.filter((gate) => gate.denies === 'vendor').length).toBe(2);
   });
 
   /*

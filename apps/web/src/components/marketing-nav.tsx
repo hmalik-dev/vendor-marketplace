@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LEGAL_PATHS } from '@vendor-marketplace/shared';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
+import { FOR_VENDORS_PATH } from '@/lib/for-vendors';
 import type { NavDrawerLink } from '@/components/nav-drawer';
 import { cn } from '@/lib/utils';
 
@@ -23,9 +24,10 @@ import { cn } from '@/lib/utils';
  *
  * "For vendors" is the vendor door. The header carries a single **Sign up**
  * pill for both account types, so this is where a vendor gets a path that
- * names them — and it deep-links with the role pre-selected rather than
- * scrolling to a section, because a visitor who clicks it has already decided
- * which side they are on. See design/design-plan/21-sign-up.md.
+ * names them. It opens `/for-vendors` — what a vendor keeps and when they are
+ * paid — rather than a sign-up form, which a visitor who already holds an
+ * account would only be bounced out of. That page carries the nav too, with
+ * this link drawn active (the frame in `design/delta-vendors/`).
  */
 /**
  * Exported so the mobile drawer carries the same links, never a second list.
@@ -40,16 +42,24 @@ import { cn } from '@/lib/utils';
 export const MARKETING_LINKS: readonly NavDrawerLink[] = [
   { label: 'Browse', href: '/search' },
   { label: 'How it works', href: '/#how-it-works', tabletHidden: true },
-  { label: 'For vendors', href: '/sign-up?role=vendor' },
+  { label: 'For vendors', href: FOR_VENDORS_PATH },
 ];
 
-/** The three reading pages, as a set, so the check is not a chain of `||`. */
-const LEGAL_PATH_SET = new Set<string>(Object.values(LEGAL_PATHS));
+/** The pages that draw these links: the landing page, `/for-vendors` and the three reading pages. */
+const NAV_PATH_SET = new Set<string>(['/', FOR_VENDORS_PATH, ...Object.values(LEGAL_PATHS)]);
+
+/**
+ * The frame's active treatment: clay-600 at 600 over a 2px clay-400 rule, 2px
+ * below the text. A `before:` pseudo-element (the hit area already owns
+ * `after:`), so the active link keeps its siblings' box and baseline.
+ */
+const ACTIVE_LINK_CLASS =
+  "font-semibold text-clay-600 before:absolute before:inset-x-0 before:top-1/2 before:mt-[calc(0.5lh+2px)] before:h-0.5 before:bg-clay-400 before:content-['']";
 
 export function MarketingNav(): React.ReactElement | null {
   const pathname = usePathname();
 
-  if (pathname !== '/' && !LEGAL_PATH_SET.has(pathname)) {
+  if (!NAV_PATH_SET.has(pathname)) {
     return null;
   }
 
@@ -74,7 +84,12 @@ export function MarketingNav(): React.ReactElement | null {
         <Link
           key={link.label}
           href={link.href}
-          className={cn(MARKETING_LINK_CLASS, link.tabletHidden === true && 'max-lg:hidden')}
+          aria-current={link.href === pathname ? 'page' : undefined}
+          className={cn(
+            MARKETING_LINK_CLASS,
+            link.href === pathname && ACTIVE_LINK_CLASS,
+            link.tabletHidden === true && 'max-lg:hidden',
+          )}
         >
           {link.label}
         </Link>
