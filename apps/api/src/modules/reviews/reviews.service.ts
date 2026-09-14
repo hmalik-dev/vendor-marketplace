@@ -11,7 +11,7 @@ import {
   type NotificationEmailDeps,
 } from '../notifications/notification-email.js';
 import type { EventHub } from '../../lib/event-stream.js';
-import { violatesConstraint } from '../../lib/constraint-violation.js';
+import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
 import { toNotification } from '../messaging/messaging.service.js';
 /*
@@ -219,10 +219,15 @@ export async function createReview(
 
     return written.review;
   } catch (error) {
-    // The race the read above cannot close. Read off the error chain rather
-    // than its message: Drizzle 0.45 wraps the driver error, and the wrapper's
-    // message is `Failed query: …` with the constraint name only on `cause`.
-    if (violatesConstraint(error, 'reviews_booking_reviewer_key')) {
+    /*
+     * The race the read above cannot close. SQLSTATE and exact constraint name
+     * only, never the message: Drizzle inlines the bound values into it, so a
+     * review whose text named this index would turn a cancelled or deadlocked
+     * insert into "already reviewed" with nothing written and nothing logged
+     * (VEN-385). `booking-review-race.contention.test.ts` drives both on the
+     * production driver.
+     */
+    if (violatesUniqueConstraint(error, 'reviews_booking_reviewer_key')) {
       throw conflict('You have already reviewed this booking');
     }
 

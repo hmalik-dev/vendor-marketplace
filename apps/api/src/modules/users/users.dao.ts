@@ -357,13 +357,12 @@ export async function updateUserByClerkId(
     return user ? { user, emailDiverged: false } : null;
   } catch (error) {
     /*
-     * Narrow on purpose, and the **strict** reader rather than
-     * `violatesConstraint`: this catch swallows the error, so a match on the
-     * wrapper's message would let any failure of this statement — a deadlock,
-     * a timeout, a dropped connection — be recorded as a collision and
-     * answered 200, for an account whose own name happened to contain the
-     * index's name. `violatesUniqueConstraint` matches the SQLSTATE and an
-     * exact constraint name and nothing else.
+     * Narrow on purpose, and never on message text: this catch swallows the
+     * error, so a match on the wrapper's message would let any failure of
+     * this statement — a deadlock, a timeout, a dropped connection — be
+     * recorded as a collision and answered 200, for an account whose own name
+     * happened to contain the index's name. `violatesUniqueConstraint`
+     * matches the SQLSTATE and an exact constraint name and nothing else.
      *
      * Anything wider than `users_email_key` has to keep failing loudly, and
      * the constraint name comes from the schema rather than being spelled

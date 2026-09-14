@@ -8,7 +8,7 @@ import {
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
-import { violatesConstraint } from '../../lib/constraint-violation.js';
+import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import { insertTagSuggestion } from './tags.dao.js';
 
 const VENDOR = 'user_vendor';
@@ -313,11 +313,11 @@ describe('tag routes', () => {
         );
 
       /*
-       * Through `violatesConstraint`, not a message regex: Drizzle 0.45 puts
-       * the constraint name on `cause` and leaves `error.message` as
-       * `Failed query: …`, which is the whole reason that helper exists.
+       * Through `violatesUniqueConstraint`, not a message regex: Drizzle 0.45
+       * puts the constraint name on `cause` and leaves `error.message` as
+       * `Failed query: …`, and the SQLSTATE rules out every other refusal.
        */
-      expect(violatesConstraint(refusal, 'tag_suggestions_pending_key')).toBe(true);
+      expect(violatesUniqueConstraint(refusal, 'tag_suggestions_pending_key')).toBe(true);
     });
 
     /*
