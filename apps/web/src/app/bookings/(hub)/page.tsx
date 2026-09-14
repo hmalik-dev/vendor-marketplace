@@ -81,9 +81,10 @@ export default async function BookingsPage({
 
   /*
    * The tab travels through sign-in, so a link to a specific tab still lands on
-   * that tab afterwards. Only the validated value is carried — an unrecognised
-   * `?tab=` is already dropped above and must not be reintroduced by the
-   * return trip.
+   * that tab afterwards. In practice the layout beside this page refuses a signed-out
+   * or gated session first, carrying the stamped request path — an
+   * unrecognised `?tab=` rides along and is dropped above on the way back in.
+   * This call still narrows the reader to a customer for the render below.
    */
   const user = await requireRole('customer', `/bookings?tab=${tab}`);
 

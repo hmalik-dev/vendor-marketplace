@@ -67,6 +67,17 @@ one drifts.
 | `fixtures.ts` | Role fixtures that **prove** the session before yielding a page |
 | `base-url.ts` | Origin resolution that refuses to guess                         |
 
+## The route-landing sweep
+
+`route-landing.spec.ts` visits every route and every literal redirect
+destination as five personas — signed out, customer, vendor, admin, and a
+freshly minted Clerk identity with **no `users` row** (`no-row-account.ts`,
+deleted afterwards). The targets come from `route-targets.ts`, which walks
+`src/app` and greps the redirect calls, so a new route is covered without
+editing the spec. Run it against `next start`, not `next dev`, with the rate
+limit raised; the no-row persona needs `CLERK_SECRET_KEY` from the environment
+or the root `.env`.
+
 ## Not here yet
 
 Vendor profile, search, payment, reviews and admin. Each is deferred for a named

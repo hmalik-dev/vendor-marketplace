@@ -32,7 +32,7 @@ function workspaceRoot(from: string = __dirname): string {
 /** `.auth/` lives at the repository root, beside `scripts/`. */
 export const AUTH_DIR = resolve(workspaceRoot(), '.auth');
 
-export type Role = 'customer' | 'vendor';
+export type Role = 'customer' | 'vendor' | 'admin';
 
 export function storageStatePath(role: Role): string {
   return resolve(AUTH_DIR, `${role}.json`);
