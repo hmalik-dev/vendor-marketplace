@@ -12,6 +12,6 @@ The project keeps **one reusable Clerk account per role** in `~/Documents/vendor
 
 Two accounts rather than one because the roles see genuinely different surfaces: a signed-in vendor is redirected off `/` to their own dashboard while a customer stays on the marketplace home, so a single account cannot drive both halves of a ticket's flows.
 
-`packages/preflight/src/checks/browser.ts` owns the contract — `E2E_ACCOUNTS` declares the roles and `pnpm preflight --ticket <n>` fails until all four keys are present. Add a role there, not ad hoc in a spec.
+`packages/preflight/src/checks/browser.ts` owns the contract — `E2E_ACCOUNTS` declares the roles and `pnpm preflight` fails until all four keys are present. Add a role there, not ad hoc in a spec.
 
 Use these for the browser-verification pass in [[vendor-marketplace-playwright-verification]]. For throwaway *sign-ups*, prefer a fresh `+clerk_test` address with the fixed verification code `424242` so these two stay clean; use the saved accounts for sign-in and returning-user flows. Signing out of a Playwright session to test signed-out surfaces is fine — signing back in with these credentials restores it.

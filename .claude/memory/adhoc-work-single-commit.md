@@ -23,7 +23,7 @@ included in the message rather than pretending it is one change. Still *look* at
 what you are sweeping in — read unfamiliar diffs before committing, because that
 is how the design-contract change in `639ea2e` and its landing parity break were
 caught. This does not extend to ticketed work, which follows
-[[vendor-marketplace-local-ticket-tracker]] and its atomic-commit convention.
+[[vendor-marketplace-linear-tracker]]: one ticket, one branch, one PR.
 
 **One narrow exception**, added 2026-08-30: this covers files a peer left
 *modified*. It does **not** cover files a peer has **staged** and is about to

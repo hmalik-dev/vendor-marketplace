@@ -45,7 +45,5 @@ stops anyone looking further.
   is a turbo flag: `pnpm typecheck --force`, never `pnpm --filter <pkg> test
   --force`, which dies with `ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL`.
 
-Related: [[verify-with-a-differently-shaped-check]],
-[[rebase-auto-merges-are-not-compile-checked]] and
-[[filing-a-ticket-is-a-three-file-change]], which already records the tracker
-half of the same cache behaviour.
+Related: [[verify-with-a-differently-shaped-check]] and
+[[rebase-auto-merges-are-not-compile-checked]].

@@ -6,17 +6,26 @@ monorepo; repo and packages are named `vendor-marketplace`, the product is
 
 ## Where things are
 
-| What                     | Where                                                                                                                                                |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ticket board (open rows) | `.claude/plans/vendor-marketplace-tickets.md` — read and write only through `node scripts/board.mjs` (`depth`, `list`, `get`, `next`, `set`, `add`)  |
-| Closed tickets           | `.claude/plans/vendor-marketplace-tickets-archive.md`                                                                                                |
-| Plan · decisions         | `.claude/plans/vendor-marketplace-plan.md` · `.claude/plans/vendor-marketplace-decisions.md`                                                         |
-| Design contract          | `design/Orla - Screens.dc.html` (1440×900 frames, the acceptance criterion); `design/design-plan/` explains them                                     |
-| Path-scoped rules        | `.claude/rules/` — load automatically when you open a matching file; not duplicated here                                                             |
-| Agents                   | `.claude/agents/`: `browser-verifier`, `parity-checker`, `bug-hunter`, `unhappy-path-hunter`; global: `Explore`, `diff-reviewer`, `security-auditor` |
-| Auto-memory              | `.claude/memory/` (symlinked from `~/.claude/projects/<slug>/memory`)                                                                                |
+| What              | Where                                                                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tickets           | Linear, team `VEN`, project **Vendor Marketplace**, over `mcp__plugin_linear_linear__*` only; pipeline settings in `.claude/project.json`            |
+| Plan · decisions  | `.claude/plans/vendor-marketplace-plan.md` · `.claude/plans/vendor-marketplace-decisions.md`                                                         |
+| Design contract   | `design/Orla - Screens.dc.html` (1440×900 frames, the acceptance criterion); `design/design-plan/` explains them                                     |
+| Path-scoped rules | `.claude/rules/` — load automatically when you open a matching file; not duplicated here                                                             |
+| Agents            | `.claude/agents/`: `browser-verifier`, `parity-checker`, `bug-hunter`, `unhappy-path-hunter`; global: `Explore`, `diff-reviewer`, `security-auditor` |
+| Auto-memory       | `.claude/memory/` (symlinked from `~/.claude/projects/<slug>/memory`)                                                                                |
 
-There is no Linear project. Do not add one.
+## Project
+
+- **Tracker:** Linear team `VEN`, project `Vendor Marketplace`. Ready =
+  `Todo` / `Backlog`; `In Progress` means a lane holds it; `blocked` label =
+  waits on a person, skip it. Ids are `VEN-n`, the branch is `worktree-ven-n`.
+  A ticket's `cap:*` labels are what `pnpm preflight --capabilities` checks.
+  Never recreate a local board: state lives in Linear, not in a file or a PR.
+- **Lanes:** `pnpm lane:up <id>` allocates ports and a lane database; every
+  app command goes through `pnpm lane:exec <id> -- <cmd>`.
+- **Verification surface:** every user-reachable change gets the repo's
+  `browser-verifier`; every screen with a frame gets `parity-checker`.
 
 ## Commands (repo root; turbo fans out per package)
 
@@ -25,7 +34,7 @@ There is no Linear project. Do not add one.
 | Verify a change (once, scoped)    | `node ~/.claude/scripts/verify.mjs --lane <id> --ticket <id>`                                                                                                   |
 | Lane up / run in / enqueue / down | `pnpm lane:up <id>` · `pnpm lane:exec <id> -- <cmd>` · `pnpm lane:pr <id> <url>` · `pnpm lane:down <id>`                                                        |
 | Full suites (what CI runs)        | `pnpm format:check && pnpm typecheck && pnpm lint && pnpm build && pnpm test && pnpm test:contention && pnpm test:agents`                                       |
-| Preflight gate for a ticket       | `pnpm preflight --ticket <n>`                                                                                                                                   |
+| Preflight gate for a ticket       | `pnpm preflight --capabilities <a,b>` — the issue's `cap:*` labels without the prefix; `--all` for everything                                                   |
 | Dev servers                       | `pnpm dev` — web 3000, API 4000 (lanes get their own ports)                                                                                                     |
 | Database                          | `docker compose up -d` (Postgres + MinIO) · `pnpm db:generate` after editing `packages/db/src/schema` · `pnpm db:migrate` · `pnpm db:seed` · `pnpm db:seed:e2e` |
 | Env registry                      | `pnpm env:example` regenerates `.env.example` and `turbo.json` passthrough; never hand-edit them                                                                |

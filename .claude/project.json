@@ -1,0 +1,29 @@
+{
+  "baseBranch": "main",
+  "packageManager": "pnpm",
+  "tracker": {
+    "type": "linear",
+    "team": "VEN",
+    "project": "Vendor Marketplace",
+    "states": {
+      "ready": ["Todo", "Backlog"],
+      "inProgress": "In Progress",
+      "done": "Done",
+      "canceled": "Canceled"
+    }
+  },
+  "lane": {
+    "up": "pnpm lane:up",
+    "exec": "pnpm lane:exec",
+    "down": "pnpm lane:down",
+    "services": ["docker compose up -d"],
+    "healthcheck": "docker compose ps",
+    "memoryGb": 3,
+    "dockerGb": 1,
+    "maxConcurrent": 4
+  },
+  "verify": {
+    "contentionPattern": "booking|availability|payments/|payout|dispute|refund|settlement|cases|session-subject|vendor-publish|review-visibility|packages/db/src/(schema|migrat)",
+    "e2ePackage": "apps/web"
+  }
+}

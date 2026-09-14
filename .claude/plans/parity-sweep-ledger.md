@@ -86,8 +86,8 @@ browser alongside the live screen; compare, never recall.
 
 ## Findings log
 
-Every defect found during the sweep, newest last. Promote each to the ticket
-board in `.claude/plans/vendor-marketplace-tickets.md` once triaged.
+Every defect found during the sweep, newest last. Promote each to Linear
+(`/file-ticket`, one issue per surface) once triaged.
 
 ### Pass 1 — guest, `/` `/search` `/vendors/[slug]` (18 findings)
 

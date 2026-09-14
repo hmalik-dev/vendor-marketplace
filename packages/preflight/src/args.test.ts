@@ -1,53 +1,14 @@
-import { isRegisteredTicket } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
 
-import { ArgumentError, parseArgs, resolveCapabilities } from './args.js';
+import { ArgumentError, parseArgs } from './args.js';
 
 describe('parseArgs', () => {
-  it('defaults to the local target and no ticket', () => {
-    expect(parseArgs([])).toEqual({ target: 'local', help: false });
+  it('defaults to the local target and the baseline capabilities', () => {
+    expect(parseArgs([])).toEqual({ capabilities: ['core', 'e2e'], target: 'local', help: false });
   });
 
-  it('reads a ticket number', () => {
-    expect(parseArgs(['--ticket', '9'])).toEqual({ ticket: 9, target: 'local', help: false });
-  });
-
-  it('reads a production target', () => {
-    expect(parseArgs(['--env', 'production'])).toEqual({ target: 'production', help: false });
-  });
-
-  it('combines a ticket and a target in either order', () => {
-    expect(parseArgs(['--env', 'production', '--ticket', '10'])).toEqual({
-      ticket: 10,
-      target: 'production',
-      help: false,
-    });
-  });
-
-  it('rejects a ticket that is not a number', () => {
-    expect(() => parseArgs(['--ticket', 'nine'])).toThrow(ArgumentError);
-  });
-
-  it('rejects a missing ticket value rather than swallowing the next flag', () => {
-    expect(() => parseArgs(['--ticket', '--env'])).toThrow(/--ticket needs a ticket number/);
-  });
-
-  it('rejects an unknown target', () => {
-    expect(() => parseArgs(['--env', 'staging'])).toThrow(/--env must be one of/);
-  });
-
-  it('rejects an unknown flag', () => {
-    expect(() => parseArgs(['--everything'])).toThrow(/Unknown argument/);
-  });
-});
-
-describe('resolveCapabilities', () => {
-  it('checks only the baseline without a ticket', () => {
-    expect(resolveCapabilities(parseArgs([]))).toEqual(['core', 'e2e']);
-  });
-
-  it('adds a ticket declared capabilities', () => {
-    expect(resolveCapabilities(parseArgs(['--ticket', '9']))).toEqual([
+  it('adds the requested capabilities to the baseline, in registry order', () => {
+    expect(parseArgs(['--capabilities', 'stripe,auth']).capabilities).toEqual([
       'core',
       'auth',
       'stripe',
@@ -55,20 +16,78 @@ describe('resolveCapabilities', () => {
     ]);
   });
 
-  // This used to throw. The registry then fell 192 rows behind the status board,
-  // which turned every ticket filed since #37 into an unrunnable gate — the stop
-  // punished the operator, not the stale data. An unregistered ticket now falls
-  // back to the baseline, and `isRegisteredTicket` is what the CLI warns on.
-  it('falls back to the baseline for an unregistered ticket, and never to nothing', () => {
-    const resolved = resolveCapabilities(parseArgs(['--ticket', '999']));
-
-    expect(isRegisteredTicket(999)).toBe(false);
-    expect(resolved).toEqual(['core', 'e2e']);
+  it('accepts the flag more than once and tolerates whitespace', () => {
+    expect(
+      parseArgs(['--capabilities', 'auth', '--capabilities', ' storage , auth']).capabilities,
+    ).toEqual(['core', 'auth', 'storage', 'e2e']);
   });
 
-  it('still narrows to the declared capabilities for a registered ticket', () => {
-    expect(isRegisteredTicket(165)).toBe(true);
-    expect(resolveCapabilities(parseArgs(['--ticket', '165']))).toEqual(['core', 'e2e']);
-    expect(resolveCapabilities(parseArgs(['--ticket', '170']))).toEqual(['core', 'storage', 'e2e']);
+  it('checks everything with --all', () => {
+    expect(parseArgs(['--all']).capabilities).toEqual([
+      'core',
+      'auth',
+      'storage',
+      'stripe',
+      'email',
+      'sentry',
+      'e2e',
+    ]);
+  });
+
+  it('unions --all with --capabilities instead of letting either win', () => {
+    expect(parseArgs(['--capabilities', 'auth', '--all']).capabilities).toEqual([
+      'core',
+      'auth',
+      'storage',
+      'stripe',
+      'email',
+      'sentry',
+      'e2e',
+    ]);
+    expect(parseArgs(['--all', '--capabilities', 'auth']).capabilities).toHaveLength(7);
+  });
+
+  it('reads a production target', () => {
+    expect(parseArgs(['--env', 'production'])).toEqual({
+      capabilities: ['core', 'e2e'],
+      target: 'production',
+      help: false,
+    });
+  });
+
+  it('combines capabilities and a target in either order', () => {
+    expect(parseArgs(['--env', 'production', '--capabilities', 'stripe'])).toEqual({
+      capabilities: ['core', 'stripe', 'e2e'],
+      target: 'production',
+      help: false,
+    });
+  });
+
+  it('rejects a capability the registry does not know', () => {
+    expect(() => parseArgs(['--capabilities', 'auth,payments'])).toThrow(/got payments/);
+    expect(() => parseArgs(['--capabilities', 'auth,payments'])).toThrow(ArgumentError);
+  });
+
+  it('rejects an empty list', () => {
+    expect(() => parseArgs(['--capabilities', ','])).toThrow(/accepts only/);
+  });
+
+  it('rejects a missing value rather than swallowing the next flag', () => {
+    expect(() => parseArgs(['--capabilities', '--env'])).toThrow(
+      /--capabilities needs a comma-separated list/,
+    );
+    expect(() => parseArgs(['--capabilities'])).toThrow(ArgumentError);
+  });
+
+  it('rejects an unknown target', () => {
+    expect(() => parseArgs(['--env', 'staging'])).toThrow(/--env must be one of/);
+  });
+
+  it('rejects the retired --ticket flag as unknown', () => {
+    expect(() => parseArgs(['--ticket', '9'])).toThrow(/Unknown argument `--ticket`/);
+  });
+
+  it('rejects an unknown flag', () => {
+    expect(() => parseArgs(['--everything'])).toThrow(/Unknown argument/);
   });
 });

@@ -26,5 +26,4 @@ Authorship arbitration produced a false dispute; possession settled it in one ro
 non-holders to stand down completely, and relay findings to the holder rather than acting.
 Do not pass on another session's resolution advice without verifying it — a "take origin's
 side for row X" instruction makes the finisher drop consolidation content sharing X's hunk.
-Related: [[shared-checkout-working-tree-is-a-tripwire]],
-[[detached-lane-ticket-ids-collide-silently]].
+Related: [[shared-checkout-working-tree-is-a-tripwire]].

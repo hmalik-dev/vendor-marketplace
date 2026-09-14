@@ -35,5 +35,4 @@ they were not independent confirmations, they shared the same hidden input.
 - When a peer reports that a command *ran*, weight that above any number of
   re-read listings, including your own.
 
-Related: [[verify-with-a-differently-shaped-check]],
-[[tracker-board-rows-are-bold]].
+Related: [[verify-with-a-differently-shaped-check]].

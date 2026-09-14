@@ -13,9 +13,12 @@ someone over a link. It is explicitly _not_ a launch and satisfies almost none o
 what follows — most pointedly §1.1, whose fabricated vendors are exactly what it
 serves, and may serve, precisely because it is not production.
 
-The ticket tracker (`.claude/plans/vendor-marketplace-tickets.md`) holds the
-build queue. This file holds the things that are _not_ tickets — configuration,
-credentials, data and legal — plus pointers to the tickets that are.
+The build queue is Linear (team `VEN`, project **Vendor Marketplace**). This
+file holds the things that are _not_ tickets — configuration, credentials, data
+and legal — plus pointers to the tickets that are. A bare **#n** below is an id
+from the retired local board (closed rows are in git history before
+`chore/linear-tracker`; the 22 rows still open on 2026-09-14 were migrated and
+each carries its board number under _Provenance_).
 
 ---
 
@@ -216,8 +219,8 @@ API on Railway).
 
 ## 4. Product completeness
 
-The marketplace cannot take a booking today. Every ticket below is MVP; see the
-tracker for detail.
+The marketplace cannot take a booking today. Every ticket below is MVP; see
+Linear for detail.
 
 - [ ] **#7** Booking request — the spine everything hangs off
 - [ ] **#22a / #22b** Vendor dashboard and customer bookings hub

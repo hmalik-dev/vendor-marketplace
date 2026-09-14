@@ -354,8 +354,9 @@ It binds every ticket, including ones whose frames predate it:
 
 Every screen file is titled **MVP** and carries a **Post-MVP** section listing
 what was deferred. **No ticket may implement anything in a Post-MVP section.**
-Deferred work lives in the Post-MVP Backlog in the tracker with its unblock
-condition — not as commented-out code, not as a half-built surface.
+Deferred work is filed in Linear (`/file-ticket`) with **Post-MVP** in the
+title and its unblock condition in the body, and stays unselected until launch —
+not as commented-out code, not as a half-built surface.
 
 **No invented numbers.** Every number on a public page is read from the database
 at request time or it does not ship. In MVP that means no platform statistics on

@@ -18,9 +18,9 @@ credential. `settings.local.json`, `history.jsonl`, `.credentials.json` and the
 219MB of session transcripts are all deliberately out.
 
 There is **no sync automation**. After a session that changes a rule, a skill or
-the ticket board, commit and push from `~/.claude` by hand, and pull on the
-other machine before starting. `plans/` is the live queue, so it is the file
-that actually conflicts.
+a script, commit and push from `~/.claude` by hand, and pull on the other
+machine before starting. Ticket state lives in Linear, so nothing in this repo
+is a live queue any more.
 
 Credentials move by `scripts/pack-keys.sh` / `unpack-keys.sh` (openssl AES-256,
 interactive passphrase) — never a commit. See

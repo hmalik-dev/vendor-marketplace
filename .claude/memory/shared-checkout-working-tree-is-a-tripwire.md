@@ -52,8 +52,7 @@ discovered later.
 
 The second is usually right. The mistake is believing option zero exists.
 
-Related: [[commit-ticket-changes-immediately]],
-[[main-pushes-dequeue-parallel-lane-prs]].
+Related: [[main-pushes-dequeue-parallel-lane-prs]].
 
 ## The deadlock is symmetric, and batching is the exit
 

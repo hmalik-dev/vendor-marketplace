@@ -19,10 +19,11 @@ message them again the moment it merges.** Use `ListAgents` to find them and
 say so explicitly rather than going quiet — a lane mid-landing should finish and
 re-queue rather than both sides stalling.
 
-This is why tracker edits, which [[commit-ticket-changes-immediately]] says go
-straight to `main`, need a moment's thought during a parallel run: they are the
-commits most likely to dequeue someone. Batch them, or send them while no PR is
-in flight.
+This is why any small push to `main` — a docs or config PR landing — needs a
+moment's thought during a parallel run: it is the commit most likely to dequeue
+someone. Send it while no lane PR is in flight. (Ticket state now lives in
+Linear, so status transitions no longer touch `main` at all — see
+[[vendor-marketplace-linear-tracker]].)
 
 **The open-PR check must GATE the merge, not accompany it — 2026-09-07.** A lane
 was told to check `gh pr list --state open` "in the same breath as the merge",

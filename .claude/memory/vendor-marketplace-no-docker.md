@@ -69,5 +69,5 @@ or worse, point local work at Neon and restart the compute burn.
 local data as disposable and seed it. Use `createTestDatabase()` for anything in
 `pnpm test`. Parallel lanes take their own database on this same container — see
 [[worktree-env-copies-drift]]. Related: [[vendor-marketplace-neon-dev-branch]],
-[[vendor-marketplace-local-ticket-tracker]],
+[[vendor-marketplace-linear-tracker]],
 [[vendor-marketplace-playwright-verification]].

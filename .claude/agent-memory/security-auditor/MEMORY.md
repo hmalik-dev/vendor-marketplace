@@ -36,7 +36,7 @@
 - [Refund idempotency keys are narrower than their params](refund-idempotency-key-is-parameter-sensitive.md) — the key is the booking id, the amount drifts by tier and the unwind flags changed; Stripe refuses the retry
 - [A refund with no durable record can happen twice](refund-before-row-move-can-double-refund.md) — refund precedes the row move, no refund column, and past 24h a retry debits the vendor a second time
 - [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased
-- [Drizzle query errors log every bound parameter — FIXED](drizzle-query-errors-log-bound-parameters.md) — the `err` serialiser and record formatter withheld them at the sink in #445; see [[err-serializer-is-the-log-sink]] before re-reporting
+- [The contention gate is a path pattern](contention-gate-is-a-path-pattern.md) — `verify.contentionPattern` in `.claude/project.json` misses `modules/payments/payments.*`; CI's own `test:contention` is the backstop
 - [The background queue carries no session](background-work-queue-carries-no-session.md) — `app.background` re-derives its recipient from the notification row; a second caller must not close over `request.auth` or a `tx`
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — per-request verified in react 19.2.8; `/` now renders a customer's booking amount and still declares no `force-dynamic`
 - [`canBook` is chrome, not a gate](canbook-is-chrome-not-a-gate.md) — three server checks refuse a vendor; the prop degrades to the most permissive answer on purpose
@@ -77,7 +77,7 @@
 - [Moderation levers are undoable by their subject](moderation-levers-are-undoable-by-their-subject.md) — #457’s `moderation_hold`; both ways the subject could still win were closed on its own lane, so do not re-report them
 - [Retired users keep their email in the unique index](retired-users-keep-their-email-in-the-unique-index.md) — closure never releases the address, so re-registering the same email is a permanent opaque 500
 - [Sign-up role is client-written, server-narrowed](sign-up-role-is-client-written-server-narrowed.md) — `unsafeMetadata.role` can say `admin`; only `normalizeRole` refuses it, and the whole sign-up screen is chrome
-- [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino reaches nested errors through three doors, all three closed in #445; `PostgresError.detail` is redacted there too
+- [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino's three doors to a nested error, `PostgresError.detail` and [[drizzle-query-errors-log-bound-parameters]] were all closed there in #445; do not re-report
 - [Email is a label, `clerk_user_id` is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial since #451; audited, nothing in the tree resolves a person by email
 - [An unwind spares a request with a booking behind it](unwind-decline-spares-requests-with-a-booking.md) — only a succeeded PaymentIntent writes that row, so the exemption is unarrangeable; it closes a post-unban double-booking window
 - [Closure deletes the Clerk identity](closure-deletes-the-clerk-identity.md) — the console's only irreversible action; its self-inflicted `user.deleted` replay is sound, its admin-target and `seed_mkt_` gaps are not

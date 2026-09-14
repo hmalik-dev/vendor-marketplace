@@ -337,9 +337,10 @@ Stripe credentials.
 | `sentry` | `SENTRY_DSN`, `SENTRY_AUTH_TOKEN` (release upload) | #15 |
 | `e2e` | `.env.e2e.local` test-account credentials | every ticket — browser verification is mandatory |
 
-The ticket → capability map lives beside the registry in
-`packages/shared/src/env/tickets.ts`. It replaces the prose `PREREQ:` notes that
-previously sat in the tracker's Notes column, where nothing could enforce them.
+A ticket declares its capabilities as `cap:<name>` labels in Linear, and
+`pnpm preflight --capabilities <a,b>` checks exactly those plus the baseline. The
+labels replace the prose `PREREQ:` notes that once sat in a Notes column, where
+nothing could enforce them.
 
 #### Values differ per environment
 
@@ -387,7 +388,7 @@ identical between local and production, which is where connection-level bugs hid
 
 **Release process:**
 1. Feature branch (`feat/<name>`) off `main`
-2. `pnpm preflight --ticket <n>` — gate passes before work starts
+2. `pnpm preflight --capabilities <a,b>` — gate passes before work starts
 3. Build, test, and verify locally, including browser verification
 4. Push, create PR via `gh pr create`
 5. GitHub Actions CI runs: format check, typecheck, lint, build, test
@@ -944,9 +945,9 @@ confusingly: the failure surfaces deep inside a feature, as a 500 or an SDK erro
 long after the real cause. Preflight moves that failure to the start of the ticket
 and names the fix.
 
-`pnpm preflight [--ticket <n>] [--env production]` resolves a ticket to its declared
-capabilities (§4) and checks only those, so a ticket that never touches Stripe is
-never blocked on Stripe credentials:
+`pnpm preflight [--capabilities <a,b>] [--env production]` checks the baseline plus
+the capabilities named — the ticket's `cap:*` labels (§4) — so a ticket that never
+touches Stripe is never blocked on Stripe credentials:
 
 | # | Check | Hard-fails when |
 |---|-------|-----------------|
@@ -971,8 +972,8 @@ what catches a `sk_test_` key configured on the production platform before a rel
 rather than after one.
 
 **Where the gate fires:** the ticket workflow. `/ticket` and `/next-ticket` run
-`pnpm preflight --ticket <n>` and refuse to move a ticket to `In Progress` until it
-passes. A local `pnpm dev` is deliberately *not* gated — feature-scoped checks cannot
+`pnpm preflight --capabilities <labels>` and refuse to move a ticket to `In Progress`
+until it passes. A local `pnpm dev` is deliberately *not* gated — feature-scoped checks cannot
 know which code path a dev server will reach, and a dev server that refuses to start
 over a credential the current work never touches trains you to bypass the gate.
 
@@ -1111,8 +1112,8 @@ Before every commit, Claude Code runs:
 ### Delivery Workflow
 
 Per ticket:
-1. **Gate:** `pnpm preflight --ticket <n>` — passes before the ticket moves to
-   `In Progress`. Every prerequisite the ticket declares is present and real.
+1. **Gate:** `pnpm preflight --capabilities <labels>` — passes before the ticket
+   moves to `In Progress`. Every prerequisite the ticket declares is present and real.
 2. **Branch:** `feat/<ticket-slug>` from `main`
 3. **Build:** Implement in dependency order (schema → shared → API → frontend)
 4. **Test:** Tests alongside code, same commit
@@ -1148,7 +1149,7 @@ Each milestone produces a demonstrable product state. Milestones are organized b
 
 #### M1.5: Environment Contract (Day 3)
 
-**Demonstrable state:** `pnpm preflight --ticket 4` prints a per-capability checklist
+**Demonstrable state:** `pnpm preflight --capabilities auth,storage` prints a per-capability checklist
 and exits non-zero with the exact fix command when anything is missing, placeholder,
 or malformed. `.env.example` and `turbo.json`'s passthrough list are generated from
 one registry and a test fails if either drifts. Local development runs against a Neon
@@ -1220,8 +1221,10 @@ email, notification, and admin work in M5 and M6 then ships to a running system.
 
 ## 11. Feature-Sized Backlog
 
-**The backlog lives in `.claude/plans/vendor-marketplace-tickets.md`.** Its Status Board
-is the queue and its Ticket Details are the executable specification.
+**The backlog lives in Linear** — team `VEN`, project **Vendor Marketplace**, settings
+in `.claude/project.json`. Each issue's description is the executable specification.
+Until 2026-09-14 it lived in a local markdown board; the 22 rows open that day were
+migrated one-to-one and each carries its board number under _Provenance_.
 
 A full copy of the ticket specifications previously lived here and drifted badly — the
 same failure, and the same remedy, as the duplicate status table recorded under
@@ -1351,16 +1354,15 @@ All open decisions have been resolved. Full rationale in `.claude/plans/vendor-m
 
 ## Ticket Tracker
 
-**The tracker lives in `.claude/plans/vendor-marketplace-tickets.md`.** It is the
+**The tracker is Linear** (team `VEN`, project **Vendor Marketplace**). It is the
 single source of truth for ticket status, branch, blocking relationships, and
-executable specification.
+executable specification; the branch is `worktree-ven-<n>` so Linear links the PR
+itself.
 
 A duplicate status table previously lived here and drifted — it still listed tickets
 #1, #2, and #3 as `Backlog` after all three had shipped. Two copies of a mutable status
 table is the same failure as four copies of the environment variable list, and it is
 resolved the same way: one owner, no copies.
-
-Push the completed backlog to Linear as a historical record after MVP ships.
 
 ---
 
@@ -1380,7 +1382,7 @@ Push the completed backlog to Linear as a historical record after MVP ships.
 
 The entire build, test, demo, and verification process is 100% agentic via Claude Code. No manual human coding, no manual browser testing — everything is automated.
 
-0. **Gate** — `pnpm preflight --ticket <n>`; every declared prerequisite is present and real before any work begins
+0. **Gate** — `pnpm preflight --capabilities <labels>`; every declared prerequisite is present and real before any work begins
 1. **Plan** (Opus or opusplan) — design the ticket's implementation, list files, identify dependencies
 2. **Branch** — `feat/<ticket-slug>` off `main`
 3. **Build** (Sonnet implementer) — dependency order: schema → shared → API → frontend. Each step leaves tree green.
@@ -1402,14 +1404,14 @@ The entire build, test, demo, and verification process is 100% agentic via Claud
 
 ### Ticket Tracking
 
-Tracked in `.claude/plans/vendor-marketplace-tickets.md`, which is the single source of truth for status and specification. No Linear MCP calls during development — push the full backlog to Linear as a historical record after MVP ships.
+Tracked in Linear over MCP (`mcp__plugin_linear_linear__*`), which is the single source of truth for status and specification. Team, project and state names come from `.claude/project.json`; the procedure is `~/.claude/skills/ticket/references/workflow.md`.
 
 Each session:
-1. Reads the tracker to find the next eligible ticket
-2. Runs `pnpm preflight --ticket <n>` — the ticket does not start until the gate passes
-3. Sets status to `In Progress`, fills in branch name
+1. Selects the highest-priority ready issue (`Todo` / `Backlog`, no `blocked` label, no open blocker)
+2. Runs `pnpm preflight --capabilities <its cap:* labels>` — the ticket does not start until the gate passes
+3. Moves it to `In Progress` as the lane opens
 4. Executes the build loop
-5. Sets status to `Done` after merge
+5. Moves it to `Done` with the squash SHA in a comment after the PR merges
 
 ### Project CLAUDE.md
 
@@ -1461,7 +1463,7 @@ pnpm dev                              # web :3000, api :4000
 
 | Task | Command |
 |------|---------|
-| Gate the ticket you are about to start | `pnpm preflight --ticket <n>` |
+| Gate the ticket you are about to start | `pnpm preflight --capabilities <labels>` |
 | Verify a production value set pre-release | `pnpm preflight --env production` |
 | Regenerate `.env.example` + turbo passthrough | `pnpm env:example` |
 | Start dev servers | `pnpm dev` |
