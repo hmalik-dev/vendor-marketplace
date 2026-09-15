@@ -136,7 +136,11 @@ export async function SiteHeader(): Promise<React.ReactElement> {
         {/* Present only on `/search`, and only from `lg` — frame `02`. */}
         <HeaderQuery categories={categories} />
 
-        {/* 16 / 14 / 12px, per frame, same as the cluster on the left. */}
+        {/*
+          16 / 14 / 12px, per frame, same as the cluster on the left. Frame `02`
+          draws 14 at 1440; frames `03`, `04` and both vendor 1440 frames draw
+          16, so `02` is the drift (D30, VEN-413).
+        */}
         <div className="flex flex-none items-center gap-3 lg:gap-3.5 min-[90rem]:gap-4">
           <Show when="signed-out">
             {/*
@@ -198,9 +202,14 @@ export async function SiteHeader(): Promise<React.ReactElement> {
           </Show>
 
           <Show when="signed-in">
-            <Button variant="ghost" asChild>
-              <Link href="/messages">Messages</Link>
-            </Button>
+            {/*
+              Nav links, like "Sign in" above — frame `02` draws both in
+              `stone-700` at 500, and ghost's `clay-500` is for tertiary
+              actions in a pane (VEN-413).
+            */}
+            <Link href="/messages" className={MARKETING_LINK_CLASS}>
+              Messages
+            </Link>
             {/*
               Four items do not fit at 390 — they pushed the header past the
               viewport. Dashboard is the one that gives way, and since #26 it
@@ -208,9 +217,9 @@ export async function SiteHeader(): Promise<React.ReactElement> {
               `14 Search tablet` keeps Messages in the bar and puts the rest
               behind the hamburger.
             */}
-            <Button variant="ghost" asChild className="max-sm:hidden">
-              <Link href="/dashboard">{dashboardLabel}</Link>
-            </Button>
+            <Link href="/dashboard" className={`${MARKETING_LINK_CLASS} max-sm:hidden`}>
+              {dashboardLabel}
+            </Link>
             <NotificationBell />
             {/*
               The account control is the app's own, never Clerk's
