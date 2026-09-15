@@ -28,7 +28,11 @@ describe('admin booking detail and requests', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  async function seedParties(): Promise<{ vendorId: string; customerId: string }> {
+  async function seedParties(): Promise<{
+    vendorId: string;
+    vendorUserId: string;
+    customerId: string;
+  }> {
     await signInAs(harness, ADMIN, true);
     const customerId = await signInAs(harness, CUSTOMER);
     await signInAs(harness, VENDOR);
@@ -47,7 +51,11 @@ describe('admin booking detail and requests', () => {
     });
     expect(created.statusCode).toBe(201);
 
-    return { vendorId: created.json().id as string, customerId };
+    return {
+      vendorId: created.json().id as string,
+      vendorUserId: created.json().userId as string,
+      customerId,
+    };
   }
 
   function get(url: string, clerkUserId: string | null = ADMIN) {
@@ -188,6 +196,94 @@ describe('admin booking detail and requests', () => {
       createdAt: expect.any(String),
       vendor: { id: vendorId, businessName: 'Fernbank Studio', payoutHold: true },
       customer: { id: customerId, name: 'Rosa Rivera', email: `${CUSTOMER}@example.com` },
+      notifications: { total: 0, unread: 0, items: [] },
+    });
+  });
+
+  it('lists what either party was told about the booking or its request, and nothing else', async () => {
+    const { vendorId, vendorUserId, customerId } = await seedParties();
+    const db = harness.database.db;
+    const booking = async (eventDate: string) => {
+      const [request] = await db
+        .insert(bookingRequests)
+        .values({ customerId, vendorId, eventDate, status: 'accepted' })
+        .returning({ id: bookingRequests.id });
+      const [row] = await db
+        .insert(bookings)
+        .values({
+          requestId: request!.id,
+          customerId,
+          vendorId,
+          eventDate,
+          totalAmountCents: 80_000,
+          platformFeeCents: 9_600,
+          vendorPayoutCents: 70_400,
+          status: 'confirmed',
+        })
+        .returning({ id: bookings.id });
+
+      return { id: row!.id, requestId: request!.id };
+    };
+    const subject = await booking('2026-10-20');
+    const other = await booking('2026-10-21');
+
+    const [quoted, confirmed] = await db
+      .insert(notifications)
+      .values([
+        {
+          userId: customerId,
+          type: 'quote_received',
+          title: 'Fernbank Studio sent a quote',
+          data: { bookingRequestId: subject.requestId, vendorId },
+          createdAt: new Date('2026-09-01T10:00:00.000Z'),
+        },
+        {
+          userId: vendorUserId,
+          type: 'booking_confirmed',
+          title: 'Rosa Rivera paid',
+          data: { bookingId: subject.id },
+          readAt: new Date('2026-09-02T12:00:00.000Z'),
+          createdAt: new Date('2026-09-02T10:00:00.000Z'),
+        },
+        // The other booking's, and one naming no booking at all.
+        {
+          userId: customerId,
+          type: 'booking_confirmed',
+          title: 'Other',
+          data: { bookingId: other.id },
+        },
+        {
+          userId: customerId,
+          type: 'new_message',
+          title: 'Message',
+          data: { conversationId: other.id },
+        },
+      ])
+      .returning({ id: notifications.id });
+
+    const body = (await get(`/admin/bookings/${subject.id}`)).json();
+
+    expect(body.notifications).toEqual({
+      total: 2,
+      unread: 1,
+      items: [
+        {
+          id: confirmed!.id,
+          type: 'booking_confirmed',
+          title: 'Rosa Rivera paid',
+          createdAt: '2026-09-02T10:00:00.000Z',
+          readAt: '2026-09-02T12:00:00.000Z',
+          recipient: 'vendor',
+        },
+        {
+          id: quoted!.id,
+          type: 'quote_received',
+          title: 'Fernbank Studio sent a quote',
+          createdAt: '2026-09-01T10:00:00.000Z',
+          readAt: null,
+          recipient: 'customer',
+        },
+      ],
     });
   });
 

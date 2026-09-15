@@ -10,6 +10,7 @@ import {
   wireAdminRequestPageSchema,
   wireAdminCaseDetailSchema,
   wireAdminCasePageSchema,
+  wireAdminCustomerDetailSchema,
   wireAdminCustomerPageSchema,
   wireAdminMetricsSchema,
   wireAdminPaymentPageSchema,
@@ -27,6 +28,7 @@ import {
   type WireAdminRequestPage,
   type WireAdminCaseDetail,
   type WireAdminCasePage,
+  type WireAdminCustomerDetail,
   type WireAdminCustomerPage,
   type WireAdminMetrics,
   type WireAdminPaymentPage,
@@ -145,6 +147,25 @@ export async function getAdminVendorFacets(): Promise<WireAdminVendorFacets> {
 
 export async function getAdminCustomers(query: string): Promise<WireAdminCustomerPage> {
   return adminRead(`/admin/customers${query}`, wireAdminCustomerPageSchema);
+}
+
+/**
+ * One customer's record (VEN-400), or `null` when no customer has that id —
+ * including an id that names a vendor or an operator, whose record is not
+ * this one. A point read reached by link, as `getAdminVendorDetail` rules.
+ */
+export async function getAdminCustomerDetail(
+  userId: string,
+): Promise<WireAdminCustomerDetail | null> {
+  try {
+    return await adminRead(`/admin/customers/${userId}`, wireAdminCustomerDetailSchema);
+  } catch (error) {
+    if (error instanceof ApiClientError && error.statusCode === 404) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 export async function getAdminBookings(query: string): Promise<WireAdminBookingPage> {

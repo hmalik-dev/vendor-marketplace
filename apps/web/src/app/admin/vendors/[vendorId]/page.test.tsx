@@ -312,6 +312,7 @@ describe('AdminVendorDetailPage', () => {
     expect(componentImports).toEqual([
       '@/components/admin/admin-detail',
       '@/components/admin/vendor-detail-actions',
+      '@/components/admin/notifications-card',
       '@/components/admin/vendor-status',
       '@/components/ui/fallback-image',
       '@/components/ui/status-pill',

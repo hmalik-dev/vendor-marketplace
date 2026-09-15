@@ -10,6 +10,7 @@ import {
   ADMIN_ACTION_SUBJECTS,
   ADMIN_ACTIONS,
   ADMIN_AVAILABILITY_LOCK_STATUSES,
+  ADMIN_NOTIFICATION_RECIPIENTS,
   ADMIN_PAGE_SIZE,
   ADMIN_REQUEST_GROUPS,
   AVAILABILITY_STATUSES,
@@ -3102,17 +3103,29 @@ export const adminAvailabilityLockSchema = z.object({
 export type AdminAvailabilityLock = z.infer<typeof adminAvailabilityLockSchema>;
 
 /**
- * A notification the platform sent the vendor. `type` is the stored string
+ * A notification the platform sent an account. `type` is the stored string
  * rather than the enum, so a row written under a retired type still lists.
  */
-export const adminVendorNotificationSchema = z.object({
+export const adminNotificationSchema = z.object({
   id: uuidSchema,
   type: z.string(),
   title: z.string(),
   createdAt: z.date(),
   readAt: z.date().nullable(),
 });
-export type AdminVendorNotification = z.infer<typeof adminVendorNotificationSchema>;
+export type AdminNotification = z.infer<typeof adminNotificationSchema>;
+
+/**
+ * The Notifications card every admin detail view carries (VEN-400): both counts
+ * over every row, and the most recent `ADMIN_DETAIL_NOTIFICATION_LIMIT` rows.
+ */
+export const adminNotificationsSchema = z.object({
+  total: z.int(),
+  unread: z.int(),
+  /** Newest first. */
+  items: z.array(adminNotificationSchema),
+});
+export type AdminNotifications = z.infer<typeof adminNotificationsSchema>;
 
 /**
  * `GET /admin/vendors/:vendorId` — everything the console holds about one
@@ -3124,12 +3137,7 @@ export const adminVendorDetailSchema = z.object({
   portfolio: z.array(adminVendorPortfolioItemSchema),
   /** Held dates from yesterday through the calendar's own horizon, earliest first. */
   locks: z.array(adminAvailabilityLockSchema),
-  notifications: z.object({
-    total: z.int(),
-    unread: z.int(),
-    /** The most recent `ADMIN_VENDOR_DETAIL_NOTIFICATION_LIMIT`, newest first. */
-    items: z.array(adminVendorNotificationSchema),
-  }),
+  notifications: adminNotificationsSchema,
 });
 export type AdminVendorDetail = z.infer<typeof adminVendorDetailSchema>;
 
@@ -3175,8 +3183,89 @@ export const adminBookingDetailSchema = z.object({
     payoutHold: z.boolean(),
   }),
   customer: z.object({ id: uuidSchema, name: z.string(), email: z.string() }),
+  /**
+   * What the platform told either party about this booking or the request it
+   * came from (VEN-400), each row naming which party it went to.
+   */
+  notifications: adminNotificationsSchema.extend({
+    items: z.array(
+      adminNotificationSchema.extend({ recipient: z.enum(ADMIN_NOTIFICATION_RECIPIENTS) }),
+    ),
+  }),
 });
 export type AdminBookingDetail = z.infer<typeof adminBookingDetailSchema>;
+
+// --- The admin customer detail (VEN-400) -----------------------------------
+
+/**
+ * The account as `/admin/customers/[userId]` reads it. Ban and closure are
+ * the stored instants, not only the list's booleans: when an account was
+ * suspended or closed is the question a support thread arrives asking.
+ */
+export const adminCustomerDetailProfileSchema = z.object({
+  id: uuidSchema,
+  email: z.string(),
+  name: z.string(),
+  phone: z.string().nullable(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  isBanned: z.boolean(),
+  bannedAt: z.date().nullable(),
+  deletedAt: z.date().nullable(),
+  /** As on the customer row (#462): the address Clerk holds that this row could not take. */
+  pendingEmail: z.string().nullable(),
+  createdAt: z.date(),
+});
+export type AdminCustomerDetailProfile = z.infer<typeof adminCustomerDetailProfileSchema>;
+
+/** One of the customer's bookings, linked to its money story. */
+export const adminCustomerBookingSchema = z.object({
+  id: uuidSchema,
+  status: bookingStatusSchema,
+  eventDate: calendarDateSchema,
+  vendorId: uuidSchema,
+  vendorName: z.string(),
+  totalAmountCents: z.int(),
+});
+export type AdminCustomerBooking = z.infer<typeof adminCustomerBookingSchema>;
+
+/** A review the customer wrote, or one a vendor wrote about them, with its booking. */
+export const adminCustomerReviewSchema = z.object({
+  id: uuidSchema,
+  bookingId: uuidSchema,
+  vendorId: uuidSchema,
+  vendorName: z.string(),
+  rating: z.int(),
+  title: z.string().nullable(),
+  content: z.string(),
+  /** `false` on a hidden customer-to-vendor review, or a private vendor-to-customer one. */
+  isPublic: z.boolean(),
+  createdAt: z.date(),
+});
+export type AdminCustomerReview = z.infer<typeof adminCustomerReviewSchema>;
+
+const adminCustomerListShape = <T extends z.ZodType>(item: T) =>
+  z.object({
+    /** Every row, counted at request time; `items` is the most recent slice. */
+    total: z.int(),
+    items: z.array(item),
+  });
+
+/**
+ * `GET /admin/customers/:userId` — one customer's record: the account, their
+ * bookings, reviews in both directions and what the platform told them. Every
+ * count is a query result, never the account's derived counter columns.
+ */
+export const adminCustomerDetailSchema = z.object({
+  customer: adminCustomerDetailProfileSchema,
+  bookings: adminCustomerListShape(adminCustomerBookingSchema),
+  reviews: z.object({
+    written: adminCustomerListShape(adminCustomerReviewSchema),
+    received: adminCustomerListShape(adminCustomerReviewSchema),
+  }),
+  notifications: adminNotificationsSchema,
+});
+export type AdminCustomerDetail = z.infer<typeof adminCustomerDetailSchema>;
 
 export const adminRequestGroupSchema = z.enum(ADMIN_REQUEST_GROUPS);
 

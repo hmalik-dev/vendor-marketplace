@@ -177,13 +177,14 @@ export default async function AdminCustomersPage({
             header: 'Name',
             className: 'font-semibold text-stone-900',
             /*
-             * The way into the data-rights page (#438). A subject-access or
-             * closure request arrives naming a person, and this table is where
-             * an operator finds them — so the name is the link rather than a
-             * second control in a column nobody would look in.
+             * The way into the customer's record (VEN-400), and through its
+             * Records card to the data-rights page (#438). A request arrives
+             * naming a person, and this table is where an operator finds them —
+             * so the name is the link rather than a second control in a column
+             * nobody would look in, and the table itself is unchanged.
              */
             cell: (row) => (
-              <Link href={`/admin/users/${row.id}`} className="hover:underline">
+              <Link href={`/admin/customers/${row.id}`} className="hover:underline">
                 {`${row.firstName} ${row.lastName}`.trim() || row.email}
               </Link>
             ),

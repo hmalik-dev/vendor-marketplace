@@ -12,6 +12,7 @@ import {
   adminCloseAccountResultSchema,
   adminConversationMessagesSchema,
   adminConversationQuerySchema,
+  adminCustomerDetailSchema,
   adminCustomerPageSchema,
   adminCustomerQuerySchema,
   adminMetricsSchema,
@@ -74,7 +75,12 @@ import {
   updateTag,
   type AdminContext,
 } from './admin.service.js';
-import { listRequests, readBookingDetail, readVendorDetail } from './admin-detail.service.js';
+import {
+  listRequests,
+  readBookingDetail,
+  readCustomerDetail,
+  readVendorDetail,
+} from './admin-detail.service.js';
 import { closeAccount, exportUserData, readUserDataRights } from './data-rights.service.js';
 import { bookingContextFor } from '../payments/payments.service.js';
 import {
@@ -387,6 +393,20 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       },
     },
     async (request) => listCustomers(app.db, request.query),
+  );
+
+  /**
+   * One customer's record (VEN-400): the account with its ban and closure
+   * instants, bookings, reviews written and received, and notifications sent.
+   * A closed account reads too. A read only.
+   */
+  app.get(
+    '/admin/customers/:userId',
+    {
+      onRequest: adminOnly,
+      schema: { params: userParamsSchema, response: { 200: adminCustomerDetailSchema } },
+    },
+    async (request) => readCustomerDetail(app.db, request.params.userId),
   );
 
   app.get(
