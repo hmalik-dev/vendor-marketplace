@@ -286,15 +286,15 @@ holds — none of them is drift, and a parity pass reports all four as expected.
 **Two colour entries in the delta are overruled, and both are ruled rather than
 open (#454, 2026-09-07).** The bundle is an _admin_ bundle and these pills are
 drawn on the customer hub and the request detail as well as the console;
-`/admin/requests`, the only surface where either would show, does not exist yet
-and is #437's. So the product-wide file wins in both cases, and the bundle's
+`/admin/requests` (VEN-399) draws both from the same `REQUEST_PRESENTATION` the
+hub reads. So the product-wide file wins in both cases, and the bundle's
 table is corrected as transcription drift under D30 — the same direction its
 `holds payouts` line went.
 
 - **`quoted` stays steel.** `03-components.md` line 29 rules
   `QUOTED steel-50 / steel-600`; the delta's table says gold. Ruled by the
   account holder: `03-components.md` stands, nothing is restyled, and
-  `/admin/requests` will draw steel when #437 builds it.
+  `/admin/requests` draws it steel (VEN-399).
 - **`accepted` stays clay.** The delta calls it _settled_ and colours it sage.
   `needsYou` is the only tone that spends clay and it means **waiting on this
   user** — an accepted request is waiting on the customer to pay, which is
