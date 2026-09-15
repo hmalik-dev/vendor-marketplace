@@ -306,7 +306,7 @@ export function DataRightsActions({
         <p className={CONSEQUENCE}>
           {closedAt
             ? 'The account is retired. Its record is kept, and this page keeps showing it.'
-            : 'Retires the account, takes any storefront down and signs them out; the record is kept. Their own upcoming bookings must be cancelled first; a vendor’s customers are refunded in full. Confirms first.'}
+            : "Retires the account, takes any storefront down and signs them out; the record is kept. Their own upcoming bookings must be cancelled first; a vendor's customers are refunded in full. Confirms first."}
         </p>
       </div>
 
