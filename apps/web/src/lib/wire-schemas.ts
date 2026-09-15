@@ -29,6 +29,8 @@ import {
   userSchema,
   adminActivityRowSchema,
   adminPlatformSettingsSchema,
+  adminVendorApplicationRowSchema,
+  adminVendorInviteRowSchema,
   adminBookingRowSchema,
   adminCaseBookingSchema,
   adminCaseDetailSchema,
@@ -602,6 +604,29 @@ export const wireAdminPlatformSettingsSchema = adminPlatformSettingsSchema.exten
   updatedAt: z.coerce.date().nullable(),
 });
 export type WireAdminPlatformSettings = z.infer<typeof wireAdminPlatformSettingsSchema>;
+
+/** The vendor waitlist (VEN-406); `createdAt` is the only date on a row. */
+export const wireAdminVendorApplicationRowSchema = adminVendorApplicationRowSchema.extend({
+  createdAt: z.coerce.date(),
+});
+export type WireAdminVendorApplicationRow = z.infer<typeof wireAdminVendorApplicationRowSchema>;
+
+export const wireAdminVendorApplicationListSchema = z.object({
+  items: z.array(wireAdminVendorApplicationRowSchema),
+});
+export type WireAdminVendorApplicationList = z.infer<typeof wireAdminVendorApplicationListSchema>;
+
+/** The vendor invites (VEN-406): when sent, and when used. */
+export const wireAdminVendorInviteRowSchema = adminVendorInviteRowSchema.extend({
+  createdAt: z.coerce.date(),
+  acceptedAt: z.coerce.date().nullable(),
+});
+export type WireAdminVendorInviteRow = z.infer<typeof wireAdminVendorInviteRowSchema>;
+
+export const wireAdminVendorInviteListSchema = z.object({
+  items: z.array(wireAdminVendorInviteRowSchema),
+});
+export type WireAdminVendorInviteList = z.infer<typeof wireAdminVendorInviteListSchema>;
 
 /**
  * The case queue (#431).

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 import {
@@ -37,7 +38,7 @@ const CENTS_PER_DOLLAR = 100;
 const VENDOR_SEARCH_PAGE_SIZE = 5;
 const SAVE_FAILED = 'That change did not save. Check your connection and try again.';
 
-type PauseField = Exclude<keyof PlatformSwitches, 'maxBookingCents'>;
+type PauseField = Exclude<keyof PlatformSwitches, 'maxBookingCents' | 'vendorInviteOnly'>;
 
 const SWITCHES: readonly { field: PauseField; label: string; description: string }[] = [
   {
@@ -156,6 +157,45 @@ export function PlatformSettingsPanel({
               </li>
             ))}
           </ul>
+        </section>
+
+        <section
+          aria-labelledby={`${fieldId}-vendor-gate`}
+          className="rounded-xl border border-stone-300 bg-stone-0 px-4 py-3.5"
+        >
+          <div className="flex items-start justify-between gap-6">
+            <div>
+              <label
+                id={`${fieldId}-vendor-gate`}
+                htmlFor={`${fieldId}-vendorInviteOnly`}
+                className="text-base font-semibold text-stone-900"
+              >
+                Vendors join by invitation only
+              </label>
+              <p className="mt-1 text-sm text-stone-600">
+                {settings.vendorInviteOnly
+                  ? 'A vendor account is created only for an invited email. Anyone else choosing vendor is sent to the application form; customers sign up as usual.'
+                  : 'Anyone can sign up as a vendor. Customers are never gated.'}{' '}
+                <Link
+                  href="/admin/vendor-applications"
+                  className="font-semibold text-clay-500 underline underline-offset-4"
+                >
+                  Applications and invites
+                </Link>
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2.5 pt-0.5">
+              <span className="text-sm text-stone-700" aria-hidden="true">
+                {settings.vendorInviteOnly ? 'Invite only' : 'Open'}
+              </span>
+              <Switch
+                id={`${fieldId}-vendorInviteOnly`}
+                checked={settings.vendorInviteOnly}
+                disabled={saving}
+                onCheckedChange={(checked) => void save({ vendorInviteOnly: checked })}
+              />
+            </div>
+          </div>
         </section>
 
         <section

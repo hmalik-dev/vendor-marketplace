@@ -98,6 +98,8 @@ forward. That is the actual finding — not which five.
 | `/admin/customers/[userId]`   | **Exempt — derived.** One customer's record (VEN-400): the account with its ban and closure instants, bookings, reviews written and received, and notifications sent, with identity and links to the data-rights record and Activity on the right. Built to the admin delta's Pattern B (`design/delta-admin/`) inside frame `13`'s shell, as `/admin/vendors/[vendorId]` is, and entered from a name in the Customers table or a booking's Records card. |
 | `/admin/requests`             | **Exempt — derived.** `Bookings · Requests` (VEN-399): frame `13`'s table over `booking_requests` with Pattern A's columns and its Live · Closed · Lapsed segmented control. A tab of Bookings, so the rail gains no row and lights `Bookings` here.                                                                                                                                                                                                      |
 | `/admin/settings`             | **Exempt — derived.** The launch switches (VEN-404): three pause switches, the beta cap on booking value and the vendors on payout hold. No frame draws a settings screen; it is built inside frame `13`'s shell to `22-admin.md`'s "card-based groupings with the actions prominent", the rule `/admin/tags` is derived from, and reached by a `Settings` row appended after `Activity` in the rail.                                                     |
+| `/admin/vendor-applications`  | **Exempt — derived.** The vendor gate's waitlist and invites (VEN-406): applications with invite and decline, an invite by email, and every invite with whether it was used. Frame `13`'s table inside its shell, reached by a `Vendor applications` row appended beside `Settings`, where the gate is switched.                                                                                                                                          |
+| `/vendors/apply`              | **Exempt — derived.** Where the vendor gate (VEN-406) sends a vendor it refused to create, and where `/for-vendors` points while the gate is on: the application form on frame `12 Sign up`'s split screen with the vendor panel (`21-sign-up.md`), saying no account was created.                                                                                                                                                                        |
 | `/legal/vendor-agreement`     | **Exempt — derived.** The public reading page for the vendor agreement (VEN-402), linked from `/for-vendors`. No frame draws it; it is frame `31`'s legal reading layout — the same `LegalPage` as `/terms`, `/privacy` and `/cookies` — over the document onboarding step 3 clips. A drawing of it would be a fourth copy of one composition.                                                                                                            |
 
 Four exempt, four to draw, one already framed and mis-recorded — plus, since
@@ -113,7 +115,8 @@ thirteenth, added by VEN-380, and like the account record the rail does not
 reach it. VEN-399 adds the fourteenth and fifteenth: `/admin/bookings/[bookingId]`,
 reached from a booking row, and `/admin/requests`, a tab of Bookings.
 VEN-400 adds the sixteenth, `/admin/customers/[userId]`, reached from a
-customer's name; the rail does not reach it.
+customer's name; the rail does not reach it. VEN-406 adds the seventeenth,
+`/admin/vendor-applications`, the second rail row no frame draws.
 
 **"Derived" is a third outcome and it is deliberately narrow.** It means the
 screen's composition is defined by a frame elsewhere in the bundle plus a written

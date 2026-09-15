@@ -32,6 +32,12 @@ vi.mock('@/lib/current-user', () => ({
   redirectVendorToDashboard: () => redirectVendorToDashboard(),
 }));
 
+const gate = vi.hoisted(() => ({ vendorInviteOnly: false }));
+
+vi.mock('@/lib/vendor-data', () => ({
+  getVendorSignUpGate: async () => ({ vendorInviteOnly: gate.vendorInviteOnly }),
+}));
+
 const { default: ForVendorsPage, dynamic } = await import('./page');
 
 /** The real interval, read before any test swaps it. */
@@ -49,6 +55,7 @@ describe('/for-vendors', () => {
   afterEach(() => {
     figures.rate = null;
     figures.hours = null;
+    gate.vendorInviteOnly = false;
     redirectVendorToDashboard.mockReset();
     cleanup();
   });
@@ -73,6 +80,19 @@ describe('/for-vendors', () => {
     for (const cta of ctas) {
       expect(cta.getAttribute('href')).toBe('/sign-up?role=vendor');
     }
+  });
+
+  it('points both calls to action at the application form while the vendor gate is on (VEN-406)', async () => {
+    gate.vendorInviteOnly = true;
+    await renderPage();
+
+    const ctas = screen.getAllByRole('link', { name: 'Apply to join' });
+
+    expect(ctas.map((cta) => cta.getAttribute('href'))).toEqual([
+      '/vendors/apply',
+      '/vendors/apply',
+    ]);
+    expect(screen.queryByRole('link', { name: 'Start taking bookings' })).toBeNull();
   });
 
   it('states the commission exactly once, as the subtraction in the worked example', async () => {

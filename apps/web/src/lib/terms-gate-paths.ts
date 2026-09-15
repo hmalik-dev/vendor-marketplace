@@ -3,6 +3,7 @@ import {
   LEGAL_PATHS,
   SUPPORT_PATH,
   TERMS_ACCEPTANCE_PATH,
+  VENDOR_APPLY_PATH,
 } from '@vendor-marketplace/shared';
 import { ApiClientError } from './api-client';
 import { pathReturningTo } from './return-path';
@@ -45,6 +46,9 @@ export function isTermsRequired(error: unknown): boolean {
  * - `/support`, because the visitor most likely to need it is the one who
  *   cannot get through — and a person stuck here has to be able to say so.
  * - the interstitial itself, which would otherwise redirect to itself.
+ * - the vendor application form (VEN-406), where the vendor gate sends a session
+ *   whose account it refused to create — that session can never clear the
+ *   Terms gate, so bouncing it back there would be a loop.
  *
  * This exists because the client funnel is genuinely ambient: `NotificationBell`
  * is mounted by the root layout on every non-admin route and fetches on mount,
@@ -55,6 +59,7 @@ const GATE_EXEMPT_PATHS: readonly string[] = [
   ...Object.values(LEGAL_PATHS),
   SUPPORT_PATH,
   TERMS_ACCEPTANCE_PATH,
+  VENDOR_APPLY_PATH,
 ];
 
 export function isGateExemptPath(pathname: string): boolean {

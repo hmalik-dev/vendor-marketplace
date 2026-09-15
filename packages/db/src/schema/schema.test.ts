@@ -41,7 +41,9 @@ const EXPECTED_TABLES = [
   'tags',
   'us_cities',
   'users',
+  'vendor_applications',
   'vendor_categories',
+  'vendor_invites',
   'vendor_profiles',
   'vendor_tags',
 ];

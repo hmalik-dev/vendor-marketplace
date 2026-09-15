@@ -17,6 +17,7 @@ import {
   servicePackages,
   users,
   vendorCategories,
+  vendorInvites,
   vendorProfiles,
 } from './schema/index.js';
 import { createTestDatabase, type TestDatabase } from './testing/test-db.js';
@@ -157,6 +158,17 @@ describe('seedE2eFixtures', () => {
    * `clerk_user_id` that cannot authenticate, and before this the only route to
    * the operations console was promoting a customer in the database by hand.
    */
+  it('pre-invites the vendor account, once, so it signs in with the vendor gate on', async () => {
+    await seedE2eFixtures(database.db, INPUT);
+    await seedE2eFixtures(database.db, INPUT);
+
+    const invites = await database.db.select().from(vendorInvites);
+
+    expect(invites.map((invite) => [invite.email, invite.acceptedAt instanceof Date])).toEqual([
+      ['vendor+clerk_test@example.com', true],
+    ]);
+  });
+
   it('grants the admin account the operations role', async () => {
     const result = await seedE2eFixtures(database.db, {
       ...INPUT,

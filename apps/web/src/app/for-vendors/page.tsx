@@ -9,10 +9,13 @@ import {
   pageTitle,
   LEGAL_PATHS,
   PAYOUT_RELEASE_HOURS,
+  VENDOR_APPLY_PATH,
+  VENDOR_SIGN_UP_PATH,
 } from '@vendor-marketplace/shared';
 import { Button } from '@/components/ui/button';
 import { redirectVendorToDashboard } from '@/lib/current-user';
 import { FOR_VENDORS_PAYOUTS_ANCHOR } from '@/lib/for-vendors';
+import { getVendorSignUpGate } from '@/lib/vendor-data';
 
 export const metadata: Metadata = {
   title: pageTitle('For vendors'),
@@ -25,9 +28,6 @@ export const metadata: Metadata = {
  * would be wrong for part of the audience. The same declaration `/` makes.
  */
 export const dynamic = 'force-dynamic';
-
-/** The sign-up deep link, with the vendor card pre-selected (21-sign-up.md). */
-const SIGN_UP_PATH = '/sign-up?role=vendor';
 
 /**
  * The worked example's price, formatted through `formatPrice` like every other
@@ -131,6 +131,14 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
   // The page's only ask is one a vendor has already completed.
   await redirectVendorToDashboard();
 
+  /*
+   * While the vendor gate is on (VEN-406) a sign-up would only be refused at
+   * the Terms, so both calls to action go straight to the application form.
+   */
+  const { vendorInviteOnly } = await getVendorSignUpGate();
+  const cta = vendorInviteOnly
+    ? { href: VENDOR_APPLY_PATH, label: 'Apply to join' }
+    : { href: VENDOR_SIGN_UP_PATH, label: 'Start taking bookings' };
   const steps = payoutSteps();
   const fees = calculateFees(EXAMPLE_PRICE_CENTS, DEFAULT_PLATFORM_FEE_RATE);
 
@@ -163,10 +171,10 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
             </p>
             <div className="mt-5.5 flex flex-col items-stretch gap-3 lg:mt-7.5 lg:flex-row lg:items-center lg:gap-5.5">
               <Link
-                href={SIGN_UP_PATH}
+                href={cta.href}
                 className="flex min-h-12 items-center justify-center rounded-lg bg-clay-400 px-6.5 py-3.5 text-cta font-semibold text-stone-0 transition-colors duration-(--duration-fast) hover:bg-clay-600"
               >
-                Start taking bookings
+                {cta.label}
               </Link>
               <a
                 href={`#${FOR_VENDORS_PAYOUTS_ANCHOR}`}
@@ -325,7 +333,7 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
               className="order-1 mt-0 min-h-12 px-6 py-3.25 text-cta lg:order-2 lg:min-h-0 lg:rounded-[9px] lg:text-base"
               asChild
             >
-              <Link href={SIGN_UP_PATH}>Start taking bookings</Link>
+              <Link href={cta.href}>{cta.label}</Link>
             </Button>
           </div>
         </div>

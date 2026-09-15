@@ -1269,6 +1269,13 @@ export const ADMIN_ACTIONS = [
   'category_deactivated',
   'category_reactivated',
   'category_reordered',
+  /*
+   * The vendor gate (VEN-406): an address invited to open a vendor account,
+   * an invite withdrawn before it was used, and an application turned down.
+   */
+  'vendor_invited',
+  'vendor_invite_revoked',
+  'vendor_application_declined',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -1297,6 +1304,8 @@ export const ADMIN_ACTION_SUBJECTS = [
   /* The singleton `platform_settings` row, named by `PLATFORM_SETTINGS_ID`. */
   'platform_settings',
   'category',
+  'vendor_invite',
+  'vendor_application',
 ] as const;
 export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
 
@@ -1680,6 +1689,12 @@ export const ERROR_CODES = {
   BOOKINGS_PAUSED: 'bookings_paused',
   CHECKOUT_PAUSED: 'checkout_paused',
   OVER_BETA_CAP: 'over_beta_cap',
+  /**
+   * The vendor gate (VEN-406) refused to create a vendor account for an
+   * address nobody invited. Nothing was written; the web app sends the reader
+   * to the application form instead of an error.
+   */
+  VENDOR_NOT_INVITED: 'vendor_not_invited',
 } as const;
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 

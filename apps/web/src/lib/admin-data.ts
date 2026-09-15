@@ -17,6 +17,8 @@ import {
   wireAdminPaymentPageSchema,
   wireAdminActivityPageSchema,
   wireAdminPlatformSettingsSchema,
+  wireAdminVendorApplicationListSchema,
+  wireAdminVendorInviteListSchema,
   wireAdminUserDataRightsSchema,
   wireAdminReviewPageSchema,
   wireAdminTagListSchema,
@@ -35,6 +37,8 @@ import {
   type WireAdminPaymentPage,
   type WireAdminActivityPage,
   type WireAdminPlatformSettings,
+  type WireAdminVendorApplicationList,
+  type WireAdminVendorInviteList,
   type WireAdminUserDataRights,
   type WireAdminReviewPage,
   type WireAdminTagList,
@@ -252,6 +256,16 @@ export async function getAdminActivity(query: string): Promise<WireAdminActivity
 /** The launch switches and the vendors whose payouts are held (VEN-404). */
 export async function getAdminPlatformSettings(): Promise<WireAdminPlatformSettings> {
   return adminRead('/admin/settings', wireAdminPlatformSettingsSchema);
+}
+
+/** The vendor waitlist, newest first (VEN-406). */
+export async function getAdminVendorApplications(): Promise<WireAdminVendorApplicationList> {
+  return adminRead('/admin/vendor-applications', wireAdminVendorApplicationListSchema);
+}
+
+/** Every vendor invite, newest first (VEN-406). */
+export async function getAdminVendorInvites(): Promise<WireAdminVendorInviteList> {
+  return adminRead('/admin/vendor-invites', wireAdminVendorInviteListSchema);
 }
 
 export async function getAdminTags(): Promise<WireAdminTagList> {

@@ -6,6 +6,7 @@ import {
   type TermsAcceptanceStatus,
 } from '@vendor-marketplace/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiClientError } from '@/lib/api-client';
 import { legalDocument } from '@/lib/legal-content';
 import { AcceptTermsScreen } from './accept-terms-screen';
 
@@ -138,5 +139,19 @@ describe('the acceptance gate', () => {
       expect(screen.getByText(/The Terms were updated while this page was open/)).toBeDefined(),
     );
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('sends a vendor the gate refused to the application form, not an error (VEN-406)', async () => {
+    const user = userEvent.setup();
+    post.mockRejectedValue(
+      new ApiClientError(403, 'vendor_not_invited', 'Vendor accounts are by invitation for now.'),
+    );
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    await user.click(box());
+    await user.click(submit());
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/vendors/apply'));
+    expect(screen.queryByText('That did not save')).toBeNull();
   });
 });

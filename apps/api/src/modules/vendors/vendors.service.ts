@@ -1,6 +1,7 @@
 import {
   VENDOR_PROFILE_MODERATION_HOLD_MESSAGE,
   MAX_SLUG_LENGTH,
+  RESERVED_VENDOR_SLUGS,
   generateSlug,
   vendorSearchResultSchema,
   type CreateVendorProfileInput,
@@ -136,6 +137,10 @@ function withSuffix(base: string, attempt: number): string {
   return `${base.length <= room ? base : base.slice(0, room).replace(/-+$/, '')}${suffix}`;
 }
 
+function isReservedVendorSlug(slug: string): boolean {
+  return (RESERVED_VENDOR_SLUGS as readonly string[]).includes(slug);
+}
+
 /**
  * Finds a free slug near `desired`. The unique index is still the authority —
  * a concurrent insert can win between the check and the write — but resolving
@@ -150,6 +155,10 @@ async function resolveSlug(
 
   for (let attempt = 1; attempt <= MAX_SLUG_ATTEMPTS; attempt += 1) {
     const candidate = attempt === 1 ? base : withSuffix(base, attempt);
+    // A static route under `/vendors/` answers a reserved slug first (VEN-406).
+    if (isReservedVendorSlug(candidate)) {
+      continue;
+    }
     if (!(await slugExists(db, candidate, exceptVendorId))) {
       return candidate;
     }

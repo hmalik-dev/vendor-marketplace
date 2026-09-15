@@ -8,8 +8,13 @@ import type { AppDatabase } from '../../lib/database.js';
 import { conflict, unauthorized, validationFailed } from '../../lib/errors.js';
 import { findUserByClerkIdIncludingRetired } from '../users/users.dao.js';
 import { displayName, syncUserFromClerk } from '../users/users.service.js';
+import { admitVendor } from '../vendor-invites/vendor-invites.service.js';
 import type { ClerkUserSnapshot } from '../users/users.service.js';
-import { findAcceptanceOfVersion, insertAcceptance } from './legal-acceptance.dao.js';
+import {
+  findAcceptanceOfVersion,
+  findAcceptancesByUser,
+  insertAcceptance,
+} from './legal-acceptance.dao.js';
 import type { NewAcceptance } from './legal-acceptance.dao.js';
 
 /**
@@ -149,7 +154,23 @@ export async function acceptTerms(
       return status;
     }
 
-    await insertAcceptance(db, termsAcceptanceRow(existing, context));
+    /*
+     * The vendor gate (VEN-406) for a row the `user.created` webhook wrote: it
+     * is not an account until this acceptance, so it is held to the same rule
+     * as the path below. An account that has accepted *any* version already
+     * exists and is not re-gated by a new version of the Terms.
+     */
+    const firstAcceptance = !(await findAcceptancesByUser(db, existing.id)).some(
+      (row) => row.document === 'terms_of_service',
+    );
+
+    await db.transaction(async (tx) => {
+      if (firstAcceptance) {
+        await admitVendor(tx, existing.role, existing.email);
+      }
+
+      await insertAcceptance(tx, termsAcceptanceRow(existing, context));
+    });
 
     return readTermsStatus(db, existing.id);
   }
@@ -167,6 +188,15 @@ export async function acceptTerms(
     if (!user) {
       throw new Error('legal acceptance: the account row could not be resolved');
     }
+
+    /*
+     * The vendor gate (VEN-406), on the row as saved rather than the snapshot:
+     * a `user.created` webhook landing mid-request can make that row the one
+     * `syncUserFromClerk` returns, with the role the sign-up first chose. A
+     * refusal rolls the whole transaction back, so no account this path wrote
+     * and no acceptance survives it.
+     */
+    await admitVendor(tx, user.role, user.email);
 
     await insertAcceptance(tx, termsAcceptanceRow(user, context));
 

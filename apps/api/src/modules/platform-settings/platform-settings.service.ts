@@ -30,6 +30,7 @@ const DEFAULT_SWITCHES: PlatformSwitches = {
   checkoutPaused: false,
   payoutReleasePaused: false,
   maxBookingCents: null,
+  vendorInviteOnly: false,
 };
 
 const ADMIN_SETTINGS_PATH = '/admin/settings';
@@ -39,6 +40,7 @@ const SWITCH_FIELDS = [
   'checkoutPaused',
   'payoutReleasePaused',
   'maxBookingCents',
+  'vendorInviteOnly',
 ] as const satisfies readonly (keyof PlatformSwitches)[];
 
 /**
@@ -61,6 +63,7 @@ function toSwitches(row: PlatformSwitches | null): PlatformSwitches {
     checkoutPaused: row.checkoutPaused,
     payoutReleasePaused: row.payoutReleasePaused,
     maxBookingCents: row.maxBookingCents,
+    vendorInviteOnly: row.vendorInviteOnly,
   };
 }
 
