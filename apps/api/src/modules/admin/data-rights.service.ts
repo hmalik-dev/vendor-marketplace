@@ -10,7 +10,7 @@ import type { LegalAcceptanceRow, UserRow, VendorProfileRow } from '@vendor-mark
 import type { AppDatabase } from '../../lib/database.js';
 import type { ClerkUserDeleter } from '../../plugins/clerk-auth.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
-import { retireUserById } from '../users/users.dao.js';
+import { hasAnotherLiveOperator, retireOperatorById, retireUserById } from '../users/users.dao.js';
 import { isClerkIdentity } from '../webhooks/clerk.reconcile.js';
 import { findConfirmedBookingsToUnwind } from './admin.dao.js';
 import { fullName, recordAdminActionBestEffort } from './admin.service.js';
@@ -482,6 +482,10 @@ async function vendorSideRefundsOnClose(
  * button before it can be pressed — so verifying the refusal never reaches the
  * deletion.
  */
+/** The last-operator refusal — one sentence for the unlocked read and the locked write. */
+export const LAST_OPERATOR_REFUSAL =
+  'This is the last operator account that can still sign in. Closing it would leave nobody able to reach the console, and only the identity provider could restore one.';
+
 export async function closeAccount(
   context: AdminContext,
   actorId: string,
@@ -489,6 +493,30 @@ export async function closeAccount(
   now: Date,
   deleteClerkUser: ClerkUserDeleter,
 ): Promise<AdminCloseAccountResult> {
+  const user = await findUserRecord(context.db, userId);
+
+  if (!user) {
+    throw notFound('No account with that id');
+  }
+
+  /*
+   * Closing another operator is allowed, past friction (VEN-391, ruled
+   * 2026-09-07: hurdles, not refusal — people leave). The friction is the
+   * console's typed confirmation on the target's email, and this structural
+   * refusal: never the last operator who can still sign in.
+   *
+   * **Before the self-closure refusal, and not relying on it.** That refusal
+   * happens to guarantee an actor survives, but a guard that depends on another
+   * guard's side effect breaks silently when that one changes — so this answers
+   * the same 409 whoever asks. `retireOperatorById` repeats the check under a
+   * lock, because two operators closing each other at once both pass this read.
+   */
+  const operatorTarget = user.role === 'admin';
+
+  if (operatorTarget && !user.deletedAt && !(await hasAnotherLiveOperator(context.db, userId))) {
+    throw conflict(LAST_OPERATOR_REFUSAL);
+  }
+
   if (actorId === userId) {
     /*
      * The same refusal `setUserBanned` makes, for a sharper reason: an operator
@@ -497,41 +525,6 @@ export async function closeAccount(
      * not one. 403 rather than 400 — it is about who the caller is.
      */
     throw forbidden('You cannot close your own account');
-  }
-
-  const user = await findUserRecord(context.db, userId);
-
-  if (!user) {
-    throw notFound('No account with that id');
-  }
-
-  if (user.role === 'admin') {
-    /*
-     * A second refusal, and #451 is what earns it.
-     *
-     * Closing another operator used to be a reversible soft-delete. It now
-     * **destroys their Clerk identity**, and nothing in this repository can put
-     * one back: `db:seed:e2e` resolves the Clerk ids behind its accounts rather
-     * than creating them, and `role = 'admin'` is unreachable from inside the
-     * product, so the only recovery is a person provisioning a user in the
-     * Clerk dashboard by hand. The self-closure refusal above already says an
-     * audit trail its own actor can erase is not one; the same argument is
-     * stronger for a peer now that the erasure cannot be undone.
-     *
-     * **Ruled 2026-09-07: hurdles, not refusal — and the hurdles are #460.**
-     * An operator account must stay closable, because people leave; the
-     * friction just has to be proportionate to being unrecoverable. So this
-     * refusal is the *default until that friction exists*, not the destination:
-     * #460 builds a typed confirmation on the target's own email, a structural
-     * refusal when no other live admin would remain, a dialog saying the
-     * sign-in comes back only from Clerk's dashboard, and its own
-     * `admin_actions` value. Delete this refusal **in the same commit** that
-     * adds them — relaxing it first would leave the console worse than it is
-     * today, which is the one outcome neither direction wants.
-     */
-    throw forbidden(
-      'An operator account cannot be closed here. Closing it would delete a sign-in that only the identity provider can restore.',
-    );
   }
 
   if (user.deletedAt) {
@@ -550,7 +543,13 @@ export async function closeAccount(
     );
   }
 
-  const retired = await retireUserById(context.db, userId);
+  const retired = operatorTarget
+    ? await retireOperatorById(context.db, userId)
+    : await retireUserById(context.db, userId);
+
+  if (retired === 'last-operator') {
+    throw conflict(LAST_OPERATOR_REFUSAL);
+  }
 
   if (!retired) {
     // Another closure took the claim between the read above and this update.
@@ -629,7 +628,7 @@ export async function closeAccount(
 
   await recordAdminActionBestEffort(context, {
     actorId,
-    action: 'user_closed',
+    action: operatorTarget ? 'operator_account_closed' : 'user_closed',
     subjectType: 'user',
     subjectId: userId,
     detail: {

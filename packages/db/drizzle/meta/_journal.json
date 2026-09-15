@@ -330,6 +330,13 @@
       "when": 1789461848595,
       "tag": "0046_zippy_odin",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789465602613,
+      "tag": "0047_clear_redwing",
+      "breakpoints": true
     }
   ]
 }

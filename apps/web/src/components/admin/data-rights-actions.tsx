@@ -39,6 +39,10 @@ export interface DataRightsActionsProps {
   bookingsRefundedOnClose: number;
   /** `true` where this record is the signed-in operator's own account. */
   isSelf: boolean;
+  /** The account's address — what an operator closure is confirmed by typing. */
+  email: string;
+  /** `true` where the account is another operator's (VEN-391). */
+  isOperator: boolean;
 }
 
 /** The one line under each action naming what it does — `11.5px` `stone-600`, per Pattern B. */
@@ -93,6 +97,8 @@ export function DataRightsActions({
   closeBlockers,
   bookingsRefundedOnClose,
   isSelf,
+  email,
+  isOperator,
 }: DataRightsActionsProps): React.ReactElement {
   const call = useApi();
   const router = useRouter();
@@ -272,8 +278,28 @@ export function DataRightsActions({
                 Close account
               </Button>
             }
-            title={`Close ${name}'s account?`}
+            title={isOperator ? `Close ${name}'s operator account?` : `Close ${name}'s account?`}
             destructive
+            typedConfirmation={
+              isOperator ? { phrase: email, label: `Type ${email} to confirm` } : undefined
+            }
+            caution={
+              /*
+               * VEN-391: the one closure nothing in the console can reverse.
+               * `role = 'admin'` is unreachable from inside the product, so the
+               * consequence is named in terms of who can fix it.
+               */
+              isOperator ? (
+                <>
+                  <strong className="font-semibold">
+                    This deletes their sign-in, and it can&apos;t be restored from here.
+                  </strong>{' '}
+                  They lose the console immediately. Only someone with access to Clerk&apos;s
+                  dashboard can give them a sign-in again, and they would still need to be made an
+                  operator by hand.
+                </>
+              ) : undefined
+            }
             description={
               <>
                 This retires the account and takes any storefront off the marketplace immediately,

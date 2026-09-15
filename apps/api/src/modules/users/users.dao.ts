@@ -1,4 +1,5 @@
-import { and, eq, exists, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, eq, exists, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import {
   legalAcceptances,
   USERS_EMAIL_UNIQUE_INDEX,
@@ -550,6 +551,78 @@ export async function retireUserById(
 }
 
 /**
+ * Any operator other than `userId` who can still sign in to the console: not
+ * retired and not banned. Takes the table so the same rule can be read on its
+ * own and correlated inside a retirement predicate.
+ */
+function isOtherLiveOperator(table: typeof users, userId: string): SQL | undefined {
+  return and(
+    eq(table.role, 'admin'),
+    isNull(table.deletedAt),
+    eq(table.isBanned, false),
+    ne(table.id, userId),
+  );
+}
+
+/** Whether an operator other than `userId` would still hold the console. */
+export async function hasAnotherLiveOperator(db: AppDatabase, userId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(isOtherLiveOperator(users, userId))
+    .limit(1);
+
+  return rows.length > 0;
+}
+
+/** The one lock every operator retirement takes; exported for its contention test. */
+export const OPERATOR_RETIREMENT_LOCK = sql`select pg_advisory_xact_lock(hashtextextended('operator_retirement', 0))`;
+
+/**
+ * Retires an **operator** — refused when nobody else would hold the console
+ * (VEN-391).
+ *
+ * The check is the `UPDATE`'s own predicate, taken under one transaction-scoped
+ * advisory lock every operator retirement shares. The predicate alone is not
+ * enough under READ COMMITTED: two operators closing each other at once would
+ * each see the other still live and both commit, leaving nobody. The lock makes
+ * the second retirement start its statement after the first has committed, so
+ * its snapshot sees one live operator fewer.
+ */
+export async function retireOperatorById(
+  db: AppDatabase,
+  userId: string,
+): Promise<{ user: UserRow; profileRetired: boolean } | 'last-operator' | null> {
+  const other = alias(users, 'other_operator');
+  const retired = await retireUserWhere(
+    db,
+    and(
+      eq(users.id, userId),
+      notDeleted,
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(other)
+          .where(isOtherLiveOperator(other, userId)),
+      ),
+    ),
+    OPERATOR_RETIREMENT_LOCK,
+  );
+
+  if (retired) {
+    return retired;
+  }
+
+  const [live] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.id, userId), notDeleted))
+    .limit(1);
+
+  return live ? 'last-operator' : null;
+}
+
+/**
  * The retirement itself, once: `deleted_at` on the account and the storefront
  * down with it, in one transaction.
  *
@@ -561,8 +634,9 @@ export async function retireUserById(
 async function retireUserWhere(
   db: AppDatabase,
   where: SQL | undefined,
+  lock?: SQL,
 ): Promise<{ user: UserRow; profileRetired: boolean } | null> {
-  const retired = await retireUserInTransaction(db, where);
+  const retired = await retireUserInTransaction(db, where, lock);
 
   /*
    * A retired row's address leaves `users_email_key`, so it is released as
@@ -581,8 +655,13 @@ async function retireUserWhere(
 async function retireUserInTransaction(
   db: AppDatabase,
   where: SQL | undefined,
+  lock?: SQL,
 ): Promise<{ user: UserRow; profileRetired: boolean } | null> {
   return db.transaction(async (tx) => {
+    if (lock) {
+      await tx.execute(lock);
+    }
+
     const updated = await tx
       .update(users)
       .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })

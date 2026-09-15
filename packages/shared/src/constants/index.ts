@@ -1225,6 +1225,16 @@ export const ADMIN_ACTIONS = [
    * suspend"* uncountable.
    */
   'user_closed',
+  /**
+   * An operator closed **another operator's** account (VEN-391).
+   *
+   * Its own value rather than `user_closed` with a flag in the detail, because
+   * this is the one closure nothing inside the product can undo: `role =
+   * 'admin'` is unreachable from the console, so the sign-in comes back only
+   * from Clerk's dashboard. The immutability trigger means a row written under
+   * the wrong value stays wrong, so the distinction is made at the writer.
+   */
+  'operator_account_closed',
   /*
    * Graduated moderation (#435) — the levers that are not a ban.
    *

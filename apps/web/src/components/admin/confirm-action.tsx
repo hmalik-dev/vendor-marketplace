@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertDialog } from 'radix-ui';
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 
@@ -64,6 +64,15 @@ export interface ConfirmActionProps {
   caution?: ReactNode;
   /** `true` when the action is irreversible, which is what earns the red fill. */
   destructive?: boolean;
+  /**
+   * Text the operator has to type, exactly, before the confirm enables.
+   *
+   * For the actions nothing inside the product can undo (VEN-391): a second
+   * click is a reflex, and typing the target's own address is not. The mismatch
+   * is stated as it happens rather than discovered on press, and the field
+   * clears whenever the dialog closes so a reopened dialog starts from nothing.
+   */
+  typedConfirmation?: { phrase: string; label: string };
   onConfirm: () => Promise<void>;
 }
 
@@ -86,12 +95,28 @@ export function ConfirmAction({
   cancelLabel = 'Cancel',
   caution,
   destructive = false,
+  typedConfirmation,
   onConfirm,
 }: ConfirmActionProps): React.ReactElement {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [typed, setTyped] = useState('');
+  const typedId = useId();
   const open = controlledOpen ?? uncontrolledOpen;
+  const typedMatches = !typedConfirmation || typed === typedConfirmation.phrase;
+  const typedMismatch = typed !== '' && !typedMatches;
+
+  let typedStateMessage: string | undefined;
+  if (typedConfirmation) {
+    if (typed === '') {
+      typedStateMessage = `${confirmLabel} stays unavailable until this matches.`;
+    } else if (typedMatches) {
+      typedStateMessage = 'Matches.';
+    } else {
+      typedStateMessage = `Doesn't match ${typedConfirmation.phrase} exactly.`;
+    }
+  }
 
   function setOpen(next: boolean): void {
     setUncontrolledOpen(next);
@@ -130,6 +155,7 @@ export function ConfirmAction({
         setOpen(next);
         if (!next) {
           setError(null);
+          setTyped('');
         }
       }}
     >
@@ -160,6 +186,36 @@ export function ConfirmAction({
             </div>
           ) : null}
 
+          {typedConfirmation ? (
+            <div className="mt-4 flex flex-col gap-1.5">
+              <label htmlFor={typedId} className="text-sm font-medium text-stone-900">
+                {typedConfirmation.label}
+              </label>
+              <input
+                id={typedId}
+                type="text"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                value={typed}
+                disabled={busy}
+                aria-invalid={typedMismatch}
+                aria-describedby={`${typedId}-state`}
+                onChange={(event) => setTyped(event.target.value)}
+                className="h-9 rounded-md border border-stone-300 bg-stone-0 px-3 text-sm text-stone-900 focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:outline-none aria-invalid:border-error-500"
+              />
+              <p
+                id={`${typedId}-state`}
+                aria-live="polite"
+                className={
+                  typedMismatch ? 'text-helper text-error-500' : 'text-helper text-stone-600'
+                }
+              >
+                {typedStateMessage}
+              </p>
+            </div>
+          ) : null}
+
           {error ? (
             <p role="alert" className="mt-3 text-sm text-error-500">
               {error}
@@ -181,7 +237,7 @@ export function ConfirmAction({
               type="button"
               size="sm"
               variant={destructive ? 'destructive' : 'primary'}
-              disabled={busy}
+              disabled={busy || !typedMatches}
               onClick={() => void confirm()}
             >
               {busy ? 'Working…' : confirmLabel}

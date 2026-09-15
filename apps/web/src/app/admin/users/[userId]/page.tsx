@@ -265,6 +265,8 @@ export default async function AdminUserDataRightsPage({
                 closeBlockers={rights.closeBlockers}
                 bookingsRefundedOnClose={rights.bookingsRefundedOnClose}
                 isSelf={viewer?.id === rights.userId}
+                email={rights.email}
+                isOperator={rights.role === 'admin'}
               />
             </AdminCard>
           </>
