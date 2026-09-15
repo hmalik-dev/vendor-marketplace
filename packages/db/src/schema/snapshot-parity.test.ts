@@ -22,6 +22,7 @@ import {
   REPORT_SUBJECTS,
   SUPPORT_CASE_ORIGINS,
   SUPPORT_CASE_STATUSES,
+  VENDOR_APPLICATION_STATUSES,
   SUPPORT_TOPICS,
   TAG_CATEGORIES,
   TAG_SUGGESTION_STATUSES,
@@ -94,6 +95,7 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'report_reason', values: REPORT_REASONS },
     { enumName: 'operator_alert_kind', values: OPERATOR_ALERT_KINDS },
     { enumName: 'operator_alert_outcome', values: OPERATOR_ALERT_OUTCOMES },
+    { enumName: 'vendor_application_status', values: VENDOR_APPLICATION_STATUSES },
   ];
 
   it.each(cases)(

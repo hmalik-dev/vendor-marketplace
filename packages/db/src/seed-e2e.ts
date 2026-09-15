@@ -24,6 +24,7 @@ import {
   servicePackages,
   users,
   vendorCategories,
+  vendorInvites,
   vendorProfiles,
 } from './schema/index.js';
 
@@ -249,6 +250,15 @@ export async function seedE2eFixtures<
     if (adminUserId !== undefined && input.admin) {
       await ensureTermsAccepted(tx, adminUserId, input.admin);
     }
+
+    /*
+     * Pre-invited (VEN-406), so the fixture vendor keeps signing in with the
+     * vendor gate on. The account already exists, so the invite reads as used.
+     */
+    await tx
+      .insert(vendorInvites)
+      .values({ email: input.vendor.email.toLowerCase(), acceptedAt: now })
+      .onConflictDoNothing({ target: vendorInvites.email });
 
     const vendorProfileId = await ensureProfile(tx, vendorUserId, {
       stripeAccountId,

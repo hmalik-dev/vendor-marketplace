@@ -25,6 +25,11 @@ export const platformSettings = pgTable(
     payoutReleasePaused: boolean('payout_release_paused').notNull().default(false),
     /** The closed-beta ceiling on one booking's price; null is no cap. */
     maxBookingCents: integer('max_booking_cents'),
+    /**
+     * The vendor gate (VEN-406): a vendor account only for an invited address.
+     * Off in a fresh database; the launch check requires it on in production.
+     */
+    vendorInviteOnly: boolean('vendor_invite_only').notNull().default(false),
     /** The operator who last changed a value; null until the first change. */
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

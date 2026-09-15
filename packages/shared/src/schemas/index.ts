@@ -89,6 +89,11 @@ import {
   SUPPORT_REFERENCE_PATTERN,
   SUPPORT_TOPICS,
 } from '../constants/support.js';
+import {
+  MAX_VENDOR_APPLICATION_MESSAGE_LENGTH,
+  VENDOR_APPLICATION_DECISIONS,
+  VENDOR_APPLICATION_STATUSES,
+} from '../constants/vendor-invites.js';
 
 // --- Primitives ------------------------------------------------------------
 
@@ -2983,6 +2988,8 @@ export const platformSwitchesSchema = z.object({
   payoutReleasePaused: z.boolean(),
   /** The closed-beta ceiling on one booking's price; null is no cap. */
   maxBookingCents: z.number().int().positive().max(MAX_PACKAGE_PRICE_CENTS).nullable(),
+  /** The vendor gate (VEN-406): a vendor account only for an invited address. */
+  vendorInviteOnly: z.boolean(),
 });
 export type PlatformSwitches = z.infer<typeof platformSwitchesSchema>;
 
@@ -3018,6 +3025,71 @@ export const adminVendorPayoutHoldResultSchema = z.object({
   payoutHold: z.boolean(),
 });
 export type AdminVendorPayoutHoldResult = z.infer<typeof adminVendorPayoutHoldResultSchema>;
+
+// --- The vendor gate (VEN-406) ---------------------------------------------
+
+/** `GET /vendor-applications/gate`: whether a vendor needs an invite to sign up. */
+export const vendorSignUpGateSchema = z.object({ vendorInviteOnly: z.boolean() });
+export type VendorSignUpGate = z.infer<typeof vendorSignUpGateSchema>;
+
+/** `POST /vendor-applications`: what the operator vets an applicant from. */
+export const vendorApplicationInputSchema = z.object({
+  email: emailSchema,
+  businessName: trimmedString(MAX_NAME_LENGTH),
+  category: trimmedString(MAX_NAME_LENGTH),
+  city: trimmedString(MAX_NAME_LENGTH),
+  message: freeText().max(MAX_VENDOR_APPLICATION_MESSAGE_LENGTH),
+});
+export type VendorApplicationInput = z.infer<typeof vendorApplicationInputSchema>;
+
+/**
+ * The same answer whether the address was new or already on the list, so the
+ * public form cannot be used to ask who has applied.
+ */
+export const vendorApplicationReceiptSchema = z.object({ received: z.literal(true) });
+export type VendorApplicationReceipt = z.infer<typeof vendorApplicationReceiptSchema>;
+
+export const vendorApplicationStatusSchema = z.enum(VENDOR_APPLICATION_STATUSES);
+
+export const adminVendorApplicationRowSchema = z.object({
+  id: uuidSchema,
+  email: z.string(),
+  businessName: z.string(),
+  category: z.string(),
+  city: z.string(),
+  message: z.string(),
+  status: vendorApplicationStatusSchema,
+  createdAt: z.date(),
+});
+export type AdminVendorApplicationRow = z.infer<typeof adminVendorApplicationRowSchema>;
+
+export const adminVendorApplicationListSchema = z.object({
+  items: z.array(adminVendorApplicationRowSchema),
+});
+export type AdminVendorApplicationList = z.infer<typeof adminVendorApplicationListSchema>;
+
+/** `PUT /admin/vendor-applications/:applicationId`. */
+export const decideVendorApplicationSchema = z.object({
+  decision: z.enum(VENDOR_APPLICATION_DECISIONS),
+});
+export type DecideVendorApplication = z.infer<typeof decideVendorApplicationSchema>;
+
+export const adminVendorInviteRowSchema = z.object({
+  id: uuidSchema,
+  email: z.string(),
+  invitedByName: z.string().nullable(),
+  createdAt: z.date(),
+  /** When the invited address opened its vendor account; null until then. */
+  acceptedAt: z.date().nullable(),
+});
+export type AdminVendorInviteRow = z.infer<typeof adminVendorInviteRowSchema>;
+
+export const adminVendorInviteListSchema = z.object({ items: z.array(adminVendorInviteRowSchema) });
+export type AdminVendorInviteList = z.infer<typeof adminVendorInviteListSchema>;
+
+/** `POST /admin/vendor-invites`. */
+export const createVendorInviteSchema = z.object({ email: emailSchema });
+export type CreateVendorInvite = z.infer<typeof createVendorInviteSchema>;
 
 // --- The admin vendor detail (VEN-380) --------------------------------------
 

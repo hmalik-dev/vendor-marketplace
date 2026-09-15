@@ -19,6 +19,7 @@ const SETTINGS: WireAdminPlatformSettings = {
   checkoutPaused: true,
   payoutReleasePaused: false,
   maxBookingCents: 50_000,
+  vendorInviteOnly: false,
   updatedAt: new Date('2026-09-14T09:05:00.000Z'),
   updatedByName: 'Ada Lovelace',
   heldVendors: [
@@ -60,6 +61,23 @@ describe('PlatformSettingsPanel', () => {
     expect(calls).toEqual([
       { path: '/admin/settings', method: 'PUT', body: { payoutReleasePaused: true } },
     ]);
+  });
+
+  it('turns the vendor gate on from its own switch (VEN-406)', async () => {
+    render(<PlatformSettingsPanel settings={SETTINGS} />);
+
+    const gate = screen.getByRole('switch', { name: 'Vendors join by invitation only' });
+    expect(gate.getAttribute('aria-checked')).toBe('false');
+    await act(async () => {
+      fireEvent.click(gate);
+    });
+
+    expect(calls).toEqual([
+      { path: '/admin/settings', method: 'PUT', body: { vendorInviteOnly: true } },
+    ]);
+    expect(
+      screen.getByRole('link', { name: 'Applications and invites' }).getAttribute('href'),
+    ).toBe('/admin/vendor-applications');
   });
 
   it('saves the cap in cents and releases a held vendor by id', async () => {

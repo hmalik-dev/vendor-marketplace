@@ -1,7 +1,12 @@
 import { cache } from 'react';
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { slugSchema, type Category } from '@vendor-marketplace/shared';
+import {
+  slugSchema,
+  vendorSignUpGateSchema,
+  type Category,
+  type VendorSignUpGate,
+} from '@vendor-marketplace/shared';
 import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
@@ -308,6 +313,23 @@ export async function getCategories(options: ReferenceReadOptions = {}): Promise
       }),
     options.required,
   );
+}
+
+/**
+ * Whether a vendor needs an invite to sign up (VEN-406). Degrades to "no" — the
+ * Terms acceptance still enforces the gate, so a failed read only costs the
+ * visitor one extra hop to the application form.
+ */
+export async function getVendorSignUpGate(): Promise<VendorSignUpGate> {
+  try {
+    return await apiRequest('/vendor-applications/gate', { schema: vendorSignUpGateSchema });
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+
+    return { vendorInviteOnly: false };
+  }
 }
 
 export async function getActiveTags(options: ReferenceReadOptions = {}): Promise<WireTag[]> {

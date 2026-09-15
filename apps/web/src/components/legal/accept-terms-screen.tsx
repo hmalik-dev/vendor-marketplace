@@ -2,7 +2,9 @@
 
 import {
   BRAND_NAME,
+  ERROR_CODES,
   LEGAL_PATHS,
+  VENDOR_APPLY_PATH,
   termsAcceptanceStatusSchema,
   type TermsAcceptanceStatus,
 } from '@vendor-marketplace/shared';
@@ -83,6 +85,15 @@ export function AcceptTermsScreen({
         returnTo ? `/after-sign-in?returnTo=${encodeURIComponent(returnTo)}` : '/after-sign-in',
       );
     } catch (error) {
+      /*
+       * The vendor gate (VEN-406): no account was created for this address, so
+       * the next step is the application form rather than a retry.
+       */
+      if (error instanceof ApiClientError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
+        router.replace(VENDOR_APPLY_PATH);
+        return;
+      }
+
       setSaving(false);
       setFailed(
         error instanceof ApiClientError && error.statusCode === 409

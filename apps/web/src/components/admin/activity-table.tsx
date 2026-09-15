@@ -81,6 +81,9 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   category_deactivated: 'Deactivated a category',
   category_reactivated: 'Reactivated a category',
   category_reordered: 'Moved a category',
+  vendor_invited: 'Invited a vendor',
+  vendor_invite_revoked: 'Revoked a vendor invite',
+  vendor_application_declined: 'Declined a vendor application',
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */
@@ -97,6 +100,8 @@ const SUBJECT_LABELS: Record<AdminActionSubject, string> = {
   conversation: 'Thread',
   platform_settings: 'Settings',
   category: 'Category',
+  vendor_invite: 'Vendor invite',
+  vendor_application: 'Vendor application',
 };
 
 /**

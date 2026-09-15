@@ -73,7 +73,7 @@ describe('the rail', () => {
     return screen.getAllByRole('link').map((link) => link.textContent?.replace(/\d+$/, '') ?? '');
   }
 
-  it('renders the nine rows in the order the delta draws them, then the unframed Settings', () => {
+  it('renders the nine rows in the order the delta draws them, then the unframed rows', () => {
     expect(railLabels()).toEqual([
       'Overview',
       'Vendors',
@@ -84,7 +84,9 @@ describe('the rail', () => {
       'Reviews',
       'Categories & tags',
       'Activity',
-      // VEN-404's launch switches: no frame draws them, so the row is appended.
+      // VEN-406's vendor waitlist and VEN-404's launch switches: no frame draws
+      // them, so the rows are appended.
+      'Vendor applications',
       'Settings',
     ]);
   });
@@ -121,10 +123,12 @@ describe('the rail', () => {
    * The count change the delta's stale preamble invites. It argues the rail
    * "needs nine" from a brief of eight; #431 had already given Cases its row,
    * so a reader who acts on that sentence adds a tenth. The one tenth row is
-   * VEN-404's unframed Settings, appended after the nine the delta draws.
+   * VEN-404's unframed Settings, and VEN-406's Vendor applications beside it,
+   * both appended after the nine the delta draws.
    */
-  it('is the nine drawn rows plus Settings, because the move was an order change', () => {
-    expect(railLabels().filter((label) => label !== 'Settings')).toHaveLength(9);
+  it('is the nine drawn rows plus the unframed two, because the move was an order change', () => {
+    const unframed = ['Vendor applications', 'Settings'];
+    expect(railLabels().filter((label) => !unframed.includes(label))).toHaveLength(9);
   });
 
   /** Badges on Cases and Reviews only — a badge on a row that is never zero is decoration. */

@@ -56,6 +56,10 @@ import { vendorRoutes } from './modules/vendors/vendors.routes.js';
 import { stripeConnectRoutes } from './modules/vendors/stripe-connect.routes.js';
 import { legalAgreementRoutes } from './modules/vendors/legal-agreement.routes.js';
 import { termsRoutes } from './modules/legal/terms.routes.js';
+import {
+  adminVendorInviteRoutes,
+  vendorApplicationRoutes,
+} from './modules/vendor-invites/vendor-invites.routes.js';
 import { paymentRoutes } from './modules/payments/payments.routes.js';
 import { stripeWebhookRoutes } from './modules/webhooks/stripe.routes.js';
 import {
@@ -257,6 +261,8 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(healthRoutes);
   await app.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(adminCategoryRoutes);
+  await app.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });
+  await app.register(vendorApplicationRoutes);
   await app.register(categoryRoutes);
   await app.register(tagRoutes);
   await app.register(placeRoutes);

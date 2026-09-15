@@ -229,6 +229,18 @@ describe('/vendor/profile', () => {
       expect(response.json().slug).toBe('vendor');
     });
 
+    it('never gives a storefront the slug the vendor application route answers (VEN-406)', async () => {
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: validBody({ businessName: 'Apply' }),
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().slug).toBe('apply-2');
+    });
+
     it('refuses a second profile for the same vendor', async () => {
       await harness.app.inject({
         method: 'POST',

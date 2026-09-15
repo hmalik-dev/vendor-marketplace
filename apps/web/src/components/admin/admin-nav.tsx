@@ -63,6 +63,11 @@ const ITEMS = [
   { href: '/admin/tags', label: 'Categories & tags' },
   { href: '/admin/activity', label: 'Activity' },
   /*
+   * The vendor gate's waitlist and invites (VEN-406). Unframed, like Settings,
+   * and beside it: the gate is switched on there and worked here.
+   */
+  { href: '/admin/vendor-applications', label: 'Vendor applications' },
+  /*
    * The launch switches (VEN-404). Deliberately unframed: the delta draws nine
    * rows and predates the switches, so this sits last, after the record the
    * other surfaces leave behind, as the one row that configures rather than

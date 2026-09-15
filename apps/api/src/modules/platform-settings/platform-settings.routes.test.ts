@@ -302,6 +302,7 @@ describe('launch switches', () => {
         checkoutPaused: false,
         payoutReleasePaused: false,
         maxBookingCents: null,
+        vendorInviteOnly: false,
         updatedAt: null,
         updatedByName: null,
         heldVendors: [],

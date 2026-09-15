@@ -17,3 +17,4 @@ export * from './us-cities.js';
 export * from './support-cases.js';
 export * from './operator-alerts.js';
 export * from './platform-settings.js';
+export * from './vendor-invites.js';
