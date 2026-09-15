@@ -40,6 +40,9 @@ export interface DataRightsActionsProps {
   isSelf: boolean;
 }
 
+/** The one line under each action naming what it does — `11.5px` `stone-600`, per Pattern B. */
+const CONSEQUENCE = 'text-helper leading-[1.5] text-stone-600';
+
 /**
  * What a closure finished without doing — one sentence per owed item.
  *
@@ -163,9 +166,34 @@ export function DataRightsActions({
     router.refresh();
   }
 
+  /*
+   * Pattern B's Actions card body (#393): tiers ordered least to most severe,
+   * a hairline between them, and one line under each naming its consequence
+   * before it is pressed. The card and its band belong to the page.
+   */
   return (
-    <div className="flex flex-col gap-2">
-      {/*
+    <div className="flex flex-col gap-2 px-4 py-3.5">
+      <div data-action-tier className="flex flex-col gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="w-full"
+          disabled={busy}
+          onClick={() => void exportRecord()}
+        >
+          {busy ? 'Working…' : 'Export data'}
+        </Button>
+        <p className={CONSEQUENCE}>
+          Downloads everything held about this account as one file, to send to the person who asked.
+          Nothing on the account changes.
+        </p>
+      </div>
+
+      <div aria-hidden="true" className="my-1.5 h-px bg-stone-150" />
+
+      <div data-action-tier className="flex flex-col gap-2">
+        {/*
         The refusal, drawn **above** the control it refuses (Pattern B, #454).
 
         #438 built the prevention and this changes only where it is drawn and
@@ -178,24 +206,26 @@ export function DataRightsActions({
         **D39's 409 is shown before the press, never as an error after it.** The
         API's refusal is the guarantee; this is the explanation.
       */}
-      {!closedAt && (isSelf || closeBlockers.length > 0) ? (
-        <div className="rounded-lg border border-gold-200 bg-gold-50 px-3.5 py-3 text-sm leading-prose text-stone-900">
-          {isSelf ? (
-            <>
-              <strong className="font-semibold">Can&apos;t close: this is your own account.</strong>{' '}
-              Every action on this console is recorded against the operator who took it, and an
-              audit trail its own actor can end is not one.
-            </>
-          ) : (
-            <>
-              <strong className="font-semibold">
-                Can&apos;t close: {closeBlockers.length} confirmed{' '}
-                {closeBlockers.length === 1 ? 'booking' : 'bookings'} on{' '}
-                {closeBlockers.map((booking) => formatEventDate(booking.eventDate)).join(', ')}.
-              </strong>{' '}
-              Cancel or complete {closeBlockers.length === 1 ? 'it' : 'them'} first, from the
-              booking screens, where the refund is priced.
-              {/*
+        {!closedAt && (isSelf || closeBlockers.length > 0) ? (
+          <div className="rounded-lg border border-gold-200 bg-gold-50 px-3.5 py-3 text-sm leading-prose text-stone-900">
+            {isSelf ? (
+              <>
+                <strong className="font-semibold">
+                  Can&apos;t close: this is your own account.
+                </strong>{' '}
+                Every action on this console is recorded against the operator who took it, and an
+                audit trail its own actor can end is not one.
+              </>
+            ) : (
+              <>
+                <strong className="font-semibold">
+                  Can&apos;t close: {closeBlockers.length} confirmed{' '}
+                  {closeBlockers.length === 1 ? 'booking' : 'bookings'} on{' '}
+                  {closeBlockers.map((booking) => formatEventDate(booking.eventDate)).join(', ')}.
+                </strong>{' '}
+                Cancel or complete {closeBlockers.length === 1 ? 'it' : 'them'} first, from the
+                booking screens, where the refund is priced.
+                {/*
                 **Named but not linked, and #437 owes the link.**
 
                 Pattern B draws this panel with the blocking booking linked, and
@@ -207,33 +237,24 @@ export function DataRightsActions({
                 named and dated here, and the anchor goes on when the route it
                 would point at is real.
               */}
-              <ul className="mt-1.5 flex flex-col gap-0.5 text-stone-700">
-                {closeBlockers.map((booking) => (
-                  <li key={booking.bookingId}>
-                    {formatEventDate(booking.eventDate)} with {booking.counterpartyName}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={busy}
-          onClick={() => void exportRecord()}
-        >
-          {busy ? 'Working…' : 'Export their record'}
-        </Button>
+                <ul className="mt-1.5 flex flex-col gap-0.5 text-stone-700">
+                  {closeBlockers.map((booking) => (
+                    <li key={booking.bookingId}>
+                      {formatEventDate(booking.eventDate)} with {booking.counterpartyName}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        ) : null}
 
         {closedAt ? (
-          <span className="text-meta text-stone-600">Closed {toDateString(closedAt)}</span>
+          <span className="text-center text-meta text-stone-600">
+            Closed {toDateString(closedAt)}
+          </span>
         ) : isSelf || closeBlockers.length > 0 ? (
-          <Button type="button" variant="secondary" size="sm" disabled>
+          <Button type="button" variant="secondary" size="sm" className="w-full" disabled>
             Close account
           </Button>
         ) : (
@@ -252,7 +273,7 @@ export function DataRightsActions({
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="border-error-200 text-error-500 hover:bg-error-50"
+                className="w-full border-error-200 text-error-500 hover:bg-error-50"
               >
                 Close account
               </Button>
@@ -282,6 +303,11 @@ export function DataRightsActions({
             onConfirm={close}
           />
         )}
+        <p className={CONSEQUENCE}>
+          {closedAt
+            ? 'The account is retired. Its record is kept, and this page keeps showing it.'
+            : "Retires the account, takes any storefront down and signs them out; the record is kept. Their own upcoming bookings must be cancelled first; a vendor's customers are refunded in full. Confirms first."}
+        </p>
       </div>
 
       {error ? (

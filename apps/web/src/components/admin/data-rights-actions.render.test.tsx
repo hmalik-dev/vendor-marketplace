@@ -293,7 +293,7 @@ describe('the data-rights closure control', () => {
     renderActions({ isSelf: true });
 
     expect(
-      (screen.getByRole('button', { name: 'Export their record' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Export data' }) as HTMLButtonElement).disabled,
     ).toBe(false);
   });
 
@@ -309,7 +309,7 @@ describe('the data-rights closure control', () => {
     expect(screen.getByText('Closed 2026-09-07').textContent).toBe('Closed 2026-09-07');
     expect(screen.queryByText(/cannot be closed while it holds/)).toBeNull();
     expect(
-      (screen.getByRole('button', { name: 'Export their record' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Export data' }) as HTMLButtonElement).disabled,
     ).toBe(false);
   });
 });
