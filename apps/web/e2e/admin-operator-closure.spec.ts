@@ -93,8 +93,9 @@ test('an operator closes another operator only after typing their address exactl
     expect((await clerk(`/users/${clerkUserId}`, { method: 'GET' })).status).toBe(404);
   } finally {
     await context.close();
+    // The row first, so a Clerk failure below cannot leave it behind.
+    await e2eOperator('remove', clerkUserId, email);
     const deleted = await clerk(`/users/${clerkUserId}`, { method: 'DELETE' });
     expect([200, 404]).toContain(deleted.status);
-    await e2eOperator('remove', clerkUserId, email);
   }
 });

@@ -130,6 +130,8 @@ export function ConfirmAction({
     try {
       await onConfirm();
       setOpen(false);
+      // `setOpen` bypasses Radix's `onOpenChange`, which is where a cancel clears it.
+      setTyped('');
     } catch (failure) {
       /*
        * The dialog stays open on failure. Closing it would leave the operator

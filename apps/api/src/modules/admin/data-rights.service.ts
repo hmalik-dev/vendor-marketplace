@@ -438,6 +438,10 @@ async function vendorSideRefundsOnClose(
   return held.filter((booking) => booking.customerId !== userId).length;
 }
 
+/** The last-operator refusal — one sentence for the unlocked read and the locked write. */
+export const LAST_OPERATOR_REFUSAL =
+  'This is the last operator account that can still sign in. Closing it would leave nobody able to reach the console, and only the identity provider could restore one.';
+
 /**
  * Closes an account on its holder's request, or **refuses** (D39).
  *
@@ -482,9 +486,6 @@ async function vendorSideRefundsOnClose(
  * button before it can be pressed — so verifying the refusal never reaches the
  * deletion.
  */
-/** The last-operator refusal — one sentence for the unlocked read and the locked write. */
-export const LAST_OPERATOR_REFUSAL =
-  'This is the last operator account that can still sign in. Closing it would leave nobody able to reach the console, and only the identity provider could restore one.';
 
 export async function closeAccount(
   context: AdminContext,
