@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AdminCard, KeyValue, KeyValueList, ScopeChip } from '@/components/admin/admin-detail';
 import { Button } from '@/components/ui/button';
 import { useApi } from '@/lib/use-api';
 import { userFacingError } from '@/lib/user-facing-error';
@@ -21,21 +22,57 @@ const SENT = new Intl.DateTimeFormat('en-US', {
 });
 
 /**
- * The scope, said at the foot of the card whether or not the thread is open.
- *
- * **Scoped to the case, not to the event date** as Pattern C words it. The read
- * is granted by an open case that reports the thread and returns its most
- * recent messages; nothing narrows it to one day, so a line promising that
- * would be a claim about access the API does not make.
+ * The month of Pattern C's `12 Sep`. `en-US`, not `en-GB`: British English
+ * abbreviates September to `Sept`. UTC, like the window itself.
+ */
+const MONTH = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' });
+
+type ThreadWindow = WireAdminConversationMessages['window'];
+
+/** The chip before the read: the server has not said which dates yet, so it names none. */
+export const THREAD_CHIP = 'Case-scoped read';
+
+/**
+ * The scope before the read, and on a case that names no thread. The dates
+ * come from the response (VEN-412), so until there is one the line says what
+ * is always true of the window without inventing which days it covers.
  */
 export const THREAD_SCOPE =
-  'Read-only, and scoped to this case. Operators can open the thread only while the case that reports it is open, and every read is logged.';
+  "Read-only, and scoped to the dates the case is about. Operators see those messages, not the relationship's whole history.";
 
-function ScopeLine(): React.ReactElement {
+/** Pattern C's footer, for the window the server actually applied. */
+export const WINDOW_SCOPE: Record<ThreadWindow['basis'], string> = {
+  event_date:
+    "Read-only, and scoped to the event date. Operators see the messages the case is about, not the relationship's whole history.",
+  report_filed:
+    "Read-only, and scoped to the week the report was filed. Operators see the messages the case is about, not the relationship's whole history.",
+};
+
+/** `12 Sep only` for one day; `6–12 Sep`, or `29 May – 4 Jun` across a month. */
+export function windowLabel(window: ThreadWindow): string {
+  const [fromDay, fromMonth] = dayAndMonth(window.from);
+  const [toDay, toMonth] = dayAndMonth(window.to);
+
+  if (window.from === window.to) {
+    return `${toDay} ${toMonth} only`;
+  }
+
+  return fromMonth === toMonth
+    ? `${fromDay}–${toDay} ${toMonth}`
+    : `${fromDay} ${fromMonth} – ${toDay} ${toMonth}`;
+}
+
+function dayAndMonth(isoDay: string): [number, string] {
+  const day = new Date(`${isoDay}T00:00:00Z`);
+
+  return [day.getUTCDate(), MONTH.format(day)];
+}
+
+function ScopeLine({ children }: { children: string }): React.ReactElement {
   return (
     <div className="mt-auto pt-3">
       <p className="border-t border-stone-150 pt-2.5 text-helper leading-prose text-stone-600">
-        {THREAD_SCOPE}
+        {children}
       </p>
     </div>
   );
@@ -55,12 +92,16 @@ function ScopeLine(): React.ReactElement {
  * then acts through moderation or through support. Nothing here posts into the
  * thread: a participant is a party to the conversation and an operator is not.
  *
- * Renders the body of Pattern C's `Reported thread` card; the page owns the
- * card and its band.
+ * Renders Pattern C's whole `Reported thread` card, band included, because the
+ * chip in the band states the window the response enforced (VEN-412) and only
+ * this component holds the response.
  */
 export function CaseConversation({
+  caseId,
   conversationId,
 }: {
+  /** The case on screen: its report, not the thread's oldest, dates the read. */
+  caseId: string;
   conversationId: string;
 }): React.ReactElement {
   const request = useApi();
@@ -74,7 +115,7 @@ export function CaseConversation({
 
     try {
       setThread(
-        await request(`/admin/conversations/${conversationId}/messages`, {
+        await request(`/admin/conversations/${conversationId}/messages?caseId=${caseId}`, {
           schema: wireAdminConversationMessagesSchema,
         }),
       );
@@ -91,8 +132,34 @@ export function CaseConversation({
     }
   }
 
+  /*
+   * Pattern C §2. **Not `readOnly`, deliberately**: the thread is read-only,
+   * but opening it writes an audit row, so the card carries one control — the
+   * deliberate press that is the read.
+   */
+  const card = (chip: string, body: React.ReactElement): React.ReactElement => (
+    <AdminCard
+      title="Reported thread"
+      note={<ScopeChip>{chip}</ScopeChip>}
+      className="flex flex-col"
+    >
+      {/*
+        The id stays on the page without the audited read: an operator quoting
+        it into a ticket or `/admin/activity` should not have to open the thread
+        to copy it.
+      */}
+      <KeyValueList className="border-b border-stone-150">
+        <KeyValue label="Conversation" kind="mono">
+          {conversationId}
+        </KeyValue>
+      </KeyValueList>
+      {body}
+    </AdminCard>
+  );
+
   if (!thread) {
-    return (
+    return card(
+      THREAD_CHIP,
       <div className="flex flex-1 flex-col px-4 py-3">
         <p className="text-sm text-stone-600">
           Opening this thread is recorded against your account, with the case it was read under.
@@ -107,12 +174,13 @@ export function CaseConversation({
             {failure}
           </p>
         )}
-        <ScopeLine />
-      </div>
+        <ScopeLine>{THREAD_SCOPE}</ScopeLine>
+      </div>,
     );
   }
 
-  return (
+  return card(
+    `${THREAD_CHIP} · ${windowLabel(thread.window)}`,
     <div className="flex flex-1 flex-col px-4 py-3">
       <p className="text-helper text-stone-600">
         {thread.customerName} and {thread.vendorName} · {thread.messages.total}{' '}
@@ -161,7 +229,7 @@ export function CaseConversation({
           The most recent {thread.messages.items.length} of {thread.messages.total} messages.
         </p>
       ) : null}
-      <ScopeLine />
-    </div>
+      <ScopeLine>{WINDOW_SCOPE[thread.window.basis]}</ScopeLine>
+    </div>,
   );
 }

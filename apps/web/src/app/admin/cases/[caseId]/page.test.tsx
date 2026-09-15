@@ -119,11 +119,12 @@ describe('AdminCasePage', () => {
     const { container } = await renderCase(supportCase());
     const thread = cardTitled(container, 'Reported thread');
 
-    expect(thread.querySelector('[data-card-band]')?.textContent).toContain(
-      'Case-scoped read · open cases only',
+    /* No dates before the read: only the response knows the window (VEN-412). */
+    expect(thread.querySelector('[data-card-band]')?.textContent).toBe(
+      'Reported threadCase-scoped read',
     );
     expect(screen.getByRole('button', { name: 'Read the reported thread' })).toBeDefined();
-    expect(thread.textContent).toContain('scoped to this case');
+    expect(thread.textContent).toContain('scoped to the dates the case is about');
   });
 
   /** A card that goes missing reads as a loading bug, so the thread card stays when there is no thread. */

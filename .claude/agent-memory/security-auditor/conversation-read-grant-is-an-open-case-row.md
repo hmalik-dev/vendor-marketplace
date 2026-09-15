@@ -28,7 +28,16 @@ AND subject_id=<this conversation>` (`findOpenCaseForConversation`,
   it with a thread of your choosing does not work.
 - The `admin_actions` row rides the same `db.transaction` as the select and is a
   plain insert with no conflict clause — a read that cannot be logged does not
-  happen. `detail` is `{caseId, reference, page, pageSize}` only.
+  happen. `detail` is `{caseId, reference, window, page, pageSize}` only.
+
+**VEN-412 dated the grant (audited 2026-09-15, PASS).** The oldest open case
+decides a `[from, until)` window server-side (`reportedThreadWindow`); `find`
+and `count` share one predicate, the query schema has no date params, and the
+`bookings` left join is on a PK so it cannot add or drop a grant row. The
+`event_date` basis is unreachable today: `openReportCase` never sets
+`bookingId`. Any writer that attaches a booking to a conversation case moves
+the window to that booking's date, with no check the booking belongs to the
+thread's pair — dates only, same thread, but re-audit it then.
 
 **How to apply:** any future writer of `support_cases.subject_type` — a seed, a
 webhook, an admin "attach evidence" control, a second report endpoint — widens

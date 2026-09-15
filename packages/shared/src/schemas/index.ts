@@ -52,6 +52,7 @@ import {
   MAX_URL_LENGTH,
   MESSAGE_MAX_LENGTH,
   MESSAGE_PAGE_SIZE,
+  REPORTED_THREAD_WINDOW_BASES,
   MIN_BOOKING_AMOUNT_CENTS,
   NOTIFICATION_TYPES,
   PAYOUT_MODELS,
@@ -3805,10 +3806,33 @@ export type AdminConversationMessage = z.infer<typeof adminConversationMessageSc
  * would write four audit rows to read one argument.
  */
 export const adminConversationQuerySchema = z.object({
+  /**
+   * The case the operator is reading under (VEN-412). A thread can carry two
+   * open reports filed weeks apart, and each grants its own dates, so the case
+   * on screen names the window rather than whichever report is oldest. It is
+   * checked against the conversation, never trusted as a pairing.
+   */
+  caseId: uuidSchema,
   ...paginationQueryShape,
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(MESSAGE_PAGE_SIZE),
 });
 export type AdminConversationQuery = z.infer<typeof adminConversationQuerySchema>;
+
+/**
+ * The dates a reported-thread read was limited to (VEN-412), both inclusive,
+ * as UTC calendar days — the same zone every stamp in the thread is printed in.
+ *
+ * `event_date` is the booking's event date alone; `report_filed` is the week
+ * ending on the day the case was opened, for a case with no booking. The
+ * server filters by this window and returns it, so the chip states the scope
+ * the query enforced rather than one the page worked out for itself.
+ */
+export const adminConversationWindowSchema = z.object({
+  basis: z.enum(REPORTED_THREAD_WINDOW_BASES),
+  from: calendarDateSchema,
+  to: calendarDateSchema,
+});
+export type AdminConversationWindow = z.infer<typeof adminConversationWindowSchema>;
 
 export const adminConversationMessagesSchema = z.object({
   conversationId: uuidSchema,
@@ -3817,6 +3841,8 @@ export const adminConversationMessagesSchema = z.object({
   caseReference: z.string().regex(SUPPORT_REFERENCE_PATTERN),
   customerName: z.string(),
   vendorName: z.string(),
+  window: adminConversationWindowSchema,
+  /** Only the messages inside `window`; `total` counts those, not the whole thread. */
   messages: paginatedSchema(adminConversationMessageSchema),
 });
 export type AdminConversationMessages = z.infer<typeof adminConversationMessagesSchema>;

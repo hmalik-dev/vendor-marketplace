@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
 import {
   bookingRequests,
   conversations,
@@ -266,6 +266,23 @@ export async function countUnreadInConversation(
 }
 
 /**
+ * A half-open `[from, until)` slice of a thread by `created_at` — the console's
+ * case-scoped read (VEN-412). Participants read the whole thread and pass none.
+ */
+export interface MessageWindow {
+  from: Date;
+  until: Date;
+}
+
+function inThread(conversationId: string, window: MessageWindow | undefined): SQL | undefined {
+  const thread = eq(messages.conversationId, conversationId);
+
+  return window
+    ? and(thread, gte(messages.createdAt, window.from), lt(messages.createdAt, window.until))
+    : thread;
+}
+
+/**
  * One page of a thread, **paged backwards from the newest** and returned
  * oldest-first — a thread is read downwards but joined at its end.
  *
@@ -285,11 +302,12 @@ export async function findMessages(
   conversationId: string,
   limit: number,
   offset: number,
+  window?: MessageWindow,
 ): Promise<MessageRow[]> {
   const rows = await db
     .select()
     .from(messages)
-    .where(eq(messages.conversationId, conversationId))
+    .where(inThread(conversationId, window))
     .orderBy(desc(messages.createdAt), desc(messages.id))
     .limit(limit)
     .offset(offset);
@@ -297,11 +315,15 @@ export async function findMessages(
   return rows.reverse();
 }
 
-export async function countMessages(db: AppDatabase, conversationId: string): Promise<number> {
+export async function countMessages(
+  db: AppDatabase,
+  conversationId: string,
+  window?: MessageWindow,
+): Promise<number> {
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(messages)
-    .where(eq(messages.conversationId, conversationId));
+    .where(inThread(conversationId, window));
 
   return rows?.[0]?.total ?? 0;
 }

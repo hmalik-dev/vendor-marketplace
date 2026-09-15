@@ -355,34 +355,53 @@ export async function insertSupportCase(
  * The **open** case that authorises reading one conversation (#436).
  *
  * This one query is the whole of the scope on `GET /admin/conversations/:id/messages`:
- * no open case naming the thread, no read. It is deliberately not
- * `findSupportCaseById` plus a check — an operator holds a case id and could
- * pass any conversation id beside it, so the grant is looked up *from the
- * conversation* and the case comes back as the answer rather than as an input.
+ * no open case naming the thread, no read. The case id and the conversation id
+ * must match **in one row** — an operator holds a case id and could pass any
+ * conversation id beside it, so a case that names some other subject grants
+ * nothing here.
+ *
+ * The case id is an input since VEN-412. It used to be looked up from the
+ * conversation, oldest open case first, which was harmless while the case only
+ * labelled the audit row; once the case also dates the read, a second report
+ * filed weeks later would have been handed the first report's week.
  *
  * `status = 'open'` is load-bearing rather than tidy. A resolved case is a
  * finished job, and leaving its grant standing would turn every report ever
  * filed into a permanent key to that thread — the free browse the ticket exists
  * to refuse, arriving one closed case at a time.
- *
- * Oldest first, so a thread with two reports against it names the case that has
- * been waiting longest, which is the same order the queue itself is worked in.
  */
 export async function findOpenCaseForConversation(
   db: AppDatabase,
+  caseId: string,
   conversationId: string,
-): Promise<{ id: string; reference: string } | null> {
+): Promise<{
+  id: string;
+  reference: string;
+  createdAt: Date;
+  eventDate: string | null;
+} | null> {
+  /*
+   * The case's filing time and its booking's event date ride along because the
+   * grant also decides *which* messages it grants (VEN-412): the event date
+   * when there is a booking, the week before the report when there is not.
+   */
   const rows = await db
-    .select({ id: supportCases.id, reference: supportCases.reference })
+    .select({
+      id: supportCases.id,
+      reference: supportCases.reference,
+      createdAt: supportCases.createdAt,
+      eventDate: bookings.eventDate,
+    })
     .from(supportCases)
+    .leftJoin(bookings, eq(bookings.id, supportCases.bookingId))
     .where(
       and(
+        eq(supportCases.id, caseId),
         eq(supportCases.status, 'open'),
         eq(supportCases.subjectType, 'conversation'),
         eq(supportCases.subjectId, conversationId),
       ),
     )
-    .orderBy(asc(supportCases.createdAt))
     .limit(1);
 
   return rows[0] ?? null;
