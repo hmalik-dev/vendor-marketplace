@@ -7,10 +7,18 @@
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -28,8 +36,17 @@ const COMPOSE = readFileSync(path.join(ROOT, 'docker-compose.yml'), 'utf8');
 /* A shape-valid stand-in, assembled so no credential-shaped literal sits in the file. */
 const FILLER = 'x'.repeat(24);
 
+const clones = [];
+
+after(() => {
+  for (const dir of clones) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 function cloneRoot() {
   const dir = mkdtempSync(path.join(tmpdir(), 'start-local-'));
+  clones.push(dir);
 
   for (const file of ['package.json', '.env.example', 'docker-compose.yml']) {
     copyFileSync(path.join(ROOT, file), path.join(dir, file));
@@ -111,6 +128,7 @@ test('a clone with no .env gets one with the local database and storage filled i
   });
 
   assert.match(output, /Created \.env/);
+  assert.equal(statSync(path.join(dir, '.env')).mode & 0o777, 0o600);
   for (const key of Object.keys(REQUIRED_KEYS)) {
     assert.match(output, new RegExp(`^  - ${key} `, 'm'));
   }
@@ -157,6 +175,31 @@ test('an existing .env with a placeholder or missing key is reported and left by
   assert.match(output, /^  - STRIPE_SECRET_KEY /m);
   assert.doesNotMatch(output, /Created \.env/);
   assert.equal(readFileSync(path.join(dir, '.env'), 'utf8'), partial);
+});
+
+/* dotenv, which the apps load `.env` with, keeps the last of a repeated key. */
+test('a key assigned twice is judged by its last value, as the apps read it', () => {
+  const later = cloneRoot();
+  writeFileSync(
+    path.join(later, '.env'),
+    envText([
+      ...Object.keys(REQUIRED_KEYS).map((key) => [key, '']),
+      ...Object.keys(REQUIRED_KEYS).map((key) => [key, `real_${FILLER}`]),
+    ]),
+  );
+  assert.equal(run(later).code, 0);
+
+  const earlier = cloneRoot();
+  writeFileSync(
+    path.join(earlier, '.env'),
+    envText([
+      ...Object.keys(REQUIRED_KEYS).map((key) => [key, `real_${FILLER}`]),
+      ['CLERK_SECRET_KEY', ''],
+    ]),
+  );
+  const { code, output } = run(earlier);
+  assert.equal(code, 1);
+  assert.match(output, /^  - CLERK_SECRET_KEY /m);
 });
 
 test('Docker not running stops with a plain Docker Desktop message and no stack', () => {

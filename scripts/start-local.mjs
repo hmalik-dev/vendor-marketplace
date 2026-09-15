@@ -104,7 +104,8 @@ function parseEnv(text) {
   for (const line of text.split('\n')) {
     const match = line.match(/^\s*([A-Z0-9_]+)\s*=(.*)$/);
 
-    if (match && !values.has(match[1])) {
+    /* The last assignment wins, as it does for dotenv in the apps. */
+    if (match) {
       values.set(match[1], match[2].trim().replace(/^(['"])(.*)\1$/, '$2'));
     }
   }
@@ -166,7 +167,7 @@ export function startLocal({ root, nodeVersion, dockerInfo, write }) {
   const exampleText = read('.env.example');
 
   if (!existsSync(envPath)) {
-    writeFileSync(envPath, createEnv(exampleText, read('docker-compose.yml')));
+    writeFileSync(envPath, createEnv(exampleText, read('docker-compose.yml')), { mode: 0o600 });
     write('Created .env with the local database and file storage settings.\n');
   }
 
@@ -185,7 +186,7 @@ export function startLocal({ root, nodeVersion, dockerInfo, write }) {
       (optional.length > 0
         ? `\nThese are optional; the app runs without them:\n${listKeys(optional)}`
         : '') +
-      '\nAsk the project owner for the .env file, put it in this folder in place of the one here, then run pnpm start again.\n',
+      '\nAsk the project owner for the .env file, move it into this folder as step 5 of the README shows, then run pnpm start again.\n',
   );
   return 1;
 }
