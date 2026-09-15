@@ -25,6 +25,7 @@ import {
   laneUp,
   type LaneUpDeps,
   parseLaneArgs,
+  seedLane,
 } from './lane.js';
 import { readManifest } from './manifest.js';
 
@@ -645,5 +646,14 @@ describe('the lane seeds', () => {
     const seeds = [...step.matchAll(/pnpm (db:seed\S*)/g)].map((match) => match[1]);
 
     expect(seeds).toEqual([...LANE_SEEDS, 'db:seed:e2e']);
+  });
+
+  it('are what lane:up runs, marketing included, before the fixtures', async () => {
+    const ran: string[] = [];
+    await seedLane(worktree, async (_path, args) => {
+      ran.push(args.join(' '));
+    });
+
+    expect(ran).toEqual(['db:seed', 'db:seed:marketing', 'db:seed:e2e']);
   });
 });

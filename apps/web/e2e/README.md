@@ -45,9 +45,12 @@ db:migrate → db:seed → db:seed:marketing → db:seed:e2e
   the console's review lists and the `Direction` filter in
   `admin-filters.spec.ts` have rows to narrow with no manual precondition.
 - **Not `db:seed:demo`.** Nothing in the suite may need it.
-- Every seed tops up rather than resets, so a second run on the same database is
-  the ordinary case and every spec must pass it: dates come from `e2e:dates`,
-  names from `uniqueVenue`.
+- `db:seed` and `db:seed:e2e` top up rather than reset, and every run of the
+  suite leaves its bookings behind, so a second run on the same database is the
+  ordinary case and every spec must pass it: dates come from `e2e:dates`, names
+  from `uniqueVenue`. `db:seed:marketing` instead **rewrites** the bookings and
+  reviews it owns, with new ids and timestamps — so no spec may hold a marketing
+  row's id, or rely on where marketing rows sort against the fixtures'.
 
 A lane created before this contract has no marketing data; run
 `pnpm lane:exec <n> -- pnpm db:seed:marketing` (idempotent) rather than

@@ -304,33 +304,39 @@ const defaultUpDeps: LaneUpDeps = {
    */
   build: (worktreePath) => pnpmInLane(worktreePath, ['build', '--filter=./packages/*']),
   migrate: (worktreePath) => pnpmInLane(worktreePath, ['db:migrate']),
-  seed: async (worktreePath) => {
-    for (const script of LANE_SEEDS) {
-      await pnpmInLane(worktreePath, [script]);
-    }
-    /*
-     * The end-to-end fixtures need Clerk to resolve the accounts' real ids, so
-     * they are best-effort: a lane whose ticket needs no browser pass should
-     * still come up. `pnpm preflight` fails loudly for the lanes that do need
-     * it, which is where the demand belongs.
-     *
-     * The reason is printed rather than swallowed. One of the things this can
-     * now catch is `assertSafeTarget` refusing the target outright — "refusing
-     * to seed end-to-end fixtures into the production branch" is not a message
-     * to discard, and a silent skip would also hide a partial application where
-     * the vendor role was granted before the profile insert failed.
-     */
-    try {
-      await pnpmInLane(worktreePath, ['db:seed:e2e']);
-    } catch (error: unknown) {
-      process.stderr.write(
-        'Lane seed: end-to-end fixtures were not applied — ' +
-          `${error instanceof Error ? error.message : String(error)}\n` +
-          '  `pnpm preflight` will fail on this lane if the ticket needs a browser pass.\n',
-      );
-    }
-  },
+  seed: (worktreePath) => seedLane(worktreePath, pnpmInLane),
 };
+
+/** Seeds a lane: `LANE_SEEDS` in order, then `db:seed:e2e`. `run` is `pnpmInLane` outside tests. */
+export async function seedLane(
+  worktreePath: string,
+  run: (worktreePath: string, args: readonly string[]) => Promise<void>,
+): Promise<void> {
+  for (const script of LANE_SEEDS) {
+    await run(worktreePath, [script]);
+  }
+  /*
+   * The end-to-end fixtures need Clerk to resolve the accounts' real ids, so
+   * they are best-effort: a lane whose ticket needs no browser pass should
+   * still come up. `pnpm preflight` fails loudly for the lanes that do need
+   * it, which is where the demand belongs.
+   *
+   * The reason is printed rather than swallowed. One of the things this can
+   * now catch is `assertSafeTarget` refusing the target outright — "refusing
+   * to seed end-to-end fixtures into the production branch" is not a message
+   * to discard, and a silent skip would also hide a partial application where
+   * the vendor role was granted before the profile insert failed.
+   */
+  try {
+    await run(worktreePath, ['db:seed:e2e']);
+  } catch (error: unknown) {
+    process.stderr.write(
+      'Lane seed: end-to-end fixtures were not applied — ' +
+        `${error instanceof Error ? error.message : String(error)}\n` +
+        '  `pnpm preflight` will fail on this lane if the ticket needs a browser pass.\n',
+    );
+  }
+}
 
 /**
  * Gives a worktree its own `node_modules` by dropping a symlink it inherited
