@@ -174,7 +174,6 @@ export default async function AdminVendorsPage({
 
           <FilterSelect
             action={PATH}
-            carried={params}
             name="category"
             label="Category"
             value={params.category ?? ''}
@@ -185,7 +184,6 @@ export default async function AdminVendorsPage({
           />
           <FilterSelect
             action={PATH}
-            carried={params}
             name="city"
             label="City"
             value={params.city ?? ''}
@@ -205,7 +203,6 @@ export default async function AdminVendorsPage({
           */}
           <FilterSelect
             action={PATH}
-            carried={params}
             name="status"
             label="Status"
             value={params.status ?? ''}
@@ -216,7 +213,6 @@ export default async function AdminVendorsPage({
           />
           <FilterSelect
             action={PATH}
-            carried={params}
             name="payouts"
             label="Payouts"
             value={params.payouts ?? ''}

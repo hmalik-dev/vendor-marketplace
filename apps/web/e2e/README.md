@@ -23,7 +23,11 @@ rather than as a mystery:
    `pnpm lane:exec <n> -- pnpm e2e:auth` — `.worktreeinclude` copies `.auth/`
    from the main checkout, where it was minted against port 3000 and has usually
    expired, so a fresh worktree inherits a session that is wrong for its port.
-3. **`seed:e2e` has run against the lane database.** `lane:up` does this.
+3. **`seed:e2e` has run against the lane database.** `lane:up` does this. Besides
+   the vendor's storefront, package and live request, it writes one **completed
+   booking reviewed in each direction**, so the console's review lists and the
+   `Direction` filter in `admin-filters.spec.ts` have rows to narrow with no
+   manual precondition — no `db:seed:demo`.
 
 ### Raise the rate limit
 
@@ -107,7 +111,8 @@ needs the test-mode `STRIPE_SECRET_KEY` from the environment or the root `.env`.
 
 ## Not here yet
 
-Vendor profile, search and admin. Each is deferred for a named
+Vendor profile and search. (The console lists are covered by
+`admin-filters.spec.ts` and `admin-lists.spec.ts`.) Each is deferred for a named
 reason — see the follow-up ticket rather than assuming they were forgotten. CI
 wiring is also absent: `ci.yml` runs on in-process PGlite with _placeholder_
 Clerk keys and never reaches Clerk, so real-auth E2E needs GitHub secrets the

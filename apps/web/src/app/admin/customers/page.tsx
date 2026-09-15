@@ -102,7 +102,12 @@ export default async function AdminCustomersPage({
       counts={[`${customers.total} total`]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH} searchPlaceholder="Search name or email…" searchValue={q}>
+        <FilterBar
+          action={PATH}
+          params={{ q, status, flag }}
+          searchPlaceholder="Search name or email…"
+          searchValue={q}
+        >
           {/*
             Closed accounts, asked for deliberately (VEN-382). No `Any status`
             choice: clearing the parameter lands on live accounts, which `Live`
@@ -110,7 +115,6 @@ export default async function AdminCustomersPage({
           */}
           <FilterSelect
             action={PATH}
-            carried={{ q, flag }}
             name="status"
             label="Status"
             value={status ?? ''}
@@ -128,21 +132,11 @@ export default async function AdminCustomersPage({
           */}
           <FilterSelect
             action={PATH}
-            carried={{ q, status }}
             name="flag"
             label="Needs attention"
             value={flag ?? ''}
             options={[{ value: 'email-stale', label: EMAIL_STALE_LABEL }]}
           />
-          {/*
-            The status and flag travel with the search form as hidden fields.
-            Submitting a GET form sends only its own controls, and the dropdowns
-            navigate on their own — so without these, pressing Enter in the search
-            box would silently clear them and answer with every customer, which is the
-            opposite of what an operator filtering for a problem wants.
-          */}
-          {status ? <input type="hidden" name="status" value={status} /> : null}
-          {flag ? <input type="hidden" name="flag" value={flag} /> : null}
         </FilterBar>
       }
       pager={{

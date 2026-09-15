@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
+import { TableBranch } from '@/components/admin/table-branch';
 import { cn } from '@/lib/utils';
 
 /**
@@ -77,8 +78,9 @@ export interface DataTableColumn<T> {
    */
   width: TableTrack;
   /**
-   * **Called twice per row** — once for the grid, once for the card list, since
-   * both branches are rendered and CSS picks one. Keep it cheap and free of
+   * **Called twice per row on the server** — once for the grid, once for the
+   * card list, since the first paint draws both and CSS picks one; after
+   * hydration only the mounted branch calls it. Keep it cheap and free of
    * side effects; hoist an `Intl` formatter to the module rather than building
    * one per call, as the six tables already do.
    */
@@ -157,9 +159,12 @@ export interface DataTableProps<T> {
  * would take the header out of the grid it has to stay aligned with.
  *
  * **Below 768 the same rows render as cards.** `30-responsive.md:31` — "Card
- * list, not a table". Both branches are in the DOM and CSS picks one, because
- * these tables render on the server and a width read in an effect would flash
- * the wrong branch first. The card list is derived from the same `columns`, so
+ * list, not a table". The server draws both branches and CSS picks one, because
+ * a width read in an effect would flash the wrong branch first. Hydration then
+ * unmounts the branch the viewport is not using (`TableBranch`), so each row
+ * control exists once and its accessible name resolves to one element — VEN-395,
+ * the shared cause behind the Tab-order note in
+ * `.claude/rules/web-design-parity.md`. The card list is derived from the same `columns`, so
  * a column added to a table arrives in both shapes at once and neither can be
  * forgotten: each labelled column becomes one `dt`/`dd` pair, and the control
  * columns keep their controls on a row of their own.
@@ -185,9 +190,10 @@ export function DataTable<T>({
         or offset changes this number with it.
       */}
       <div className={cn('min-h-0 flex-1 overflow-auto', scrollPadding && 'pb-20')}>
-        <div
-          role="table"
-          /*
+        <TableBranch cards={false}>
+          <div
+            role="table"
+            /*
             The floor applies **below `lg` only**, and that bound is not
             cosmetic. At 1024 the floor equals the pane's width exactly — but
             only where the vertical scrollbar is an overlay. A classic 15px
@@ -202,21 +208,21 @@ export function DataTable<T>({
             Set as a custom property because a Tailwind class must be a literal
             the scanner can see, and the value is derived from a constant.
           */
-          className="hidden min-w-full md:block max-lg:min-w-(--admin-table-min-width)"
-          style={{
-            ['--admin-table-columns' as string]: template,
-            ['--admin-table-min-width' as string]: `max(100%, ${TABLE_MIN_WIDTH_PX}px)`,
-          }}
-        >
-          <div
-            role="row"
-            className="sticky top-0 z-10 grid items-center gap-3 border-b border-stone-300 bg-stone-100 px-4 py-2.5 text-label font-semibold tracking-label text-stone-600 uppercase grid-cols-(--admin-table-columns)"
+            className="hidden min-w-full md:block max-lg:min-w-(--admin-table-min-width)"
+            style={{
+              ['--admin-table-columns' as string]: template,
+              ['--admin-table-min-width' as string]: `max(100%, ${TABLE_MIN_WIDTH_PX}px)`,
+            }}
           >
-            {columns.map((column) => (
-              <span
-                role="columnheader"
-                key={column.key}
-                /*
+            <div
+              role="row"
+              className="sticky top-0 z-10 grid items-center gap-3 border-b border-stone-300 bg-stone-100 px-4 py-2.5 text-label font-semibold tracking-label text-stone-600 uppercase grid-cols-(--admin-table-columns)"
+            >
+              {columns.map((column) => (
+                <span
+                  role="columnheader"
+                  key={column.key}
+                  /*
                   The header truncates like a body cell does, and it has to for
                   the same reason the body does. Body cells always carried
                   `text-ellipsis` (below); the header carried nothing and was
@@ -234,19 +240,19 @@ export function DataTable<T>({
                   control's ring escape its cell, and a header label is static
                   text with nothing to focus.
                 */
-                className={cn('truncate', column.headerClassName)}
-              >
-                {column.header}
-              </span>
-            ))}
-          </div>
+                  className={cn('truncate', column.headerClassName)}
+                >
+                  {column.header}
+                </span>
+              ))}
+            </div>
 
-          {rows.map((row, index) => (
-            <div
-              role="row"
-              key={rowKey(row)}
-              className={cn(
-                /*
+            {rows.map((row, index) => (
+              <div
+                role="row"
+                key={rowKey(row)}
+                className={cn(
+                  /*
                   `box-content`, and `text-action`. The frame's row is 44px of
                   content **plus** its 1px separator — `.side`-style
                   content-box, like every other measurement in that file — so a
@@ -254,16 +260,16 @@ export function DataTable<T>({
                   step is 13px (`text-action`), not the 13.5px `text-base`
                   default.
                 */
-                'grid box-content h-11 items-center gap-3 border-b border-stone-150 px-4 text-action text-stone-700 grid-cols-(--admin-table-columns)',
-                // Zebra on `stone-25`, the one surface between `stone-0` and `stone-50`.
-                index % 2 === 1 && 'bg-stone-25',
-              )}
-            >
-              {columns.map((column) => (
-                <span
-                  role="cell"
-                  key={column.key}
-                  /*
+                  'grid box-content h-11 items-center gap-3 border-b border-stone-150 px-4 text-action text-stone-700 grid-cols-(--admin-table-columns)',
+                  // Zebra on `stone-25`, the one surface between `stone-0` and `stone-50`.
+                  index % 2 === 1 && 'bg-stone-25',
+                )}
+              >
+                {columns.map((column) => (
+                  <span
+                    role="cell"
+                    key={column.key}
+                    /*
                     `overflow-clip`, not `overflow-hidden`.
                     `overflow-clip-margin` **only applies to `overflow: clip`**
                     — on `hidden` it is silently ignored, which is why the first
@@ -277,20 +283,23 @@ export function DataTable<T>({
                     the select column does — its track is 22px and its control
                     needs a taller target than that box.
                   */
-                  className={cn(
-                    'overflow-clip text-ellipsis whitespace-nowrap [overflow-clip-margin:6px]',
-                    column.className,
-                  )}
-                >
-                  {column.cell(row)}
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
+                    className={cn(
+                      'overflow-clip text-ellipsis whitespace-nowrap [overflow-clip-margin:6px]',
+                      column.className,
+                    )}
+                  >
+                    {column.cell(row)}
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </TableBranch>
 
         {rows.length > 0 ? (
-          <CardList columns={columns} rows={rows} rowKey={rowKey} />
+          <TableBranch cards>
+            <CardList columns={columns} rows={rows} rowKey={rowKey} />
+          </TableBranch>
         ) : (
           /*
             One empty state for both branches, below the table rather than

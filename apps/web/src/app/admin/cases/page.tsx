@@ -142,7 +142,6 @@ export default async function AdminCasesPage({
           */}
           <FilterSelect
             action={PATH}
-            carried={{ booking }}
             name="status"
             label="Status"
             allowAny={false}
@@ -154,7 +153,6 @@ export default async function AdminCasesPage({
           />
           <FilterSelect
             action={PATH}
-            carried={{ status }}
             name="booking"
             label="Booking"
             value={booking ?? ''}

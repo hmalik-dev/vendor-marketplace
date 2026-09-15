@@ -516,18 +516,18 @@ describe('what the parity pass measured, kept from drifting back', () => {
     expect(dataTable).not.toMatch(/overflow-hidden[^']*\[overflow-clip-margin/);
   });
 
-  it('gives both row controls a 44px-tall target', () => {
+  it('gives both row controls a 44px target', () => {
     /*
      * `04-laws.md` asks 44x44 of an icon-only control; they were 32x32 and
      * 14x14. The `···` fills its 70px cell and right-aligns its glyph, which is
-     * where the frame draws it. The checkbox takes the row's full height but
-     * cannot take 44px of width: frame `13` gives that column a **22px** track,
-     * so a wider target would overlap the business name. Recorded in the ticket
-     * as a frame-versus-law question rather than resolved by widening the
-     * column, which would be a composition change.
+     * where the frame draws it. The checkbox's 22px track is frame `13`'s, so
+     * its label reaches 15px left into the row gutter rather than right into
+     * the business name (VEN-395) — 44 wide without moving the box. The rendered
+     * geometry is asserted in `e2e/admin-lists.spec.ts`; this pins the classes.
      */
     expect(rowTrigger).toContain('h-11 w-full items-center justify-end');
-    expect(vendorTable).toContain('flex h-11 w-full cursor-pointer items-center justify-start');
+    expect(vendorTable).toContain('-ml-[15px] flex h-11 w-11 shrink-0');
+    expect(vendorTable).toContain('pl-[15px] max-md:ml-0 max-md:pl-0');
   });
 
   it('clears the floating bulk bar by its own measured height', () => {

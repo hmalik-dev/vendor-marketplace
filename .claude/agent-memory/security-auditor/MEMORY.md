@@ -57,7 +57,7 @@
 - [D31's proportional split is now our arithmetic](refund-proportionality-is-now-ours-to-state.md) — Stripe used to state the vendor's retained half; the pre-release cancel path states nobody's
 - [The payout sweep is a second money mover](payout-sweep-is-a-second-money-mover.md) — it takes a row lock the cancel and dispute paths do not, and their guards key on `status` alone
 - [`payoutOwedClauses` is shared with the sweep](payout-owed-clauses-is-shared-with-the-sweep.md) — since #424 one predicate serves the vendor's read and the `FOR UPDATE` claim that transfers; widening it widens Stripe
-- [Legacy destination rows are guarded in one place](legacy-destination-rows-guarded-in-one-place.md) — `refundAndUnwind` refuses them; the ban unwind and the deploy window do not
+- [Legacy destination rows are guarded twice](legacy-destination-rows-guarded-in-one-place.md) — refund + unwind refuse them; the deploy window does not; the E2E seed's completed booking relies on the pair
 - [The acceptance record is undeletable PII](legal-acceptance-record-is-undeletable-pii.md) — every user gets one since #429; closure is a soft delete, so the trigger's only delete branch never fires
 - [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` is null for a gated account; `requireClerkSubject` is the deliberate exception for two routes
 - [`request.ip` is one hop, never IP-validated](request-ip-is-one-hop-trusted-not-validated.md) — fine as a rate-limit bucket, unbounded text against `varchar(45)` when persisted as evidence

@@ -1,6 +1,8 @@
 import {
   BOOKING_REQUEST_EXPIRY_DAYS,
+  calculateFees,
   CURRENT_TERMS_VERSION,
+  DEFAULT_PLATFORM_FEE_RATE,
   CURRENT_VENDOR_AGREEMENT_VERSION,
   EVENT_TYPES,
   type EventType,
@@ -9,14 +11,16 @@ import {
   parseDurationHours,
   toDateString,
 } from '@vendor-marketplace/shared';
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, notExists, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import {
   availability,
   bookingRequests,
+  bookings,
   categories,
   legalAcceptances,
+  reviews,
   servicePackages,
   users,
   vendorCategories,
@@ -71,6 +75,18 @@ const EVENT_SEARCH_DAYS = 60;
  * browser pass has sent a quote, so the fixture inserts and dies on that index.
  */
 const LIVE_REQUEST_STATUSES = ['pending', 'quoted'] as const;
+
+/** How long ago the seeded completed booking's event took place. */
+const COMPLETED_EVENT_DAYS_AGO = 30;
+
+/** When the seeded completed booking was paid, relative to its event. */
+const PAID_DAYS_BEFORE_EVENT = 21;
+
+/** When its request was sent, relative to the payment. */
+const REQUEST_DAYS_BEFORE_PAYMENT = 7;
+
+/** The ratings the two seeded reviews give — one per direction. */
+const SEEDED_REVIEW_RATINGS = { customer_to_vendor: 5, vendor_to_customer: 4 } as const;
 
 export interface E2eAccount {
   /**
@@ -250,6 +266,8 @@ export async function seedE2eFixtures<
        * not live with requests waiting on it.
        */
       await clearLiveRequests(tx, vendorProfileId);
+      // And the reviewed booking the published seed wrote, which is not empty.
+      await removeReviewedBooking(tx, vendorProfileId, customerUserId);
       /*
        * And the two blockers the frame draws open. Without this the draft
        * fixture rendered `Publish checklist · 6 of 6` on an unpublished
@@ -275,6 +293,13 @@ export async function seedE2eFixtures<
     const servicePackage = await ensurePackage(tx, vendorProfileId);
     const request = await ensureBookingRequest(tx, {
       vendorProfileId,
+      customerUserId,
+      servicePackage,
+      now,
+    });
+    await ensureReviewedBooking(tx, {
+      vendorProfileId,
+      vendorUserId,
       customerUserId,
       servicePackage,
       now,
@@ -452,9 +477,28 @@ async function ensureProfile(
  * `27 Vendor dashboard - empty . 1024` draws `Requests 0` in the sidebar beside
  * an empty pane. Only the fixture pair's own rows are touched, and only in a
  * database `assertSafeTarget` has already cleared.
+ *
+ * **A request that became a booking is kept.** `bookings.request_id` is
+ * `RESTRICT`, so deleting one failed the whole draft seed the moment the
+ * published seed wrote its completed, reviewed booking (VEN-395) — or a paid
+ * journey had booked one. A booking is history, not a request waiting on the
+ * vendor, and deleting paid history to draw an empty pane is not this
+ * fixture's to do.
  */
 async function clearLiveRequests(tx: Tx, vendorProfileId: string): Promise<void> {
-  await tx.delete(bookingRequests).where(eq(bookingRequests.vendorId, vendorProfileId));
+  await tx
+    .delete(bookingRequests)
+    .where(
+      and(
+        eq(bookingRequests.vendorId, vendorProfileId),
+        notExists(
+          tx
+            .select({ id: bookings.id })
+            .from(bookings)
+            .where(eq(bookings.requestId, bookingRequests.id)),
+        ),
+      ),
+    );
 }
 
 /**
@@ -864,4 +908,255 @@ async function ensureBookingRequest(
   }
 
   return created;
+}
+
+/** The instant `days` before `now`; a negative `days` is after it. */
+function daysBefore(now: Date, days: number): Date {
+  const date = new Date(now);
+  date.setDate(date.getDate() - days);
+
+  return date;
+}
+
+/**
+ * Marks the request behind the fixture's own completed booking.
+ *
+ * The paid-booking journey completes bookings between the same two accounts, so
+ * "a completed booking between the pair" is not the fixture's row — and the
+ * draft seed removes this one. Matched on the request's details rather than a
+ * new column: it is the one free-text field the fixture already writes.
+ */
+const SEEDED_COMPLETED_DETAILS = 'Seeded completed booking, so the console has reviews to filter.';
+
+/** Where the seeded completed booking took place. */
+const SEEDED_COMPLETED_LOCATION = 'Laguna Gloria, Austin TX';
+
+/** The rounded average and count `reviews.dao.ts` derives on both sides of a review. */
+const RATING_AGGREGATE = {
+  avgRating: sql<string>`coalesce(round(avg(${reviews.rating})::numeric, 2), 0)`,
+  reviewCount: sql<number>`count(*)::int`,
+};
+
+/** The fixture's own completed booking, found through the request it came from. */
+async function findSeededBooking(tx: Tx, vendorProfileId: string): Promise<string | null> {
+  const [row] = await tx
+    .select({ bookingId: bookings.id })
+    .from(bookings)
+    .innerJoin(bookingRequests, eq(bookingRequests.id, bookings.requestId))
+    .where(
+      and(
+        eq(bookings.vendorId, vendorProfileId),
+        eq(bookingRequests.customDetails, SEEDED_COMPLETED_DETAILS),
+      ),
+    )
+    .limit(1);
+
+  return row?.bookingId ?? null;
+}
+
+/**
+ * One completed booking between the two fixture accounts, reviewed in **both**
+ * directions (VEN-395).
+ *
+ * Without it `/admin/reviews` is empty after `seed:e2e`, so the review-direction
+ * filter spec passes because it found nothing to check — a review needs a
+ * completed booking, and nothing in this fixture completed one.
+ *
+ * **The payout is the legacy destination pair** — `payout_released_at` set with
+ * no `stripe_transfer_id` (`isLegacyDestinationPayout`). The vendor is payable
+ * through a *real* connected account, so an unreleased `separate` row would be
+ * picked up by the payout sweep and moved as real test-mode money; a made-up
+ * transfer id is the fake Stripe object #387 removed. This pair is neither: the
+ * sweep ignores it and a refund against it reverses nothing.
+ *
+ * Idempotent: the fixture's own booking is adopted, and each review is written
+ * only if its author has not reviewed that booking. The derived ratings are then
+ * re-derived from the rows, so a re-run cannot double-count.
+ */
+async function ensureReviewedBooking(
+  tx: Tx,
+  input: {
+    vendorProfileId: string;
+    vendorUserId: string;
+    customerUserId: string;
+    servicePackage: SeededPackage;
+    now: Date;
+  },
+): Promise<void> {
+  const bookingId =
+    (await findSeededBooking(tx, input.vendorProfileId)) ??
+    (await createCompletedBooking(tx, input));
+
+  await tx
+    .insert(reviews)
+    .values([
+      {
+        bookingId,
+        reviewerId: input.customerUserId,
+        vendorId: input.vendorProfileId,
+        type: 'customer_to_vendor',
+        rating: SEEDED_REVIEW_RATINGS.customer_to_vendor,
+        content: 'Seeded review, so the console has a review about a vendor.',
+        isPublic: true,
+      },
+      {
+        bookingId,
+        reviewerId: input.vendorUserId,
+        vendorId: input.vendorProfileId,
+        type: 'vendor_to_customer',
+        rating: SEEDED_REVIEW_RATINGS.vendor_to_customer,
+        content: 'Seeded review, so the console has a review about a customer.',
+        // The vendor's read on a customer stays private, as `seed-demo` writes it.
+        isPublic: false,
+      },
+    ])
+    .onConflictDoNothing({ target: [reviews.bookingId, reviews.reviewerId] });
+
+  await rederiveRatings(tx, input.vendorProfileId, input.customerUserId);
+}
+
+/**
+ * Removes the fixture's own reviewed booking, for the draft storefront.
+ *
+ * The draft seed exists to draw frame `27 Vendor dashboard — empty · 1024`, and
+ * a completed, paid, five-star booking is not empty: it feeds the payout totals
+ * and the rating. The booking goes first — its reviews cascade with it — then
+ * the request `RESTRICT` was guarding, and the ratings are re-derived from what
+ * is left. Only the fixture's marked row: a booking a paid journey completed is
+ * history this fixture did not write.
+ */
+async function removeReviewedBooking(
+  tx: Tx,
+  vendorProfileId: string,
+  customerUserId: string,
+): Promise<void> {
+  const bookingId = await findSeededBooking(tx, vendorProfileId);
+
+  if (bookingId === null) {
+    return;
+  }
+
+  const [removed] = await tx
+    .delete(bookings)
+    .where(eq(bookings.id, bookingId))
+    .returning({ requestId: bookings.requestId });
+
+  if (removed) {
+    await tx.delete(bookingRequests).where(eq(bookingRequests.id, removed.requestId));
+  }
+
+  await rederiveRatings(tx, vendorProfileId, customerUserId);
+}
+
+/** Both parties' derived ratings, recounted from the review rows as `reviews.dao.ts` does. */
+async function rederiveRatings(
+  tx: Tx,
+  vendorProfileId: string,
+  customerUserId: string,
+): Promise<void> {
+  const [vendorTotals] = await tx
+    .select(RATING_AGGREGATE)
+    .from(reviews)
+    .where(
+      and(
+        eq(reviews.vendorId, vendorProfileId),
+        eq(reviews.type, 'customer_to_vendor'),
+        eq(reviews.isPublic, true),
+      ),
+    );
+  await tx
+    .update(vendorProfiles)
+    .set({
+      avgRating: vendorTotals?.avgRating ?? '0',
+      reviewCount: vendorTotals?.reviewCount ?? 0,
+    })
+    .where(eq(vendorProfiles.id, vendorProfileId));
+
+  const [customerTotals] = await tx
+    .select(RATING_AGGREGATE)
+    .from(reviews)
+    .innerJoin(bookings, eq(bookings.id, reviews.bookingId))
+    .where(and(eq(reviews.type, 'vendor_to_customer'), eq(bookings.customerId, customerUserId)));
+  await tx
+    .update(users)
+    .set({
+      avgCustomerRating: customerTotals?.avgRating ?? '0',
+      customerReviewCount: customerTotals?.reviewCount ?? 0,
+    })
+    .where(eq(users.id, customerUserId));
+}
+
+/**
+ * The accepted request and the completed booking it became, past the event.
+ *
+ * Every timestamp is in the past and in the order the product writes them —
+ * sent, accepted and paid, event, completed. A request left at the `now()`
+ * default counted as answered inside the dashboard's 30-day response window
+ * while claiming to have been accepted seven weeks before it was sent.
+ */
+async function createCompletedBooking(
+  tx: Tx,
+  input: {
+    vendorProfileId: string;
+    customerUserId: string;
+    servicePackage: SeededPackage;
+    now: Date;
+  },
+): Promise<string> {
+  const event = daysBefore(input.now, COMPLETED_EVENT_DAYS_AGO);
+  const eventDate = toDateString(event);
+  const paidAt = daysBefore(event, PAID_DAYS_BEFORE_EVENT);
+  const sentAt = daysBefore(paidAt, REQUEST_DAYS_BEFORE_PAYMENT);
+  const completedAt = daysBefore(event, -1);
+  const fees = calculateFees(input.servicePackage.priceCents, DEFAULT_PLATFORM_FEE_RATE);
+
+  const [request] = await tx
+    .insert(bookingRequests)
+    .values({
+      customerId: input.customerUserId,
+      vendorId: input.vendorProfileId,
+      packageId: input.servicePackage.id,
+      eventDate,
+      eventLocation: SEEDED_COMPLETED_LOCATION,
+      eventType: SEEDED_EVENT_TYPE,
+      guestCount: 80,
+      customDetails: SEEDED_COMPLETED_DETAILS,
+      status: 'accepted',
+      finalPriceCents: input.servicePackage.priceCents,
+      acceptedAt: paidAt,
+      createdAt: sentAt,
+      updatedAt: paidAt,
+    })
+    .returning({ id: bookingRequests.id });
+
+  if (!request) {
+    throw new Error('seedE2eFixtures: could not create the completed booking request');
+  }
+
+  const [booking] = await tx
+    .insert(bookings)
+    .values({
+      requestId: request.id,
+      customerId: input.customerUserId,
+      vendorId: input.vendorProfileId,
+      eventDate,
+      eventLocation: SEEDED_COMPLETED_LOCATION,
+      totalAmountCents: fees.totalCents,
+      platformFeeCents: fees.platformFeeCents,
+      vendorPayoutCents: fees.vendorPayoutCents,
+      payoutModel: 'destination',
+      payoutReleasedAt: paidAt,
+      status: 'completed',
+      paidAt,
+      completedAt,
+      createdAt: paidAt,
+      updatedAt: completedAt,
+    })
+    .returning({ id: bookings.id });
+
+  if (!booking) {
+    throw new Error('seedE2eFixtures: could not create the completed booking');
+  }
+
+  return booking.id;
 }

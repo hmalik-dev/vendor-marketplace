@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { Toaster } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AdminVendorStatus } from '@vendor-marketplace/shared';
 import type { WireAdminVendorRow } from '@/lib/wire-schemas';
@@ -293,8 +294,36 @@ describe('VendorRowActions', () => {
   it('names the row it acts on', () => {
     render(<VendorTable filtered={false} rows={[vendorRow('live')]} />);
 
-    // Two: the grid rendering and the card rendering of the same row.
-    expect(screen.getAllByRole('button', { name: 'Actions for Fernbank Studio' })).toHaveLength(2);
+    /*
+     * One (VEN-395). It was two — the grid and the card rendering of the same
+     * row — and every strict `getByRole` on the table was ambiguous. `getBy`
+     * throws on a second match, so this fails against the duplicate.
+     */
+    expect(screen.getByRole('button', { name: 'Actions for Fernbank Studio' })).not.toBeNull();
+  });
+
+  /*
+   * VEN-395. The vendor's own toggle confirms with a toast and the operator's
+   * did nothing visible. Read off a mounted `Toaster`, not a mocked `toast`: the
+   * requirement is a confirmation the operator can read.
+   */
+  it.each([
+    ['live', 'Unpublish profile', "Fernbank Studio's profile is hidden."],
+    ['paused', 'Publish profile', "Fernbank Studio's profile is live."],
+  ] as const)('confirms a %s row’s %s with a toast', async (status, action, confirmation) => {
+    render(
+      <>
+        <Toaster />
+        <VendorTable filtered={false} rows={[vendorRow(status)]} />
+      </>,
+    );
+    fireEvent.keyDown(screen.getByRole('button', { name: /^Actions for/ }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: action }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: action }));
+
+    expect(await screen.findByText(confirmation)).not.toBeNull();
   });
 });
 

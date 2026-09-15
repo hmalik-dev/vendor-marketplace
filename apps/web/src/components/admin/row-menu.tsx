@@ -111,9 +111,10 @@ export function RowMenu({
                 on the same element either way.
 
                 Closing that last gap means hand-rolling a tab-order walk, and
-                this table renders **every row action twice** (the grid and the
-                `md:hidden` card list), which is precisely the DOM that makes a
-                naive "next focusable" query pick the wrong element. Returning to
+                until hydration the table renders **every row action twice**
+                (the grid and the `md:hidden` card list; `TableBranch` unmounts
+                one after, VEN-395), which is the DOM that makes a naive
+                "next focusable" query pick the wrong element. Returning to
                 the trigger is also the conventional ARIA menu-button behaviour,
                 and that doc clause was written for the *select* shell. Raised
                 for a ruling rather than papered over.

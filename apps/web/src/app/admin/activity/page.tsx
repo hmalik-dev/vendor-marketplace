@@ -102,7 +102,6 @@ export default async function AdminActivityPage({
         <FilterBar action={PATH} params={params}>
           <FilterSelect
             action={PATH}
-            carried={{ actor: params.actor, subject: params.subject }}
             name="action"
             label="Action"
             value={params.action ?? ''}

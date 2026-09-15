@@ -88,18 +88,17 @@ describe('AdminCustomersPage', () => {
 
     await renderPage({ status: 'closed' });
 
-    // `DataTable` renders every row twice: the grid and the `md:hidden` card list.
+    // `DataTable` mounts one branch per viewport (VEN-395), so each row once.
     const pills = [...document.querySelectorAll('[data-slot="status-pill"]')];
     expect(pills.map((pill) => [pill.textContent, pill.getAttribute('data-tone')])).toEqual([
       ['Closed', 'inert'],
-      ['Closed', 'inert'],
     ]);
-    expect(screen.getAllByText('Joined Jan 5, 2026')).toHaveLength(2);
+    expect(screen.getAllByText('Joined Jan 5, 2026')).toHaveLength(1);
     expect(
       screen
         .getAllByRole('link', { name: 'Grace Hopper' })
         .map((link) => link.getAttribute('href')),
-    ).toEqual([`/admin/users/${CLOSED_ID}`, `/admin/users/${CLOSED_ID}`]);
+    ).toEqual([`/admin/users/${CLOSED_ID}`]);
   });
 
   it('shows the chosen set on the Status trigger and carries it through the search form', async () => {
@@ -112,9 +111,13 @@ describe('AdminCustomersPage', () => {
       'listbox',
     );
     expect(screen.queryByRole('button', { name: 'Status' })).toBeNull();
+    // Exactly one: the bar writes it from `params`, and a second field under the
+    // same name would submit `?status=closed&status=closed` (VEN-395).
     expect(
-      container.querySelector('input[type="hidden"][name="status"]')?.getAttribute('value'),
-    ).toBe('closed');
+      [...container.querySelectorAll('input[type="hidden"][name="status"]')].map((input) =>
+        input.getAttribute('value'),
+      ),
+    ).toEqual(['closed']);
   });
 
   it('reads as an unapplied Status filter by default, with no hidden status field', async () => {

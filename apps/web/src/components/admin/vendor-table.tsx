@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import {
   ADMIN_VENDOR_STATUS_LABELS,
   adminBanResultSchema,
@@ -364,13 +365,16 @@ export function VendorTable({
                 growing the glyph.
               */
               /*
-                22 x 44, and that is the frame's ceiling rather than a choice.
-                Frame `13` gives this column a **22px** track with the box at its
-                left edge, so a 44px-wide target cannot exist here without
-                overlapping the business name. The label takes the full row
-                height, which is the axis that was free.
+                44 x 44 without moving the box (VEN-395). Frame `13` gives this
+                column a **22px** track with the box at its left edge, so the
+                label reaches **left** into the row's 16px gutter rather than
+                right into the business name: `-ml-[15px]` with `pl-[15px]`
+                keeps the glyph where the frame draws it, and the 44px box ends
+                at 29px — inside the 22px track plus its 12px gap. The row is
+                already 44px tall. Below `md` the card list gives the control a
+                44px wrapper of its own, so the overhang is undone there.
               */
-              <label className="flex h-11 w-full cursor-pointer items-center justify-start">
+              <label className="-ml-[15px] flex h-11 w-11 shrink-0 cursor-pointer items-center justify-start pl-[15px] max-md:ml-0 max-md:pl-0">
                 <span className="sr-only">Select {row.businessName}</span>
                 <input
                   type="checkbox"
@@ -537,8 +541,8 @@ function VendorRowActions({
 
   /*
     Mounted only while open, not rendered alongside the menu and hidden.
-    `DataTable` calls every `cell` twice — once for the grid, once for the card
-    list — so a page of fifteen rows carrying two always-mounted `AlertDialog`
+    `DataTable`'s server render calls every `cell` twice — once for the grid,
+    once for the card list — so a page of fifteen rows carrying two always-mounted `AlertDialog`
     roots apiece is sixty portals and focus traps for a screen where at most one
     dialog can be open. The `open` prop is what drives the mount either way.
   */
@@ -596,6 +600,17 @@ function VendorRowActions({
               confirmLabel={unpublishing ? 'Unpublish profile' : 'Publish profile'}
               onConfirm={async () => {
                 await setPublished(!unpublishing);
+                /*
+                  The confirmation the vendor gets for the same change (VEN-395,
+                  `40-states.md`): a state change the operator caused says so.
+                  Same verbs as the vendor's own toggle, naming the storefront
+                  because an operator is not its owner.
+                */
+                toast.success(
+                  unpublishing
+                    ? `${row.businessName}'s profile is hidden.`
+                    : `${row.businessName}'s profile is live.`,
+                );
                 onDone();
               }}
             />
