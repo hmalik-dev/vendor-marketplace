@@ -164,8 +164,22 @@ const RESEND_WEBHOOK_SETUP: EnvSetup = {
 
 const SENTRY_SETUP: EnvSetup = {
   url: 'https://sentry.io/settings/projects/',
-  steps: ['Open Sentry → Project → Client Keys (DSN)'],
+  steps: [
+    'Open Sentry → Project → Client Keys (DSN)',
+    'Leave it unset locally: a laptop that reports into the production project pollutes its error budget',
+  ],
 };
+
+const SENTRY_UPLOAD_SETUP: EnvSetup = {
+  url: 'https://sentry.io/orgredirect/organizations/:orgslug/settings/auth-tokens/',
+  steps: [
+    'Open Sentry → Settings → Auth Tokens → Create New Token (an organization token carries the org)',
+    'Set it, with the web project slug, where the production web build runs — the deploy workflow',
+  ],
+};
+
+/** A DSN names a public key, an ingest host and a numeric project. */
+const SENTRY_DSN_SHAPE = /^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+\/\d+$/;
 
 const HTTP_URL = /^https?:\/\/[^\s,]+$/;
 const HTTPS_URL = /^https:\/\/[^\s,]+$/;
@@ -722,15 +736,71 @@ export const ENV_REGISTRY = [
 
   // --- sentry --------------------------------------------------------------
   {
+    /*
+     * No default, and excused only off a deployment (VEN-397). A laptop with no
+     * DSN runs with reporting off — the SDK is never initialised — so no
+     * development value exists that could reach the production project. A
+     * deployment refuses to boot without one: an API that cannot report its
+     * errors is the nineteen-hour outage nobody heard about.
+     */
     key: 'SENTRY_DSN',
     capability: 'sentry',
     audience: 'server',
     consumers: ['api'],
     environments: 'per-environment',
-    shape: /^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+\/\d+$/,
+    optionalFor: ['baseline', 'local'],
+    shape: SENTRY_DSN_SHAPE,
     placeholder: 'https://...@sentry.io/...',
-    description: 'Sentry DSN the API reports errors to.',
+    description: 'Sentry DSN the API reports errors to. Unset locally; required on a deployment.',
     setup: SENTRY_SETUP,
+  },
+  {
+    /*
+     * The web app's own project, and browser-facing because the client SDK
+     * sends from the visitor's browser — a DSN is a write-only ingest address,
+     * public by design. Same excusal as the API's row, checked by the build.
+     */
+    key: 'NEXT_PUBLIC_SENTRY_DSN',
+    capability: 'sentry',
+    audience: 'browser',
+    consumers: ['web'],
+    environments: 'per-environment',
+    optionalFor: ['baseline', 'local'],
+    shape: SENTRY_DSN_SHAPE,
+    placeholder: 'https://...@sentry.io/...',
+    description:
+      'Sentry DSN the web app reports errors to, from the server and the browser. Unset locally; required on a deployment.',
+    setup: SENTRY_SETUP,
+  },
+  {
+    /*
+     * Source-map upload, which only the production web build performs. Excused
+     * on every target the apps check — a preview deployment has no maps to
+     * upload — and required by `preflight --env production`; the deploy
+     * workflow refuses to start without it.
+     */
+    key: 'SENTRY_AUTH_TOKEN',
+    capability: 'sentry',
+    audience: 'server',
+    consumers: ['web'],
+    environments: 'per-environment',
+    optionalFor: ['baseline', 'local', 'deployed'],
+    shape: /^sntrys_[A-Za-z0-9+/=_-]{20,}$/,
+    placeholder: 'sntrys_...',
+    description: 'Sentry organization token the production web build uploads source maps with.',
+    setup: SENTRY_UPLOAD_SETUP,
+  },
+  {
+    key: 'SENTRY_WEB_PROJECT',
+    capability: 'sentry',
+    audience: 'server',
+    consumers: ['web'],
+    environments: 'per-environment',
+    optionalFor: ['baseline', 'local', 'deployed'],
+    shape: /^[a-z0-9][a-z0-9_-]*$/,
+    placeholder: '...',
+    description: 'Slug of the Sentry project the web source maps are uploaded to.',
+    setup: SENTRY_UPLOAD_SETUP,
   },
 ] as const satisfies readonly EnvVariable[];
 

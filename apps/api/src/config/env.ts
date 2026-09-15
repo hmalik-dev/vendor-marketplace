@@ -11,7 +11,7 @@ import { z } from 'zod';
  * new service's variables required — the keys themselves live in the env
  * registry, so this schema cannot drift from `.env.example` or `turbo.json`.
  */
-const API_CAPABILITIES = ['core', 'auth', 'storage', 'stripe', 'email'] as const;
+const API_CAPABILITIES = ['core', 'auth', 'storage', 'stripe', 'email', 'sentry'] as const;
 
 /**
  * Every environment variable the API reads, validated once at boot. Failing

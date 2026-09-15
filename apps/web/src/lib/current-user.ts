@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
+import * as Sentry from '@sentry/nextjs';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import type { UserRole } from '@vendor-marketplace/shared';
@@ -30,11 +31,27 @@ import { wireUserSchema, type WireUser } from './wire-schemas';
  * shared between two visitors.
  */
 export const getCurrentUser = cache(async function getCurrentUser(): Promise<WireUser | null> {
-  const { getToken } = await auth();
+  const { getToken, userId } = await auth();
   const token = await getToken();
 
   if (!token) {
     return null;
+  }
+
+  /*
+   * A server render that fails after this point is reported against the caller
+   * — the Clerk id alone, the same one the browser and the API attach.
+   *
+   * The **isolation** scope, named rather than inherited: `Sentry.setUser`
+   * writes to the current scope, which is per request only while the SDK's
+   * auto-instrumentation has wrapped the render in one. Where it has not — an
+   * unwrapped server action, some route-handler shapes — the id lands on the
+   * global scope and the *next* visitor's error is reported against the
+   * *previous* visitor's account. Nothing downstream can catch that: the
+   * scrubber preserves whatever `user.id` it is handed.
+   */
+  if (userId) {
+    Sentry.getIsolationScope().setUser({ id: userId });
   }
 
   try {

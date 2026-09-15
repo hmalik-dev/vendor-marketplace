@@ -3,10 +3,11 @@ import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
 import {
   serializerCompiler,
   validatorCompiler,
+  type FastifyPluginAsyncZod,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { createDatabase, loadEnv } from '@vendor-marketplace/db';
@@ -29,6 +30,7 @@ import { backgroundPlugin } from './plugins/background.js';
 import { clockPlugin, type Clock } from './plugins/clock.js';
 import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
+import { createErrorReporter, type ErrorReporter } from './lib/error-reporting.js';
 import { eventsPlugin } from './plugins/events.js';
 import { operatorAlertsPlugin } from './plugins/operator-alerts.js';
 import { payoutReleasePlugin } from './plugins/payout-release.js';
@@ -121,10 +123,39 @@ export interface BuildServerOptions {
   operatorDigestIntervalMs?: number;
   /** Pause between operator alert send retries; defaults to a real timer. */
   operatorAlertWait?: (ms: number) => Promise<void>;
+  /**
+   * The error tracker seam. Defaults to Sentry when `SENTRY_DSN` is set and to
+   * silence when it is not — which the env registry allows only off a
+   * deployment, so a production API cannot be built without reporting.
+   */
+  errorReporter?: ErrorReporter;
+}
+
+/**
+ * Registers a route plugin one scope down, recording every route it declares.
+ *
+ * The extra scope changes nothing for the plugin — these are all encapsulated
+ * already — and gives the `onRoute` hook somewhere to live that sees only its
+ * routes. Collected from registration rather than written out as a list, so a
+ * new checkout route is a payment route without anyone remembering to say so.
+ */
+function recordingRoutes<TOptions extends FastifyPluginOptions>(
+  plugin: FastifyPluginAsyncZod<TOptions>,
+  into: Set<string>,
+): FastifyPluginAsyncZod<TOptions> {
+  return async (scope, options) => {
+    scope.addHook('onRoute', (route) => {
+      into.add(route.url);
+    });
+    await plugin(scope, options);
+  };
 }
 
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
   const { env, db, storage } = options;
+  const errorReporter = options.errorReporter ?? createErrorReporter(env);
+  /** Route patterns that move money; filled as the payment plugins register below. */
+  const moneyRoutes = new Set<string>();
 
   const app = Fastify({
     /*
@@ -216,7 +247,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
-  await app.register(errorHandlerPlugin);
+  await app.register(errorHandlerPlugin, { reporter: errorReporter, paymentRoutes: moneyRoutes });
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, {
     origin: allowedOrigins(env),
@@ -256,6 +287,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   });
   await app.register(payoutReleasePlugin, {
     intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,
+    reporter: errorReporter,
   });
 
   await app.register(healthRoutes);
@@ -269,7 +301,9 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(userRoutes);
   await app.register(customerRoutes);
   await app.register(vendorRoutes);
-  await app.register(stripeConnectRoutes, { returnOrigin: canonicalWebOrigin(env) });
+  await app.register(recordingRoutes(stripeConnectRoutes, moneyRoutes), {
+    returnOrigin: canonicalWebOrigin(env),
+  });
   await app.register(legalAgreementRoutes);
   await app.register(termsRoutes);
   await app.register(packageRoutes);
@@ -312,11 +346,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
       ...options.webhooks,
     });
   }
-  await app.register(paymentRoutes, {
+  await app.register(recordingRoutes(paymentRoutes, moneyRoutes), {
     platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
     webOrigin: canonicalWebOrigin(env),
   });
-  await app.register(stripeWebhookRoutes, {
+  await app.register(recordingRoutes(stripeWebhookRoutes, moneyRoutes), {
     platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
     webOrigin: canonicalWebOrigin(env),
   });
