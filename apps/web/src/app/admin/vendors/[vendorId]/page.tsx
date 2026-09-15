@@ -293,7 +293,7 @@ export default async function AdminVendorDetailPage({
           >
             {locks.length === 0 ? (
               <CardEmpty>
-                No dates are held from yesterday through the calendar’s horizon.
+                No dates are held from yesterday through the calendar&apos;s horizon.
               </CardEmpty>
             ) : (
               <CardTable

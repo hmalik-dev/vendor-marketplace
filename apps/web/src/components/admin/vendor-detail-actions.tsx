@@ -214,7 +214,7 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
             <p className={CONSEQUENCE}>
               {flagged
                 ? 'Lets them sign in again. Cancelled bookings are not restored.'
-                : 'Declines every open request and cancels every future confirmed booking, refunded in full — the vendor’s share reverses out of their Stripe balance. Confirms first.'}
+                : "Declines every open request and cancels every future confirmed booking, refunded in full — the vendor's share reverses out of their Stripe balance. Confirms first."}
             </p>
           </Tier>
         </>
