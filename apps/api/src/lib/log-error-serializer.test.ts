@@ -1,4 +1,6 @@
+import { ClerkAPIResponseError } from '@clerk/backend/errors';
 import { DrizzleQueryError } from 'drizzle-orm';
+import pino from 'pino';
 import { describe, expect, it } from 'vitest';
 import { redactLogRecord, serializeError } from './log-error-serializer.js';
 
@@ -33,6 +35,27 @@ function failedQuery(params: unknown[]): DrizzleQueryError {
 /** Everything the logger would write for this error, as one searchable string. */
 function serialized(error: Error): string {
   return JSON.stringify(serializeError(error));
+}
+
+/**
+ * The line a real pino logger writes, wired the way `server.ts` wires it.
+ *
+ * Not `serializeError`'s return value: `pino-std-serializers` copies an error's
+ * `errors` array to `aggregateErrors` *and* writes it again under `errors`, and
+ * only the line shows what both copies carried.
+ */
+function loggedLine(record: Record<string, unknown>): string {
+  const lines: string[] = [];
+  const logger = pino(
+    { formatters: { log: redactLogRecord }, serializers: { err: serializeError } },
+    { write: (line: string) => lines.push(line) },
+  );
+
+  logger.error(record, 'A nested failure');
+
+  expect(lines).toHaveLength(1);
+
+  return lines[0]!;
 }
 
 describe('the API error serialiser', () => {
@@ -115,6 +138,110 @@ describe('the API error serialiser', () => {
 
     expect(serialized(aggregated)).not.toContain(SENTINEL);
     expect(serialized(attached)).not.toContain(SENTINEL);
+  });
+
+  it('redacts every entry of an errors array, not only the ones pino calls errors', () => {
+    /*
+     * pino hands `errors` entries that are not error-like straight through, into
+     * both `aggregateErrors` and `errors`. A driver's field record, a query
+     * payload, an array of failures or a record wrapping one reaches the line
+     * raw unless the sink walks it. Each carries the sentinel somewhere the
+     * redaction already withholds on an error.
+     */
+    class FieldRecord {
+      detail = SENTINEL;
+    }
+
+    const entries = [
+      { detail: `Key (reference)=(${SENTINEL}) already exists.` },
+      { query: STATEMENT, params: [SENTINEL] },
+      [failedQuery([SENTINEL])],
+      { failure: failedQuery([SENTINEL]) },
+      // A class instance is written field by field exactly as a literal is.
+      new FieldRecord(),
+      // An entry pino does call an error still carries raw records of its own.
+      { message: 'Write failed', payload: { query: STATEMENT, params: [SENTINEL] } },
+    ];
+
+    for (const entry of entries) {
+      const failure = Object.assign(new Error('Every write failed'), { errors: [entry] });
+
+      for (const key of ['err', 'failure']) {
+        const line = loggedLine({ [key]: failure });
+
+        expect(line, `${key}: ${JSON.stringify(entry)}`).not.toContain(SENTINEL);
+        // The entry is still written, withheld — not dropped from the line.
+        expect(line).toContain('[redacted]');
+      }
+    }
+  });
+
+  it("withholds a failure carried in a real ClerkAPIResponseError's errors array", () => {
+    /*
+     * Built by Clerk's own class, whose `errors` is an own enumerable array of
+     * `ClerkAPIError`s that pino files under both `aggregateErrors` and `errors`.
+     * Both entries below are Clerk's own: one parsed from a response, one a
+     * `ClerkAPIError` that carries a record — the entry shape pino calls an
+     * error and serialises field by field.
+     */
+    const clerk = new ClerkAPIResponseError('Unprocessable Entity', {
+      data: [
+        { code: 'form_identifier_exists', message: 'Taken', long_message: 'That email is taken.' },
+        { code: 'form_param_invalid', message: 'Invalid', long_message: 'Not written.' },
+      ],
+      status: 422,
+    });
+    Object.assign(clerk.errors[1]!, { payload: { query: STATEMENT, params: [SENTINEL] } });
+
+    for (const key of ['err', 'failure']) {
+      const line = loggedLine({ [key]: clerk });
+
+      expect(line).not.toContain(SENTINEL);
+      // What says what went wrong survives, under every key pino wrote it to.
+      expect(JSON.parse(line)).toMatchObject({
+        [key]: {
+          status: 422,
+          errors: [
+            { code: 'form_identifier_exists' },
+            { code: 'form_param_invalid', payload: { query: STATEMENT, params: '[redacted]' } },
+          ],
+          ...(key === 'err'
+            ? {
+                aggregateErrors: [
+                  { code: 'form_identifier_exists', longMessage: 'That email is taken.' },
+                  { code: 'form_param_invalid', payload: { params: '[redacted]' } },
+                ],
+              }
+            : {}),
+        },
+      });
+    }
+  });
+
+  it('terminates on an errors array that contains itself', () => {
+    const entries: unknown[] = [{ params: [SENTINEL], query: STATEMENT }];
+    entries.push(entries);
+
+    const line = loggedLine({ err: Object.assign(new Error('Looped'), { errors: entries }) });
+
+    expect(line).not.toContain(SENTINEL);
+    // Withheld at the first repeat, not eight levels down at the depth bound.
+    expect((JSON.parse(line) as { err: { errors: unknown[] } }).err.errors[1]).toBe('[redacted]');
+  });
+
+  it('keeps a record two entries share, because sharing is not a cycle', () => {
+    const shared = { code: 'form_identifier_exists', field: 'email' };
+    const failure = Object.assign(new Error('Two fields failed'), {
+      errors: [shared, { meta: shared }, failedQuery([SENTINEL])],
+    });
+
+    const line = JSON.parse(loggedLine({ err: failure })) as {
+      err: { errors: unknown[]; aggregateErrors: unknown[] };
+    };
+
+    expect(JSON.stringify(line)).not.toContain(SENTINEL);
+    expect(line.err.errors.slice(0, 2)).toEqual([shared, { meta: shared }]);
+    expect(line.err.aggregateErrors.slice(0, 2)).toEqual([shared, { meta: shared }]);
   });
 
   it('redacts an error that is not an Error, because pino serialises it anyway', () => {
