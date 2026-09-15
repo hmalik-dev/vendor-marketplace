@@ -17,3 +17,4 @@
 - [run_code_unsafe has no require/import](run-code-unsafe-has-no-require-use-storagestate-option.md) — load a stored identity via `browser.newContext({storageState: <path>})`, not `fs.readFileSync`
 - [API parity checks need a Clerk bearer, not cookies](api-parity-check-needs-clerk-bearer-not-cookies.md) — pull `window.Clerk.session.getToken()` and fetch the API's own port directly; cookie-only cross-port fetch 401s
 - [revalidateTag('categories') doesn't bust the public cache](revalidatetag-categories-does-not-bust-public-cache.md) — VEN-401: DB/audit/raw-API update instantly, but landing/header stayed stale 10+ min; verify via curl, not the admin's own no-store re-render
+- [Hero jump row is hardcoded, not live categories](hero-jump-row-is-hardcoded-not-live-categories.md) — landing "Or jump straight to" + footer Browse column read a fixed 4-slug constant, never `getCategories()`; deactivation never removes them

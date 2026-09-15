@@ -6,7 +6,6 @@ import {
   CATEGORY_SEEDS,
   CATEGORY_SLUGS,
   LANDING_CATEGORY_COUNT,
-  LANDING_JUMP_CATEGORY_SLUGS,
   serialiseJsonLd,
   type Category,
 } from '@vendor-marketplace/shared';
@@ -21,6 +20,7 @@ import { readRoleForChrome, redirectVendorToDashboard } from '@/lib/current-user
 import { FOR_VENDORS_PATH, FOR_VENDORS_PAYOUTS_ANCHOR } from '@/lib/for-vendors';
 import { GENERIC_TRUST_COPY } from '@/lib/landing-status';
 import type { TrustTitle } from '@/lib/landing-status';
+import { offeredJumpCategories } from '@/lib/jump-categories';
 import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
 
 /**
@@ -51,10 +51,6 @@ const CONTAINER = 'mx-auto w-full max-w-[1440px] px-5 lg:px-7 min-[90rem]:px-10'
 /** The blurb each landing card carries, by slug. Copy, so it lives in shared. */
 const SHORT_DESCRIPTIONS = new Map(
   CATEGORY_SEEDS.map((seed) => [seed.slug, seed.shortDescription]),
-);
-
-const JUMP_CATEGORY_NAMES = LANDING_JUMP_CATEGORY_SLUGS.map(
-  (slug) => CATEGORY_SEEDS.find((seed) => seed.slug === slug)?.name ?? slug,
 );
 
 /**
@@ -453,13 +449,13 @@ export default async function HomePage(): Promise<React.ReactElement> {
                 <span className="mr-px text-[11.5px] text-stone-600 min-[90rem]:mr-0.5 min-[90rem]:text-sm">
                   Or jump straight to
                 </span>
-                {LANDING_JUMP_CATEGORY_SLUGS.map((slug, index) => (
+                {offeredJumpCategories(categories).map(({ slug, name }) => (
                   <Link
                     key={slug}
                     href={`/search?category=${slug}`}
                     className="rounded-full border border-stone-300 bg-stone-0 px-2.5 py-1.25 text-[11.5px] font-semibold text-stone-900 transition-colors duration-(--duration-fast) min-[90rem]:px-3 min-[90rem]:py-1.5 min-[90rem]:text-sm hover:border-clay-300 hover:text-clay-600"
                   >
-                    {JUMP_CATEGORY_NAMES[index]}
+                    {name}
                   </Link>
                 ))}
               </div>

@@ -1,16 +1,11 @@
 import Link from 'next/link';
 import { Show, SignOutButton } from '@clerk/nextjs';
-import {
-  BRAND_NAME,
-  BRAND_TAGLINE,
-  LANDING_JUMP_CATEGORY_SLUGS,
-  CATEGORY_SEEDS,
-  LEGAL_PATHS,
-  SUPPORT_PATH,
-} from '@vendor-marketplace/shared';
-import type { UserRole } from '@vendor-marketplace/shared';
+import { BRAND_NAME, BRAND_TAGLINE, LEGAL_PATHS, SUPPORT_PATH } from '@vendor-marketplace/shared';
+import type { Category, UserRole } from '@vendor-marketplace/shared';
 import { cn } from '@/lib/utils';
 import { readRoleForChrome } from '@/lib/current-user';
+import { offeredJumpCategories } from '@/lib/jump-categories';
+import { getCategories } from '@/lib/vendor-data';
 import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { OnPath } from '@/components/on-path';
@@ -21,14 +16,16 @@ import { FOR_VENDORS_PATH } from '@/lib/for-vendors';
  * platform — see design/design-plan/10-landing.md.
  */
 
-/** The same four categories the hero jumps to, so the two agree. */
-const BROWSE_LINKS = [
-  ...LANDING_JUMP_CATEGORY_SLUGS.map((slug) => ({
-    href: `/search?category=${slug}`,
-    label: CATEGORY_SEEDS.find((seed) => seed.slug === slug)?.name ?? slug,
-  })),
-  { href: '/search', label: 'All vendors' },
-];
+/** The same categories the hero jumps to, so the two agree — hidden ones included out. */
+function browseLinks(categories: readonly Category[]): FooterLinkSpec[] {
+  return [
+    ...offeredJumpCategories(categories).map(({ slug, name }) => ({
+      href: `/search?category=${slug}`,
+      label: name,
+    })),
+    { href: '/search', label: 'All vendors' },
+  ];
+}
 
 /** One row of a footer column. */
 interface FooterLinkSpec {
@@ -241,7 +238,7 @@ export async function SiteFooter(): Promise<React.ReactElement> {
    * makes a request when signed out, so a marketing page pays nothing for it —
    * the same contract the header relies on.
    */
-  const role = await readRoleForChrome();
+  const [role, categories] = await Promise.all([readRoleForChrome(), getCategories()]);
   /*
    * `null` is a signed-out visitor **or** an account record that could not be
    * read, and the two columns want different things from that ambiguity.
@@ -312,7 +309,7 @@ export async function SiteFooter(): Promise<React.ReactElement> {
 
           <nav aria-label="Footer" className="grid gap-8.5 sm:grid-cols-3 lg:col-span-3">
             <FooterColumn heading="Browse">
-              {BROWSE_LINKS.map((link) => (
+              {browseLinks(categories).map((link) => (
                 <FooterLink key={link.href} {...link} />
               ))}
             </FooterColumn>
