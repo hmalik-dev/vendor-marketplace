@@ -317,7 +317,25 @@ describe('admin vendor detail', () => {
       expiresAt: new Date('2026-09-30T00:00:00.000Z'),
     });
 
+    /*
+     * A stored row wins its date over the request overlay, as on the vendor's
+     * calendar: the `available` a cancelled booking leaves hides the live
+     * request on 10-04, and a stored `pending` names the request it holds.
+     */
+    const [heldRequest] = await db
+      .insert(bookingRequests)
+      .values({ customerId, vendorId: vendor.id, eventDate: '2026-10-03', status: 'pending' })
+      .returning({ id: bookingRequests.id });
+    await db.insert(bookingRequests).values({
+      customerId,
+      vendorId: vendor.id,
+      eventDate: '2026-10-04',
+      status: 'pending',
+    });
+
     await db.insert(availability).values([
+      { vendorId: vendor.id, date: '2026-10-03', status: 'pending' },
+      { vendorId: vendor.id, date: '2026-10-04', status: 'available' },
       { vendorId: vendor.id, date: '2026-10-10', status: 'booked' },
       { vendorId: vendor.id, date: '2026-10-31', status: 'booked' },
       { vendorId: vendor.id, date: '2026-11-07', status: 'blocked', note: 'out of state' },
@@ -329,6 +347,20 @@ describe('admin vendor detail', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().locks).toEqual([
+      {
+        date: '2026-10-03',
+        status: 'pending',
+        note: null,
+        holders: [
+          {
+            kind: 'request',
+            id: heldRequest!.id,
+            customerName: 'Rosa Rivera',
+            status: 'pending',
+            expiresAt: null,
+          },
+        ],
+      },
       {
         date: '2026-10-10',
         status: 'booked',

@@ -3,6 +3,7 @@ import {
   ADMIN_VENDOR_DETAIL_NOTIFICATION_LIMIT,
   toDateString,
   type AdminAvailabilityLock,
+  type AdminLockHolder,
   type AdminVendorDetail,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
@@ -14,7 +15,7 @@ import {
   findBookingsHoldingDates,
   findLiveRequestsHoldingDates,
   findRecentNotificationsForAdmin,
-  findStoredLocks,
+  findStoredCalendarRows,
   findVendorPackagesForAdmin,
   findVendorPortfolioForAdmin,
   type DateRange,
@@ -55,13 +56,16 @@ function groupByDate<T extends { eventDate: string }>(rows: readonly T[]): Map<s
 /**
  * What holds each date, composed the way the vendor's calendar composes it.
  *
- * A stored row wins its date, exactly as `readCalendar` overlays: `blocked` is
- * the vendor's own decision and `booked` their acceptance. A live request makes
- * a date `pending` only where nothing is stored.
+ * **Any** stored row wins its date, exactly as `readCalendar` overlays —
+ * including an `available` one a cancelled booking leaves, which is not a lock
+ * and is not listed, but which the vendor's calendar shows free whatever
+ * request sits on it. A live request makes a date `pending` only where nothing
+ * is stored.
  *
- * A `booked` date lists the bookings standing on it, and **an empty list is the
- * finding**: the calendar refuses the date while nothing holds it, which is the
- * stale lock an operator arrives asking about.
+ * A held date lists what stands on it — bookings for `booked`, live requests
+ * for a stored `pending` (`lockHeldDate` writes one) — and **an empty list is
+ * the finding**: the calendar refuses the date while nothing holds it, which is
+ * the stale lock an operator arrives asking about.
  */
 export function composeLocks(
   stored: readonly StoredLockRow[],
@@ -72,34 +76,49 @@ export function composeLocks(
   const bookingsByDate = groupByDate(heldBookings);
   const storedDates = new Set(stored.map((row) => row.date));
 
-  const storedLocks: AdminAvailabilityLock[] = stored.map((row) => ({
-    date: row.date,
-    status: row.status,
-    note: row.note,
-    holders:
-      row.status === 'booked'
-        ? (bookingsByDate.get(row.date) ?? []).map((booking) => ({
-            kind: 'booking' as const,
-            id: booking.id,
-            customerName: fullName(booking.firstName, booking.lastName),
-            status: booking.status,
-          }))
-        : [],
-  }));
+  const bookingHolders = (date: string): AdminLockHolder[] =>
+    (bookingsByDate.get(date) ?? []).map((booking) => ({
+      kind: 'booking' as const,
+      id: booking.id,
+      customerName: fullName(booking.firstName, booking.lastName),
+      status: booking.status,
+    }));
+  const requestHolders = (date: string): AdminLockHolder[] =>
+    (requestsByDate.get(date) ?? []).map((request) => ({
+      kind: 'request' as const,
+      id: request.id,
+      customerName: fullName(request.firstName, request.lastName),
+      status: request.status,
+      expiresAt: request.expiresAt,
+    }));
 
-  const pendingLocks: AdminAvailabilityLock[] = [...requestsByDate]
-    .filter(([date]) => !storedDates.has(date))
-    .map(([date, held]) => ({
+  const storedLocks: AdminAvailabilityLock[] = stored.flatMap((row) => {
+    if (row.status !== 'booked' && row.status !== 'pending' && row.status !== 'blocked') {
+      return [];
+    }
+
+    return [
+      {
+        date: row.date,
+        status: row.status,
+        note: row.note,
+        holders:
+          row.status === 'booked'
+            ? bookingHolders(row.date)
+            : row.status === 'pending'
+              ? requestHolders(row.date)
+              : [],
+      },
+    ];
+  });
+
+  const pendingLocks: AdminAvailabilityLock[] = [...requestsByDate.keys()]
+    .filter((date) => !storedDates.has(date))
+    .map((date) => ({
       date,
       status: 'pending' as const,
       note: null,
-      holders: held.map((request) => ({
-        kind: 'request' as const,
-        id: request.id,
-        customerName: fullName(request.firstName, request.lastName),
-        status: request.status,
-        expiresAt: request.expiresAt,
-      })),
+      holders: requestHolders(date),
     }));
 
   return [...storedLocks, ...pendingLocks].sort((left, right) =>
@@ -123,7 +142,7 @@ export async function readVendorDetail(
   const [packages, portfolio, stored, requests, heldBookings, recent, counts] = await Promise.all([
     findVendorPackagesForAdmin(db, vendorId),
     findVendorPortfolioForAdmin(db, vendorId),
-    findStoredLocks(db, vendorId, range),
+    findStoredCalendarRows(db, vendorId, range),
     findLiveRequestsHoldingDates(db, vendorId, range, now),
     findBookingsHoldingDates(db, vendorId, range),
     findRecentNotificationsForAdmin(db, vendor.userId, ADMIN_VENDOR_DETAIL_NOTIFICATION_LIMIT),

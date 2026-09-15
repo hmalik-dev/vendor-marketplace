@@ -14,6 +14,7 @@ import {
   type AdminVendorNotification,
   type AdminVendorPackage,
   type AdminVendorPortfolioItem,
+  type AvailabilityStatus,
   type BookingRequestStatus,
   type BookingStatus,
 } from '@vendor-marketplace/shared';
@@ -44,7 +45,7 @@ export interface DateRange {
 
 export interface StoredLockRow {
   date: string;
-  status: 'booked' | 'blocked';
+  status: AvailabilityStatus;
   note: string | null;
 }
 
@@ -130,13 +131,17 @@ export async function findVendorPortfolioForAdmin(
     .orderBy(asc(portfolioItems.displayOrder), asc(portfolioItems.createdAt));
 }
 
-/** The stored holds in range — `booked` by an acceptance, `blocked` by the vendor. */
-export async function findStoredLocks(
+/**
+ * Every stored calendar row in range, whatever its status. An `available` row
+ * (a cancelled booking leaves one) is not a lock, but it still wins its date
+ * over the request overlay exactly as it does in `readCalendar`.
+ */
+export async function findStoredCalendarRows(
   db: AppDatabase,
   vendorId: string,
   range: DateRange,
 ): Promise<StoredLockRow[]> {
-  const rows = await db
+  return db
     .select({ date: availability.date, status: availability.status, note: availability.note })
     .from(availability)
     .where(
@@ -144,14 +149,9 @@ export async function findStoredLocks(
         eq(availability.vendorId, vendorId),
         gte(availability.date, range.from),
         lte(availability.date, range.to),
-        inArray(availability.status, ['booked', 'blocked']),
       ),
     )
     .orderBy(asc(availability.date));
-
-  return rows.flatMap((row) =>
-    row.status === 'booked' || row.status === 'blocked' ? [{ ...row, status: row.status }] : [],
-  );
 }
 
 /**

@@ -72,7 +72,11 @@ function HeldBy({ lock }: { lock: Lock }): React.ReactElement {
    * because the state is wrong rather than waiting.
    */
   if (lock.holders.length === 0) {
-    return <span className="text-error-500">No live booking holds this date</span>;
+    return (
+      <span className="text-error-500">
+        No live {lock.status === 'booked' ? 'booking' : 'request'} holds this date
+      </span>
+    );
   }
 
   return (
