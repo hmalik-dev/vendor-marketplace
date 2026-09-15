@@ -9,23 +9,27 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 
 /**
- * The repository secrets the job reads, by the name the job's `env:` maps them
- * to. Every one is needed: the E2E accounts sign in against the Clerk test
- * instance, `seed:e2e` resolves their Clerk ids and pins the Stripe connected
- * account, and `paid-booking.spec.ts` pays through Stripe test mode.
+ * `[variable, secret]`: each variable the job's `env:` fills from a repository
+ * secret, and that secret's own name — the one a missing value is reported
+ * under, since it is what someone adds. Every one is needed: the E2E accounts
+ * sign in against the Clerk test instance, `seed:e2e` resolves their Clerk ids
+ * and pins the Stripe connected account, and `paid-booking.spec.ts` pays
+ * through Stripe test mode.
  */
 export const REQUIRED_SECRETS = [
-  'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-  'CLERK_SECRET_KEY',
-  'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
-  'STRIPE_SECRET_KEY',
-  'E2E_VENDOR_STRIPE_ACCOUNT_ID',
-  'E2E_CUSTOMER_EMAIL',
-  'E2E_CUSTOMER_PASSWORD',
-  'E2E_VENDOR_EMAIL',
-  'E2E_VENDOR_PASSWORD',
-  'E2E_ADMIN_EMAIL',
-  'E2E_ADMIN_PASSWORD',
+  ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'E2E_CLERK_PUBLISHABLE_KEY'],
+  ['CLERK_SECRET_KEY', 'E2E_CLERK_SECRET_KEY'],
+  ['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'E2E_STRIPE_PUBLISHABLE_KEY'],
+  ['STRIPE_SECRET_KEY', 'E2E_STRIPE_SECRET_KEY'],
+  ...[
+    'E2E_VENDOR_STRIPE_ACCOUNT_ID',
+    'E2E_CUSTOMER_EMAIL',
+    'E2E_CUSTOMER_PASSWORD',
+    'E2E_VENDOR_EMAIL',
+    'E2E_VENDOR_PASSWORD',
+    'E2E_ADMIN_EMAIL',
+    'E2E_ADMIN_PASSWORD',
+  ].map((name) => [name, name]),
 ];
 
 /** The repository variable that turns a missing secret from a warning into a failure. */
@@ -41,7 +45,9 @@ export const GATE_VARIABLE = 'E2E_GATE';
  * someone has switched on must not be switched off again by a deleted secret.
  */
 export function secretsVerdict(env) {
-  const missing = REQUIRED_SECRETS.filter((name) => !env[name]?.trim());
+  const missing = REQUIRED_SECRETS.filter(([variable]) => !env[variable]?.trim()).map(
+    ([, secret]) => secret,
+  );
   const required = env[GATE_VARIABLE]?.trim() === 'required';
 
   if (missing.length === 0) return { run: true, fail: false, missing, message: null };

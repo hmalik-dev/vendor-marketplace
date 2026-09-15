@@ -8,7 +8,9 @@ import { test } from 'node:test';
 
 import { REQUIRED_SECRETS, renderSummary, secretsVerdict, summarizeReport } from './e2e-ci.mjs';
 
-const ALL_SECRETS = Object.fromEntries(REQUIRED_SECRETS.map((name) => [name, `value-of-${name}`]));
+const ALL_SECRETS = Object.fromEntries(
+  REQUIRED_SECRETS.map(([variable]) => [variable, `value-of-${variable}`]),
+);
 
 test('every secret present: the suite runs', () => {
   assert.deepEqual(secretsVerdict(ALL_SECRETS), {
@@ -23,8 +25,15 @@ test('a missing secret before the gate is switched on skips with a warning namin
   const verdict = secretsVerdict({ ...ALL_SECRETS, STRIPE_SECRET_KEY: '' });
   assert.equal(verdict.run, false);
   assert.equal(verdict.fail, false);
-  assert.deepEqual(verdict.missing, ['STRIPE_SECRET_KEY']);
-  assert.match(verdict.message, /NOT run — secrets missing: STRIPE_SECRET_KEY \(VEN-377\)/);
+  assert.deepEqual(verdict.missing, ['E2E_STRIPE_SECRET_KEY']);
+  assert.match(verdict.message, /NOT run — secrets missing: E2E_STRIPE_SECRET_KEY \(VEN-377\)/);
+});
+
+// The first CI run reported `CLERK_SECRET_KEY`, the job's variable, where the
+// operator has to add the secret `E2E_CLERK_SECRET_KEY`.
+test('a missing value is reported under the repository secret someone must add', () => {
+  const verdict = secretsVerdict({ ...ALL_SECRETS, CLERK_SECRET_KEY: '' });
+  assert.deepEqual(verdict.missing, ['E2E_CLERK_SECRET_KEY']);
 });
 
 test('a missing secret once E2E_GATE=required fails the job', () => {
@@ -40,8 +49,8 @@ test('a missing secret once E2E_GATE=required fails the job', () => {
 
 test('the verdict names a missing secret and never carries a present value', () => {
   const verdict = secretsVerdict({ ...ALL_SECRETS, CLERK_SECRET_KEY: undefined });
-  for (const name of REQUIRED_SECRETS.filter((n) => n !== 'CLERK_SECRET_KEY')) {
-    assert.ok(!verdict.message.includes(`value-of-${name}`), `message leaked ${name}`);
+  for (const [variable] of REQUIRED_SECRETS.filter(([v]) => v !== 'CLERK_SECRET_KEY')) {
+    assert.ok(!verdict.message.includes(`value-of-${variable}`), `message leaked ${variable}`);
   }
 });
 
