@@ -259,6 +259,9 @@ describe('admin routes', () => {
       { method: 'PUT', url: `/admin/vendors/${NIL}/payout-hold` },
       /* VEN-380. One vendor's owner email, Stripe state and who holds their dates. */
       { method: 'GET', url: `/admin/vendors/${NIL}` },
+      /* VEN-399. A booking's money and a customer's email; every request in the funnel. */
+      { method: 'GET', url: `/admin/bookings/${NIL}` },
+      { method: 'GET', url: '/admin/requests' },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {
