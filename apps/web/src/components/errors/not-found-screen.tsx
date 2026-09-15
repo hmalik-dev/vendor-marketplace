@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { CATEGORY_SEEDS, LANDING_CATEGORY_COUNT } from '@vendor-marketplace/shared';
 import { BrokenMark } from '@/components/brand/broken-mark';
 import { Button } from '@/components/ui/button';
+import { offeredRecoveryCategories } from '@/lib/jump-categories';
+import { getCategories } from '@/lib/vendor-data';
 
 /**
  * Frame `15`. The body of every 404 in the product.
@@ -17,10 +18,12 @@ import { Button } from '@/components/ui/button';
  *
  * The recovery is *category links*, not "go home". A 404 on a marketplace is
  * almost always a stale vendor URL, and the fastest route back to what the
- * visitor wanted is the kind of vendor they were looking for.
+ * visitor wanted is the kind of vendor they were looking for. They follow the
+ * live taxonomy so a category an operator hid is not offered (VEN-416); a
+ * failed read degrades to the full list rather than failing a second page.
  */
-export function NotFoundScreen(): React.ReactElement {
-  const categories = CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT);
+export async function NotFoundScreen(): Promise<React.ReactElement> {
+  const categories = offeredRecoveryCategories(await getCategories());
 
   return (
     <div className="mx-auto flex min-h-[620px] w-full max-w-3xl flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
