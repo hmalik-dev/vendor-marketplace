@@ -10,7 +10,7 @@ import { VendorApplicationForm } from '@/components/vendors/vendor-application-f
 import { DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
 import { readIdentityForSupport } from '@/lib/current-user';
 
-export const metadata: Metadata = { title: pageTitle('Apply to join as a vendor') };
+export const metadata: Metadata = { title: pageTitle('Apply as a vendor') };
 
 /** Who is asking changes the copy and the email field, so no cached copy. */
 export const dynamic = 'force-dynamic';
