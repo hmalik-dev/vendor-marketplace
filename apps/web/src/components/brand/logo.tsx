@@ -177,20 +177,20 @@ export function Logo({
           ink out to 23px. The box stays 1.45 D so the wordmark gap keeps
           measuring from the same place.
 
-          **The delta bundles disagree, and #441 did not adjudicate it.**
-          the screens document has no `*` reset — its `box-sizing` hits are
-          33 inline opt-ins — which is what #250 measured. Every delta bundle
-          opens with `* { box-sizing: border-box }`, so the closing-band frame
-          draws the footer mark as two *equal footprints*: a 17px outline circle
-          with its 1.3px stroke inside, beside a 17px disc. This renders 19px
-          against that 17, and 2px low, at every diameter.
+          **Ruled 2026-09-07 (#449): `box-content` stands and #250 is upheld.**
+          The screens document has no `*` reset — its `box-sizing` hits are
+          33 inline opt-ins — and neither do `delta-admin` or `contact-support`.
+          `delta-band`, `delta-legal` and `delta-vendors` open with
+          `* { box-sizing: border-box }`, so the closing-band frame draws the
+          footer mark as two *equal footprints*: a 17px outline circle with its
+          1.3px stroke inside, beside a 17px disc. This renders 19px against
+          that 17, and 2px low, at every diameter.
 
-          Left alone deliberately. `box-content` is #250's ruling, taken from
-          the screens document and measured there; overturning it would move the
-          mark on every surface in the product — header, auth panel, favicon,
-          app icon — on the authority of one bundle. That is a design pass, and
-          it is filed. A parity read of `design/delta-band/` will measure 19
-          against 17 here and is looking at this, not at drift.
+          The screens document is the primary contract and the delta bundles
+          supplement it, so this is an accepted deviation from those bundles,
+          permanently. A parity read of `design/delta-band/` measuring 19
+          against 17 here is reading that decision, not drift — do not re-file
+          it. The ruling is recorded in `.claude/rules/web-design-parity.md`.
         */}
         <span
           data-testid="logo-mark-stroke"
