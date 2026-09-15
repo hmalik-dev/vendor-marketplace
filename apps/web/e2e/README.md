@@ -23,11 +23,35 @@ rather than as a mystery:
    `pnpm lane:exec <n> -- pnpm e2e:auth` — `.worktreeinclude` copies `.auth/`
    from the main checkout, where it was minted against port 3000 and has usually
    expired, so a fresh worktree inherits a session that is wrong for its port.
-3. **`seed:e2e` has run against the lane database.** `lane:up` does this. Besides
-   the vendor's storefront, package and live request, it writes one **completed
-   booking reviewed in each direction**, so the console's review lists and the
-   `Direction` filter in `admin-filters.spec.ts` have rows to narrow with no
-   manual precondition — no `db:seed:demo`.
+3. **The lane database is seeded by the contract below.** `lane:up` does this.
+
+### The seeding contract
+
+One contract, and both runners follow it: `lane:up` (`LANE_SEEDS` in
+`packages/preflight/src/lane/lane.ts`) and CI's `Migrate and seed` step, which
+`lane.test.ts` holds to the same list and order.
+
+```
+db:migrate → db:seed → db:seed:marketing → db:seed:e2e
+```
+
+- **`db:seed:marketing` is in, and required.** `admin-closed-customers.spec.ts`
+  closes one of its customers, so the suite cannot run without it. Every spec is
+  written to pass with the marketing vendors present: a spec that counts rows,
+  reads the first page of a list, or measures a grid is measuring the marketing
+  data too, and must hold at that volume (VEN-414).
+- **`db:seed:e2e` runs last.** Besides the vendor's storefront, package and live
+  request, it writes one **completed booking reviewed in each direction**, so
+  the console's review lists and the `Direction` filter in
+  `admin-filters.spec.ts` have rows to narrow with no manual precondition.
+- **Not `db:seed:demo`.** Nothing in the suite may need it.
+- Every seed tops up rather than resets, so a second run on the same database is
+  the ordinary case and every spec must pass it: dates come from `e2e:dates`,
+  names from `uniqueVenue`.
+
+A lane created before this contract has no marketing data; run
+`pnpm lane:exec <n> -- pnpm db:seed:marketing` (idempotent) rather than
+recreating it.
 
 ### Raise the rate limit
 
@@ -118,8 +142,7 @@ reason — see the follow-up ticket rather than assuming they were forgotten.
 ## On CI
 
 `ci.yml`'s `End-to-end journeys` job (VEN-411) boots this whole stack after
-`verify` — `db:seed`, `db:seed:marketing` (which `admin-closed-customers` needs)
-and `db:seed:e2e`, `next start`, `stripe listen` — and runs every suite with
+`verify` — seeded by [the contract](#the-seeding-contract), `next start`, `stripe listen` — and runs every suite with
 **one retry, reported**: a test that passed only on its retry is named in the
 job summary by `scripts/e2e-ci.mjs`. It skips with a warning until the
 repository has its `E2E_*` secrets (VEN-377); set the variable `E2E_GATE=required`

@@ -159,33 +159,36 @@ async function expectSubmitKeepsTheFilter(page: Page, before: Listing): Promise<
   expect(after.directions).toEqual([DIRECTION.about]);
 }
 
-/**
- * The unfiltered listing, having proved it holds both directions.
- *
- * `seed:e2e` writes one completed booking reviewed in each direction (VEN-395),
- * so this holds on a lane with no manual precondition. With one direction only,
- * the filter removes nothing and every assertion below would pass against a bar
- * that still discards the query — which is why it is asserted, not assumed.
- */
+/** The unfiltered listing: every review, newest first. */
 async function unfilteredBaseline(page: Page): Promise<Listing> {
   await page.goto(PATH);
   await expect(page).toHaveURL(new RegExp(`${PATH}$`));
 
-  const unfiltered = await listing(page);
-
-  expect(
-    unfiltered.directions.length,
-    `${PATH} shows reviews in one direction only (${unfiltered.directions.join(', ') || 'none'}), ` +
-      `so the Direction filter cannot be observed to narrow anything. Re-run the fixture seed:\n` +
-      `  pnpm lane:exec <n> -- pnpm db:seed:e2e`,
-  ).toBeGreaterThan(1);
-
-  return unfiltered;
+  return listing(page);
 }
 
+/**
+ * The filter narrowed the table, and to the direction chosen.
+ *
+ * Both directions are proved to exist by the **totals**, never by the unfiltered
+ * first page (VEN-414). That page is the newest twenty reviews, and the
+ * marketing seed writes 918 reviews about vendors: seeded after `seed:e2e`'s one
+ * review about a customer — or topped up by a few paid-booking runs — they push
+ * it off the page, and a first-page check reported "one direction only" on a
+ * table that held both. With one direction only, the filtered total equals the
+ * unfiltered one (or is zero), so a bar that discarded the query still fails
+ * here — the reason this is asserted rather than assumed.
+ */
 function expectNarrowed(filtered: Listing, unfiltered: Listing): void {
-  expect(filtered.total).toBeGreaterThan(0);
-  expect(filtered.total).toBeLessThan(unfiltered.total);
+  expect(
+    filtered.total,
+    `${PATH} holds no review about a customer, so the Direction filter cannot be observed ` +
+      `to narrow anything. Re-run the fixture seed:\n  pnpm lane:exec <n> -- pnpm db:seed:e2e`,
+  ).toBeGreaterThan(0);
+  expect(
+    filtered.total,
+    `every review in ${PATH} is about a customer, so the filter removed nothing`,
+  ).toBeLessThan(unfiltered.total);
   expect(filtered.directions).toEqual([DIRECTION.about]);
 }
 

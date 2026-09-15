@@ -1,4 +1,4 @@
-import { test as base, type Page } from '@playwright/test';
+import { test as base, type Browser, type Page } from '@playwright/test';
 
 import { resolveE2EApiUrl } from './base-url.js';
 import { expect, expectSignedIn, storageStatePath } from './fixtures.js';
@@ -131,12 +131,39 @@ function expectSharedPieces(measured: Measured, { hasFields }: { hasFields: bool
   }
 }
 
-test('/admin/users/[userId] draws Pattern B', async ({ adminPage: page }) => {
-  await page.goto('/admin/customers');
-  const href = await page.locator('a[href^="/admin/users/"]').first().getAttribute('href');
-  expect(href, 'no customer rows — the lane seed is missing').not.toBeNull();
+/**
+ * The E2E customer's own user id, read as that customer.
+ *
+ * Selected on seed identity (`e2e/README.md`), not as the first row of
+ * `/admin/customers` (VEN-414). That list is newest first, so with the marketing
+ * seed present its first row is whichever demo customer was written last — an
+ * account with no legal acceptance, whose page correctly draws no label/value
+ * list, and the Pattern B assertion then failed on data rather than on the
+ * screen. `seed:e2e` writes this customer's Terms acceptance, so the list is
+ * there to measure.
+ */
+async function e2eCustomerId(browser: Browser): Promise<string> {
+  const context = await browser.newContext({ storageState: storageStatePath('customer') });
 
-  await page.goto(href as string);
+  try {
+    const page = await context.newPage();
+    await page.goto('/bookings');
+    await expectSignedIn(page);
+    await page.waitForFunction(() => window.Clerk?.loaded === true);
+    const token = await page.evaluate(async () => (await window.Clerk?.session?.getToken()) ?? '');
+    const response = await page.request.get(`${API_URL}/users/me`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.status(), 'GET /users/me as the E2E customer').toBe(200);
+
+    return ((await response.json()) as { id: string }).id;
+  } finally {
+    await context.close();
+  }
+}
+
+test('/admin/users/[userId] draws Pattern B', async ({ adminPage: page, browser }) => {
+  await page.goto(`/admin/users/${await e2eCustomerId(browser)}`);
   await waitForHydration(page, '[data-detail-aside] button');
 
   const layout = await page.evaluate(() => {

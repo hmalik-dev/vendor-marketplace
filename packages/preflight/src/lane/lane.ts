@@ -279,6 +279,17 @@ export function currentBranch(worktreePath: string): string {
   }).trim();
 }
 
+/**
+ * The seeds every lane requires, in order; `db:seed:e2e` follows them, best-effort.
+ *
+ * The committed Playwright suite's seeding contract (VEN-414,
+ * `apps/web/e2e/README.md`), and the order CI's `Migrate and seed` step runs —
+ * `lane.test.ts` holds the two together. `admin-closed-customers.spec.ts` needs
+ * the marketing customers, so a lane seeded without them is not the stack CI
+ * tests.
+ */
+export const LANE_SEEDS = ['db:seed', 'db:seed:marketing'] as const;
+
 const defaultUpDeps: LaneUpDeps = {
   createDatabase: (ticket, worktreePath) =>
     createLaneDatabase(ticket, baseDatabaseUrl(worktreePath)),
@@ -294,7 +305,9 @@ const defaultUpDeps: LaneUpDeps = {
   build: (worktreePath) => pnpmInLane(worktreePath, ['build', '--filter=./packages/*']),
   migrate: (worktreePath) => pnpmInLane(worktreePath, ['db:migrate']),
   seed: async (worktreePath) => {
-    await pnpmInLane(worktreePath, ['db:seed']);
+    for (const script of LANE_SEEDS) {
+      await pnpmInLane(worktreePath, [script]);
+    }
     /*
      * The end-to-end fixtures need Clerk to resolve the accounts' real ids, so
      * they are best-effort: a lane whose ticket needs no browser pass should
