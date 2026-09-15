@@ -171,6 +171,7 @@ export function PlatformSettingsPanel({
               : `New requests and payments over ${formatPrice(settings.maxBookingCents)} are refused, including on requests made before the cap was set. A checkout already open can still complete.`}
           </p>
           <form
+            noValidate
             className="mt-3 flex flex-wrap items-end gap-3"
             onSubmit={(event) => {
               event.preventDefault();
@@ -290,6 +291,7 @@ function HeldVendors({ settings, saving, run }: HeldVendorsProps): React.ReactEl
       )}
 
       <form
+        noValidate
         className="mt-4 flex flex-wrap items-end gap-3"
         onSubmit={(event) => {
           event.preventDefault();

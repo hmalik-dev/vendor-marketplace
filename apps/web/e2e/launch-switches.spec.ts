@@ -1,4 +1,4 @@
-import { test as base, type Browser, type Page } from '@playwright/test';
+import { type Browser, type Page } from '@playwright/test';
 
 import {
   TEST_CARDS,
