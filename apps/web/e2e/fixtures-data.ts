@@ -22,3 +22,19 @@
 
 /** `seed:e2e`'s fixture vendor — the storefront both E2E accounts share. */
 export const E2E_VENDOR_SLUG = 'e2e-test-studio';
+
+/**
+ * A whole-dollar amount the way `formatPrice` prints it — `145000` → `$1,450`.
+ *
+ * Restated rather than imported for the same CJS reason as the slug, and pinned
+ * to the real formatter by `fixtures-data.test.ts`. Whole dollars only: every
+ * figure the paid journey asserts is the seeded package price, and a cents
+ * amount reaching here means the fixture changed under the suite.
+ */
+export function formatWholeDollars(cents: number): string {
+  if (!Number.isInteger(cents) || cents % 100 !== 0) {
+    throw new Error(`formatWholeDollars expects whole dollars in cents, got ${cents}`);
+  }
+
+  return `$${(cents / 100).toLocaleString('en-US')}`;
+}

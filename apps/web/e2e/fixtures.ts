@@ -1,5 +1,7 @@
+import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { promisify } from 'node:util';
 
 import { test as base, expect, type Browser, type Page, type TestInfo } from '@playwright/test';
 
@@ -31,6 +33,51 @@ function workspaceRoot(from: string = __dirname): string {
 
 /** `.auth/` lives at the repository root, beside `scripts/`. */
 export const AUTH_DIR = resolve(workspaceRoot(), '.auth');
+
+const run = promisify(execFile);
+
+/**
+ * `packages/db`'s test-only date control, run as a child process.
+ *
+ * A child rather than an import because specs cannot load that package (see
+ * `fixtures-data.ts`), and a command rather than an API route because moving a
+ * paid event into the past is a write no deployed surface may be able to make.
+ * The script refuses a production database exactly as `seed:e2e` does, and it
+ * inherits this process's environment — under `lane:exec`, the lane database.
+ */
+async function e2eDates(args: readonly string[]): Promise<{ eventDate: string }> {
+  const { stdout } = await run(
+    'pnpm',
+    ['--silent', '--filter', '@vendor-marketplace/db', 'e2e:dates', ...args],
+    { cwd: workspaceRoot() },
+  );
+  const parsed: unknown = JSON.parse(stdout.trim().split('\n').at(-1) ?? '');
+
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !('eventDate' in parsed) ||
+    typeof parsed.eventDate !== 'string'
+  ) {
+    throw new Error(`e2e:dates ${args.join(' ')} printed no eventDate: ${stdout}`);
+  }
+
+  return { eventDate: parsed.eventDate };
+}
+
+/**
+ * A date the E2E vendor has nothing on, chosen at random from a window starting
+ * 120 days out. `seed:e2e` tops up rather than resets, so a fixed date would be
+ * booked by the first run and refused on every run after it.
+ */
+export async function freshEventDate(): Promise<string> {
+  return (await e2eDates(['fresh-date'])).eventDate;
+}
+
+/** Moves a booking's event to yesterday (UTC), so it can be marked complete. */
+export async function shiftBookingIntoPast(bookingId: string): Promise<string> {
+  return (await e2eDates(['shift-past', bookingId])).eventDate;
+}
 
 export type Role = 'customer' | 'vendor' | 'admin';
 
