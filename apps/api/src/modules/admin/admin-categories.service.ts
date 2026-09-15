@@ -44,8 +44,13 @@ export async function setCategoryActive(
   }
 
   await db.transaction(async (tx) => {
+    /*
+     * The update is conditional on the state changing, so of two identical
+     * toggles racing past the check above only one moves the row and logs it.
+     * The loser (or a row deleted meanwhile) answers as the no-op it now is.
+     */
     if (!(await setCategoryActiveRow(tx, categoryId, isActive))) {
-      throw notFound('No category with that id');
+      return;
     }
 
     await insertAdminAction(tx, {
@@ -63,10 +68,11 @@ export async function setCategoryActive(
 /**
  * Persists a complete order: position `n` is written as `display_order = n + 1`.
  *
- * The list must name every category exactly once. One that misses a category
- * (or names one that no longer exists) was built from a screen that is out of
- * date, and applying it would silently push the missing category to wherever
- * its stale number happens to sort — so it is refused with a 409 instead.
+ * Refused with a 409 when the screen it came from is out of date: when
+ * `basedOnCategoryIds` is no longer the current order (another operator moved
+ * something since), or when the new list does not name every category exactly
+ * once. Applying either would silently undo a move or push a missing category
+ * to wherever its stale number happens to sort.
  *
  * One `category_reordered` row per category whose position actually changed,
  * with where it was and where it went; categories the reorder left in place
@@ -81,7 +87,12 @@ export async function reorderCategories(
     const current = await lockCategoryPositions(tx);
     const positions = new Map(current.map((row) => [row.id, row.displayOrder]));
 
+    const stale =
+      input.basedOnCategoryIds.length !== current.length ||
+      current.some((row, index) => input.basedOnCategoryIds[index] !== row.id);
+
     if (
+      stale ||
       input.categoryIds.length !== positions.size ||
       input.categoryIds.some((id) => !positions.has(id))
     ) {

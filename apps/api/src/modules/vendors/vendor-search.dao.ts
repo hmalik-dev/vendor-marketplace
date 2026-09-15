@@ -84,6 +84,7 @@ function filters(query: VendorSearchQuery, exceptCategory = false): SQL[] {
       JOIN categories c ON c.id = vc.category_id
       WHERE vc.vendor_id = vendor_profiles.id
         AND c.slug = ${query.category}
+        AND c.is_active
     )`);
   }
 
@@ -259,7 +260,8 @@ export async function searchVendors(
           })
           .from(vendorCategories)
           .innerJoin(categories, eq(categories.id, vendorCategories.categoryId))
-          .where(inArray(vendorCategories.vendorId, vendorIds))
+          // A card names only the categories still offered (VEN-401).
+          .where(and(inArray(vendorCategories.vendorId, vendorIds), eq(categories.isActive, true)))
           .orderBy(asc(categories.displayOrder));
 
   const categoriesByVendor = new Map<string, VendorCard['categories']>();

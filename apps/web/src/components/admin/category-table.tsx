@@ -53,14 +53,15 @@ export function CategoryTable({
   }
 
   function move(index: number, offset: -1 | 1): Promise<void> {
-    const ids = categories.map((category) => category.id);
+    const basedOn = categories.map((category) => category.id);
+    const ids = [...basedOn];
     const target = index + offset;
     [ids[index], ids[target]] = [ids[target]!, ids[index]!];
 
     return run(async () => {
       await call('/admin/categories/order', {
         method: 'PUT',
-        body: { categoryIds: ids },
+        body: { categoryIds: ids, basedOnCategoryIds: basedOn },
         schema: adminCategoryListSchema,
       });
       await after();

@@ -8,6 +8,7 @@ import {
   signInAs,
   type TestHarness,
 } from '../../testing/test-server.js';
+import { setCategoryActiveRow } from './admin-categories.dao.js';
 
 const ADMIN = 'user_admin';
 const VENDOR = 'user_vendor';
@@ -62,12 +63,16 @@ describe('admin category management', () => {
       payload: { isActive },
     });
 
-  const reorder = (categoryIds: string[], clerkUserId = ADMIN) =>
+  /** `basedOn` defaults to the order as it stands, which is what a fresh screen sends. */
+  const reorder = async (categoryIds: string[], basedOn?: string[]) =>
     harness.app.inject({
       method: 'PUT',
       url: '/admin/categories/order',
-      headers: bearer(clerkUserId),
-      payload: { categoryIds },
+      headers: bearer(ADMIN),
+      payload: {
+        categoryIds,
+        basedOnCategoryIds: basedOn ?? (await categoryRows()).map((row) => row.id),
+      },
     });
 
   /** A published vendor listed under photography and catering, so both have a facet. */
@@ -248,6 +253,17 @@ describe('admin category management', () => {
       expect(response.statusCode).toBe(404);
     });
 
+    /*
+     * The race's losing half: a toggle that read "active" and finds the row
+     * already inactive by the time it writes. PGlite cannot interleave two
+     * requests, so the conditional update is driven directly.
+     */
+    it('moves no row when the category is already in the requested state', async () => {
+      expect(await setCategoryActiveRow(harness.database.db, cateringId, true)).toBe(false);
+      expect(await setCategoryActiveRow(harness.database.db, cateringId, false)).toBe(true);
+      expect(await setCategoryActiveRow(harness.database.db, cateringId, false)).toBe(false);
+    });
+
     it('drops a deactivated category from /categories and brings it back on reactivation', async () => {
       await setActive(cateringId, false);
       const hidden = await harness.app.inject({ method: 'GET', url: '/categories' });
@@ -278,6 +294,68 @@ describe('admin category management', () => {
 
       const after = await harness.app.inject({ method: 'GET', url: '/vendors' });
       expect(after.json().facets.categories).toEqual([{ categoryId: photographyId, count: 1 }]);
+    });
+
+    it('drops it from search cards and stops the category filter matching it', async () => {
+      await publishVendorInBoth();
+      await setActive(cateringId, false);
+
+      const cards = await harness.app.inject({ method: 'GET', url: '/vendors' });
+      expect(
+        (cards.json().items as Array<{ categories: Array<{ slug: string }> }>)[0]!.categories.map(
+          (category) => category.slug,
+        ),
+      ).toEqual(['photography']);
+
+      const filtered = await harness.app.inject({
+        method: 'GET',
+        url: '/vendors?category=catering',
+      });
+      expect(filtered.statusCode).toBe(200);
+      expect(filtered.json().total).toBe(0);
+    });
+
+    /*
+     * The editor cannot draw a hidden category, so it posts the held id back on
+     * every save. Refusing it would lock the vendor out of their storefront.
+     */
+    it('lets a vendor listed under it keep saving their storefront, and keeps the link', async () => {
+      await publishVendorInBoth();
+      await setActive(cateringId, false);
+
+      const saved = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { bio: 'Still two trades.', categoryIds: [photographyId, cateringId] },
+      });
+      expect(saved.statusCode).toBe(200);
+
+      await setActive(cateringId, true);
+      const admin = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/categories',
+        headers: bearer(ADMIN),
+      });
+      expect(
+        (admin.json().items as Array<{ id: string; vendorCount: number }>).find(
+          (item) => item.id === cateringId,
+        )?.vendorCount,
+      ).toBe(1);
+    });
+
+    it('still refuses a hidden category the vendor was not already listed under', async () => {
+      await publishVendorInBoth();
+      const [decor] = (await categoryRows()).filter((row) => row.slug === 'decor');
+      await setActive(decor!.id, false);
+
+      const saved = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { categoryIds: [photographyId, decor!.id] },
+      });
+      expect(saved.statusCode).toBe(400);
     });
   });
 
@@ -336,6 +414,21 @@ describe('admin category management', () => {
       expect(response.statusCode).toBe(409);
       expect(await categoryRows()).toEqual(before);
       expect(await newActions()).toEqual([]);
+    });
+
+    it('refuses a reorder built on an order another operator has since changed', async () => {
+      const seen = (await categoryRows()).map((row) => row.id);
+      const [first, second, third, ...rest] = seen;
+
+      // Operator A swaps the first two.
+      expect((await reorder([second!, first!, third!, ...rest], seen)).statusCode).toBe(200);
+      const afterA = await categoryRows();
+
+      // Operator B, still looking at the original order, moves the third up.
+      const response = await reorder([first!, third!, second!, ...rest], seen);
+
+      expect(response.statusCode).toBe(409);
+      expect(await categoryRows()).toEqual(afterA);
     });
 
     it('refuses a list that names a category twice', async () => {
