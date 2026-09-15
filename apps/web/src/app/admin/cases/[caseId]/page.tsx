@@ -1,14 +1,26 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import type { ReactNode } from 'react';
 import { formatPrice, REPORT_SUBJECT_LABELS, uuidSchema } from '@vendor-marketplace/shared';
-import { CaseConversation } from '@/components/admin/case-conversation';
+import {
+  Absent,
+  AdminCard,
+  DetailHeader,
+  KeyValue,
+  KeyValueList,
+  ScopeChip,
+} from '@/components/admin/admin-detail';
+import { CaseConversation, THREAD_SCOPE } from '@/components/admin/case-conversation';
 import { CaseResolution } from '@/components/admin/case-resolution';
+import { Avatar } from '@/components/ui/avatar';
 import { StatusPill } from '@/components/ui/status-pill';
 import { BOOKING_PRESENTATION, PAYOUT_PRESENTATION } from '@/lib/booking-entries';
 import { getAdminCase } from '@/lib/admin-data';
-import { CASE_ARRIVAL, CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
-import { cn } from '@/lib/utils';
+import {
+  ageInDays,
+  ageTone,
+  CASE_ARRIVAL,
+  CASE_PRESENTATION,
+  caseSubject,
+} from '@/lib/case-presentation';
 
 /*
  * **24-hour, like `/admin/activity` and like Pattern C** (#454).
@@ -41,95 +53,22 @@ const EVENT_DATE = new Intl.DateTimeFormat('en-US', {
 
 /*
  * The payout pill reads `PAYOUT_PRESENTATION`, and the private copy this
- * replaces is exactly the drift that map's own docstring warns about (#454).
- *
- * **It painted `held` red.** `40-states.md` reserves red for failure and the
- * delta's colour table spends it on three things — a payout attempt that
- * failed, a chargeback, a dispute reason. A hold is none of them: it is
- * deliberate, correct, and the frame draws it **gold** (`$2,314.00 · held`).
- * Telling an operator that a working hold has failed is the exact sentence
- * `PAYOUT_PRESENTATION` says it exists to prevent — *"painting it as a failure
- * would tell an operator to fix something that is working."*
- *
- * It also carried a second vocabulary — `On hold` / `Awaiting the sweep` /
- * `Paid out` against the shared `Held` / `Awaiting release` / `Released` — so
- * this screen and `/admin/payments` named one state three different ways
- * between them. That map is exported from `booking-entries.ts` rather than
- * from the client `payment-table.tsx` precisely so a Server Component like this
- * one can read it.
+ * replaces is exactly the drift that map's own docstring warns about (#454):
+ * it painted `held` red, which `40-states.md` reserves for failure, and it
+ * named one state three different ways against `/admin/payments`.
  */
 
 /**
- * A card, and — for the three that make up Pattern C — its region number.
+ * One case, composed to Pattern C (#431, #393).
  *
- * **The numbers are visible on purpose.** The delta stacks the complaint, the
- * booking it froze and the resolve control in the order an operator has to read
- * them to be allowed to act, and puts the control last so it is reachable only
- * past the evidence: *the scroll is half the safeguard and the copy is the
- * other half*. Numbering them is what lets somebody who jumped straight to the
- * bottom see what they skipped — an unnumbered stack in the right order looks
- * identical to one in the wrong order.
- *
- * The chargeback card carries no number. It is conditional — most cases have
- * none — and a numbered sequence that gains and loses a member depending on the
- * row is not a sequence.
- *
- * `3` is drawn on a clay edge, because it is the one that moves money.
- */
-function Card({
-  title,
-  region,
-  children,
-}: {
-  title: string;
-  region?: 1 | 2 | 3;
-  children: ReactNode;
-}): React.ReactElement {
-  return (
-    <section
-      className={cn(
-        'rounded-xl border bg-stone-0 p-4',
-        region === 3 ? 'border-clay-200' : 'border-stone-300',
-      )}
-    >
-      <h2 className="text-label font-semibold tracking-label text-stone-600 uppercase">
-        {region ? <span className="text-stone-900">{region} · </span> : null}
-        {title}
-      </h2>
-      <div className="mt-3">{children}</div>
-    </section>
-  );
-}
-
-/** One labelled figure. `font-mono` on the value, as every money cell is. */
-function Field({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: ReactNode;
-  mono?: boolean;
-}): React.ReactElement {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-label font-semibold tracking-label text-stone-600 uppercase">
-        {label}
-      </span>
-      <span className={mono ? 'font-mono text-base text-stone-900' : 'text-base text-stone-900'}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-/**
- * One case, and where it is resolved (#431).
- *
- * **Card groupings with the actions prominent**, which is what `22-admin.md`
- * asks of a detail view — not the console's table shell, because nothing here is
- * a list. The money card carries every field `adminBookingRowSchema` omits,
- * because this is the one screen where an operator decides who keeps it.
+ * **Three numbered regions, in the order an operator must read them to be
+ * allowed to act**: the complaint, the booking it froze, then the resolve
+ * control. At 1440 they sit in two columns — 1 and 3 on the left, 2 on the
+ * right — but the DOM, and so the reading and tab order, stays 1 → 2 → 3, so
+ * the control is still reachable only past the evidence. Grid placement moves
+ * region 3 up the left column; it does not move it ahead of region 2 for a
+ * keyboard or a screen reader. The numbers stay visible so somebody who jumped
+ * to the bottom can see what they skipped.
  */
 export default async function AdminCasePage({
   params,
@@ -159,253 +98,271 @@ export default async function AdminCasePage({
   }
 
   const booking = supportCase.booking;
+  const sender = supportCase.senderName ?? supportCase.senderEmail ?? 'The card network';
+  const age = ageInDays(supportCase.createdAt, Date.now());
+  const thread = supportCase.subjectType === 'conversation' ? supportCase.subjectId : null;
+  const moneyOnHold = booking?.status === 'disputed' && supportCase.status === 'open';
+
+  /*
+   * Stated rather than left to be inferred. Stripe's outcome and this
+   * platform's disposition are different facts, and an operator who read
+   * "lost" as "settled" would leave a payout frozen for ever.
+   */
+  const chargebackRows = supportCase.stripeDisputeId ? (
+    <>
+      <KeyValue label="Chargeback" kind="mono">
+        {supportCase.stripeDisputeId}
+      </KeyValue>
+      <KeyValue label="Network outcome">
+        {supportCase.networkOutcome ?? <Absent>Still with the network</Absent>}
+      </KeyValue>
+    </>
+  ) : null;
+  const chargebackNote = supportCase.stripeDisputeId ? (
+    <p className="border-t border-stone-150 px-4 py-2.5 text-helper leading-prose text-stone-600">
+      The network&apos;s answer does not resolve the case. Rule in region 3 once you have decided
+      what the platform is doing about it.
+    </p>
+  ) : null;
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-4">
-        <div className="flex flex-wrap items-baseline gap-2.5">
-          <h1 className="display-heading font-mono text-[23px] text-stone-900">
-            {supportCase.reference}
-          </h1>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <DetailHeader
+        crumb={{ label: 'Cases', href: '/admin/cases' }}
+        current={supportCase.reference}
+        heading={caseSubject(supportCase)}
+        pills={
           <StatusPill tone={CASE_PRESENTATION[supportCase.status].tone}>
             {CASE_PRESENTATION[supportCase.status].label}
           </StatusPill>
-        </div>
-        <Link href="/admin/cases" className="text-sm text-stone-600 hover:underline">
-          Back to the queue
-        </Link>
-      </div>
-      <p className="mt-1.5 text-sm text-stone-600">
-        {caseSubject(supportCase)} · filed {FILED.format(supportCase.createdAt)} UTC
-        {supportCase.resolvedAt ? ` · resolved ${FILED.format(supportCase.resolvedAt)} UTC` : ''}
-      </p>
+        }
+        stat={
+          <>
+            <span className="font-mono text-helper">{supportCase.reference}</span> · filed{' '}
+            {FILED.format(supportCase.createdAt)} UTC
+            {supportCase.resolvedAt ? (
+              ` · resolved ${FILED.format(supportCase.resolvedAt)} UTC`
+            ) : (
+              <>
+                {' · '}
+                <span className={`font-semibold ${ageTone(age)}`}>{age}d old</span>
+              </>
+            )}
+          </>
+        }
+      />
 
-      <div className="mt-4 flex flex-col gap-3">
-        <Card region={1} title="The complaint">
-          {/*
-            `whitespace-pre-wrap`: this is what somebody typed into a textarea,
-            and collapsing their paragraphs would make a four-paragraph account
-            of what went wrong into one block an operator has to re-read.
-          */}
-          <p className="text-base leading-prose whitespace-pre-wrap text-stone-900">
-            {supportCase.message}
-          </p>
-          <div className="mt-3.5 grid gap-3 sm:grid-cols-3">
-            <Field
-              label="From"
-              value={
-                supportCase.senderName ??
-                supportCase.senderEmail ?? <span className="text-stone-600">The card network</span>
-              }
-            />
-            <Field
-              label="Reply to"
-              value={supportCase.senderEmail ?? <span className="text-stone-600">—</span>}
-            />
-            <Field label="Arrived by" value={CASE_ARRIVAL[supportCase.origin]} />
-          </div>
-
-          {supportCase.emailFailedAt ? (
-            <p role="alert" className="mt-3 text-sm text-error-500">
-              {/*
-                Two sentences, because the same column means two different
-                things depending on the door (#436).
-
-                A support message *is* the email, so a refused send means the
-                complaint reached nobody. An in-product report is this case row
-                — an operator works it from the queue whether or not any mail
-                went out — so what failed is the notice, and telling an operator
-                the report never arrived while they are reading it would be
-                plainly false.
-              */}
-              {supportCase.origin === 'user_report'
-                ? 'This report is filed, but the notice telling us to look at it was refused by the mail service on '
-                : 'This report never reached the support inbox — the mail service refused it on '}
-              {FILED.format(supportCase.emailFailedAt)} UTC.{' '}
-              {/*
-                Three states, and the first one is why this is not two.
-                **Most cases have no booking at all** — a general question names
-                none — and a sentence about a payout hold being withdrawn is
-                then about money that was never involved, on the screen an
-                operator reads to find out what happened. A browser pass caught
-                exactly that.
-
-                The other two are derived rather than asserted: the unwind that
-                takes a hold back off logs its own failure rather than throwing,
-                so a send failure whose compensation also failed leaves the
-                booking `disputed`, and a fixed "nothing is frozen" would be a
-                claim about money that the code cannot make.
-              */}
-              {!booking
-                ? 'No booking was named, so no payout was ever held.'
-                : booking.payoutStatus === 'held'
-                  ? 'The payout is still on hold — the withdrawal did not go through, so rule on it below.'
-                  : 'The payout hold was withdrawn, so nothing is frozen.'}{' '}
-              {/*
-                A report has no sender to answer — `/reports` deliberately sends
-                the reporter no receipt, so there is no correspondence to
-                continue. What it has is a subject to act on.
-              */}
-              {supportCase.origin === 'user_report'
-                ? 'Work it from here as usual.'
-                : 'Answer the sender from here.'}
-            </p>
-          ) : null}
-          {supportCase.holdRefusal ? (
-            <p role="alert" className="mt-3 text-sm text-error-500">
-              The payout could not be put on hold: {supportCase.holdRefusal}
-            </p>
-          ) : null}
-        </Card>
-
-        {supportCase.subjectType && supportCase.subjectId ? (
-          <Card title="What was reported">
-            <Field
-              label={REPORT_SUBJECT_LABELS[supportCase.subjectType]}
-              value={supportCase.subjectId}
-              mono
-            />
-            {/*
-              The thread's own card, and only for a thread. The other three
-              subjects are already public — a storefront, a review, a published
-              photograph — and the case links nothing an operator cannot
-              already open. A conversation is the one that needs a grant, so it
-              is the one that gets a control.
-            */}
-            {supportCase.subjectType === 'conversation' ? (
-              <div className="mt-3.5">
-                <CaseConversation conversationId={supportCase.subjectId} />
+      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-6 pt-4 pb-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:grid-rows-[auto_1fr]">
+        <AdminCard
+          readOnly
+          title="1 · The complaint"
+          note={
+            <span className="text-stone-600">
+              {CASE_ARRIVAL[supportCase.origin]} · {FILED.format(supportCase.createdAt)} UTC
+            </span>
+          }
+          className="self-start lg:col-start-1 lg:row-start-1"
+        >
+          <div className="px-4 py-3.5">
+            <div data-sender className="mb-2.5 flex items-center gap-2.5">
+              <Avatar name={sender} size="xs" />
+              <div className="min-w-0">
+                <p className="text-action font-semibold text-stone-900">{sender}</p>
+                <p className="text-helper [overflow-wrap:anywhere] text-stone-600">
+                  {supportCase.senderUserId ? (
+                    <>
+                      Account ·{' '}
+                      <span className="font-mono text-xs">{supportCase.senderUserId}</span>
+                    </>
+                  ) : supportCase.origin === 'chargeback' ? (
+                    'Stripe webhook · no one to answer'
+                  ) : (
+                    'Signed out'
+                  )}
+                  {supportCase.senderEmail ? ` · ${supportCase.senderEmail}` : ''}
+                </p>
               </div>
-            ) : null}
-          </Card>
-        ) : null}
-
-        {supportCase.stripeDisputeId ? (
-          <Card title="The chargeback">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Stripe dispute" value={supportCase.stripeDisputeId} mono />
-              <Field
-                label="Network outcome"
-                value={
-                  supportCase.networkOutcome ?? (
-                    <span className="text-stone-600">Still with the network</span>
-                  )
-                }
-              />
             </div>
             {/*
-              Stated rather than left to be inferred. Stripe's outcome and this
-              platform's disposition are different facts, and an operator who
-              read "lost" as "settled" would leave a payout frozen for ever.
+              `whitespace-pre-wrap`: this is what somebody typed into a textarea,
+              and collapsing their paragraphs would make a four-paragraph account
+              of what went wrong into one block an operator has to re-read.
             */}
-            <p className="mt-3 text-sm text-stone-600">
-              The network&apos;s answer does not resolve the case. Rule below once you have decided
-              what the platform is doing about it.
+            <p
+              data-message-inset
+              className="rounded-lg border border-stone-200 bg-stone-50 px-[15px] py-[13px] text-base leading-[1.75] break-words whitespace-pre-wrap text-stone-900"
+            >
+              {supportCase.message}
             </p>
-          </Card>
-        ) : null}
+            <p className="mt-2.5 text-helper text-stone-600">
+              Message shown in full — case bodies are never clamped.{' '}
+              {[...supportCase.message].length.toLocaleString('en-US')} characters.
+            </p>
 
-        {booking ? (
-          <Card region={2} title="The booking it froze">
-            <div className="flex flex-wrap items-baseline gap-2.5">
-              <Link
-                href={`/vendors/${booking.vendorSlug}`}
-                className="text-base font-semibold text-stone-900 hover:underline"
-              >
-                {booking.vendorName}
-              </Link>
-              <span className="text-sm text-stone-600">for {booking.customerName}</span>
-              <StatusPill tone={BOOKING_PRESENTATION[booking.status].tone}>
-                {BOOKING_PRESENTATION[booking.status].label}
-              </StatusPill>
-              <StatusPill tone={PAYOUT_PRESENTATION[booking.payoutStatus].tone}>
-                {PAYOUT_PRESENTATION[booking.payoutStatus].label}
-              </StatusPill>
-            </div>
+            {supportCase.emailFailedAt ? (
+              <p role="alert" className="mt-3 text-sm text-error-500">
+                {/*
+                  Two sentences, because the same column means two different
+                  things depending on the door (#436). A support message *is*
+                  the email, so a refused send means the complaint reached
+                  nobody; an in-product report is this case row, so what failed
+                  is the notice.
+                */}
+                {supportCase.origin === 'user_report'
+                  ? 'This report is filed, but the notice telling us to look at it was refused by the mail service on '
+                  : 'This report never reached the support inbox — the mail service refused it on '}
+                {FILED.format(supportCase.emailFailedAt)} UTC.{' '}
+                {/*
+                  Three states, derived rather than asserted: most cases name no
+                  booking, and an unwind whose compensation failed leaves the
+                  booking `disputed`, so a fixed "nothing is frozen" would be a
+                  claim about money the code cannot make.
+                */}
+                {!booking
+                  ? 'No booking was named, so no payout was ever held.'
+                  : booking.payoutStatus === 'held'
+                    ? 'The payout is still on hold — the withdrawal did not go through, so rule on it below.'
+                    : 'The payout hold was withdrawn, so nothing is frozen.'}{' '}
+                {supportCase.origin === 'user_report'
+                  ? 'Work it from here as usual.'
+                  : 'Answer the sender from here.'}
+              </p>
+            ) : null}
+            {supportCase.holdRefusal ? (
+              <p role="alert" className="mt-3 text-sm text-error-500">
+                The payout could not be put on hold: {supportCase.holdRefusal}
+              </p>
+            ) : null}
+          </div>
+        </AdminCard>
 
-            <div className="mt-3.5 grid gap-3 sm:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-3.5 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+          {booking ? (
+            <AdminCard
+              readOnly
+              title="2 · The booking it froze"
+              note={
+                <StatusPill tone={BOOKING_PRESENTATION[booking.status].tone}>
+                  {BOOKING_PRESENTATION[booking.status].label}
+                </StatusPill>
+              }
+            >
               {/* Parsed as UTC midnight: a calendar date read in local time
                   moves a day for anyone west of UTC. */}
-              <Field
-                label="Event date"
-                value={EVENT_DATE.format(new Date(`${booking.eventDate}T00:00:00Z`))}
-              />
-              <Field label="Total" value={formatPrice(booking.totalAmountCents)} mono />
-              <Field label="Platform fee" value={formatPrice(booking.platformFeeCents)} mono />
-              <Field label="Vendor payout" value={formatPrice(booking.vendorPayoutCents)} mono />
-              <Field
-                label="Refunded"
-                value={
-                  booking.refundAmountCents === null ? (
-                    <span className="text-stone-600">—</span>
+              <p className="px-4 pt-3 text-action text-stone-900">
+                {booking.customerName} ·{' '}
+                {EVENT_DATE.format(new Date(`${booking.eventDate}T00:00:00Z`))} ·{' '}
+                {booking.vendorName}
+              </p>
+              <KeyValueList className="pt-2">
+                <KeyValue label="Booking" kind="mono">
+                  {booking.id}
+                </KeyValue>
+                <KeyValue label="Total" kind="mono">
+                  {formatPrice(booking.totalAmountCents)}
+                </KeyValue>
+                <KeyValue label="Platform fee" kind="mono">
+                  {formatPrice(booking.platformFeeCents)}
+                </KeyValue>
+                <KeyValue label="Vendor payout" kind="mono">
+                  {formatPrice(booking.vendorPayoutCents)}{' '}
+                  <StatusPill tone={PAYOUT_PRESENTATION[booking.payoutStatus].tone}>
+                    {PAYOUT_PRESENTATION[booking.payoutStatus].label}
+                  </StatusPill>
+                </KeyValue>
+                <KeyValue label="Paid at" kind="mono">
+                  {booking.paidAt ? `${FILED.format(booking.paidAt)} UTC` : <Absent />}
+                </KeyValue>
+                <KeyValue label="Payout released" kind="mono">
+                  {booking.payoutReleasedAt ? (
+                    `${FILED.format(booking.payoutReleasedAt)} UTC`
+                  ) : (
+                    <Absent />
+                  )}
+                </KeyValue>
+                <KeyValue label="Refund amount" kind="mono">
+                  {booking.refundAmountCents === null ? (
+                    <Absent />
                   ) : (
                     formatPrice(booking.refundAmountCents)
-                  )
-                }
-                mono
-              />
-              <Field
-                label="Paid"
-                value={
-                  booking.paidAt ? (
-                    FILED.format(booking.paidAt)
-                  ) : (
-                    <span className="text-stone-600">—</span>
-                  )
-                }
-              />
-              <Field
-                label="Payout released"
-                value={
-                  booking.payoutReleasedAt ? (
-                    FILED.format(booking.payoutReleasedAt)
-                  ) : (
-                    <span className="text-stone-600">Not yet</span>
-                  )
-                }
-              />
-              <Field
-                label="Cancelled by"
-                value={booking.cancelledBy ?? <span className="text-stone-600">—</span>}
-              />
-              <Field
-                label="Payment intent"
-                value={booking.stripePaymentIntentId ?? <span className="text-stone-600">—</span>}
-                mono
-              />
-            </div>
-
-            {/*
-              **Red, and called by its own name** — Pattern C (#454).
-
-              The delta draws this field as `Dispute reason` with the value in
-              red, and it is one of exactly three things in the whole delta that
-              earn red: a payout attempt that failed, a chargeback, and this.
-              `40-states.md` reserves red for failure and this is the sentence
-              saying what failed — the reason a card network or a customer gave
-              for the money being in dispute.
-
-              It rendered as a plain `Hold reason`, which is the platform's
-              word for the *consequence* rather than the network's word for the
-              cause; an operator comparing this screen to Stripe's dashboard was
-              reading two names for one field.
-            */}
-            {booking.disputeReason ? (
-              <div className="mt-3.5">
-                <Field
-                  label="Dispute reason"
-                  value={
+                  )}
+                </KeyValue>
+                <KeyValue label="Cancelled by">{booking.cancelledBy ?? <Absent />}</KeyValue>
+                {/*
+                  **Red, and called by its own name** — Pattern C (#454). One of
+                  exactly three things the delta spends red on: a failed payout
+                  attempt, a chargeback, and this — the reason the network or
+                  the customer gave for the money being in dispute.
+                */}
+                {booking.disputeReason ? (
+                  <KeyValue label="Dispute reason">
                     <span className="font-semibold text-error-500">{booking.disputeReason}</span>
-                  }
-                />
-              </div>
-            ) : null}
-          </Card>
-        ) : null}
+                  </KeyValue>
+                ) : null}
+                {chargebackRows}
+                <KeyValue label="Payment intent" kind="mono">
+                  {booking.stripePaymentIntentId ?? <Absent />}
+                </KeyValue>
+              </KeyValueList>
+              {chargebackNote}
+            </AdminCard>
+          ) : chargebackRows ? (
+            <AdminCard readOnly title="The chargeback">
+              <KeyValueList>{chargebackRows}</KeyValueList>
+              {chargebackNote}
+            </AdminCard>
+          ) : null}
 
-        <Card region={3} title="Resolve">
-          <CaseResolution supportCase={supportCase} />
-        </Card>
+          {supportCase.subjectType && supportCase.subjectId && !thread ? (
+            <AdminCard readOnly title="What was reported">
+              {/*
+                The other three subjects are already public — a storefront, a
+                review, a published photograph — so the case names the id and
+                links nothing an operator cannot already open.
+              */}
+              <KeyValueList>
+                <KeyValue label={REPORT_SUBJECT_LABELS[supportCase.subjectType]} kind="mono">
+                  {supportCase.subjectId}
+                </KeyValue>
+              </KeyValueList>
+            </AdminCard>
+          ) : null}
+
+          {/*
+            Pattern C §2. **Not `readOnly`, deliberately**: the thread is
+            read-only, but opening it writes an audit row, so the card carries
+            one control — the deliberate press that is the read.
+          */}
+          <AdminCard
+            title="Reported thread"
+            note={<ScopeChip>Case-scoped read · open cases only</ScopeChip>}
+            className="flex flex-col"
+          >
+            {thread ? (
+              <CaseConversation conversationId={thread} />
+            ) : (
+              <div className="px-4 py-3">
+                <p className="text-sm text-stone-600">
+                  This case names no conversation, so there is no thread to read.
+                </p>
+                <p className="mt-3 border-t border-stone-150 pt-2.5 text-helper leading-prose text-stone-600">
+                  {THREAD_SCOPE}
+                </p>
+              </div>
+            )}
+          </AdminCard>
+        </div>
+
+        <AdminCard
+          tone="clay"
+          title="3 · Resolve"
+          note={moneyOnHold ? 'Moves money. Both positions confirm first.' : undefined}
+          className="self-start lg:col-start-1 lg:row-start-2"
+        >
+          <div className="px-4 py-3.5">
+            <CaseResolution supportCase={supportCase} />
+          </div>
+        </AdminCard>
       </div>
     </div>
   );
