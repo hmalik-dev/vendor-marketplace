@@ -179,7 +179,10 @@ export default async function AdminCasePage({
                   ) : (
                     'Signed out'
                   )}
-                  {supportCase.senderEmail ? ` · ${supportCase.senderEmail}` : ''}
+                  {/* A nameless sender is already named by their address above. */}
+                  {supportCase.senderEmail && supportCase.senderName
+                    ? ` · ${supportCase.senderEmail}`
+                    : ''}
                 </p>
               </div>
             </div>
@@ -339,7 +342,19 @@ export default async function AdminCasePage({
             className="flex flex-col"
           >
             {thread ? (
-              <CaseConversation conversationId={thread} />
+              <>
+                {/*
+                  The id stays on the page without the audited read: an operator
+                  quoting it into a ticket or `/admin/activity` should not have
+                  to open the thread to copy it.
+                */}
+                <KeyValueList className="border-b border-stone-150">
+                  <KeyValue label="Conversation" kind="mono">
+                    {thread}
+                  </KeyValue>
+                </KeyValueList>
+                <CaseConversation conversationId={thread} />
+              </>
             ) : (
               <div className="px-4 py-3">
                 <p className="text-sm text-stone-600">

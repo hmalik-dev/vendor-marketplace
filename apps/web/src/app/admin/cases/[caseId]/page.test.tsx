@@ -174,6 +174,49 @@ describe('AdminCasePage', () => {
     );
   });
 
+  it('prints the reported conversation id without the audited read', async () => {
+    const { container } = await renderCase(supportCase());
+    const thread = cardTitled(container, 'Reported thread');
+
+    expect(
+      [...thread.querySelectorAll('dt')].map((label) => [
+        label.textContent,
+        label.nextElementSibling?.textContent,
+      ]),
+    ).toEqual([['Conversation', '44444444-4444-4444-8444-444444444444']]);
+  });
+
+  it('does not repeat the address of a sender who gave no name', async () => {
+    const { container } = await renderCase(
+      supportCase({
+        origin: 'support_message',
+        senderUserId: null,
+        senderName: null,
+        senderEmail: 'a@example.com',
+      }),
+    );
+
+    expect(container.querySelector('[data-sender]')?.textContent).toBe('Aa@example.comSigned out');
+  });
+
+  it('keeps the mail refusal and the hold refusal in region 1, as alerts', async () => {
+    const { container } = await renderCase(
+      supportCase({
+        origin: 'support_message',
+        emailFailedAt: new Date('2026-09-04T09:13:00Z'),
+        holdRefusal: 'The payout was already released.',
+      }),
+    );
+    const complaint = cardTitled(container, '1 · The complaint');
+
+    expect(
+      [...complaint.querySelectorAll('[role="alert"]')].map((alert) => alert.textContent),
+    ).toEqual([
+      'This report never reached the support inbox — the mail service refused it on Sep 4, 2026, 09:13 UTC. The payout is still on hold — the withdrawal did not go through, so rule on it below. Answer the sender from here.',
+      'The payout could not be put on hold: The payout was already released.',
+    ]);
+  });
+
   it('puts no interactive element inside any read-only card', async () => {
     const { container } = await renderCase(supportCase());
 
