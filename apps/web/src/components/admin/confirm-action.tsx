@@ -3,6 +3,7 @@
 import { AlertDialog } from 'radix-ui';
 import { useId, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 
 export interface ConfirmActionProps {
@@ -193,7 +194,7 @@ export function ConfirmAction({
               <label htmlFor={typedId} className="text-sm font-medium text-stone-900">
                 {typedConfirmation.label}
               </label>
-              <input
+              <Input
                 id={typedId}
                 type="text"
                 autoComplete="off"
@@ -204,7 +205,7 @@ export function ConfirmAction({
                 aria-invalid={typedMismatch}
                 aria-describedby={`${typedId}-state`}
                 onChange={(event) => setTyped(event.target.value)}
-                className="h-9 rounded-md border border-stone-300 bg-stone-0 px-3 text-sm text-stone-900 focus-visible:ring-2 focus-visible:ring-stone-900 focus-visible:outline-none aria-invalid:border-error-500"
+                className="text-sm"
               />
               <p
                 id={`${typedId}-state`}
