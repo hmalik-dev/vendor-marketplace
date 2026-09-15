@@ -266,6 +266,51 @@ describe('SiteHeader', () => {
   });
 
   /*
+   * VEN-413: frame `02` draws `Messages` and `Bookings` as nav links —
+   * `13.5px / 500 / #4A443C` — not as ghost buttons, whose `clay-500` and
+   * semibold `03-components.md` reserves for tertiary actions. Class-level
+   * facts on the split list, since a substring match lets
+   * `min-[90rem]:text-[13.5px]` stand in for a different step. jsdom computes
+   * no styles, so the rendered colour is the browser pass's to verify.
+   */
+  it.each(['Messages', 'Bookings'])('draws %s in the nav-link treatment', async (name) => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+
+    render(await SiteHeader());
+
+    const classes = screen.getByRole('link', { name }).className.split(/\s+/);
+
+    expect(classes).toEqual(
+      expect.arrayContaining(['text-stone-700', 'font-medium', 'min-[90rem]:text-[13.5px]']),
+    );
+    // The 44px target the ghost button carried survives the restyle.
+    expect(classes).toContain('min-h-11');
+    expect(classes).not.toContain('text-clay-500');
+    expect(classes).not.toContain('font-semibold');
+  });
+
+  /*
+   * The cluster gap is 16px at 1440. Frame `02` draws 14, but frames `03`, `04`
+   * and both vendor 1440 frames draw 16 for the same cluster — one frame
+   * against four siblings is transcription drift (D30). 1024 draws 14 in two of
+   * three frames. Below `lg` the one cluster serves both auth states and the
+   * 768 frames split — `14 Landing tablet` 12, `14 Search tablet` 14 — so it
+   * holds the signed-out value; this pin records the ladder, not a ruling there.
+   */
+  it('spaces the signed-in cluster 12 / 14 / 16px up the breakpoints', async () => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+
+    render(await SiteHeader());
+
+    const cluster = screen.getByRole('link', { name: 'Messages' }).parentElement;
+    const classes = cluster?.className.split(/\s+/) ?? [];
+
+    expect(classes).toEqual(expect.arrayContaining(['gap-3', 'lg:gap-3.5', 'min-[90rem]:gap-4']));
+  });
+
+  /*
    * VEN-403: users never access Clerk. The avatar opens the app's own menu,
    * and it holds exactly three rows — nothing that leads to Clerk's profile.
    */
