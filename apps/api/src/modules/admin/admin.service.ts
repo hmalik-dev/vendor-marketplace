@@ -68,6 +68,7 @@ import {
 } from '../vendors/vendors.dao.js';
 import { publishBlockers, unpublishForMissingPackages } from '../vendors/vendors.service.js';
 import { normalizeTagName } from '../tags/tags.service.js';
+import { banOperatorById, hasAnotherLiveOperator } from '../users/users.dao.js';
 import { resolveDispute } from '../payments/payments.service.js';
 import { retryPayoutRelease } from '../payments/payouts.service.js';
 import {
@@ -363,6 +364,10 @@ export async function listVendors(
   };
 }
 
+/** The last-operator refusal on the ban path — the unlocked read and the locked write. */
+export const LAST_OPERATOR_BAN_REFUSAL =
+  'This is the last operator account that can still sign in. Banning it would leave nobody able to reach the console, and only a database change could restore one.';
+
 /**
  * Bans or unbans an account.
  *
@@ -463,6 +468,35 @@ export async function setUserBanned(
     };
   }
 
+  /*
+   * An operator's ban obeys closure's last-operator rule, under closure's lock
+   * (VEN-417). The read answers the common case before anything moves; the
+   * locked write answers the race, where a closure or a second ban committed
+   * between the two. And the flag goes **first** for an operator, as the
+   * retirement does in `closeAccount`: a refusal that arrived after the unwind
+   * would leave a live operator with their requests declined and bookings
+   * refunded for a ban that never happened.
+   */
+  let operatorBan: { profileUnpublished: boolean } | undefined;
+
+  if (target.role === 'admin') {
+    if (!(await hasAnotherLiveOperator(context.db, targetId))) {
+      throw conflict(LAST_OPERATOR_BAN_REFUSAL);
+    }
+
+    const banned = await banOperatorById(context.db, targetId, now);
+
+    if (banned === 'last-operator') {
+      throw conflict(LAST_OPERATOR_BAN_REFUSAL);
+    }
+
+    if (!banned) {
+      throw conflict('That account is already banned');
+    }
+
+    operatorBan = banned;
+  }
+
   const unwound = await unwindAccountBookings(
     context,
     targetId,
@@ -471,13 +505,8 @@ export async function setUserBanned(
     SUSPENSION_UNWIND,
   );
 
-  const { profileUnpublished } = await setBanned(
-    context.db,
-    targetId,
-    profile?.id ?? null,
-    true,
-    now,
-  );
+  const { profileUnpublished } =
+    operatorBan ?? (await setBanned(context.db, targetId, profile?.id ?? null, true, now));
 
   /*
    * Last, and best-effort. Everything above has already happened — cards
