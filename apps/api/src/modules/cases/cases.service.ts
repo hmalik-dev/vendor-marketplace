@@ -1,13 +1,17 @@
 import {
+  addDays,
   formatPrice,
   pageWindow,
   payoutStatusOf,
   REPORT_CASE_TOPIC,
+  REPORTED_THREAD_WINDOW_DAYS,
+  toDateString,
   type AdminCaseBooking,
   type AdminCaseDetail,
   type AdminCasePage,
   type AdminCaseQuery,
   type AdminConversationMessages,
+  type AdminConversationWindow,
   type ReportReason,
   type ReportSubject,
   type SupportTopic,
@@ -26,7 +30,7 @@ import {
   StaleBookingError,
   type BookingContext,
 } from '../payments/payments.service.js';
-import { countMessages, findMessages } from '../messaging/messaging.dao.js';
+import { countMessages, findMessages, type MessageWindow } from '../messaging/messaging.dao.js';
 import { findConversationParties } from '../reports/reports.dao.js';
 import {
   countCaseWidenings,
@@ -705,10 +709,46 @@ export async function resolveCase(
 // --- What the console reads under a case's authority -----------------------
 
 /**
+ * The dates a case lets an operator read of the thread it reports (VEN-412).
+ *
+ * A booking dates the case, so the read is its **event date** — Pattern C's
+ * `12 Sep only`. A report names no event, so the read is the **week ending on
+ * the day it was filed**: the messages that prompted it, and not the
+ * relationship's whole history. Whole UTC days either way, because every stamp
+ * in the thread is printed in UTC and a window drawn in another zone would cut
+ * a day the chip says is included.
+ *
+ * Returns the inclusive calendar days the response states and the half-open
+ * instants the query filters on, from one computation so they cannot disagree.
+ */
+export function reportedThreadWindow(grant: { createdAt: Date; eventDate: string | null }): {
+  window: AdminConversationWindow;
+  bounds: MessageWindow;
+} {
+  if (grant.eventDate !== null) {
+    const from = new Date(`${grant.eventDate}T00:00:00.000Z`);
+
+    return {
+      window: { basis: 'event_date', from: grant.eventDate, to: grant.eventDate },
+      bounds: { from, until: addDays(from, 1) },
+    };
+  }
+
+  const filed = toDateString(grant.createdAt);
+  const until = addDays(new Date(`${filed}T00:00:00.000Z`), 1);
+  const from = addDays(until, -REPORTED_THREAD_WINDOW_DAYS);
+
+  return {
+    window: { basis: 'report_filed', from: toDateString(from), to: filed },
+    bounds: { from, until },
+  };
+}
+
+/**
  * The messages on a reported thread, read **only from the case that names it**
  * and **never without a row saying who read it** (#436).
  *
- * Three constraints, and each one is an acceptance rather than a nicety.
+ * Four constraints, and each one is an acceptance rather than a nicety.
  *
  * 1. **Scoped, not a browse.** The grant is looked up from the conversation —
  *    `findOpenCaseForConversation` — so a caller holding a case id cannot pair
@@ -723,7 +763,10 @@ export async function resolveCase(
  *    swallowing the failure, is how the console comes to have read messages it
  *    has no record of reading — which is the entire reason #434 was this
  *    ticket's prerequisite.
- * 3. **Read only.** There is no counterpart that writes into a thread, and there
+ * 3. **Dated, not the whole history.** The grant also bounds *which* messages:
+ *    `reportedThreadWindow` narrows the read to the case's event date, or to the
+ *    week before the report, and the response names that window (VEN-412).
+ * 4. **Read only.** There is no counterpart that writes into a thread, and there
  *    is not meant to be: the operator reads, then acts through moderation or
  *    through support. A message from the platform inside a private conversation
  *    would make the marketplace a party to it.
@@ -755,6 +798,7 @@ export async function readCaseConversation(
   }
 
   const customerName = fullName(parties.customerFirstName, parties.customerLastName);
+  const { window, bounds } = reportedThreadWindow(grant);
 
   const { rows, total } = await deps.db.transaction(async (tx) => {
     await insertAdminAction(tx, {
@@ -768,12 +812,12 @@ export async function readCaseConversation(
        * not the content of what was moderated, which is what the table's own
        * doc comment calls the difference between a log and a second copy.
        */
-      detail: { caseId: grant.id, reference: grant.reference, page, pageSize },
+      detail: { caseId: grant.id, reference: grant.reference, window, page, pageSize },
     });
 
     const [found, counted] = await Promise.all([
-      findMessages(tx, conversationId, pageSize, (page - 1) * pageSize),
-      countMessages(tx, conversationId),
+      findMessages(tx, conversationId, pageSize, (page - 1) * pageSize, bounds),
+      countMessages(tx, conversationId, bounds),
     ]);
 
     return { rows: found, total: counted };
@@ -785,6 +829,7 @@ export async function readCaseConversation(
     caseReference: grant.reference,
     customerName,
     vendorName: parties.vendorBusinessName,
+    window,
     messages: {
       items: rows.map((row) => ({
         id: row.id,

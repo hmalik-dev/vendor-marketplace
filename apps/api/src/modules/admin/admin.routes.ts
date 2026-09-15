@@ -671,7 +671,9 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
    * **A read, scoped by a case, and logged.** `readCaseConversation` refuses
    * every conversation no *open* case names, so this is not a browse of every
    * thread in the marketplace — it is the report's own evidence, reachable
-   * while the report is being worked and not afterwards. Each successful read
+   * while the report is being worked and not afterwards. It is dated too: only
+   * the case's event date, or the week before a bookingless report, comes back,
+   * and the response names that window (VEN-412). Each successful read
    * writes an `admin_actions` row in the same transaction, which is why #434
    * was this ticket's prerequisite rather than a nicety.
    *

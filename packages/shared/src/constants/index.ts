@@ -1347,6 +1347,19 @@ export const MESSAGE_MAX_LENGTH = 5_000;
  */
 export const MESSAGE_PAGE_SIZE = 50;
 
+/**
+ * How many UTC calendar days of a reported thread an operator reads when the
+ * case has no booking to date it by (VEN-412): the day the report was filed
+ * and the six before it. A case with a booking reads the event date alone, as
+ * Pattern C draws it; a report names no event, so the week leading up to the
+ * report is the nearest thing to "the messages the case is about".
+ */
+export const REPORTED_THREAD_WINDOW_DAYS = 7;
+
+/** What dated a reported-thread read: the booking's event, or the report itself. */
+export const REPORTED_THREAD_WINDOW_BASES = ['event_date', 'report_filed'] as const;
+export type ReportedThreadWindowBasis = (typeof REPORTED_THREAD_WINDOW_BASES)[number];
+
 /** Largest guest count accepted anywhere a party size is captured. */
 export const MAX_GUEST_COUNT = 100_000;
 

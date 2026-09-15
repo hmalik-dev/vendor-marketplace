@@ -8,7 +8,7 @@ import {
   KeyValueList,
   ScopeChip,
 } from '@/components/admin/admin-detail';
-import { CaseConversation, THREAD_SCOPE } from '@/components/admin/case-conversation';
+import { CaseConversation, THREAD_CHIP, THREAD_SCOPE } from '@/components/admin/case-conversation';
 import { CaseResolution } from '@/components/admin/case-resolution';
 import { Avatar } from '@/components/ui/avatar';
 import { StatusPill } from '@/components/ui/status-pill';
@@ -332,30 +332,18 @@ export default async function AdminCasePage({
           ) : null}
 
           {/*
-            Pattern C §2. **Not `readOnly`, deliberately**: the thread is
-            read-only, but opening it writes an audit row, so the card carries
-            one control — the deliberate press that is the read.
+            Pattern C §2. With a thread, the component draws the whole card:
+            its chip prints the dates the read was limited to, and only the
+            response knows them (VEN-412).
           */}
-          <AdminCard
-            title="Reported thread"
-            note={<ScopeChip>Case-scoped read · open cases only</ScopeChip>}
-            className="flex flex-col"
-          >
-            {thread ? (
-              <>
-                {/*
-                  The id stays on the page without the audited read: an operator
-                  quoting it into a ticket or `/admin/activity` should not have
-                  to open the thread to copy it.
-                */}
-                <KeyValueList className="border-b border-stone-150">
-                  <KeyValue label="Conversation" kind="mono">
-                    {thread}
-                  </KeyValue>
-                </KeyValueList>
-                <CaseConversation conversationId={thread} />
-              </>
-            ) : (
+          {thread ? (
+            <CaseConversation conversationId={thread} />
+          ) : (
+            <AdminCard
+              title="Reported thread"
+              note={<ScopeChip>{THREAD_CHIP}</ScopeChip>}
+              className="flex flex-col"
+            >
               <div className="px-4 py-3">
                 <p className="text-sm text-stone-600">
                   This case names no conversation, so there is no thread to read.
@@ -364,8 +352,8 @@ export default async function AdminCasePage({
                   {THREAD_SCOPE}
                 </p>
               </div>
-            )}
-          </AdminCard>
+            </AdminCard>
+          )}
         </div>
 
         <AdminCard

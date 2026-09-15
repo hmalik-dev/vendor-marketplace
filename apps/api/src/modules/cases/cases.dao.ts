@@ -371,10 +371,26 @@ export async function insertSupportCase(
 export async function findOpenCaseForConversation(
   db: AppDatabase,
   conversationId: string,
-): Promise<{ id: string; reference: string } | null> {
+): Promise<{
+  id: string;
+  reference: string;
+  createdAt: Date;
+  eventDate: string | null;
+} | null> {
+  /*
+   * The case's filing time and its booking's event date ride along because the
+   * grant also decides *which* messages it grants (VEN-412): the event date
+   * when there is a booking, the week before the report when there is not.
+   */
   const rows = await db
-    .select({ id: supportCases.id, reference: supportCases.reference })
+    .select({
+      id: supportCases.id,
+      reference: supportCases.reference,
+      createdAt: supportCases.createdAt,
+      eventDate: bookings.eventDate,
+    })
     .from(supportCases)
+    .leftJoin(bookings, eq(bookings.id, supportCases.bookingId))
     .where(
       and(
         eq(supportCases.status, 'open'),
