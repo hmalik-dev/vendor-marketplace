@@ -20,7 +20,7 @@ afterEach(() => {
   cleanup();
 });
 
-function renderRail(avatarUrl: string | null) {
+function renderRail(avatarUrl: string | null, blockerCount = 0) {
   return render(
     <RequestSummaryRail
       vendor={{
@@ -43,7 +43,7 @@ function renderRail(avatarUrl: string | null) {
       primaryLabel="Continue to review"
       onPrimary={vi.fn()}
       submitting={false}
-      blockerCount={0}
+      blockerCount={blockerCount}
       askHref="/vendors/kessler-co"
     />,
   );
@@ -90,5 +90,23 @@ describe('RequestSummaryRail vendor avatar', () => {
     cleanup();
 
     expect(renderRail(null).container.innerHTML).toBe(failedHtml);
+  });
+});
+
+/*
+ * VEN-420. Frame `22`'s blocker dot is `width:16px; border:1.5px` in a document
+ * with no box-sizing reset, so it paints 19px; border-box painted 16px. jsdom
+ * does no layout, so the box model is pinned by class on the split list.
+ */
+describe('RequestSummaryRail blocker dot', () => {
+  it('paints the dot content-box, as the frame does', () => {
+    renderRail(null, 2);
+
+    const dot = screen.getByText('2 fields to fix').querySelector('span[aria-hidden="true"]');
+    const classes = dot?.className.split(' ') ?? [];
+
+    expect(classes).toContain('size-4');
+    expect(classes).toContain('border-[1.5px]');
+    expect(classes).toContain('box-content');
   });
 });

@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { EmptyState, EmptyStateGlyph } from './empty-state';
+import { EmptyState, EmptyStateGlyph, SearchEmptyGlyph } from './empty-state';
 
 afterEach(cleanup);
 
@@ -133,6 +133,40 @@ describe('EmptyStateGlyph', () => {
     expect(circles[1]?.className).toContain('border-dashed');
     expect(circles[1]?.className).toContain('border-stone-400');
     expect(circles[1]?.className).toContain('left-[22px]');
+  });
+});
+
+/**
+ * VEN-420. The screens document ships no `*` box-sizing reset, so frames
+ * `18`–`20` paint a `width:36px; border:1.5px` circle as a 39px ring. Tailwind's
+ * border-box default paints it 36px, 3px short. jsdom does no layout, so the box
+ * model is pinned by class, on the split list so a longer class cannot satisfy
+ * it; the painted size is measured in the browser against the frame.
+ */
+describe('the glyphs paint their rings content-box, as the frames do', () => {
+  function rings(container: HTMLElement): string[][] {
+    return Array.from(container.querySelectorAll('span span'))
+      .map((ring) => ring.className.split(' '))
+      .filter((classes) => classes.includes('border-[1.5px]'));
+  }
+
+  it('EmptyStateGlyph: its one ring, and not its filled disc', () => {
+    const { container } = render(<EmptyStateGlyph />);
+    const [disc] = Array.from(container.querySelectorAll('span span'));
+    const glyphRings = rings(container);
+
+    expect(glyphRings).toHaveLength(1);
+    expect(glyphRings[0]).toContain('box-content');
+    expect(disc?.className.split(' ')).not.toContain('box-content');
+  });
+
+  it('SearchEmptyGlyph: both rings', () => {
+    const { container } = render(<SearchEmptyGlyph />);
+
+    expect(rings(container)).toHaveLength(2);
+    for (const classes of rings(container)) {
+      expect(classes).toContain('box-content');
+    }
   });
 });
 

@@ -210,11 +210,11 @@ export function RangeDropdown({
           }}
         />
         <span
-          className="absolute top-[-4px] -ml-[5px] size-[11px] rounded-full border-2 border-clay-400 bg-stone-0"
+          className="absolute top-[-4px] -ml-[5px] box-content size-[11px] rounded-full border-2 border-clay-400 bg-stone-0"
           style={{ left: `${offset(draft.min, bounds.min, bounds)}%` }}
         />
         <span
-          className="absolute top-[-4px] -mr-[5px] size-[11px] rounded-full border-2 border-clay-400 bg-stone-0"
+          className="absolute top-[-4px] -mr-[5px] box-content size-[11px] rounded-full border-2 border-clay-400 bg-stone-0"
           style={{ right: `${100 - offset(draft.max, bounds.max, bounds)}%` }}
         />
       </div>

@@ -222,8 +222,13 @@ has none, so it cannot disagree — and the siblings under D30 are the paired
 empty-state marks, all loose at 0.61–0.64 D: `18` 24/38, `27 Search — no
 results` 21/33, `19`/`20` 22/36, `27 Vendor dashboard` 19/31 (`19`'s second
 ring is solid, not dashed). `EmptyStateGlyph` and `SearchEmptyGlyph` take those
-offsets but paint their rings border-box, 3px short — a separate surface,
-filed as **VEN-420**. The logo's `OFFSET_RATIO = 0.45` (#449) is the
+offsets and, since **VEN-420**, paint their rings `box-content` too — as do the
+`RangeDropdown` thumbs (`28 Dropdown variants`, 11px + 2px → 15px) and the
+request rail's blocker dot (`22`, 16px + 1.5px → 19px). **A fixed-size bordered
+circle in a content-box frame is `box-content`**; the search bar's pin and
+`PageLoader`'s ring are explicit `box-border` because the frame sets
+`box-sizing:border-box` on them (line 1693 inline; the loader's class rule at
+line 48). **Grep the element's own style for `box-sizing` before either call.** The logo's `OFFSET_RATIO = 0.45` (#449) is the
 working mark and does not move; a pass reading the two marks' different offsets
 is looking at this ruling.
 
