@@ -302,7 +302,19 @@ table is corrected as transcription drift under D30 — the same direction its
   on the screen where it is least done.
 
 Neither is a finding and neither is re-litigated per screen.
-`admin-delta-parity.test.ts` pins both with the ruling beside them.
+
+**Two console screens from the admin delta, ruled on landing (VEN-399).**
+
+- **The booking detail's Money card carries `Payout model` and `Completed`**,
+  which the delta's event-order row list omits, and a `Payout` state row where
+  `payout_released_at` has not fired. VEN-399's acceptance names both columns,
+  and a released-or-not reading is the one question the list cannot answer.
+  Additive rows in the event order, not a recomposition.
+- **`/admin/requests` lights no segment when no group is chosen.** The bare
+  route lists every status; `Live` is a filter, not the default, so drawing it
+  lit would misstate the rows. A pass reading an unlit control on the bare URL
+  is looking at this ruling.
+  `admin-delta-parity.test.ts` pins both with the ruling beside them.
 
 **The body is 13.5px; the frames' bodies are 16px (VEN-389, measured
 2026-09-14).** `globals.css` declares `body { font-size: var(--text-base) }`.
