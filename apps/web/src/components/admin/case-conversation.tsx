@@ -38,14 +38,14 @@ export const THREAD_CHIP = 'Case-scoped read';
  * is always true of the window without inventing which days it covers.
  */
 export const THREAD_SCOPE =
-  'Read-only, and scoped to the dates the case is about. Operators see those messages, not the relationship’s whole history.';
+  "Read-only, and scoped to the dates the case is about. Operators see those messages, not the relationship's whole history.";
 
 /** Pattern C's footer, for the window the server actually applied. */
 export const WINDOW_SCOPE: Record<ThreadWindow['basis'], string> = {
   event_date:
-    'Read-only, and scoped to the event date. Operators see the messages the case is about, not the relationship’s whole history.',
+    "Read-only, and scoped to the event date. Operators see the messages the case is about, not the relationship's whole history.",
   report_filed:
-    'Read-only, and scoped to the week the report was filed. Operators see the messages the case is about, not the relationship’s whole history.',
+    "Read-only, and scoped to the week the report was filed. Operators see the messages the case is about, not the relationship's whole history.",
 };
 
 /** `12 Sep only` for one day; `6–12 Sep`, or `29 May – 4 Jun` across a month. */

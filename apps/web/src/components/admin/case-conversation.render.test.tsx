@@ -35,7 +35,7 @@ function thread(window: WireAdminConversationMessages['window']): WireAdminConve
           senderId: '66666666-6666-4666-8666-666666666666',
           senderName: 'Maya Rivera',
           senderSide: 'customer',
-          content: 'Hi — we’re at the venue, are you close?',
+          content: 'Hi — we are at the venue, are you close?',
           readAt: null,
           createdAt: new Date('2026-09-12T14:06:00Z'),
         },
@@ -59,7 +59,7 @@ async function openThread(window: WireAdminConversationMessages['window']): Prom
   );
 
   fireEvent.click(screen.getByRole('button', { name: 'Read the reported thread' }));
-  await screen.findByText('Hi — we’re at the venue, are you close?');
+  await screen.findByText('Hi — we are at the venue, are you close?');
   /* Under the case on screen: its report, not the thread's oldest, dates the window. */
   expect(request).toHaveBeenCalledWith(
     `/admin/conversations/${CONVERSATION_ID}/messages?caseId=${CASE_ID}`,
@@ -70,14 +70,15 @@ async function openThread(window: WireAdminConversationMessages['window']): Prom
 }
 
 describe('CaseConversation', () => {
-  it('prints the served event date in the chip and the frame’s footer', async () => {
+  it("prints the served event date in the chip and the frame's footer", async () => {
     const card = await openThread({ basis: 'event_date', from: '2026-09-12', to: '2026-09-12' });
 
     expect(card.querySelector('[data-card-band]')?.textContent).toBe(
       'Reported threadCase-scoped read · 12 Sep only',
     );
+    /* The frame's line, with the straight apostrophe `31-content-voice.md` rules. */
     expect(card.textContent).toContain(
-      'Read-only, and scoped to the event date. Operators see the messages the case is about, not the relationship’s whole history.',
+      "Read-only, and scoped to the event date. Operators see the messages the case is about, not the relationship's whole history.",
     );
   });
 
