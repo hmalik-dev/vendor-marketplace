@@ -1,25 +1,29 @@
 ---
 name: hero-jump-row-is-hardcoded-not-live-categories
-description: Landing hero "Or jump straight to" row and footer Browse column never reflect category deactivation, by design
+description: SUPERSEDED — as of VEN-401 landing on main (fb696a1a), the hero jump row and footer Browse column now filter against live categories via offeredJumpCategories
 metadata:
   type: project
 ---
 
-`LANDING_JUMP_CATEGORY_SLUGS` (`packages/shared/src/constants/index.ts`) is a
-compile-time `as const` list of 4 slugs (photography, catering, entertainment,
-beauty), ruled by the account holder 2026-09-06 (#419). `apps/web/src/app/page.tsx`'s
-hero "Or jump straight to" row and `site-footer.tsx`'s Browse column both read
-this constant directly — never `getCategories()` — so deactivating one of those
-4 categories from `/admin/tags` will **never** remove it from either surface, no
-matter how long you wait. This is separate from, and not fixed by,
-[[revalidatetag-categories-does-not-bust-public-cache]]'s 60s-revalidate fix.
+**Superseded 2026-09-15.** This memory previously said the landing hero "Or
+jump straight to" row and `site-footer.tsx`'s Browse column read
+`LANDING_JUMP_CATEGORY_SLUGS` directly and could never reflect a deactivation.
+That is no longer true: `apps/web/src/lib/jump-categories.ts` now exports
+`offeredJumpCategories(categories)`, which both `page.tsx` and
+`site-footer.tsx` call with the live `getCategories()` result — it filters the
+ruled 4-slug list down to whichever of those are still active (an empty
+`categories` array, meaning the taxonomy read degraded, keeps all four rather
+than reading as "every category hidden").
 
-**Why:** the constant is a deliberately fixed "4 popular categories" shortcut
-list, intentionally decoupled from live taxonomy state — not a caching bug.
+**Verified live, signed-out, 1440x900, 2026-09-15:** deactivating Entertainment
+from `/admin/tags` removed it from both the hero row (`Photography · Catering
+· Beauty`) and the footer Browse column within the normal ~60-90s revalidate
+window ([[revalidatetag-categories-does-not-bust-public-cache]], also updated);
+reactivating restored it to its original third position in both. No further
+waiting was needed once the cache window elapsed — this is fixed, not a
+still-open gap.
 
-**How to apply:** when a ticket's AC says "a deactivated category leaves the
-landing category pills," test the "Browse by category" grid (driven by
-`getCategories()`, correctly updates within ~60-90s) separately from the hero
-jump row and footer Browse column (hardcoded, structurally cannot update).
-Report the hardcoded ones as a scope gap/FAILED against such an AC rather than
-waiting longer — no amount of waiting will change them.
+**How to apply:** don't re-file "the hero row is hardcoded" against this
+codebase. If a future pass finds it stale again, that's a regression against
+`offeredJumpCategories`, worth naming as such, not a rediscovery of a known
+limitation.
