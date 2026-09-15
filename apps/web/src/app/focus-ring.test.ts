@@ -73,37 +73,7 @@ describe('the product’s focus ring reaches every control', () => {
   });
 
   /*
-   * Clerk's user button is the one control the rule above cannot reach: Clerk
-   * ships a box-shadow of its own and wins the cascade, so the trigger drew a
-   * 4px clay ring at 50% with no offset layer at all.
-   */
-  it('restates the ring for Clerk’s user button, which outranks the base rule', () => {
-    const rule = ruleFor('\\.cl-userButtonTrigger:focus-visible');
-
-    for (const utility of RING) {
-      expect(rule).toContain(utility);
-    }
-
-    expect(rule).toContain('outline-none');
-  });
-
-  /*
-   * Load-bearing, and the reason two earlier attempts failed: Clerk injects
-   * its styles into a later cascade layer, and a later layer beats an earlier
-   * one whatever the selector's specificity. Putting this back inside
-   * `@layer base` silently restores the bug.
-   */
-  it('keeps Clerk’s overrides outside @layer base, where they can win', () => {
-    const base = globalsCss.match(/@layer base \{[\s\S]*?\n\}/)?.[0] ?? '';
-
-    expect(base).not.toBe('');
-    expect(base).not.toContain('cl-userButtonTrigger');
-    expect(globalsCss).toContain('.cl-userButtonTrigger:focus-visible');
-  });
-
-  /*
-   * #195. The auth form's three Clerk-styled controls had the same defect as
-   * the user button — a 4px clay at 50% with no offset layer. The nodes Clerk
+   * #195. The auth form's three Clerk-styled controls drew Clerk's own ring — a 4px clay at 50% with no offset layer. The nodes Clerk
    * does *not* style itself (its footer link, its logo link) already take the
    * base rule correctly, which is what proves the layer is the cause rather
    * than the selector.
@@ -190,10 +160,19 @@ describe('the product’s focus ring reaches every control', () => {
   });
 
   it('names tokens rather than hexes, so the palette stays one source', () => {
-    const rule = ruleFor('\\.cl-userButtonTrigger:focus-visible');
+    /*
+     * The auth field's rule, since the user button that used to carry this
+     * check is gone (VEN-403). Its comments cite issues as `#383`, which reads
+     * as a hex, so only the declarations are scanned — and they are asserted
+     * present, so an empty body cannot pass.
+     */
+    const declarations = ruleFor(
+      '\\[data-auth-screen\\] \\.cl-formFieldInput\\.cl-formFieldInput:focus-visible',
+    ).replace(/\/\*[\s\S]*?\*\//g, '');
 
+    expect(declarations).toContain('ring-clay-400/15');
     // #B4552F is clay-400 and #F8F5EF is stone-50; either appearing here would
     // be the second source of truth `layout.tsx` warns about.
-    expect(rule).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(declarations).not.toMatch(/#[0-9a-f]{3,8}/i);
   });
 });

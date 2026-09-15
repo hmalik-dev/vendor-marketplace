@@ -184,12 +184,12 @@ export function NotificationBell({ initial = [] }: NotificationBellProps): React
            * 360px, bounded by the space actually to the panel's left.
            *
            * The panel hangs off the **bell's** right edge, not the screen's,
-           * and the bell is not the last thing in the header: `UserButton` and
-           * the drawer trigger follow it. So the room available is the viewport
-           * less everything to its right — at 390 that is gap-3 (12) + the
-           * 44px user button + gap-3 (12) + the 44px drawer trigger less its
-           * `-mr-2.5` (34) + the 16px gutter = 118px, rounded to 8rem for the
-           * margin of error a Clerk-rendered control deserves.
+           * and the bell is not the last thing in the header: `AccountMenu`'s
+           * avatar and the drawer trigger follow it. So the room available is
+           * the viewport less everything to its right — at 390 that is gap-3
+           * (12) + the 44px avatar trigger + gap-3 (12) + the 44px drawer
+           * trigger less its `-mr-2.5` (34) + the 16px gutter = 118px, rounded
+           * to 8rem for margin.
            *
            * A first attempt used `100vw - 2.75rem`, one gutter — which is the
            * bound that would be right if the panel were flush to the screen

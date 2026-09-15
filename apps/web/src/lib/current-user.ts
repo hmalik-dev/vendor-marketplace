@@ -162,8 +162,21 @@ export async function redirectIfSignedIn(returnTo?: string | null): Promise<void
  * the header runs on `/suspended` too, and redirecting from there would loop.
  */
 export async function readRoleForChrome(): Promise<UserRole | null> {
+  return (await readUserForChrome())?.role ?? null;
+}
+
+/**
+ * The whole account record, under the same never-throw rule as
+ * `readRoleForChrome`.
+ *
+ * The header's account control draws the name and photograph from it (VEN-403)
+ * — from our own row rather than Clerk's session claims, so the header never
+ * shows a value the app does not hold. Still decoration: an unreadable record
+ * costs the avatar its initials, not the page.
+ */
+export async function readUserForChrome(): Promise<WireUser | null> {
   try {
-    return (await getCurrentUser())?.role ?? null;
+    return await getCurrentUser();
   } catch (error) {
     if (isNavigationSignal(error)) {
       throw error;

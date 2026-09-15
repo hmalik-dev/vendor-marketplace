@@ -28,6 +28,13 @@ export const AVATAR_SIZES = {
    */
   row: 32,
   /*
+   * The signed-in header's account control, frame `02 Search`: a 32px circle
+   * with a 14px monogram. The same fill as `row`, a different glyph — see
+   * `GLYPH_SIZES` — so it is its own step. The 44px target is the trigger's,
+   * not the circle's (VEN-403).
+   */
+  header: 32,
+  /*
    * The vendor card's monogram. Frame `02 Search` draws a 32px circle with a
    * 2px ring *outside* it, and the frames are content-box, so it occupies 36.
    * `box-border` below takes the ring out of the number instead, which is why
@@ -89,6 +96,8 @@ const GLYPH_SIZES: Partial<Record<AvatarSize, number>> = {
    * others — the same half-pixel disagreement `sm` is pinned for.
    */
   row: 13,
+  // Frame `02 Search` sets `font-size:14px` on the header's 32px circle.
+  header: 14,
   /*
    * Frame `03` sets the identity monogram at 23px in a 60px circle — 0.38,
    * not the 0.42 the default fraction would give, which would render 25.2.

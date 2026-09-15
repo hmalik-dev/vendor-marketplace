@@ -8,6 +8,27 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
 }));
 
+/*
+ * Clerk's sign-out control clones its one child with a click handler that signs
+ * out to `redirectUrl`. The mock does the same against a spy, so removing the
+ * wrapper or changing where it lands fails a test.
+ */
+const signOut = vi.fn();
+
+vi.mock('@clerk/nextjs', async () => {
+  const { cloneElement } = await import('react');
+
+  return {
+    SignOutButton: ({
+      children,
+      redirectUrl,
+    }: {
+      children: React.ReactElement<{ onClick?: () => void }>;
+      redirectUrl?: string;
+    }) => cloneElement(children, { onClick: () => signOut(redirectUrl) }),
+  };
+});
+
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
@@ -18,6 +39,7 @@ vi.mock('next/link', () => ({
 
 afterEach(() => {
   cleanup();
+  signOut.mockClear();
 });
 
 /**
@@ -48,6 +70,28 @@ describe('SignedInDrawer', () => {
       );
     },
   );
+
+  /*
+   * VEN-403: at narrow widths the avatar's account menu is out of reach behind
+   * the hamburger, so the drawer carries every row that menu offers.
+   */
+  it('carries the account menu’s rows: dashboard, support and sign out', async () => {
+    const user = userEvent.setup();
+
+    render(<SignedInDrawer dashboardLabel={DASHBOARD_LABEL_BY_ROLE.vendor} />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+
+    const rows = screen.getByRole('navigation', { name: 'Menu' }).querySelectorAll('li > *');
+
+    expect([...rows].map((row) => [row.textContent, row.getAttribute('href')])).toEqual([
+      ['Dashboard', '/dashboard'],
+      ['Messages', '/messages'],
+      ['Contact support', '/support'],
+      ['Sign out', null],
+    ]);
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
+  });
 
   it('never writes "Dashboard" for a customer', async () => {
     const user = userEvent.setup();

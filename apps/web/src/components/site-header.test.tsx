@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cloneElement, type ReactNode } from 'react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 
@@ -15,8 +15,21 @@ vi.mock('next/navigation', () => ({
 vi.mock('@clerk/nextjs', () => ({
   Show: ({ when, children }: { when: AuthState; children: ReactNode }) =>
     when === authState ? children : null,
-  UserButton: () => <button type="button">Open user button</button>,
+  /*
+   * Clerk's sign-out control clones its one child with a click handler that
+   * signs out to `redirectUrl`; the mock does the same against a spy. The
+   * account menu itself is the app's own and renders for real (VEN-403).
+   */
+  SignOutButton: ({
+    children,
+    redirectUrl,
+  }: {
+    children: React.ReactElement<{ onClick?: () => void }>;
+    redirectUrl?: string;
+  }) => cloneElement(children, { onClick: () => signOut(redirectUrl) }),
 }));
+
+const signOut = vi.fn();
 
 /*
  * The header fetches the taxonomy because frame `02` puts the query bar in it.
@@ -48,9 +61,16 @@ vi.mock('@/components/messaging/notification-bell', () => ({
  * must follow the record.
  */
 let currentRole: 'customer' | 'vendor' | 'admin' | null = null;
+let currentUser: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatarUrl: string | null;
+} = { firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', avatarUrl: null };
 
 vi.mock('@/lib/current-user', () => ({
-  readRoleForChrome: async () => currentRole,
+  readUserForChrome: async () =>
+    currentRole === null ? null : { ...currentUser, role: currentRole },
 }));
 
 const { SiteHeader } = await import('./site-header');
@@ -60,6 +80,13 @@ describe('SiteHeader', () => {
     authState = 'signed-out';
     pathname = '/';
     currentRole = null;
+    signOut.mockClear();
+    currentUser = {
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      email: 'ada@example.com',
+      avatarUrl: null,
+    };
   });
 
   afterEach(() => {
@@ -117,7 +144,7 @@ describe('SiteHeader', () => {
       'href',
       'http://localhost:3000/sign-up',
     );
-    expect(screen.queryByRole('button', { name: 'Open user button' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Account menu' })).toBeNull();
   });
 
   /*
@@ -190,7 +217,7 @@ describe('SiteHeader', () => {
    * `20-customer-bookings-hub.md` requires that "the word 'dashboard' appears
    * nowhere in the UI".
    */
-  it('offers messages, the role-named dashboard link and the user button when signed in', async () => {
+  it('offers messages, the role-named dashboard link and the account menu when signed in', async () => {
     authState = 'signed-in';
     currentRole = 'customer';
 
@@ -205,7 +232,7 @@ describe('SiteHeader', () => {
       'href',
       'http://localhost:3000/dashboard',
     );
-    expect(screen.getByRole('button', { name: 'Open user button' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Account menu' })).toBeDefined();
     expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
   });
@@ -236,6 +263,87 @@ describe('SiteHeader', () => {
       'href',
       'http://localhost:3000/dashboard',
     );
+  });
+
+  /*
+   * VEN-403: users never access Clerk. The avatar opens the app's own menu,
+   * and it holds exactly three rows — nothing that leads to Clerk's profile.
+   */
+  it.each([
+    ['customer' as const, 'Bookings'],
+    ['vendor' as const, 'Dashboard'],
+    ['admin' as const, 'Admin'],
+  ])('opens a %s account menu of exactly dashboard, support and sign out', async (role, label) => {
+    authState = 'signed-in';
+    currentRole = role;
+
+    render(await SiteHeader());
+    // jsdom has no PointerEvent, and Radix opens a menu from the keyboard too.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu' }), { key: 'Enter' });
+
+    const menu = screen.getByRole('menu');
+    const items = within(menu).getAllByRole('menuitem');
+
+    expect(items.map((item) => item.textContent)).toEqual([label, 'Contact support', 'Sign out']);
+    expect(items[0]).toHaveProperty('href', 'http://localhost:3000/dashboard');
+    expect(items[1]).toHaveProperty('href', 'http://localhost:3000/support');
+    expect(items[2]?.tagName).toBe('BUTTON');
+
+    // Sign out lands signed out on `/` — criterion 2's half that jsdom can see.
+    fireEvent.click(items[2]!);
+    expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
+  });
+
+  /*
+   * #435's ruling for an ARIA menu button: Tab closes the panel and parks focus
+   * on the trigger, rather than Radix swallowing the key inside an open menu.
+   */
+  it('closes the account menu on Tab and returns focus to the avatar', async () => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+
+    render(await SiteHeader());
+    const trigger = screen.getByRole('button', { name: 'Account menu' });
+    // A keyboard user is on the trigger when they open it; `keyDown` alone
+    // does not put them there.
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(screen.getByRole('menu')).toBeDefined();
+
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Tab' });
+
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    // Radix settles focus after the panel unmounts, on a later tick.
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  /*
+   * Our record names the avatar, never Clerk's claims. Frame `02` draws one
+   * initial on the clay or sage fill; a fresh account with no name falls back
+   * to its email address.
+   */
+  it('draws the avatar from our record: initials without a photo, the photo with one', async () => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+    currentUser = { firstName: '', lastName: '', email: 'pat@example.com', avatarUrl: null };
+
+    const initials = render(await SiteHeader());
+    const monogram = initials.container.querySelector('[data-slot="avatar-fallback"]');
+
+    expect(monogram?.textContent).toBe('P');
+    expect(monogram?.className).toMatch(/\b(?:bg-clay-150|bg-sage-100)\b/);
+
+    cleanup();
+
+    currentUser = { ...currentUser, avatarUrl: 'https://cdn.example.com/pat.jpg' };
+    const photo = render(await SiteHeader());
+    const trigger = photo.getByRole('button', { name: 'Account menu' });
+
+    expect(trigger.querySelector('img')?.getAttribute('src')).toBe(
+      'https://cdn.example.com/pat.jpg',
+    );
+    expect(trigger.querySelector('[data-slot="avatar-fallback"]')).toBeNull();
   });
 
   /*
