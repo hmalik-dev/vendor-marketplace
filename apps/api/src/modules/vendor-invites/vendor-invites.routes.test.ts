@@ -205,6 +205,58 @@ describe('the vendor gate', () => {
       });
     });
 
+    it('gates the row as saved when a vendor webhook row lands after the snapshot said customer', async () => {
+      await setGate(true);
+      const identity = freshIdentity('customer');
+      const snapshot = harness.clerkUsers.get(identity)!;
+      const get = harness.clerkUsers.get.bind(harness.clerkUsers);
+      let landed: Promise<unknown> | null = null;
+
+      /*
+       * The account holder rewrote `unsafeMetadata.role` to customer after the
+       * sign-up queued a vendor `user.created`. The webhook's row is written
+       * while the acceptance reads the snapshot — queued ahead of the
+       * acceptance's own transaction on the one PGlite connection.
+       */
+      harness.clerkUsers.get = (id: string) => {
+        if (id === identity && landed === null) {
+          // `.execute()` starts it now; a Drizzle builder otherwise runs only when awaited.
+          landed = harness.database.db
+            .insert(users)
+            .values({
+              clerkUserId: identity,
+              email: snapshot.email,
+              role: 'vendor',
+              firstName: 'Grace',
+              lastName: 'Hopper',
+            })
+            .execute();
+        }
+        return get(id);
+      };
+
+      try {
+        const response = await accept(identity);
+
+        expect(response.statusCode).toBe(403);
+        expect(response.json()).toMatchObject({ error: 'vendor_not_invited' });
+      } finally {
+        harness.clerkUsers.get = get;
+      }
+
+      await landed;
+      const [row] = await harness.database.db
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(eq(users.clerkUserId, identity));
+      expect(row?.role).toBe('vendor');
+      const held = await harness.database.db
+        .select()
+        .from(legalAcceptances)
+        .where(eq(legalAcceptances.acceptedByUserId, row!.id));
+      expect(held).toHaveLength(0);
+    });
+
     it('never makes a webhook-created row for an un-invited vendor usable', async () => {
       await setGate(true);
       const vendor = freshIdentity('vendor');
@@ -300,6 +352,44 @@ describe('the vendor gate', () => {
       ]);
     });
 
+    it('arrives already invited when the address was invited first', async () => {
+      await invite('early@example.com');
+
+      await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        payload: application('early@example.com'),
+      });
+
+      const [row] = await harness.database.db.select().from(vendorApplications);
+      expect(row?.status).toBe('invited');
+    });
+
+    it('applies with a session’s own address, replacing what a stranger filed under it', async () => {
+      const owner = freshIdentity('vendor', 'owner@example.com');
+      await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        payload: { ...application('owner@example.com'), businessName: 'Squatter Co' },
+      });
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        headers: bearer(owner),
+        payload: { ...application('someone-else@example.com'), businessName: 'Owner Florals' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const rows = await harness.database.db.select().from(vendorApplications);
+      expect(rows.map((row) => [row.email, row.businessName])).toEqual([
+        ['owner@example.com', 'Owner Florals'],
+      ]);
+    });
+
     it('stops one caller after six applications in an hour', async () => {
       const visitor = fromANewVisitor();
 
@@ -389,6 +479,26 @@ describe('the vendor gate', () => {
         decision: 'invite',
       });
       expect(again.statusCode).toBe(409);
+    });
+
+    it('refuses to decline an applicant whose address is already invited', async () => {
+      await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        payload: application('both@example.com'),
+      });
+      await invite('both@example.com');
+      await harness.database.db.update(vendorApplications).set({ status: 'new' });
+      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+
+      const decided = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
+        decision: 'decline',
+      });
+
+      expect(decided.statusCode).toBe(409);
+      const [stored] = await harness.database.db.select().from(vendorApplications);
+      expect(stored?.status).toBe('new');
     });
 
     it('declines an applicant without inviting or emailing them', async () => {

@@ -91,4 +91,5 @@
 - [The data-rights export is hand-enumerated](data-rights-export-is-hand-enumerated.md) — a new `users` PII column reaches the console and not the subject's own DSAR file
 - [Contested-email repair trusts Clerk absence](contested-email-repair-trusts-clerk-absence.md) — VEN-386 PASS; waiter handoff picks the stalest pending row
 - [Admin category writes](admin-category-writes.md) — VEN-401 PASS; toggle can double-write its audit row under a concurrent repeat
+- [Vendor invite gate checks before the row it creates](vendor-invite-gate-checks-before-the-row-it-creates.md) — VEN-406: snapshot role judged, webhook row committed; waitlist email squattable
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — public repo: traces carry Clerk cookies, stripe-listen.log carries whsec; masking never reaches artifacts

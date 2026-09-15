@@ -3,10 +3,12 @@ import { currentUser } from '@clerk/nextjs/server';
 import { BRAND_NAME, pageTitle, SUPPORT_PATH } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { AuthScreen } from '@/components/auth/auth-screen';
 import { Button } from '@/components/ui/button';
 import { VendorApplicationForm } from '@/components/vendors/vendor-application-form';
-import { redirectVendorToDashboard } from '@/lib/current-user';
+import { DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
+import { readIdentityForSupport } from '@/lib/current-user';
 
 export const metadata: Metadata = { title: pageTitle('Apply to join as a vendor') };
 
@@ -21,8 +23,16 @@ export const dynamic = 'force-dynamic';
  * the vendor photograph, because it is the same moment of the same journey.
  */
 export default async function VendorApplyPage(): Promise<React.ReactElement> {
-  // A vendor who already has an account has nothing to apply for.
-  await redirectVendorToDashboard();
+  /*
+   * A vendor who already has an account has nothing to apply for. Read the way
+   * `/support` reads it, never through the suspension redirect: the session the
+   * gate sends here holds no accepted account, and `/users/me` answers it
+   * `TERMS_REQUIRED` — which, on a gate-exempt path, would fall through to
+   * `/suspended`.
+   */
+  if ((await readIdentityForSupport())?.role === 'vendor') {
+    redirect(DASHBOARD_PATH_BY_ROLE.vendor);
+  }
 
   const session = await currentUser();
   const sessionEmail =

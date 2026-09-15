@@ -7,9 +7,8 @@ import type { UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, unauthorized, validationFailed } from '../../lib/errors.js';
 import { findUserByClerkIdIncludingRetired } from '../users/users.dao.js';
-import { displayName, normalizeRole, syncUserFromClerk } from '../users/users.service.js';
-import { markInviteAccepted } from '../vendor-invites/vendor-invites.dao.js';
-import { assertVendorMayJoin } from '../vendor-invites/vendor-invites.service.js';
+import { displayName, syncUserFromClerk } from '../users/users.service.js';
+import { admitVendor } from '../vendor-invites/vendor-invites.service.js';
 import type { ClerkUserSnapshot } from '../users/users.service.js';
 import {
   findAcceptanceOfVersion,
@@ -165,16 +164,12 @@ export async function acceptTerms(
       (row) => row.document === 'terms_of_service',
     );
 
-    if (firstAcceptance) {
-      await assertVendorMayJoin(db, existing.role, existing.email);
-    }
-
     await db.transaction(async (tx) => {
-      await insertAcceptance(tx, termsAcceptanceRow(existing, context));
-
-      if (firstAcceptance && existing.role === 'vendor') {
-        await markInviteAccepted(tx, existing.email);
+      if (firstAcceptance) {
+        await admitVendor(tx, existing.role, existing.email);
       }
+
+      await insertAcceptance(tx, termsAcceptanceRow(existing, context));
     });
 
     return readTermsStatus(db, existing.id);
@@ -186,13 +181,6 @@ export async function acceptTerms(
    * becomes a held connection.
    */
   const snapshot = await loadSnapshot();
-  const role = normalizeRole(snapshot.roleHint);
-
-  /*
-   * The vendor gate (VEN-406), before anything is written: a refused vendor
-   * leaves no account, no acceptance and no profile behind.
-   */
-  await assertVendorMayJoin(db, role, snapshot.email);
 
   const userId = await db.transaction(async (tx) => {
     const user = await syncUserFromClerk(tx, snapshot);
@@ -201,11 +189,16 @@ export async function acceptTerms(
       throw new Error('legal acceptance: the account row could not be resolved');
     }
 
-    await insertAcceptance(tx, termsAcceptanceRow(user, context));
+    /*
+     * The vendor gate (VEN-406), on the row as saved rather than the snapshot:
+     * a `user.created` webhook landing mid-request can make that row the one
+     * `syncUserFromClerk` returns, with the role the sign-up first chose. A
+     * refusal rolls the whole transaction back, so no account this path wrote
+     * and no acceptance survives it.
+     */
+    await admitVendor(tx, user.role, user.email);
 
-    if (user.role === 'vendor') {
-      await markInviteAccepted(tx, user.email);
-    }
+    await insertAcceptance(tx, termsAcceptanceRow(user, context));
 
     return user.id;
   });

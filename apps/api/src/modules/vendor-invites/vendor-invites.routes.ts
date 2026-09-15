@@ -67,7 +67,12 @@ export const vendorApplicationRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     /* 200, not 201: the caller gets nothing addressable, and a repeat is the same answer. */
-    async (request) => submitVendorApplication(app.db, request.body),
+    async (request) =>
+      submitVendorApplication(
+        app.db,
+        request.body,
+        request.clerkIdentity ? (await request.clerkIdentity.loadSnapshot()).email : null,
+      ),
   );
 };
 

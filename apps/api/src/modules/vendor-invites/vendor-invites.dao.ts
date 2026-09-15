@@ -33,6 +33,25 @@ export async function findInviteByEmail(
   return rows[0] ?? null;
 }
 
+/**
+ * The invite for an address, locked for the caller's transaction, so a revoke
+ * racing an acceptance either lands first (and the acceptance is refused) or
+ * waits until the account and its stamp have committed (and is refused as used).
+ */
+export async function lockInviteByEmail(
+  tx: AppDatabase,
+  email: string,
+): Promise<VendorInviteRow | null> {
+  const rows = await tx
+    .select()
+    .from(vendorInvites)
+    .where(eq(vendorInvites.email, inviteKey(email)))
+    .for('update')
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
 /** Stamps the first use of an invite; a later account on the same address changes nothing. */
 export async function markInviteAccepted(tx: AppDatabase, email: string): Promise<void> {
   await tx
@@ -97,15 +116,39 @@ export async function findAdminInvites(db: AppDatabase): Promise<AdminVendorInvi
   }));
 }
 
-/** Adds the applicant to the waitlist; a second application from the same address writes nothing. */
-export async function insertApplicationIfAbsent(
+/**
+ * Adds the applicant to the waitlist. A second application from the same
+ * address writes nothing — unless `verified`, where the address is the
+ * caller's own session email: then it replaces details still waiting on a
+ * decision, so a stranger who filed first under that address cannot speak for
+ * its owner.
+ */
+export async function upsertApplication(
   db: AppDatabase,
   input: VendorApplicationInput,
+  status: VendorApplicationStatus,
+  verified: boolean,
 ): Promise<void> {
-  await db
+  const insert = db
     .insert(vendorApplications)
-    .values({ ...input, email: inviteKey(input.email) })
-    .onConflictDoNothing({ target: vendorApplications.email });
+    .values({ ...input, email: inviteKey(input.email), status });
+
+  if (!verified) {
+    await insert.onConflictDoNothing({ target: vendorApplications.email });
+    return;
+  }
+
+  await insert.onConflictDoUpdate({
+    target: vendorApplications.email,
+    set: {
+      businessName: input.businessName,
+      category: input.category,
+      city: input.city,
+      message: input.message,
+      updatedAt: sql`now()`,
+    },
+    setWhere: eq(vendorApplications.status, 'new'),
+  });
 }
 
 export async function findAdminApplications(db: AppDatabase): Promise<AdminVendorApplicationRow[]> {

@@ -19,18 +19,23 @@ import type { EmailGateway } from '../../lib/email.js';
 import { AppError, conflict, notFound } from '../../lib/errors.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
-import { readPlatformSwitches } from '../platform-settings/platform-settings.service.js';
+import {
+  readPlatformSwitches,
+  readPlatformSwitchesUncached,
+} from '../platform-settings/platform-settings.service.js';
 import {
   deleteUnusedInvite,
   findAdminApplications,
   findAdminInvites,
   findInviteByEmail,
   findInviteById,
-  insertApplicationIfAbsent,
   insertInviteIfAbsent,
   inviteKey,
   lockApplication,
+  lockInviteByEmail,
+  markInviteAccepted,
   setApplicationStatus,
+  upsertApplication,
 } from './vendor-invites.dao.js';
 
 /**
@@ -60,29 +65,28 @@ export function vendorNotInvited(): AppError {
 }
 
 /**
- * Refuses a vendor account for an address nobody invited, while the gate is on.
+ * Refuses a vendor account for an address nobody invited, while the gate is on,
+ * and stamps the invite of one that was.
  *
- * Called **before** anything is written, so a refusal leaves no account, no
- * acceptance and no profile. Any role but `vendor` passes untouched.
+ * Runs **first** in the transaction that creates the account, so a refusal
+ * rolls back to no account, no acceptance and no profile, and the invite row is
+ * locked until that transaction ends — a concurrent revoke cannot slip between
+ * the check and the account. Any role but `vendor` passes untouched.
  */
-export async function assertVendorMayJoin(
-  db: AppDatabase,
-  role: UserRole,
-  email: string,
-): Promise<void> {
+export async function admitVendor(tx: AppDatabase, role: UserRole, email: string): Promise<void> {
   if (role !== 'vendor') {
     return;
   }
 
-  const { vendorInviteOnly } = await readPlatformSwitches(db);
+  // Read from the row: a transaction handle is new per call, so the cache could only miss.
+  const { vendorInviteOnly } = await readPlatformSwitchesUncached(tx);
+  const invite = vendorInviteOnly ? await lockInviteByEmail(tx, email) : null;
 
-  if (!vendorInviteOnly) {
-    return;
-  }
-
-  if (!(await findInviteByEmail(db, email))) {
+  if (vendorInviteOnly && !invite) {
     throw vendorNotInvited();
   }
+
+  await markInviteAccepted(tx, email);
 }
 
 /** `GET /vendor-applications/gate`. */
@@ -95,12 +99,19 @@ export async function readVendorSignUpGate(db: AppDatabase): Promise<VendorSignU
 /**
  * `POST /vendor-applications`. The same receipt whether the address was new or
  * already waiting, so the form answers nothing about who else has applied.
+ *
+ * `sessionEmail` is the caller's Clerk address when they hold a session — the
+ * refused vendor the gate sends here — and it replaces whatever the body says.
  */
 export async function submitVendorApplication(
   db: AppDatabase,
-  input: VendorApplicationInput,
+  body: VendorApplicationInput,
+  sessionEmail: string | null,
 ): Promise<VendorApplicationReceipt> {
-  await insertApplicationIfAbsent(db, input);
+  const input = sessionEmail === null ? body : { ...body, email: sessionEmail };
+  // Already invited by address: the application arrives decided, so it cannot be declined past the invite.
+  const invited = (await findInviteByEmail(db, input.email)) !== null;
+  await upsertApplication(db, input, invited ? 'invited' : 'new', sessionEmail !== null);
 
   return { received: true };
 }
@@ -253,6 +264,11 @@ export async function decideVendorApplication(
     if (decision === 'decline') {
       if (row.status === 'declined') {
         throw conflict('That application is already declined');
+      }
+
+      // An invite sent by address still admits them; declining would only hide it.
+      if (await lockInviteByEmail(tx, row.email)) {
+        throw conflict('That address is already invited; revoke the invite instead');
       }
 
       await setApplicationStatus(tx, { id: row.id }, 'declined');
