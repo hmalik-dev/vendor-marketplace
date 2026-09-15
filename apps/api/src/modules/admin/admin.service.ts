@@ -280,7 +280,7 @@ export function deriveVendorStatus(row: {
   return row.stripeOnboarded ? 'paused' : 'review';
 }
 
-function toVendorRow(row: AdminVendorProjection): AdminVendorRow {
+export function toVendorRow(row: AdminVendorProjection): AdminVendorRow {
   return {
     id: row.id,
     userId: row.userId,

@@ -46,6 +46,13 @@ import {
   adminTagSuggestionRowSchema,
   adminVendorFacetsSchema,
   adminVendorRowSchema,
+  adminAvailabilityLockSchema,
+  adminLockBookingHolderSchema,
+  adminLockRequestHolderSchema,
+  adminVendorDetailProfileSchema,
+  adminVendorDetailSchema,
+  adminVendorNotificationSchema,
+  adminVendorPortfolioItemSchema,
   vendorCardSchema,
   vendorProfileDetailSchema,
   vendorReviewsPageSchema,
@@ -401,6 +408,40 @@ export const wireAdminVendorPageSchema = paginatedSchema(wireAdminVendorRowSchem
   ...wideningShape,
 });
 export type WireAdminVendorPage = z.infer<typeof wireAdminVendorPageSchema>;
+
+/**
+ * `GET /admin/vendors/:vendorId` (VEN-380). Four dates cross the wire — the
+ * vendor's `createdAt`, a request holder's `expiresAt`, and each notification's
+ * `createdAt` and `readAt` — and the portfolio's object keys resolve to URLs.
+ */
+export const wireAdminVendorDetailSchema = adminVendorDetailSchema.extend({
+  vendor: adminVendorDetailProfileSchema.extend({ createdAt: z.coerce.date() }),
+  portfolio: z.array(
+    adminVendorPortfolioItemSchema.extend({
+      imageUrl: requiredImageUrl(),
+      thumbnailUrl: imageUrl(),
+    }),
+  ),
+  locks: z.array(
+    adminAvailabilityLockSchema.extend({
+      holders: z.array(
+        z.discriminatedUnion('kind', [
+          adminLockBookingHolderSchema,
+          adminLockRequestHolderSchema.extend({ expiresAt: z.coerce.date().nullable() }),
+        ]),
+      ),
+    }),
+  ),
+  notifications: adminVendorDetailSchema.shape.notifications.extend({
+    items: z.array(
+      adminVendorNotificationSchema.extend({
+        createdAt: z.coerce.date(),
+        readAt: z.coerce.date().nullable(),
+      }),
+    ),
+  }),
+});
+export type WireAdminVendorDetail = z.infer<typeof wireAdminVendorDetailSchema>;
 
 export const wireAdminVendorFacetsSchema = adminVendorFacetsSchema;
 export type WireAdminVendorFacets = z.infer<typeof wireAdminVendorFacetsSchema>;
