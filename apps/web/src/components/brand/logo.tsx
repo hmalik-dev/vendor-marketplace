@@ -72,14 +72,24 @@ function wordmarkGap(size: number): number {
 /**
  * Wordmark font size, as a multiple of the diameter.
  *
- * `design-plan/02-brand-and-logo.md` states this as a law — "wordmark size
- * 1.60 D" — so it is not a ticket's to change. Frames `08`/`09`/`10`/`11` pair
- * a 15px mark with a 23px wordmark, which is 1.533 and renders 24px here; ten
- * desktop frames do the same, while frame `01 Landing` draws the 24px that 1.6
- * produces. The frames and the plan therefore disagree, and adjudicating that
- * is a design pass rather than a parity fix. Recorded against #118.
+ * `design-plan/02-brand-and-logo.md` states 1.60 D, which is what a diameter
+ * with no entry in `WORDMARK_SIZES` falls back to.
  */
 const WORDMARK_SIZE_RATIO = 1.6;
+/**
+ * The wordmark sizes the frames actually draw, in px, by diameter — the size
+ * equivalent of `WORDMARK_GAPS`, and for the same reason: the frames round to
+ * whole pixels, so no one ratio satisfies them.
+ *
+ * D=15 → 23px (VEN-388). Every 1440 header in the screens document pairs a 15px
+ * mark with a 23px wordmark except `01 Landing`, which draws the 24px that
+ * 1.60 D produces — one frame against nine is D30's outlier, and frame `13`'s
+ * admin header is among the nine. The other diameters are left to the ratio
+ * until a ticket corroborates theirs.
+ */
+export const WORDMARK_SIZES: Partial<Record<number, number>> = {
+  15: 23,
+};
 /**
  * The diameters the design calls for, by context. Named so no surface picks a
  * logo size by eye.
@@ -93,12 +103,9 @@ export const LOGO_SIZES = {
    * frame that measures it.
    *
    * The wordmark still derives from `WORDMARK_SIZE_RATIO`, so it renders 27.2px
-   * against the frame's 25. The honest reason that is deferred rather than
-   * fixed is not that 1.60 D is a law — it is that there is no `WORDMARK_SIZES`
-   * table. The frames draw three ratios (D=15 → 23px, D=17 → 25px, the cover
-   * chrome's D=20 → 32px), so no single one satisfies them, which is the same
-   * argument `WORDMARK_GAPS` exists to answer for the gap. Minting the size
-   * equivalent is #118's, not this ticket's.
+   * against the frame's 25. `WORDMARK_SIZES` now exists (VEN-388) but holds
+   * only the D=15 entry that ticket corroborated; adding D=17 restyles the
+   * footer, which is #118's to measure.
    */
   marketingFooter: 17,
   appIcon: 24,
@@ -208,7 +215,7 @@ export function Logo({
         <span
           data-testid="logo-wordmark"
           className={cn('font-display leading-none', tokens.wordmark)}
-          style={{ fontSize: `${size * WORDMARK_SIZE_RATIO}px` }}
+          style={{ fontSize: `${WORDMARK_SIZES[size] ?? size * WORDMARK_SIZE_RATIO}px` }}
         >
           {BRAND_NAME}
         </span>

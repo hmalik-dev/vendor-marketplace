@@ -1,10 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, render, screen } from '@testing-library/react';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { deltaFrame } from '@/testing/design-frames';
-import { Logo, LOGO_SIZES, WORDMARK_GAPS } from './logo';
+import { Logo, LOGO_SIZES, WORDMARK_GAPS, WORDMARK_SIZES } from './logo';
 
 /** The six diameters design/design-plan/02-brand-and-logo.md specifies. */
 const EVERY_SIZE = Object.values(LOGO_SIZES);
@@ -356,5 +356,34 @@ describe('the mark is one construction in all three places', () => {
     expect(Number((stroke as RegExpExecArray)[1]) - Number((fill as RegExpExecArray)[1])).toBe(
       diameter * 0.45,
     );
+  });
+  /*
+   * VEN-388. The desktop header's wordmark, read off every lockup in the
+   * screens document that draws a 15px mark: the size most of them agree on is
+   * the one built, so a single outlier frame (`01 Landing`'s 24px) cannot move
+   * it and a re-cut that changes the majority fails here.
+   */
+  it('renders the D=15 wordmark at the size most frames draw', () => {
+    const design = join(process.cwd(), '../../design');
+    const screensFile = readdirSync(design).find((entry) => entry.endsWith('Screens.dc.html'));
+    const screens = readFileSync(join(design, screensFile ?? ''), 'utf8');
+    const sizes = [
+      ...screens.matchAll(
+        /width:15px;height:15px;border-radius:50%;background:#B4552F[\s\S]{0,400}?font-size:(\d+)px[^>]*>\{\{ brandName/g,
+      ),
+    ].map((match) => Number(match[1]));
+    const tally = new Map<number, number>();
+    for (const size of sizes) {
+      tally.set(size, (tally.get(size) ?? 0) + 1);
+    }
+    const [majority, count] = [...tally.entries()].sort((a, b) => b[1] - a[1])[0] ?? [0, 0];
+
+    expect(count, `D=15 lockups by wordmark size: ${JSON.stringify([...tally])}`).toBeGreaterThan(
+      sizes.length / 2,
+    );
+    expect(WORDMARK_SIZES[LOGO_SIZES.desktopHeader]).toBe(majority);
+
+    render(<Logo size={LOGO_SIZES.desktopHeader} />);
+    expect(screen.getByTestId('logo-wordmark').style.fontSize).toBe(`${majority}px`);
   });
 });

@@ -23,8 +23,17 @@ export interface AdminHeaderProps {
  * operator in this header.
  */
 export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactElement {
+  /*
+   * `box-content` (VEN-388): the frame document ships no reset, so `.hd`'s
+   * `height:64px` is the content box and its 1px hairline sits below it —
+   * 65px outer, one pixel taller than a border-box header. Every frame draws
+   * `.hd` that way, so the value is corroborated rather than read once. The
+   * console shell is a flex column, not `app-shell`'s calc, so the extra
+   * pixel comes out of the pane rather than scrolling the page; the site
+   * header keeps its border-box height for exactly that calc.
+   */
   return (
-    <header className="flex h-(--header-height) shrink-0 items-center justify-between border-b border-stone-800 bg-stone-900 px-8">
+    <header className="box-content flex h-(--header-height) shrink-0 items-center justify-between border-b border-stone-800 bg-stone-900 px-8">
       <div className="flex shrink-0 items-center gap-[9px]">
         <Link href="/admin" className="rounded-sm">
           {/*
@@ -36,12 +45,9 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
 
             `LOGO_SIZES.desktopHeader` rather than the 15 it happens to hold:
             that map exists "so no surface picks a logo size by eye", and every
-            other header obeys it. The trade this makes is recorded, so a later
-            parity pass does not re-find it as new — 15 renders the mark at the
-            frame's exact 22 x 15 and the wordmark at 24px against the frame's
-            23px, because `WORDMARK_SIZE_RATIO` is a plan law (1.60 D) that ten
-            desktop frames contradict at 1.533. That disagreement is #118's, and
-            `logo.tsx` already adjudicates it the same way.
+            other header obeys it. 15 renders the mark at the frame's exact
+            22 x 15 and, since VEN-388, the wordmark at the frame's 23px —
+            `WORDMARK_SIZES` states it.
           */}
           <Logo tone="dark" size={LOGO_SIZES.desktopHeader} />
         </Link>

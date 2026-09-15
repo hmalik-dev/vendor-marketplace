@@ -6,6 +6,7 @@ import {
   toDateString,
 } from '@vendor-marketplace/shared';
 import type {
+  AdminActivityActorList,
   AdminActivityPage,
   AdminActivityQuery,
   AdminBanResult,
@@ -85,6 +86,7 @@ import {
   countAdminVendors,
   countVendorWidenings,
   countVendorsHoldingTag,
+  findAdminActionActors,
   findAdminActions,
   findAdminBookings,
   findAdminCustomers,
@@ -197,7 +199,7 @@ export async function listActivity(
   query: AdminActivityQuery,
 ): Promise<AdminActivityPage> {
   const offset = offsetOf(query);
-  /* `AdminActivityQuery` already carries the three filter fields the DAO reads. */
+  /* `AdminActivityQuery` already carries the filter fields the DAO reads. */
   const [rows, total] = await Promise.all([
     findAdminActions(db, query, query.pageSize, offset),
     countAdminActions(db, query),
@@ -231,6 +233,18 @@ export async function listActivity(
     total,
     page: query.page,
     pageSize: query.pageSize,
+  };
+}
+
+/** The `Actor ▾` facet: every operator the log names, by name (VEN-388). */
+export async function listActivityActors(db: AppDatabase): Promise<AdminActivityActorList> {
+  const actors = await findAdminActionActors(db);
+
+  return {
+    actors: actors.map((actor) => ({
+      id: actor.id,
+      name: fullName(actor.firstName, actor.lastName),
+    })),
   };
 }
 

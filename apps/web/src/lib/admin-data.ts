@@ -1,5 +1,10 @@
 import { auth } from '@clerk/nextjs/server';
-import { adminCategoryListSchema, type AdminCategoryList } from '@vendor-marketplace/shared';
+import {
+  adminActivityActorListSchema,
+  adminCategoryListSchema,
+  type AdminActivityActorList,
+  type AdminCategoryList,
+} from '@vendor-marketplace/shared';
 import { redirect } from 'next/navigation';
 import type { z } from 'zod';
 import { ApiClientError, apiRequest } from './api-client';
@@ -251,6 +256,11 @@ export async function getAdminTagSuggestions(query: string): Promise<WireAdminTa
 
 export async function getAdminActivity(query: string): Promise<WireAdminActivityPage> {
   return adminRead(`/admin/activity${query}`, wireAdminActivityPageSchema);
+}
+
+/** The operators the log names — the `Actor ▾` facet (VEN-388). No dates, so no wire schema. */
+export async function getAdminActivityActors(): Promise<AdminActivityActorList> {
+  return adminRead('/admin/activity/actors', adminActivityActorListSchema);
 }
 
 /** The launch switches and the vendors whose payouts are held (VEN-404). */

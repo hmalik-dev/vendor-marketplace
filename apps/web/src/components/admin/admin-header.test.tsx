@@ -63,4 +63,18 @@ describe('AdminHeader', () => {
     const chip = screen.getByText('Admin');
     expect(chip.parentElement?.className).toContain('shrink-0');
   });
+  /*
+   * VEN-388. Frame `13`'s `.hd` is `height:64px` plus a 1px bottom border in a
+   * document with no box-sizing reset, so it is 65px outer. `box-content` on
+   * the same token is what reproduces that; a border-box header is 1px short.
+   * jsdom resolves no height, so the class-level fact is what is asserted.
+   */
+  it('sizes the bar as content-box, so the hairline sits outside the header height', () => {
+    render(<AdminHeader email={EMAIL} name="Admin" />);
+
+    const classes = screen.getByRole('banner').className.split(/\s+/);
+    expect(classes).toContain('box-content');
+    expect(classes).toContain('h-(--header-height)');
+    expect(classes).toContain('border-b');
+  });
 });

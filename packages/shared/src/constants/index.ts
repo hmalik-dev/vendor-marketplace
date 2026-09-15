@@ -1310,6 +1310,15 @@ export const ADMIN_ACTION_SUBJECTS = [
 export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
 
 /**
+ * The activity feed's date-range facet (VEN-388): how far back from the moment
+ * of the request. Relative windows rather than two date fields, because the
+ * question an operator brings is "what happened recently", and the database's
+ * clock decides the cutoff so a pasted URL means the same window when reopened.
+ */
+export const ADMIN_ACTIVITY_RANGES = ['24h', '7d', '30d'] as const;
+export type AdminActivityRange = (typeof ADMIN_ACTIVITY_RANGES)[number];
+
+/**
  * Days in the dashboard's `This week` strip.
  *
  * Seven, and **rolling from today** rather than snapped to a calendar week:

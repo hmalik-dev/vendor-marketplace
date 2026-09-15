@@ -43,7 +43,12 @@ export function oneOf<T extends string>(value: RawParam, allowed: readonly T[]):
  * silently clearing the field.
  */
 export function boundedText(value: RawParam): string | undefined {
-  const trimmed = first(value)?.trim();
+  /*
+   * NUL removed (VEN-388): Postgres refuses it in a text parameter with 22021,
+   * so `?q=%00` reached the API and rendered the 500 page. No search term
+   * means one.
+   */
+  const trimmed = first(value)?.replaceAll('\0', '').trim();
 
   return trimmed ? trimmed.slice(0, MAX_NAME_LENGTH) : undefined;
 }

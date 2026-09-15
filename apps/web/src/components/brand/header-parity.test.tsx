@@ -130,24 +130,22 @@ describe('the shared header matches the frame on the Layout axis', () => {
   });
 
   /*
-   * The wordmark is deliberately NOT asserted against the frame here. The
-   * frames pair a 15px mark with 23px, and `design-plan/02-brand-and-logo.md`
-   * states 1.60 D, which is 24px. Those disagree, and the plan wins until a
-   * design pass rules otherwise — so this file asserts the plan's number and
-   * `logo.test.tsx` owns it. Recorded against #118.
+   * The plan and the frames agree on the desktop wordmark since VEN-388: the
+   * plan's sizes table states the 23px nine of ten 1440 frames draw, where it
+   * used to state 1.60 D's 24px. This reads the plan's row, so a change to
+   * either side fails here; `logo.test.tsx` reads the frames.
    */
-  it('keeps the wordmark on the plan’s ratio, not the frame’s', () => {
+  it('renders the desktop wordmark at the size the plan’s table states', () => {
     const plan = readFileSync(
       join(process.cwd(), '../../design/design-plan/02-brand-and-logo.md'),
       'utf8',
     );
-    const stated = plan.match(/wordmark size\s+([\d.]+) D/);
+    const stated = plan.match(/\| Desktop header\s+\| 15px\s+\|[^|]+\|[^|]+\| (\d+)px/);
 
     expect(stated).not.toBeNull();
 
     render(<Logo size={LOGO_SIZES.desktopHeader} />);
 
-    const expected = LOGO_SIZES.desktopHeader * Number(stated?.[1]);
-    expect(screen.getByTestId('logo-wordmark').style.fontSize).toBe(`${expected}px`);
+    expect(screen.getByTestId('logo-wordmark').style.fontSize).toBe(`${stated?.[1]}px`);
   });
 });

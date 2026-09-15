@@ -5,6 +5,7 @@ import {
   ADMIN_VENDOR_STATUS_LABELS,
 } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
+import { ExportCsvLink } from '@/components/admin/export-csv-link';
 import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { VendorTable } from '@/components/admin/vendor-table';
@@ -136,15 +137,7 @@ export default async function AdminVendorsPage({
           params={params}
           searchPlaceholder="Search name, email or slug…"
           searchValue={params.q}
-          trailing={
-            <Link
-              href={`/admin/vendors/export${query}`}
-              prefetch={false}
-              className="text-sm font-semibold text-clay-500 hover:underline"
-            >
-              Export CSV
-            </Link>
-          }
+          trailing={<ExportCsvLink href={`${PATH}/export${adminQueryString(params)}`} />}
         >
           {/*
             The saved filter, and the one control that is a link rather than a

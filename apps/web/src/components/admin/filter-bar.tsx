@@ -101,7 +101,13 @@ export function FilterSelect({
           aria-haspopup="listbox"
           aria-expanded={open}
           className={cn(
-            'flex items-center gap-1.5 rounded-md border border-stone-300 bg-stone-0 py-2 pr-3 pl-3.5 text-sm font-semibold whitespace-nowrap',
+            /*
+              `px-3.5` both sides, frame `13`'s `padding:8px 14px` (VEN-388).
+              The right side was 12px, a vestige of the caret D25 removed —
+              the gap the glyph used to fill. Symmetric padding is the fix;
+              the caret stays absent (`dropdown-caret.test.ts`).
+            */
+            'flex items-center gap-1.5 rounded-md border border-stone-300 bg-stone-0 px-3.5 py-2 text-sm font-semibold whitespace-nowrap',
             chosen ? 'text-clay-600' : 'text-stone-900',
           )}
         >

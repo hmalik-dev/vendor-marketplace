@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  adminActivityActorListSchema,
   adminActivityPageSchema,
   adminActivityQuerySchema,
   adminBanResultSchema,
@@ -55,6 +56,7 @@ import { listCases, readCase, readCaseConversation, resolveCase } from '../cases
 import {
   deleteReview,
   listActivity,
+  listActivityActors,
   listBookings,
   listCustomers,
   listPayments,
@@ -632,6 +634,16 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       },
     },
     async (request) => listActivity(app.db, request.query),
+  );
+
+  /** The operators the log names — `Actor ▾` on `/admin/activity` (VEN-388). */
+  app.get(
+    '/admin/activity/actors',
+    {
+      onRequest: adminOnly,
+      schema: { response: { 200: adminActivityActorListSchema } },
+    },
+    async () => listActivityActors(app.db),
   );
 
   /**

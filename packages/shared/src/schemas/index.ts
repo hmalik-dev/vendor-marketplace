@@ -9,6 +9,7 @@ import {
 import {
   ADMIN_ACTION_SUBJECTS,
   ADMIN_ACTIONS,
+  ADMIN_ACTIVITY_RANGES,
   ADMIN_AVAILABILITY_LOCK_STATUSES,
   ADMIN_NOTIFICATION_RECIPIENTS,
   ADMIN_PAGE_SIZE,
@@ -2972,8 +2973,22 @@ export const adminActivityQuerySchema = z.object({
   actor: uuidSchema.optional(),
   subject: uuidSchema.optional(),
   action: adminActionSchema.optional(),
+  /** Pattern A's `Subject type ▾` (VEN-388): every row about one kind of record. */
+  subjectType: adminActionSubjectSchema.optional(),
+  /** Pattern A's date range (VEN-388), counted back from the request. */
+  range: z.enum(ADMIN_ACTIVITY_RANGES).optional(),
 });
 export type AdminActivityQuery = z.infer<typeof adminActivityQuerySchema>;
+
+/**
+ * `GET /admin/activity/actors` — the operators the log names, for the
+ * `Actor ▾` facet (VEN-388). Only actors with at least one row, so every choice
+ * narrows to something.
+ */
+export const adminActivityActorListSchema = z.object({
+  actors: z.array(z.object({ id: uuidSchema, name: z.string() })),
+});
+export type AdminActivityActorList = z.infer<typeof adminActivityActorListSchema>;
 
 export const adminActivityPageSchema =
   paginatedSchema(adminActivityRowSchema).extend(wideningShape);
@@ -3510,6 +3525,8 @@ export const adminCaseQuerySchema = z.object({
    */
   status: supportCaseStatusSchema.default('open'),
   booking: adminCaseBookingFilterSchema.optional(),
+  /** Matches the reference, or the sender's name or address (VEN-388). */
+  q: trimmedString(MAX_NAME_LENGTH).optional(),
 });
 export type AdminCaseQuery = z.infer<typeof adminCaseQuerySchema>;
 
