@@ -153,9 +153,10 @@ describe('the glyphs paint their rings content-box, as the frames do', () => {
   it('EmptyStateGlyph: its one ring, and not its filled disc', () => {
     const { container } = render(<EmptyStateGlyph />);
     const [disc] = Array.from(container.querySelectorAll('span span'));
+    const glyphRings = rings(container);
 
-    expect(rings(container)).toHaveLength(1);
-    expect(rings(container)[0]).toContain('box-content');
+    expect(glyphRings).toHaveLength(1);
+    expect(glyphRings[0]).toContain('box-content');
     expect(disc?.className.split(' ')).not.toContain('box-content');
   });
 
