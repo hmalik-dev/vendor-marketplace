@@ -113,7 +113,15 @@ needs the test-mode `STRIPE_SECRET_KEY` from the environment or the root `.env`.
 
 Vendor profile and search. (The console lists are covered by
 `admin-filters.spec.ts` and `admin-lists.spec.ts`.) Each is deferred for a named
-reason — see the follow-up ticket rather than assuming they were forgotten. CI
-wiring is also absent: `ci.yml` runs on in-process PGlite with _placeholder_
-Clerk keys and never reaches Clerk, so real-auth E2E needs GitHub secrets the
-account holder must add.
+reason — see the follow-up ticket rather than assuming they were forgotten.
+
+## On CI
+
+`ci.yml`'s `End-to-end journeys` job (VEN-411) boots this whole stack after
+`verify` — `db:seed`, `db:seed:marketing` (which `admin-closed-customers` needs)
+and `db:seed:e2e`, `next start`, `stripe listen` — and runs every suite with
+**one retry, reported**: a test that passed only on its retry is named in the
+job summary by `scripts/e2e-ci.mjs`. It skips with a warning until the
+repository has its `E2E_*` secrets (VEN-377); set the variable `E2E_GATE=required`
+once they exist. Traces are off on CI, because the repository is public and a
+trace carries the accounts' Clerk sessions — reproduce a CI failure on a lane.

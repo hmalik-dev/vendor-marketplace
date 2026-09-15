@@ -113,6 +113,207 @@ jobs:
       - name: Test agent workflows and hooks
         run: pnpm test:agents
 
+  # The committed Playwright journeys against the whole stack — built, served
+  # with `next start`, real Clerk test instance, Stripe test mode with webhooks
+  # forwarded (VEN-411). After `verify`, so a pull request that does not compile
+  # spends no browser minutes.
+  #
+  # Until the repository secrets below exist (VEN-377) the first step skips the
+  # suite with a warning rather than failing every pull request in the fleet.
+  # Once they do, set the repository variable `E2E_GATE=required` — a missing
+  # secret then fails the job — and add this job's name to the required checks
+  # on `main`. `scripts/e2e-ci.mjs` holds both decisions and their tests.
+  e2e:
+    name: End-to-end journeys
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # This job holds the Stripe and Clerk secrets, so its token reads and nothing more.
+    permissions:
+      contents: read
+    # One run per branch. The workflow-level group already cancels a superseded
+    # push; this also keeps two runs of one branch off the shared E2E accounts
+    # and the pinned Stripe connected account at once.
+    concurrency:
+      group: e2e-${{ github.ref }}
+      cancel-in-progress: true
+
+    services:
+      # Same image and trust rationale as `verify`'s.
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: vendor_marketplace
+          POSTGRES_DB: vendor_marketplace
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vendor_marketplace"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    # Everything not set here is inherited from the workflow's `env:` above,
+    # the Clerk webhook placeholder included: no journey signs a Clerk webhook.
+    env:
+      E2E_GATE: ${{ vars.E2E_GATE }}
+      # The stack's own origins, which the E2E harness refuses to guess.
+      PORT: '4000'
+      WEB_PORT: '3000'
+      API_URL: http://localhost:4000
+      WEB_URL: http://localhost:3000
+      E2E_BASE_URL: http://localhost:3000
+      E2E_API_URL: http://localhost:4000
+      # A full pass exceeds the default 120 requests a minute, and a 429 renders
+      # as the generic 500 page (`apps/web/e2e/README.md`).
+      RATE_LIMIT_MAX: '100000'
+      # The secrets. GitHub masks each value in the log wherever it appears.
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.E2E_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.E2E_CLERK_SECRET_KEY }}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.E2E_STRIPE_PUBLISHABLE_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.E2E_STRIPE_SECRET_KEY }}
+      E2E_VENDOR_STRIPE_ACCOUNT_ID: ${{ secrets.E2E_VENDOR_STRIPE_ACCOUNT_ID }}
+      E2E_CUSTOMER_EMAIL: ${{ secrets.E2E_CUSTOMER_EMAIL }}
+      E2E_CUSTOMER_PASSWORD: ${{ secrets.E2E_CUSTOMER_PASSWORD }}
+      E2E_VENDOR_EMAIL: ${{ secrets.E2E_VENDOR_EMAIL }}
+      E2E_VENDOR_PASSWORD: ${{ secrets.E2E_VENDOR_PASSWORD }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the E2E secrets are configured
+        id: secrets
+        run: node scripts/e2e-ci.mjs secrets
+
+      - uses: pnpm/action-setup@v4
+        if: steps.secrets.outputs.run == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.run == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - if: steps.secrets.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+
+      # Not a service container: MinIO needs `server /data` as its command, which
+      # `services:` cannot pass. Same images, root user and development password
+      # as docker-compose.yml — which are also the registry's `S3_*` defaults the
+      # API falls back to — and the same object-read-only policy `storage-init`
+      # applies. A container that lives for this job and holds nothing.
+      - name: Start MinIO and create the uploads bucket
+        if: steps.secrets.outputs.run == 'true'
+        run: |
+          read -r MINIO_ROOT_PASSWORD <<< vendor_marketplace_dev
+          export MINIO_ROOT_PASSWORD
+          docker run -d --name storage --network host \
+            -e MINIO_ROOT_USER=vendor-marketplace -e MINIO_ROOT_PASSWORD \
+            minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+          scripts/wait-http.sh --timeout 60 http://localhost:9000/minio/health/ready
+          echo '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::vendor-marketplace-uploads/*"]}]}' > "$RUNNER_TEMP/uploads-policy.json"
+          docker run --rm --network host -v "$RUNNER_TEMP:/policy" --entrypoint /bin/sh \
+            minio/mc:RELEASE.2025-04-16T18-13-26Z -c "
+            mc alias set local http://localhost:9000 vendor-marketplace vendor_marketplace_dev &&
+            mc mb --ignore-existing local/vendor-marketplace-uploads &&
+            mc anonymous set-json /policy/uploads-policy.json local/vendor-marketplace-uploads"
+
+      # The file `seed:e2e` and `pnpm e2e:auth` read the accounts from. Values
+      # come from masked secrets and are written, never echoed.
+      - name: Write .env.e2e.local
+        if: steps.secrets.outputs.run == 'true'
+        run: |
+          for name in E2E_CUSTOMER_EMAIL E2E_CUSTOMER_PASSWORD E2E_VENDOR_EMAIL E2E_VENDOR_PASSWORD \
+                      E2E_ADMIN_EMAIL E2E_ADMIN_PASSWORD E2E_VENDOR_STRIPE_ACCOUNT_ID STRIPE_SECRET_KEY; do
+            printf '%s=%s\n' "$name" "${!name}"
+          done > .env.e2e.local
+
+      - name: Build
+        if: steps.secrets.outputs.run == 'true'
+        run: pnpm build
+
+      - name: Migrate and seed
+        if: steps.secrets.outputs.run == 'true'
+        run: |
+          pnpm db:migrate
+          pnpm db:seed
+          pnpm db:seed:marketing
+          pnpm db:seed:e2e
+
+      # `listen` forwards platform and Connect events to the API, and prints the
+      # signing secret the API verifies them with — so it runs before the API.
+      - name: Forward Stripe webhooks
+        if: steps.secrets.outputs.run == 'true'
+        env:
+          STRIPE_CLI_VERSION: 1.50.11
+        run: |
+          curl -fsSL "https://github.com/stripe/stripe-cli/releases/download/v${STRIPE_CLI_VERSION}/stripe_${STRIPE_CLI_VERSION}_linux_x86_64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP" stripe
+          signing=$("$RUNNER_TEMP/stripe" listen --api-key "$STRIPE_SECRET_KEY" --print-secret)
+          echo "::add-mask::$signing"
+          echo "STRIPE_WEBHOOK_SECRET=$signing" >> "$GITHUB_ENV"
+          nohup "$RUNNER_TEMP/stripe" listen --api-key "$STRIPE_SECRET_KEY" \
+            --forward-to localhost:4000/webhooks/stripe \
+            --forward-connect-to localhost:4000/webhooks/stripe \
+            > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
+
+      # The Resend key is a placeholder with the registry's shape, which the API
+      # validates at boot: no journey asserts a delivered email, so the job never
+      # needs to reach Resend.
+      - name: Start the API and web
+        if: steps.secrets.outputs.run == 'true'
+        run: |
+          read -r RESEND_API_KEY <<< re_ci_placeholder_not_a_key
+          export RESEND_API_KEY
+          nohup pnpm --filter @vendor-marketplace/api start > "$RUNNER_TEMP/api.log" 2>&1 &
+          (cd apps/web && nohup pnpm exec next start --port "$WEB_PORT" > "$RUNNER_TEMP/web.log" 2>&1 &)
+          scripts/wait-http.sh --timeout 120 http://localhost:4000/ready http://localhost:3000/ \
+            || { tail -n 50 "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/web.log"; exit 1; }
+
+      - name: Sign in the E2E accounts
+        if: steps.secrets.outputs.run == 'true'
+        run: |
+          pnpm --filter @vendor-marketplace/web exec playwright install --with-deps chromium
+          pnpm e2e:auth
+
+      - name: Run the journeys
+        if: steps.secrets.outputs.run == 'true'
+        run: pnpm --filter @vendor-marketplace/web test:e2e
+
+      - name: Report retries and timing
+        if: always() && steps.secrets.outputs.run == 'true' && hashFiles('apps/web/playwright-results.json') != ''
+        run: node scripts/e2e-ci.mjs summary apps/web/playwright-results.json
+
+      # The repository is public, so an artifact is readable by any GitHub user.
+      # Hence no traces (`playwright.config.ts` turns them off on CI — a trace
+      # records the E2E accounts' Clerk session cookies, the admin's included)
+      # and no `stripe-listen.log`, which prints the webhook signing secret
+      # unmasked. The report keeps each failure's screenshot and error context.
+      # `cancelled()` too, so a run that hit `timeout-minutes` still leaves them.
+      - name: Upload the Playwright report
+        if: (failure() || cancelled()) && steps.secrets.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/playwright-results.json
+          retention-days: 14
+
+      # The API redacts cookie, authorization and signature headers from its log.
+      - name: Upload the server logs
+        if: (failure() || cancelled()) && steps.secrets.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-logs
+          path: |
+            ${{ runner.temp }}/api.log
+            ${{ runner.temp }}/web.log
+          retention-days: 14
+
 # Migrations are Railway's job, not CI's. `railway.json` carries
 # `preDeployCommand`, which runs the compiled migrator before a new container
 # takes traffic — atomic with the deploy that needs the schema, and impossible
