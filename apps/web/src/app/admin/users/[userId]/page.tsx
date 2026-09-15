@@ -1,11 +1,19 @@
 import { LEGAL_ACCEPTANCE_LABELS } from '@vendor-marketplace/shared';
 import { notFound } from 'next/navigation';
-import { AdminSurface } from '@/components/admin/admin-surface';
+import { Fragment } from 'react';
+import {
+  Absent,
+  AdminCard,
+  DetailGrid,
+  DetailHeader,
+  KeyValue,
+  KeyValueList,
+  ScopeChip,
+} from '@/components/admin/admin-detail';
 import { DataRightsActions } from '@/components/admin/data-rights-actions';
-import { DataTable } from '@/components/admin/data-table';
+import { Avatar } from '@/components/ui/avatar';
 import { Banner } from '@/components/ui/banner';
-import { EmptyState } from '@/components/ui/empty-state';
-import { StatusPill } from '@/components/ui/status-pill';
+import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { ApiClientError } from '@/lib/api-client';
 import { getCurrentUser } from '@/lib/current-user';
 import { getAdminUserDataRights } from '@/lib/admin-data';
@@ -13,12 +21,18 @@ import { getAdminUserDataRights } from '@/lib/admin-data';
 /** Reads a live account and the record it leaves behind; never cached. */
 export const dynamic = 'force-dynamic';
 
+/*
+ * 24-hour and in UTC, like every stamp on the case detail one click away
+ * (#454): an acceptance timestamp is evidence, and `2:02 PM` is a form a reader
+ * has to disambiguate before comparing two of them.
+ */
 const ACCEPTED = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
   year: 'numeric',
-  hour: 'numeric',
+  hour: '2-digit',
   minute: '2-digit',
+  hour12: false,
   timeZone: 'UTC',
 });
 
@@ -42,9 +56,20 @@ const RETAINED_LABELS: Record<string, string> = {
   legalAcceptances: 'Legal acceptances',
 };
 
+/** Where the breadcrumb goes back to; an operator's own account has no list. */
+const ROLE_LISTS: Record<string, { label: string; href: string }> = {
+  customer: { label: 'Customers', href: '/admin/customers' },
+  vendor: { label: 'Vendors', href: '/admin/vendors' },
+};
+
+const TABLE_ROW = 'grid grid-cols-[minmax(0,1fr)_110px] items-center gap-2.5 px-4';
+
 /**
- * One account's data rights: what is still held, what can be exported, and
- * whether it can be closed (#438).
+ * One account's data rights, composed to Pattern B (#438, #393).
+ *
+ * **Left is the record, right is identity and actions**, and the right column
+ * is the only place anything that changes state may sit: the two record cards
+ * are declared read-only and carry no control at all.
  *
  * **It shows a closed account rather than hiding one.** The privacy policy says
  * records are kept, so an operator asked "what do you still hold about me" gets
@@ -82,148 +107,194 @@ export default async function AdminUserDataRightsPage({
     throw error;
   }
 
+  const name = rights.name || rights.email;
   const retained = Object.entries(rights.retained);
   const heldTotal = retained.reduce((sum, [, count]) => sum + count, 0);
+  const state: { label: string; tone: StatusTone } = rights.closedAt
+    ? { label: 'Closed', tone: 'inert' }
+    : rights.isBanned
+      ? { label: 'Flagged', tone: 'failed' }
+      : { label: 'Live', tone: 'confirmed' };
 
   return (
-    <AdminSurface
-      heading={rights.name || rights.email}
-      counts={[
-        rights.email,
-        rights.role,
-        rights.closedAt ? 'Closed' : rights.isBanned ? 'Flagged' : 'Live',
-        `${heldTotal} retained ${heldTotal === 1 ? 'record' : 'records'}`,
-      ]}
-    >
-      <div className="flex flex-col gap-6 overflow-y-auto pb-6">
-        {/*
-          The account's address stopped agreeing with the identity provider and
-          nothing could say so before this (#462). It is first on the page and
-          not inside a card about something else, because every other section
-          here describes the record while this one says the record is wrong —
-          and because it is read from the row rather than derived, an operator
-          has no other way to learn it.
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <DetailHeader
+        crumb={ROLE_LISTS[rights.role]}
+        current={name}
+        heading={name}
+        pills={<StatusPill tone={state.tone}>{state.label}</StatusPill>}
+        stat={
+          <>
+            {rights.role} · {heldTotal} retained {heldTotal === 1 ? 'record' : 'records'}
+          </>
+        }
+      />
 
-          `failed` rather than `pending`: `40-states.md` reserves gold for
-          waiting on somebody and red for a thing that failed, and this is a
-          write that was refused, not one still in flight. `Banner` derives the
-          colour from that word, so it is not a choice made here.
-        */}
-        {rights.pendingEmail === null ? null : (
-          <Banner status="failed" title="This address is out of date">
-            {ADDRESS_HELD_BY_ANOTHER_ACCOUNT} Mail goes to {rights.email}; the identity provider
-            holds {rights.pendingEmail}
-            {rights.emailSyncFailedAt === null
-              ? ''
-              : `, and has since ${ACCEPTED.format(rights.emailSyncFailedAt)}`}
-            .
-          </Banner>
-        )}
+      <DetailGrid
+        record={
+          <>
+            {/*
+              The account's address stopped agreeing with the identity provider
+              (#462). First in the record, because every card below describes
+              the record while this says the record is wrong — and it is read
+              from the row, so an operator has no other way to learn it.
 
-        <section className="rounded-xl border border-stone-300 bg-stone-0 p-4">
-          <h2 className="display-heading text-display-sm text-stone-900">Data rights</h2>
-          <p className="mt-1 mb-3 text-sm leading-prose text-stone-700">
-            The privacy policy promises a copy of what we hold, and closure on request. Both are
-            answered here. Closure retires the account and takes any storefront down; it never
-            deletes the record. It never prices the account holder&apos;s own bookings — those have
-            to be cancelled first — and where the account is a vendor, the bookings their customers
-            hold are cancelled and refunded in full.
-          </p>
-          <DataRightsActions
-            userId={rights.userId}
-            name={rights.name || rights.email}
-            closedAt={rights.closedAt}
-            closeBlockers={rights.closeBlockers}
-            bookingsRefundedOnClose={rights.bookingsRefundedOnClose}
-            isSelf={viewer?.id === rights.userId}
-          />
-        </section>
+              `failed` rather than `pending`: this is a write that was refused,
+              not one still in flight, and `Banner` derives the colour from that
+              word.
+            */}
+            {rights.pendingEmail === null ? null : (
+              <Banner status="failed" title="This address is out of date">
+                {ADDRESS_HELD_BY_ANOTHER_ACCOUNT} Mail goes to {rights.email}; the identity provider
+                holds {rights.pendingEmail}
+                {rights.emailSyncFailedAt === null
+                  ? ''
+                  : `, and has since ${ACCEPTED.format(rights.emailSyncFailedAt)} UTC`}
+                .
+              </Banner>
+            )}
 
-        <section className="rounded-xl border border-stone-300 bg-stone-0 p-4">
-          <h2 className="display-heading text-display-sm text-stone-900">What is still held</h2>
-          <p className="mt-1 mb-3 text-sm leading-prose text-stone-700">
-            Exactly what the export enumerates. A closed account keeps all of it — the other
-            party&apos;s copy of a booking or a conversation is theirs as much as it is this
-            account&apos;s.
-          </p>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
-            {retained.map(([key, count]) => (
-              <div key={key} className="flex flex-col">
-                <dt className="text-meta text-stone-600">{RETAINED_LABELS[key] ?? key}</dt>
-                <dd className="font-semibold text-stone-900">{count}</dd>
+            <AdminCard
+              readOnly
+              title="What is still held"
+              note={
+                <span className="text-stone-600">
+                  Exactly what the export enumerates · kept after closure
+                </span>
+              }
+            >
+              <div
+                role="table"
+                aria-label="Records still held, by category"
+                className="text-action text-stone-900"
+              >
+                <div role="rowgroup">
+                  <div
+                    role="row"
+                    className={`${TABLE_ROW} border-b border-stone-150 py-2 text-label font-semibold tracking-label text-stone-600 uppercase`}
+                  >
+                    <span role="columnheader">Category</span>
+                    <span role="columnheader" className="text-right">
+                      Records
+                    </span>
+                  </div>
+                </div>
+                <div role="rowgroup">
+                  {retained.map(([key, count], index) => (
+                    <div
+                      key={key}
+                      role="row"
+                      className={`${TABLE_ROW} h-[34px] ${index % 2 === 1 ? 'bg-stone-25' : ''} ${
+                        index < retained.length - 1 ? 'border-b border-stone-150' : ''
+                      }`}
+                    >
+                      <span role="cell">{RETAINED_LABELS[key] ?? key}</span>
+                      <span role="cell" data-kind="mono" className="text-right font-mono text-meta">
+                        {count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </dl>
-        </section>
+            </AdminCard>
 
-        <section className="rounded-xl border border-stone-300 bg-stone-0 p-4">
-          <div className="flex flex-wrap items-baseline gap-2.5">
-            <h2 className="display-heading text-display-sm text-stone-900">Legal acceptances</h2>
-            <StatusPill tone="inert">Read-only</StatusPill>
-          </div>
-          <p className="mt-1 mb-3 text-sm leading-prose text-stone-700">
-            The record that answers &ldquo;did they agree to this, and to which version&rdquo;. It
-            is append-only in the database — three triggers refuse an update, a delete and a
-            table-wide wipe — so there is nothing to edit here and no control that would.
-          </p>
-          <DataTable
-            rows={rights.legalAcceptances}
-            rowKey={(row) => row.id}
-            empty={
-              <EmptyState
-                headline="No acceptances recorded"
-                description="A row is written when the person accepts a document. Accounts that predate the record have none."
+            <AdminCard
+              readOnly
+              title={`Legal acceptances · ${rights.legalAcceptances.length}`}
+              note={<ScopeChip>Read-only — append-only in the database</ScopeChip>}
+            >
+              {/*
+                Read-only fields, one group per acceptance. The record is
+                append-only — three triggers refuse an update, a delete and a
+                table-wide wipe — so there is nothing to edit and no control
+                that would.
+
+                **Wraps, never truncates** — Pattern B rule 3 (#454). An IPv6
+                address is 39 characters, and a truncated identifier is a call
+                to support.
+              */}
+              {rights.legalAcceptances.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-stone-600">
+                  No acceptances recorded. A row is written when the person accepts a document;
+                  accounts that predate the record have none.
+                </p>
+              ) : (
+                rights.legalAcceptances.map((row, index) => (
+                  <KeyValueList
+                    key={row.id}
+                    className={index > 0 ? 'border-t border-stone-150' : undefined}
+                  >
+                    <KeyValue label="Document">
+                      <span className="font-semibold">{LEGAL_ACCEPTANCE_LABELS[row.document]}</span>
+                    </KeyValue>
+                    <KeyValue label="Version" kind="mono">
+                      {row.version}
+                    </KeyValue>
+                    <KeyValue label="Accepted" kind="mono">
+                      {ACCEPTED.format(row.acceptedAt)} UTC
+                    </KeyValue>
+                    <KeyValue label="By">{row.acceptedByName}</KeyValue>
+                    <KeyValue label="On behalf of">{row.businessName ?? <Absent />}</KeyValue>
+                    <KeyValue label="From" kind="mono">
+                      {row.ip ?? <Absent />}
+                    </KeyValue>
+                  </KeyValueList>
+                ))
+              )}
+            </AdminCard>
+          </>
+        }
+        aside={
+          <>
+            <AdminCard readOnly title="Identity">
+              <div className="flex flex-col gap-2.5 px-4 py-3.5">
+                <div className="flex items-center gap-2.5">
+                  <Avatar name={name} size="md" className="rounded-[10px]" />
+                  <div className="min-w-0">
+                    <p className="text-cta font-semibold break-words text-stone-900">{name}</p>
+                    <p className="text-meta text-stone-600 capitalize">{rights.role}</p>
+                  </div>
+                </div>
+                <dl className="grid grid-cols-[82px_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1.5">
+                  {[
+                    { label: 'Contact', value: rights.email, mono: false },
+                    { label: 'Account', value: rights.userId, mono: true },
+                    ...(rights.vendorSlug
+                      ? [{ label: 'Slug', value: rights.vendorSlug, mono: true }]
+                      : []),
+                  ].map((field) => (
+                    <Fragment key={field.label}>
+                      <dt className="text-label font-semibold tracking-label text-stone-600 uppercase">
+                        {field.label}
+                      </dt>
+                      <dd
+                        className={
+                          field.mono
+                            ? 'font-mono text-helper [overflow-wrap:anywhere] text-stone-900'
+                            : 'text-sm [overflow-wrap:anywhere] text-stone-900'
+                        }
+                      >
+                        {field.value}
+                      </dd>
+                    </Fragment>
+                  ))}
+                </dl>
+              </div>
+            </AdminCard>
+
+            <AdminCard title="Actions">
+              <DataRightsActions
+                userId={rights.userId}
+                name={name}
+                closedAt={rights.closedAt}
+                closeBlockers={rights.closeBlockers}
+                bookingsRefundedOnClose={rights.bookingsRefundedOnClose}
+                isSelf={viewer?.id === rights.userId}
               />
-            }
-            columns={[
-              {
-                key: 'document',
-                width: '1.2fr',
-                header: 'Document',
-                className: 'font-semibold text-stone-900',
-                cell: (row) => LEGAL_ACCEPTANCE_LABELS[row.document],
-              },
-              { key: 'version', width: '.6fr', header: 'Version', cell: (row) => row.version },
-              {
-                key: 'accepted',
-                width: '1.2fr',
-                header: 'Accepted',
-                cell: (row) => ACCEPTED.format(row.acceptedAt),
-              },
-              { key: 'by', width: '1.2fr', header: 'By', cell: (row) => row.acceptedByName },
-              {
-                key: 'business',
-                width: '1.2fr',
-                header: 'On behalf of',
-                cell: (row) => row.businessName ?? '—',
-              },
-              {
-                key: 'ip',
-                width: '.9fr',
-                header: 'From',
-                /*
-                  **Wraps, never truncates** — Pattern B rule 3 (#454).
-
-                  `DataTable`'s cells are `overflow-clip text-ellipsis
-                  whitespace-nowrap` by default, which is right for a scannable
-                  list and wrong for a record an operator copies out of. Rule 3
-                  is explicit: *"No ellipsis, no tooltip: a truncated Stripe id
-                  is a call to support."* An acceptance IP is exactly that kind
-                  of value — an IPv6 address is 39 characters and this track is
-                  147px, so under the default it would ellipsise silently.
-
-                  Overridden per column rather than in the primitive: the class
-                  string is merged after the defaults, so these three win the
-                  conflict, and every other admin table keeps the truncation its
-                  own screens were measured with.
-                */
-                className: 'overflow-visible break-words whitespace-normal',
-                cell: (row) => row.ip ?? '—',
-              },
-            ]}
-          />
-        </section>
-      </div>
-    </AdminSurface>
+            </AdminCard>
+          </>
+        }
+      />
+    </div>
   );
 }

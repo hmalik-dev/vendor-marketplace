@@ -321,9 +321,10 @@ describe('the table', () => {
       'src/app/admin/customers/page.tsx',
       // #432 moved the Payments columns into a client component with them.
       'src/components/admin/payment-table.tsx',
-      'src/app/admin/users/[userId]/page.tsx',
+      // `/admin/users/[userId]` left this list with #393: Pattern B draws its
+      // acceptances as read-only fields, not a table.
     ];
-    expect(columnSources).toHaveLength(8);
+    expect(columnSources).toHaveLength(7);
 
     for (const path of columnSources) {
       // Comments discuss these classes by name; only the code declares them.

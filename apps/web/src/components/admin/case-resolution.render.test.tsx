@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WireAdminCaseDetail } from '@/lib/wire-schemas';
@@ -242,41 +240,9 @@ describe('the two confirms', () => {
   });
 });
 
-describe('the three regions', () => {
-  /**
-   * The numbers are visible, and the resolve control is last.
-   *
-   * Read off the page source with comments stripped — the page explains at
-   * length *why* the control sits last, so an unstripped guard for "3 · Resolve"
-   * matches the explanation and cannot fail for a card in the wrong place.
-   */
-  const page = readFileSync(
-    join(process.cwd(), 'src/app/admin/cases/[caseId]/page.tsx'),
-    'utf8',
-  ).replace(/\{?\/\*[\s\S]*?\*\/\}?/g, '');
-
-  it('numbers the complaint, the booking and the resolve control in that order', () => {
-    const regions = [...page.matchAll(/<Card region=\{(\d)\} title="([^"]+)"/g)].map((match) => [
-      match[1],
-      match[2],
-    ]);
-
-    expect(regions).toEqual([
-      ['1', 'The complaint'],
-      ['2', 'The booking it froze'],
-      ['3', 'Resolve'],
-    ]);
-  });
-
-  /**
-   * The scroll is half the safeguard: the control has to be past the evidence.
-   *
-   * Asserted as a source ordering rather than a rendered one because the page
-   * is an async Server Component; what it guards is a card being moved above
-   * the complaint, which is the only way this order breaks.
-   */
-  it('puts the resolve control after both of the regions it reads from', () => {
-    expect(page.indexOf('region={3}')).toBeGreaterThan(page.indexOf('region={1}'));
-    expect(page.indexOf('region={3}')).toBeGreaterThan(page.indexOf('region={2}'));
-  });
-});
+/*
+ * The three regions' numbering and order are asserted on the rendered page in
+ * `app/admin/cases/[caseId]/page.test.tsx` (#393), which replaced the source
+ * scan that lived here: the two-column grid made DOM order and visual placement
+ * separate facts, and only a render can tell them apart.
+ */
