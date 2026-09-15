@@ -32,3 +32,9 @@ Since #399 there is also a caller outside `src/scripts/` that issues CREATE/DROP
 DATABASE rather than inserting rows — see
 [[contention-harness-issues-server-ddl]] for why that one is still bounded.
 Related: [[e2e-fixture-forges-stripe-onboarded]].
+
+Since VEN-407, `scripts/e2e-booking-dates.ts` (`e2e:dates shift-past <id>`) also
+sits behind it and rewrites _any_ booking's event date to yesterday (not scoped
+to the E2E vendor). Audited clean: no route, not in the `exports` map, no deploy
+step runs it; the Playwright side uses `execFile` (no shell) with a UUID from the
+API, and Drizzle binds it. Keep it unexported and route-less.

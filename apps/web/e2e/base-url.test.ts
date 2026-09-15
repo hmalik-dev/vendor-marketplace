@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveE2EBaseUrl } from './base-url.js';
+import { resolveE2EApiUrl, resolveE2EBaseUrl } from './base-url.js';
 
 describe('resolveE2EBaseUrl', () => {
   it('prefers E2E_BASE_URL, which is how a run is aimed at a deployed origin', () => {
@@ -53,5 +53,28 @@ describe('resolveE2EBaseUrl', () => {
    */
   it('ignores WEB_PORT rather than reconstructing an origin from it', () => {
     expect(() => resolveE2EBaseUrl({ WEB_PORT: '3031' })).toThrow(/refusing to default/i);
+  });
+});
+
+describe('resolveE2EApiUrl', () => {
+  it('prefers E2E_API_URL over the lane value', () => {
+    expect(
+      resolveE2EApiUrl({
+        E2E_API_URL: 'http://localhost:4099/',
+        NEXT_PUBLIC_API_URL: 'http://localhost:4015',
+      }),
+    ).toBe('http://localhost:4099');
+  });
+
+  it('uses the API the browser calls, so a spec and its page agree', () => {
+    expect(resolveE2EApiUrl({ NEXT_PUBLIC_API_URL: 'http://localhost:4015' })).toBe(
+      'http://localhost:4015',
+    );
+  });
+
+  it('throws rather than defaulting to the shared API on port 4000', () => {
+    expect(() => resolveE2EApiUrl({ API_URL: 'http://localhost:4000', E2E_API_URL: '  ' })).toThrow(
+      /refusing to default to http:\/\/localhost:4000/i,
+    );
   });
 });

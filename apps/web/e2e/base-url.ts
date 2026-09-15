@@ -52,3 +52,24 @@ export function resolveE2EBaseUrl(env: Record<string, string | undefined> = proc
       "http://localhost:3000, which is another lane's server.",
   );
 }
+
+/**
+ * Which API a journey sets its preconditions up through.
+ *
+ * Refuses to guess for the same reason `resolveE2EBaseUrl` does: `:4000` is the
+ * shared API, and a request created there is invisible to the lane web server
+ * the browser is driving. The lane exports `NEXT_PUBLIC_API_URL` — the value
+ * the browser itself calls — so a spec and the page it drives agree.
+ */
+export function resolveE2EApiUrl(env: Record<string, string | undefined> = process.env): string {
+  const explicit = env.E2E_API_URL?.trim() || env.NEXT_PUBLIC_API_URL?.trim();
+  if (explicit) {
+    return withoutTrailingSlash(explicit);
+  }
+
+  throw new Error(
+    'E2E API URL is not set. Run the suites through the lane so the port is resolved:\n' +
+      '  pnpm lane:exec <ticket> -- pnpm --filter @vendor-marketplace/web test:e2e\n' +
+      "or set E2E_API_URL. Refusing to default to http://localhost:4000, which is another lane's API.",
+  );
+}
