@@ -814,7 +814,15 @@ export async function readCaseConversation(
        * not the content of what was moderated, which is what the table's own
        * doc comment calls the difference between a log and a second copy.
        */
-      detail: { caseId: grant.id, reference: grant.reference, window, page, pageSize },
+      detail: {
+        caseId: grant.id,
+        reference: grant.reference,
+        windowBasis: window.basis,
+        windowFrom: window.from,
+        windowTo: window.to,
+        page,
+        pageSize,
+      },
     });
 
     const [found, counted] = await Promise.all([

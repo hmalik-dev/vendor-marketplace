@@ -724,7 +724,9 @@ describe('reporting and message visibility (#436)', () => {
       .where(eq(adminActions.subjectId, fixture.conversationId));
     expect(logged!.detail).toMatchObject({
       caseId: row.id,
-      window: { basis: 'report_filed', from: '2020-05-29', to: '2020-06-04' },
+      windowBasis: 'report_filed',
+      windowFrom: '2020-05-29',
+      windowTo: '2020-06-04',
     });
   });
 
