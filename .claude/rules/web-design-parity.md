@@ -187,11 +187,13 @@ measuring 19-against-17 is looking at this ruling. Do not re-file it.**
 
 The mechanism, which still governs every bordered box: `Orla - Screens.dc.html`
 ships no `*` reset, so it is content-box, which is what #250 measured;
-`delta-band`, `delta-legal` and `contact-support` each set
+`delta-band`, `delta-legal` and `delta-vendors` each set
 `* { box-sizing: border-box; }`, so those draw the mark as two equal footprints.
-**`delta-admin` ships no reset either** (confirmed 2026-09-07: zero `box-sizing`
-declarations), so the split is **two content-box documents against three
-border-box bundles**, not one against three — which is why D30's
+**`delta-admin` and `contact-support` ship no reset either** (recounted
+2026-09-15, VEN-415: `delta-admin` has zero `box-sizing` declarations;
+`contact-support`'s two are a class rule and an inline style, not a `*` rule),
+so the split is **three content-box documents against three border-box
+bundles**, not one against three — which is why D30's
 one-frame-against-corroborating-siblings reading does not decide this and primacy
 does. **Grep `box-sizing` in the specific bundle a pass is reading before arguing
 about any bordered box in it**, in both directions.
