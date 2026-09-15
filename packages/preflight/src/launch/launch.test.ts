@@ -327,30 +327,42 @@ describe('the Stripe webhook subscription', () => {
     expect(find(results, 'stripe webhook endpoint').status).toBe('PASS');
   });
 
-  it('requires every type the route module handles, read from the module itself', async () => {
-    const handled = await loadHandledStripeEvents(REPO_ROOT);
+  /*
+   * These two import real source from other workspaces, and the first import
+   * transforms the API's whole module graph. That took 5.0s on a CI runner
+   * sharing the turbo test fan-out (PR #181) — bounded compile work with no
+   * waiting in it, so the budget is widened rather than the import faked.
+   */
+  const IMPORTS_REPO_SOURCE = { timeout: 30_000 };
 
-    expect(handled).toEqual([
-      'account.updated',
-      'capability.updated',
-      'payment_intent.succeeded',
-      'charge.dispute.created',
-      'charge.dispute.closed',
-      'charge.dispute.funds_reinstated',
-    ]);
+  it(
+    'requires every type the route module handles, read from the module itself',
+    IMPORTS_REPO_SOURCE,
+    async () => {
+      const handled = await loadHandledStripeEvents(REPO_ROOT);
 
-    // Mutation: a type added to the route's set is one the check now demands.
-    const results = await runLaunchChecks(
-      options('live', {
-        handledStripeEvents: [...handled, 'invoice.paid'],
-        get: doubles('live', handled).get,
-      }),
-    );
+      expect(handled).toEqual([
+        'account.updated',
+        'capability.updated',
+        'payment_intent.succeeded',
+        'charge.dispute.created',
+        'charge.dispute.closed',
+        'charge.dispute.funds_reinstated',
+      ]);
 
-    expect(find(results, 'stripe webhook endpoint').detail).toBe('missing invoice.paid');
-  });
+      // Mutation: a type added to the route's set is one the check now demands.
+      const results = await runLaunchChecks(
+        options('live', {
+          handledStripeEvents: [...handled, 'invoice.paid'],
+          get: doubles('live', handled).get,
+        }),
+      );
 
-  it('reads the seed markers from the seed modules', async () => {
+      expect(find(results, 'stripe webhook endpoint').detail).toBe('missing invoice.paid');
+    },
+  );
+
+  it('reads the seed markers from the seed modules', IMPORTS_REPO_SOURCE, async () => {
     await expect(loadSeedMarkers(REPO_ROOT)).resolves.toEqual({
       marketingPrefix: 'seed_mkt_',
       demoPrefix: 'seed_demo_',
