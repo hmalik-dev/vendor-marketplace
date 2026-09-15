@@ -85,4 +85,5 @@
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — FIXED before merge in VEN-405: `stripe:signature` and `stripe:server-error` dedupe apart; anonymous 401s can still mute only the signature alert
 - [Backup integrity is not authenticity](backup-integrity-is-not-authenticity.md) — VEN-408: bucket-token holder forges a dump the drill pg_restores as superuser
 - [Launch switches gate new intents, not open ones](launch-switches-gate-new-intents-not-open-ones.md) — VEN-404 checkout pause/cap miss an already-issued client secret; retry bypass is intended
+- [launch:check bearer hosts are fixed](launch-check-bearer-hosts-are-fixed.md) — VEN-409 PASS; re-open only if bearer() meets an env-built URL or a seed module gains a top-level main
 - [The data-rights export is hand-enumerated](data-rights-export-is-hand-enumerated.md) — a new `users` PII column reaches the console and not the subject's own DSAR file

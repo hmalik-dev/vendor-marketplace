@@ -136,6 +136,14 @@ function isAccountEvent(type: string): boolean {
   );
 }
 
+/** Every enumerated type above, for `pnpm launch:check` (VEN-409); thin `v2.core.*` events need an event destination, not a webhook endpoint. */
+export const HANDLED_STRIPE_EVENT_TYPES: readonly string[] = [
+  ...SNAPSHOT_ACCOUNT_EVENTS,
+  PAYMENT_SUCCEEDED_EVENT,
+  DISPUTE_CREATED_EVENT,
+  ...DISPUTE_CLOSED_EVENTS,
+];
+
 export interface StripeWebhookRoutesOptions {
   /** `STRIPE_PLATFORM_FEE_RATE`, resolved and coerced at boot. */
   platformFeeRate: number;
