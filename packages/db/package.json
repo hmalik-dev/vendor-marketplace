@@ -41,13 +41,17 @@
     "seed:e2e": "tsx src/scripts/seed-e2e.ts",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
     "e2e:dates": "tsx src/scripts/e2e-booking-dates.ts",
+    "backup": "tsx src/scripts/backup.ts",
+    "restore-drill": "tsx src/scripts/restore-drill.ts",
     "studio": "drizzle-kit studio",
     "keys:from-urls": "tsx src/scripts/keys-from-urls.ts",
     "cover:from-portfolio": "tsx src/scripts/cover-from-portfolio.ts",
     "cities:build": "tsx src/scripts/build-us-cities.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1118.0",
     "@vendor-marketplace/shared": "workspace:*",
+    "age-encryption": "0.3.1",
     "dotenv": "17.4.2",
     "drizzle-orm": "0.45.2",
     "postgres": "3.4.9",

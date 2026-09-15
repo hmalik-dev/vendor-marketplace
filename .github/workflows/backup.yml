@@ -1,0 +1,82 @@
+# The nightly off-platform database backup.
+#
+# Neon's history window and snapshots protect against our own mistakes; they do
+# not protect against Neon — an account lockout, a billing failure, a bad support
+# day. This copies the database somewhere Neon cannot reach: a `pg_dump`,
+# encrypted with `age` to the public key in `.github/backup-age-recipients.txt`,
+# in a backups bucket separate from the uploads bucket, under a token scoped to
+# that bucket alone. The private key never touches GitHub.
+#
+# Restoring is `pnpm db:restore-drill` — see docs/runbook-restore.md.
+#
+# A failure is the alert: GitHub mails the workflow's owner when a scheduled run
+# fails, and every failure path below exits non-zero — an unset secret, a dump
+# under the size floor, a missing recipient, an upload the bucket refused.
+name: Database backup
+
+on:
+  schedule:
+    # 03:00 UTC, the quietest hour for a US marketplace.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which database to back up
+        type: choice
+        options: [staging, production]
+        default: staging
+      min_bytes:
+        description: Override the minimum dump size in bytes (prove the floor fails the run)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never cancelled: a superseded backup is still a backup.
+  group: backup-${{ inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Dump, encrypt and store
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Each GitHub environment holds its own DATABASE_URL_UNPOOLED and bucket
+    # token, so a staging dispatch can never read production's secrets.
+    environment: ${{ inputs.environment || 'production' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # pg_dump must be at least the server's major version, and the runner's
+      # preinstalled client is older than the Postgres 18 Neon runs.
+      - name: Install the Postgres 18 client
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
+          echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
+
+      # Inputs reach the script as environment variables, never interpolated
+      # into the shell. The script passes the connection to pg_dump as libpq
+      # variables, so neither the URL nor its password is ever on a command line.
+      - name: Back up the database
+        env:
+          BACKUP_ENVIRONMENT: ${{ inputs.environment || 'production' }}
+          BACKUP_MIN_BYTES: ${{ inputs.min_bytes }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+        run: pnpm db:backup
