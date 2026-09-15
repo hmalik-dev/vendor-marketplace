@@ -38,7 +38,12 @@ export function VendorSurface({
       className={cn('flex w-full flex-col px-4 py-6 sm:px-6 lg:px-8', fills && 'lg:app-shell')}
     >
       <header className="flex shrink-0 flex-wrap items-start justify-between gap-4">
-        <div className="max-w-prose">
+        {/*
+         * A fixed 400px, not `max-w-prose`: `ch` resolves against this block's
+         * inherited size, so declaring the 13.5px body (VEN-389) narrowed the
+         * measure 62px and wrapped the packages description onto a third line.
+         */}
+        <div className="max-w-100">
           <p className="text-label font-semibold tracking-label text-stone-600 uppercase">
             {eyebrow}
           </p>
