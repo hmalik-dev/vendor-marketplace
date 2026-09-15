@@ -230,6 +230,13 @@ export async function getOwnAvailability(): Promise<WireAvailability[]> {
  */
 const REFERENCE_DATA_REVALIDATE_SECONDS = 3600;
 
+/**
+ * The cache tag on the shared taxonomy read. The console's category writes
+ * expire it (VEN-401), so a deactivation or a reorder reaches the landing pills
+ * and the search rail on the next request rather than up to an hour later.
+ */
+export const CATEGORIES_CACHE_TAG = 'categories';
+
 export interface ReferenceReadOptions {
   /**
    * Propagate an upstream failure instead of degrading to an empty list.
@@ -291,6 +298,7 @@ export async function getCategories(options: ReferenceReadOptions = {}): Promise
     () =>
       apiRequest('/categories', {
         schema: wireCategoryListSchema,
+        cacheTags: [CATEGORIES_CACHE_TAG],
         ...referenceCaching(options.fresh),
       }),
     options.required,

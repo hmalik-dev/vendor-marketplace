@@ -92,6 +92,18 @@ describe('reference reads', () => {
       );
     });
 
+    /* VEN-401: the console's category writes expire this read by its tag. */
+    it('tags the cached taxonomy so a console write can expire it', async () => {
+      apiRequest.mockResolvedValue([]);
+
+      await getCategories();
+
+      expect(apiRequest).toHaveBeenCalledWith(
+        '/categories',
+        expect.objectContaining({ cacheTags: ['categories'] }),
+      );
+    });
+
     it('reads past the cache for a page that posts the ids back', async () => {
       apiRequest.mockResolvedValue([]);
 

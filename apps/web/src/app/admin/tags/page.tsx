@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { TAG_SUGGESTION_STATUSES } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
+import { CategoryTable } from '@/components/admin/category-table';
 import { Pager } from '@/components/admin/pager';
 import { TagQueue } from '@/components/admin/tag-queue';
 import { TagTable } from '@/components/admin/tag-table';
-import { getAdminTagSuggestions, getAdminTags } from '@/lib/admin-data';
+import { getAdminCategories, getAdminTagSuggestions, getAdminTags } from '@/lib/admin-data';
 import {
   adminQueryString,
   droppedKeys,
@@ -41,9 +42,10 @@ export default async function AdminTagsPage({
   // Every other console screen says when it ignored something in the address;
   // this one silently fell back to `pending`, which reads as the queue's state.
   const dropped = droppedKeys(raw, { status: parsed });
-  const [suggestions, tags] = await Promise.all([
+  const [suggestions, tags, categories] = await Promise.all([
     getAdminTagSuggestions(adminQueryString({ status, page: pageNumber(raw.page) })),
     getAdminTags(),
+    getAdminCategories(),
   ]);
 
   return (
@@ -89,6 +91,10 @@ export default async function AdminTagsPage({
           pageSize={suggestions.pageSize}
           total={suggestions.total}
         />
+
+        {/* The route stays `/admin/tags` (5b901a7c); categories join it here (VEN-401). */}
+        <h2 className="mt-6 mb-2.5 font-display text-[21px] text-stone-900">Categories</h2>
+        <CategoryTable categories={categories.items} />
 
         <h2 className="mt-6 mb-2.5 font-display text-[21px] text-stone-900">The vocabulary</h2>
         <TagTable tags={tags.items} />

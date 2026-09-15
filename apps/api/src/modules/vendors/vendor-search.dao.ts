@@ -308,7 +308,9 @@ export async function categoryFacets(
     })
     .from(vendorProfiles)
     .innerJoin(vendorCategories, eq(vendorCategories.vendorId, vendorProfiles.id))
-    .where(and(...filters(query, true)))
+    // A deactivated category is not offered (VEN-401), so it has no facet to count.
+    .innerJoin(categories, eq(categories.id, vendorCategories.categoryId))
+    .where(and(eq(categories.isActive, true), ...filters(query, true)))
     .groupBy(vendorCategories.categoryId);
 
   return rows.map((row) => ({ categoryId: row.categoryId, count: row.count }));

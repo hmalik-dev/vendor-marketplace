@@ -90,10 +90,12 @@ async function applyCategorySuccessors<
 /**
  * Inserts the launch categories. Idempotent: re-running updates the existing
  * row in place on the unique `slug` index rather than inserting a duplicate,
- * so edits to `CATEGORY_SEEDS` propagate on the next run. Retired slugs are
- * folded into their successors first, and any category the seeds no longer
- * describe is deactivated rather than deleted — a hard delete would take its
- * `vendor_categories` rows with it.
+ * so edits to a seed's name, description and icon propagate on the next run.
+ * Its order and active flag only seed a new row — once a category exists,
+ * both belong to the console. Retired slugs are folded into their successors
+ * first, and any category the seeds no longer describe is deactivated rather
+ * than deleted — a hard delete would take its `vendor_categories` rows with
+ * it.
  */
 export async function seedCategories<
   TQueryResult extends PgQueryResultHKT,
@@ -120,8 +122,12 @@ export async function seedCategories<
         name: sql`excluded.name`,
         description: sql`excluded.description`,
         icon: sql`excluded.icon`,
-        displayOrder: sql`excluded.display_order`,
-        isActive: sql`excluded.is_active`,
+        /*
+         * `display_order` and `is_active` are written on insert only. Once a
+         * category exists, the console owns both (VEN-401): an operator's
+         * deactivation or reorder must survive the next `db:seed`, which every
+         * lane and every CI run performs.
+         */
       },
     })
     .returning({ id: categories.id });
