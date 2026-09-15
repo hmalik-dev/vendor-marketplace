@@ -9,6 +9,34 @@ describe('CheckoutUnavailable', () => {
     cleanup();
   });
 
+  /* VEN-404: over the beta cap, where a retry can never succeed. */
+  it('sends a customer over the beta cap to support rather than a retry', () => {
+    render(<CheckoutUnavailable reason="over-cap" requestId={REQUEST_ID} vendorName={null} />);
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      'This booking is over our beta limit',
+    );
+    expect(screen.getByRole('link', { name: 'Contact support' }).getAttribute('href')).toBe(
+      '/support',
+    );
+    expect(screen.queryByRole('link', { name: 'Try this payment again' })).toBeNull();
+  });
+
+  /* VEN-404: the operator paused checkout. The notice, and a retry that works once it lifts. */
+  it('tells a customer checkout is paused and that nothing was charged', () => {
+    render(<CheckoutUnavailable reason="paused" requestId={REQUEST_ID} vendorName={null} />);
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      'Payments are paused for a moment',
+    );
+    expect(
+      screen.getByText('Bookings are paused for a short while. Nothing has been charged.'),
+    ).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Try this payment again' }).getAttribute('href')).toBe(
+      `/bookings/${REQUEST_ID}/checkout`,
+    );
+  });
+
   /*
    * #387: this screen replaces a `notFound()` that told the customer their link
    * was old and the vendor may have gone. The money position is the thing a

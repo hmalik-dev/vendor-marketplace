@@ -967,6 +967,23 @@ export const MIN_BOOKING_AMOUNT_CENTS = 2_500;
 /** Ceiling on a single service package price ($100,000). */
 export const MAX_PACKAGE_PRICE_CENTS = 10_000_000;
 
+/**
+ * The id of the one `platform_settings` row (VEN-404). Fixed, so the row is a
+ * singleton by constraint and an audit row can name it.
+ */
+export const PLATFORM_SETTINGS_ID = '00000000-0000-4000-8000-000000000001';
+
+/**
+ * How long an API instance trusts its last read of the launch switches. A flip
+ * reaches every instance within this window; the instance that wrote it sees
+ * it at once.
+ */
+export const PLATFORM_SETTINGS_CACHE_MS = 10_000;
+
+/** What a customer is told when a launch switch has stopped their request or payment. */
+export const BOOKINGS_PAUSED_NOTICE =
+  'Bookings are paused for a short while. Nothing has been charged.';
+
 /** Platform commission when `STRIPE_PLATFORM_FEE_RATE` is unset. */
 export const DEFAULT_PLATFORM_FEE_RATE = 0.12;
 
@@ -1194,6 +1211,13 @@ export const ADMIN_ACTIONS = [
    * not happen.
    */
   'conversation_messages_read',
+  /*
+   * The launch switches (VEN-404). One row per field that changed, with
+   * `field`, `before` and `after` in the detail, so a flip is counted by field.
+   */
+  'platform_setting_changed',
+  'vendor_payout_hold_set',
+  'vendor_payout_hold_released',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -1219,6 +1243,8 @@ export const ADMIN_ACTION_SUBJECTS = [
   'service_package',
   'portfolio_item',
   'conversation',
+  /* The singleton `platform_settings` row, named by `PLATFORM_SETTINGS_ID`. */
+  'platform_settings',
 ] as const;
 export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
 
@@ -1581,6 +1607,14 @@ export const ERROR_CODES = {
   INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
   UPLOAD_FAILED: 'UPLOAD_FAILED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  /*
+   * The launch switches (VEN-404). Lowercase because the operator runbook and
+   * the ticket name them that way, and the web app branches on them to show
+   * the paused notice instead of an error.
+   */
+  BOOKINGS_PAUSED: 'bookings_paused',
+  CHECKOUT_PAUSED: 'checkout_paused',
+  OVER_BETA_CAP: 'over_beta_cap',
 } as const;
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 

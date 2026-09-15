@@ -84,4 +84,5 @@
 - [`violatesConstraint` is FIXED](violates-constraint-matches-bound-parameters.md) — VEN-385 removed the message arm; SQLSTATE + `constraint_name` only, do not re-report
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — FIXED before merge in VEN-405: `stripe:signature` and `stripe:server-error` dedupe apart; anonymous 401s can still mute only the signature alert
 - [Backup integrity is not authenticity](backup-integrity-is-not-authenticity.md) — VEN-408: bucket-token holder forges a dump the drill pg_restores as superuser
+- [Launch switches gate new intents, not open ones](launch-switches-gate-new-intents-not-open-ones.md) — VEN-404 checkout pause/cap miss an already-issued client secret; retry bypass is intended
 - [The data-rights export is hand-enumerated](data-rights-export-is-hand-enumerated.md) — a new `users` PII column reaches the console and not the subject's own DSAR file

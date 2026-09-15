@@ -61,6 +61,13 @@ const ITEMS = [
   { href: '/admin/reviews', label: 'Reviews' },
   { href: '/admin/tags', label: 'Categories & tags' },
   { href: '/admin/activity', label: 'Activity' },
+  /*
+   * The launch switches (VEN-404). Deliberately unframed: the delta draws nine
+   * rows and predates the switches, so this sits last, after the record the
+   * other surfaces leave behind, as the one row that configures rather than
+   * works a queue.
+   */
+  { href: '/admin/settings', label: 'Settings' },
 ] as const;
 
 /**

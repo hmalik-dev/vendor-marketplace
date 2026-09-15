@@ -93,6 +93,7 @@ forward. That is the actual finding — not which five.
 | `/admin/cases`            | **Exempt — derived.** As `/admin/customers` — frame `13`'s table over `support_cases` (#431). Two composition differences, both ruled in `22-admin.md` rather than drawn: the rows are ordered **oldest first**, because the age of the oldest open case is money somebody is not being paid, and the count line carries that age.                                                                                                                  |
 | `/admin/cases/[caseId]`   | **Exempt — derived.** The console's first detail view, built to `22-admin.md`'s "card-based groupings with the actions prominent" and its AlertDialog rule, the same written spec `/admin/tags` is derived from. No frame draws a case, and one that drew the money fields would be a second source for figures the database already answers.                                                                                                       |
 | `/admin/users/[userId]`   | **Exempt — derived.** One account's data-rights record (`#438`): what is still held, the export and closure controls, and the read-only `legal_acceptances` table. A detail view rather than a projection of frame `13`'s table, so it is built to `22-admin.md`'s "detail views — card-based groupings with the actions prominent" — the same written rule `/admin/tags` and `/admin/cases/[caseId]` are derived from — inside frame `13`'s shell. |
+| `/admin/settings`         | **Exempt — derived.** The launch switches (VEN-404): three pause switches, the beta cap on booking value and the vendors on payout hold. No frame draws a settings screen; it is built inside frame `13`'s shell to `22-admin.md`'s "card-based groupings with the actions prominent", the rule `/admin/tags` is derived from, and reached by a `Settings` row appended after `Activity` in the rail.                                               |
 
 Four exempt, four to draw, one already framed and mis-recorded — plus, since
 `#15`, the eleven console routes above: one framed by `13 Admin` and ten
@@ -101,6 +102,8 @@ Four exempt, four to draw, one already framed and mis-recorded — plus, since
 that reaches both is ruled in `22-admin.md` rather than drawn by frame `13`.
 `/admin/users/[userId]` is the eleventh, added by `#438`, and the rail does not
 reach it at all — it is one account's record, entered from a name in a table.
+`/admin/settings` is the twelfth, added by VEN-404, and the one console row
+the rail gains that no frame draws.
 
 **"Derived" is a third outcome and it is deliberately narrow.** It means the
 screen's composition is defined by a frame elsewhere in the bundle plus a written

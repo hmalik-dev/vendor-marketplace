@@ -104,6 +104,8 @@ export interface ReleasableBookingRow {
   payoutAttempts: number;
   vendorStripeAccountId: string | null;
   vendorStripeOnboarded: boolean;
+  /** An operator is holding this vendor's automatic payouts (VEN-404). */
+  vendorPayoutHold: boolean;
 }
 
 /**
@@ -130,11 +132,18 @@ export async function findDuePayoutBookingIds(
   const rows = await db
     .select({ id: bookings.id })
     .from(bookings)
+    /*
+     * A held vendor's payouts are left out of the batch rather than claimed and
+     * skipped (VEN-404), so a long hold cannot fill every batch and starve the
+     * vendors behind it. They stay due and come back once the hold is lifted.
+     */
+    .innerJoin(vendorProfiles, eq(bookings.vendorId, vendorProfiles.id))
     .where(
       and(
         inArray(bookings.status, [...RELEASABLE_STATUSES]),
         ...payoutOwedClauses(),
         lte(bookings.eventDate, dueThroughDate),
+        eq(vendorProfiles.payoutHold, false),
       ),
     )
     /*
@@ -189,6 +198,7 @@ export async function claimReleasableBooking(
       payoutAttempts: bookings.payoutAttempts,
       vendorStripeAccountId: vendorProfiles.stripeAccountId,
       vendorStripeOnboarded: vendorProfiles.stripeOnboarded,
+      vendorPayoutHold: vendorProfiles.payoutHold,
     })
     .from(bookings)
     .innerJoin(vendorProfiles, eq(bookings.vendorId, vendorProfiles.id))

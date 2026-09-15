@@ -18,6 +18,7 @@ import {
   adminPackageActiveResultSchema,
   adminPaymentPageSchema,
   adminPaymentQuerySchema,
+  adminPlatformSettingsSchema,
   adminReviewPageSchema,
   adminReviewQuerySchema,
   adminReviewVisibilityResultSchema,
@@ -29,6 +30,7 @@ import {
   adminUserDataRightsSchema,
   adminUserExportSchema,
   adminVendorFacetsSchema,
+  adminVendorPayoutHoldResultSchema,
   adminVendorPageSchema,
   adminVendorPublishResultSchema,
   adminVendorQuerySchema,
@@ -37,7 +39,9 @@ import {
   resolveTagSuggestionSchema,
   setPackageActiveSchema,
   setReviewVisibilitySchema,
+  setVendorPayoutHoldSchema,
   setVendorPublishedSchema,
+  updatePlatformSettingsSchema,
   updateTagSchema,
 } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
@@ -68,6 +72,11 @@ import {
 } from './admin.service.js';
 import { closeAccount, exportUserData, readUserDataRights } from './data-rights.service.js';
 import { bookingContextFor } from '../payments/payments.service.js';
+import {
+  readAdminPlatformSettings,
+  setVendorPayoutHold,
+  updatePlatformSettings,
+} from '../platform-settings/platform-settings.service.js';
 
 const userParamsSchema = z.object({ userId: z.uuid() });
 const reviewParamsSchema = z.object({ reviewId: z.uuid() });
@@ -283,6 +292,51 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
         assertRole(request.auth, ['admin']).id,
         request.params.bookingId,
         app.clock(),
+      ),
+  );
+
+  /**
+   * The launch switches (VEN-404): pause new requests, checkout or automatic
+   * payouts, and cap booking value, without a deploy. Each field that changes
+   * writes its own `admin_actions` row with before and after, and the operator
+   * is emailed so an accidental flip is noticed the same hour.
+   */
+  app.get(
+    '/admin/settings',
+    { onRequest: adminOnly, schema: { response: { 200: adminPlatformSettingsSchema } } },
+    async () => readAdminPlatformSettings(app.db),
+  );
+
+  app.put(
+    '/admin/settings',
+    {
+      onRequest: adminOnly,
+      schema: {
+        body: updatePlatformSettingsSchema,
+        response: { 200: adminPlatformSettingsSchema },
+      },
+    },
+    async (request) =>
+      updatePlatformSettings(context(), assertRole(request.auth, ['admin']).id, request.body),
+  );
+
+  /** Holds or releases one vendor's automatic payouts (VEN-404). */
+  app.put(
+    '/admin/vendors/:vendorId/payout-hold',
+    {
+      onRequest: adminOnly,
+      schema: {
+        params: vendorParamsSchema,
+        body: setVendorPayoutHoldSchema,
+        response: { 200: adminVendorPayoutHoldResultSchema },
+      },
+    },
+    async (request) =>
+      setVendorPayoutHold(
+        context(),
+        assertRole(request.auth, ['admin']).id,
+        request.params.vendorId,
+        request.body.payoutHold,
       ),
   );
 

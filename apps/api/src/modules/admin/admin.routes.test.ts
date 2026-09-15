@@ -250,6 +250,13 @@ describe('admin routes', () => {
        * guard is what stops a stranger reaching the scope check at all.
        */
       { method: 'GET', url: `/admin/conversations/${NIL}/messages` },
+      /*
+       * VEN-404. The launch switches stop checkout and payouts for everyone, so
+       * a stranger reaching them could halt the marketplace or unpause money.
+       */
+      { method: 'GET', url: '/admin/settings' },
+      { method: 'PUT', url: '/admin/settings' },
+      { method: 'PUT', url: `/admin/vendors/${NIL}/payout-hold` },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {

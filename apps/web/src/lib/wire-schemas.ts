@@ -27,6 +27,7 @@ import {
   tagSchema,
   userSchema,
   adminActivityRowSchema,
+  adminPlatformSettingsSchema,
   adminBookingRowSchema,
   adminCaseBookingSchema,
   adminCaseDetailSchema,
@@ -490,6 +491,12 @@ export const wireAdminActivityPageSchema = paginatedSchema(wireAdminActivityRowS
   wideningShape,
 );
 export type WireAdminActivityPage = z.infer<typeof wireAdminActivityPageSchema>;
+
+/** The launch switches (VEN-404); `updatedAt` is the only date on it. */
+export const wireAdminPlatformSettingsSchema = adminPlatformSettingsSchema.extend({
+  updatedAt: z.coerce.date().nullable(),
+});
+export type WireAdminPlatformSettings = z.infer<typeof wireAdminPlatformSettingsSchema>;
 
 /**
  * The case queue (#431).

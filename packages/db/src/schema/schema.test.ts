@@ -32,6 +32,7 @@ const EXPECTED_TABLES = [
   'messages',
   'notifications',
   'operator_alerts',
+  'platform_settings',
   'portfolio_items',
   'reviews',
   'service_packages',

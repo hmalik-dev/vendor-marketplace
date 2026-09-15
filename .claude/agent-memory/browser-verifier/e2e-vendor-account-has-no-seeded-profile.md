@@ -32,3 +32,9 @@ permission classifier blocked even a profile-creation form-fill during this
 run (reasonable — a verifier shouldn't be fabricating business data), so route
 this back to the caller rather than working around the denial. Confirm the
 same gap doesn't affect other lanes before assuming it's fixed.
+
+**Update (lane ven-404, 2026-09-14):** superseded — `pnpm db:seed:e2e` (see the
+project's `CLAUDE.md`) now gives the E2E vendor a published storefront, a
+package and a live `pending` booking request out of the box, confirmed by a
+read-only DB query. The remaining gap is narrower: see
+[[e2e-seed-has-only-one-pending-booking-request]].

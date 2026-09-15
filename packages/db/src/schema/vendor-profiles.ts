@@ -130,6 +130,15 @@ export const vendorProfiles = pgTable(
      * rows.
      */
     moderationHold: boolean('moderation_hold').notNull().default(false),
+    /**
+     * An operator is holding this vendor's automatic payouts (VEN-404).
+     *
+     * The scheduled sweep skips the vendor's due payouts while it is set, and
+     * they stay due: clearing it releases them on the next sweep. The
+     * operator's per-booking retry still releases one by hand. Set and cleared
+     * by `PUT /admin/vendors/:vendorId/payout-hold` alone.
+     */
+    payoutHold: boolean('payout_hold').notNull().default(false),
     /** Soft delete — preserves booking history integrity. */
     isDeleted: boolean('is_deleted').notNull().default(false),
     /** Derived from reviews; never written directly by an endpoint. */

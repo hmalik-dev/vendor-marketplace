@@ -14,6 +14,7 @@ import {
   payoutFailedAlert,
   type OperatorAlerts,
 } from '../operator-alerts/operator-alerts.service.js';
+import { readPlatformSwitchesUncached } from '../platform-settings/platform-settings.service.js';
 import { findBookingById } from './payments.dao.js';
 import {
   claimReleasableBooking,
@@ -84,12 +85,27 @@ export async function releaseDuePayouts(
   now: Date,
 ): Promise<PayoutSweepResult> {
   const dueThroughDate = payoutDueThroughDate(now);
-  const ids = await findDuePayoutBookingIds(context.db, dueThroughDate, RELEASE_BATCH_SIZE);
-
   const result: PayoutSweepResult = { released: 0, skipped: 0, failed: 0 };
 
+  if (await payoutReleasePaused(context)) {
+    return result;
+  }
+
+  const ids = await findDuePayoutBookingIds(context.db, dueThroughDate, RELEASE_BATCH_SIZE);
+
   for (const bookingId of ids) {
-    const outcome = await releaseOnePayout(context, bookingId, dueThroughDate, now);
+    /*
+     * Re-read before every booking rather than once per sweep (VEN-404), so a
+     * pause flipped mid-sweep stops the very next transfer. Everything not yet
+     * reached stays due and goes out on the first sweep after the unpause.
+     */
+    if (await payoutReleasePaused(context)) {
+      break;
+    }
+
+    const outcome = await releaseOnePayout(context, bookingId, dueThroughDate, now, {
+      honourVendorHold: true,
+    });
     result[outcome] += 1;
   }
 
@@ -98,6 +114,10 @@ export async function releaseDuePayouts(
   }
 
   return result;
+}
+
+async function payoutReleasePaused(context: PayoutContext): Promise<boolean> {
+  return (await readPlatformSwitchesUncached(context.db)).payoutReleasePaused;
 }
 
 /**
@@ -156,7 +176,14 @@ export async function retryPayoutRelease(
 
   refusePayoutRetry(subject, dueThroughDate);
 
-  const outcome = await releaseOnePayout(context, bookingId, dueThroughDate, now);
+  /*
+   * Neither the platform pause nor a vendor hold applies here (VEN-404): this
+   * is the operator releasing one payout by hand, which is what both exist to
+   * make the only way money moves.
+   */
+  const outcome = await releaseOnePayout(context, bookingId, dueThroughDate, now, {
+    honourVendorHold: false,
+  });
   const after = await findBookingById(context.db, bookingId);
 
   if (!after) {
@@ -252,6 +279,7 @@ async function releaseOnePayout(
   bookingId: string,
   dueThroughDate: string,
   now: Date,
+  options: { honourVendorHold: boolean },
 ): Promise<keyof PayoutSweepResult> {
   /*
    * The failure is recorded **after** the transaction rather than inside it.
@@ -269,7 +297,11 @@ async function releaseOnePayout(
   const outcome = await context.db.transaction(async (tx) => {
     const booking = await claimReleasableBooking(tx, bookingId, dueThroughDate);
 
-    if (!booking) {
+    /*
+     * The hold is re-read under the lock too: one set between the id scan and
+     * this claim must still win over the sweep.
+     */
+    if (!booking || (options.honourVendorHold && booking.vendorPayoutHold)) {
       return 'skipped';
     }
 

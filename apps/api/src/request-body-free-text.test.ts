@@ -225,11 +225,13 @@ describe('free text on a request body', () => {
     // with no free text between them, which is exactly the case this count
     // exists to keep visible rather than let a future prose field slip in
     // beside one; 27 since #436 added `createReportSchema`, whose `detail` is
-    // free text a stranger types about somebody else.
+    // free text a stranger types about somebody else; 29 since VEN-404 added
+    // `updatePlatformSettingsSchema` and `setVendorPayoutHoldSchema`, booleans
+    // and a cap in cents with no free text.
     //
     // A merge is where this number goes wrong: two lanes each add to 23 and a
     // both-sides union keeps one of the answers rather than the sum.
-    expect(names).toHaveLength(27);
+    expect(names).toHaveLength(29);
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
 

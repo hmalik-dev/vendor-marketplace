@@ -42,6 +42,7 @@ import {
   type OperatorAlerts,
 } from '../operator-alerts/operator-alerts.service.js';
 import { notificationHref } from '../messaging/messaging.service.js';
+import { assertCheckoutOpen } from '../platform-settings/platform-settings.service.js';
 import {
   applyBookingTransition,
   cancelBookingAndFreeDate,
@@ -248,6 +249,9 @@ export async function openCheckout(
       metadata: {},
     });
   }
+
+  // The launch switches (VEN-404), checked before Stripe is asked for anything.
+  await assertCheckoutOpen(context.db, amountCents);
 
   /*
    * The whole amount, into Orla's balance (#423). No fee and no destination:

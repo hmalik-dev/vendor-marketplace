@@ -1,3 +1,4 @@
+import { BOOKINGS_PAUSED_NOTICE, ERROR_CODES } from '@vendor-marketplace/shared';
 import { ApiClientError } from './api-client';
 
 /**
@@ -53,6 +54,14 @@ export const REQUEST_DID_NOT_ARRIVE = 'That did not reach us. Check your connect
 export function userFacingError(error: unknown, fallback: string): string {
   if (!(error instanceof ApiClientError)) {
     return fallback;
+  }
+
+  /*
+   * A launch switch (VEN-404) is a deliberate 503 with its own sentence, and
+   * the customer is owed that sentence rather than the connection fallback.
+   */
+  if (error.code === ERROR_CODES.BOOKINGS_PAUSED || error.code === ERROR_CODES.CHECKOUT_PAUSED) {
+    return BOOKINGS_PAUSED_NOTICE;
   }
 
   /*

@@ -12,6 +12,7 @@ import {
   wireAdminMetricsSchema,
   wireAdminPaymentPageSchema,
   wireAdminActivityPageSchema,
+  wireAdminPlatformSettingsSchema,
   wireAdminUserDataRightsSchema,
   wireAdminReviewPageSchema,
   wireAdminTagListSchema,
@@ -25,6 +26,7 @@ import {
   type WireAdminMetrics,
   type WireAdminPaymentPage,
   type WireAdminActivityPage,
+  type WireAdminPlatformSettings,
   type WireAdminUserDataRights,
   type WireAdminReviewPage,
   type WireAdminTagList,
@@ -173,6 +175,11 @@ export async function getAdminTagSuggestions(query: string): Promise<WireAdminTa
 
 export async function getAdminActivity(query: string): Promise<WireAdminActivityPage> {
   return adminRead(`/admin/activity${query}`, wireAdminActivityPageSchema);
+}
+
+/** The launch switches and the vendors whose payouts are held (VEN-404). */
+export async function getAdminPlatformSettings(): Promise<WireAdminPlatformSettings> {
+  return adminRead('/admin/settings', wireAdminPlatformSettingsSchema);
 }
 
 export async function getAdminTags(): Promise<WireAdminTagList> {
