@@ -322,32 +322,36 @@ function HeldVendors({ settings, saving, run }: HeldVendorsProps): React.ReactEl
         </Button>
       </form>
 
-      {results === null ? null : results.length === 0 ? (
-        <p className="mt-3 text-sm text-stone-700">No vendor matches that search.</p>
-      ) : (
-        <ul className="mt-3 divide-y divide-stone-200 border-y border-stone-200">
-          {results.map((vendor) => (
-            <li key={vendor.id} className="flex items-center justify-between gap-4 py-2.5">
-              <span className="text-sm text-stone-900">
-                <span className="font-semibold">{vendor.businessName}</span>{' '}
-                <span className="font-mono text-stone-600">{vendor.slug}</span>
-              </span>
-              {heldIds.has(vendor.id) ? (
-                <span className="text-sm text-stone-600">Held</span>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={saving}
-                  onClick={() => void setHold(vendor.id, true)}
-                >
-                  Hold payouts
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
+      {results !== null && (
+        <>
+          {results.length === 0 ? (
+            <p className="mt-3 text-sm text-stone-700">No vendor matches that search.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-stone-200 border-y border-stone-200">
+              {results.map((vendor) => (
+                <li key={vendor.id} className="flex items-center justify-between gap-4 py-2.5">
+                  <span className="text-sm text-stone-900">
+                    <span className="font-semibold">{vendor.businessName}</span>{' '}
+                    <span className="font-mono text-stone-600">{vendor.slug}</span>
+                  </span>
+                  {heldIds.has(vendor.id) ? (
+                    <span className="text-sm text-stone-600">Held</span>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={saving}
+                      onClick={() => void setHold(vendor.id, true)}
+                    >
+                      Hold payouts
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </section>
   );
