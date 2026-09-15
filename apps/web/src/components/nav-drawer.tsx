@@ -36,6 +36,12 @@ export interface NavDrawerProps {
   children?: ReactNode;
   links: readonly NavDrawerLink[];
   /**
+   * A last row that is not a link — the signed-in drawer's `Sign out`, which is
+   * a session mutation. Handed `NAV_DRAWER_ROW_CLASS` by the caller so it reads
+   * as one more row rather than a different control.
+   */
+  action?: ReactNode;
+  /**
    * The width the trigger disappears at, because the frames disagree by screen.
    *
    * `14 Landing tablet` draws the signed-out landing bar at 768 with its links
@@ -46,8 +52,13 @@ export interface NavDrawerProps {
   hideTriggerFrom?: 'md' | '769px';
 }
 
+/** One drawer row, shared by the links and the `action` row. */
+export const NAV_DRAWER_ROW_CLASS =
+  'block w-full rounded-lg px-2 py-3 text-left text-md font-medium text-stone-900 hover:bg-stone-100';
+
 export function NavDrawer({
   links,
+  action,
   children,
   hideTriggerFrom = '769px',
 }: NavDrawerProps): React.ReactElement {
@@ -136,14 +147,12 @@ export function NavDrawer({
             <ul className="flex flex-col">
               {links.map((link) => (
                 <li key={link.label}>
-                  <Link
-                    href={link.href}
-                    className="block rounded-lg px-2 py-3 text-md font-medium text-stone-900 hover:bg-stone-100"
-                  >
+                  <Link href={link.href} className={NAV_DRAWER_ROW_CLASS}>
                     {link.label}
                   </Link>
                 </li>
               ))}
+              {action ? <li>{action}</li> : null}
             </ul>
           </nav>
         </DialogPrimitive.Content>

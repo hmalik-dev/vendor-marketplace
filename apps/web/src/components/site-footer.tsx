@@ -336,7 +336,7 @@ export async function SiteFooter(): Promise<React.ReactElement> {
                 <li>
                   {/*
                     Clerk's own control rather than a link to a route: signing
-                    out is a session mutation, and the `UserButton` in the header
+                    out is a session mutation, and the header's `AccountMenu`
                     is a menu behind an avatar — this column is where a reader
                     who wants out actually looks. `className` rather than a
                     nested element, so there is one focusable control here and

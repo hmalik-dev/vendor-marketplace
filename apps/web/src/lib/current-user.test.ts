@@ -36,6 +36,7 @@ const {
   getCurrentUser,
   readIdentityForSupport,
   readRoleForChrome,
+  readUserForChrome,
   redirectIfSignedIn,
   redirectVendorToDashboard,
   requireCurrentUser,
@@ -349,6 +350,31 @@ describe('readRoleForChrome', () => {
     apiRequest.mockRejectedValue(signal);
 
     await expect(readRoleForChrome()).rejects.toBe(signal);
+  });
+});
+
+/*
+ * VEN-403: the header's account control draws the name and photograph from our
+ * own row, under the same never-throw rule the role read carries.
+ */
+describe('readUserForChrome', () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    apiRequest.mockReset();
+  });
+
+  it('returns the whole record when it reads', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockResolvedValue(CUSTOMER);
+
+    await expect(readUserForChrome()).resolves.toEqual(CUSTOMER);
+  });
+
+  it('degrades on a 500 rather than taking the document down', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
+
+    await expect(readUserForChrome()).resolves.toBeNull();
   });
 });
 

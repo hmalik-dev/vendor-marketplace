@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { Show, UserButton } from '@clerk/nextjs';
+import { Show } from '@clerk/nextjs';
 import type { UserRole } from '@vendor-marketplace/shared';
+import { AccountMenu } from '@/components/account-menu';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { RoleChip } from '@/components/brand/role-chip';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
@@ -11,7 +12,8 @@ import { HeaderQuery } from '@/components/search/header-query';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getCategories } from '@/lib/vendor-data';
-import { readRoleForChrome } from '@/lib/current-user';
+import { readUserForChrome } from '@/lib/current-user';
+import type { WireUser } from '@/lib/wire-schemas';
 import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
 
 /**
@@ -47,6 +49,21 @@ function homeFor(role: UserRole | null): string {
   return role === 'vendor' ? '/dashboard' : '/';
 }
 
+/**
+ * The name the avatar's initials are drawn from: our own record's, never
+ * Clerk's session claims. Clerk's email-and-password sign-up collects no name,
+ * so a fresh account falls back to its email address — one initial, which is
+ * what frame `02` draws — and an unreadable record to an empty string, which
+ * `Avatar` renders as `?`.
+ */
+function displayNameFor(user: WireUser | null): string {
+  if (!user) {
+    return '';
+  }
+
+  return `${user.firstName} ${user.lastName}`.trim() || user.email;
+}
+
 export async function SiteHeader(): Promise<React.ReactElement> {
   /*
    * The role decides whether the header carries the vendor chip, and it is
@@ -54,11 +71,12 @@ export async function SiteHeader(): Promise<React.ReactElement> {
    * rule `current-user.ts` states. Signed out, the read returns before it
    * makes a request, so a marketing page pays nothing for it.
    *
-   * `readRoleForChrome` never throws. This header is in the root layout, where
+   * `readUserForChrome` never throws. This header is in the root layout, where
    * a throw escapes every `error.tsx` and takes the whole document to the
    * global error screen — see the note on that function.
    */
-  const [categories, role] = await Promise.all([getCategories(), readRoleForChrome()]);
+  const [categories, user] = await Promise.all([getCategories(), readUserForChrome()]);
+  const role = user?.role ?? null;
 
   /*
    * What the signed-in `/dashboard` link is called for this reader, resolved
@@ -195,29 +213,18 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             </Button>
             <NotificationBell />
             {/*
-              **This control is an unrefusable backstop, and #438 says so
-              rather than leaving it implied.**
-
-              `<UserButton />`'s account menu offers deletion at the identity
-              provider, and a Clerk deletion is *reactive*: by the time
-              `user.deleted` reaches the webhook the identity is already gone,
-              there is no request left to answer and no response to carry a
-              refusal. So D39's rule — an account holding a future confirmed
-              booking cannot be closed — is enforced on the product's own route,
-              `POST /admin/users/:userId/close`, which answers 409 and names the
-              bookings to cancel first.
-
-              Closing that gap means disabling self-serve deletion in the Clerk
-              instance, which is a setting in their dashboard and not a prop
-              here: Clerk exposes no way to hide the built-in Delete account
-              section from this component. Until it is turned off there, a
-              determined user reaches deletion in two clicks from this button,
-              and #433's fallback is what catches them — the booking is left
-              confirmed, payable and logged for a human, which decides nothing.
-              That is deliberately the weaker of the two answers, and it is the
-              one that applies here.
+              The account control is the app's own, never Clerk's
+              `UserButton` (VEN-403). Clerk's menu offered email changes and
+              deletion at the identity provider, and a Clerk deletion is
+              reactive — there is no request left to refuse — so D39's rule,
+              enforced on `POST /admin/users/:userId/close`, could not answer
+              it. Users never access Clerk; `AccountMenu` says why at length.
             */}
-            <UserButton />
+            <AccountMenu
+              name={displayNameFor(user)}
+              avatarUrl={user?.avatarUrl ?? null}
+              dashboardLabel={dashboardLabel}
+            />
             <SignedInDrawer dashboardLabel={dashboardLabel} />
           </Show>
         </div>

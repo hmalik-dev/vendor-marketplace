@@ -121,27 +121,17 @@ describe('icon-only controls carry the law’s hit area', () => {
   });
 
   /*
-   * Clerk owns its trigger's markup, so the target is grown in CSS. The avatar
-   * inside keeps its own size — the control still looks as the frames draw it.
+   * VEN-403: the header's account control is the app's own now, so the target
+   * is a utility on its trigger rather than CSS aimed at Clerk's markup.
    */
-  it('grows Clerk’s user button to the hit area without resizing the avatar', () => {
-    const globals = read('src/app/globals.css');
-    const rule = globals.match(/\.cl-userButtonTrigger\s*\{([^}]*)\}/);
+  it('gives the header account menu trigger the full hit area', () => {
+    const menu = read('src/components/account-menu.tsx');
+    const trigger = menu.match(/<DropdownMenu\.Trigger[\s\S]*?>/);
 
-    expect(rule).not.toBeNull();
-    expect(rule?.[1]).toContain('min-h-11');
-    expect(rule?.[1]).toContain('min-w-11');
-
-    /*
-     * Only the target grows. `globals.css` does style `.cl-avatarBox`
-     * elsewhere, so this cannot assert the selector's absence — it asserts
-     * that no rule reaching the avatar sets a width or height, which is the
-     * thing that would change the frame's visual rather than the hit area.
-     */
-    for (const [, body] of globals.matchAll(/\.cl-avatarBox[^{]*\{([^}]*)\}/g)) {
-      expect(body).not.toMatch(/(?:^|[\s;])(?:min-)?[wh]-\d/);
-      expect(body).not.toMatch(/(?:width|height)\s*:/);
-      expect(body).not.toMatch(/\bsize-\d/);
-    }
+    expect(
+      trigger,
+      'account-menu.tsx no longer opens its trigger the way this reads it',
+    ).not.toBeNull();
+    expect(trigger?.[0]).toContain(HIT_AREA);
   });
 });

@@ -1,8 +1,10 @@
 'use client';
 
+import { SignOutButton } from '@clerk/nextjs';
 import { usePathname } from 'next/navigation';
+import { accountLinks, SIGN_OUT_REDIRECT } from '@/components/account-menu';
 import { MARKETING_LINKS } from '@/components/marketing-nav';
-import { NavDrawer } from '@/components/nav-drawer';
+import { NAV_DRAWER_ROW_CLASS, NavDrawer } from '@/components/nav-drawer';
 
 /**
  * Decides what the drawer holds, and whether it should exist at all.
@@ -16,7 +18,8 @@ import { NavDrawer } from '@/components/nav-drawer';
  *   quietly reintroducing the nav on every screen. Off `/`, "Sign in" and the
  *   Sign up pill both stay in the bar and there is nothing left to put away.
  * - **Signed in** it holds Dashboard, which the header hides below `sm` for
- *   width. That was always a stopgap waiting on this drawer.
+ *   width, and every row of the avatar's account menu — `Contact support` and
+ *   `Sign out` too — so a narrow width loses nothing the menu offers (VEN-403).
  */
 export function SignedOutDrawer(): React.ReactElement | null {
   const pathname = usePathname();
@@ -47,12 +50,18 @@ export interface SignedInDrawerProps {
 }
 
 export function SignedInDrawer({ dashboardLabel }: SignedInDrawerProps): React.ReactElement {
+  const [dashboard, support] = accountLinks(dashboardLabel);
+
   return (
     <NavDrawer
-      links={[
-        { label: dashboardLabel, href: '/dashboard' },
-        { label: 'Messages', href: '/messages' },
-      ]}
+      links={[dashboard, { label: 'Messages', href: '/messages' }, support]}
+      action={
+        <SignOutButton redirectUrl={SIGN_OUT_REDIRECT}>
+          <button type="button" className={NAV_DRAWER_ROW_CLASS}>
+            Sign out
+          </button>
+        </SignOutButton>
+      }
     />
   );
 }

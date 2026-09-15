@@ -121,7 +121,7 @@ describe('the notifications panel dismisses on Escape', () => {
  * frames draw.
  *
  * It hangs off the **bell's** right edge at a fixed 360px, and the bell is not
- * the last thing in the header — `UserButton` and the drawer trigger follow it.
+ * the last thing in the header — `AccountMenu`'s avatar and the drawer trigger follow it.
  * So the room to its left is the viewport less everything to its right, which
  * at 390 is about 118px. A first attempt bounded it at one gutter
  * (`100vw - 2.75rem`), the number that would be right if the panel were flush
