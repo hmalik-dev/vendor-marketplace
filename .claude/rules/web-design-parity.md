@@ -215,7 +215,9 @@ base box; `03-components.md`'s `py-2.5` is the drift here.
 (VEN-419, 2026-09-15).** `BrokenMark` draws frame `15`'s 74x46 box with the
 dashed circle at `left:28px` (0.61 D), and that ring is `box-content`: the
 screens document is content-box, so its 1.5px border paints a 49px ring whose
-right edge sits at 77px. Frame `26` draws **no** broken mark — its state library
+right edge sits at 77px — at DPR 2. Chromium floors a 1.5px border to whole
+device pixels, so a DPR-1 pass reads 48px and 76px, and the frame reads the same
+there; compare the two in one browser, never against the arithmetic. Frame `26` draws **no** broken mark — its state library
 has none, so it cannot disagree — and the siblings under D30 are the paired
 empty-state marks, all loose at 0.61–0.64 D: `18` 24/38, `27 Search — no
 results` 21/33, `19`/`20` 22/36, `27 Vendor dashboard` 19/31 (`19`'s second
