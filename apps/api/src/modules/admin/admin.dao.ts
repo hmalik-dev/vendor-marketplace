@@ -315,6 +315,36 @@ const primaryCategoryExpression = sql<string | null>`(
   limit 1
 )`;
 
+/**
+ * The Vendors table's projection, over `vendor_profiles ⋈ users`.
+ *
+ * Shared with the vendor detail (VEN-380) so the status and counts a detail
+ * shows are derived from exactly the columns the row it was opened from read.
+ */
+export function adminVendorSelection() {
+  return {
+    id: vendorProfiles.id,
+    userId: vendorProfiles.userId,
+    businessName: vendorProfiles.businessName,
+    slug: vendorProfiles.slug,
+    categoryName: primaryCategoryExpression,
+    city: vendorProfiles.city,
+    state: vendorProfiles.state,
+    avgRating: vendorProfiles.avgRating,
+    reviewCount: vendorProfiles.reviewCount,
+    bookingsCount: bookingsCountExpression,
+    isPublished: vendorProfiles.isPublished,
+    moderationHold: vendorProfiles.moderationHold,
+    stripeOnboarded: vendorProfiles.stripeOnboarded,
+    stripeAccountId: vendorProfiles.stripeAccountId,
+    stripeDisabledReason: vendorProfiles.stripeDisabledReason,
+    stripeRequirementsDue: vendorProfiles.stripeRequirementsDue,
+    isBanned: users.isBanned,
+    isRetired: RETIRED,
+    createdAt: vendorProfiles.createdAt,
+  };
+}
+
 export async function findAdminVendors(
   db: AppDatabase,
   filters: AdminVendorFilters,
@@ -322,27 +352,7 @@ export async function findAdminVendors(
   offset: number,
 ): Promise<AdminVendorProjection[]> {
   return db
-    .select({
-      id: vendorProfiles.id,
-      userId: vendorProfiles.userId,
-      businessName: vendorProfiles.businessName,
-      slug: vendorProfiles.slug,
-      categoryName: primaryCategoryExpression,
-      city: vendorProfiles.city,
-      state: vendorProfiles.state,
-      avgRating: vendorProfiles.avgRating,
-      reviewCount: vendorProfiles.reviewCount,
-      bookingsCount: bookingsCountExpression,
-      isPublished: vendorProfiles.isPublished,
-      moderationHold: vendorProfiles.moderationHold,
-      stripeOnboarded: vendorProfiles.stripeOnboarded,
-      stripeAccountId: vendorProfiles.stripeAccountId,
-      stripeDisabledReason: vendorProfiles.stripeDisabledReason,
-      stripeRequirementsDue: vendorProfiles.stripeRequirementsDue,
-      isBanned: users.isBanned,
-      isRetired: RETIRED,
-      createdAt: vendorProfiles.createdAt,
-    })
+    .select(adminVendorSelection())
     .from(vendorProfiles)
     .innerJoin(users, eq(users.id, vendorProfiles.userId))
     .where(vendorFilterCondition(filters))

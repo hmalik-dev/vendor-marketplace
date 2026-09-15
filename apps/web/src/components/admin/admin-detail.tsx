@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
+import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
 /*
@@ -80,6 +81,111 @@ export function DetailGrid({
       </div>
     </div>
   );
+}
+
+/**
+ * A whole Pattern B screen: the header band over the two columns (VEN-380).
+ * Every detail route composes this rather than restating the shell, so the
+ * booking and customer details inherit the same scroll and stacking.
+ */
+export function DetailView({
+  header,
+  record,
+  aside,
+}: {
+  header: DetailHeaderProps;
+  record: ReactNode;
+  aside: ReactNode;
+}): React.ReactElement {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <DetailHeader {...header} />
+      <DetailGrid record={record} aside={aside} />
+    </div>
+  );
+}
+
+export interface CardTableColumn<T> {
+  key: string;
+  header: string;
+  /** A grid track — `110px`, `1.2fr`. */
+  width: string;
+  align?: 'start' | 'end';
+  cell: (row: T) => ReactNode;
+}
+
+/**
+ * The small table a detail card holds — `.ach`-banded, a 10.5px uppercase
+ * header row, 34px rows striped `stone-25` and ruled `stone-150` — as the
+ * delta draws Packages and Availability locks. ARIA table roles on a grid, so
+ * each row keeps the card's own track widths without a `<table>`'s layout.
+ */
+export function CardTable<T>({
+  label,
+  columns,
+  rows,
+  rowKey,
+  muted,
+}: {
+  /** The accessible name — what the rows are. */
+  label: string;
+  columns: readonly CardTableColumn<T>[];
+  rows: readonly T[];
+  rowKey: (row: T) => string;
+  /** Rows drawn in `stone-600`, as the delta draws an inactive package. */
+  muted?: (row: T) => boolean;
+}): React.ReactElement {
+  const tracks = { gridTemplateColumns: columns.map((column) => column.width).join(' ') };
+  const align = (column: CardTableColumn<T>): string | undefined =>
+    column.align === 'end' ? 'text-right' : undefined;
+
+  return (
+    <div role="table" aria-label={label} className="text-action text-stone-900">
+      <div role="rowgroup">
+        <div
+          role="row"
+          style={tracks}
+          className="grid items-center gap-2.5 border-b border-stone-150 px-4 py-2 text-label font-semibold tracking-label text-stone-600 uppercase"
+        >
+          {columns.map((column) => (
+            <span key={column.key} role="columnheader" className={align(column)}>
+              {column.header}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div role="rowgroup">
+        {rows.map((row, index) => (
+          <div
+            key={rowKey(row)}
+            role="row"
+            style={tracks}
+            className={cn(
+              'grid min-h-[34px] items-center gap-2.5 px-4 py-1',
+              index % 2 === 1 && 'bg-stone-25',
+              index < rows.length - 1 && 'border-b border-stone-150',
+              muted?.(row) && 'text-stone-600',
+            )}
+          >
+            {columns.map((column) => (
+              <span
+                key={column.key}
+                role="cell"
+                className={cn('min-w-0 [overflow-wrap:anywhere]', align(column))}
+              >
+                {column.cell(row)}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The one `stone-600` line an empty card keeps instead of disappearing (Pattern B rule 5). */
+export function CardEmpty({ children }: { children: ReactNode }): React.ReactElement {
+  return <p className="px-4 py-3 text-sm text-stone-600">{children}</p>;
 }
 
 export interface AdminCardProps {
@@ -198,6 +304,60 @@ export function KeyValue({
         {children}
       </dd>
     </>
+  );
+}
+
+export interface IdentityField {
+  label: string;
+  value: ReactNode;
+  /** Identifiers — mono, as anything paste-worthy is. */
+  mono?: boolean;
+}
+
+/**
+ * The right column's Identity card: avatar, name and one line under it, then
+ * a compact 82px label column. Small, because whoever arrives here already
+ * knows who they clicked (Pattern B rule 1).
+ */
+export function IdentityCard({
+  name,
+  subtitle,
+  fields,
+}: {
+  name: string;
+  subtitle: ReactNode;
+  fields: readonly IdentityField[];
+}): React.ReactElement {
+  return (
+    <AdminCard readOnly title="Identity">
+      <div className="flex flex-col gap-2.5 px-4 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <Avatar name={name} size="md" className="rounded-[10px]" />
+          <div className="min-w-0">
+            <p className="text-cta font-semibold break-words text-stone-900">{name}</p>
+            <p className="text-meta text-stone-600">{subtitle}</p>
+          </div>
+        </div>
+        <dl className="grid grid-cols-[82px_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1.5">
+          {fields.map((field) => (
+            <Fragment key={field.label}>
+              <dt className="text-label font-semibold tracking-label text-stone-600 uppercase">
+                {field.label}
+              </dt>
+              <dd
+                className={
+                  field.mono
+                    ? 'font-mono text-helper [overflow-wrap:anywhere] text-stone-900'
+                    : 'text-sm [overflow-wrap:anywhere] text-stone-900'
+                }
+              >
+                {field.value}
+              </dd>
+            </Fragment>
+          ))}
+        </dl>
+      </div>
+    </AdminCard>
   );
 }
 

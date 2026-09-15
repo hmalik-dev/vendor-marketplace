@@ -17,6 +17,7 @@ import {
   wireAdminReviewPageSchema,
   wireAdminTagListSchema,
   wireAdminTagSuggestionPageSchema,
+  wireAdminVendorDetailSchema,
   wireAdminVendorFacetsSchema,
   wireAdminVendorPageSchema,
   type WireAdminBookingPage,
@@ -31,6 +32,7 @@ import {
   type WireAdminReviewPage,
   type WireAdminTagList,
   type WireAdminTagSuggestionPage,
+  type WireAdminVendorDetail,
   type WireAdminVendorFacets,
   type WireAdminVendorPage,
 } from './wire-schemas';
@@ -111,6 +113,26 @@ export async function getAdminMetrics(): Promise<WireAdminMetrics> {
 
 export async function getAdminVendors(query: string): Promise<WireAdminVendorPage> {
   return adminRead(`/admin/vendors${query}`, wireAdminVendorPageSchema);
+}
+
+/**
+ * One vendor and everything the console holds about them (VEN-380), or `null`
+ * when no vendor has that id — a point read addressed by an id somebody can
+ * hold, so a 404 is a wrong link rather than the error boundary, exactly as
+ * `getAdminCase` rules.
+ */
+export async function getAdminVendorDetail(
+  vendorId: string,
+): Promise<WireAdminVendorDetail | null> {
+  try {
+    return await adminRead(`/admin/vendors/${vendorId}`, wireAdminVendorDetailSchema);
+  } catch (error) {
+    if (error instanceof ApiClientError && error.statusCode === 404) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 export async function getAdminVendorFacets(): Promise<WireAdminVendorFacets> {

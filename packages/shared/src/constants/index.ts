@@ -55,6 +55,21 @@ export const LOCKED_AVAILABILITY_STATUSES = AVAILABILITY_STATUSES.filter(
 );
 
 /**
+ * What the admin vendor detail lists as a lock on a date (VEN-380): the two
+ * stored holds and the request overlay. `completed` is history rather than a
+ * hold, and `available` is the absence of one.
+ */
+export const ADMIN_AVAILABILITY_LOCK_STATUSES = [
+  'booked',
+  'pending',
+  'blocked',
+] as const satisfies readonly AvailabilityStatus[];
+export type AdminAvailabilityLockStatus = (typeof ADMIN_AVAILABILITY_LOCK_STATUSES)[number];
+
+/** The most recent notifications the admin vendor detail lists; the card's count is the full total. */
+export const ADMIN_VENDOR_DETAIL_NOTIFICATION_LIMIT = 20;
+
+/**
  * Everything that keeps a vendor profile from going live.
  *
  * Each blocker carries three things because three surfaces need different ones

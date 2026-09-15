@@ -7,7 +7,8 @@ import type { AdminVendorStatus } from '@vendor-marketplace/shared';
 import type { WireAdminVendorRow } from '@/lib/wire-schemas';
 
 vi.mock('@/lib/use-api', () => ({ useApi: () => vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push }) }));
 
 const { SuspensionConsequence, UnpublishConsequence, RepublishConsequence, VendorTable } =
   await import('./vendor-table');
@@ -205,7 +206,7 @@ describe('VendorRowActions', () => {
    * labels: a `live` storefront is the one you can take down.
    */
   it('offers Unpublish on a live storefront and Publish on an unpublished one', () => {
-    expect(menuLabelsFor('live')).toEqual(['Unpublish profile', 'Suspend vendor']);
+    expect(menuLabelsFor('live')).toEqual(['View', 'Unpublish profile', 'Suspend vendor']);
     cleanup();
     /*
      * Both directions on a row that is already down (#457). Unpublish is what
@@ -217,12 +218,14 @@ describe('VendorRowActions', () => {
      * Order is least → most severe, per the admin delta's Pattern B.
      */
     expect(menuLabelsFor('paused')).toEqual([
+      'View',
       'Publish profile',
       'Unpublish profile',
       'Suspend vendor',
     ]);
     cleanup();
     expect(menuLabelsFor('review')).toEqual([
+      'View',
       'Publish profile',
       'Unpublish profile',
       'Suspend vendor',
@@ -270,9 +273,9 @@ describe('VendorRowActions', () => {
     }
   });
 
-  /** A suspended account is offered the lift and nothing else. */
+  /** A suspended account is offered the lift and no other lever. */
   it('offers only the lift on a suspended account', () => {
-    expect(menuLabelsFor('flagged')).toEqual(['Lift suspension']);
+    expect(menuLabelsFor('flagged')).toEqual(['View', 'Lift suspension']);
   });
 
   /*
@@ -406,6 +409,19 @@ describe('the held status (#457)', () => {
    */
   it('offers the operator the publish direction on a held row, and only that', () => {
     /* No Unpublish: the hold it would set already stands. */
-    expect(menuLabelsFor('held')).toEqual(['Publish profile', 'Suspend vendor']);
+    expect(menuLabelsFor('held')).toEqual(['View', 'Publish profile', 'Suspend vendor']);
+  });
+
+  /** VEN-380: the row menu opens the vendor detail, and leads with it. */
+  it('opens the vendor detail from View', async () => {
+    push.mockClear();
+    menuLabelsFor('live');
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'View' }));
+
+    // `RowMenu` runs an item's `onSelect` on the next tick, after the menu closes.
+    await vi.waitFor(() =>
+      expect(push).toHaveBeenCalledWith('/admin/vendors/11111111-1111-4111-8111-111111111111'),
+    );
   });
 });
