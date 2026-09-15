@@ -17,9 +17,9 @@ Concretely, what that means:
 - It reads the Neon **`staging`** branch. The `production` branch is never
   touched, and `packages/db/src/scripts/safe-target.ts` refuses to seed it.
 - Its vendors are **fabricated** — seeded, with invented ratings and review
-  counts. That is the whole reason they stay off `production`; see
-  `pre-launch.md` §1.1, which treats those same rows reaching a public
-  production site as the single most serious blocker in the file.
+  counts. That is the whole reason they stay off `production`; the
+  `seeded rows` check in `pre-launch.md` fails a launch while any of those
+  rows are in the production database.
 - Clerk is a **development instance** and Stripe is in **test mode**. No real
   money can move; no real account is reachable.
 - It is on free infrastructure that sleeps when idle.
@@ -140,7 +140,7 @@ applied**. `production` is at the same 10. An API built from `main` will not
 work against either until they are migrated.
 
 An earlier revision of this file said `staging` carried the marketing seed's 16
-vendors. It does not — that claim was inherited from `pre-launch.md` §1.1, which
+vendors. It does not — that claim was inherited from an earlier `pre-launch.md`, which
 describes a Neon `dev` branch that no longer exists. Seeding is a required step,
 not an optional one.
 

@@ -1,300 +1,87 @@
-# Pre-launch checklist — everything that must change before real users
+# Pre-launch — what must be true before real users and real money
 
-**Status as of 2026-08-27: development only. No real users, no real money, no
-real vendors.** Every item below is safe _because_ that is true, and becomes a
-defect the moment it stops being true.
+**The gate is a command, not this page:**
 
-This file is the gate. Nothing here is optional; items marked **BLOCKER** would
-cause user-visible harm, legal exposure, or data loss on day one.
+```sh
+pnpm launch:check
+```
 
-**Not to be confused with `demo.md`.** That file stands up a free, sleep-when-idle
-showcase deployment on the Neon `staging` branch, so the app can be shown to
-someone over a link. It is explicitly _not_ a launch and satisfies almost none of
-what follows — most pointedly §1.1, whose fabricated vendors are exactly what it
-serves, and may serve, precisely because it is not production.
+It reads the production values from `.env.production.local` (gitignored; real
+process environment variables win over it), asks each provider what is actually
+configured, and prints one line per item: `PASS`, `FAIL`, `SKIP` (the thing it
+checks has not landed yet) or `MANUAL` (no provider API can answer). It exits
+non-zero while anything is `FAIL`. It is read-only — every provider call is a
+`GET`, the database session is `READ ONLY` — and it prints no secret beyond its
+prefix and last four characters. It needs production credentials, so it is run
+by the operator before a release and never in CI.
 
-The build queue is Linear (team `VEN`, project **Vendor Marketplace**). This
-file holds the things that are _not_ tickets — configuration, credentials, data
-and legal — plus pointers to the tickets that are. A bare **#n** below is an id
-from the retired local board (closed rows are in git history before
-`chore/linear-tracker`; the 22 rows still open on 2026-09-14 were migrated and
-each carries its board number under _Provenance_).
+Launch readiness is a run with no `FAIL`, every `MANUAL` line confirmed by hand,
+and every item below done.
 
----
-
-## 1. BLOCKERS — do not launch with these
-
-### 1.1 Production is serving fabricated vendors and fabricated reviews
-
-**Verified 2026-08-27.** `GET /vendors` on the live site returns **16 invented
-photography vendors** — "June Harlow", rating **4.9**, **127 reviews** — seeded
-by `pnpm db:seed:marketing` (ef8b341), together with **918 reviews behind 918
-fabricated completed bookings**.
-
-**They are not in the `production` database.** The deployed API reads the Neon
-**`dev`** branch — see ticket **#48**, found by comparing the two APIs during the
-Railway cutover: `production` holds 0 vendors and 10 categories, `dev` holds 16
-and 11. This is deliberate for now, so the deployment keeps usable design-parity
-data while there are no real users, and the `production` branch stays clean.
-**The launch swap is therefore a data _and_ a connection-string change**, and
-both must happen together.
-
-This is the single most serious item in this file. A real customer cannot tell
-these from real supply; they carry ratings, review counts and prices that no
-transaction ever produced. Shipping it is misrepresentation, and it directly
-contradicts the project's own rule that _no number on a public page is unread
-from the database_.
-
-- [ ] **Purge the marketing seed from the production branch** before the first
-      real user, or
-- [ ] launch with real vendor supply only and keep the seed to `dev`.
-- [ ] Add a guard that fails a production deploy when seeded demo rows are
-      present — this is exactly the kind of thing that survives by accident.
-- [ ] Confirm `pnpm db:seed:marketing` cannot be pointed at `production`.
-
-### 1.2 Clerk is a development instance
-
-Production currently authenticates against **`stirred-flea-3295.clerk.accounts.dev`**
-with `pk_test_` / `sk_test_` keys. Clerk development instances are rate-limited,
-carry dev-only session behaviour, and are not supported for production traffic.
-
-- [ ] Create the Clerk **production instance**, on the real domain.
-- [ ] Swap `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (`pk_live_`) and
-      `CLERK_SECRET_KEY` (`sk_live_`) on **both** Vercel and Railway.
-- [ ] Re-create the webhook endpoint on the production instance and set the new
-      `CLERK_WEBHOOK_SECRET` — see §2.3 and ticket **#46**.
-- [ ] Verify sign-up, sign-in and role assignment end to end against the
-      production instance.
-
-### 1.3 Stripe is in test mode
-
-`sk_test_` / `pk_test_`, and `STRIPE_WEBHOOK_SECRET` is still the literal
-placeholder. No money can move.
-
-- [ ] Live Stripe keys and a live Connect platform (**#9**).
-- [ ] Live webhook endpoint + signing secret, pointed at the production API.
-- [ ] Complete the payment lifecycle (**#10**) — it does not exist yet.
-- [ ] Verify a real end-to-end booking, capture, payout and refund before
-      opening to customers.
-
-### 1.4 No security headers on the web tier
-
-`apps/web/next.config.ts` sets no `headers()` at all — no HSTS, CSP,
-`X-Content-Type-Options`, `Referrer-Policy` or frame protections. The API is
-properly hardened (helmet, cors, rate-limit); the web tier is not. Ticket **#30**.
-
-- [ ] Add the header set and verify against a real response, not the config.
-
-### 1.5 No terms of service and no privacy policy
-
-`apps/web/src/app/` has no `terms` or `privacy` route. A marketplace taking
-payments and storing personal data cannot launch without them, and Stripe
-Connect onboarding expects them.
-
-- [ ] ToS + privacy policy pages, linked from the footer and from sign-up.
-- [ ] State the cancellation and refund policy the product actually enforces:
-      **100% refund over 48h, 50% under 48h** (decision D3), platform commission
-      **12%** (D4).
-- [ ] **Have a lawyer read the staff-message-access clause in `privacy.md`
-      (#436).** It is under _Who else sees it_ and it is the only paragraph in
-      the corpus asserting that staff can read a user's private messages, so it
-      is the one most likely to be legally load-bearing rather than filler. It
-      was written to describe what the code does — scoped to a reported thread,
-      only while the report is open, every read logged, no staff writes — and
-      **not** to be binding wording anybody has reviewed. Reword it or keep it,
-      but decide deliberately: the rest of this corpus is placeholder nobody has
-      relied on, and a claim about reading messages is not.
+**Current state:** not launched. The deployment authenticates against a Clerk
+**development** instance and Stripe is in **test mode**, so `launch:check` fails
+on both today — correctly. `docs/demo.md` describes the showcase deployment,
+which is not a launch; `docs/credentials.md` is the credential runbook.
 
 ---
 
-## 2. Credentials and environment
+## What `launch:check` covers
 
-### 2.1 Rotate everything exposed during setup
-
-These were pasted into a chat transcript on 2026-08-27 while provisioning
-Railway. Harmless today — empty bucket, dev instance, no users — but they must
-not reach launch.
-
-- [ ] **R2 access key id + secret access key** — create a new R2 API token,
-      update the two Railway vars, delete the old token.
-- [ ] **`CLERK_WEBHOOK_SECRET`** — rotate in Svix, update Railway. Moot if
-      §1.2 replaces the instance entirely, which it should.
-
-### 2.2 Placeholder values still in the production API environment
-
-Railway was provisioned from `.env.example` verbatim. Fixed on 2026-08-27:
-`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NODE_ENV`, `WEB_URL`, `API_URL`,
-`CLERK_WEBHOOK_SECRET`, `CLERK_SECRET_KEY`, and all four `S3_*` values. Still
-literal placeholders, and only unblocked because nothing consumes them yet:
-
-- [ ] `RESEND_API_KEY` (`re_...`) and a **verified sending domain** with SPF and
-      DKIM — without this every transactional email lands in spam (**#11**).
-- [ ] `EMAIL_FROM` — currently `noreply@ve…`, must be on the verified domain.
-- [ ] `SENTRY_DSN` (`https://...`) — no error reporting exists until this is real
-      (**#15**).
-- [ ] `STRIPE_*` — see §1.3.
-
-### 2.3 Webhook endpoints must point at the production API
-
-- [ ] **Clerk** — was pointed at a `clerk webhooks listen` **CLI relay**, so
-      `user.updated` / `user.deleted` were silently dropped in production
-      (**#46**). Repointed at Railway during cutover; re-do on the production
-      instance.
-- [ ] **Stripe** — endpoint + signing secret against the production API.
-- [ ] Add a check that fails if a configured webhook target is not a real API
-      origin. Nothing guards this today, which is how #46 survived unnoticed.
-
-### 2.4 Domain and DNS
-
-Everything is on `*.vercel.app` and `*.up.railway.app` today.
-
-- [ ] Real domain, on Cloudflare.
-- [ ] `WEB_URL`, `API_URL`, `NEXT_PUBLIC_API_URL` and `BRAND_DOMAIN` all on it.
-- [ ] Clerk production instance on the domain (§1.2).
-- [ ] `cdn.` subdomain for R2 — see §3.1.
+| Group       | Check                                                                     | Passes when                                                                                                                                                                                                                             |
+| ----------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clerk       | `clerk key`                                                               | `CLERK_SECRET_KEY` is `sk_live_`                                                                                                                                                                                                        |
+| Clerk       | `clerk instance`                                                          | the Backend API reports `environment_type: production`                                                                                                                                                                                  |
+| Clerk       | `clerk webhook endpoint`                                                  | `CLERK_WEBHOOK_ENDPOINT` is `API_URL/webhooks/clerk` — Clerk has no read API for its webhook endpoints, so this is the declared value the API refuses to boot without                                                                   |
+| Clerk       | `clerk self-serve deletion`                                               | the instance's `delete_self` is off (`MANUAL` when the instance settings cannot be read)                                                                                                                                                |
+| Stripe      | `stripe key`                                                              | `STRIPE_SECRET_KEY` is `sk_live_`                                                                                                                                                                                                       |
+| Stripe      | `stripe webhook endpoint`                                                 | exactly one enabled endpoint at `API_URL/webhooks/stripe` (the API verifies one signing secret) subscribes to every type in `HANDLED_STRIPE_EVENT_TYPES` (`apps/api/src/modules/webhooks/stripe.routes.ts`); the missing ones are named |
+| Stripe      | `stripe connected-account events`                                         | `MANUAL`: the endpoint list does not say whether an endpoint listens to connected accounts, and vendor `account.updated` arrives only if it does                                                                                        |
+| Stripe      | `charges_enabled`, `payouts_enabled`                                      | both `true` on the platform account                                                                                                                                                                                                     |
+| Stripe      | `stripe statement descriptor`                                             | set, at least 5 characters, not a placeholder — nothing in `apps/api` sets one, so it is configured in the Dashboard                                                                                                                    |
+| Stripe      | `stripe business name`                                                    | equals `BRAND_NAME`                                                                                                                                                                                                                     |
+| Resend      | `resend sending domain`                                                   | the domain of `EMAIL_FROM` is `verified` (`MANUAL` when a sending-only key cannot list domains)                                                                                                                                         |
+| Storage     | `S3_PUBLIC_URL`                                                           | a custom domain, not `*.r2.dev` or a local address                                                                                                                                                                                      |
+| Database    | `database branch`                                                         | `DATABASE_URL` is a Neon endpoint and `NEON_BRANCH` is `production`                                                                                                                                                                     |
+| Database    | `seeded rows`                                                             | zero rows carry the marketing, demo or E2E seed markers — fabricated vendors and reviews on a public production site are misrepresentation                                                                                              |
+| Database    | `migrations`                                                              | every migration in the repository journal is applied                                                                                                                                                                                    |
+| Environment | `SENTRY_DSN`, `OPERATOR_ALERT_EMAIL`, `SUPPORT_EMAIL_TO`                  | set, not the registry placeholder, and matching the production shape                                                                                                                                                                    |
+| Environment | `RATE_LIMIT_MAX`                                                          | between 30 and 1000 requests per minute per IP                                                                                                                                                                                          |
+| App         | `api /ready`                                                              | `API_URL/ready` answers 200 (database and storage both up)                                                                                                                                                                              |
+| App         | `web security headers`                                                    | a real response from `WEB_URL` carries HSTS, an enforcing CSP, `X-Content-Type-Options`, `X-Frame-Options` and `Referrer-Policy`                                                                                                        |
+| App         | `platform_settings.vendorInviteOnly`, `platform_settings.maxBookingCents` | `SKIP` until VEN-406 and VEN-404 land; a closed beta needs invite-only on and a booking cap set                                                                                                                                         |
 
 ---
 
-## 3. Storage and data
+## What only a person can do
 
-### 3.1 R2 is on the public development URL
+- [ ] **Legal wording** (VEN-378). The terms, privacy and cookie pages exist, but
+      their wording is placeholder nobody has relied on. A lawyer reads them —
+      above all the staff-message-access clause under _Who else sees it_ in the
+      privacy policy, the one paragraph asserting that staff can read a user's
+      private messages — and the legal entity and a monitored support
+      destination are named.
+- [ ] **Provider accounts** (VEN-377): the Clerk production instance on the real
+      domain, the live Stripe Connect platform, the Resend domain's DNS, the
+      Cloudflare custom domain for the R2 bucket, and the **Neon upgrade from
+      Free to Launch** — on Free, `production` has a 6-hour history window, no
+      branch protection and a storage cap whose breach makes writes fail. After
+      the upgrade: protect the `production` branch and widen its history
+      retention.
+- [ ] **Image licensing.** Confirm the licence of every shipped marketing image
+      and the landing-page category photography.
+- [ ] **A real end-to-end transaction** on live keys before opening to customers:
+      book, pay, message, cancel with a refund, and see the payout arrive.
+- [ ] **Restore drill.** Nightly encrypted off-platform backups exist (VEN-408);
+      run the drill in `docs/runbook-restore.md` against the production backups
+      once before launch, not only by reading the workflow.
+- [ ] **Rotate every credential touched during setup** (`docs/credentials.md`).
 
-`S3_PUBLIC_URL` is `https://pub-f0933b41….r2.dev`. Cloudflare **rate-limits**
-this URL, excludes it from its cache, and does not recommend it for production —
-no caching means slower LCP and more billed Class B operations, on exactly the
-image-heavy vendor pages the product depends on for organic traffic.
+## Known limits to revisit before scaling out
 
-**This is time-sensitive.** Image URLs are stored **absolute** in the database
-(`storage.ts:41`), so changing `S3_PUBLIC_URL` later does not repoint existing
-images — it leaves rows split across two hosts and needs a data migration. The
-bucket is empty today. Ticket **#47**.
-
-- [ ] Attach a Cloudflare **custom domain** to the bucket **before real vendors
-      upload**, or
-- [ ] store the **object key** and resolve the base URL at render time — the
-      better long-term shape, but it touches every image-bearing column and its
-      wire schema.
-
-### 3.2 Database
-
-- [ ] **Switch the API off the `dev` branch onto `production`** (**#48**) — it
-      reads `dev` today, by decision, and nothing enforces the direction.
-- [ ] Re-run the reference seed on `production`: it is **stale**, carrying 10
-      categories where `dev` has 11.
-- [ ] Extend preflight so a _production_ target refuses a non-production branch.
-      It enforces only the opposite direction today.
-- [ ] **Upgrade Neon from Free to Launch** (**#206**) — pay-as-you-go, no monthly
-      minimum, realistically $5-25/month at this size. Free is the correct plan
-      while there is no real data; every line below is gated on this one. On the
-      Free plan today: **6-hour** history window, **zero** snapshots and no
-      scheduled backups, `production` **unprotected**, scale-to-zero that cannot
-      be disabled, a 0.5 GB storage cap whose breach makes inserts, updates and
-      deletes _fail_, and 5 GB/month egress shared across the whole account. A
-      bad `UPDATE` found the next morning is unrecoverable inside a six-hour
-      window.
-- [ ] After the upgrade — all four are agent-executable through the Neon MCP once
-      the plan allows them: set `protected: true` on the `production` branch,
-      widen `history_retention_seconds` from **21,600 (6h)** to **604,800
-      (7 days)**, add a scheduled backup, and set a spending notification.
-- [ ] Disable scale-to-zero on `production` once real traffic exists, so the
-      first visitor after an idle spell does not pay the cold start.
-- [ ] `pg_dump` to R2 on a schedule, **regardless of plan**. Point-in-time
-      restore and snapshots protect against your own mistakes; an off-platform
-      dump is the only thing that protects against the platform's — account
-      lockout, billing failure, a bad support day.
-- [ ] Point-in-time recovery / backup retention confirmed and tested by doing a
-      real restore, not by reading the setting.
-- [ ] Migrations run as a gated pre-deploy step and roll back cleanly on failure.
-- [ ] Review the `max: 10` connection pool against the real replica count.
-
-### 3.3 Upload limits disagree across the stack
-
-Spec says **JPG or PNG · 12 MB · min 1200px · 20 files**; the app says "JPEG,
-PNG, or WebP, up to 10MB" in three places and enforces no minimum dimension and
-no batch limit (**#29**). Separately, if any part of the API ever runs on Vercel,
-its **4.5 MB body cap** silently breaks uploads (**#34**, resolved by D10 —
-API on Railway).
-
----
-
-## 4. Product completeness
-
-The marketplace cannot take a booking today. Every ticket below is MVP; see
-Linear for detail.
-
-- [ ] **#7** Booking request — the spine everything hangs off
-- [ ] **#22a / #22b** Vendor dashboard and customer bookings hub
-- [ ] **#8** Messaging + notifications
-- [ ] **#9 / #10** Stripe onboarding and the payment lifecycle
-- [ ] **#12** Reviews — the landing page promises "reviews from real bookings"
-      and every card renders a rating
-- [ ] **#11** Transactional email
-- [ ] **#16** Customer profile
-- [ ] **#29** Search and upload states
-- [ ] **#33** Front-door resilience — one failed reference read currently 500s
-      every route
-- [ ] **#14** Demo dataset and E2E suites — note the tension with §1.1: demo data
-      must never reach production
-
----
-
-## 5. Correctness and polish
-
-- [ ] **#42** Soft 404 — `notFound()` returns **HTTP 200** in production, so
-      every removed vendor URL gets indexed as a live page
-- [ ] **#30** No `robots.ts`, `sitemap.ts`, `opengraph-image`, `manifest.ts` or
-      `metadataBase` — the site is uncrawlable and every shared link renders a
-      blank card
-- [ ] **#45** Mid-width layout defects at 768 and 1024
-- [ ] **#26** Responsive header parity; **#25** style tags; **#37** search button
-      discipline; **#39** state library; **#41** vendor tagline and experience
-- [ ] Accessibility pass: keyboard traversal, focus order, contrast, and screen
-      reader labels on every shipped surface
-- [ ] Design parity gate re-run at 1440 / 1280 / **1024** / 768 / 390
-
----
-
-## 6. Operations
-
-- [ ] **#20** Deploy pipeline — gated, with rollback
-- [ ] **#35** Post-deploy smoke check. The API answered **500 on every route for
-      19 hours** while the platform reported the deployment healthy; a build that
-      never invokes a route cannot detect a broken runtime
-- [ ] **#19** Production environment provisioning, completed and documented
-- [ ] Sentry alerting wired to somewhere a human actually reads
-- [ ] Uptime monitoring on `/ready`, not `/health`
-- [ ] An on-call path and a documented rollback procedure
-- [ ] Rate limiting: `@fastify/rate-limit` is **per-instance and in memory**.
-      Correct on a bounded Railway replica count; revisit before scaling out
-
----
-
-## 7. Legal and business
-
-- [ ] ToS, privacy policy, cookie notice (§1.5) — including the
-      staff-message-access clause #436 added to the privacy policy
-- [ ] Stripe Connect terms accepted; platform account fully verified
-- [ ] Vendor agreement covering the 12% commission and payout timing
-- [ ] Refund and cancellation policy shown before payment, matching what the
-      code enforces
-- [ ] A support contact route that reaches a human
-- [ ] Confirm the licensing of every shipped marketing image and the landing
-      category photography
-
----
-
-## 8. Launch-day sequence
-
-1. Freeze `main`.
-2. Purge demo data (§1.1) and verify `GET /vendors` returns only real supply.
-3. Swap Clerk, Stripe, Resend and Sentry to production credentials.
-4. Cut DNS to the real domain; verify Clerk and CORS on it.
-5. Run migrations; verify `/ready` reports `database: up, storage: up`.
-6. Smoke test: sign up as customer and as vendor, publish a profile, upload an
-   image, send a booking request, pay, message, review, refund.
-7. Verify security headers, `robots.txt`, `sitemap.xml` and a share card on a
-   real URL.
-8. Confirm error reporting and uptime alerts fire — by deliberately breaking
-   something, not by assuming.
-9. Rotate every credential touched during setup (§2.1).
-10. Unfreeze.
+- **Image URLs are stored absolute.** `apps/api/src/lib/storage.ts` writes
+  `publicUrlFor(S3_PUBLIC_URL, key)` into rows, so changing `S3_PUBLIC_URL` after
+  vendors upload does not repoint existing images. Put the custom domain in
+  place first — which is why `launch:check` fails `*.r2.dev`.
+- **The rate limiter is in memory, per instance.** `@fastify/rate-limit` in
+  `apps/api/src/server.ts` keeps its counters in each process, so N replicas
+  allow N × `RATE_LIMIT_MAX`. Correct on a bounded replica count.
