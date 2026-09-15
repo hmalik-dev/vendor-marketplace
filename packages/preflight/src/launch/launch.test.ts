@@ -119,6 +119,7 @@ function databaseDouble(mode: Mode): LaunchDatabase {
     seedRowCounts: async () =>
       live ? { marketing: 0, demo: 0, e2e: 0 } : { marketing: 16, demo: 0, e2e: 1 },
     pendingMigrations: async () => (live ? [] : ['0043_past_joshua_kane']),
+    maxBookingCents: async () => (live ? 500_000 : null),
   };
 }
 
@@ -224,11 +225,23 @@ describe('launch:check against correctly configured doubles', () => {
     expect(find(results, 'stripe key').detail).toBe('sk_live_…9003');
   });
 
-  it('reports the platform_settings switches as SKIP until VEN-404 and VEN-406 land', async () => {
+  it('reads the booking cap, and reports invite-only as SKIP until VEN-406 lands', async () => {
     const results = await runLaunchChecks(options('live'));
 
     expect(find(results, 'platform_settings.vendorInviteOnly').status).toBe('SKIP');
-    expect(find(results, 'platform_settings.maxBookingCents').status).toBe('SKIP');
+    expect(find(results, 'platform_settings.maxBookingCents')).toMatchObject({
+      status: 'PASS',
+      detail: '500000',
+    });
+  });
+
+  it('fails an uncapped platform for a beta release', async () => {
+    const results = await runLaunchChecks(options('test'));
+
+    expect(find(results, 'platform_settings.maxBookingCents')).toMatchObject({
+      status: 'FAIL',
+      detail: 'unset (expected a booking cap for a beta release)',
+    });
   });
 
   it('turns an unreachable provider into a failure rather than a crash', async () => {

@@ -31,6 +31,8 @@ export interface LaunchDatabase {
   seedRowCounts(): Promise<SeedRowCounts>;
   /** Tags of the repository's migrations the database has not applied. */
   pendingMigrations(): Promise<readonly string[]>;
+  /** `platform_settings.max_booking_cents`; `null` when uncapped or the row was never written. */
+  maxBookingCents(): Promise<number | null>;
 }
 
 export interface PostgresLaunchDatabaseOptions {
@@ -78,6 +80,12 @@ export function postgresLaunchDatabase(
       `;
       const applied = new Set(rows.map((row) => row.created_at));
       return journal.filter((entry) => !applied.has(String(entry.when))).map((entry) => entry.tag);
+    },
+    async maxBookingCents() {
+      const [row] = await sql<{ max_booking_cents: number | null }[]>`
+        select max_booking_cents from platform_settings limit 1
+      `;
+      return row?.max_booking_cents ?? null;
     },
     close: () => sql.end(),
   };
@@ -145,6 +153,23 @@ export function databaseProbes({ env, database }: LaunchOptions): Probe[] {
           pending.length === 0
             ? passed('database', 'migrations', 'at the repository latest')
             : failed('database', 'migrations', `${pending.length} pending: ${pending.join(', ')}`),
+        ];
+      },
+    },
+    {
+      // VEN-404's booking cap. A closed beta caps what one booking can charge.
+      group: 'database',
+      name: 'platform_settings.maxBookingCents',
+      async run() {
+        const cap = await database.maxBookingCents();
+        return [
+          judge(
+            'database',
+            'platform_settings.maxBookingCents',
+            cap === null ? 'unset' : String(cap),
+            cap !== null,
+            'a booking cap for a beta release',
+          ),
         ];
       },
     },

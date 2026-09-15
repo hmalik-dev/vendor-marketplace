@@ -50,22 +50,16 @@ export function appProbes({ env, get }: LaunchOptions): Probe[] {
       },
     },
     {
-      // The launch switches live in `platform_settings`, which VEN-404 and
-      // VEN-406 add. Until that schema is on main there is nothing to read.
+      // The invite-only switch is added to `platform_settings` by VEN-406.
+      // Until that column is on main there is nothing to read.
       group: 'app',
-      name: 'platform_settings',
+      name: 'platform_settings.vendorInviteOnly',
       run: async () => [
         {
           group: 'app',
           name: 'platform_settings.vendorInviteOnly',
           status: 'SKIP',
           detail: 'not in this tree until VEN-406 lands; a beta release needs it on',
-        },
-        {
-          group: 'app',
-          name: 'platform_settings.maxBookingCents',
-          status: 'SKIP',
-          detail: 'not in this tree until VEN-404 lands; a beta release needs it set',
         },
       ],
     },
