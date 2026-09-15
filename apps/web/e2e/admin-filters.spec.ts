@@ -162,9 +162,10 @@ async function expectSubmitKeepsTheFilter(page: Page, before: Listing): Promise<
 /**
  * The unfiltered listing, having proved it holds both directions.
  *
- * Reviews are not part of `seed:e2e` — a review needs a completed booking. With
- * one direction only, the filter removes nothing and every assertion below
- * would pass against a bar that still discards the query.
+ * `seed:e2e` writes one completed booking reviewed in each direction (VEN-395),
+ * so this holds on a lane with no manual precondition. With one direction only,
+ * the filter removes nothing and every assertion below would pass against a bar
+ * that still discards the query — which is why it is asserted, not assumed.
  */
 async function unfilteredBaseline(page: Page): Promise<Listing> {
   await page.goto(PATH);
@@ -175,8 +176,8 @@ async function unfilteredBaseline(page: Page): Promise<Listing> {
   expect(
     unfiltered.directions.length,
     `${PATH} shows reviews in one direction only (${unfiltered.directions.join(', ') || 'none'}), ` +
-      `so the Direction filter cannot be observed to narrow anything. Seed the console:\n` +
-      `  pnpm lane:exec <n> -- pnpm db:seed:demo`,
+      `so the Direction filter cannot be observed to narrow anything. Re-run the fixture seed:\n` +
+      `  pnpm lane:exec <n> -- pnpm db:seed:e2e`,
   ).toBeGreaterThan(1);
 
   return unfiltered;

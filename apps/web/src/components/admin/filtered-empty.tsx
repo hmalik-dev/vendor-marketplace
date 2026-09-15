@@ -43,6 +43,13 @@ export interface FilteredEmptyProps {
   widenings: readonly FilterWidening[];
 }
 
+/** Said when no single widening reveals a row — "any one of them" needs more than one. */
+function nothingPays(filterCount: number): string {
+  return filterCount === 1
+    ? 'Widening it still finds nothing.'
+    : 'Widening any single one of them still finds nothing.';
+}
+
 /**
  * The filtered-empty state, with a **counted** way out per filter (#454).
  *
@@ -99,18 +106,14 @@ export function FilteredEmpty({
     <EmptyState
       headline={headline}
       /*
-       * The second line, and it is two sentences that have to stay honest
-       * together. "Widening any one of them finds something" is a claim about
-       * the routes below it — so when every widening reveals zero it is not
-       * said, and the state says the opposite instead. A fixed sentence would
-       * promise rows that are not there on exactly the run where an operator
-       * most needs the truth.
+       * The second line makes no promise about the routes below it (VEN-395).
+       * It used to say "Widening any one of them finds something" whenever one
+       * route paid — false with two filters and one productive widening, since
+       * a route is drawn only when it reveals rows. The buttons carry their own
+       * counts, so they speak for themselves. The one claim left is the one
+       * that is true of every filter: when no route is drawn, none pays.
        */
-      description={
-        routes.length > 0
-          ? `${narrowing} Widening any one of them finds something:`
-          : `${narrowing} Widening any single one of them still finds nothing.`
-      }
+      description={routes.length > 0 ? narrowing : `${narrowing} ${nothingPays(filters.length)}`}
       action={
         <div className="flex flex-wrap items-center justify-center gap-2">
           {routes.map((route, index) => (

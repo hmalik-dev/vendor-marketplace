@@ -51,14 +51,13 @@ describe('ReviewTable', () => {
     );
 
     /*
-     * Two, not four. `DataTable` renders every row twice — the grid from `md`
-     * up and a card list below it — so one marked row out of two is two pills,
-     * and marking both would be four. The assertion is the pairing, not the
-     * presence of a pill.
+     * One, not two. `DataTable` mounts one branch per viewport (VEN-395), so
+     * one marked row out of two is one pill, and marking both would be two.
+     * The assertion is the pairing, not the presence of a pill.
      */
-    expect(screen.getAllByText('Hidden')).toHaveLength(2);
-    expect(screen.getAllByText('A review an operator took down')).toHaveLength(2);
-    expect(screen.getAllByText('Late and unapologetic')).toHaveLength(2);
+    expect(screen.getAllByText('Hidden')).toHaveLength(1);
+    expect(screen.getAllByText('A review an operator took down')).toHaveLength(1);
+    expect(screen.getAllByText('Late and unapologetic')).toHaveLength(1);
   });
 
   /*
@@ -70,12 +69,12 @@ describe('ReviewTable', () => {
   it('gives each row an overflow menu named for the review it acts on', () => {
     render(<ReviewTable filtered={false} rows={[reviewRow()]} />);
 
-    // Two: the grid rendering and the card rendering of the same row.
+    // One: `DataTable` mounts only the branch for the viewport (VEN-395).
     expect(
       screen.getAllByRole('button', {
         name: 'Actions for the review of Fernbank Studio by Dana R.',
       }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 
   /** Opens the first `···` and returns the menu item labels, in order. */
@@ -126,7 +125,7 @@ describe('ReviewTable', () => {
       />,
     );
 
-    expect(screen.getAllByText('Private')).toHaveLength(2);
+    expect(screen.getAllByText('Private')).toHaveLength(1);
     expect(screen.queryByText('Hidden')).toBeNull();
   });
 

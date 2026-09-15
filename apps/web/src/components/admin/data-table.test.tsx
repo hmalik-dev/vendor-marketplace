@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { renderToString } from 'react-dom/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataTable, type DataTableColumn } from './data-table';
 
 afterEach(cleanup);
@@ -181,7 +182,28 @@ describe('DataTable below the desktop widths', () => {
     return column;
   });
 
+  /**
+   * The viewport `TableBranch` reads. `vitest.setup.ts`'s stub never matches,
+   * which is the desktop; a card test has to say it is below `md`.
+   */
+  function viewport(narrow: boolean): void {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query) =>
+        ({
+          matches: narrow && query === '(width < 48rem)',
+          media: query,
+          addEventListener: () => undefined,
+          removeEventListener: () => undefined,
+        }) as unknown as MediaQueryList,
+    );
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   function renderCards(rows: readonly Row[]) {
+    viewport(true);
     return renderTable(rows, withControls);
   }
 
@@ -234,6 +256,7 @@ describe('DataTable below the desktop widths', () => {
         ? { ...column, className: 'flex justify-end overflow-visible' }
         : column,
     );
+    viewport(true);
     renderTable([{ id: 'a', name: 'Casa Verde', note: 'Short' }], geometry);
 
     const wrappers = [...(cardsOf()[0]?.querySelectorAll(':scope > div > div') ?? [])];
@@ -271,13 +294,47 @@ describe('DataTable below the desktop widths', () => {
     expect(widthOf(wrappers[1])).toBe(70);
   });
 
-  it('renders the table from 768 up and the card list below it, never both', () => {
+  /*
+   * VEN-395. Both branches used to stay mounted with CSS picking one, so every
+   * row control existed twice under one accessible name and a strict
+   * `getByRole('button', { name: /Actions for/ })` resolved to two. Now only the
+   * branch for the viewport is mounted — asserted at both widths, because a
+   * single-width check passes while the other branch's duplicate survives.
+   */
+  it('mounts only the table from 768 up, so each row control exists once', () => {
+    viewport(false);
+    renderTable([{ id: 'a', name: 'Casa Verde', note: 'Short' }], withControls);
+
+    expect(screen.getByRole('table').className).toContain('md:block');
+    expect(screen.queryByRole('list')).toBeNull();
+    expect(screen.getByRole('button', { name: 'More' })).not.toBeNull();
+  });
+
+  /*
+   * The server cannot read the viewport, so its HTML keeps both branches and
+   * the breakpoint classes pick one on first paint — the reason this is not a
+   * width read in an effect, which would flash the wrong branch.
+   */
+  it('still server-renders both branches, so the first paint is right at every width', () => {
+    const html = renderToString(
+      <DataTable
+        columns={withControls}
+        rows={[{ id: 'a', name: 'Casa Verde', note: 'Short' }]}
+        rowKey={(row) => row.id}
+        empty={<p>Nothing here</p>}
+      />,
+    );
+
+    expect(html.match(/role="table"/g)).toHaveLength(1);
+    expect(html.match(/<ul class="md:hidden"/g)).toHaveLength(1);
+  });
+
+  it('mounts only the card list below 768, so each row control exists once', () => {
     renderCards([{ id: 'a', name: 'Casa Verde', note: 'Short' }]);
 
-    const table = screen.getByRole('table');
-    expect(table.className).toContain('hidden');
-    expect(table.className).toContain('md:block');
     expect(screen.getByRole('list').className).toContain('md:hidden');
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByRole('button', { name: 'More' })).not.toBeNull();
   });
 
   it('gives every labelled column its header as the card’s own label', () => {

@@ -93,7 +93,6 @@ export default async function AdminBookingsPage({
         <FilterBar action={PATH} params={{ status, flag }}>
           <FilterSelect
             action={PATH}
-            carried={{ flag }}
             name="status"
             label="Status"
             value={status ?? ''}
@@ -111,7 +110,6 @@ export default async function AdminBookingsPage({
           */}
           <FilterSelect
             action={PATH}
-            carried={{ status }}
             name="flag"
             label="Needs attention"
             value={flag ?? ''}

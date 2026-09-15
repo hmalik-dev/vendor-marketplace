@@ -73,7 +73,6 @@ export default async function AdminPaymentsPage({
           */}
           <FilterSelect
             action={PATH}
-            carried={{}}
             name="flag"
             label="Needs attention"
             value={flag ?? ''}

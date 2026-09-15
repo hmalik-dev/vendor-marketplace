@@ -170,10 +170,9 @@ describe('the counted filtered-empty state', () => {
   /**
    * The sentence stays honest when no widening pays.
    *
-   * "Widening any one of them finds something" is a claim about the routes
-   * under it, and an operator staring at a state that promises rows and offers
-   * none has been told something false on exactly the run where they most need
-   * the truth. The escape is still there — it is the only way out left.
+   * An operator staring at a state that promises rows and offers none has been
+   * told something false on exactly the run where they most need the truth.
+   * The escape is still there — it is the only way out left.
    */
   it('does not promise rows when every single widening finds none', () => {
     draw([]);
@@ -182,6 +181,43 @@ describe('the counted filtered-empty state', () => {
       'Widening any single one of them still finds nothing.',
     );
     expect(widenNames()).toEqual([]);
-    expect(screen.getByText('Clear all filters')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Clear all filters' }).getAttribute('href')).toBe(
+      '/admin/cases',
+    );
+  });
+
+  /**
+   * VEN-395. The line said "Widening any one of them finds something:" whenever
+   * a single route paid — false with two filters and one productive widening,
+   * because a route is drawn only when it reveals rows. Every combination of
+   * one to three filters and zero to all of them productive, with the exact
+   * sentence each must print: the counted buttons speak for the routes, and the
+   * line claims only what is true of the filters.
+   */
+  describe.each([1, 2, 3])('with %i active filter(s)', (active) => {
+    const filters = FILTERS.slice(0, active);
+    const narrowing =
+      active === 1 ? 'One filter is narrowing this.' : `${active} filters are narrowing this.`;
+
+    it.each(Array.from({ length: active + 1 }, (_, productive) => productive))(
+      'and %i productive widening(s), says only what is true',
+      (productive) => {
+        const counted = filters.map((filter, index) => ({
+          key: filter.key,
+          count: index < productive ? 3 : 0,
+        }));
+        draw(counted, filters);
+
+        const nothing =
+          active === 1
+            ? 'Widening it still finds nothing.'
+            : 'Widening any single one of them still finds nothing.';
+        expect(screen.getByText(/narrowing this/).textContent).toBe(
+          productive === 0 ? `${narrowing} ${nothing}` : narrowing,
+        );
+        expect(widenNames()).toHaveLength(productive);
+        expect(screen.queryByText(/finds something/)).toBeNull();
+      },
+    );
   });
 });

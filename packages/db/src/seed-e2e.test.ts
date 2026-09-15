@@ -1,5 +1,5 @@
 import { CURRENT_VENDOR_AGREEMENT_VERSION, EVENT_TYPES } from '@vendor-marketplace/shared';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { seedReferenceData } from './seed.js';
 import {
@@ -11,7 +11,9 @@ import {
 import {
   availability,
   bookingRequests,
+  bookings,
   legalAcceptances,
+  reviews,
   servicePackages,
   users,
   vendorCategories,
@@ -76,6 +78,21 @@ describe('seedE2eFixtures', () => {
     };
   }
 
+  /*
+   * The statuses a live request holds. Request counts below read these, not
+   * the whole table: the published seed also writes the accepted request
+   * behind its completed, reviewed booking (VEN-395), which is history rather
+   * than something waiting on the vendor.
+   */
+  const LIVE = ['pending', 'quoted'] as const;
+
+  function liveRequests() {
+    return database.db
+      .select()
+      .from(bookingRequests)
+      .where(inArray(bookingRequests.status, [...LIVE]));
+  }
+
   beforeEach(async () => {
     database = await createTestDatabase();
     await database.runMigrations();
@@ -108,7 +125,12 @@ describe('seedE2eFixtures', () => {
     const requests = await database.db
       .select()
       .from(bookingRequests)
-      .where(eq(bookingRequests.vendorId, result.vendorProfileId));
+      .where(
+        and(
+          eq(bookingRequests.vendorId, result.vendorProfileId),
+          inArray(bookingRequests.status, [...LIVE]),
+        ),
+      );
     expect(requests).toHaveLength(1);
     expect(requests[0]?.status).toBe('pending');
     expect(requests[0]?.customerId).toBe(result.customerUserId);
@@ -300,8 +322,102 @@ describe('seedE2eFixtures', () => {
 
     expect(await database.db.select().from(vendorProfiles)).toHaveLength(1);
     expect(await database.db.select().from(servicePackages)).toHaveLength(1);
-    expect(await database.db.select().from(bookingRequests)).toHaveLength(1);
+    expect(await liveRequests()).toHaveLength(1);
     expect(await database.db.select().from(users)).toHaveLength(2);
+    // The reviewed booking is adopted too, not written again with its reviews.
+    expect(await database.db.select().from(bookings)).toHaveLength(1);
+    expect(await database.db.select().from(reviews)).toHaveLength(2);
+  });
+
+  /*
+   * VEN-395. A review needs a completed booking and the fixture made neither,
+   * so `/admin/reviews` was empty after `seed:e2e` and a direction-filter spec
+   * could only pass by finding nothing to check.
+   */
+  describe('the completed, reviewed booking', () => {
+    it('completes a past booking between the two accounts and reviews it in each direction', async () => {
+      const result = published(await seedE2eFixtures(database.db, INPUT));
+
+      const [booking] = await database.db.select().from(bookings);
+      expect(booking?.status).toBe('completed');
+      expect(booking?.vendorId).toBe(result.vendorProfileId);
+      expect(booking?.customerId).toBe(result.customerUserId);
+      // 30 days before the pinned "now", so it is always in the past.
+      expect(booking?.eventDate).toBe('2026-07-31');
+      expect(booking?.totalAmountCents).toBe(145_000);
+
+      const written = await database.db
+        .select({ type: reviews.type, reviewerId: reviews.reviewerId, rating: reviews.rating })
+        .from(reviews)
+        .where(eq(reviews.bookingId, booking?.id ?? ''));
+      expect(written.sort((a, b) => a.type.localeCompare(b.type))).toEqual([
+        { type: 'customer_to_vendor', reviewerId: result.customerUserId, rating: 5 },
+        { type: 'vendor_to_customer', reviewerId: result.vendorUserId, rating: 4 },
+      ]);
+    });
+
+    it('derives both parties’ ratings from the reviews it wrote', async () => {
+      const result = await seedE2eFixtures(database.db, INPUT);
+      // Twice, so a derivation that incremented instead of recounting shows.
+      await seedE2eFixtures(database.db, INPUT);
+
+      const [profile] = await database.db
+        .select()
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, result.vendorProfileId));
+      const [customer] = await database.db
+        .select()
+        .from(users)
+        .where(eq(users.id, result.customerUserId));
+
+      expect(profile?.avgRating).toBe('5.00');
+      expect(profile?.reviewCount).toBe(1);
+      expect(customer?.avgCustomerRating).toBe('4.00');
+      expect(customer?.customerReviewCount).toBe(1);
+    });
+
+    /*
+     * The vendor is payable through a real connected account, so an unreleased
+     * `separate` payout on this row would be moved by the sweep as real
+     * test-mode money. The legacy destination pair is released and names no
+     * transfer, so there is nothing to sweep and nothing fake to reverse.
+     */
+    /*
+     * The dashboard's response rate counts requests by `created_at` inside the
+     * last 30 days. Left at `now()`, the seeded accepted request read as a
+     * fresh answered one and moved that figure.
+     */
+    it('dates the request behind it before the payment, outside the 30-day window', async () => {
+      await seedE2eFixtures(database.db, INPUT);
+
+      const [request] = await database.db
+        .select()
+        .from(bookingRequests)
+        .where(eq(bookingRequests.status, 'accepted'));
+      const [booking] = await database.db.select().from(bookings);
+
+      expect(request?.createdAt.toISOString()).toBe('2026-07-03T00:00:00.000Z');
+      expect(request?.acceptedAt?.toISOString()).toBe('2026-07-10T00:00:00.000Z');
+      expect(booking?.paidAt?.toISOString()).toBe('2026-07-10T00:00:00.000Z');
+      expect(booking?.completedAt?.toISOString()).toBe('2026-08-01T00:00:00.000Z');
+    });
+
+    it('leaves nothing for the payout sweep to transfer', async () => {
+      await seedE2eFixtures(database.db, INPUT);
+
+      const [booking] = await database.db.select().from(bookings);
+      expect(booking?.payoutModel).toBe('destination');
+      expect(booking?.payoutReleasedAt).not.toBeNull();
+      expect(booking?.stripeTransferId).toBeNull();
+      expect(booking?.stripePaymentIntentId).toBeNull();
+    });
+
+    it('is not written by the draft seed', async () => {
+      await seedE2eFixtures(database.db, { ...INPUT, storefront: 'draft' });
+
+      expect(await database.db.select().from(bookings)).toHaveLength(0);
+      expect(await database.db.select().from(reviews)).toHaveLength(0);
+    });
   });
 
   /*
@@ -404,7 +520,7 @@ describe('seedE2eFixtures', () => {
 
       expect(profile?.isPublished).toBe(false);
       expect(profile?.isDeleted).toBe(false);
-      expect(await database.db.select().from(bookingRequests)).toHaveLength(0);
+      expect(await liveRequests()).toHaveLength(0);
       expect(result.bookingRequestId).toBeNull();
       expect(result.packageId).toBeNull();
       expect(result.eventDate).toBeNull();
@@ -451,12 +567,59 @@ describe('seedE2eFixtures', () => {
     it('clears the requests a previous published run left behind', async () => {
       const seeded = published(await seedE2eFixtures(database.db, INPUT));
 
-      expect(await database.db.select().from(bookingRequests)).toHaveLength(1);
+      expect(await liveRequests()).toHaveLength(1);
 
       const drafted = await seedE2eFixtures(database.db, { ...INPUT, storefront: 'draft' });
 
       expect(drafted.vendorProfileId).toBe(seeded.vendorProfileId);
+      expect(await liveRequests()).toHaveLength(0);
+      // And the reviewed booking with them (VEN-395): a completed, rated booking
+      // is not the empty dashboard the draft exists to draw.
       expect(await database.db.select().from(bookingRequests)).toHaveLength(0);
+      expect(await database.db.select().from(bookings)).toHaveLength(0);
+      expect(await database.db.select().from(reviews)).toHaveLength(0);
+      const [profile] = await database.db
+        .select()
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, drafted.vendorProfileId));
+      expect(profile?.reviewCount).toBe(0);
+      expect(profile?.avgRating).toBe('0.00');
+    });
+
+    /*
+     * `bookings.request_id` is `RESTRICT`, so deleting a request that became a
+     * booking failed the whole draft seed. A booking the paid journey completed
+     * is history the fixture did not write, and survives the draft.
+     */
+    it('keeps a booking it did not write, and the request behind it', async () => {
+      const seeded = published(await seedE2eFixtures(database.db, INPUT));
+      const [journey] = await database.db
+        .insert(bookingRequests)
+        .values({
+          customerId: seeded.customerUserId,
+          vendorId: seeded.vendorProfileId,
+          packageId: seeded.packageId,
+          eventDate: '2026-06-01',
+          eventType: 'wedding',
+          status: 'accepted',
+        })
+        .returning({ id: bookingRequests.id });
+      await database.db.insert(bookings).values({
+        requestId: journey?.id ?? '',
+        customerId: seeded.customerUserId,
+        vendorId: seeded.vendorProfileId,
+        eventDate: '2026-06-01',
+        totalAmountCents: 145_000,
+        platformFeeCents: 17_400,
+        vendorPayoutCents: 127_600,
+        status: 'completed',
+      });
+
+      await seedE2eFixtures(database.db, { ...INPUT, storefront: 'draft' });
+
+      const left = await database.db.select().from(bookings);
+      expect(left.map((booking) => booking.requestId)).toEqual([journey?.id]);
+      expect(await database.db.select().from(bookingRequests)).toHaveLength(1);
     });
 
     /*
@@ -516,7 +679,7 @@ describe('seedE2eFixtures', () => {
       expect(profile?.isPublished).toBe(true);
       expect(profile?.responseTimeHours).not.toBeNull();
       expect(active.length).toBeGreaterThan(0);
-      expect(await database.db.select().from(bookingRequests)).toHaveLength(1);
+      expect(await liveRequests()).toHaveLength(1);
     });
   });
 
@@ -614,7 +777,7 @@ describe('seedE2eFixtures', () => {
     const second = published(await seedE2eFixtures(database.db, INPUT));
 
     expect(second.bookingRequestId).toBe(first.bookingRequestId);
-    expect(await database.db.select().from(bookingRequests)).toHaveLength(1);
+    expect(await liveRequests()).toHaveLength(1);
   });
 
   /*

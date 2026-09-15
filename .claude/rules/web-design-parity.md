@@ -126,10 +126,27 @@ extra Tab, and that is correct rather than a defect.
 
 **Do not "fix" it by hand-rolling a tab-order walk.** Radix's menu keydown
 handling sits between the component's handler and the browser default, so
-declining to `preventDefault` does not hand the key back — and the admin table
-renders every row action **twice** (the grid and the `md:hidden` card list), which
-is precisely the DOM that makes a naive next-focusable query select the wrong
-element.
+declining to `preventDefault` does not hand the key back — and the admin table's
+server render draws every row action **twice** (the grid and the `md:hidden` card
+list), which is precisely the DOM that makes a naive next-focusable query select
+the wrong element. The same duplicate made `Actions for <vendor>` resolve to two
+buttons under Playwright strict mode; **VEN-395 fixed the shared cause** in
+`DataTable` — `TableBranch` unmounts the branch the viewport is not using once
+hydrated, so after hydration each control exists once. Before hydration both
+still exist, so a walk or a locator must wait for it (`e2e/hydration.ts`).
+
+**The filtered-empty state does not print the delta's "Widening any one of them
+finds something:" (VEN-395).** `design/delta-admin/Orla-Admin-Views.html:140`
+draws it, but a route is drawn only when it reveals rows, so with two filters and
+one productive widening the sentence is false. The line states how many filters
+are narrowing the view and lets the counted buttons speak; only when no route is
+drawn does it add that widening still finds nothing. A parity pass reading the
+missing clause is looking at this ruling.
+
+**The Refine bar's search field has a visible `Search` label (VEN-395).** Frame
+`13` draws the field with only a placeholder, which disappears on the first
+keystroke; `04-laws.md` requires a label that stays. The word sits before the
+field and shifts the controls right within the bar's slack.
 
 **A retired vendor's row draws no `···` control (#433, ruled 2026-09-07).**
 Frame `13` draws the row-actions control in all fifteen rows. A retired account
