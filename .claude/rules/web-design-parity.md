@@ -211,6 +211,16 @@ short. On any filled control, measure the **painted** box, not the layout box
 and not the `padding` property alone. `sm`, `lg` and the other variants keep the
 base box; `03-components.md`'s `py-2.5` is the drift here.
 
+**The broken mark is the frames' loose geometry, not the logo's overlap
+(VEN-419, 2026-09-15).** `BrokenMark` draws frame `15`'s 74x46 box with the
+dashed circle at `left:28px` (0.61 D). Frame `26` draws **no** broken mark —
+its state library has none, so it cannot disagree — and the siblings under D30
+are the empty-state marks, which all draw the same loose offset: `18` 24/38,
+`27 Search — no results` 21/33, `19`/`20` 22/36, `27 Vendor dashboard` 19/31.
+`EmptyStateGlyph` and `SearchEmptyGlyph` already take those. The logo's
+`OFFSET_RATIO = 0.45` (#449) is the working mark and does not move; a pass
+reading the two marks' different offsets is looking at this ruling.
+
 **A border or surface token used as text on an ink ground is machine-checked
 (#447, 2026-09-07).** `apps/web/src/testing/token-roles.ts` holds `STONE_ROLES`,
 the declared role of every `--color-stone-*` step, and is the source of truth for
