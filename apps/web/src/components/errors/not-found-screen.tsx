@@ -44,9 +44,11 @@ export async function NotFoundScreen(): Promise<React.ReactElement> {
 
       {/*
         Three jobs, one sentence: what happened, why it is not alarming, and
-        that the visitor's account is untouched — `40-states.md` §1.
+        that the visitor's account is untouched — `40-states.md` §1. 14px at
+        1.65, which is `text-cta`, as frame `16`'s 500 screen takes it; this
+        read `text-sm`'s 12.5 (VEN-418).
       */}
-      <p className="mt-3 max-w-[440px] text-sm leading-[1.65] text-stone-700">
+      <p className="mt-3 max-w-[440px] text-cta leading-[1.65] text-stone-700">
         The link may be old, or a vendor may have taken their listing down. Nothing is wrong with
         your account.
       </p>

@@ -198,6 +198,19 @@ one-frame-against-corroborating-siblings reading does not decide this and primac
 does. **Grep `box-sizing` in the specific bundle a pass is reading before arguing
 about any bordered box in it**, in both directions.
 
+**A default-size primary `Button` is `.btnP`'s box: `border-0 py-2.75 px-5`
+(VEN-418, 2026-09-15).** Corroborated under D30: the `.btnP` class is
+`11px 20px` with no border in the screens document, `contact-support` and
+`delta-legal`; inline clay fills in the screens document draw `11px 20px` four
+times against `10px 20px` twice (`delta-admin`'s `9px 16px` `.btnP` is its own
+12.5px compact button). `.btnS` is `10px 20px` **plus** a 1px border, so frame
+`15` draws the two side by side at one height, primary 2px narrower. The base
+`border border-transparent` sits under `bg-clip-padding`, so a transparent
+border is **unpainted**: primary had the right layout height and a fill 2px
+short. On any filled control, measure the **painted** box, not the layout box
+and not the `padding` property alone. `sm`, `lg` and the other variants keep the
+base box; `03-components.md`'s `py-2.5` is the drift here.
+
 **A border or surface token used as text on an ink ground is machine-checked
 (#447, 2026-09-07).** `apps/web/src/testing/token-roles.ts` holds `STONE_ROLES`,
 the declared role of every `--color-stone-*` step, and is the source of truth for
