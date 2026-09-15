@@ -9,6 +9,7 @@ import {
   SUPPORT_PATH,
 } from '@vendor-marketplace/shared';
 import { cleanup, render, screen, within } from '@testing-library/react';
+import type { Category } from '@vendor-marketplace/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deltaFrame } from '@/testing/design-frames';
 
@@ -65,6 +66,13 @@ vi.mock('@/lib/current-user', () => ({
   readRoleForChrome: async () => currentRole,
 }));
 
+/* The live taxonomy; empty is the degraded read, which keeps every ruled link. */
+let liveCategories: Category[] = [];
+
+vi.mock('@/lib/vendor-data', () => ({
+  getCategories: async () => liveCategories,
+}));
+
 let pathname = '/';
 
 vi.mock('next/navigation', () => ({
@@ -78,6 +86,7 @@ describe('SiteFooter', () => {
     authState = 'signed-out';
     currentRole = null;
     pathname = '/';
+    liveCategories = [];
   });
 
   /*
@@ -162,6 +171,31 @@ describe('SiteFooter', () => {
       'All vendors',
     ]);
     expect(screen.queryByRole('link', { name: 'Florals' })).toBeNull();
+  });
+
+  /* VEN-401: an operator can hide a category, and a link to it would search on nothing. */
+  it('drops a ruled category the live taxonomy no longer offers', async () => {
+    liveCategories = CATEGORY_SEEDS.filter((seed) => seed.slug !== 'entertainment').map(
+      (seed, index) => ({
+        id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        name: seed.name,
+        slug: seed.slug,
+        description: seed.description,
+        icon: seed.icon,
+        displayOrder: seed.displayOrder,
+        isActive: true,
+      }),
+    );
+
+    render(await SiteFooter());
+
+    const browse = screen.getByText('Browse').parentElement;
+    expect([...browse!.querySelectorAll('a')].map((link) => link.textContent)).toEqual([
+      'Photography',
+      'Catering',
+      'Beauty',
+      'All vendors',
+    ]);
   });
 
   /*
@@ -670,9 +704,13 @@ describe('the footer Browse column and the landing hero name the same categories
      * two documents by hand.
      */
     const hero = readFileSync(join(process.cwd(), 'src/app/page.tsx'), 'utf8');
+    const footer = readFileSync(join(process.cwd(), 'src/components/site-footer.tsx'), 'utf8');
+    const helper = readFileSync(join(process.cwd(), 'src/lib/jump-categories.ts'), 'utf8');
 
-    expect(hero).toContain('LANDING_JUMP_CATEGORY_SLUGS');
-    // Its chips are mapped from the constant rather than from a literal array.
-    expect(hero).toMatch(/LANDING_JUMP_CATEGORY_SLUGS\.map\(/);
+    // Both render their chips through the one helper (VEN-401 added the live
+    // taxonomy filter there), and the helper maps from the constant.
+    expect(hero).toMatch(/offeredJumpCategories\(categories\)\.map\(/);
+    expect(footer).toMatch(/offeredJumpCategories\(categories\)\.map\(/);
+    expect(helper).toMatch(/LANDING_JUMP_CATEGORY_SLUGS\.filter\(/);
   });
 });

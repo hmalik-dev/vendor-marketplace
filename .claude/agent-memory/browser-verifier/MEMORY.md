@@ -19,3 +19,4 @@
 - [A ticket's own setup steps can authorize scoped DB writes](ticket-setup-steps-can-authorize-scoped-db-writes.md) — override the read-only default only when the task names the column/row and a restore step
 - [Unattached conversation avoids the shared pending booking](unattached-conversation-avoids-shared-booking-mutation.md) — "Send a message" on a vendor storefront opens a fresh thread with no booking attached; real table is `support_cases`, not `cases`
 - [revalidateTag('categories') doesn't bust the public cache](revalidatetag-categories-does-not-bust-public-cache.md) — VEN-401: DB/audit/raw-API update instantly, but landing/header stayed stale 10+ min; verify via curl, not the admin's own no-store re-render
+- [Hero jump row is hardcoded, not live categories](hero-jump-row-is-hardcoded-not-live-categories.md) — landing "Or jump straight to" + footer Browse column read a fixed 4-slug constant, never `getCategories()`; deactivation never removes them
