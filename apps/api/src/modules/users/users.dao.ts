@@ -315,10 +315,11 @@ type EmailDivergenceWrite =
  * the follow-up write is possible.
  *
  * **A successful email write clears the record**, so `pending_email` always
- * means *currently* diverged. That is what makes the repair observable: when
- * the other row releases the address, the next `user.updated` — or a
- * `pnpm reconcile:clerk` pass, which drives this same function — writes the
- * address and the flag goes away on its own.
+ * means *currently* diverged. And when a write moves a row **off** an address,
+ * the row waiting on that address takes it in the same call
+ * (`handAddressToWaiter`, VEN-386), so the ordering race repairs itself on the
+ * event that ends it. A holder Clerk no longer backs is `clerk.service.ts`'s to
+ * resolve.
  *
  * **Rows that diverged before this landed carry neither column**, and no
  * migration backfills them: the old code never learnt which address it failed
@@ -352,7 +353,14 @@ export async function updateUserByClerkId(
     email === undefined ? {} : { pendingEmail: null, emailSyncFailedAt: null };
 
   try {
+    // Read first: `RETURNING` carries only the new address, and the old one is what is released.
+    const previousEmail =
+      email === undefined ? undefined : (await findUserByClerkId(db, clerkUserId))?.email;
     const user = await writeClerkPatch(db, clerkUserId, patch, resolving);
+
+    if (user && previousEmail !== undefined && previousEmail !== user.email) {
+      await handAddressToWaiter(db, previousEmail);
+    }
 
     return user ? { user, emailDiverged: false } : null;
   } catch (error) {
@@ -391,6 +399,70 @@ export async function updateUserByClerkId(
 
     return user ? { user, emailDiverged: true } : null;
   }
+}
+
+/**
+ * Writes a just-released address onto the live row that diverged waiting for it
+ * (VEN-386).
+ *
+ * The ordering race is the reason: a `user.updated` moving onto an address can
+ * be delivered before the one moving its holder off it, and the second event
+ * is the last that will ever arrive for either account. Without this the waiter
+ * stayed diverged until its holder edited their profile again.
+ *
+ * **Only a sole waiter is handed the address.** Clerk gives an address to one
+ * identity, so of two rows waiting on it at most one is genuine, and nothing
+ * in the database says which — `email_sync_failed_at` is the first failure on
+ * *any* address, not when this one was claimed. Guessing would send one
+ * account's notifications to another's inbox. With several waiters, each
+ * stays diverged (and mail-silent) until its own next event, which asks Clerk.
+ *
+ * A waiter that collides anyway (the address was taken in between) keeps its
+ * record, the state it was already in. One level only — the waiter's own old
+ * address is not re-offered, so a chain of swaps cannot recurse here.
+ */
+async function handAddressToWaiter(db: AppDatabase, address: string): Promise<void> {
+  const waiters = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.pendingEmail, address), notDeleted))
+    .limit(2);
+
+  const [waiter] = waiters;
+
+  if (!waiter || waiters.length > 1) {
+    return;
+  }
+
+  try {
+    await db
+      .update(users)
+      .set({ email: address, pendingEmail: null, emailSyncFailedAt: null, updatedAt: sql`now()` })
+      .where(and(eq(users.id, waiter.id), eq(users.pendingEmail, address), notDeleted));
+  } catch (error) {
+    if (!violatesUniqueConstraint(error, USERS_EMAIL_UNIQUE_INDEX)) {
+      throw error;
+    }
+  }
+}
+
+/**
+ * The live row holding an address, for a collision's caller to ask Clerk
+ * about (VEN-386). Live only: `users_email_key` ignores retired rows, so only a
+ * live one can be what refused the write.
+ */
+export async function findLiveUserByEmail(db: AppDatabase, email: string): Promise<UserRow | null> {
+  if (!email) {
+    return null;
+  }
+
+  const rows = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.email, email), notDeleted))
+    .limit(1);
+
+  return rows?.[0] ?? null;
 }
 
 /** The one `UPDATE` both branches above run, so they cannot drift apart. */
@@ -487,6 +559,26 @@ export async function retireUserById(
  * a redelivered `user.deleted` a no-op rather than a second unwind.
  */
 async function retireUserWhere(
+  db: AppDatabase,
+  where: SQL | undefined,
+): Promise<{ user: UserRow; profileRetired: boolean } | null> {
+  const retired = await retireUserInTransaction(db, where);
+
+  /*
+   * A retired row's address leaves `users_email_key`, so it is released as
+   * surely as by a `user.updated` — and a `user.deleted` delivered after the
+   * event of the account that took the address over is the same ordering race
+   * (VEN-386). After the commit, not inside it: a 23505 there would abort the
+   * retirement itself.
+   */
+  if (retired) {
+    await handAddressToWaiter(db, retired.user.email);
+  }
+
+  return retired;
+}
+
+async function retireUserInTransaction(
   db: AppDatabase,
   where: SQL | undefined,
 ): Promise<{ user: UserRow; profileRetired: boolean } | null> {

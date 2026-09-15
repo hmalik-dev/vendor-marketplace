@@ -32,7 +32,7 @@ function deps(overrides: Partial<NotificationEmailDeps> = {}): {
         select: () => ({
           from: () => ({
             where: () => ({
-              limit: async () => [{ email: 'reader@example.test' }],
+              limit: async () => [{ email: 'reader@example.test', pendingEmail: null }],
             }),
           }),
         }),
@@ -184,6 +184,48 @@ describe('sendNotificationEmail', () => {
     await expect(sendNotificationEmail(d, ROW)).resolves.toBeUndefined();
     expect(sent).toEqual([]);
     expect(errors).toEqual([]);
+  });
+
+  /*
+   * VEN-386. A row whose address disagrees with Clerk is mid-repair, and the
+   * address it still holds is one Clerk has moved off — so the notification
+   * stays in-app only, and the skip is logged without either address.
+   */
+  it('sends nothing to an account whose address is diverged, and says why without the address', async () => {
+    const infos: unknown[][] = [];
+    const {
+      deps: d,
+      sent,
+      errors,
+    } = deps({
+      db: {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [
+                { email: 'reader@example.test', pendingEmail: 'next@example.test' },
+              ],
+            }),
+          }),
+        }),
+      } as unknown as NotificationEmailDeps['db'],
+    });
+    d.log = {
+      error: (...args: unknown[]) => errors.push(args),
+      info: (...args: unknown[]) => infos.push(args),
+    } as unknown as NotificationEmailDeps['log'];
+
+    await sendNotificationEmail(d, ROW);
+
+    expect(sent).toEqual([]);
+    expect(errors).toEqual([]);
+    expect(infos).toHaveLength(1);
+    expect(infos[0]?.[0]).toEqual({
+      notificationId: ROW.id,
+      userId: ROW.userId,
+      reason: 'email-diverged',
+    });
+    expect(JSON.stringify(infos)).not.toContain('@example.test');
   });
 
   /*

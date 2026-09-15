@@ -4,6 +4,7 @@ import { CURRENT_TERMS_VERSION, type UserRole } from '@vendor-marketplace/shared
 import { forbidden, unauthorized } from '../lib/errors.js';
 import { findSessionSubject } from '../modules/users/users.dao.js';
 import type { ClerkUserSnapshot } from '../modules/users/users.service.js';
+import type { ClerkUserSource } from '../modules/webhooks/clerk-user-source.js';
 
 export interface AuthenticatedUser {
   /** Local `users.id`; the only identifier services and DAOs accept. */
@@ -29,6 +30,8 @@ declare module 'fastify' {
   interface FastifyInstance {
     /** Ends a Clerk identity outright; see `ClerkUserDeleter`. */
     deleteClerkUser: ClerkUserDeleter;
+    /** Reads Clerk identities outside a session; the Clerk webhook asks it who holds an address. */
+    clerkUsers: ClerkUserSource;
   }
 
   interface FastifyRequest {
@@ -70,6 +73,7 @@ export interface ClerkAuthPluginOptions {
   verifySessionToken?: TokenVerifier;
   loadClerkUser?: ClerkUserLoader;
   deleteClerkUser?: ClerkUserDeleter;
+  clerkUsers?: ClerkUserSource;
 }
 
 const BEARER_PREFIX = 'Bearer ';
@@ -172,6 +176,7 @@ export const clerkAuthPlugin = fp<ClerkAuthPluginOptions>(
     const loadClerkUser = options.loadClerkUser ?? defaultLoader(clerk);
 
     app.decorate('deleteClerkUser', options.deleteClerkUser ?? defaultDeleter(clerk));
+    app.decorate('clerkUsers', options.clerkUsers ?? clerk.users);
 
     app.decorateRequest('auth', null);
     app.decorateRequest('clerkIdentity', null);

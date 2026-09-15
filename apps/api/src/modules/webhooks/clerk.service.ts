@@ -5,8 +5,20 @@ import {
   type AdminContext,
 } from '../admin/account-unwind.js';
 import { findVendorProfileByUserId } from '../admin/admin.dao.js';
-import { findUserByClerkId, retireUserByClerkId, updateUserByClerkId } from '../users/users.dao.js';
+import {
+  findLiveUserByEmail,
+  findUserByClerkId,
+  retireUserByClerkId,
+  updateUserByClerkId,
+} from '../users/users.dao.js';
 import { mirroredClerkName, syncUserFromClerk } from '../users/users.service.js';
+import {
+  asWebhookData,
+  clerkUsersIn,
+  isClerkIdentity,
+  type ClerkApiUser,
+  type ClerkUserSource,
+} from './clerk-user-source.js';
 import { primaryEmail, type ClerkWebhookEvent } from './clerk.schemas.js';
 
 export type ClerkWebhookOutcome =
@@ -36,6 +48,8 @@ export async function applyClerkUserEvent(
   context: AdminContext,
   event: ClerkWebhookEvent,
   now: Date,
+  /** Asked who really holds an address a `user.updated` collided on. */
+  clerk: ClerkUserSource,
 ): Promise<ClerkWebhookOutcome> {
   const db = context.db;
   const clerkUserId = event.data.id;
@@ -79,7 +93,20 @@ export async function applyClerkUserEvent(
         ...(event.data.image_url === undefined ? {} : { avatarUrl: event.data.image_url || null }),
       };
 
-      const mirrored = await updateUserByClerkId(db, clerkUserId, patch);
+      let mirrored = await updateUserByClerkId(db, clerkUserId, patch);
+
+      /*
+       * A collision means the holder is the stale row — Clerk gives an address
+       * to one identity — so ask Clerk about it and retry once if that
+       * released the address (VEN-386).
+       */
+      if (
+        mirrored?.emailDiverged &&
+        email !== null &&
+        (await releaseStaleHolder(context, clerk, mirrored.user, email, now))
+      ) {
+        mirrored = await updateUserByClerkId(db, clerkUserId, patch);
+      }
 
       if (!mirrored) {
         return 'ignored';
@@ -116,6 +143,91 @@ export async function applyClerkUserEvent(
     default:
       return 'ignored';
   }
+}
+
+/**
+ * Frees an address a live row holds but Clerk no longer gives it, and answers
+ * whether the claimant's write is now worth retrying (VEN-386).
+ *
+ * The holder is stale by construction — a missed `user.deleted`, or a
+ * `user.updated` moving it off the address still in flight — so Clerk is the
+ * arbiter:
+ *
+ * - **Gone from Clerk** → the deletion that never arrived, through the same
+ *   `applyUserDeleted` a delivered one takes. Retiring the row alone would
+ *   leave its bookings for an account nobody can answer.
+ * - **Moved in Clerk** → its address is mirrored, which releases this one.
+ *   Exactly one hop: if that address collides too the holder records its own
+ *   divergence and the chain stops here, rather than walking accounts.
+ * - **Still the owner**, or **Clerk unreachable** → nothing to do; the claimant
+ *   stays `diverged`, as before this ticket.
+ *
+ * A holder Clerk never issued (a seeded account) is never asked about: Clerk
+ * would answer "no such user", and reading that as a deletion retires the demo
+ * marketplace.
+ */
+async function releaseStaleHolder(
+  context: AdminContext,
+  clerk: ClerkUserSource,
+  claimant: UserRow,
+  email: string,
+  now: Date,
+): Promise<boolean> {
+  const { id: claimantId, clerkUserId: claimantClerkUserId } = claimant;
+  const holder = await findLiveUserByEmail(context.db, email);
+
+  if (!holder) {
+    // Released between the collision and this read.
+    return true;
+  }
+
+  if (holder.id === claimantId || !isClerkIdentity(holder.clerkUserId)) {
+    return false;
+  }
+
+  let remote: ClerkApiUser | undefined;
+  try {
+    /*
+     * The claimant is asked about too, as a control: Clerk just sent its
+     * event, so it exists. If Clerk does not know it either, this API holds a
+     * key for a different Clerk instance — and reading every holder as deleted
+     * would retire live accounts and refund their bookings.
+     */
+    const found = clerkUsersIn(
+      await clerk.getUserList({ userId: [holder.clerkUserId, claimantClerkUserId], limit: 2 }),
+    );
+
+    if (!found.some((user) => user.id === claimantClerkUserId)) {
+      throw new Error('Clerk does not know the identity whose event it just delivered');
+    }
+
+    remote = found.find((user) => user.id === holder.clerkUserId);
+  } catch (error) {
+    context.log.error(
+      { userId: claimantId, holderId: holder.id, err: error },
+      'Could not ask Clerk who holds a contested address; the account stays diverged',
+    );
+
+    return false;
+  }
+
+  if (!remote) {
+    await applyUserDeleted(context, holder.clerkUserId, now);
+
+    return true;
+  }
+
+  const remoteEmail = primaryEmail(asWebhookData(remote));
+
+  if (remoteEmail === null || remoteEmail === email) {
+    return false;
+  }
+
+  const corrected = await updateUserByClerkId(context.db, holder.clerkUserId, {
+    email: remoteEmail,
+  });
+
+  return corrected !== null && !corrected.emailDiverged;
 }
 
 /**

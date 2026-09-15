@@ -441,6 +441,28 @@ describe('reporting and message visibility (#436)', () => {
   });
 
   /*
+   * VEN-386 skips notification email for a diverged account; a report is the
+   * reporter's own action, so its send keeps the stored address.
+   */
+  it('still replies to a reporter whose address is diverged at the stored address', async () => {
+    const fixture = await seed();
+    await harness.database.db
+      .update(users)
+      .set({ pendingEmail: 'reporter.new@example.com', emailSyncFailedAt: new Date() })
+      .where(eq(users.id, fixture.customerId));
+
+    const response = await report(CUSTOMER, 'vendor_profile', fixture.vendorProfileId);
+    await harness.flushEmail();
+
+    expect(response.statusCode).toBe(200);
+    const inbox = harness.email.sent.filter((message) => message.to === TEST_ENV.SUPPORT_EMAIL_TO);
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]?.replyTo).toBe(`${CUSTOMER}@example.com`);
+    const [filed] = await casesFor(fixture.vendorProfileId);
+    expect(filed?.senderEmail).toBe(`${CUSTOMER}@example.com`);
+  });
+
+  /*
    * The guard on #431's finding, from the other direction. Both existing doors
    * freeze a payout and one of them used to do it in silence; this door places
    * no hold at all, so there is nothing to announce and nothing to forget.

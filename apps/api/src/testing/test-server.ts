@@ -923,6 +923,28 @@ export async function createTestHarness(
        * and watch it fail the way a deleted Clerk session does, instead of
        * asserting only that a function was called.
        */
+      /*
+       * Clerk's user list is the same registry the loader reads, so an id a
+       * suite never registered — or one a closure deleted — reads as gone.
+       */
+      clerkUsers: {
+        getUserList: async ({ userId }) =>
+          userId.flatMap((id) => {
+            const snapshot = clerkUsers.get(id);
+            return snapshot
+              ? [
+                  {
+                    id,
+                    emailAddresses: [{ id: 'idn_primary', emailAddress: snapshot.email }],
+                    primaryEmailAddressId: 'idn_primary',
+                    firstName: snapshot.firstName,
+                    lastName: snapshot.lastName,
+                    imageUrl: snapshot.avatarUrl ?? null,
+                  },
+                ]
+              : [];
+          }),
+      },
       deleteClerkUser: async (clerkUserId) => {
         if (clerkDeletionFails) {
           throw new Error('Test Clerk deletion refused');

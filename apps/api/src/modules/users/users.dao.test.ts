@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { users } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
-import { insertUserIfAbsent, updateUserByClerkId } from './users.dao.js';
+import { insertUserIfAbsent, retireUserByClerkId, updateUserByClerkId } from './users.dao.js';
 
 /**
  * One harness for the whole file. Two `createTestHarness()` instances in one
@@ -286,5 +286,81 @@ describe('updateUserByClerkId, when another account already holds the address', 
 
     expect(ada?.emailSyncFailedAt?.getTime()).toBe(first?.getTime());
     expect(ada?.lastName).toBe('Lovelace');
+  });
+
+  /**
+   * The ordering race (VEN-386): Ada's move to Bea's address was delivered
+   * before Bea's move off it. Bea's event releasing the address is the only
+   * event that will ever arrive, so it has to hand the address to Ada in the
+   * same call — nothing else would re-apply it.
+   */
+  it('hands a released address to the row waiting on it', async () => {
+    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+    expect((await rowFor(ADA))?.pendingEmail).toBe(BEA_EMAIL);
+
+    const bea = await updateUserByClerkId(harness.database.db, BEA, {
+      email: 'bea.new@example.com',
+    });
+
+    expect(bea?.emailDiverged).toBe(false);
+    expect((await rowFor(BEA))?.email).toBe('bea.new@example.com');
+
+    const ada = await rowFor(ADA);
+
+    expect(ada?.email).toBe(BEA_EMAIL);
+    expect(ada?.pendingEmail).toBeNull();
+    expect(ada?.emailSyncFailedAt).toBeNull();
+  });
+
+  /**
+   * Two rows waiting on one address: Clerk gives it to one of them and the
+   * database cannot tell which, so neither is handed it.
+   */
+  it('hands a released address to nobody when more than one row waits on it', async () => {
+    await harness.database.db.insert(users).values(newUser('clerk_cy', 'cy@example.com'));
+    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+    await updateUserByClerkId(harness.database.db, 'clerk_cy', { email: BEA_EMAIL });
+
+    await updateUserByClerkId(harness.database.db, BEA, { email: 'bea.new@example.com' });
+
+    expect((await rowFor(ADA))?.email).toBe(ADA_EMAIL);
+    expect((await rowFor(ADA))?.pendingEmail).toBe(BEA_EMAIL);
+    expect((await rowFor('clerk_cy'))?.email).toBe('cy@example.com');
+    expect((await rowFor('clerk_cy'))?.pendingEmail).toBe(BEA_EMAIL);
+  });
+
+  /**
+   * The same race with a deletion: the account that took the address over was
+   * delivered before the holder's `user.deleted`.
+   */
+  it('hands the address of a retired account to the row waiting on it', async () => {
+    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+
+    await retireUserByClerkId(harness.database.db, BEA);
+
+    const ada = await rowFor(ADA);
+
+    expect(ada?.email).toBe(BEA_EMAIL);
+    expect(ada?.pendingEmail).toBeNull();
+    expect(ada?.emailSyncFailedAt).toBeNull();
+  });
+
+  /**
+   * An event that does not move the holder off the address releases nothing,
+   * so the waiter stays diverged rather than colliding a second time.
+   */
+  it('leaves the waiter diverged when the holder keeps the address', async () => {
+    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+
+    await updateUserByClerkId(harness.database.db, BEA, {
+      email: BEA_EMAIL,
+      firstName: 'Beatrice',
+    });
+
+    const ada = await rowFor(ADA);
+
+    expect(ada?.email).toBe(ADA_EMAIL);
+    expect(ada?.pendingEmail).toBe(BEA_EMAIL);
+    expect((await rowFor(BEA))?.firstName).toBe('Beatrice');
   });
 });

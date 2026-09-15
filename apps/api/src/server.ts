@@ -84,7 +84,10 @@ export interface BuildServerOptions {
    */
   clock?: Clock;
   /** Test seams; production wiring uses the real Clerk and svix clients. */
-  auth?: Pick<ClerkAuthPluginOptions, 'verifySessionToken' | 'loadClerkUser' | 'deleteClerkUser'>;
+  auth?: Pick<
+    ClerkAuthPluginOptions,
+    'verifySessionToken' | 'loadClerkUser' | 'deleteClerkUser' | 'clerkUsers'
+  >;
   /**
    * The svix seam, shared by both webhooks that use it — Clerk's and Resend's.
    * One verifier because it stands in for one library.

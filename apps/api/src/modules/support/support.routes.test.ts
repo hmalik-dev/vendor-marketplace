@@ -6,6 +6,8 @@ import {
   supportMessageReceiptSchema,
   supportSendFailureDetailsSchema,
 } from '@vendor-marketplace/shared';
+import { users } from '@vendor-marketplace/db/schema';
+import { eq } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createResendGateway } from '../../lib/email.js';
@@ -151,6 +153,40 @@ describe('POST /support/messages', () => {
     // case where the recipient is not the sender's to choose.
     expect(confirmation?.text).toContain(MESSAGE);
     expect(confirmation?.text).toContain('Here is what you sent');
+  });
+
+  /*
+   * VEN-386 skips notification email for an account whose address disagrees
+   * with Clerk. An acknowledgement is about the sender's own message, so it
+   * keeps answering at the stored address.
+   */
+  it('still answers a signed-in sender whose address is diverged at the stored address', async () => {
+    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
+    await harness.database.db
+      .update(users)
+      .set({ pendingEmail: 'alan.new@example.com', emailSyncFailedAt: new Date() })
+      .where(eq(users.clerkUserId, CUSTOMER));
+
+    try {
+      const result = await harness.app.inject({
+        method: 'POST',
+        url: '/support/messages',
+        ...fromANewVisitor(),
+        headers: bearer(CUSTOMER),
+        payload: { topic: 'booking-or-payment', message: MESSAGE },
+      });
+
+      expect(result.statusCode).toBe(200);
+
+      const [report, confirmation] = harness.email.sent;
+      expect(report?.replyTo).toBe(CUSTOMER_EMAIL);
+      expect(confirmation?.to).toBe(CUSTOMER_EMAIL);
+    } finally {
+      await harness.database.db
+        .update(users)
+        .set({ pendingEmail: null, emailSyncFailedAt: null })
+        .where(eq(users.clerkUserId, CUSTOMER));
+    }
   });
 
   it('carries the error digest, route and timestamp into the report', async () => {

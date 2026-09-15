@@ -46,6 +46,8 @@ describe('POST /webhooks/clerk', () => {
   });
 
   afterEach(async () => {
+    harness.clerkUsers.delete('user_other');
+    harness.clerkUsers.delete(CLERK_ID);
     await harness.database.db.delete(users);
   });
 
@@ -158,6 +160,18 @@ describe('POST /webhooks/clerk', () => {
       firstName: 'Dorothy',
       lastName: 'Vaughan',
     });
+    /*
+     * Clerk still gives the holder this address, so it is not a stale row
+     * the handler can release (VEN-386) and the collision stands.
+     */
+    harness.clerkUsers.set('user_other', {
+      clerkUserId: 'user_other',
+      email: 'taken@example.com',
+      firstName: 'Dorothy',
+      lastName: 'Vaughan',
+      roleHint: 'customer',
+      avatarUrl: null,
+    });
 
     const response = await post(
       harness,
@@ -191,6 +205,52 @@ describe('POST /webhooks/clerk', () => {
     expect(row?.emailSyncFailedAt).toBeInstanceOf(Date);
     // The rest of the event still landed.
     expect(row?.lastName).toBe('Coleman');
+  });
+
+  /*
+   * The same collision against a holder Clerk no longer has — the missed
+   * `user.deleted` (VEN-386): the holder is retired and the address lands.
+   */
+  it('releases an address held by an account Clerk has deleted', async () => {
+    await post(harness, userCreated());
+    harness.clerkUsers.set(CLERK_ID, {
+      clerkUserId: CLERK_ID,
+      email: 'taken@example.com',
+      firstName: 'Katherine',
+      lastName: 'Johnson',
+      roleHint: 'vendor',
+      avatarUrl: null,
+    });
+    await harness.database.db.insert(users).values({
+      clerkUserId: 'user_gone',
+      email: 'taken@example.com',
+      role: 'customer',
+      firstName: 'Dorothy',
+      lastName: 'Vaughan',
+    });
+
+    const response = await post(
+      harness,
+      JSON.stringify({
+        type: 'user.updated',
+        data: {
+          id: CLERK_ID,
+          email_addresses: [{ id: 'idn_primary', email_address: 'taken@example.com' }],
+          primary_email_address_id: 'idn_primary',
+        },
+      }),
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ received: true, outcome: 'updated' });
+
+    const rows = await harness.database.db.select().from(users);
+
+    expect(rows.find((row) => row.clerkUserId === CLERK_ID)).toMatchObject({
+      email: 'taken@example.com',
+      pendingEmail: null,
+    });
+    expect(rows.find((row) => row.clerkUserId === 'user_gone')?.deletedAt).toBeInstanceOf(Date);
   });
 
   it('does not let user.created escalate the role through unsafe metadata', async () => {
