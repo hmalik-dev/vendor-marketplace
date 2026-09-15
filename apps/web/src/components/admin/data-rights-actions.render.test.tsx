@@ -191,6 +191,19 @@ describe('the data-rights closure control', () => {
     expect(warning.textContent).toContain('July 4, 2099 with Ada Pell');
   });
 
+  /** Pattern B draws each blocking booking linked; its detail exists since VEN-399. */
+  it('links each blocking booking to its detail', () => {
+    renderActions({
+      closeBlockers: [BLOCKER, { ...BLOCKER, bookingId: 'other', eventDate: '2099-07-04' }],
+    });
+
+    const links = within(panel()).getAllByRole('link');
+    expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['June 1, 2099 with Sunlit Studio', '/admin/bookings/44444444-4444-4444-8444-444444444444'],
+      ['July 4, 2099 with Sunlit Studio', '/admin/bookings/other'],
+    ]);
+  });
+
   /**
    * The confirmation has to say what the closure will actually do, and that
    * differs by which side of the booking this account is on (D39).

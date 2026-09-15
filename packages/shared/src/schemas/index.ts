@@ -11,6 +11,7 @@ import {
   ADMIN_ACTIONS,
   ADMIN_AVAILABILITY_LOCK_STATUSES,
   ADMIN_PAGE_SIZE,
+  ADMIN_REQUEST_GROUPS,
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
   BOOKING_WEEK_WINDOW_DAYS,
@@ -52,6 +53,7 @@ import {
   MESSAGE_PAGE_SIZE,
   MIN_BOOKING_AMOUNT_CENTS,
   NOTIFICATION_TYPES,
+  PAYOUT_MODELS,
   PAYOUT_STATUSES,
   RESOLVE_DISPUTE_OUTCOMES,
   PRICE_TYPES,
@@ -3130,6 +3132,82 @@ export const adminVendorDetailSchema = z.object({
   }),
 });
 export type AdminVendorDetail = z.infer<typeof adminVendorDetailSchema>;
+
+// --- The admin booking detail and the requests funnel (VEN-399) ------------
+
+/**
+ * `GET /admin/bookings/:bookingId` — the money story of one booking.
+ *
+ * Every money and lifecycle column the Bookings and Payments rows leave out is
+ * here, nullable exactly as stored, so the page can omit a row that does not
+ * apply rather than print a dash for it. `payoutStatus` and `payoutFailing` are
+ * the shared derivations' answers, as on `/admin/payments`.
+ */
+export const adminBookingDetailSchema = z.object({
+  id: uuidSchema,
+  requestId: uuidSchema,
+  status: bookingStatusSchema,
+  eventDate: calendarDateSchema,
+  eventLocation: z.string().nullable(),
+  totalAmountCents: z.int(),
+  platformFeeCents: z.int(),
+  vendorPayoutCents: z.int(),
+  payoutModel: z.enum(PAYOUT_MODELS),
+  payoutStatus: payoutStatusSchema,
+  payoutFailing: z.boolean(),
+  payoutAttempts: z.int(),
+  payoutFailureReason: z.string().nullable(),
+  payoutReleasedAt: z.date().nullable(),
+  stripePaymentIntentId: z.string().nullable(),
+  stripeTransferId: z.string().nullable(),
+  paidAt: z.date().nullable(),
+  completedAt: z.date().nullable(),
+  cancelledAt: z.date().nullable(),
+  cancellationReason: z.string().nullable(),
+  cancelledBy: bookingCancelledBySchema.nullable(),
+  refundAmountCents: z.int().nullable(),
+  disputeReason: z.string().nullable(),
+  createdAt: z.date(),
+  vendor: z.object({
+    id: uuidSchema,
+    businessName: z.string(),
+    /** VEN-404's switch: the sweep skips this vendor's payouts while it is on. */
+    payoutHold: z.boolean(),
+  }),
+  customer: z.object({ id: uuidSchema, name: z.string(), email: z.string() }),
+});
+export type AdminBookingDetail = z.infer<typeof adminBookingDetailSchema>;
+
+export const adminRequestGroupSchema = z.enum(ADMIN_REQUEST_GROUPS);
+
+/**
+ * One row of `Bookings · Requests`. `status` is the status **as read** —
+ * lazy expiry applied, never written — so a request past its window reads
+ * `expired` here exactly as its participants' own read shows it.
+ */
+export const adminRequestRowSchema = z.object({
+  id: uuidSchema,
+  status: bookingRequestStatusSchema,
+  eventDate: calendarDateSchema,
+  vendorId: uuidSchema,
+  vendorName: z.string(),
+  customerName: z.string(),
+  quotedPriceCents: z.int().nullable(),
+  expiresAt: z.date().nullable(),
+  /** When the request stopped being live; `null` while it still is. */
+  resolvedAt: z.date().nullable(),
+  createdAt: z.date(),
+});
+export type AdminRequestRow = z.infer<typeof adminRequestRowSchema>;
+
+export const adminRequestQuerySchema = z.object({
+  ...adminPaginationShape,
+  group: adminRequestGroupSchema.optional(),
+  status: bookingRequestStatusSchema.optional(),
+});
+export type AdminRequestQuery = z.infer<typeof adminRequestQuerySchema>;
+export const adminRequestPageSchema = paginatedSchema(adminRequestRowSchema).extend(wideningShape);
+export type AdminRequestPage = z.infer<typeof adminRequestPageSchema>;
 
 // --- The operations case queue (#431) --------------------------------------
 

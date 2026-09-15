@@ -1,16 +1,29 @@
 import {
   addDays,
   ADMIN_VENDOR_DETAIL_NOTIFICATION_LIMIT,
+  isPayoutFailing,
+  LIVE_BOOKING_REQUEST_STATUSES,
+  pageWindow,
+  payoutStatusOf,
+  requestStatusAsRead,
   toDateString,
   type AdminAvailabilityLock,
+  type AdminBookingDetail,
   type AdminLockHolder,
+  type AdminRequestPage,
+  type AdminRequestQuery,
   type AdminVendorDetail,
+  type BookingRequestStatus,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
 import { availabilityWindow } from '../availability/availability.service.js';
 import {
+  countAdminRequests,
   countNotificationsForAdmin,
+  countRequestWidenings,
+  findAdminBookingDetail,
+  findAdminRequests,
   findAdminVendorDetail,
   findBookingsHoldingDates,
   findLiveRequestsHoldingDates,
@@ -18,6 +31,7 @@ import {
   findStoredCalendarRows,
   findVendorPackagesForAdmin,
   findVendorPortfolioForAdmin,
+  type AdminRequestListRow,
   type DateRange,
   type LockBookingRow,
   type LockRequestRow,
@@ -165,5 +179,105 @@ export async function readVendorDetail(
     portfolio,
     locks: composeLocks(stored, requests, heldBookings),
     notifications: { ...counts, items: recent },
+  };
+}
+
+/** `GET /admin/bookings/:bookingId` (VEN-399). */
+export async function readBookingDetail(
+  db: AppDatabase,
+  bookingId: string,
+): Promise<AdminBookingDetail> {
+  const row = await findAdminBookingDetail(db, bookingId);
+
+  if (!row) {
+    throw notFound('No booking with that id');
+  }
+
+  const {
+    vendorId,
+    vendorName,
+    vendorPayoutHold,
+    customerId,
+    customerFirstName,
+    customerLastName,
+    customerEmail,
+    ...booking
+  } = row;
+
+  return {
+    ...booking,
+    payoutStatus: payoutStatusOf(booking),
+    payoutFailing: isPayoutFailing(booking),
+    vendor: { id: vendorId, businessName: vendorName, payoutHold: vendorPayoutHold },
+    customer: {
+      id: customerId,
+      name: fullName(customerFirstName, customerLastName),
+      email: customerEmail,
+    },
+  };
+}
+
+/**
+ * When a request stopped being live, for the Expires column's resolution date.
+ * `updated_at` moves on every status write, so it is the decision's time for
+ * a decline or a withdrawal; acceptance and expiry have their own instants.
+ */
+function resolvedAt(row: AdminRequestListRow, status: BookingRequestStatus): Date | null {
+  if (LIVE_BOOKING_REQUEST_STATUSES.includes(status)) {
+    return null;
+  }
+
+  if (status === 'accepted') {
+    return row.acceptedAt ?? row.updatedAt;
+  }
+
+  return status === 'expired' ? (row.expiresAt ?? row.updatedAt) : row.updatedAt;
+}
+
+/**
+ * `GET /admin/requests` — the pre-payment funnel, every status (VEN-399).
+ *
+ * **A read, and only a read.** The participant's read ages a lapsed row as it
+ * returns it; this one reports the same answer from the same predicate and
+ * writes nothing, so an operator browsing the funnel never sends a customer
+ * a `request_expired` notification.
+ */
+export async function listRequests(
+  db: AppDatabase,
+  query: AdminRequestQuery,
+  now: Date,
+): Promise<AdminRequestPage> {
+  const filters = { group: query.group, status: query.status, now };
+  const window = pageWindow(query);
+  const [rows, total] = await Promise.all([
+    findAdminRequests(db, filters, window.limit, window.offset),
+    countAdminRequests(db, filters),
+  ]);
+
+  // Only an empty first page earns the widening scan, as on every console list (#454).
+  const widenings =
+    rows.length === 0 && query.page === 1 ? await countRequestWidenings(db, filters) : [];
+
+  return {
+    widenings,
+    items: rows.map((row) => {
+      const status = requestStatusAsRead(row, now);
+
+      return {
+        id: row.id,
+        status,
+        eventDate: row.eventDate,
+        vendorId: row.vendorId,
+        vendorName: row.vendorName,
+        customerName: fullName(row.customerFirstName, row.customerLastName),
+        quotedPriceCents: row.quotedPriceCents,
+        expiresAt: row.expiresAt,
+        resolvedAt: resolvedAt(row, status),
+        createdAt: row.createdAt,
+      };
+    }),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
   };
 }

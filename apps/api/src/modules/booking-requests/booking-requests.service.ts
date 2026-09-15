@@ -2,13 +2,13 @@ import {
   BOOKING_REQUEST_EXPIRY_DAYS,
   BOOKING_REQUEST_TRANSITIONS,
   ERROR_CODES,
-  EXPIRABLE_BOOKING_REQUEST_STATUSES,
   addDays,
   disclosesCustomerContact,
   isUniversallyPastDate,
   pageWindow,
   parseDurationHours,
   replyDeadline,
+  requestStatusAsRead,
   toDateString,
   type BookingRequestDetail,
   type BookingRequestStatus,
@@ -247,9 +247,7 @@ async function ageIfExpired(
   now: Date,
   mail?: NotificationEmailDeps,
 ): Promise<BookingRequestRow> {
-  const expirable = (EXPIRABLE_BOOKING_REQUEST_STATUSES as readonly string[]).includes(row.status);
-
-  if (!expirable || row.expiresAt === null || row.expiresAt.getTime() > now.getTime()) {
+  if (row.status === 'expired' || requestStatusAsRead(row, now) !== 'expired') {
     return row;
   }
 

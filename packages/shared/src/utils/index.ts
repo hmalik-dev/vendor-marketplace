@@ -1,12 +1,14 @@
 import {
   BOOKING_REQUEST_EXPIRY_DAYS,
   DEFAULT_PLATFORM_FEE_RATE,
+  EXPIRABLE_BOOKING_REQUEST_STATUSES,
   FULL_REFUND_CUTOFF_HOURS,
   HELD_PAYOUT_STATUSES,
   LATE_CANCELLATION_REFUND_RATE,
   MAX_EVENT_DATE_MONTHS_AHEAD,
   MAX_SLUG_LENGTH,
   PAYOUT_RELEASE_HOURS,
+  type BookingRequestStatus,
   type BookingStatus,
   type PayoutModel,
   type PayoutStatus,
@@ -102,6 +104,28 @@ export function expiryCountdown(expiresAt: Date | null, now: Date = new Date()):
   }
 
   return days === 1 ? 'expires today' : `expires in ${days}d`;
+}
+
+/**
+ * The status a request reads as at `now`, lazy expiry applied.
+ *
+ * Expiry is never swept, so the stored `status` is the value as last written: a
+ * `pending` or `quoted` request whose window has closed is `expired` to every
+ * reader before anything writes it. The participant's read ages the row on this
+ * answer and the console reports it without writing (VEN-399) — one predicate,
+ * so the two cannot disagree about the same row.
+ */
+export function requestStatusAsRead(
+  request: { status: BookingRequestStatus; expiresAt: Date | null },
+  now: Date,
+): BookingRequestStatus {
+  const expirable = (EXPIRABLE_BOOKING_REQUEST_STATUSES as readonly string[]).includes(
+    request.status,
+  );
+
+  return expirable && request.expiresAt !== null && request.expiresAt.getTime() <= now.getTime()
+    ? 'expired'
+    : request.status;
 }
 
 /**

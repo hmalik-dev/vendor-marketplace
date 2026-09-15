@@ -3,7 +3,7 @@
 - [E2E seed has only one pending booking request](e2e-seed-has-only-one-pending-booking-request.md) — no payable/accepted booking exists; clicking Accept to make one is denied by auto-mode as a shared-resource mutation
 - [Clerk handshake URLs leak session tokens](clerk-handshake-urls-leak-session-tokens.md) — never log full request/response URLs when driving a stored .auth/*.json identity
 - [E2E vendor blocked on payout setup](e2e-vendor-blocked-on-payout-setup.md) — Accept POSTs 402 until Stripe payout is complete; no in-app UI to clear it; Decline/read-only criteria still verifiable
-- [Playwright MCP is single-context; use a scratch script for a second role](playwright-mcp-single-context-scratch-script.md) — MCP tools share one browser/cookie jar; load a second .auth/*.json via a throwaway Node+Playwright script instead
+- [Playwright MCP is single-context; use a scratch script for a second role](playwright-mcp-single-context-scratch-script.md) — MCP tools share one jar, BUT `browser.newContext({storageState: <path>})` inside run_code_unsafe safely gives a second role in-session (amended)
 - [Stored auth state needs marker-wait, not fixed sleep](stored-auth-state-needs-marker-wait-not-fixed-sleep.md) — client header can render signed-out for 1-2 reloads after loading .auth/*.json; wait for a DOM marker and retry, don't fixed-sleep
 - [Focus ring "renders nothing" can be a transition artifact](focus-ring-transition-artifact-false-positive.md) — Button's ring animates in over 150ms; measure/screenshot after the wait, not synchronously post-Tab
 - [MCP ref-click fails on combobox role](mcp-ref-click-fails-on-combobox-role.md) — pasted-ref click/type throws a CSS parse error on role=combobox; pass a plain CSS selector instead
@@ -12,3 +12,7 @@
 - [browser_run_code_unsafe hang leaks contexts](browser-run-code-unsafe-hang-leaks-contexts.md) — an aborted call skips its own cleanup; check `browser.contexts().length` and close stragglers
 - [Radix AlertDialog is role=alertdialog, not role=dialog](radix-alertdialog-role-not-dialog.md) — a confirm-click script scoped to `[role="dialog"]` silently no-ops and leaves state half-migrated
 - [e2e:auth session can age out mid-pass](e2e-auth-session-ages-out-within-one-pass.md) — mint the role's storage state immediately before the script that uses it, don't batch several roles ahead of time
+- [Warm-up navigations need a real delay, not just a second hit](warmup-navigations-need-a-real-delay-not-just-a-second-hit.md) — two back-to-back `goto('/')`s with no wait still read fully signed-out on the next protected route
+- [Rapid navigation loop leaves a stale DOM read](rapid-navigation-loop-leaves-stale-dom-read.md) — a page-wide query right after a burst of `goto()`s misread an unrelated element's `aria-current`; re-check isolated before reporting
+- [run_code_unsafe has no require/import](run-code-unsafe-has-no-require-use-storagestate-option.md) — load a stored identity via `browser.newContext({storageState: <path>})`, not `fs.readFileSync`
+- [API parity checks need a Clerk bearer, not cookies](api-parity-check-needs-clerk-bearer-not-cookies.md) — pull `window.Clerk.session.getToken()` and fetch the API's own port directly; cookie-only cross-port fetch 401s

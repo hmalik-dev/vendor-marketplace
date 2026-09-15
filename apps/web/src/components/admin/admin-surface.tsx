@@ -6,6 +6,8 @@ import { droppedFiltersLine } from '@/lib/admin-params';
 export interface AdminSurfaceProps {
   /** Serif 23px, per frame `13`. */
   heading: string;
+  /** Views of one surface, beside the heading — `Bookings · Requests` (VEN-399). */
+  tabs?: ReactNode;
   /**
    * The count line's leading clauses — "412 total", "38 awaiting review".
    * Every one is a query result read at request time; nothing here is invented.
@@ -56,6 +58,7 @@ export interface AdminSurfaceProps {
  */
 export function AdminSurface({
   heading,
+  tabs,
   counts,
   filters,
   dropped,
@@ -68,7 +71,14 @@ export function AdminSurface({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="shrink-0 px-6 pt-4 pb-3">
         <div className="mb-3.5 flex items-baseline justify-between gap-4">
-          <h1 className="display-heading text-[23px] text-stone-900">{heading}</h1>
+          {tabs ? (
+            <div className="flex items-baseline gap-4">
+              <h1 className="display-heading text-[23px] text-stone-900">{heading}</h1>
+              {tabs}
+            </div>
+          ) : (
+            <h1 className="display-heading text-[23px] text-stone-900">{heading}</h1>
+          )}
           <div className="flex items-baseline gap-4">
             <p className="text-sm text-stone-600">
               {counts.join(' · ')}

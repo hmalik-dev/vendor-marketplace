@@ -70,6 +70,14 @@ export type AdminAvailabilityLockStatus = (typeof ADMIN_AVAILABILITY_LOCK_STATUS
 export const ADMIN_VENDOR_DETAIL_NOTIFICATION_LIMIT = 20;
 
 /**
+ * The three groups `Bookings · Requests` segments six statuses into (VEN-399).
+ * Pattern A of the admin delta: six pills side by side is too many, so the
+ * control carries groups and each row still shows its exact status.
+ */
+export const ADMIN_REQUEST_GROUPS = ['live', 'closed', 'lapsed'] as const;
+export type AdminRequestGroup = (typeof ADMIN_REQUEST_GROUPS)[number];
+
+/**
  * Everything that keeps a vendor profile from going live.
  *
  * Each blocker carries three things because three surfaces need different ones
@@ -178,6 +186,19 @@ export const EXPIRABLE_BOOKING_REQUEST_STATUSES = ['pending', 'quoted'] as const
  */
 export const LIVE_BOOKING_REQUEST_STATUSES: readonly BookingRequestStatus[] =
   BOOKING_REQUEST_STATUSES.filter((status) => BOOKING_REQUEST_TRANSITIONS[status].length > 0);
+
+/**
+ * Which statuses each `Bookings · Requests` group holds. `live` is the state
+ * machine's own live set rather than a second list of it.
+ */
+export const ADMIN_REQUEST_GROUP_STATUSES: Record<
+  AdminRequestGroup,
+  readonly BookingRequestStatus[]
+> = {
+  live: LIVE_BOOKING_REQUEST_STATUSES,
+  closed: ['accepted', 'declined'],
+  lapsed: ['expired', 'cancelled'],
+};
 
 /**
  * The statuses at which the vendor may see the customer's full name and

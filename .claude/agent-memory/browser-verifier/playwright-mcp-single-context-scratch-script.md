@@ -45,14 +45,31 @@ role's session as burned and re-run `pnpm e2e:auth <role>` (via `pnpm lane:exec
 <n> -- pnpm e2e:auth <role>` so it targets the lane's own port and DB) before
 the stored state is reused again.
 
-The separate-process script above is the only route that avoids this, because
-the cookie values never have to pass through a tool argument that gets echoed.
-Use the `Write` tool to place it at an absolute path **outside the repo**
-(e.g. `/tmp/<ticket>-verify.cjs`) — a `Bash` heredoc to write it is refused by
-the worktree guard even for a path under `/tmp`, but `Write` isn't. CJS (not
+The separate-process script above is the only route that avoids this **when
+cookies must be embedded as a literal**, because the cookie values never have
+to pass through a tool argument that gets echoed. Use the `Write` tool to
+place it at an absolute path **outside the repo** (e.g.
+`/tmp/<ticket>-verify.cjs`) — a `Bash` heredoc to write it is refused by the
+worktree guard even for a path under `/tmp`, but `Write` isn't. CJS (not
 `.mjs`) lets you `require()` the repo's nested pnpm path directly
 (`node_modules/.pnpm/playwright@<version>/node_modules/playwright/index.js`,
 found via `node -e "console.log(require.resolve('playwright'))"` run with cwd
 in the repo) instead of needing `scripts/_tmp-*.mjs` inside the repo at all —
 one less thing to remember to delete, and it can't trip the one-writer/dirty
 tree guard since it's never inside the worktree.
+
+**Amendment (lane 399, worked cleanly):** the exposure above is specific to
+embedding cookie _values_ in the `code` string. Passing a **file path** is
+fine: `await page.context().browser().newContext({ storageState: '<abs path
+to .auth/*.json>' })` inside `browser_run_code_unsafe` lets Playwright read
+the file itself — nothing but the path string appears in the echoed
+`### Ran Playwright code` block, and `newContext` + `newPage` gives a fully
+separate cookie jar in the same tool call, so admin, customer and a public
+(no-storageState) view can all be driven back-to-back in one session without
+an external script. This supersedes the "not possible mid-session" framing
+above for the common case; the external-script route in this memory is still
+correct for the narrower case where you must manipulate raw cookie values
+(e.g. `addCookies` from a hand-parsed JSON) rather than handing Playwright the
+path. See [[run-code-unsafe-has-no-require-use-storagestate-option]] for the
+call shape and [[browser-run-code-unsafe-hang-leaks-contexts]] for closing the
+contexts this creates.

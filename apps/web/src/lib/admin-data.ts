@@ -5,7 +5,9 @@ import { ApiClientError, apiRequest } from './api-client';
 import { redirectIfTermsRequired } from './terms-gate';
 import { signInPathReturningHere } from './requested-path';
 import {
+  wireAdminBookingDetailSchema,
   wireAdminBookingPageSchema,
+  wireAdminRequestPageSchema,
   wireAdminCaseDetailSchema,
   wireAdminCasePageSchema,
   wireAdminCustomerPageSchema,
@@ -20,7 +22,9 @@ import {
   wireAdminVendorDetailSchema,
   wireAdminVendorFacetsSchema,
   wireAdminVendorPageSchema,
+  type WireAdminBookingDetail,
   type WireAdminBookingPage,
+  type WireAdminRequestPage,
   type WireAdminCaseDetail,
   type WireAdminCasePage,
   type WireAdminCustomerPage,
@@ -145,6 +149,30 @@ export async function getAdminCustomers(query: string): Promise<WireAdminCustome
 
 export async function getAdminBookings(query: string): Promise<WireAdminBookingPage> {
   return adminRead(`/admin/bookings${query}`, wireAdminBookingPageSchema);
+}
+
+/**
+ * One booking's money story (VEN-399), or `null` when no booking has that id —
+ * a point read an operator reaches by link, so a 404 is a wrong link rather
+ * than the error boundary, as `getAdminVendorDetail` rules.
+ */
+export async function getAdminBookingDetail(
+  bookingId: string,
+): Promise<WireAdminBookingDetail | null> {
+  try {
+    return await adminRead(`/admin/bookings/${bookingId}`, wireAdminBookingDetailSchema);
+  } catch (error) {
+    if (error instanceof ApiClientError && error.statusCode === 404) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+/** `Bookings · Requests` (VEN-399): every booking request, lazy expiry applied. */
+export async function getAdminRequests(query: string): Promise<WireAdminRequestPage> {
+  return adminRead(`/admin/requests${query}`, wireAdminRequestPageSchema);
 }
 
 export async function getAdminPayments(query: string): Promise<WireAdminPaymentPage> {
