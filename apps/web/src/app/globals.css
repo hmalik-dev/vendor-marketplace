@@ -198,8 +198,18 @@ body:has([data-auth-screen]) > footer {
   [data-focus-own]:focus-visible {
     @apply outline-none;
   }
+  /*
+   * VEN-389. The same argument as `line-height` below, one property on: an
+   * element with no text utility inherits its size, and nothing declared one,
+   * so every unsized block drew a 16px line box (`--text-lg`) around whatever
+   * its children set. `--text-base` is the scale's body step.
+   *
+   * On `body`, never `html` — `html` is what `rem` resolves against, and moving
+   * it would rescale every spacing utility in the product.
+   */
   body {
     @apply bg-background text-foreground;
+    font-size: var(--text-base);
   }
   /*
    * #235. `tailwindcss/preflight.css` sets `html, :host { line-height: 1.5 }`,
