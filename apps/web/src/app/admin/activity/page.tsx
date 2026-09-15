@@ -99,7 +99,7 @@ export default async function AdminActivityPage({
       counts={[`${activity.total} ${activity.total === 1 ? 'action' : 'actions'} recorded`]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH}>
+        <FilterBar action={PATH} params={params}>
           <FilterSelect
             action={PATH}
             carried={{ actor: params.actor, subject: params.subject }}

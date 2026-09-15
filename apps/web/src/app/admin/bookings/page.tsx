@@ -90,7 +90,7 @@ export default async function AdminBookingsPage({
       counts={[`${bookings.total} total`]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH}>
+        <FilterBar action={PATH} params={{ status, flag }}>
           <FilterSelect
             action={PATH}
             carried={{ flag }}

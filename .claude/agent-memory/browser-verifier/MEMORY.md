@@ -7,3 +7,5 @@
 - [Focus ring "renders nothing" can be a transition artifact](focus-ring-transition-artifact-false-positive.md) — Button's ring animates in over 150ms; measure/screenshot after the wait, not synchronously post-Tab
 - [MCP ref-click fails on combobox role](mcp-ref-click-fails-on-combobox-role.md) — pasted-ref click/type throws a CSS parse error on role=combobox; pass a plain CSS selector instead
 - [Search bar has hidden duplicate inputs](search-bar-has-hidden-duplicate-inputs.md) — Vendor type/City/Search button each render twice (one display:none twin); disambiguate via offsetParent before selecting
+- [Admin storage state needs a public warm-up before a protected route](admin-storage-state-needs-public-warmup-before-protected-route.md) — hitting the same protected route twice redirected to sign-in; hit `/` first, then it stuck
+- [browser_run_code_unsafe hang leaks contexts](browser-run-code-unsafe-hang-leaks-contexts.md) — an aborted call skips its own cleanup; check `browser.contexts().length` and close stragglers
