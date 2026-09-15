@@ -48,7 +48,8 @@ function assertEnvironment(environment: string): void {
   }
 }
 
-function prefixFor(environment: string): string {
+/** `db/<environment>/`, the prefix every object and listing for it shares. */
+export function backupPrefix(environment: string): string {
   assertEnvironment(environment);
   return `${BACKUP_ROOT}/${environment}/`;
 }
@@ -56,12 +57,8 @@ function prefixFor(environment: string): string {
 /** `db/<environment>/YYYY/MM/DD.dump.age` and its manifest, by UTC date. */
 export function backupKeys(environment: string, at: Date): { dump: string; manifest: string } {
   const [date] = at.toISOString().split('T');
-  const stem = `${prefixFor(environment)}${(date ?? '').replaceAll('-', '/')}`;
+  const stem = `${backupPrefix(environment)}${(date ?? '').replaceAll('-', '/')}`;
   return { dump: `${stem}.dump.age`, manifest: `${stem}.manifest.json` };
-}
-
-export function backupPrefix(environment: string): string {
-  return prefixFor(environment);
 }
 
 interface DatedKey {
@@ -70,7 +67,7 @@ interface DatedKey {
 }
 
 function datedKeys(keys: readonly string[], environment: string): DatedKey[] {
-  const prefix = prefixFor(environment);
+  const prefix = backupPrefix(environment);
   const dated: DatedKey[] = [];
 
   for (const key of keys) {
