@@ -262,6 +262,8 @@ describe('admin routes', () => {
       /* VEN-399. A booking's money and a customer's email; every request in the funnel. */
       { method: 'GET', url: `/admin/bookings/${NIL}` },
       { method: 'GET', url: '/admin/requests' },
+      /* VEN-400. One customer's contact details, bookings, reviews and notifications. */
+      { method: 'GET', url: `/admin/customers/${NIL}` },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {

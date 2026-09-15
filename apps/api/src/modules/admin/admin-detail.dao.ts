@@ -19,6 +19,7 @@ import {
   bookings,
   notifications,
   portfolioItems,
+  reviews,
   servicePackages,
   users,
   vendorProfiles,
@@ -26,8 +27,10 @@ import {
 import {
   ADMIN_REQUEST_GROUP_STATUSES,
   LIVE_BOOKING_REQUEST_STATUSES,
+  type AdminCustomerBooking,
+  type AdminCustomerReview,
+  type AdminNotification,
   type AdminRequestGroup,
-  type AdminVendorNotification,
   type AdminVendorPackage,
   type AdminVendorPortfolioItem,
   type AvailabilityStatus,
@@ -238,22 +241,57 @@ export async function findBookingsHoldingDates(
     .orderBy(asc(bookings.eventDate), asc(bookings.createdAt));
 }
 
-/** The most recent notifications sent to one account, newest first. */
+export interface AdminNotificationRow extends AdminNotification {
+  /** The recipient, so a read spanning two accounts can say which each went to. */
+  userId: string;
+}
+
+/** Which notifications a detail view's card reads; built only by the two functions below. */
+export type NotificationScope = SQL;
+
+/** Every notification sent to one account. */
+export function notificationsSentTo(userId: string): NotificationScope {
+  return eq(notifications.userId, userId);
+}
+
+/**
+ * Every notification either party was sent about one booking (VEN-400): the
+ * payload names the booking, or the request it was accepted from. Scoped to
+ * the two parties, so a payload naming the booking in anyone else's feed —
+ * there is none today — could not be listed as sent to one of them.
+ */
+export function notificationsAboutBooking(booking: {
+  id: string;
+  requestId: string;
+  customerId: string;
+  vendorUserId: string;
+}): NotificationScope {
+  return and(
+    inArray(notifications.userId, [booking.customerId, booking.vendorUserId]),
+    or(
+      sql`${notifications.data} ->> 'bookingId' = ${booking.id}`,
+      sql`${notifications.data} ->> 'bookingRequestId' = ${booking.requestId}`,
+    ),
+  )!;
+}
+
+/** The most recent notifications matching `where`, newest first. */
 export async function findRecentNotificationsForAdmin(
   db: AppDatabase,
-  userId: string,
+  where: NotificationScope,
   limit: number,
-): Promise<AdminVendorNotification[]> {
+): Promise<AdminNotificationRow[]> {
   return db
     .select({
       id: notifications.id,
+      userId: notifications.userId,
       type: notifications.type,
       title: notifications.title,
       createdAt: notifications.createdAt,
       readAt: notifications.readAt,
     })
     .from(notifications)
-    .where(eq(notifications.userId, userId))
+    .where(where)
     .orderBy(desc(notifications.createdAt), desc(notifications.id))
     .limit(limit);
 }
@@ -261,7 +299,7 @@ export async function findRecentNotificationsForAdmin(
 /** Both counts in the Notifications card's band, from one scan. */
 export async function countNotificationsForAdmin(
   db: AppDatabase,
-  userId: string,
+  where: NotificationScope,
 ): Promise<{ total: number; unread: number }> {
   const rows = await db
     .select({
@@ -269,7 +307,7 @@ export async function countNotificationsForAdmin(
       unread: sql<number>`(count(*) filter (where ${notifications.readAt} is null))::int`,
     })
     .from(notifications)
-    .where(eq(notifications.userId, userId));
+    .where(where);
 
   return rows[0] ?? { total: 0, unread: 0 };
 }
@@ -300,6 +338,7 @@ export interface AdminBookingDetailRow {
   vendorId: string;
   vendorName: string;
   vendorPayoutHold: boolean;
+  vendorUserId: string;
   customerId: string;
   customerFirstName: string;
   customerLastName: string;
@@ -338,6 +377,7 @@ export async function findAdminBookingDetail(
       vendorId: vendorProfiles.id,
       vendorName: vendorProfiles.businessName,
       vendorPayoutHold: vendorProfiles.payoutHold,
+      vendorUserId: vendorProfiles.userId,
       customerId: users.id,
       customerFirstName: users.firstName,
       customerLastName: users.lastName,
@@ -450,4 +490,137 @@ export async function countRequestWidenings(
     conditionWithout: (dropped) => requestFilterCondition({ ...filters, [dropped]: undefined }),
     scan: (selection) => db.select(selection).from(bookingRequests),
   });
+}
+
+export interface AdminCustomerDetailRow {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  city: string | null;
+  state: string | null;
+  isBanned: boolean;
+  bannedAt: Date | null;
+  deletedAt: Date | null;
+  pendingEmail: string | null;
+  createdAt: Date;
+}
+
+/**
+ * One customer account (VEN-400), closed or not — a closed account is read
+ * with its closure date, as the customer list's `Closed` view shows it. Only
+ * `role = 'customer'`: a vendor's record is `/admin/vendors/[vendorId]`.
+ */
+export async function findAdminCustomerDetail(
+  db: AppDatabase,
+  userId: string,
+): Promise<AdminCustomerDetailRow | null> {
+  const rows = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      phone: users.phone,
+      city: users.city,
+      state: users.state,
+      isBanned: users.isBanned,
+      bannedAt: users.bannedAt,
+      deletedAt: users.deletedAt,
+      pendingEmail: users.pendingEmail,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(and(eq(users.id, userId), eq(users.role, 'customer')))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+/** A slice of rows and the count of every row the query matched. */
+export interface CountedRows<T> {
+  total: number;
+  items: T[];
+}
+
+/**
+ * `count(*) over ()` carries the full count on every row of the slice, so one
+ * query answers both. The slice always starts at the first row, so an empty
+ * slice means nothing matched and its total is zero.
+ */
+function counted<T extends { total: number }>(rows: T[]): CountedRows<Omit<T, 'total'>> {
+  return {
+    total: rows[0]?.total ?? 0,
+    items: rows.map(({ total: _total, ...row }) => row),
+  };
+}
+
+/** The customer's most recent bookings by event date, and how many they have in all. */
+export async function findCustomerBookingsForAdmin(
+  db: AppDatabase,
+  customerId: string,
+  limit: number,
+): Promise<CountedRows<AdminCustomerBooking>> {
+  const rows = await db
+    .select({
+      id: bookings.id,
+      status: bookings.status,
+      eventDate: bookings.eventDate,
+      vendorId: vendorProfiles.id,
+      vendorName: vendorProfiles.businessName,
+      totalAmountCents: bookings.totalAmountCents,
+      total: sql<number>`(count(*) over ())::int`,
+    })
+    .from(bookings)
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
+    .where(eq(bookings.customerId, customerId))
+    .orderBy(desc(bookings.eventDate), desc(bookings.createdAt), desc(bookings.id))
+    .limit(limit);
+
+  return counted(rows);
+}
+
+const customerReviewSelection = {
+  id: reviews.id,
+  bookingId: reviews.bookingId,
+  vendorId: vendorProfiles.id,
+  vendorName: vendorProfiles.businessName,
+  rating: reviews.rating,
+  title: reviews.title,
+  content: reviews.content,
+  isPublic: reviews.isPublic,
+  createdAt: reviews.createdAt,
+  total: sql<number>`(count(*) over ())::int`,
+};
+
+/**
+ * The reviews the customer wrote, or those vendors wrote about them — hidden
+ * and private ones included, since the console is where those are read.
+ *
+ * Received reviews are found through the booking's customer rather than by
+ * excluding the reviewer, so a row is only ever "about" the account whose
+ * booking it reviews.
+ */
+export async function findCustomerReviewsForAdmin(
+  db: AppDatabase,
+  customerId: string,
+  direction: 'written' | 'received',
+  limit: number,
+): Promise<CountedRows<AdminCustomerReview>> {
+  const where =
+    direction === 'written'
+      ? and(eq(reviews.reviewerId, customerId), eq(reviews.type, 'customer_to_vendor'))
+      : and(eq(bookings.customerId, customerId), eq(reviews.type, 'vendor_to_customer'));
+
+  const rows = await db
+    .select(customerReviewSelection)
+    .from(reviews)
+    .innerJoin(bookings, eq(bookings.id, reviews.bookingId))
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, reviews.vendorId))
+    .where(where)
+    .orderBy(desc(reviews.createdAt), desc(reviews.id))
+    .limit(limit);
+
+  return counted(rows);
 }

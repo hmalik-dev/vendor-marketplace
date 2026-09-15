@@ -15,6 +15,7 @@ import {
   KeyValueList,
   ScopeChip,
 } from '@/components/admin/admin-detail';
+import { NotificationsCard } from '@/components/admin/notifications-card';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAdminBookingDetail } from '@/lib/admin-data';
 import {
@@ -69,7 +70,8 @@ function Money({ cents, sub = false }: { cents: number; sub?: boolean }): React.
  * total, fee, payout, paid, completed, released, attempts, refund, cancellation,
  * dispute. A row that does not apply is omitted rather than dashed, so the
  * card's length is the story's length. Read-only: the dispute and payout-retry
- * levers live where they already are.
+ * levers live where they already are. Below it, what either party was told
+ * about the booking (VEN-400).
  */
 export default async function AdminBookingDetailPage({
   params,
@@ -114,89 +116,98 @@ export default async function AdminBookingDetailPage({
         ),
       }}
       record={
-        <AdminCard
-          readOnly
-          title="Money"
-          note={<ScopeChip>Read-only — each row a stored value</ScopeChip>}
-        >
-          <KeyValueList>
-            <KeyValue label="Total" kind="mono">
-              <Money cents={booking.totalAmountCents} />
-            </KeyValue>
-            <KeyValue label="Platform fee" kind="mono">
-              <Money cents={booking.platformFeeCents} sub />
-            </KeyValue>
-            <KeyValue label="Vendor payout" kind="mono">
-              <Money cents={booking.vendorPayoutCents} sub />
-            </KeyValue>
-            <KeyValue label="Payout model">{PAYOUT_MODEL_LABELS[booking.payoutModel]}</KeyValue>
-            {booking.stripePaymentIntentId ? (
-              <KeyValue label="Payment intent" kind="mono">
-                {booking.stripePaymentIntentId}
+        <>
+          <AdminCard
+            readOnly
+            title="Money"
+            note={<ScopeChip>Read-only — each row a stored value</ScopeChip>}
+          >
+            <KeyValueList>
+              <KeyValue label="Total" kind="mono">
+                <Money cents={booking.totalAmountCents} />
               </KeyValue>
-            ) : null}
-            {booking.paidAt ? (
-              <KeyValue label="Paid" kind="mono">
-                <Stamp at={booking.paidAt} />
+              <KeyValue label="Platform fee" kind="mono">
+                <Money cents={booking.platformFeeCents} sub />
               </KeyValue>
-            ) : null}
-            {booking.completedAt ? (
-              <KeyValue label="Completed" kind="mono">
-                <Stamp at={booking.completedAt} />
+              <KeyValue label="Vendor payout" kind="mono">
+                <Money cents={booking.vendorPayoutCents} sub />
               </KeyValue>
-            ) : null}
-            <KeyValue label="Payout">
-              {payout.label}
-              {vendor.payoutHold && booking.payoutStatus !== 'released' ? (
-                <span className="text-gold-600"> · vendor&apos;s payouts held by an operator</span>
+              <KeyValue label="Payout model">{PAYOUT_MODEL_LABELS[booking.payoutModel]}</KeyValue>
+              {booking.stripePaymentIntentId ? (
+                <KeyValue label="Payment intent" kind="mono">
+                  {booking.stripePaymentIntentId}
+                </KeyValue>
               ) : null}
-              {booking.payoutFailing ? (
-                <span className="ml-2 align-middle">
-                  <StatusPill tone="failed">{PAYOUT_FAILING_LABEL}</StatusPill>
-                </span>
+              {booking.paidAt ? (
+                <KeyValue label="Paid" kind="mono">
+                  <Stamp at={booking.paidAt} />
+                </KeyValue>
               ) : null}
-            </KeyValue>
-            {booking.payoutReleasedAt ? (
-              <KeyValue label="Payout released" kind="mono">
-                <Stamp at={booking.payoutReleasedAt} />
-              </KeyValue>
-            ) : null}
-            {booking.stripeTransferId ? (
-              <KeyValue label="Transfer" kind="mono">
-                {booking.stripeTransferId}
-              </KeyValue>
-            ) : null}
-            {booking.payoutAttempts > 0 ? (
-              <KeyValue label="Payout attempts">
-                {booking.payoutAttempts}
-                {booking.payoutFailureReason ? (
-                  <span className="block font-mono text-meta text-error-500">
-                    {booking.payoutFailureReason}
+              {booking.completedAt ? (
+                <KeyValue label="Completed" kind="mono">
+                  <Stamp at={booking.completedAt} />
+                </KeyValue>
+              ) : null}
+              <KeyValue label="Payout">
+                {payout.label}
+                {vendor.payoutHold && booking.payoutStatus !== 'released' ? (
+                  <span className="text-gold-600">
+                    {' '}
+                    · vendor&apos;s payouts held by an operator
+                  </span>
+                ) : null}
+                {booking.payoutFailing ? (
+                  <span className="ml-2 align-middle">
+                    <StatusPill tone="failed">{PAYOUT_FAILING_LABEL}</StatusPill>
                   </span>
                 ) : null}
               </KeyValue>
-            ) : null}
-            {booking.refundAmountCents !== null ? (
-              <KeyValue label="Refunded" kind="mono">
-                <Money cents={booking.refundAmountCents} />
-              </KeyValue>
-            ) : null}
-            {booking.cancelledAt ? (
-              <KeyValue label="Cancelled" kind="mono">
-                <Stamp at={booking.cancelledAt} />
-              </KeyValue>
-            ) : null}
-            {booking.cancellationReason ? (
-              <KeyValue label="Cancellation reason">{booking.cancellationReason}</KeyValue>
-            ) : null}
-            {booking.cancelledBy ? (
-              <KeyValue label="Cancelled by">{CANCELLED_BY_LABELS[booking.cancelledBy]}</KeyValue>
-            ) : null}
-            {booking.disputeReason ? (
-              <KeyValue label="Dispute reason">{booking.disputeReason}</KeyValue>
-            ) : null}
-          </KeyValueList>
-        </AdminCard>
+              {booking.payoutReleasedAt ? (
+                <KeyValue label="Payout released" kind="mono">
+                  <Stamp at={booking.payoutReleasedAt} />
+                </KeyValue>
+              ) : null}
+              {booking.stripeTransferId ? (
+                <KeyValue label="Transfer" kind="mono">
+                  {booking.stripeTransferId}
+                </KeyValue>
+              ) : null}
+              {booking.payoutAttempts > 0 ? (
+                <KeyValue label="Payout attempts">
+                  {booking.payoutAttempts}
+                  {booking.payoutFailureReason ? (
+                    <span className="block font-mono text-meta text-error-500">
+                      {booking.payoutFailureReason}
+                    </span>
+                  ) : null}
+                </KeyValue>
+              ) : null}
+              {booking.refundAmountCents !== null ? (
+                <KeyValue label="Refunded" kind="mono">
+                  <Money cents={booking.refundAmountCents} />
+                </KeyValue>
+              ) : null}
+              {booking.cancelledAt ? (
+                <KeyValue label="Cancelled" kind="mono">
+                  <Stamp at={booking.cancelledAt} />
+                </KeyValue>
+              ) : null}
+              {booking.cancellationReason ? (
+                <KeyValue label="Cancellation reason">{booking.cancellationReason}</KeyValue>
+              ) : null}
+              {booking.cancelledBy ? (
+                <KeyValue label="Cancelled by">{CANCELLED_BY_LABELS[booking.cancelledBy]}</KeyValue>
+              ) : null}
+              {booking.disputeReason ? (
+                <KeyValue label="Dispute reason">{booking.disputeReason}</KeyValue>
+              ) : null}
+            </KeyValueList>
+          </AdminCard>
+          <NotificationsCard
+            {...booking.notifications}
+            empty="Nothing has been sent to either party about this booking."
+          />
+        </>
       }
       aside={
         <>
@@ -224,7 +235,7 @@ export default async function AdminBookingDetailPage({
               </li>
               <li>
                 <Link
-                  href={`/admin/users/${customer.id}`}
+                  href={`/admin/customers/${customer.id}`}
                   className="text-clay-600 hover:underline"
                 >
                   Customer · {customer.name}

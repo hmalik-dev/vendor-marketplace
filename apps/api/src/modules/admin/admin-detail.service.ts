@@ -1,6 +1,7 @@
 import {
   addDays,
-  ADMIN_VENDOR_DETAIL_NOTIFICATION_LIMIT,
+  ADMIN_CUSTOMER_DETAIL_LIST_LIMIT,
+  ADMIN_DETAIL_NOTIFICATION_LIMIT,
   isPayoutFailing,
   LIVE_BOOKING_REQUEST_STATUSES,
   pageWindow,
@@ -9,6 +10,8 @@ import {
   toDateString,
   type AdminAvailabilityLock,
   type AdminBookingDetail,
+  type AdminCustomerDetail,
+  type AdminNotifications,
   type AdminLockHolder,
   type AdminRequestPage,
   type AdminRequestQuery,
@@ -23,6 +26,9 @@ import {
   countNotificationsForAdmin,
   countRequestWidenings,
   findAdminBookingDetail,
+  findAdminCustomerDetail,
+  findCustomerBookingsForAdmin,
+  findCustomerReviewsForAdmin,
   findAdminRequests,
   findAdminVendorDetail,
   findBookingsHoldingDates,
@@ -31,6 +37,10 @@ import {
   findStoredCalendarRows,
   findVendorPackagesForAdmin,
   findVendorPortfolioForAdmin,
+  notificationsAboutBooking,
+  notificationsSentTo,
+  type AdminNotificationRow,
+  type NotificationScope,
   type AdminRequestListRow,
   type DateRange,
   type LockBookingRow,
@@ -140,6 +150,27 @@ export function composeLocks(
   );
 }
 
+/**
+ * The Notifications card's read (VEN-400): both counts over every matching
+ * row, and the most recent `ADMIN_DETAIL_NOTIFICATION_LIMIT` of them.
+ */
+async function readNotifications(
+  db: AppDatabase,
+  where: NotificationScope,
+): Promise<{ total: number; unread: number; items: AdminNotificationRow[] }> {
+  const [items, counts] = await Promise.all([
+    findRecentNotificationsForAdmin(db, where, ADMIN_DETAIL_NOTIFICATION_LIMIT),
+    countNotificationsForAdmin(db, where),
+  ]);
+
+  return { ...counts, items };
+}
+
+/** One account's own feed, without the recipient every row shares. */
+function withoutRecipient(read: Awaited<ReturnType<typeof readNotifications>>): AdminNotifications {
+  return { ...read, items: read.items.map(({ userId: _userId, ...item }) => item) };
+}
+
 /** `GET /admin/vendors/:vendorId`. */
 export async function readVendorDetail(
   db: AppDatabase,
@@ -153,14 +184,13 @@ export async function readVendorDetail(
   }
 
   const range = lockRange(now);
-  const [packages, portfolio, stored, requests, heldBookings, recent, counts] = await Promise.all([
+  const [packages, portfolio, stored, requests, heldBookings, notifications] = await Promise.all([
     findVendorPackagesForAdmin(db, vendorId),
     findVendorPortfolioForAdmin(db, vendorId),
     findStoredCalendarRows(db, vendorId, range),
     findLiveRequestsHoldingDates(db, vendorId, range, now),
     findBookingsHoldingDates(db, vendorId, range),
-    findRecentNotificationsForAdmin(db, vendor.userId, ADMIN_VENDOR_DETAIL_NOTIFICATION_LIMIT),
-    countNotificationsForAdmin(db, vendor.userId),
+    readNotifications(db, notificationsSentTo(vendor.userId)),
   ]);
 
   return {
@@ -178,7 +208,7 @@ export async function readVendorDetail(
     packages,
     portfolio,
     locks: composeLocks(stored, requests, heldBookings),
-    notifications: { ...counts, items: recent },
+    notifications: withoutRecipient(notifications),
   };
 }
 
@@ -197,12 +227,22 @@ export async function readBookingDetail(
     vendorId,
     vendorName,
     vendorPayoutHold,
+    vendorUserId,
     customerId,
     customerFirstName,
     customerLastName,
     customerEmail,
     ...booking
   } = row;
+  const notifications = await readNotifications(
+    db,
+    notificationsAboutBooking({
+      id: booking.id,
+      requestId: booking.requestId,
+      customerId,
+      vendorUserId,
+    }),
+  );
 
   return {
     ...booking,
@@ -214,6 +254,40 @@ export async function readBookingDetail(
       name: fullName(customerFirstName, customerLastName),
       email: customerEmail,
     },
+    notifications: {
+      ...notifications,
+      items: notifications.items.map(({ userId, ...item }) => ({
+        ...item,
+        recipient: userId === customerId ? ('customer' as const) : ('vendor' as const),
+      })),
+    },
+  };
+}
+
+/** `GET /admin/customers/:userId` (VEN-400). */
+export async function readCustomerDetail(
+  db: AppDatabase,
+  userId: string,
+): Promise<AdminCustomerDetail> {
+  const row = await findAdminCustomerDetail(db, userId);
+
+  if (!row) {
+    throw notFound('No customer with that id');
+  }
+
+  const [bookings, written, received, notifications] = await Promise.all([
+    findCustomerBookingsForAdmin(db, userId, ADMIN_CUSTOMER_DETAIL_LIST_LIMIT),
+    findCustomerReviewsForAdmin(db, userId, 'written', ADMIN_CUSTOMER_DETAIL_LIST_LIMIT),
+    findCustomerReviewsForAdmin(db, userId, 'received', ADMIN_CUSTOMER_DETAIL_LIST_LIMIT),
+    readNotifications(db, notificationsSentTo(userId)),
+  ]);
+  const { firstName, lastName, ...customer } = row;
+
+  return {
+    customer: { ...customer, name: fullName(firstName, lastName) },
+    bookings,
+    reviews: { written, received },
+    notifications: withoutRecipient(notifications),
   };
 }
 

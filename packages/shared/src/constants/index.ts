@@ -66,8 +66,15 @@ export const ADMIN_AVAILABILITY_LOCK_STATUSES = [
 ] as const satisfies readonly AvailabilityStatus[];
 export type AdminAvailabilityLockStatus = (typeof ADMIN_AVAILABILITY_LOCK_STATUSES)[number];
 
-/** The most recent notifications the admin vendor detail lists; the card's count is the full total. */
-export const ADMIN_VENDOR_DETAIL_NOTIFICATION_LIMIT = 20;
+/** The most recent notifications an admin detail view lists; the card's count is the full total. */
+export const ADMIN_DETAIL_NOTIFICATION_LIMIT = 20;
+
+/** The most recent bookings, and reviews each way, the admin customer detail lists (VEN-400). */
+export const ADMIN_CUSTOMER_DETAIL_LIST_LIMIT = 20;
+
+/** Who a booking's notification went to, on the admin booking detail (VEN-400). */
+export const ADMIN_NOTIFICATION_RECIPIENTS = ['customer', 'vendor'] as const;
+export type AdminNotificationRecipient = (typeof ADMIN_NOTIFICATION_RECIPIENTS)[number];
 
 /**
  * The three groups `Bookings · Requests` segments six statuses into (VEN-399).

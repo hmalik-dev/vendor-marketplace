@@ -98,7 +98,7 @@ describe('AdminCustomersPage', () => {
       screen
         .getAllByRole('link', { name: 'Grace Hopper' })
         .map((link) => link.getAttribute('href')),
-    ).toEqual([`/admin/users/${CLOSED_ID}`]);
+    ).toEqual([`/admin/customers/${CLOSED_ID}`]);
   });
 
   it('shows the chosen set on the Status trigger and carries it through the search form', async () => {

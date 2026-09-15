@@ -21,6 +21,7 @@ import {
   PortfolioRemoveControl,
   VendorDetailActions,
 } from '@/components/admin/vendor-detail-actions';
+import { NotificationsCard } from '@/components/admin/notifications-card';
 import { VENDOR_STATUS_TONES } from '@/components/admin/vendor-status';
 import { FallbackImage } from '@/components/ui/fallback-image';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
@@ -330,65 +331,7 @@ export default async function AdminVendorDetailPage({
             )}
           </AdminCard>
 
-          <AdminCard
-            readOnly
-            title={`Notifications sent · ${notifications.total}`}
-            note={
-              <span className="text-stone-600">
-                {notifications.unread} unread
-                {notifications.total > notifications.items.length
-                  ? ` · latest ${notifications.items.length} shown`
-                  : ''}
-              </span>
-            }
-          >
-            {notifications.items.length === 0 ? (
-              <CardEmpty>Nothing has been sent to this vendor.</CardEmpty>
-            ) : (
-              <CardTable
-                label="Notifications sent"
-                rows={notifications.items}
-                rowKey={(item) => item.id}
-                columns={[
-                  {
-                    key: 'sent',
-                    header: 'Sent',
-                    width: '160px',
-                    cell: (item) => (
-                      <span className="font-mono text-meta">
-                        {STAMP.format(item.createdAt)} UTC
-                      </span>
-                    ),
-                  },
-                  {
-                    key: 'title',
-                    header: 'Notification',
-                    width: 'minmax(0,1fr)',
-                    cell: (item) => (
-                      <>
-                        {item.title}
-                        <span className="block font-mono text-helper text-stone-600">
-                          {item.type}
-                        </span>
-                      </>
-                    ),
-                  },
-                  {
-                    key: 'read',
-                    header: 'Read',
-                    width: '90px',
-                    align: 'end',
-                    cell: (item) =>
-                      item.readAt ? (
-                        <StatusPill tone="quoted">Read</StatusPill>
-                      ) : (
-                        <StatusPill tone="inert">Unread</StatusPill>
-                      ),
-                  },
-                ]}
-              />
-            )}
-          </AdminCard>
+          <NotificationsCard {...notifications} empty="Nothing has been sent to this vendor." />
         </>
       }
       aside={

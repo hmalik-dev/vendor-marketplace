@@ -1,4 +1,5 @@
 import {
+  ADMIN_NOTIFICATION_RECIPIENTS,
   availabilitySchema,
   bookingRequestDetailSchema,
   bookingWithContextSchema,
@@ -51,7 +52,12 @@ import {
   adminLockRequestHolderSchema,
   adminVendorDetailProfileSchema,
   adminVendorDetailSchema,
-  adminVendorNotificationSchema,
+  adminNotificationSchema,
+  adminNotificationsSchema,
+  adminCustomerBookingSchema,
+  adminCustomerDetailProfileSchema,
+  adminCustomerDetailSchema,
+  adminCustomerReviewSchema,
   adminVendorPortfolioItemSchema,
   adminBookingDetailSchema,
   adminRequestRowSchema,
@@ -411,6 +417,18 @@ export const wireAdminVendorPageSchema = paginatedSchema(wireAdminVendorRowSchem
 });
 export type WireAdminVendorPage = z.infer<typeof wireAdminVendorPageSchema>;
 
+/** One row of the Notifications card every admin detail view carries (VEN-400). */
+export const wireAdminNotificationSchema = adminNotificationSchema.extend({
+  createdAt: z.coerce.date(),
+  readAt: z.coerce.date().nullable(),
+});
+export type WireAdminNotification = z.infer<typeof wireAdminNotificationSchema>;
+
+export const wireAdminNotificationsSchema = adminNotificationsSchema.extend({
+  items: z.array(wireAdminNotificationSchema),
+});
+export type WireAdminNotifications = z.infer<typeof wireAdminNotificationsSchema>;
+
 /**
  * `GET /admin/vendors/:vendorId` (VEN-380). Four dates cross the wire — the
  * vendor's `createdAt`, a request holder's `expiresAt`, and each notification's
@@ -434,14 +452,7 @@ export const wireAdminVendorDetailSchema = adminVendorDetailSchema.extend({
       ),
     }),
   ),
-  notifications: adminVendorDetailSchema.shape.notifications.extend({
-    items: z.array(
-      adminVendorNotificationSchema.extend({
-        createdAt: z.coerce.date(),
-        readAt: z.coerce.date().nullable(),
-      }),
-    ),
-  }),
+  notifications: wireAdminNotificationsSchema,
 });
 export type WireAdminVendorDetail = z.infer<typeof wireAdminVendorDetailSchema>;
 
@@ -457,6 +468,29 @@ export const wireAdminCustomerPageSchema = paginatedSchema(wireAdminCustomerRowS
 );
 export type WireAdminCustomerPage = z.infer<typeof wireAdminCustomerPageSchema>;
 
+/**
+ * `GET /admin/customers/:userId` (VEN-400) — the account's three instants,
+ * each review's `createdAt`, and the notifications' two dates cross the wire.
+ */
+const wireAdminCustomerReviewListSchema = z.object({
+  total: z.int(),
+  items: z.array(adminCustomerReviewSchema.extend({ createdAt: z.coerce.date() })),
+});
+export const wireAdminCustomerDetailSchema = adminCustomerDetailSchema.extend({
+  customer: adminCustomerDetailProfileSchema.extend({
+    bannedAt: z.coerce.date().nullable(),
+    deletedAt: z.coerce.date().nullable(),
+    createdAt: z.coerce.date(),
+  }),
+  bookings: z.object({ total: z.int(), items: z.array(adminCustomerBookingSchema) }),
+  reviews: z.object({
+    written: wireAdminCustomerReviewListSchema,
+    received: wireAdminCustomerReviewListSchema,
+  }),
+  notifications: wireAdminNotificationsSchema,
+});
+export type WireAdminCustomerDetail = z.infer<typeof wireAdminCustomerDetailSchema>;
+
 export const wireAdminBookingRowSchema = adminBookingRowSchema.extend({
   createdAt: z.coerce.date(),
 });
@@ -465,13 +499,20 @@ export const wireAdminBookingPageSchema =
   paginatedSchema(wireAdminBookingRowSchema).extend(wideningShape);
 export type WireAdminBookingPage = z.infer<typeof wireAdminBookingPageSchema>;
 
-/** `GET /admin/bookings/:bookingId` (VEN-399) — five dates cross the wire. */
+/** `GET /admin/bookings/:bookingId` (VEN-399) — five dates, and the notifications' two. */
 export const wireAdminBookingDetailSchema = adminBookingDetailSchema.extend({
   payoutReleasedAt: z.coerce.date().nullable(),
   paidAt: z.coerce.date().nullable(),
   completedAt: z.coerce.date().nullable(),
   cancelledAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
+  notifications: wireAdminNotificationsSchema.extend({
+    items: z.array(
+      wireAdminNotificationSchema.extend({
+        recipient: z.enum(ADMIN_NOTIFICATION_RECIPIENTS),
+      }),
+    ),
+  }),
 });
 export type WireAdminBookingDetail = z.infer<typeof wireAdminBookingDetailSchema>;
 

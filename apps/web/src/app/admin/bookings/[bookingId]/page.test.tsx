@@ -54,6 +54,7 @@ function detail(overrides: Record<string, unknown> = {}): WireAdminBookingDetail
     createdAt: '2026-09-02T09:58:00.000Z',
     vendor: { id: VENDOR_ID, businessName: 'Fernbank Studio', payoutHold: false },
     customer: { id: CUSTOMER_ID, name: 'Rosa Rivera', email: 'rosa@example.com' },
+    notifications: { total: 0, unread: 0, items: [] },
     ...overrides,
   });
 }
@@ -161,12 +162,68 @@ describe('AdminBookingDetailPage', () => {
     expect(rows).toContainEqual(['Transfer', 'tr_test_released']);
   });
 
+  it('lists what each party was told about the booking, with read state', async () => {
+    getAdminBookingDetail.mockResolvedValue(
+      detail({
+        notifications: {
+          total: 3,
+          unread: 1,
+          items: [
+            {
+              id: '55555555-5555-4555-8555-555555555555',
+              type: 'booking_confirmed',
+              title: 'Rosa Rivera paid',
+              createdAt: '2026-09-02T10:00:00.000Z',
+              readAt: '2026-09-02T12:00:00.000Z',
+              recipient: 'vendor',
+            },
+            {
+              id: '66666666-6666-4666-8666-666666666666',
+              type: 'quote_received',
+              title: 'Fernbank Studio sent a quote',
+              createdAt: '2026-09-01T10:00:00.000Z',
+              readAt: null,
+              recipient: 'customer',
+            },
+          ],
+        },
+      }),
+    );
+
+    await renderPage();
+
+    const table = screen.getByRole('table', { name: 'Notifications sent' });
+    expect(
+      within(table)
+        .getAllByRole('row')
+        .map((row) =>
+          [...row.querySelectorAll('[role="cell"], [role="columnheader"]')].map(
+            (cell) => cell.textContent,
+          ),
+        ),
+    ).toEqual([
+      ['Sent', 'To', 'Notification', 'Read'],
+      ['Sep 2, 2026, 10:00 UTC', 'Vendor', 'Rosa Rivera paidbooking_confirmed', 'Read'],
+      [
+        'Sep 1, 2026, 10:00 UTC',
+        'Customer',
+        'Fernbank Studio sent a quotequote_received',
+        'Unread',
+      ],
+    ]);
+    expect(screen.getByText('1 unread · latest 2 shown').tagName).toBe('SPAN');
+  });
+
   it('keeps its links out of the read-only cards and points them at both parties', async () => {
     getAdminBookingDetail.mockResolvedValue(detail());
 
     const { container } = await renderPage();
 
-    expect(interactiveInsideReadOnlyCards(container)).toEqual({ Money: 0, Identity: 0 });
+    expect(interactiveInsideReadOnlyCards(container)).toEqual({
+      Money: 0,
+      'Notifications sent · 0': 0,
+      Identity: 0,
+    });
     const records = screen
       .getByRole('heading', { name: 'Records' })
       .closest('section') as HTMLElement;
@@ -176,7 +233,7 @@ describe('AdminBookingDetailPage', () => {
         .map((link) => [link.textContent, link.getAttribute('href')]),
     ).toEqual([
       ['Vendor · Fernbank Studio', `/admin/vendors/${VENDOR_ID}`],
-      ['Customer · Rosa Rivera', `/admin/users/${CUSTOMER_ID}`],
+      ['Customer · Rosa Rivera', `/admin/customers/${CUSTOMER_ID}`],
     ]);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       'Fernbank Studio · October 10, 2026',

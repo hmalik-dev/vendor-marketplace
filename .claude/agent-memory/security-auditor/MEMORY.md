@@ -87,7 +87,7 @@
 - [Launch switches gate new intents, not open ones](launch-switches-gate-new-intents-not-open-ones.md) — VEN-404 checkout pause/cap miss an already-issued client secret; retry bypass is intended
 - [launch:check bearer hosts are fixed](launch-check-bearer-hosts-are-fixed.md) — VEN-409 PASS; re-open only if bearer() meets an env-built URL or a seed module gains a top-level main
 - [Admin booking detail + requests funnel](admin-booking-detail-and-requests-reads.md) — VEN-399 PASS; reopen if the funnel read ever ages rows or lists contact
-- [Admin vendor detail is a gated aggregate](admin-vendor-detail-is-a-gated-aggregate.md) — VEN-380 PASS; widening notifications to `body` or locks to request text bypasses the case-row read grant
+- [Admin vendor detail is a gated aggregate](admin-vendor-detail-is-a-gated-aggregate.md) — VEN-380 + VEN-400 customer detail PASS; widening notifications to `body` or locks to request text bypasses the case-row read grant
 - [The data-rights export is hand-enumerated](data-rights-export-is-hand-enumerated.md) — a new `users` PII column reaches the console and not the subject's own DSAR file
 - [Contested-email repair trusts Clerk absence](contested-email-repair-trusts-clerk-absence.md) — VEN-386 PASS; waiter handoff picks the stalest pending row
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — public repo: traces carry Clerk cookies, stripe-listen.log carries whsec; masking never reaches artifacts
