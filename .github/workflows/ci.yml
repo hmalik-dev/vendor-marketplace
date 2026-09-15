@@ -235,6 +235,9 @@ jobs:
         if: steps.secrets.outputs.run == 'true'
         run: pnpm build
 
+      # The suite's seeding contract (apps/web/e2e/README.md). `lane:up` runs the
+      # same seeds in the same order, and preflight's lane.test.ts fails if the
+      # two part ways.
       - name: Migrate and seed
         if: steps.secrets.outputs.run == 'true'
         run: |

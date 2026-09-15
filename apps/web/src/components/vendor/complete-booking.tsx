@@ -7,7 +7,7 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { useViewerToday } from '@/lib/use-viewer-today';
-import { wireBookingSchema } from '@/lib/wire-schemas';
+import { wireBookingViewSchema } from '@/lib/wire-schemas';
 import type { WireBooking } from '@/lib/wire-schemas';
 
 export interface CompleteBookingProps {
@@ -43,12 +43,22 @@ export function CompleteBooking({
   const call = useApi();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * The status the API answered with, once the vendor has pressed the button.
+   * VEN-414: the card used to learn it only from `router.refresh()`, and on this
+   * page that refresh was observed aborted in the browser after the API's 200 —
+   * the booking was complete and the vendor was still offered `Mark complete`
+   * until they reloaded. The answer is the booking as it now stands, so it is
+   * drawn directly; the refresh still runs for the rest of the page.
+   */
+  const [answered, setAnswered] = useState<WireBooking['status'] | null>(null);
+  const status = answered ?? booking.status;
 
-  if (booking.status === 'completed') {
+  if (status === 'completed') {
     return <StatusPill tone="completed">Complete</StatusPill>;
   }
 
-  if (booking.status === 'cancelled') {
+  if (status === 'cancelled') {
     return <StatusPill tone="failed">Cancelled</StatusPill>;
   }
 
@@ -72,10 +82,11 @@ export function CompleteBooking({
     setError(null);
 
     try {
-      await call(`/vendor/bookings/${booking.id}/complete`, {
+      const completed = await call(`/vendor/bookings/${booking.id}/complete`, {
         method: 'PUT',
-        schema: wireBookingSchema.omit({ eventType: true, venue: true }),
+        schema: wireBookingViewSchema,
       });
+      setAnswered(completed.status);
       router.refresh();
     } catch (failure) {
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));

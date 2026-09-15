@@ -21,9 +21,11 @@ import {
   laneDown,
   laneEnqueued,
   laneEnvFor,
+  LANE_SEEDS,
   laneUp,
   type LaneUpDeps,
   parseLaneArgs,
+  seedLane,
 } from './lane.js';
 import { readManifest } from './manifest.js';
 
@@ -626,5 +628,32 @@ describe('parseLaneArgs pr', () => {
 
   it('names what it needs when the url is missing', () => {
     expect(() => parseLaneArgs(['pr', '42'])).toThrow(/url/);
+  });
+});
+
+/*
+ * VEN-414. The committed Playwright suite runs on one seeding contract, and
+ * `lane:up` and CI's `Migrate and seed` step are its two runners: a lane seeded
+ * differently from CI reproduces neither CI's green nor its red.
+ */
+describe('the lane seeds', () => {
+  it('are the seeds CI runs before db:seed:e2e, in the same order', () => {
+    const workflow = readFileSync(
+      path.resolve(import.meta.dirname, '../../../../.github/workflows/ci.yml'),
+      'utf8',
+    );
+    const step = workflow.split('- name: Migrate and seed')[1]?.split('- name:')[0] ?? '';
+    const seeds = [...step.matchAll(/pnpm (db:seed\S*)/g)].map((match) => match[1]);
+
+    expect(seeds).toEqual([...LANE_SEEDS, 'db:seed:e2e']);
+  });
+
+  it('are what lane:up runs, marketing included, before the fixtures', async () => {
+    const ran: string[] = [];
+    await seedLane(worktree, async (_path, args) => {
+      ran.push(args.join(' '));
+    });
+
+    expect(ran).toEqual(['db:seed', 'db:seed:marketing', 'db:seed:e2e']);
   });
 });

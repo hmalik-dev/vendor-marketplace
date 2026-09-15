@@ -170,6 +170,18 @@ async function readStop(page: Page): Promise<Stop | null> {
 
     if (drawn !== undefined) {
       const box = drawn.getBoundingClientRect();
+      /*
+       * Whether a scroll container has already been passed on each axis.
+       *
+       * Past one, where the control sits on that axis is a scroll position for
+       * every clip further out too, not only for the pane itself (VEN-414). On
+       * `/search` the result pane is flush with the page shell's bottom edge,
+       * and once the grid holds enough vendors to scroll, Chrome's
+       * scroll-into-view leaves a focused card in the last row 0.3125px past
+       * that edge. The pane was correctly exempt; the shell, which does not
+       * scroll itself, then reported the same scroll position as a clip.
+       */
+      const scrolled = [false, false];
 
       for (
         let node = drawn.parentElement;
@@ -197,15 +209,11 @@ async function readStop(page: Page): Promise<Stop | null> {
          * `04-laws.md` names, and the vendor card and the messages list are
          * both instances of it.
          */
+        scrolled[0] ||= node.scrollWidth > node.clientWidth;
+        scrolled[1] ||= node.scrollHeight > node.clientHeight;
         const axes: [number, boolean][] = [
-          [
-            Math.min(box.left - clip.left, clip.right - box.right),
-            node.scrollWidth > node.clientWidth,
-          ],
-          [
-            Math.min(box.top - clip.top, clip.bottom - box.bottom),
-            node.scrollHeight > node.clientHeight,
-          ],
+          [Math.min(box.left - clip.left, clip.right - box.right), scrolled[0]],
+          [Math.min(box.top - clip.top, clip.bottom - box.bottom), scrolled[1]],
         ];
 
         const stuck = axes.find(([slack, scrollable]) => !scrollable && slack <= 0);

@@ -16,7 +16,14 @@ import {
   seededPackage,
   uniqueVenue,
 } from './booking-journey.js';
-import { expect, freshEventDate, shiftBookingIntoPast, test } from './fixtures.js';
+import {
+  expect,
+  expectSignedIn,
+  freshEventDate,
+  shiftBookingIntoPast,
+  storageStatePath,
+  test,
+} from './fixtures.js';
 import { E2E_VENDOR_SLUG, formatWholeDollars } from './fixtures-data.js';
 import { waitForHydration } from './hydration.js';
 
@@ -40,6 +47,13 @@ const JOURNEY_TIMEOUT_MS = 180_000;
 const WEBHOOK_WAIT_MS = 60_000;
 
 test.describe.configure({ timeout: JOURNEY_TIMEOUT_MS });
+
+/** A `YYYY-MM-DD` calendar date moved by whole days, in UTC so no zone can shift it. */
+function addDaysToDate(date: string, days: number): string {
+  const moved = new Date(`${date}T00:00:00Z`);
+  moved.setUTCDate(moved.getUTCDate() + days);
+  return moved.toISOString().slice(0, 10);
+}
 
 /** The vendor's card for one booking on `/vendor/bookings`, found by its unique venue. */
 function vendorBookingCard(vendorPage: Page, venue: string): ReturnType<Page['locator']> {
@@ -119,6 +133,8 @@ test.describe('paid booking', () => {
     await expect(row, 'the accepted request is still waiting on the dashboard').toHaveCount(0);
 
     await vendorPage.goto('/vendor/bookings');
+    // Mid-swap the streamed list holds both copies of the card (`e2e/hydration.ts`).
+    await waitForHydration(vendorPage, 'main li');
     await expect(
       vendorBookingCard(vendorPage, venue).getByText('Awaiting payment', { exact: true }),
     ).toBeVisible();
@@ -268,13 +284,40 @@ test.describe('paid booking', () => {
       venue,
     });
     const booking = await payThroughStripe(customerPage, request.id, `${baseURL}/bookings`);
-    await shiftBookingIntoPast(booking.id);
+    const eventDate = await shiftBookingIntoPast(booking.id);
 
-    await vendorPage.goto('/vendor/bookings');
-    const card = vendorBookingCard(vendorPage, venue);
-    await waitForHydration(vendorPage, 'li button');
-    await card.getByRole('button', { name: 'Mark complete' }).click();
-    await expect(card.getByText('Complete', { exact: true })).toBeVisible();
+    /*
+     * The tightest day there is (VEN-414): the vendor's own evening of the event
+     * day, when UTC — the API's clock, and the day `shiftBookingIntoPast` counted
+     * back from — is already on the next one. A pinned zone and a pinned clock,
+     * so this runs the edge at any hour instead of only between 00:00 UTC and
+     * local midnight. UTC-12 keeps the pinned instant within twelve hours of the
+     * real one, where the Clerk session the vendor holds is still honoured.
+     */
+    const vendorContext = await browser.newContext({
+      storageState: storageStatePath('vendor'),
+      timezoneId: 'Etc/GMT+12',
+    });
+    try {
+      const vendorAtEdge = await vendorContext.newPage();
+      await vendorAtEdge.clock.setSystemTime(new Date(`${eventDate}T23:30:00-12:00`));
+      await vendorAtEdge.goto('/vendor/bookings');
+      await expectSignedIn(vendorAtEdge);
+      expect(
+        await vendorAtEdge.evaluate(() => [
+          new Date().toLocaleDateString('en-CA'),
+          new Date().toISOString().slice(0, 10),
+        ]),
+        'the vendor’s day is the event day while UTC is already past it',
+      ).toEqual([eventDate, addDaysToDate(eventDate, 1)]);
+
+      const card = vendorBookingCard(vendorAtEdge, venue);
+      await waitForHydration(vendorAtEdge, 'li button');
+      await card.getByRole('button', { name: 'Mark complete' }).click();
+      await expect(card.getByText('Complete', { exact: true })).toBeVisible();
+    } finally {
+      await vendorContext.close();
+    }
     expect((await readBooking(customerPage, booking.id)).status).toBe('completed');
 
     const review = `Paid journey review ${venue}`;
