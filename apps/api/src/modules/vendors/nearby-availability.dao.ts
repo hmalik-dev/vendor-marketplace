@@ -114,7 +114,7 @@ export async function findVendorsFreeNearby(
     conditions.push(sql`EXISTS (
       SELECT 1 FROM vendor_categories vc
       JOIN categories c ON c.id = vc.category_id
-      WHERE vc.vendor_id = vendor_profiles.id AND c.slug = ${query.category}
+      WHERE vc.vendor_id = vendor_profiles.id AND c.slug = ${query.category} AND c.is_active
     )`);
   }
 
@@ -180,7 +180,7 @@ export async function findVendorsFreeNearby(
           })
           .from(vendorCategories)
           .innerJoin(categories, eq(categories.id, vendorCategories.categoryId))
-          .where(inArray(vendorCategories.vendorId, vendorIds))
+          .where(and(inArray(vendorCategories.vendorId, vendorIds), eq(categories.isActive, true)))
           .orderBy(asc(categories.displayOrder));
 
   const categoriesByVendor = new Map<string, NearbyVendor['categories']>();

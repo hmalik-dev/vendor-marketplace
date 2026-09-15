@@ -70,7 +70,10 @@ describe('CategoryTable', () => {
       {
         path: '/admin/categories/order',
         method: 'PUT',
-        body: { categoryIds: [PHOTOGRAPHY.id, DECOR.id, CATERING.id] },
+        body: {
+          categoryIds: [PHOTOGRAPHY.id, DECOR.id, CATERING.id],
+          basedOnCategoryIds: [PHOTOGRAPHY.id, CATERING.id, DECOR.id],
+        },
       },
     ]);
     expect(expired).toHaveBeenCalledTimes(1);

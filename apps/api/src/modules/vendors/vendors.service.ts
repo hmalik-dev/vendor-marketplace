@@ -184,15 +184,24 @@ async function firstRejection<T extends readonly unknown[]>(
   ) as unknown as T;
 }
 
-/** Rejects category ids that do not exist or are no longer selectable. */
+/**
+ * Rejects category ids that do not exist or are no longer selectable.
+ *
+ * `heldIds` are the categories the vendor is already listed under. One an
+ * operator has since deactivated stays acceptable (VEN-401): the editor cannot
+ * draw a hidden category, so it sends the id back untouched on every save, and
+ * refusing it would lock the vendor out of their own storefront.
+ */
 async function assertCategoriesSelectable(
   db: AppDatabase,
   categoryIds: readonly string[],
+  heldIds: readonly string[] = [],
 ): Promise<string[]> {
   const unique = [...new Set(categoryIds)];
-  const found = await findActiveCategoryIds(db, unique);
+  const found = new Set(await findActiveCategoryIds(db, unique));
+  const held = new Set(heldIds);
 
-  if (found.length !== unique.length) {
+  if (unique.some((id) => !found.has(id) && !held.has(id))) {
     /*
      * `field` is what lets the storefront editor put this on the category
      * picker instead of a toast: matching the prose to a control is not
@@ -425,8 +434,13 @@ export async function updateVendorProfile(
 
   // Resolved before anything is written, and concurrently — see
   // `createVendorProfile`.
+  const requestedCategoryIds = input.categoryIds;
   const [categoryIds, tags] = await firstRejection([
-    input.categoryIds === undefined ? undefined : assertCategoriesSelectable(db, input.categoryIds),
+    requestedCategoryIds === undefined
+      ? undefined
+      : findVendorCategoryIds(db, existing.id).then((held) =>
+          assertCategoriesSelectable(db, requestedCategoryIds, held),
+        ),
     input.tagIds === undefined ? undefined : resolveVendorTagSelection(db, input.tagIds),
   ] as const);
 

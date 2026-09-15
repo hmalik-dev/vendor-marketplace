@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import { categories, vendorCategories } from '@vendor-marketplace/db/schema';
 import type { AdminCategoryRow } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
@@ -38,12 +38,12 @@ export async function findAdminCategoryById(
 }
 
 /**
- * Every category's id and position, row-locked for the rest of the transaction.
+ * Every category's id and position in the public order, row-locked for the
+ * rest of the transaction.
  *
- * The lock is what makes a reorder's "does this list still name every
- * category?" check hold until the write lands: two operators reordering at once
- * serialise here instead of each validating against the order the other is
- * about to replace.
+ * The lock is what makes a reorder's "is this still the order you saw?" check
+ * hold until the write lands: two operators reordering at once serialise here,
+ * and the second compares against the order the first has just written.
  */
 export async function lockCategoryPositions(
   tx: AppDatabase,
@@ -51,6 +51,7 @@ export async function lockCategoryPositions(
   return tx
     .select({ id: categories.id, displayOrder: categories.displayOrder })
     .from(categories)
+    .orderBy(asc(categories.displayOrder), asc(categories.name))
     .for('update');
 }
 
@@ -62,7 +63,7 @@ export async function setCategoryActiveRow(
   const updated = await tx
     .update(categories)
     .set({ isActive })
-    .where(eq(categories.id, categoryId))
+    .where(and(eq(categories.id, categoryId), ne(categories.isActive, isActive)))
     .returning({ id: categories.id });
 
   return updated.length > 0;

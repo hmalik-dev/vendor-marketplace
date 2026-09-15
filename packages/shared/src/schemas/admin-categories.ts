@@ -21,18 +21,22 @@ export type AdminCategoryList = z.infer<typeof adminCategoryListSchema>;
 export const setCategoryActiveSchema = z.object({ isActive: z.boolean() });
 export type SetCategoryActive = z.infer<typeof setCategoryActiveSchema>;
 
+const categoryOrderSchema = z
+  .array(uuidSchema)
+  .min(1)
+  .max(100)
+  .refine((ids) => new Set(ids).size === ids.length, { message: 'A category is listed twice' });
+
 /**
- * The whole order, not a single move.
+ * The whole order, not a single move, and the order it was built from.
  *
  * A move sent as "swap with the neighbour" is two writes that a concurrent
- * edit can interleave; a complete list is one statement of intent the service
- * can refuse when it no longer names every category that exists.
+ * edit can interleave. `basedOnCategoryIds` is the order the screen showed, so
+ * the service can refuse a reorder built on a list another operator has since
+ * rearranged instead of silently undoing their move.
  */
 export const reorderCategoriesSchema = z.object({
-  categoryIds: z
-    .array(uuidSchema)
-    .min(1)
-    .max(100)
-    .refine((ids) => new Set(ids).size === ids.length, { message: 'A category is listed twice' }),
+  categoryIds: categoryOrderSchema,
+  basedOnCategoryIds: categoryOrderSchema,
 });
 export type ReorderCategories = z.infer<typeof reorderCategoriesSchema>;
