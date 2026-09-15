@@ -626,6 +626,65 @@ export async function retireOperatorById(
 }
 
 /**
+ * Bans an **operator** — refused when nobody else would hold the console
+ * (VEN-417).
+ *
+ * A ban takes an operator out of the live set as surely as a retirement does,
+ * so it shares the retirement's lock and its predicate. Without the lock, one
+ * operator banning the other while that one closes the first both commit, each
+ * statement's snapshot still counting its own actor as live. It also takes a
+ * held storefront down, as `setBanned` does, in the same transaction.
+ *
+ * `null` when the row was not ours to ban: gone, or already banned by a request
+ * that won the claim.
+ */
+export async function banOperatorById(
+  db: AppDatabase,
+  userId: string,
+  now: Date,
+): Promise<{ profileUnpublished: boolean } | 'last-operator' | null> {
+  return db.transaction(async (tx) => {
+    await tx.execute(OPERATOR_RETIREMENT_LOCK);
+
+    const other = alias(users, 'other_operator');
+    const banned = await tx
+      .update(users)
+      .set({ isBanned: true, bannedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(users.id, userId),
+          eq(users.isBanned, false),
+          exists(
+            tx
+              .select({ one: sql`1` })
+              .from(other)
+              .where(isOtherLiveOperator(other, userId)),
+          ),
+        ),
+      )
+      .returning({ id: users.id });
+
+    if (banned.length === 0) {
+      const [unbanned] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.id, userId), eq(users.isBanned, false)))
+        .limit(1);
+
+      return unbanned ? 'last-operator' : null;
+    }
+
+    const unpublished = await tx
+      .update(vendorProfiles)
+      .set({ isPublished: false, updatedAt: now })
+      .where(and(eq(vendorProfiles.userId, userId), eq(vendorProfiles.isPublished, true)))
+      .returning({ id: vendorProfiles.id });
+
+    return { profileUnpublished: unpublished.length > 0 };
+  });
+}
+
+/**
  * The retirement itself, once: `deleted_at` on the account and the storefront
  * down with it, in one transaction.
  *
