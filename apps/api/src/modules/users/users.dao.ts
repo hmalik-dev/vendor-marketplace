@@ -1,5 +1,5 @@
 import { and, eq, exists, isNull, ne, sql, type SQL } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   legalAcceptances,
   USERS_EMAIL_UNIQUE_INDEX,
@@ -555,7 +555,10 @@ export async function retireUserById(
  * retired and not banned. Takes the table so the same rule can be read on its
  * own and correlated inside a retirement predicate.
  */
-function isOtherLiveOperator(table: typeof users, userId: string): SQL | undefined {
+function isOtherLiveOperator(
+  table: Record<'role' | 'deletedAt' | 'isBanned' | 'id', AnyPgColumn>,
+  userId: string,
+): SQL | undefined {
   return and(
     eq(table.role, 'admin'),
     isNull(table.deletedAt),
