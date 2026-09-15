@@ -1,5 +1,5 @@
 import { cloneElement, type ReactNode } from 'react';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 
@@ -292,6 +292,30 @@ describe('SiteHeader', () => {
     // Sign out lands signed out on `/` — criterion 2's half that jsdom can see.
     fireEvent.click(items[2]!);
     expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
+  });
+
+  /*
+   * #435's ruling for an ARIA menu button: Tab closes the panel and parks focus
+   * on the trigger, rather than Radix swallowing the key inside an open menu.
+   */
+  it('closes the account menu on Tab and returns focus to the avatar', async () => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+
+    render(await SiteHeader());
+    const trigger = screen.getByRole('button', { name: 'Account menu' });
+    // A keyboard user is on the trigger when they open it; `keyDown` alone
+    // does not put them there.
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(screen.getByRole('menu')).toBeDefined();
+
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Tab' });
+
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    // Radix settles focus after the panel unmounts, on a later tick.
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
   /*

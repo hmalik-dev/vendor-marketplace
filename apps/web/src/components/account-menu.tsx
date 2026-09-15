@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { SignOutButton } from '@clerk/nextjs';
 import { DropdownMenu } from 'radix-ui';
+import { useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
 
 /**
@@ -61,9 +62,14 @@ export function AccountMenu({
   avatarUrl,
   dashboardLabel,
 }: AccountMenuProps): React.ReactElement {
+  const trigger = useRef<HTMLButtonElement>(null);
+  // Controlled only so `Tab` can close it — see the handler on the content.
+  const [open, setOpen] = useState(false);
+
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger
+        ref={trigger}
         aria-label="Account menu"
         /*
           44px of target around the frame's 32px circle, per `04-laws.md`. No
@@ -83,6 +89,18 @@ export function AccountMenu({
           // The panel's highlight is its fill, so the global ring steps aside —
           // the same reason `row-menu.tsx` gives.
           data-focus-own
+          /*
+            Tab closes the menu and parks focus on the trigger — the ARIA
+            menu-button convention #435 ruled for `admin/row-menu.tsx`, which
+            explains why "moves on" is not attempted. Without this Radix
+            swallows the key and the panel stays open with focus inside it.
+          */
+          onKeyDown={(event) => {
+            if (event.key === 'Tab') {
+              setOpen(false);
+              trigger.current?.focus();
+            }
+          }}
           className="z-50 flex min-w-[13rem] flex-col rounded-panel border border-stone-300 bg-stone-0 p-[6px] shadow-dropdown"
         >
           {accountLinks(dashboardLabel).map((link) => (
