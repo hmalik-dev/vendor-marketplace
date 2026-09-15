@@ -213,13 +213,26 @@ base box; `03-components.md`'s `py-2.5` is the drift here.
 
 **The broken mark is the frames' loose geometry, not the logo's overlap
 (VEN-419, 2026-09-15).** `BrokenMark` draws frame `15`'s 74x46 box with the
-dashed circle at `left:28px` (0.61 D). Frame `26` draws **no** broken mark —
-its state library has none, so it cannot disagree — and the siblings under D30
-are the empty-state marks, which all draw the same loose offset: `18` 24/38,
-`27 Search — no results` 21/33, `19`/`20` 22/36, `27 Vendor dashboard` 19/31.
-`EmptyStateGlyph` and `SearchEmptyGlyph` already take those. The logo's
-`OFFSET_RATIO = 0.45` (#449) is the working mark and does not move; a pass
-reading the two marks' different offsets is looking at this ruling.
+dashed circle at `left:28px` (0.61 D), and that ring is `box-content`: the
+screens document is content-box, so its 1.5px border paints a 49px ring whose
+right edge sits at 77px. Frame `26` draws **no** broken mark — its state library
+has none, so it cannot disagree — and the siblings under D30 are the paired
+empty-state marks, all loose at 0.61–0.64 D: `18` 24/38, `27 Search — no
+results` 21/33, `19`/`20` 22/36, `27 Vendor dashboard` 19/31 (`19`'s second
+ring is solid, not dashed). `EmptyStateGlyph` and `SearchEmptyGlyph` take those
+offsets but paint their rings border-box, 3px short — a separate surface,
+filed as **VEN-420**. The logo's `OFFSET_RATIO = 0.45` (#449) is the
+working mark and does not move; a pass reading the two marks' different offsets
+is looking at this ruling.
+
+**The 404 header is the plain signed-out header (VEN-419, 2026-09-15).** Frame
+`15` draws `Browse · How it works · For vendors` and `Log in`. `MarketingNav` is
+scoped by pathname to the pages that draw it, and a 404's pathname is whatever
+was mistyped, so it renders no nav there; the 404 body's own `Browse vendors`
+button and category pills are the recovery the frame asks for. `Log in` is frame
+`15` alone against `Sign in` in five frames (`01`, `27 Landing — 1024`, `14
+Landing tablet`, `12`, `28`), so `Sign in` stands under D30. **A parity pass on
+the 404 finding either is looking at this ruling. Do not re-file it.**
 
 **A border or surface token used as text on an ink ground is machine-checked
 (#447, 2026-09-07).** `apps/web/src/testing/token-roles.ts` holds `STONE_ROLES`,

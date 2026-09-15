@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils';
  *
  * Come loose is the point, so it does **not** share the logo's 0.45 overlap:
  * frame `15` draws the dashed circle at `left:28px` in a 74x46 box, and the
- * empty-state marks on `18`–`20` corroborate the same ~0.61 D offset (VEN-419).
+ * empty-state marks on `18`–`20` corroborate a 0.61–0.64 D offset (VEN-419).
+ * The screens document is content-box, so the dashed ring is `box-content`: its
+ * 1.5px border paints outside the 46px, a 49px ring to 77px, as the logo's does.
  * It is decorative — the heading beside it says what happened — so it is hidden
  * from the accessibility tree.
  */
@@ -31,7 +33,7 @@ export function BrokenMark({ className }: BrokenMarkProps): React.ReactElement {
         style={{ width: DIAMETER, height: DIAMETER }}
       />
       <span
-        className="absolute top-0 rounded-full border-[1.5px] border-dashed border-stone-400"
+        className="absolute top-0 box-content rounded-full border-[1.5px] border-dashed border-stone-400"
         style={{ left: OFFSET, width: DIAMETER, height: DIAMETER }}
       />
     </span>
