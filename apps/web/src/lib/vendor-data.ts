@@ -231,11 +231,14 @@ export async function getOwnAvailability(): Promise<WireAvailability[]> {
 const REFERENCE_DATA_REVALIDATE_SECONDS = 3600;
 
 /**
- * The cache tag on the shared taxonomy read. The console's category writes
- * expire it (VEN-401), so a deactivation or a reorder reaches the landing pills
- * and the search rail on the next request rather than up to an hour later.
+ * The taxonomy's window is a minute, not an hour (VEN-401). An operator can now
+ * hide or reorder a category from the console, and a hidden one lingering on
+ * the landing pills and the header picker for an hour reads as the write not
+ * having worked. A minute keeps the header's read off the API on nearly every
+ * page view while bounding that lag. On-demand `revalidateTag` from the console
+ * was tried first and did not expire the entry under `next start` in a lane.
  */
-export const CATEGORIES_CACHE_TAG = 'categories';
+const CATEGORIES_REVALIDATE_SECONDS = 60;
 
 export interface ReferenceReadOptions {
   /**
@@ -288,8 +291,11 @@ async function degradeToEmpty<T>(read: () => Promise<T[]>, required?: boolean): 
  * is what a fresh read looks like: the option is left out entirely rather than
  * sent as `0`, which Next would pair with `cache` and then ignore.
  */
-function referenceCaching(fresh?: boolean): { revalidate?: number } {
-  return fresh === true ? {} : { revalidate: REFERENCE_DATA_REVALIDATE_SECONDS };
+function referenceCaching(
+  fresh?: boolean,
+  seconds = REFERENCE_DATA_REVALIDATE_SECONDS,
+): { revalidate?: number } {
+  return fresh === true ? {} : { revalidate: seconds };
 }
 
 /** Public reference data; no session needed. */
@@ -298,8 +304,7 @@ export async function getCategories(options: ReferenceReadOptions = {}): Promise
     () =>
       apiRequest('/categories', {
         schema: wireCategoryListSchema,
-        cacheTags: [CATEGORIES_CACHE_TAG],
-        ...referenceCaching(options.fresh),
+        ...referenceCaching(options.fresh, CATEGORIES_REVALIDATE_SECONDS),
       }),
     options.required,
   );

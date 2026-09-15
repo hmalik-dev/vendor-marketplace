@@ -90,12 +90,6 @@ export interface ApiRequestOptions<T> {
    * Ignored in the browser, where `fetch` has no `next` option.
    */
   revalidate?: number;
-  /**
-   * Cache tags for a `revalidate`d read, so a write elsewhere can expire it
-   * with `revalidateTag` instead of waiting out the window. Ignored without
-   * `revalidate`, since a `no-store` read has nothing to expire.
-   */
-  cacheTags?: readonly string[];
 }
 
 /** Reads the API's structured error body, tolerating a non-JSON failure page. */
@@ -153,7 +147,7 @@ async function readJsonBody(response: Response, path: string): Promise<unknown> 
  * `undefined` deep inside a component.
  */
 export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>): Promise<T> {
-  const { schema, method = 'GET', body, token, signal, revalidate, cacheTags } = options;
+  const { schema, method = 'GET', body, token, signal, revalidate } = options;
 
   const headers: Record<string, string> = { accept: 'application/json' };
   if (token) {
@@ -236,9 +230,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
       ...(requestSignal ? { signal: requestSignal } : {}),
       // `cache` and `next.revalidate` are mutually exclusive — sending both makes
       // Next ignore the revalidate and store nothing.
-      ...(revalidate === undefined
-        ? { cache: 'no-store' as const }
-        : { next: { revalidate, ...(cacheTags ? { tags: [...cacheTags] } : {}) } }),
+      ...(revalidate === undefined ? { cache: 'no-store' as const } : { next: { revalidate } }),
     }),
   );
 

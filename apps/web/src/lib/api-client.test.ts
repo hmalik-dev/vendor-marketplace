@@ -32,24 +32,6 @@ describe('apiRequest', () => {
     });
   });
 
-  it('sends cache tags beside a revalidate window, and none on a no-store read', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(200, { id: 'u1', name: 'Ada' }));
-    await apiRequest('/categories', {
-      schema: bodySchema,
-      revalidate: 60,
-      cacheTags: ['categories'],
-    });
-
-    fetchMock.mockResolvedValue(jsonResponse(200, { id: 'u1', name: 'Ada' }));
-    await apiRequest('/categories', { schema: bodySchema, cacheTags: ['categories'] });
-
-    const [cached, fresh] = fetchMock.mock.calls.map((call) => call[1] as Record<string, unknown>);
-    expect(cached?.next).toEqual({ revalidate: 60, tags: ['categories'] });
-    expect(cached?.cache).toBeUndefined();
-    expect(fresh?.next).toBeUndefined();
-    expect(fresh?.cache).toBe('no-store');
-  });
-
   it('sends the bearer token when one is supplied', async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, { id: 'u1', name: 'Ada' }));
 

@@ -18,3 +18,4 @@
 - [API parity checks need a Clerk bearer, not cookies](api-parity-check-needs-clerk-bearer-not-cookies.md) — pull `window.Clerk.session.getToken()` and fetch the API's own port directly; cookie-only cross-port fetch 401s
 - [A ticket's own setup steps can authorize scoped DB writes](ticket-setup-steps-can-authorize-scoped-db-writes.md) — override the read-only default only when the task names the column/row and a restore step
 - [Unattached conversation avoids the shared pending booking](unattached-conversation-avoids-shared-booking-mutation.md) — "Send a message" on a vendor storefront opens a fresh thread with no booking attached; real table is `support_cases`, not `cases`
+- [revalidateTag('categories') doesn't bust the public cache](revalidatetag-categories-does-not-bust-public-cache.md) — VEN-401: DB/audit/raw-API update instantly, but landing/header stayed stale 10+ min; verify via curl, not the admin's own no-store re-render

@@ -3,7 +3,6 @@ import type { AdminCategoryRow } from '@vendor-marketplace/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const calls: { path: string; method?: string; body?: unknown }[] = [];
-const expired = vi.fn(async () => undefined);
 const refresh = vi.fn();
 let failNext = false;
 
@@ -18,7 +17,6 @@ vi.mock('@/lib/use-api', () => ({
   },
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
-vi.mock('@/app/admin/tags/actions', () => ({ expirePublicCategories: expired }));
 
 const { CategoryTable } = await import('./category-table');
 
@@ -46,7 +44,6 @@ const button = (name: string): HTMLButtonElement =>
 afterEach(() => {
   cleanup();
   calls.length = 0;
-  expired.mockClear();
   refresh.mockClear();
 });
 
@@ -59,7 +56,7 @@ describe('CategoryTable', () => {
     expect(button('Move Catering up').disabled).toBe(false);
   });
 
-  it('sends the whole order with the row swapped, then expires the public taxonomy', async () => {
+  it('sends the whole order with the row swapped, then refreshes', async () => {
     render(<CategoryTable categories={ALL} />);
 
     await act(async () => {
@@ -76,7 +73,6 @@ describe('CategoryTable', () => {
         },
       },
     ]);
-    expect(expired).toHaveBeenCalledTimes(1);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
@@ -91,10 +87,10 @@ describe('CategoryTable', () => {
     expect(calls).toEqual([
       { path: `/admin/categories/${CATERING.id}`, method: 'PUT', body: { isActive: true } },
     ]);
-    expect(expired).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('says a failed move did not save and leaves the cache alone', async () => {
+  it('says a failed move did not save and does not refresh', async () => {
     render(<CategoryTable categories={ALL} />);
     failNext = true;
 
@@ -103,6 +99,6 @@ describe('CategoryTable', () => {
     });
 
     expect(screen.getByRole('alert').textContent).toBe('That order did not save.');
-    expect(expired).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 });
