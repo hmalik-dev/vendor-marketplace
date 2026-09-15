@@ -1,5 +1,6 @@
 import {
   CATEGORY_SEEDS,
+  LANDING_CATEGORY_COUNT,
   LANDING_JUMP_CATEGORY_SLUGS,
   type Category,
 } from '@vendor-marketplace/shared';
@@ -27,4 +28,18 @@ export function offeredJumpCategories(categories: readonly Category[]): JumpCate
     slug,
     name: CATEGORY_SEEDS.find((seed) => seed.slug === slug)?.name ?? slug,
   }));
+}
+
+/**
+ * The not-found screen's recovery pills (frame `15`, VEN-416): the first
+ * seeded categories that the live taxonomy still offers, under the same
+ * degraded-read rule as {@link offeredJumpCategories} — an empty list keeps
+ * every pill, because an error page must not fail on a second upstream.
+ */
+export function offeredRecoveryCategories(categories: readonly Category[]): JumpCategory[] {
+  const offered = new Set(categories.map((category) => category.slug));
+
+  return CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT)
+    .filter((seed) => categories.length === 0 || offered.has(seed.slug))
+    .map(({ slug, name }) => ({ slug, name }));
 }
