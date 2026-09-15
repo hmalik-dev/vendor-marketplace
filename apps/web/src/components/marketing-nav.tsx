@@ -45,7 +45,7 @@ export const MARKETING_LINKS: readonly NavDrawerLink[] = [
   { label: 'For vendors', href: FOR_VENDORS_PATH },
 ];
 
-/** The pages that draw these links: the landing page, `/for-vendors` and the three reading pages. */
+/** The pages that draw these links: the landing page, `/for-vendors` and the four legal reading pages. */
 const NAV_PATH_SET = new Set<string>(['/', FOR_VENDORS_PATH, ...Object.values(LEGAL_PATHS)]);
 
 /**

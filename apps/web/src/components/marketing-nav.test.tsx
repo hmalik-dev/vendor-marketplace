@@ -63,6 +63,19 @@ describe('MarketingNav', () => {
     expect(screen.getByRole('link', { name: 'How it works' }).getAttribute('href')).toMatch(/^\/#/);
   });
 
+  it.each(['/terms', '/privacy', '/cookies', '/legal/vendor-agreement'])(
+    'draws on the legal reading page %s',
+    (path) => {
+      pathname = path;
+
+      render(<MarketingNav />);
+
+      expect(screen.getByRole('link', { name: 'For vendors' }).getAttribute('href')).toBe(
+        '/for-vendors',
+      );
+    },
+  );
+
   it('renders nothing off the landing page, where the frames fill that space differently', () => {
     pathname = '/search';
 

@@ -52,8 +52,8 @@ export function legalDocument(slug: LegalDocumentSlug): LegalDocument {
 }
 
 /**
- * The vendor agreement, which is a document without a page: it is read inside
- * step 3 of onboarding, clipped and expandable in place.
+ * The vendor agreement: read inside step 3 of onboarding, clipped and
+ * expandable in place, and in full at `LEGAL_PATHS['vendor-agreement']`.
  */
 export function vendorAgreementDocument(): LegalDocument {
   return DOCUMENTS['vendor-agreement'];

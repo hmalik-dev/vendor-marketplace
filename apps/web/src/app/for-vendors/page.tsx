@@ -7,8 +7,8 @@ import {
   formatPrice,
   formatRate,
   pageTitle,
+  LEGAL_PATHS,
   PAYOUT_RELEASE_HOURS,
-  VENDOR_AGREEMENT_PATH,
 } from '@vendor-marketplace/shared';
 import { Button } from '@/components/ui/button';
 import { redirectVendorToDashboard } from '@/lib/current-user';
@@ -311,7 +311,7 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
           {/* The button leads on mobile and trails on desktop, as both frames draw. */}
           <div className="flex flex-none flex-col items-stretch gap-3.5 lg:flex-row lg:items-center lg:gap-5 lg:pb-0.75">
             <Link
-              href={VENDOR_AGREEMENT_PATH}
+              href={LEGAL_PATHS['vendor-agreement']}
               className="order-2 text-center text-action font-semibold text-stone-480 underline-offset-4 transition-colors duration-(--duration-fast) hover:text-stone-50 hover:underline lg:order-1 lg:text-base"
             >
               Read the vendor agreement

@@ -1,8 +1,4 @@
-import {
-  BRAND_NAME,
-  PAYOUT_RELEASE_HOURS,
-  VENDOR_AGREEMENT_PATH,
-} from '@vendor-marketplace/shared';
+import { BRAND_NAME, PAYOUT_RELEASE_HOURS, LEGAL_PATHS } from '@vendor-marketplace/shared';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -189,6 +185,6 @@ describe('/for-vendors', () => {
 
     expect(
       screen.getByRole('link', { name: 'Read the vendor agreement' }).getAttribute('href'),
-    ).toBe(VENDOR_AGREEMENT_PATH);
+    ).toBe(LEGAL_PATHS['vendor-agreement']);
   });
 });
