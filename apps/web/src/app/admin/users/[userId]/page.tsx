@@ -1,17 +1,16 @@
 import { LEGAL_ACCEPTANCE_LABELS } from '@vendor-marketplace/shared';
 import { notFound } from 'next/navigation';
-import { Fragment } from 'react';
 import {
   Absent,
   AdminCard,
   DetailGrid,
   DetailHeader,
+  IdentityCard,
   KeyValue,
   KeyValueList,
   ScopeChip,
 } from '@/components/admin/admin-detail';
 import { DataRightsActions } from '@/components/admin/data-rights-actions';
-import { Avatar } from '@/components/ui/avatar';
 import { Banner } from '@/components/ui/banner';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { ApiClientError } from '@/lib/api-client';
@@ -246,41 +245,17 @@ export default async function AdminUserDataRightsPage({
         }
         aside={
           <>
-            <AdminCard readOnly title="Identity">
-              <div className="flex flex-col gap-2.5 px-4 py-3.5">
-                <div className="flex items-center gap-2.5">
-                  <Avatar name={name} size="md" className="rounded-[10px]" />
-                  <div className="min-w-0">
-                    <p className="text-cta font-semibold break-words text-stone-900">{name}</p>
-                    <p className="text-meta text-stone-600 capitalize">{rights.role}</p>
-                  </div>
-                </div>
-                <dl className="grid grid-cols-[82px_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1.5">
-                  {[
-                    { label: 'Contact', value: rights.email, mono: false },
-                    { label: 'Account', value: rights.userId, mono: true },
-                    ...(rights.vendorSlug
-                      ? [{ label: 'Slug', value: rights.vendorSlug, mono: true }]
-                      : []),
-                  ].map((field) => (
-                    <Fragment key={field.label}>
-                      <dt className="text-label font-semibold tracking-label text-stone-600 uppercase">
-                        {field.label}
-                      </dt>
-                      <dd
-                        className={
-                          field.mono
-                            ? 'font-mono text-helper [overflow-wrap:anywhere] text-stone-900'
-                            : 'text-sm [overflow-wrap:anywhere] text-stone-900'
-                        }
-                      >
-                        {field.value}
-                      </dd>
-                    </Fragment>
-                  ))}
-                </dl>
-              </div>
-            </AdminCard>
+            <IdentityCard
+              name={name}
+              subtitle={<span className="capitalize">{rights.role}</span>}
+              fields={[
+                { label: 'Contact', value: rights.email },
+                { label: 'Account', value: rights.userId, mono: true },
+                ...(rights.vendorSlug
+                  ? [{ label: 'Slug', value: rights.vendorSlug, mono: true }]
+                  : []),
+              ]}
+            />
 
             <AdminCard title="Actions">
               <DataRightsActions

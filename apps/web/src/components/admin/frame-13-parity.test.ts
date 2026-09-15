@@ -62,6 +62,8 @@ function frameRule(selector: string): string {
 const frame = adminFrame();
 const dataTable = read('src/components/admin/data-table.tsx');
 const vendorTable = read('src/components/admin/vendor-table.tsx');
+/* The pill tones moved beside the table (VEN-380) so a Server Component can import them. */
+const vendorStatus = read('src/components/admin/vendor-status.ts');
 const header = read('src/components/admin/admin-header.tsx');
 const nav = read('src/components/admin/admin-nav.tsx');
 const surface = read('src/components/admin/admin-surface.tsx');
@@ -430,7 +432,7 @@ describe('the status pills', () => {
        * mention of the same word in the prose beside it.
        */
       const status = label.toLowerCase();
-      expect(vendorTable, label).toContain(`${status}: '${tone}',`);
+      expect(vendorStatus, label).toContain(`${status}: '${tone}',`);
       expect(statusLabels, label).toContain(`${status}: '${label}',`);
     }
   });
@@ -445,7 +447,7 @@ describe('the status pills', () => {
    */
   it('gives the retired status no colour the frame did not already draw', () => {
     expect(pillsInFrame().map(([label]) => label)).not.toContain('Retired');
-    expect(vendorTable).toContain("retired: 'inert',");
+    expect(vendorStatus).toContain("retired: 'inert',");
     expect(statusLabels).toContain("retired: 'Retired',");
   });
 

@@ -9,6 +9,7 @@ import {
 import {
   ADMIN_ACTION_SUBJECTS,
   ADMIN_ACTIONS,
+  ADMIN_AVAILABILITY_LOCK_STATUSES,
   ADMIN_PAGE_SIZE,
   AVAILABILITY_STATUSES,
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
@@ -3013,6 +3014,122 @@ export const adminVendorPayoutHoldResultSchema = z.object({
   payoutHold: z.boolean(),
 });
 export type AdminVendorPayoutHoldResult = z.infer<typeof adminVendorPayoutHoldResultSchema>;
+
+// --- The admin vendor detail (VEN-380) --------------------------------------
+
+/**
+ * The vendor as `/admin/vendors/[vendorId]` reads it: the Vendors table's own
+ * row, extended, so the status the detail pills and the status the list pills
+ * come from one derivation and cannot disagree.
+ */
+export const adminVendorDetailProfileSchema = adminVendorRowSchema.extend({
+  /** The owner's sign-in address — searched by the list and shown nowhere until here. */
+  email: z.string(),
+  ownerName: z.string(),
+  responseTimeHours: z.int().nullable(),
+  serviceRadiusKm: z.int().nullable(),
+  travelsBeyondRadius: z.boolean(),
+  isPublished: z.boolean(),
+  /** Set by the console's unpublish lever; the vendor cannot clear it (#457). */
+  moderationHold: z.boolean(),
+  /** VEN-404's per-vendor switch; the sweep skips a held vendor's payouts. */
+  payoutHold: z.boolean(),
+});
+export type AdminVendorDetailProfile = z.infer<typeof adminVendorDetailProfileSchema>;
+
+export const adminVendorPackageSchema = z.object({
+  id: uuidSchema,
+  name: z.string(),
+  priceCents: z.int(),
+  priceType: priceTypeSchema,
+  isActive: z.boolean(),
+  moderationHold: z.boolean(),
+});
+export type AdminVendorPackage = z.infer<typeof adminVendorPackageSchema>;
+
+/**
+ * One portfolio photo. The references are plain strings rather than
+ * `imageRefSchema`: this is a response, and a stored row that predates a
+ * tightened input rule must still be listable so an operator can remove it.
+ */
+export const adminVendorPortfolioItemSchema = z.object({
+  id: uuidSchema,
+  imageUrl: z.string(),
+  thumbnailUrl: z.string().nullable(),
+  caption: z.string().nullable(),
+  displayOrder: z.int(),
+});
+export type AdminVendorPortfolioItem = z.infer<typeof adminVendorPortfolioItemSchema>;
+
+/** A confirmed-or-later booking holding a `booked` date. */
+export const adminLockBookingHolderSchema = z.object({
+  kind: z.literal('booking'),
+  id: uuidSchema,
+  customerName: z.string(),
+  status: bookingStatusSchema,
+});
+
+/** A live request holding a `pending` date, with the deadline that frees it. */
+export const adminLockRequestHolderSchema = z.object({
+  kind: z.literal('request'),
+  id: uuidSchema,
+  customerName: z.string(),
+  status: bookingRequestStatusSchema,
+  expiresAt: z.date().nullable(),
+});
+
+export const adminLockHolderSchema = z.discriminatedUnion('kind', [
+  adminLockBookingHolderSchema,
+  adminLockRequestHolderSchema,
+]);
+export type AdminLockHolder = z.infer<typeof adminLockHolderSchema>;
+
+/**
+ * One held date and what holds it.
+ *
+ * `holders` is empty for a `blocked` date — the vendor's own decision, with
+ * its note — and, for a `booked` one, is the tell that the lock is **stale**:
+ * the calendar refuses the date while no live booking stands on it.
+ */
+export const adminAvailabilityLockSchema = z.object({
+  date: calendarDateSchema,
+  status: z.enum(ADMIN_AVAILABILITY_LOCK_STATUSES),
+  note: z.string().nullable(),
+  holders: z.array(adminLockHolderSchema),
+});
+export type AdminAvailabilityLock = z.infer<typeof adminAvailabilityLockSchema>;
+
+/**
+ * A notification the platform sent the vendor. `type` is the stored string
+ * rather than the enum, so a row written under a retired type still lists.
+ */
+export const adminVendorNotificationSchema = z.object({
+  id: uuidSchema,
+  type: z.string(),
+  title: z.string(),
+  createdAt: z.date(),
+  readAt: z.date().nullable(),
+});
+export type AdminVendorNotification = z.infer<typeof adminVendorNotificationSchema>;
+
+/**
+ * `GET /admin/vendors/:vendorId` — everything the console holds about one
+ * vendor, each card a request-time query result.
+ */
+export const adminVendorDetailSchema = z.object({
+  vendor: adminVendorDetailProfileSchema,
+  packages: z.array(adminVendorPackageSchema),
+  portfolio: z.array(adminVendorPortfolioItemSchema),
+  /** Held dates from yesterday through the calendar's own horizon, earliest first. */
+  locks: z.array(adminAvailabilityLockSchema),
+  notifications: z.object({
+    total: z.int(),
+    unread: z.int(),
+    /** The most recent `ADMIN_VENDOR_DETAIL_NOTIFICATION_LIMIT`, newest first. */
+    items: z.array(adminVendorNotificationSchema),
+  }),
+});
+export type AdminVendorDetail = z.infer<typeof adminVendorDetailSchema>;
 
 // --- The operations case queue (#431) --------------------------------------
 

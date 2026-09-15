@@ -8,54 +8,19 @@ import {
   ADMIN_VENDOR_STATUS_LABELS,
   adminBanResultSchema,
   adminVendorPublishResultSchema,
-  type AdminVendorStatus,
 } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { RowMenu } from '@/components/admin/row-menu';
 import { DataTable } from '@/components/admin/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
-import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
+import { StatusPill } from '@/components/ui/status-pill';
+import { VENDOR_STATUS_TONES } from '@/components/admin/vendor-status';
 import { displayRating } from '@/lib/admin-params';
 import { useApi } from '@/lib/use-api';
 import type { WireAdminVendorRow } from '@/lib/wire-schemas';
 
 /** The durable list of bookings a ban could not unwind (#415). */
-const STUCK_REFUNDS_PATH = '/admin/bookings?flag=refund-stuck';
-
-/**
- * The statuses frame `13` draws, mapped onto the shared pill vocabulary in
- * `03-components.md` rather than onto new colours. Every value here is a token
- * pair the frame already uses:
- *
- * | Status  | Frame fill / text   | Shared tone |
- * | ------- | ------------------- | ----------- |
- * | Live    | `#EDF0E9` `#4B5940` | `confirmed` |
- * | Review  | `#F5EEDC` `#7A5A12` | `pending`   |
- * | Flagged | `#F7E7E0` `#8E3F20` | `needsYou`  |
- * | Paused  | `#EFE9E0` `#6B6459` | `inert`     |
- *
- * `Retired` (#433) is the one the frame does not draw, because the state did
- * not exist when it was drawn. It takes `inert` — the same tone as `Paused`,
- * which is the frame's vocabulary for "this storefront is not trading" — and is
- * told apart by its label rather than by a fifth colour nobody specified. A new
- * token pair here would be inventing design, which is the plan's job and not
- * this ticket's.
- *
- * `Held` (#457) arrives the same way and takes the same route: `needsYou`, the
- * tone `Flagged` already spends, because both are the console saying *an
- * operator did this and only an operator can undo it*. Sharing a tone with the
- * other moderation state is the point — the pair a reader must not confuse is
- * `Held` and `Paused`, and those are now a colour apart where before they were
- * the same label.
- */
-const STATUS_TONES: Record<AdminVendorStatus, StatusTone> = {
-  live: 'confirmed',
-  review: 'pending',
-  flagged: 'needsYou',
-  paused: 'inert',
-  held: 'needsYou',
-  retired: 'inert',
-};
+export const STUCK_REFUNDS_PATH = '/admin/bookings?flag=refund-stuck';
 
 /**
  * What a suspension does, in one place.
@@ -415,7 +380,7 @@ export function VendorTable({
             width: '.9fr',
             header: 'Status',
             cell: (row) => (
-              <StatusPill tone={STATUS_TONES[row.status]}>
+              <StatusPill tone={VENDOR_STATUS_TONES[row.status]}>
                 {ADMIN_VENDOR_STATUS_LABELS[row.status]}
               </StatusPill>
             ),
@@ -462,6 +427,7 @@ function VendorRowActions({
   onBan: (banned: boolean) => Promise<void>;
   onDone: () => void;
 }): React.ReactElement | null {
+  const router = useRouter();
   const call = useApi();
   const [open, setOpen] = useState<'ban' | 'publish' | 'unpublish' | null>(null);
 
@@ -510,9 +476,19 @@ function VendorRowActions({
     the second, and a `held` one drops Unpublish because the hold already
     stands.
   */
+  /*
+    `View` leads (VEN-380): it changes nothing, so it sits ahead of the levers
+    and keeps them contiguous in their least → most severe order.
+  */
+  const view = {
+    key: 'view',
+    label: 'View',
+    onSelect: () => router.push(`/admin/vendors/${row.id}`),
+  };
   const items = flagged
-    ? [{ key: 'ban', label: 'Lift suspension', onSelect: () => setOpen('ban') }]
+    ? [view, { key: 'ban', label: 'Lift suspension', onSelect: () => setOpen('ban') }]
     : [
+        view,
         ...(row.status === 'live'
           ? []
           : [

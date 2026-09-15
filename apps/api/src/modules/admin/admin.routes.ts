@@ -29,6 +29,7 @@ import {
   adminTagSuggestionResultSchema,
   adminUserDataRightsSchema,
   adminUserExportSchema,
+  adminVendorDetailSchema,
   adminVendorFacetsSchema,
   adminVendorPayoutHoldResultSchema,
   adminVendorPageSchema,
@@ -70,6 +71,7 @@ import {
   updateTag,
   type AdminContext,
 } from './admin.service.js';
+import { readVendorDetail } from './admin-detail.service.js';
 import { closeAccount, exportUserData, readUserDataRights } from './data-rights.service.js';
 import { bookingContextFor } from '../payments/payments.service.js';
 import {
@@ -355,6 +357,21 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
     '/admin/vendors/facets',
     { onRequest: adminOnly, schema: { response: { 200: adminVendorFacetsSchema } } },
     async () => readVendorFacets(app.db),
+  );
+
+  /**
+   * One vendor, everything the console holds about them (VEN-380): profile,
+   * Stripe state, packages, portfolio, what holds each date, notifications.
+   * A read only — every lever the detail offers is one of the routes in this
+   * plugin, so nothing it shows can be changed a second way.
+   */
+  app.get(
+    '/admin/vendors/:vendorId',
+    {
+      onRequest: adminOnly,
+      schema: { params: vendorParamsSchema, response: { 200: adminVendorDetailSchema } },
+    },
+    async (request) => readVendorDetail(app.db, request.params.vendorId, app.clock()),
   );
 
   app.get(
