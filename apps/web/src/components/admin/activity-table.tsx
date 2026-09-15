@@ -78,6 +78,9 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   platform_setting_changed: 'Changed a launch switch',
   vendor_payout_hold_set: "Held a vendor's payouts",
   vendor_payout_hold_released: "Released a vendor's payout hold",
+  category_deactivated: 'Deactivated a category',
+  category_reactivated: 'Reactivated a category',
+  category_reordered: 'Moved a category',
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */
@@ -93,6 +96,7 @@ const SUBJECT_LABELS: Record<AdminActionSubject, string> = {
   portfolio_item: 'Photo',
   conversation: 'Thread',
   platform_settings: 'Settings',
+  category: 'Category',
 };
 
 /**

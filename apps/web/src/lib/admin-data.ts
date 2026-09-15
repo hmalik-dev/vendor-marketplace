@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
+import { adminCategoryListSchema, type AdminCategoryList } from '@vendor-marketplace/shared';
 import { redirect } from 'next/navigation';
 import type { z } from 'zod';
 import { ApiClientError, apiRequest } from './api-client';
@@ -255,6 +256,11 @@ export async function getAdminPlatformSettings(): Promise<WireAdminPlatformSetti
 
 export async function getAdminTags(): Promise<WireAdminTagList> {
   return adminRead('/admin/tags', wireAdminTagListSchema);
+}
+
+/** Every category, inactive ones included. No dates on the row, so the shared schema parses the wire as is. */
+export async function getAdminCategories(): Promise<AdminCategoryList> {
+  return adminRead('/admin/categories', adminCategoryListSchema);
 }
 
 /**
