@@ -5,6 +5,7 @@ import {
   adminBanResultSchema,
   adminBookingPageSchema,
   adminBookingQuerySchema,
+  adminBookingDetailSchema,
   adminCaseDetailSchema,
   adminCasePageSchema,
   adminCaseQuerySchema,
@@ -19,6 +20,8 @@ import {
   adminPaymentPageSchema,
   adminPaymentQuerySchema,
   adminPlatformSettingsSchema,
+  adminRequestPageSchema,
+  adminRequestQuerySchema,
   adminReviewPageSchema,
   adminReviewQuerySchema,
   adminReviewVisibilityResultSchema,
@@ -71,7 +74,7 @@ import {
   updateTag,
   type AdminContext,
 } from './admin.service.js';
-import { readVendorDetail } from './admin-detail.service.js';
+import { listRequests, readBookingDetail, readVendorDetail } from './admin-detail.service.js';
 import { closeAccount, exportUserData, readUserDataRights } from './data-rights.service.js';
 import { bookingContextFor } from '../payments/payments.service.js';
 import {
@@ -699,5 +702,32 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
         request.params.caseId,
         app.clock(),
       ),
+  );
+
+  /**
+   * One booking's money story (VEN-399): every amount, the payout's state and
+   * attempts, refund, cancellation and dispute. A read only — the dispute and
+   * payout-retry levers above are the ways any of it changes.
+   */
+  app.get(
+    '/admin/bookings/:bookingId',
+    {
+      onRequest: adminOnly,
+      schema: { params: bookingParamsSchema, response: { 200: adminBookingDetailSchema } },
+    },
+    async (request) => readBookingDetail(app.db, request.params.bookingId),
+  );
+
+  /**
+   * `Bookings · Requests` (VEN-399) — the pre-payment funnel in all six
+   * statuses, each read with lazy expiry applied and nothing written.
+   */
+  app.get(
+    '/admin/requests',
+    {
+      onRequest: adminOnly,
+      schema: { querystring: adminRequestQuerySchema, response: { 200: adminRequestPageSchema } },
+    },
+    async (request) => listRequests(app.db, request.query, app.clock()),
   );
 };

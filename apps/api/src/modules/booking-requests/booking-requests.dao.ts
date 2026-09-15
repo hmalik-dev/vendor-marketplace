@@ -147,7 +147,7 @@ function hasLapsed(now: Date): SQL {
  * expirable statuses correspondingly shed the rows that have lapsed. Anything
  * terminal cannot move on its own and compares directly.
  */
-function readsAs(status: BookingRequestStatus, now: Date): SQL {
+export function readsAs(status: BookingRequestStatus, now: Date): SQL {
   if (status === 'expired') {
     return or(eq(bookingRequests.status, 'expired'), hasLapsed(now)) as SQL;
   }

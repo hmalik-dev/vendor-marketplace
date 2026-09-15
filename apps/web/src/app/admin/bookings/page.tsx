@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ADMIN_BOOKING_FLAGS, BOOKING_STATUSES, formatPrice } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
+import { BookingsTabs } from '@/components/admin/bookings-tabs';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -87,6 +88,7 @@ export default async function AdminBookingsPage({
   return (
     <AdminSurface
       heading="Bookings"
+      tabs={<BookingsTabs current="bookings" />}
       counts={[`${bookings.total} total`]}
       dropped={dropped}
       filters={
@@ -158,8 +160,13 @@ export default async function AdminBookingsPage({
             width: '1fr',
             header: 'Event date',
             // Parsed as UTC midnight: `eventDate` is a calendar date, and a
-            // local-time read moves it a day for anyone west of UTC.
-            cell: (row) => EVENT_DATE.format(new Date(`${row.eventDate}T00:00:00Z`)),
+            // local-time read moves it a day for anyone west of UTC. The row's
+            // way into its money story (VEN-399).
+            cell: (row) => (
+              <Link href={`/admin/bookings/${row.id}`} className="hover:underline">
+                {EVENT_DATE.format(new Date(`${row.eventDate}T00:00:00Z`))}
+              </Link>
+            ),
           },
           {
             key: 'total',

@@ -139,7 +139,7 @@ describe('the rail', () => {
     expect(badged).toEqual(['Cases23', 'Reviews6']);
   });
 
-  /** `/admin/requests` is a tab of Bookings, not a row. That surface is #437's. */
+  /** `/admin/requests` is a tab of Bookings, not a row (VEN-399). */
   it('gives /admin/requests no row', () => {
     render(<AdminNav reviewCount={6} caseCount={23} />);
 
@@ -493,10 +493,10 @@ describe('the delta colour vocabulary', () => {
    *
    * Both are the same shape and were settled the same way: the delta is an
    * *admin* bundle, and these pills are drawn on the customer hub and the
-   * request detail as well as the console. `/admin/requests`, the only surface
-   * where the delta would show either, does not exist yet and is #437's — so
-   * restyling three customer screens on an admin bundle's authority is an
-   * adjudication rather than a parity fix, and the product-wide file wins.
+   * request detail as well as the console. `/admin/requests` (VEN-399) draws
+   * both from this same `REQUEST_PRESENTATION` — so restyling three customer
+   * screens on an admin bundle's authority is an adjudication rather than a
+   * parity fix, and the product-wide file wins.
    *
    * - **`quoted` stays steel.** `03-components.md` rules `QUOTED steel-50 /
    *   steel-600`; the delta's table says gold. Ruled 2026-09-07 by the account

@@ -43,7 +43,8 @@ export interface AdminNavProps {
  * composition.
  *
  * **`/admin/requests` gets no row.** The delta rules it a tab inside `Bookings`
- * — a request is a booking before it exists — and that surface is #437's.
+ * — a request is a booking before it exists — so it lights the Bookings row
+ * (VEN-399) rather than leaving the rail with nothing current.
  *
  * Not exported, and the order is asserted by *rendering* the rail rather than
  * by grepping this file: a `toContain` over the source matches the prose above
@@ -55,7 +56,7 @@ const ITEMS = [
   { href: '/admin', label: 'Overview' },
   { href: '/admin/vendors', label: 'Vendors' },
   { href: '/admin/customers', label: 'Customers' },
-  { href: '/admin/bookings', label: 'Bookings' },
+  { href: '/admin/bookings', label: 'Bookings', alsoFor: '/admin/requests' },
   { href: '/admin/cases', label: 'Cases' },
   { href: '/admin/payments', label: 'Payments' },
   { href: '/admin/reviews', label: 'Reviews' },
@@ -112,7 +113,10 @@ export function AdminNav({ reviewCount, caseCount }: AdminNavProps): React.React
           const isActive =
             item.href === '/admin'
               ? pathname === '/admin'
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              : [item.href, 'alsoFor' in item ? item.alsoFor : undefined].some(
+                  (href) =>
+                    href !== undefined && (pathname === href || pathname.startsWith(`${href}/`)),
+                );
 
           /*
            * One expression rather than a condition per badge. Two adjacent

@@ -1,6 +1,9 @@
 'use client';
 
 import { BRAND_NAME, toDateString } from '@vendor-marketplace/shared';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 /*
  * `formatEventDate`, not the raw column. An event date is a Postgres `DATE`
  * that travels as a `YYYY-MM-DD` string (`.claude/rules/shared-contracts.md`),
@@ -11,8 +14,6 @@ import { BRAND_NAME, toDateString } from '@vendor-marketplace/shared';
  * at UTC midnight so the date cannot move a day for a reader west of UTC.
  */
 import { formatEventDate } from '@/lib/booking-entries';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { Button } from '@/components/ui/button';
 import { useApi } from '@/lib/use-api';
@@ -225,22 +226,15 @@ export function DataRightsActions({
                 </strong>{' '}
                 Cancel or complete {closeBlockers.length === 1 ? 'it' : 'them'} first, from the
                 booking screens, where the refund is priced.
-                {/*
-                **Named but not linked, and #437 owes the link.**
-
-                Pattern B draws this panel with the blocking booking linked, and
-                `closeBlockers` carries the `bookingId` to link it with. The
-                destination is `/admin/bookings/[id]`, which **does not exist
-                yet** — it is one of the five detail routes #437 builds. A link
-                to a 404 is worse than no link: it tells an operator the console
-                has somewhere to send them and then does not. So the booking is
-                named and dated here, and the anchor goes on when the route it
-                would point at is real.
-              */}
                 <ul className="mt-1.5 flex flex-col gap-0.5 text-stone-700">
                   {closeBlockers.map((booking) => (
                     <li key={booking.bookingId}>
-                      {formatEventDate(booking.eventDate)} with {booking.counterpartyName}
+                      <Link
+                        href={`/admin/bookings/${booking.bookingId}`}
+                        className="underline underline-offset-2 hover:text-stone-900"
+                      >
+                        {formatEventDate(booking.eventDate)} with {booking.counterpartyName}
+                      </Link>
                     </li>
                   ))}
                 </ul>

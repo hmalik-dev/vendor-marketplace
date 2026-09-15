@@ -24,11 +24,36 @@ import {
   isPayoutFailing,
   payoutStatusOf,
   replyDeadline,
+  requestStatusAsRead,
   shortTimeAgo,
   toDateString,
   todayDateString,
   universallyPastFrom,
 } from './index.js';
+
+/** Lazy expiry as every reader sees it (VEN-399). */
+describe('requestStatusAsRead', () => {
+  const NOW = new Date('2026-10-01T12:00:00.000Z');
+  const BEFORE = new Date('2026-10-01T11:59:59.999Z');
+  const AFTER = new Date('2026-10-01T12:00:00.001Z');
+
+  it('reads a pending or quoted request whose window has closed as expired', () => {
+    expect(requestStatusAsRead({ status: 'pending', expiresAt: BEFORE }, NOW)).toBe('expired');
+    expect(requestStatusAsRead({ status: 'quoted', expiresAt: BEFORE }, NOW)).toBe('expired');
+  });
+
+  it('treats the deadline instant itself as closed, as the SQL predicate does', () => {
+    expect(requestStatusAsRead({ status: 'pending', expiresAt: NOW }, NOW)).toBe('expired');
+  });
+
+  it('leaves an open window, a missing deadline and every settled status alone', () => {
+    expect(requestStatusAsRead({ status: 'quoted', expiresAt: AFTER }, NOW)).toBe('quoted');
+    expect(requestStatusAsRead({ status: 'pending', expiresAt: null }, NOW)).toBe('pending');
+    for (const status of ['accepted', 'declined', 'cancelled', 'expired'] as const) {
+      expect(requestStatusAsRead({ status, expiresAt: BEFORE }, NOW)).toBe(status);
+    }
+  });
+});
 
 describe('generateSlug', () => {
   it('lowercases and hyphenates a business name', () => {

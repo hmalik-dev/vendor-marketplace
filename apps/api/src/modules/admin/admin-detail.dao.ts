@@ -1,4 +1,18 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -10,16 +24,23 @@ import {
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import {
+  ADMIN_REQUEST_GROUP_STATUSES,
   LIVE_BOOKING_REQUEST_STATUSES,
+  type AdminRequestGroup,
   type AdminVendorNotification,
   type AdminVendorPackage,
   type AdminVendorPortfolioItem,
   type AvailabilityStatus,
+  type BookingCancelledBy,
   type BookingRequestStatus,
   type BookingStatus,
+  type FilterWidening,
+  type PayoutModel,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { readsAs } from '../booking-requests/booking-requests.dao.js';
 import { adminVendorSelection, type AdminVendorProjection } from './admin.dao.js';
+import { countWidenings } from './widenings.js';
 
 /**
  * The reads behind the console's detail views (VEN-380). Policy — what counts
@@ -251,4 +272,182 @@ export async function countNotificationsForAdmin(
     .where(eq(notifications.userId, userId));
 
   return rows[0] ?? { total: 0, unread: 0 };
+}
+
+export interface AdminBookingDetailRow {
+  id: string;
+  requestId: string;
+  status: BookingStatus;
+  eventDate: string;
+  eventLocation: string | null;
+  totalAmountCents: number;
+  platformFeeCents: number;
+  vendorPayoutCents: number;
+  payoutModel: PayoutModel;
+  payoutAttempts: number;
+  payoutFailureReason: string | null;
+  payoutReleasedAt: Date | null;
+  stripePaymentIntentId: string | null;
+  stripeTransferId: string | null;
+  paidAt: Date | null;
+  completedAt: Date | null;
+  cancelledAt: Date | null;
+  cancellationReason: string | null;
+  cancelledBy: BookingCancelledBy | null;
+  refundAmountCents: number | null;
+  disputeReason: string | null;
+  createdAt: Date;
+  vendorId: string;
+  vendorName: string;
+  vendorPayoutHold: boolean;
+  customerId: string;
+  customerFirstName: string;
+  customerLastName: string;
+  customerEmail: string;
+}
+
+/** One booking with every money and lifecycle column, and both parties (VEN-399). */
+export async function findAdminBookingDetail(
+  db: AppDatabase,
+  bookingId: string,
+): Promise<AdminBookingDetailRow | null> {
+  const rows = await db
+    .select({
+      id: bookings.id,
+      requestId: bookings.requestId,
+      status: bookings.status,
+      eventDate: bookings.eventDate,
+      eventLocation: bookings.eventLocation,
+      totalAmountCents: bookings.totalAmountCents,
+      platformFeeCents: bookings.platformFeeCents,
+      vendorPayoutCents: bookings.vendorPayoutCents,
+      payoutModel: bookings.payoutModel,
+      payoutAttempts: bookings.payoutAttempts,
+      payoutFailureReason: bookings.payoutFailureReason,
+      payoutReleasedAt: bookings.payoutReleasedAt,
+      stripePaymentIntentId: bookings.stripePaymentIntentId,
+      stripeTransferId: bookings.stripeTransferId,
+      paidAt: bookings.paidAt,
+      completedAt: bookings.completedAt,
+      cancelledAt: bookings.cancelledAt,
+      cancellationReason: bookings.cancellationReason,
+      cancelledBy: bookings.cancelledBy,
+      refundAmountCents: bookings.refundAmountCents,
+      disputeReason: bookings.disputeReason,
+      createdAt: bookings.createdAt,
+      vendorId: vendorProfiles.id,
+      vendorName: vendorProfiles.businessName,
+      vendorPayoutHold: vendorProfiles.payoutHold,
+      customerId: users.id,
+      customerFirstName: users.firstName,
+      customerLastName: users.lastName,
+      customerEmail: users.email,
+    })
+    .from(bookings)
+    .innerJoin(users, eq(users.id, bookings.customerId))
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
+    .where(eq(bookings.id, bookingId))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+export interface AdminRequestListRow {
+  id: string;
+  status: BookingRequestStatus;
+  eventDate: string;
+  vendorId: string;
+  vendorName: string;
+  customerFirstName: string;
+  customerLastName: string;
+  quotedPriceCents: number | null;
+  expiresAt: Date | null;
+  acceptedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AdminRequestFilters {
+  group?: AdminRequestGroup | undefined;
+  status?: BookingRequestStatus | undefined;
+  /** The instant read at, so lazy expiry decides which group a row is in. */
+  now: Date;
+}
+
+/**
+ * The list's predicate, every status compared **as read** through the
+ * participant query's own `readsAs` — a lapsed `pending` row is found under
+ * `expired` and `lapsed`, and not under `pending` or `live`.
+ */
+function requestFilterCondition(filters: AdminRequestFilters): SQL | undefined {
+  return and(
+    filters.group
+      ? or(
+          ...ADMIN_REQUEST_GROUP_STATUSES[filters.group].map((status) =>
+            readsAs(status, filters.now),
+          ),
+        )
+      : undefined,
+    filters.status ? readsAs(filters.status, filters.now) : undefined,
+  );
+}
+
+/** The two filters the requests table can be narrowed by. */
+export const REQUEST_FILTER_KEYS = ['group', 'status'] as const;
+export type RequestFilterKey = (typeof REQUEST_FILTER_KEYS)[number];
+
+/** One page of every booking request, newest first. */
+export async function findAdminRequests(
+  db: AppDatabase,
+  filters: AdminRequestFilters,
+  limit: number,
+  offset: number,
+): Promise<AdminRequestListRow[]> {
+  return db
+    .select({
+      id: bookingRequests.id,
+      status: bookingRequests.status,
+      eventDate: bookingRequests.eventDate,
+      vendorId: vendorProfiles.id,
+      vendorName: vendorProfiles.businessName,
+      customerFirstName: users.firstName,
+      customerLastName: users.lastName,
+      quotedPriceCents: bookingRequests.quotedPriceCents,
+      expiresAt: bookingRequests.expiresAt,
+      acceptedAt: bookingRequests.acceptedAt,
+      createdAt: bookingRequests.createdAt,
+      updatedAt: bookingRequests.updatedAt,
+    })
+    .from(bookingRequests)
+    .innerJoin(users, eq(users.id, bookingRequests.customerId))
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookingRequests.vendorId))
+    .where(requestFilterCondition(filters))
+    .orderBy(desc(bookingRequests.createdAt), desc(bookingRequests.id))
+    .limit(limit)
+    .offset(offset);
+}
+
+/** Both foreign keys cascade, so the count needs no joins to agree with the page. */
+export async function countAdminRequests(
+  db: AppDatabase,
+  filters: AdminRequestFilters,
+): Promise<number> {
+  const rows = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(bookingRequests)
+    .where(requestFilterCondition(filters));
+
+  return rows[0]?.total ?? 0;
+}
+
+/** How many requests each single widening would reveal, in one scan (#454). */
+export async function countRequestWidenings(
+  db: AppDatabase,
+  filters: AdminRequestFilters,
+): Promise<FilterWidening[]> {
+  return countWidenings<RequestFilterKey>({
+    active: REQUEST_FILTER_KEYS.filter((key) => filters[key] !== undefined),
+    conditionWithout: (dropped) => requestFilterCondition({ ...filters, [dropped]: undefined }),
+    scan: (selection) => db.select(selection).from(bookingRequests),
+  });
 }

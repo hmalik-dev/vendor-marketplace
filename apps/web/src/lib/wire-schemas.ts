@@ -53,6 +53,8 @@ import {
   adminVendorDetailSchema,
   adminVendorNotificationSchema,
   adminVendorPortfolioItemSchema,
+  adminBookingDetailSchema,
+  adminRequestRowSchema,
   vendorCardSchema,
   vendorProfileDetailSchema,
   vendorReviewsPageSchema,
@@ -462,6 +464,27 @@ export type WireAdminBookingRow = z.infer<typeof wireAdminBookingRowSchema>;
 export const wireAdminBookingPageSchema =
   paginatedSchema(wireAdminBookingRowSchema).extend(wideningShape);
 export type WireAdminBookingPage = z.infer<typeof wireAdminBookingPageSchema>;
+
+/** `GET /admin/bookings/:bookingId` (VEN-399) — five dates cross the wire. */
+export const wireAdminBookingDetailSchema = adminBookingDetailSchema.extend({
+  payoutReleasedAt: z.coerce.date().nullable(),
+  paidAt: z.coerce.date().nullable(),
+  completedAt: z.coerce.date().nullable(),
+  cancelledAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+});
+export type WireAdminBookingDetail = z.infer<typeof wireAdminBookingDetailSchema>;
+
+/** `GET /admin/requests` (VEN-399) — `expiresAt`, `resolvedAt` and `createdAt` are dates. */
+export const wireAdminRequestRowSchema = adminRequestRowSchema.extend({
+  expiresAt: z.coerce.date().nullable(),
+  resolvedAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+});
+export type WireAdminRequestRow = z.infer<typeof wireAdminRequestRowSchema>;
+export const wireAdminRequestPageSchema =
+  paginatedSchema(wireAdminRequestRowSchema).extend(wideningShape);
+export type WireAdminRequestPage = z.infer<typeof wireAdminRequestPageSchema>;
 
 /**
  * Two dates, and `payoutReleasedAt` is the one that is new (#432).
