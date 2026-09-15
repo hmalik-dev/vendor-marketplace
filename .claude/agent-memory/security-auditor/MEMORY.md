@@ -82,5 +82,6 @@
 - [An unwind spares a request with a booking behind it](unwind-decline-spares-requests-with-a-booking.md) — only a succeeded PaymentIntent writes that row, so the exemption is unarrangeable; it closes a post-unban double-booking window
 - [Closure deletes the Clerk identity](closure-deletes-the-clerk-identity.md) — the console's only irreversible action; its self-inflicted `user.deleted` replay is sound, its admin-target and `seed_mkt_` gaps are not
 - [`violatesConstraint` is FIXED](violates-constraint-matches-bound-parameters.md) — VEN-385 removed the message arm; SQLSTATE + `constraint_name` only, do not re-report
+- [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — FIXED before merge in VEN-405: `stripe:signature` and `stripe:server-error` dedupe apart; anonymous 401s can still mute only the signature alert
 - [Backup integrity is not authenticity](backup-integrity-is-not-authenticity.md) — VEN-408: bucket-token holder forges a dump the drill pg_restores as superuser
 - [The data-rights export is hand-enumerated](data-rights-export-is-hand-enumerated.md) — a new `users` PII column reaches the console and not the subject's own DSAR file

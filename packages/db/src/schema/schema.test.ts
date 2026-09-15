@@ -31,6 +31,7 @@ const EXPECTED_TABLES = [
   'legal_acceptances',
   'messages',
   'notifications',
+  'operator_alerts',
   'portfolio_items',
   'reviews',
   'service_packages',

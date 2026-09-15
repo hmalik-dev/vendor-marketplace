@@ -1,6 +1,7 @@
 import { isLegacyDestinationPayout, toDateString } from '@vendor-marketplace/shared';
 import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
+import { refundFailedAlert } from '../operator-alerts/operator-alerts.service.js';
 import { cancelBookingAndFreeDate } from '../payments/payments.dao.js';
 import type { BookingContext } from '../payments/payments.service.js';
 import { declineOpenRequests, findConfirmedBookingsToUnwind } from './admin.dao.js';
@@ -337,6 +338,9 @@ export async function unwindAccountBookings(
         context.log.error(
           { bookingId: booking.id, operation: copy.operation, err: error },
           'Refund failed while unwinding an account',
+        );
+        context.alerts?.dispatch(
+          refundFailedAlert({ bookingId: booking.id, during: copy.operation }),
         );
         /*
          * Counted, not only logged (#400). The `continue` is right — a booking

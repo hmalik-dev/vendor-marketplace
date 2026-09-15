@@ -24,7 +24,12 @@ import {
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  TEST_ENV,
+  type TestHarness,
+} from '../../testing/test-server.js';
 
 /**
  * In-product reporting and case-scoped message reads (#436).
@@ -418,8 +423,10 @@ describe('reporting and message visibility (#436)', () => {
     });
     await harness.flushEmail();
 
-    expect(harness.email.sent).toHaveLength(1);
-    const sent = harness.email.sent[0]!;
+    // The operator's own alert (VEN-405) goes elsewhere; this is the support inbox's copy.
+    const inbox = harness.email.sent.filter((message) => message.to === TEST_ENV.SUPPORT_EMAIL_TO);
+    expect(inbox).toHaveLength(1);
+    const sent = inbox[0]!;
     /* The routing key leads the subject line, the way a support send's does. */
     expect(sent.subject).toContain(REPORT_REASON_LABELS['off-platform-payment']);
     expect(sent.replyTo).toBe(`${CUSTOMER}@example.com`);

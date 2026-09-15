@@ -235,15 +235,19 @@ export async function recordPayoutFailure(
   tx: AppDatabase,
   bookingId: string,
   reason: string,
-): Promise<void> {
-  await tx
+): Promise<number> {
+  const rows = await tx
     .update(bookings)
     .set({
       payoutAttempts: sql`${bookings.payoutAttempts} + 1`,
       payoutFailureReason: reason,
       updatedAt: sql`now()`,
     })
-    .where(eq(bookings.id, bookingId));
+    .where(eq(bookings.id, bookingId))
+    .returning({ payoutAttempts: bookings.payoutAttempts });
+
+  // The count after this failure; 0 only if the booking vanished underneath.
+  return rows[0]?.payoutAttempts ?? 0;
 }
 
 /*

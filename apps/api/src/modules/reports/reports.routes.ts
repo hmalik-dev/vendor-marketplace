@@ -56,6 +56,7 @@ export const reportRoutes: FastifyPluginAsyncZod<ReportRoutesOptions> = async (a
           email: app.email,
           log: request.log,
           to: options.supportEmailTo,
+          alerts: app.operatorAlerts,
         },
         authenticated(request.auth),
         request.body,

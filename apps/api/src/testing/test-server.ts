@@ -93,6 +93,8 @@ export const TEST_ENV: ApiEnv = {
   RESEND_WEBHOOK_SECRET: ['whsec', 'not', 'used', 'by', 'the', 'suites'].join('_'),
   EMAIL_FROM: 'noreply@test.invalid',
   SUPPORT_EMAIL_TO: 'support@test.invalid',
+  OPERATOR_ALERT_EMAIL: 'operator@test.invalid',
+  OPERATOR_TIMEZONE: 'America/New_York',
 };
 
 /**
@@ -858,6 +860,10 @@ export async function createTestHarness(
      * directly, which is the same function the timer calls.
      */
     payoutSweepIntervalMs: 0,
+    // The digest likewise: suites call `runOperatorDigest` with a pinned clock.
+    operatorDigestIntervalMs: 0,
+    // Alert send retries do not wait on a real timer in a suite.
+    operatorAlertWait: async () => undefined,
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     auth: {

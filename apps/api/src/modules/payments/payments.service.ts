@@ -37,6 +37,10 @@ import {
   findVendorUserId,
 } from '../booking-requests/booking-requests.dao.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
+import {
+  refundFailedAlert,
+  type OperatorAlerts,
+} from '../operator-alerts/operator-alerts.service.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import {
   applyBookingTransition,
@@ -71,6 +75,11 @@ export interface BookingContext {
    * drifted, and threading them separately is how that happens.
    */
   mail: NotificationEmailDeps;
+  /**
+   * The operator's pager, for a refund that did not go through (VEN-405).
+   * Optional so a suite that builds a context by hand is not made to fake one.
+   */
+  alerts?: Pick<OperatorAlerts, 'dispatch'>;
 }
 
 /**
@@ -92,6 +101,7 @@ export function bookingContextFor(
     hub: app.events,
     log,
     mail: { db: app.db, email: app.email, log, webOrigin, background: app.background },
+    alerts: app.operatorAlerts,
   };
 }
 
@@ -102,6 +112,7 @@ export interface BookingContextSource {
   events: EventHub;
   email: NotificationEmailDeps['email'];
   background: NotificationEmailDeps['background'];
+  operatorAlerts?: Pick<OperatorAlerts, 'dispatch'>;
 }
 
 /** A booking action that also has to price a charge. */
@@ -808,33 +819,51 @@ async function refundAndUnwind(
    * booking still reading `confirmed`, which they can cancel again tomorrow.
    * Without this read that second attempt is a second refund.
    */
-  const alreadyRefunded = await context.stripe.findRefund(booking.stripePaymentIntentId);
+  /*
+   * A refund Stripe would not give is money a customer was promised, so the
+   * operator hears of it (VEN-405) before the error goes on to the caller.
+   */
+  const reportRefundFailure = (error: unknown): never => {
+    context.alerts?.dispatch(
+      refundFailedAlert({
+        bookingId: booking.id,
+        during: keyPrefix === 'cancel' ? 'a cancellation' : 'an upheld dispute',
+      }),
+    );
+    throw error;
+  };
+
+  const alreadyRefunded = await context.stripe
+    .findRefund(booking.stripePaymentIntentId)
+    .catch(reportRefundFailure);
 
   const refund =
     alreadyRefunded ??
-    (await context.stripe.createRefund({
-      paymentIntentId: booking.stripePaymentIntentId,
-      amountCents: refundCents,
-      reason: 'requested_by_customer',
-      /*
-       * Keyed on the booking, because the refund is sent *before* the guarded
-       * update that decides who won. That update's status predicate means only
-       * one of two concurrent cancels writes the row — but both reached this
-       * line first, and without a key Stripe would have paid the customer twice
-       * for one cancellation. The key makes the second call return the first
-       * refund instead of creating another. One booking, one cancellation, one
-       * refund. (#399)
-       *
-       * The `_direct` suffix is the request's version, not decoration. Stripe
-       * refuses a key replayed with *different parameters*, so it changes
-       * whenever the request under it does — it was `_unwind` while the refund
-       * carried D31's two flags, and it is `_direct` now that the refund
-       * carries neither (#423). A booking whose cancel was attempted in the
-       * previous 24 hours under the old params would otherwise have its retry
-       * refused with an `idempotency_error` rather than refunded.
-       */
-      idempotencyKey: `${keyPrefix}_${booking.id}_direct`,
-    }));
+    (await context.stripe
+      .createRefund({
+        paymentIntentId: booking.stripePaymentIntentId,
+        amountCents: refundCents,
+        reason: 'requested_by_customer',
+        /*
+         * Keyed on the booking, because the refund is sent *before* the guarded
+         * update that decides who won. That update's status predicate means only
+         * one of two concurrent cancels writes the row — but both reached this
+         * line first, and without a key Stripe would have paid the customer twice
+         * for one cancellation. The key makes the second call return the first
+         * refund instead of creating another. One booking, one cancellation, one
+         * refund. (#399)
+         *
+         * The `_direct` suffix is the request's version, not decoration. Stripe
+         * refuses a key replayed with *different parameters*, so it changes
+         * whenever the request under it does — it was `_unwind` while the refund
+         * carried D31's two flags, and it is `_direct` now that the refund
+         * carries neither (#423). A booking whose cancel was attempted in the
+         * previous 24 hours under the old params would otherwise have its retry
+         * refused with an `idempotency_error` rather than refunded.
+         */
+        idempotencyKey: `${keyPrefix}_${booking.id}_direct`,
+      })
+      .catch(reportRefundFailure));
 
   /*
    * The share the vendor keeps — the proportion of the total that was *not*

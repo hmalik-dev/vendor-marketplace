@@ -302,6 +302,13 @@
       "when": 1788846170842,
       "tag": "0042_elite_monster_badoon",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1789429474773,
+      "tag": "0043_past_joshua_kane",
+      "breakpoints": true
     }
   ]
 }
