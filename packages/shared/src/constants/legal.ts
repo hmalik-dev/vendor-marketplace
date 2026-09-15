@@ -22,21 +22,31 @@ export const LEGAL_DOCUMENT_SLUGS = ['terms', 'privacy', 'cookies'] as const;
 export type LegalDocumentSlug = (typeof LEGAL_DOCUMENT_SLUGS)[number];
 
 /**
- * Every document written in the legal Markdown, routed or not.
+ * Every document written in the legal Markdown.
  *
- * The vendor agreement is the one that is not a page: it is read inside step 3
- * of onboarding, in a card that clips to 150px and expands in place. It is
- * written in the same format and rendered by the same blocks, because it is the
- * same kind of document and two prose pipelines would drift.
+ * The vendor agreement is read in two places: inside step 3 of onboarding, in a
+ * card that clips to 150px and expands in place, and on its own public reading
+ * page for a visitor deciding whether to list (VEN-402). It is written in the
+ * same format and rendered by the same blocks, because it is the same kind of
+ * document and two prose pipelines would drift. It stays out of
+ * `LEGAL_DOCUMENT_SLUGS` because the footer's legal row does not carry it.
  */
 export const LEGAL_CONTENT_SLUGS = [...LEGAL_DOCUMENT_SLUGS, 'vendor-agreement'] as const;
 export type LegalContentSlug = (typeof LEGAL_CONTENT_SLUGS)[number];
 
-/** Where each page lives, so a link is never a hand-typed string. */
-export const LEGAL_PATHS: Record<LegalDocumentSlug, string> = {
+/**
+ * Where each reading page lives, so a link is never a hand-typed string.
+ *
+ * The vendor agreement reads at `/legal/vendor-agreement`, the path
+ * `FOR-VENDORS-PROMPT.md` names — not `/vendor-agreement`, which would sit one
+ * character away from the vendor-only `/vendor` subtree, and not
+ * `VENDOR_AGREEMENT_PATH`, which is the vendor's own accept step.
+ */
+export const LEGAL_PATHS: Record<LegalContentSlug, string> = {
   terms: '/terms',
   privacy: '/privacy',
   cookies: '/cookies',
+  'vendor-agreement': '/legal/vendor-agreement',
 };
 
 /**
@@ -87,7 +97,8 @@ export const CURRENT_VENDOR_AGREEMENT_VERSION = 'v1.0';
 export const VENDOR_AGREEMENT_TITLE = 'Vendor agreement';
 
 /**
- * Step 3 of onboarding, and afterwards the vendor's own record of it.
+ * Step 3 of onboarding, and afterwards the vendor's own record of it. Gated to
+ * vendors: a link a visitor can see goes to `LEGAL_PATHS['vendor-agreement']`.
  *
  * One route for both states rather than a step and a settings page: they read
  * the same row and answer the same question, and a second URL for the accepted

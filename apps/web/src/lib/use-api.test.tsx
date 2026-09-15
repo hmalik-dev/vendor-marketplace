@@ -76,21 +76,25 @@ describe('useApi and the acceptance gate', () => {
    * the same case and worse: the person most likely to need it is the one who
    * cannot get through.
    */
-  it.each(['/terms', '/privacy', '/cookies', '/support', '/accept-terms'])(
-    'does not navigate away from %s',
-    async (pathname) => {
-      window.history.replaceState({}, '', pathname);
-      apiRequest.mockRejectedValue(
-        new ApiClientError(403, ERROR_CODES.TERMS_REQUIRED, 'Accept the Terms'),
-      );
+  it.each([
+    '/terms',
+    '/privacy',
+    '/cookies',
+    '/legal/vendor-agreement',
+    '/support',
+    '/accept-terms',
+  ])('does not navigate away from %s', async (pathname) => {
+    window.history.replaceState({}, '', pathname);
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, ERROR_CODES.TERMS_REQUIRED, 'Accept the Terms'),
+    );
 
-      const { result } = renderHook(() => useApi());
+    const { result } = renderHook(() => useApi());
 
-      await expect(result.current('/notifications', { schema: z.unknown() })).rejects.toThrow();
+    await expect(result.current('/notifications', { schema: z.unknown() })).rejects.toThrow();
 
-      expect(push).not.toHaveBeenCalled();
-    },
-  );
+    expect(push).not.toHaveBeenCalled();
+  });
 
   it('leaves a real refusal alone, so the caller can say what it means', async () => {
     apiRequest.mockRejectedValue(new ApiClientError(403, ERROR_CODES.FORBIDDEN, 'wrong role'));

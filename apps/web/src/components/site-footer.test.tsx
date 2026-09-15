@@ -106,7 +106,7 @@ describe('SiteFooter', () => {
 
     expect(
       within(legalRow as HTMLElement).getByRole('link', { name: 'Vendor agreement' }),
-    ).toHaveProperty('href', 'http://localhost:3000/vendor/agreement');
+    ).toHaveProperty('href', 'http://localhost:3000/legal/vendor-agreement');
   });
 
   afterEach(() => {

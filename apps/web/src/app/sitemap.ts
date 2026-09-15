@@ -1,6 +1,6 @@
 import {
   CATEGORY_SEEDS,
-  LEGAL_DOCUMENT_SLUGS,
+  LEGAL_CONTENT_SLUGS,
   LEGAL_PATHS,
   MAX_PAGE_SIZE,
   vendorSearchResultSchema,
@@ -72,9 +72,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
      * The legal pages. Low priority and rarely changed, but listed rather than
      * omitted: Stripe Connect onboarding asks for the `/terms` and `/privacy`
      * URLs, and a page a crawler has never seen is one whose canonical form
-     * nobody can check.
+     * nobody can check. The vendor agreement is listed with them: it is public
+     * reading for anyone deciding whether to list.
      */
-    ...LEGAL_DOCUMENT_SLUGS.map((slug) => ({
+    ...LEGAL_CONTENT_SLUGS.map((slug) => ({
       url: `${origin}${LEGAL_PATHS[slug]}`,
       changeFrequency: 'yearly' as const,
       priority: 0.3,
