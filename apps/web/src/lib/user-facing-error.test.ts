@@ -15,6 +15,26 @@ function apiError(
 
 describe('userFacingError', () => {
   /*
+   * VEN-404: a launch switch answers a deliberate 503, and the customer is owed
+   * the operator's sentence rather than the connection fallback every other
+   * 5xx gets.
+   */
+  it.each([['bookings_paused' as const], ['checkout_paused' as const]])(
+    'says bookings are paused for a %s 503',
+    (code) => {
+      expect(userFacingError(apiError(503, code, 'anything the server said'), FALLBACK)).toBe(
+        'Bookings are paused for a short while. Nothing has been charged.',
+      );
+    },
+  );
+
+  it('still hides the body of an ordinary 503', () => {
+    expect(userFacingError(apiError(503, 'INTERNAL_ERROR', 'pool exhausted'), FALLBACK)).toBe(
+      FALLBACK,
+    );
+  });
+
+  /*
    * The guard #72 asked for. `40-states.md` requires an error to say what
    * happened *in the user's words — not the exception*, and these three are the
    * exception: they are what the API's own error handler emits when it has

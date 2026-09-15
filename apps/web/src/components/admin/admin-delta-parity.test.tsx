@@ -73,7 +73,7 @@ describe('the rail', () => {
     return screen.getAllByRole('link').map((link) => link.textContent?.replace(/\d+$/, '') ?? '');
   }
 
-  it('renders the nine rows in the order the delta draws them', () => {
+  it('renders the nine rows in the order the delta draws them, then the unframed Settings', () => {
     expect(railLabels()).toEqual([
       'Overview',
       'Vendors',
@@ -84,6 +84,8 @@ describe('the rail', () => {
       'Reviews',
       'Categories & tags',
       'Activity',
+      // VEN-404's launch switches: no frame draws them, so the row is appended.
+      'Settings',
     ]);
   });
 
@@ -118,10 +120,11 @@ describe('the rail', () => {
   /*
    * The count change the delta's stale preamble invites. It argues the rail
    * "needs nine" from a brief of eight; #431 had already given Cases its row,
-   * so a reader who acts on that sentence adds a tenth.
+   * so a reader who acts on that sentence adds a tenth. The one tenth row is
+   * VEN-404's unframed Settings, appended after the nine the delta draws.
    */
-  it('is nine rows, because the move was an order change and not a count change', () => {
-    expect(railLabels()).toHaveLength(9);
+  it('is the nine drawn rows plus Settings, because the move was an order change', () => {
+    expect(railLabels().filter((label) => label !== 'Settings')).toHaveLength(9);
   });
 
   /** Badges on Cases and Reviews only — a badge on a row that is never zero is decoration. */

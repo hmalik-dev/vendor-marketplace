@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BOOKINGS_PAUSED_NOTICE } from '@vendor-marketplace/shared';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 
@@ -16,7 +17,7 @@ import { Button } from '@/components/ui/button';
  * cancelled, declined or it expired" is the same defect as the 404 this screen
  * replaced, moved one bucket over.
  */
-export type CheckoutUnavailableReason = 'failed' | 'not-accepted' | 'closed';
+export type CheckoutUnavailableReason = 'failed' | 'not-accepted' | 'closed' | 'paused';
 
 export interface CheckoutUnavailableProps {
   reason: CheckoutUnavailableReason;
@@ -65,6 +66,22 @@ function copyFor(
       money: 'Nothing is owed on this booking.',
       action: { label: 'Back to this booking', href: booking },
       secondary: { label: 'Browse vendors', href: '/search' },
+    };
+  }
+
+  /*
+   * The operator paused checkout (VEN-404). The ticket's sentence verbatim, and
+   * the retry is the same link as `failed`'s: the page re-opens checkout as it
+   * renders, so it works again the moment the switch is off.
+   */
+  if (reason === 'paused') {
+    return {
+      eyebrow: 'Checkout paused',
+      heading: 'Payments are paused for a moment',
+      body: BOOKINGS_PAUSED_NOTICE,
+      money: 'No payment was taken and your booking is still accepted.',
+      action: { label: 'Try this payment again', href: `${booking}/checkout` },
+      secondary: { label: 'Back to this booking', href: booking },
     };
   }
 

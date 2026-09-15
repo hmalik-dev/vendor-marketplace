@@ -2969,6 +2969,51 @@ export const adminActivityPageSchema =
   paginatedSchema(adminActivityRowSchema).extend(wideningShape);
 export type AdminActivityPage = z.infer<typeof adminActivityPageSchema>;
 
+// --- Launch switches (VEN-404) ---------------------------------------------
+
+/** The values an operator sets on `/admin/settings`. */
+export const platformSwitchesSchema = z.object({
+  bookingRequestsPaused: z.boolean(),
+  checkoutPaused: z.boolean(),
+  payoutReleasePaused: z.boolean(),
+  /** The closed-beta ceiling on one booking's price; null is no cap. */
+  maxBookingCents: z.number().int().positive().max(MAX_PACKAGE_PRICE_CENTS).nullable(),
+});
+export type PlatformSwitches = z.infer<typeof platformSwitchesSchema>;
+
+/** A vendor whose automatic payouts an operator is holding. */
+export const adminHeldVendorSchema = z.object({
+  id: uuidSchema,
+  businessName: z.string(),
+  slug: z.string(),
+});
+export type AdminHeldVendor = z.infer<typeof adminHeldVendorSchema>;
+
+/** `GET /admin/settings`: the switches, who last changed them, and the held vendors. */
+export const adminPlatformSettingsSchema = platformSwitchesSchema.extend({
+  updatedAt: z.date().nullable(),
+  updatedByName: z.string().nullable(),
+  heldVendors: z.array(adminHeldVendorSchema),
+});
+export type AdminPlatformSettings = z.infer<typeof adminPlatformSettingsSchema>;
+
+/** `PUT /admin/settings`: any subset of the switches, at least one. */
+export const updatePlatformSettingsSchema = platformSwitchesSchema
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, { message: 'Change at least one setting' });
+export type UpdatePlatformSettings = z.infer<typeof updatePlatformSettingsSchema>;
+
+/** `PUT /admin/vendors/:vendorId/payout-hold`. */
+export const setVendorPayoutHoldSchema = z.object({ payoutHold: z.boolean() });
+export type SetVendorPayoutHold = z.infer<typeof setVendorPayoutHoldSchema>;
+
+export const adminVendorPayoutHoldResultSchema = z.object({
+  vendorId: uuidSchema,
+  payoutHold: z.boolean(),
+});
+export type AdminVendorPayoutHoldResult = z.infer<typeof adminVendorPayoutHoldResultSchema>;
+
 // --- The operations case queue (#431) --------------------------------------
 
 export const supportCaseOriginSchema = z.enum(SUPPORT_CASE_ORIGINS);

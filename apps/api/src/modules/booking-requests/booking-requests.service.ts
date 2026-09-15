@@ -61,6 +61,7 @@ import {
   hasRivalAcceptanceOn,
   lockHeldDate,
 } from './booking-requests.dao.js';
+import { assertBookingRequestsOpen } from '../platform-settings/platform-settings.service.js';
 import type { CustomerIdentityRow, VendorSummaryRow } from './booking-requests.dao.js';
 
 /** The four things either party can do to a live request. */
@@ -526,6 +527,9 @@ export async function createBookingRequest(
       throw notFound('That package is no longer offered');
     }
   }
+
+  // The launch switches (VEN-404): a paused platform or a price over the beta cap.
+  await assertBookingRequestsOpen(db, servicePackage?.priceCents ?? null);
 
   const values: NewBookingRequestRow = {
     customerId: user.id,
