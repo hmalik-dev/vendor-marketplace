@@ -107,7 +107,7 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
   });
 
   it('mirrors a holder Clerk has moved, and lands the address', async () => {
-    const clerk = clerkHolding(clerkUser(HOLDER, 'w@example.com'));
+    const clerk = clerkHolding(clerkUser(CLAIMANT, CONTESTED), clerkUser(HOLDER, 'w@example.com'));
 
     const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
 
@@ -141,7 +141,7 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
       firstName: 'Cy',
       lastName: 'T',
     });
-    const clerk = clerkHolding(clerkUser(HOLDER, 'w@example.com'));
+    const clerk = clerkHolding(clerkUser(CLAIMANT, CONTESTED), clerkUser(HOLDER, 'w@example.com'));
 
     const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
 
@@ -153,8 +153,23 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
     expect((await rowFor('user_cy'))?.email).toBe('w@example.com');
   });
 
+  /*
+   * Clerk not knowing the claimant whose event it just delivered means the key
+   * belongs to another Clerk instance; every holder would read as deleted.
+   */
+  it('retires nobody when Clerk does not know the claimant either', async () => {
+    const clerk = clerkHolding();
+
+    const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
+
+    expect(outcome).toBe('diverged');
+    expect((await rowFor(HOLDER))?.deletedAt).toBeNull();
+    expect((await rowFor(CLAIMANT))?.pendingEmail).toBe(CONTESTED);
+    expect(errors).toHaveLength(2);
+  });
+
   it('stays diverged when Clerk says the holder still owns the address', async () => {
-    const clerk = clerkHolding(clerkUser(HOLDER, CONTESTED));
+    const clerk = clerkHolding(clerkUser(CLAIMANT, CONTESTED), clerkUser(HOLDER, CONTESTED));
 
     const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
 

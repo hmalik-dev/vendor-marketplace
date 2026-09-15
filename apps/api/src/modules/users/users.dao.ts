@@ -410,10 +410,15 @@ export async function updateUserByClerkId(
  * is the last that will ever arrive for either account. Without this the waiter
  * stayed diverged until its holder edited their profile again.
  *
- * Earliest failure first, and the first write that lands ends it: the address
- * is then held again, so every other waiter would only collide. A waiter that
- * collides anyway (the address was taken in between) keeps its record, which
- * is the same state it was already in. One level only — the waiter's own old
+ * **Only a sole waiter is handed the address.** Clerk gives an address to one
+ * identity, so of two rows waiting on it at most one is genuine, and nothing
+ * in the database says which — `email_sync_failed_at` is the first failure on
+ * *any* address, not when this one was claimed. Guessing would send one
+ * account's notifications to another's inbox. With several waiters, each
+ * stays diverged (and mail-silent) until its own next event, which asks Clerk.
+ *
+ * A waiter that collides anyway (the address was taken in between) keeps its
+ * record, the state it was already in. One level only — the waiter's own old
  * address is not re-offered, so a chain of swaps cannot recurse here.
  */
 async function handAddressToWaiter(db: AppDatabase, address: string): Promise<void> {
@@ -421,25 +426,22 @@ async function handAddressToWaiter(db: AppDatabase, address: string): Promise<vo
     .select({ id: users.id })
     .from(users)
     .where(and(eq(users.pendingEmail, address), notDeleted))
-    .orderBy(users.emailSyncFailedAt);
+    .limit(2);
 
-  for (const waiter of waiters) {
-    try {
-      const [landed] = await db
-        .update(users)
-        .set({ email: address, pendingEmail: null, emailSyncFailedAt: null, updatedAt: sql`now()` })
-        .where(and(eq(users.id, waiter.id), eq(users.pendingEmail, address), notDeleted))
-        .returning({ id: users.id });
+  const [waiter] = waiters;
 
-      if (landed) {
-        return;
-      }
-    } catch (error) {
-      if (!violatesUniqueConstraint(error, USERS_EMAIL_UNIQUE_INDEX)) {
-        throw error;
-      }
+  if (!waiter || waiters.length > 1) {
+    return;
+  }
 
-      return;
+  try {
+    await db
+      .update(users)
+      .set({ email: address, pendingEmail: null, emailSyncFailedAt: null, updatedAt: sql`now()` })
+      .where(and(eq(users.id, waiter.id), eq(users.pendingEmail, address), notDeleted));
+  } catch (error) {
+    if (!violatesUniqueConstraint(error, USERS_EMAIL_UNIQUE_INDEX)) {
+      throw error;
     }
   }
 }
@@ -557,6 +559,26 @@ export async function retireUserById(
  * a redelivered `user.deleted` a no-op rather than a second unwind.
  */
 async function retireUserWhere(
+  db: AppDatabase,
+  where: SQL | undefined,
+): Promise<{ user: UserRow; profileRetired: boolean } | null> {
+  const retired = await retireUserInTransaction(db, where);
+
+  /*
+   * A retired row's address leaves `users_email_key`, so it is released as
+   * surely as by a `user.updated` — and a `user.deleted` delivered after the
+   * event of the account that took the address over is the same ordering race
+   * (VEN-386). After the commit, not inside it: a 23505 there would abort the
+   * retirement itself.
+   */
+  if (retired) {
+    await handAddressToWaiter(db, retired.user.email);
+  }
+
+  return retired;
+}
+
+async function retireUserInTransaction(
   db: AppDatabase,
   where: SQL | undefined,
 ): Promise<{ user: UserRow; profileRetired: boolean } | null> {

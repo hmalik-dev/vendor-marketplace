@@ -47,6 +47,7 @@ describe('POST /webhooks/clerk', () => {
 
   afterEach(async () => {
     harness.clerkUsers.delete('user_other');
+    harness.clerkUsers.delete(CLERK_ID);
     await harness.database.db.delete(users);
   });
 
@@ -212,6 +213,14 @@ describe('POST /webhooks/clerk', () => {
    */
   it('releases an address held by an account Clerk has deleted', async () => {
     await post(harness, userCreated());
+    harness.clerkUsers.set(CLERK_ID, {
+      clerkUserId: CLERK_ID,
+      email: 'taken@example.com',
+      firstName: 'Katherine',
+      lastName: 'Johnson',
+      roleHint: 'vendor',
+      avatarUrl: null,
+    });
     await harness.database.db.insert(users).values({
       clerkUserId: 'user_gone',
       email: 'taken@example.com',

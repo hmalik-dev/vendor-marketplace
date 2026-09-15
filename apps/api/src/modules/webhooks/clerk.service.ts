@@ -103,7 +103,7 @@ export async function applyClerkUserEvent(
       if (
         mirrored?.emailDiverged &&
         email !== null &&
-        (await releaseStaleHolder(context, clerk, mirrored.user.id, email, now))
+        (await releaseStaleHolder(context, clerk, mirrored.user, email, now))
       ) {
         mirrored = await updateUserByClerkId(db, clerkUserId, patch);
       }
@@ -169,10 +169,11 @@ export async function applyClerkUserEvent(
 async function releaseStaleHolder(
   context: AdminContext,
   clerk: ClerkUserSource,
-  claimantId: string,
+  claimant: UserRow,
   email: string,
   now: Date,
 ): Promise<boolean> {
+  const { id: claimantId, clerkUserId: claimantClerkUserId } = claimant;
   const holder = await findLiveUserByEmail(context.db, email);
 
   if (!holder) {
@@ -186,8 +187,21 @@ async function releaseStaleHolder(
 
   let remote: ClerkApiUser | undefined;
   try {
-    const page = await clerk.getUserList({ userId: [holder.clerkUserId], limit: 1 });
-    remote = clerkUsersIn(page).find((user) => user.id === holder.clerkUserId);
+    /*
+     * The claimant is asked about too, as a control: Clerk just sent its
+     * event, so it exists. If Clerk does not know it either, this API holds a
+     * key for a different Clerk instance — and reading every holder as deleted
+     * would retire live accounts and refund their bookings.
+     */
+    const found = clerkUsersIn(
+      await clerk.getUserList({ userId: [holder.clerkUserId, claimantClerkUserId], limit: 2 }),
+    );
+
+    if (!found.some((user) => user.id === claimantClerkUserId)) {
+      throw new Error('Clerk does not know the identity whose event it just delivered');
+    }
+
+    remote = found.find((user) => user.id === holder.clerkUserId);
   } catch (error) {
     context.log.error(
       { userId: claimantId, holderId: holder.id, err: error },

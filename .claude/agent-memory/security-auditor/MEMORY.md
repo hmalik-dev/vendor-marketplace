@@ -88,4 +88,5 @@
 - [launch:check bearer hosts are fixed](launch-check-bearer-hosts-are-fixed.md) — VEN-409 PASS; re-open only if bearer() meets an env-built URL or a seed module gains a top-level main
 - [Admin vendor detail is a gated aggregate](admin-vendor-detail-is-a-gated-aggregate.md) — VEN-380 PASS; widening notifications to `body` or locks to request text bypasses the case-row read grant
 - [The data-rights export is hand-enumerated](data-rights-export-is-hand-enumerated.md) — a new `users` PII column reaches the console and not the subject's own DSAR file
+- [Contested-email repair trusts Clerk absence](contested-email-repair-trusts-clerk-absence.md) — VEN-386 PASS; waiter handoff picks the stalest pending row
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — public repo: traces carry Clerk cookies, stripe-listen.log carries whsec; masking never reaches artifacts
