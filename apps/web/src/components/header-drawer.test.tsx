@@ -8,10 +8,26 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
 }));
 
-// Clerk's sign-out control clones its child into the button it renders.
-vi.mock('@clerk/nextjs', () => ({
-  SignOutButton: ({ children }: { children: React.ReactNode }) => children,
-}));
+/*
+ * Clerk's sign-out control clones its one child with a click handler that signs
+ * out to `redirectUrl`. The mock does the same against a spy, so removing the
+ * wrapper or changing where it lands fails a test.
+ */
+const signOut = vi.fn();
+
+vi.mock('@clerk/nextjs', async () => {
+  const { cloneElement } = await import('react');
+
+  return {
+    SignOutButton: ({
+      children,
+      redirectUrl,
+    }: {
+      children: React.ReactElement<{ onClick?: () => void }>;
+      redirectUrl?: string;
+    }) => cloneElement(children, { onClick: () => signOut(redirectUrl) }),
+  };
+});
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -23,6 +39,7 @@ vi.mock('next/link', () => ({
 
 afterEach(() => {
   cleanup();
+  signOut.mockClear();
 });
 
 /**
@@ -72,7 +89,8 @@ describe('SignedInDrawer', () => {
       ['Contact support', '/support'],
       ['Sign out', null],
     ]);
-    expect(screen.getByRole('button', { name: 'Sign out' }).tagName).toBe('BUTTON');
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
   });
 
   it('never writes "Dashboard" for a customer', async () => {

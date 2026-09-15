@@ -20,7 +20,14 @@ import { sourceFiles, TS_AND_TSX, withoutComments } from '@/testing/source-scan'
  * Comments are blanked first, so prose explaining this rule is not an instance
  * of it.
  */
-const FORBIDDEN = /\b(?:UserButton|UserProfile|OrganizationProfile|openUserProfile)\b/g;
+/*
+ * No leading `\b`, on purpose: Clerk's imperative routes to the same screens
+ * embed the name — `openUserProfile`, `redirectToUserProfile`,
+ * `buildUserProfileUrl`, `openOrganizationProfile` — and a leading boundary
+ * let every one of them through. The trailing boundary (or `Url`) is what keeps
+ * a product name that merely starts with one, like `UserProfileSummary`, out.
+ */
+const FORBIDDEN = /(?:UserButton|UserProfile|OrganizationProfile)(?:Url)?\b/g;
 
 function violationsIn(code: string): string[] {
   return [...code.matchAll(FORBIDDEN)].map((match) => match[0]);
@@ -44,7 +51,10 @@ describe('no Clerk account-management surface is reachable from the app (VEN-403
     expect(violationsIn("import { Show, UserButton } from '@clerk/nextjs';")).toEqual([
       'UserButton',
     ]);
-    expect(violationsIn('const { openUserProfile } = useClerk();')).toEqual(['openUserProfile']);
+    expect(violationsIn('const { openUserProfile } = useClerk();')).toEqual(['UserProfile']);
+    expect(violationsIn('clerk.redirectToUserProfile();')).toEqual(['UserProfile']);
+    expect(violationsIn('href={clerk.buildUserProfileUrl()}')).toEqual(['UserProfileUrl']);
+    expect(violationsIn('openOrganizationProfile()')).toEqual(['OrganizationProfile']);
     expect(violationsIn(withoutComments('// `<UserButton />` opened Clerk’s profile'))).toEqual([]);
     // A word boundary, so a product component that merely starts with the name
     // is not a Clerk surface.

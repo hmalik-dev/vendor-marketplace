@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { cloneElement, type ReactNode } from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
@@ -16,11 +16,20 @@ vi.mock('@clerk/nextjs', () => ({
   Show: ({ when, children }: { when: AuthState; children: ReactNode }) =>
     when === authState ? children : null,
   /*
-   * Clerk's sign-out control clones its child; the header's account menu is
-   * the app's own and renders for real (VEN-403).
+   * Clerk's sign-out control clones its one child with a click handler that
+   * signs out to `redirectUrl`; the mock does the same against a spy. The
+   * account menu itself is the app's own and renders for real (VEN-403).
    */
-  SignOutButton: ({ children }: { children: ReactNode }) => children,
+  SignOutButton: ({
+    children,
+    redirectUrl,
+  }: {
+    children: React.ReactElement<{ onClick?: () => void }>;
+    redirectUrl?: string;
+  }) => cloneElement(children, { onClick: () => signOut(redirectUrl) }),
 }));
+
+const signOut = vi.fn();
 
 /*
  * The header fetches the taxonomy because frame `02` puts the query bar in it.
@@ -71,6 +80,7 @@ describe('SiteHeader', () => {
     authState = 'signed-out';
     pathname = '/';
     currentRole = null;
+    signOut.mockClear();
     currentUser = {
       firstName: 'Ada',
       lastName: 'Lovelace',
@@ -278,6 +288,10 @@ describe('SiteHeader', () => {
     expect(items[0]).toHaveProperty('href', 'http://localhost:3000/dashboard');
     expect(items[1]).toHaveProperty('href', 'http://localhost:3000/support');
     expect(items[2]?.tagName).toBe('BUTTON');
+
+    // Sign out lands signed out on `/` — criterion 2's half that jsdom can see.
+    fireEvent.click(items[2]!);
+    expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
   });
 
   /*
