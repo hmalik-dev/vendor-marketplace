@@ -210,29 +210,32 @@ function redactValues(error: ErrorLike): ErrorLike {
   });
 }
 
-/** An object literal, or JSON parsed into one — not a class instance, a `Date` or a `Buffer`. */
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  const prototype: unknown = Object.getPrototypeOf(value);
-
-  return prototype === Object.prototype || prototype === null;
+/**
+ * An object the log line writes field by field: anything `JSON.stringify`
+ * enumerates, which is every object without a `toJSON` of its own — a class
+ * instance as much as a literal. A `Date` or a `Buffer` says what it writes.
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { toJSON?: unknown }).toJSON !== 'function'
+  );
 }
 
 /**
- * An `errors` array, with every entry pino will write redacted — returned as
- * the same array when no entry changed.
+ * An array, with every entry pino will write redacted — returned as the same
+ * array when no entry changed.
  *
  * **Every entry, not only the error-like ones.** `pino-std-serializers` passes
- * each entry through its own serialiser into `aggregateErrors`, which hands a
- * non-error back untouched, and then writes the array a second time under
- * `errors` as it found it. So a driver's field record carrying `detail`, a
- * `{ query, params }` payload, a nested array of failures or a record wrapping
- * one all reach the line raw unless the sink walks them — and nothing about the
- * error type that carries the array (a `ClerkAPIResponseError`, an
- * `AggregateError`, anyone's own) decides which of those arrives.
+ * each entry of an `errors` array through its own serialiser into
+ * `aggregateErrors`, which hands a non-error back untouched, and then writes
+ * the array a second time under `errors` as it found it. So a driver's field
+ * record carrying `detail`, a `{ query, params }` payload, a nested array of
+ * failures or a record wrapping one all reach the line raw unless the sink
+ * walks them — and nothing about the error type that carries the array (a
+ * `ClerkAPIResponseError`, an `AggregateError`, anyone's own) decides which of
+ * those arrives.
  */
 function sanitizeEntries(entries: unknown[], seen: Set<unknown>, depth: number): unknown[] {
   const sanitized = entries.map((entry) => sanitizeEntry(entry, seen, depth));
@@ -241,47 +244,54 @@ function sanitizeEntries(entries: unknown[], seen: Set<unknown>, depth: number):
 }
 
 /**
- * One entry of an `errors` array: an error through `sanitize`, a nested array
- * or plain record walked with the same withholdings, anything else as it was.
+ * Any value pino writes without a serialiser: an error through `sanitize`, an
+ * array or record walked with the same withholdings, anything else as it was.
  *
- * Cycles and depth are answered as `sanitize` answers them, by dropping the
- * link, for the same reason — handing the original back puts the values in.
+ * An array or record **past the depth bound, or inside itself, is withheld**
+ * rather than handed back — the original is how the values would get in again.
+ * Unlike an error, it is released from `seen` once its walk is done: a record
+ * two entries share is not a cycle, and dropping the second copy would cost the
+ * line its detail for nothing.
  */
 function sanitizeEntry(entry: unknown, seen: Set<unknown>, depth: number): unknown {
   if (isErrorLike(entry)) {
     return sanitize(entry, seen, depth);
   }
 
-  if (!Array.isArray(entry) && !isPlainRecord(entry)) {
+  if (!Array.isArray(entry) && !isRecord(entry)) {
     return entry;
   }
 
   if (seen.has(entry) || depth >= MAX_DEPTH) {
-    return undefined;
+    return REDACTED;
   }
 
   seen.add(entry);
 
-  if (Array.isArray(entry)) {
-    return sanitizeEntries(entry, seen, depth + 1);
-  }
-
-  const queryShaped = typeof entry.query === 'string' && Array.isArray(entry.params);
-  let rebuilt: Record<string, unknown> | null = null;
-
-  for (const [key, value] of Object.entries(entry)) {
-    const sanitized =
-      value !== undefined && (VALUE_BEARING.includes(key) || (queryShaped && key === 'params'))
-        ? REDACTED
-        : sanitizeEntry(value, seen, depth + 1);
-
-    if (sanitized !== value) {
-      rebuilt ??= { ...entry };
-      rebuilt[key] = sanitized;
+  try {
+    if (Array.isArray(entry)) {
+      return sanitizeEntries(entry, seen, depth + 1);
     }
-  }
 
-  return rebuilt ?? entry;
+    const queryShaped = typeof entry.query === 'string' && Array.isArray(entry.params);
+    let rebuilt: Record<string, unknown> | null = null;
+
+    for (const [key, value] of Object.entries(entry)) {
+      const sanitized =
+        value !== undefined && (VALUE_BEARING.includes(key) || (queryShaped && key === 'params'))
+          ? REDACTED
+          : sanitizeEntry(value, seen, depth + 1);
+
+      if (sanitized !== value) {
+        rebuilt ??= { ...entry };
+        rebuilt[key] = sanitized;
+      }
+    }
+
+    return rebuilt ?? entry;
+  } finally {
+    seen.delete(entry);
+  }
 }
 
 /**
@@ -295,7 +305,8 @@ function sanitizeEntry(entry: unknown, seen: Set<unknown>, depth: number): unkno
  * `AggregateError`, or anything `Promise.any` rejects with), and into any own
  * enumerable property whose value is error-like — each through its *own*
  * serialiser, which does not redact. A failed query one link down any of those
- * three is the same leak as a failed query at the top.
+ * three is the same leak as a failed query at the top. Every other array or
+ * record on an error pino writes raw, so those are walked too (`sanitizeEntry`).
  */
 function sanitize(value: unknown, seen: Set<unknown>, depth: number): unknown {
   if (!isErrorLike(value)) {
@@ -324,11 +335,13 @@ function sanitize(value: unknown, seen: Set<unknown>, depth: number): unknown {
      * the deliberate pass below then reads it as a cycle and drops the link —
      * taking the driver's message and its `SQLSTATE` with it.
      */
-    if (key === 'cause' || key === 'errors' || !isErrorLike(nested)) {
+    if (key === 'cause' || key === 'errors') {
       continue;
     }
 
-    const sanitized = sanitize(nested, seen, depth + 1);
+    // Not only error-valued properties: pino writes an array or record on an
+    // error raw, so `{ message, payload: { query, params } }` leaks through one.
+    const sanitized = sanitizeEntry(nested, seen, depth + 1);
 
     if (sanitized !== nested) {
       overrides[key] = sanitized;
@@ -336,7 +349,9 @@ function sanitize(value: unknown, seen: Set<unknown>, depth: number): unknown {
   }
 
   if (Array.isArray(value.errors)) {
-    const errors = sanitizeEntries(value.errors, seen, depth + 1);
+    // Through `sanitizeEntry`, so the array itself is on the path an entry that
+    // contains it is checked against.
+    const errors = sanitizeEntry(value.errors, seen, depth + 1);
 
     if (errors !== value.errors) {
       overrides.errors = errors;
