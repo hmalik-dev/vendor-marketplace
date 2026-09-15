@@ -1,5 +1,6 @@
 - [Clerk session lapse can 500 the whole app](clerk-session-lapse-can-500-whole-app.md) — not just a sign-in bounce; e2e:auth re-run won't fix a wedged dev server
-- [E2E vendor account has no seeded profile](e2e-vendor-account-has-no-seeded-profile.md) — vendor+clerk_test@example.com is unlinked to the 16 seeded demo vendors/918 bookings; report booking-dependent criteria BLOCKED
+- [E2E vendor account has no seeded profile](e2e-vendor-account-has-no-seeded-profile.md) — fixed by `db:seed:e2e` as of ven-404; see the newer entry below
+- [E2E seed has only one pending booking request](e2e-seed-has-only-one-pending-booking-request.md) — no payable/accepted booking exists; clicking Accept to make one is denied by auto-mode as a shared-resource mutation
 - [Clerk handshake URLs leak session tokens](clerk-handshake-urls-leak-session-tokens.md) — never log full request/response URLs when driving a stored .auth/*.json identity
 - [E2E vendor blocked on payout setup](e2e-vendor-blocked-on-payout-setup.md) — Accept POSTs 402 until Stripe payout is complete; no in-app UI to clear it; Decline/read-only criteria still verifiable
 - [Playwright MCP is single-context; use a scratch script for a second role](playwright-mcp-single-context-scratch-script.md) — MCP tools share one browser/cookie jar; load a second .auth/*.json via a throwaway Node+Playwright script instead
