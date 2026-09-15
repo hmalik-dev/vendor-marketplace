@@ -152,7 +152,9 @@ export type CheckoutOutcome =
    */
   | { state: 'failed' }
   /** The operator has paused checkout (VEN-404) — 503 `checkout_paused`. */
-  | { state: 'paused' };
+  | { state: 'paused' }
+  /** The price is over the beta cap (VEN-404) — 422 `over_beta_cap`. */
+  | { state: 'over-cap' };
 
 /**
  * Opens checkout for one accepted request.
@@ -197,6 +199,9 @@ export async function openCheckout(requestId: string): Promise<CheckoutOutcome> 
     }
     if (error.code === ERROR_CODES.CHECKOUT_PAUSED) {
       return { state: 'paused' };
+    }
+    if (error.code === ERROR_CODES.OVER_BETA_CAP) {
+      return { state: 'over-cap' };
     }
     if (error.statusCode === 400 || error.statusCode === 422) {
       return { state: 'failed' };

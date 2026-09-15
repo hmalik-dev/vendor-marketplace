@@ -50,7 +50,7 @@ const SWITCHES: readonly { field: PauseField; label: string; description: string
     field: 'checkoutPaused',
     label: 'Pause checkout',
     description:
-      'No new charge is started. Customers see that bookings are paused and nothing has been charged.',
+      'No new payment is started, and customers are told bookings are paused. A checkout a customer already has open can still complete.',
   },
   {
     field: 'payoutReleasePaused',
@@ -168,7 +168,7 @@ export function PlatformSettingsPanel({
           <p className="mt-1 text-sm text-stone-600">
             {settings.maxBookingCents === null
               ? 'No cap. Any price a vendor sets can be requested and paid.'
-              : `Requests and payments over ${formatPrice(settings.maxBookingCents)} are refused, including requests made before the cap was set.`}
+              : `New requests and payments over ${formatPrice(settings.maxBookingCents)} are refused, including on requests made before the cap was set. A checkout already open can still complete.`}
           </p>
           <form
             className="mt-3 flex flex-wrap items-end gap-3"

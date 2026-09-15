@@ -86,10 +86,10 @@ export default async function CheckoutPage({ params }: PageProps): Promise<React
  * the two: it promises the customer nothing.
  */
 async function unavailableScreen(
-  state: 'not-payable' | 'failed' | 'paused',
+  state: 'not-payable' | 'failed' | 'paused' | 'over-cap',
   requestId: string,
 ): Promise<React.ReactElement> {
-  if (state === 'failed' || state === 'paused') {
+  if (state === 'failed' || state === 'paused' || state === 'over-cap') {
     return <CheckoutUnavailable reason={state} requestId={requestId} vendorName={null} />;
   }
 

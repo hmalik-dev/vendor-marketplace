@@ -17,7 +17,8 @@ import { Button } from '@/components/ui/button';
  * cancelled, declined or it expired" is the same defect as the 404 this screen
  * replaced, moved one bucket over.
  */
-export type CheckoutUnavailableReason = 'failed' | 'not-accepted' | 'closed' | 'paused';
+export type CheckoutUnavailableReason =
+  'failed' | 'not-accepted' | 'closed' | 'paused' | 'over-cap';
 
 export interface CheckoutUnavailableProps {
   reason: CheckoutUnavailableReason;
@@ -81,6 +82,21 @@ function copyFor(
       body: BOOKINGS_PAUSED_NOTICE,
       money: 'No payment was taken and your booking is still accepted.',
       action: { label: 'Try this payment again', href: `${booking}/checkout` },
+      secondary: { label: 'Back to this booking', href: booking },
+    };
+  }
+
+  /*
+   * Over the closed-beta cap (VEN-404), which retrying can never clear — so the
+   * action is support rather than a retry link.
+   */
+  if (reason === 'over-cap') {
+    return {
+      eyebrow: 'Over the beta limit',
+      heading: 'This booking is over our beta limit',
+      body: "During the beta we can only take payment up to a set price, and this booking is above it. Contact support and we'll sort it out with you.",
+      money: 'No payment was taken and your booking is still accepted.',
+      action: { label: 'Contact support', href: '/support' },
       secondary: { label: 'Back to this booking', href: booking },
     };
   }

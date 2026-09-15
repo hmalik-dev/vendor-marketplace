@@ -17,10 +17,15 @@ import {
   toDateString,
 } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  bearer,
+  createTestHarness,
+  TEST_ENV,
+  type TestHarness,
+} from '../../testing/test-server.js';
 import { releaseDuePayouts, retryPayoutRelease } from '../payments/payouts.service.js';
-import { forgetPlatformSwitches } from './platform-settings.service.js';
+import { forgetPlatformSwitches, readPlatformSwitches } from './platform-settings.service.js';
 
 /**
  * The launch switches (VEN-404), end to end through the routes that obey them.
@@ -192,6 +197,13 @@ describe('launch switches', () => {
     return addDays(START, dateOffset + 4);
   }
 
+  /** What the operator was emailed, once the background sends have settled. */
+  async function operatorMail(): Promise<{ subject: string; text: string }[]> {
+    await harness.flushEmail();
+
+    return harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL);
+  }
+
   function sweep(): ReturnType<typeof releaseDuePayouts> {
     return releaseDuePayouts(
       { db: harness.database.db, stripe: harness.stripe, log: harness.app.log },
@@ -236,6 +248,8 @@ describe('launch switches', () => {
     harness.stripe.paymentIntents.clear();
     harness.stripe.intentsByKey.clear();
     harness.stripe.transfers.length = 0;
+    harness.email.sent.length = 0;
+    vi.restoreAllMocks();
     await harness.database.db.delete(platformSettings);
     forgetPlatformSwitches(harness.database.db);
     await harness.database.db.delete(bookings);
@@ -339,9 +353,32 @@ describe('launch switches', () => {
         });
       }
 
+      const alerts = await operatorMail();
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]!.subject).toContain('A launch switch was changed');
+      expect(alerts[0]!.text).toContain('checkoutPaused: off → on');
+      expect(alerts[0]!.text).toContain('maxBookingCents: no cap → $500');
+
       const repeat = await inject('PUT', '/admin/settings', ADMIN, { checkoutPaused: true });
       expect(repeat.statusCode).toBe(409);
       expect(await harness.database.db.select().from(adminActions)).toHaveLength(2);
+    });
+
+    /*
+     * Another instance never saw the write, so it obeys its own cached read —
+     * for at most `PLATFORM_SETTINGS_CACHE_MS`, and then reads the row again.
+     */
+    it('trusts a cached read for ten seconds and no longer', async () => {
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(START.getTime());
+      expect((await readPlatformSwitches(harness.database.db)).checkoutPaused).toBe(false);
+
+      await harness.database.db.insert(platformSettings).values({ checkoutPaused: true });
+
+      clock.mockReturnValue(START.getTime() + 9_999);
+      expect((await readPlatformSwitches(harness.database.db)).checkoutPaused).toBe(false);
+
+      clock.mockReturnValue(START.getTime() + 10_000);
+      expect((await readPlatformSwitches(harness.database.db)).checkoutPaused).toBe(true);
     });
 
     it('refuses an empty change and a cap that is not a positive whole number of cents', async () => {
@@ -493,6 +530,10 @@ describe('launch switches', () => {
       });
       expect(hold.statusCode).toBe(200);
       expect(hold.json()).toEqual({ vendorId: held.vendorId, payoutHold: true });
+      const holdAlerts = await operatorMail();
+      expect(holdAlerts.map((message) => message.subject)).toEqual([
+        expect.stringContaining("A vendor's payouts were put on hold"),
+      ]);
 
       const settings = await inject('GET', '/admin/settings', ADMIN);
       expect(settings.json().heldVendors).toEqual([
