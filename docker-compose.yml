@@ -1,5 +1,5 @@
 # Local development runs against THIS Postgres service, not a Neon branch — see
-# the README. Point DATABASE_URL at it and leave DATABASE_URL_UNPOOLED unset;
+# docs/development.md. Point DATABASE_URL at it and leave DATABASE_URL_UNPOOLED unset;
 # `migration-url.ts` then falls back to the pooled URL, which is correct here
 # because there is no PgBouncer in front of it.
 #
