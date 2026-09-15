@@ -36,10 +36,11 @@ replay.
 **Gap 1 is FIXED in VEN-391**, do not re-report: operator targets are closable
 past a typed email (client-only by decision) and a 409 when no other live
 operator (admin, not deleted, not banned) remains, re-checked in the UPDATE under
-`OPERATOR_RETIREMENT_LOCK`. Residual, reported low: `setUserBanned` has no admin
-guard and does not take that lock, so "B closes A" racing "A bans B" ends with A
-deleted and B banned (zero live; recovery is a DB unban). Ban-vs-ban already
-reached zero before VEN-391. `e2e:operator` audited clean: `assertSafeTarget`
+`OPERATOR_RETIREMENT_LOCK`. **The ban-path residual is FIXED in VEN-417**, do
+not re-report: an admin target's ban runs `banOperatorById` under the same lock
+and predicate, flag before unwind; unban and `setBanned` (non-admin snapshot role
+only) can only grow the live set. Accepted low: flag-first means an unwind that
+throws leaves an operator banned with no `user_banned` row, and a retry 409s. `e2e:operator` audited clean: `assertSafeTarget`
 first, email regex fences both mint and remove, `users_clerk_user_id_key` is
 non-partial so mint cannot shadow an existing row.
 
