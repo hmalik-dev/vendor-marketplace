@@ -16,3 +16,5 @@
 - [Rapid navigation loop leaves a stale DOM read](rapid-navigation-loop-leaves-stale-dom-read.md) — a page-wide query right after a burst of `goto()`s misread an unrelated element's `aria-current`; re-check isolated before reporting
 - [run_code_unsafe has no require/import](run-code-unsafe-has-no-require-use-storagestate-option.md) — load a stored identity via `browser.newContext({storageState: <path>})`, not `fs.readFileSync`
 - [API parity checks need a Clerk bearer, not cookies](api-parity-check-needs-clerk-bearer-not-cookies.md) — pull `window.Clerk.session.getToken()` and fetch the API's own port directly; cookie-only cross-port fetch 401s
+- [A ticket's own setup steps can authorize scoped DB writes](ticket-setup-steps-can-authorize-scoped-db-writes.md) — override the read-only default only when the task names the column/row and a restore step
+- [Unattached conversation avoids the shared pending booking](unattached-conversation-avoids-shared-booking-mutation.md) — "Send a message" on a vendor storefront opens a fresh thread with no booking attached; real table is `support_cases`, not `cases`
