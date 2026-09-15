@@ -56,9 +56,9 @@ which is not a launch; `docs/credentials.md` is the credential runbook.
 
 - [ ] **Legal wording** (VEN-378). The terms, privacy and cookie pages exist, but
       their wording is placeholder nobody has relied on. A lawyer reads them —
-      above all the staff-message-access clause under _Who else sees it_ in the
-      privacy policy, the one paragraph asserting that staff can read a user's
-      private messages — and the legal entity and a monitored support
+      above all the staff-message-access clause (#436) under _Who else sees it_
+      in the privacy policy, the one paragraph asserting that staff can read a
+      user's private messages — and the legal entity and a monitored support
       destination are named.
 - [ ] **Provider accounts** (VEN-377): the Clerk production instance on the real
       domain, the live Stripe Connect platform, the Resend domain's DNS, the
