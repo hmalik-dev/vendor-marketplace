@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   bookings,
@@ -20,6 +20,7 @@ import type {
 } from '@vendor-marketplace/shared';
 import { countWidenings } from '../admin/widenings.js';
 import type { AppDatabase } from '../../lib/database.js';
+import { containsInsensitive } from '../../lib/like-pattern.js';
 
 /**
  * Every `support_cases` query (#431).
@@ -87,9 +88,31 @@ const CASE_SELECTION = {
   createdAt: supportCases.createdAt,
 } as const;
 
+/**
+ * The search (VEN-388): the reference, the address the case was sent from, or
+ * the sender account's name or address.
+ *
+ * The account half is an `EXISTS` rather than a condition on the list's sender
+ * join, so the count and the widening scan — which read `support_cases` alone —
+ * stay the same query as the page.
+ */
+function caseSearchCondition(term: string): SQL | undefined {
+  return or(
+    containsInsensitive(supportCases.reference, term),
+    containsInsensitive(supportCases.senderEmail, term),
+    sql`exists (
+      select 1 from ${users} as sender
+      where sender.id = ${supportCases.senderUserId}
+        and (${containsInsensitive(sql`concat_ws(' ', sender.first_name, sender.last_name)`, term)}
+          or ${containsInsensitive(sql`sender.email`, term)})
+    )`,
+  );
+}
+
 function caseFilterCondition(query: {
   status?: SupportCaseStatus;
   booking?: AdminCaseQuery['booking'];
+  q?: string | undefined;
 }): SQL | undefined {
   return and(
     // `undefined` is the widening scan dropping this filter, never a missing value.
@@ -99,6 +122,7 @@ function caseFilterCondition(query: {
       : query.booking === 'without'
         ? isNull(supportCases.bookingId)
         : undefined,
+    query.q ? caseSearchCondition(query.q) : undefined,
   );
 }
 
@@ -141,7 +165,7 @@ export async function findSupportCases(
  * console's default view it would link straight back to the empty page it was
  * offered from.
  */
-export const CASE_FILTER_KEYS = ['status', 'booking'] as const;
+export const CASE_FILTER_KEYS = ['status', 'booking', 'q'] as const;
 export type CaseFilterKey = (typeof CASE_FILTER_KEYS)[number];
 
 /** The status a `status` widening actually navigates to. Two members, so it is the other one. */
@@ -172,11 +196,12 @@ export async function countCaseWidenings(
   query: AdminCaseQuery,
 ): Promise<FilterWidening[]> {
   return countWidenings<CaseFilterKey>({
-    active: CASE_FILTER_KEYS.filter((key) => key !== 'booking' || query.booking !== undefined),
+    active: CASE_FILTER_KEYS.filter((key) => key === 'status' || query[key] !== undefined),
     conditionWithout: (dropped) =>
       caseFilterCondition({
         status: dropped === 'status' ? otherCaseStatus(query.status) : query.status,
         booking: dropped === 'booking' ? undefined : query.booking,
+        q: dropped === 'q' ? undefined : query.q,
       }),
     scan: (selection) => db.select(selection).from(supportCases),
   });

@@ -68,6 +68,7 @@ const header = read('src/components/admin/admin-header.tsx');
 const nav = read('src/components/admin/admin-nav.tsx');
 const surface = read('src/components/admin/admin-surface.tsx');
 const vendorsPage = read('src/app/admin/vendors/page.tsx');
+const exportLink = read('src/components/admin/export-csv-link.tsx');
 /*
  * The labels moved out of the component and into the shared enum (#433), so the
  * table's pill and the filter bar's options cannot be worded differently. The
@@ -665,8 +666,11 @@ describe('the title row and the Refine bar', () => {
   it('keeps the frame’s literal control strings', () => {
     for (const literal of ['Search name, email or slug…', 'Export CSV']) {
       expect(frame, literal).toContain(literal);
-      expect(vendorsPage, literal).toContain(literal);
     }
+    expect(vendorsPage).toContain('Search name, email or slug…');
+    // One `Export CSV` for every console list that draws it (VEN-388).
+    expect(vendorsPage).toContain('<ExportCsvLink href=');
+    expect(exportLink).toContain('Export CSV');
     expect(frame).toContain('Awaiting review (38)');
     expect(vendorsPage).toContain('Awaiting review ({vendors.awaitingReview})');
   });
@@ -678,7 +682,7 @@ describe('the title row and the Refine bar', () => {
     expect(themeCss).toContain('--color-clay-400: #b4552f');
     expect(themeCss).toContain('--color-clay-500: #a34a28');
     expect(vendorsPage).toContain('bg-clay-400 text-stone-0');
-    expect(vendorsPage).toContain('text-clay-500');
+    expect(exportLink).toContain('text-clay-500');
   });
 
   it('puts the filters in the bar rather than behind a modal', () => {

@@ -208,6 +208,7 @@ describe('admin routes', () => {
        * whole history is exactly what a stranger must not be able to walk.
        */
       { method: 'GET', url: '/admin/activity' },
+      { method: 'GET', url: '/admin/activity/actors' },
       { method: 'PUT', url: `/admin/tags/${NIL}` },
       { method: 'PUT', url: `/admin/users/${NIL}/ban` },
       { method: 'PUT', url: `/admin/users/${NIL}/unban` },

@@ -36,6 +36,7 @@ import type {
   AdminAction,
   AdminActionDetail,
   AdminActionSubject,
+  AdminActivityRange,
   AdminBookingFlag,
   AdminCustomerFlag,
   AdminCustomerStatus,
@@ -1780,7 +1781,16 @@ export interface AdminActionFilters {
   actor?: string | undefined;
   subject?: string | undefined;
   action?: AdminAction | undefined;
+  subjectType?: AdminActionSubject | undefined;
+  range?: AdminActivityRange | undefined;
 }
+
+/** Each range as a Postgres interval, subtracted from the database's own `now()`. */
+const ACTIVITY_RANGE_INTERVALS: Record<AdminActivityRange, string> = {
+  '24h': '24 hours',
+  '7d': '7 days',
+  '30d': '30 days',
+};
 
 /**
  * One audit row, before it is written.
@@ -1838,6 +1848,16 @@ function actionFilterCondition(filters: AdminActionFilters): SQL | undefined {
 
   if (filters.action) {
     conditions.push(eq(adminActions.action, filters.action));
+  }
+
+  if (filters.subjectType) {
+    conditions.push(eq(adminActions.subjectType, filters.subjectType));
+  }
+
+  if (filters.range) {
+    conditions.push(
+      sql`${adminActions.createdAt} >= now() - ${ACTIVITY_RANGE_INTERVALS[filters.range]}::interval`,
+    );
   }
 
   return conditions.length > 0 ? and(...conditions) : undefined;
@@ -1910,8 +1930,8 @@ export async function countAdminActions(
   return rows?.[0]?.total ?? 0;
 }
 
-/** The three filters the activity feed can be narrowed by. */
-export const ACTION_FILTER_KEYS = ['actor', 'subject', 'action'] as const;
+/** The filters the activity feed can be narrowed by. */
+export const ACTION_FILTER_KEYS = ['actor', 'subject', 'action', 'subjectType', 'range'] as const;
 export type ActionFilterKey = (typeof ACTION_FILTER_KEYS)[number];
 
 /**
@@ -1930,4 +1950,21 @@ export async function countActionWidenings(
     conditionWithout: (dropped) => actionFilterCondition({ ...filters, [dropped]: undefined }),
     scan: (selection) => db.select(selection).from(adminActions),
   });
+}
+
+/**
+ * Every operator the log names, for the `Actor ▾` facet (VEN-388).
+ *
+ * Read from the log rather than from `users.role`: an operator who was demoted
+ * still authored their rows, and an admin who never acted would be a choice
+ * that narrows to nothing.
+ */
+export async function findAdminActionActors(
+  db: AppDatabase,
+): Promise<{ id: string; firstName: string; lastName: string }[]> {
+  return db
+    .selectDistinct({ id: users.id, firstName: users.firstName, lastName: users.lastName })
+    .from(adminActions)
+    .innerJoin(users, eq(users.id, adminActions.actorId))
+    .orderBy(asc(users.firstName), asc(users.lastName), asc(users.id));
 }

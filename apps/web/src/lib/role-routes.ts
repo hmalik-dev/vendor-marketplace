@@ -84,9 +84,10 @@ export const POST_SIGN_IN_PATH_BY_ROLE: Record<UserRole, string> = {
  *
  * The guard recognises the two shapes a gate is written in here —
  * `requireRole(...)` and `redirectVendorToDashboard()`. A gate written inline
- * instead, as `admin/vendors/export/route.ts` does with its own
- * `user.role !== 'admin'` check, is invisible to it; that one is covered by the
- * `/admin` rule, but the next inline gate on an unruled path would not be. Use
+ * instead, as the admin `export` route handlers do through
+ * `refuseUnlessAdmin` in `lib/admin-export.ts`, is invisible to it; those are
+ * covered by the `/admin` rule, but the next inline gate on an unruled path
+ * would not be. Use
  * `requireRole` for a new one, or add the rule here by hand.
  */
 export const ROLE_ROUTE_RULES: ReadonlyArray<{

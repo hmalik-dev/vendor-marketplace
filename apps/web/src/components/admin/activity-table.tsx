@@ -87,7 +87,7 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */
-const SUBJECT_LABELS: Record<AdminActionSubject, string> = {
+export const SUBJECT_LABELS: Record<AdminActionSubject, string> = {
   user: 'Account',
   review: 'Review',
   tag: 'Tag',
@@ -121,7 +121,7 @@ const SUBJECT_LABELS: Record<AdminActionSubject, string> = {
  * throughout. `null` is still dropped, because it means "not applicable here"
  * rather than "no".
  */
-function detailLine(detail: WireAdminActivityRow['detail']): string {
+export function detailLine(detail: WireAdminActivityRow['detail']): string {
   return Object.entries(detail)
     .filter(([, value]) => value !== null)
     .map(([key, value]) => `${key} ${String(value)}`)

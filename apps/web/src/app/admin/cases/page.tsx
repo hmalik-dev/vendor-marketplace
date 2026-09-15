@@ -1,20 +1,16 @@
 import Link from 'next/link';
-import { ADMIN_CASE_BOOKING_FILTERS, SUPPORT_CASE_STATUSES } from '@vendor-marketplace/shared';
+import { SUPPORT_CASE_STATUSES } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
+import { ExportCsvLink } from '@/components/admin/export-csv-link';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAdminCases } from '@/lib/admin-data';
 import { ageInDays, ageTone, CASE_PRESENTATION, caseSubject } from '@/lib/case-presentation';
-import {
-  adminQueryString,
-  droppedKeys,
-  oneOf,
-  pageNumber,
-  type RawParam,
-} from '@/lib/admin-params';
+import { caseParams } from '@/lib/admin-list-params';
+import { adminQueryString, droppedKeys, pageNumber, type RawParam } from '@/lib/admin-params';
 
 const PATH = '/admin/cases';
 
@@ -30,15 +26,27 @@ const PATH = '/admin/cases';
 export default async function AdminCasesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: RawParam; booking?: RawParam; page?: RawParam }>;
+  searchParams: Promise<{ q?: RawParam; status?: RawParam; booking?: RawParam; page?: RawParam }>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
-  const status = oneOf(raw.status, SUPPORT_CASE_STATUSES);
-  const booking = oneOf(raw.booking, ADMIN_CASE_BOOKING_FILTERS);
-  const dropped = droppedKeys(raw, { status, booking });
-  const cases = await getAdminCases(
-    adminQueryString({ status, booking, page: pageNumber(raw.page) }),
-  );
+  const params = caseParams(raw);
+  const { q, status, booking } = params;
+  const dropped = droppedKeys(raw, params);
+  const showing = status ?? 'open';
+  const other = showing === 'open' ? 'resolved' : 'open';
+  /*
+   * The status pills' counts (VEN-388), read at request time. The status being
+   * shown is this page's own total; the other is one more count under the same
+   * search and booking filters, so each number is the list its choice opens.
+   */
+  const [cases, otherCases] = await Promise.all([
+    getAdminCases(adminQueryString({ ...params, page: pageNumber(raw.page) })),
+    getAdminCases(adminQueryString({ q, booking, status: other, pageSize: 1 })),
+  ]);
+  const statusCounts = { [showing]: cases.total, [other]: otherCases.total } as Record<
+    (typeof SUPPORT_CASE_STATUSES)[number],
+    number
+  >;
 
   /*
    * One clock read for the whole table, not one per row. Rendering is not
@@ -54,7 +62,6 @@ export default async function AdminCasesPage({
    * every page but the first is worse than one that is only shown once.
    */
   const oldest = cases.page === 1 ? cases.items[0] : undefined;
-  const showing = status ?? 'open';
 
   /*
    * The filters currently narrowing the view, in the order the bar shows them.
@@ -71,19 +78,27 @@ export default async function AdminCasesPage({
    *
    * `booking` is a genuine drop, and is only active when it was set.
    */
-  const other = showing === 'open' ? 'resolved' : 'open';
   const active: ActiveFilter[] = [
     {
       key: 'status',
       widening: `${CASE_PRESENTATION[other].label} cases instead`,
-      carried: { status: other, booking },
+      carried: { ...params, status: other },
     },
     ...(booking
       ? [
           {
             key: 'booking',
             widening: 'Any kind',
-            carried: { status },
+            carried: { ...params, booking: undefined },
+          },
+        ]
+      : []),
+    ...(q
+      ? [
+          {
+            key: 'q',
+            widening: 'Any search term',
+            carried: { ...params, q: undefined },
           },
         ]
       : []),
@@ -95,9 +110,11 @@ export default async function AdminCasesPage({
    * a generic join reads "No resolved and about a booking cases", and this
    * sentence is the part of the state that has to sound like a person wrote it.
    */
-  const filteredHeadline = booking
-    ? `No ${showing} cases ${booking === 'with' ? 'about a booking' : 'that are general questions'}`
-    : `No ${showing} cases`;
+  const filteredHeadline = [
+    `No ${showing} cases`,
+    ...(booking ? [booking === 'with' ? 'about a booking' : 'that are general questions'] : []),
+    ...(q ? [`matching "${q}"`] : []),
+  ].join(' ');
 
   /*
    * **True empty carries no button** — the delta is explicit, and this is the
@@ -131,7 +148,13 @@ export default async function AdminCasesPage({
       ]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH} params={{ status, booking }}>
+        <FilterBar
+          action={PATH}
+          params={params}
+          searchPlaceholder="Search reference or sender…"
+          searchValue={q}
+          trailing={<ExportCsvLink href={`${PATH}/export${adminQueryString(params)}`} />}
+        >
           {/*
             `allowAny={false}`, and it is the only filter in the console that
             says so. `adminCaseQuerySchema` defaults `status` to `open` — the
@@ -146,9 +169,14 @@ export default async function AdminCasesPage({
             label="Status"
             allowAny={false}
             value={status ?? 'open'}
+            /*
+              Counted, as Pattern A draws them — `Open (4)` / `Resolved (0)`.
+              The dropdown shape is an accepted deviation from the bundle's
+              pills; the counts were not covered by it (VEN-388).
+            */
             options={SUPPORT_CASE_STATUSES.map((value) => ({
               value,
-              label: CASE_PRESENTATION[value].label,
+              label: `${CASE_PRESENTATION[value].label} (${statusCounts[value]})`,
             }))}
           />
           <FilterSelect
@@ -165,7 +193,7 @@ export default async function AdminCasesPage({
       }
       pager={{
         path: PATH,
-        params: { status, booking },
+        params,
         page: cases.page,
         pageSize: cases.pageSize,
         total: cases.total,
@@ -190,7 +218,10 @@ export default async function AdminCasesPage({
            * a filter would put the *filtered*-empty copy on a view nothing is
            * filtering.
            */
-          cases.widenings.length > 0 || status !== undefined || booking !== undefined ? (
+          cases.widenings.length > 0 ||
+          status !== undefined ||
+          booking !== undefined ||
+          q !== undefined ? (
             <FilteredEmpty
               headline={filteredHeadline}
               path={PATH}

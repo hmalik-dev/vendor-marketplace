@@ -27,6 +27,6 @@ export function escapeLikePattern(value: string): string {
  * makes the wildcards live. Every caller that wants "does this column contain
  * what the user typed" should reach for this instead.
  */
-export function containsInsensitive(column: Column, term: string): SQL {
+export function containsInsensitive(column: Column | SQL, term: string): SQL {
   return sql`${column} ILIKE ${`%${escapeLikePattern(term)}%`} ESCAPE '\\'`;
 }

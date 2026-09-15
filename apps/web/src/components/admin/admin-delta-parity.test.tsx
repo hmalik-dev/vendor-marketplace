@@ -337,6 +337,66 @@ describe('/admin/cases against Pattern A', () => {
 });
 
 /*
+ * The Pattern A residue VEN-388 closed. Read from the page sources with their
+ * comments stripped, so a sentence about a facet cannot stand in for the facet.
+ * The browser pass drives each one; what is pinned here is that each control is
+ * mounted with the bundle's words, in the bundle's order.
+ */
+describe('the list residue Pattern A draws (VEN-388)', () => {
+  const activity = sourceWithoutComments('src/app/admin/activity/page.tsx');
+  const cases = sourceWithoutComments('src/app/admin/cases/page.tsx');
+
+  it('gives /admin/activity the three facets the bundle names, in its order', () => {
+    expect(drawn).toContain('Actor ▾, Subject type ▾, date range');
+    const facets = [...activity.matchAll(/name="(\w+)"\s+label="([^"]+)"/g)].map(
+      ([, name, label]) => `${name}:${label}`,
+    );
+    expect(facets).toEqual([
+      'actor:Actor',
+      'subjectType:Subject type',
+      'range:Date range',
+      'action:Action',
+    ]);
+  });
+
+  it('draws the Cases search with the bundle’s placeholder', () => {
+    expect(drawn).toContain('max-width:280px');
+    expect(drawn).toContain('Search reference or sender…');
+    expect(cases).toContain('searchPlaceholder="Search reference or sender…"');
+    expect(cases).toContain('searchValue={q}');
+  });
+
+  it('counts both case statuses the way the bundle labels them', () => {
+    expect(drawn).toContain('>Open (0)</span>');
+    expect(cases).toContain('label: `${CASE_PRESENTATION[value].label} (${statusCounts[value]})`');
+  });
+
+  it('right-anchors Export CSV on both lists, exporting the filters on screen', () => {
+    for (const [path, source] of [
+      ['/admin/activity', activity],
+      ['/admin/cases', cases],
+    ] as const) {
+      expect(source, path).toContain(
+        'trailing={<ExportCsvLink href={`${PATH}/export${adminQueryString(params)}`} />}',
+      );
+    }
+  });
+
+  it('paints the read-only marker steel, the information tone', () => {
+    const detail = sourceWithoutComments('src/components/admin/admin-detail.tsx');
+    const theme = readFileSync(
+      join(process.cwd(), '../../packages/config/tailwind/theme.css'),
+      'utf8',
+    );
+
+    expect(drawn).toContain('background:#EEF3FA;color:#3D6A8C">Read only');
+    expect(detail).toContain('bg-steel-50 px-2 py-[3px] text-steel-600');
+    expect(theme).toContain('--color-steel-50: #eef3fa');
+    expect(theme).toContain('--color-steel-600: #3d6a8c');
+  });
+});
+
+/*
  * Acceptance 5, as a table over **every** status the delta names.
  *
  * A single `expired` assertion is the shape this repo keeps being caught by: it
@@ -555,7 +615,7 @@ describe('a widening always leads somewhere', () => {
   it('sends the case queue status route to the other status, not to no status', () => {
     // The `carried` object is what `adminQueryString` builds the href from; a
     // `status` absent from it is a link back to the default view.
-    expect(cases).toContain('carried: { status: other, booking }');
+    expect(cases).toContain('carried: { ...params, status: other }');
     expect(cases).toContain("const other = showing === 'open' ? 'resolved' : 'open'");
   });
 

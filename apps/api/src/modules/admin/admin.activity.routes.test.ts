@@ -726,6 +726,139 @@ describe('the admin action log', () => {
       expect(none.statusCode).toBe(200);
       expect(none.json()).toMatchObject({ items: [], total: 0, page: 1 });
     });
+
+    /** Pattern A's `Subject type ▾` (VEN-388). */
+    it('narrows by subject type, and counts the widening that drops it', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile();
+      const reviewId = await createReview(customerId, vendor.profileId, 'Recorded for the facet.');
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/ban`,
+        headers: bearer(ADMIN),
+      });
+      await harness.app.inject({
+        method: 'DELETE',
+        url: `/admin/reviews/${reviewId}`,
+        headers: bearer(ADMIN),
+      });
+
+      const reviewsOnly = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/activity?subjectType=review',
+        headers: bearer(ADMIN),
+      });
+
+      expect(reviewsOnly.statusCode).toBe(200);
+      expect(reviewsOnly.json().total).toBe(1);
+      expect(reviewsOnly.json().items[0]).toMatchObject({
+        action: 'review_deleted',
+        subjectType: 'review',
+        subjectId: reviewId,
+      });
+
+      const empty = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/activity?subjectType=booking',
+        headers: bearer(ADMIN),
+      });
+
+      expect(empty.json()).toMatchObject({
+        items: [],
+        total: 0,
+        widenings: [{ key: 'subjectType', count: 2 }],
+      });
+    });
+
+    /** Pattern A's date range (VEN-388), counted back from the database's clock. */
+    it('narrows by date range against the database clock', async () => {
+      const actorId = await signIn(ADMIN, true);
+      const subjectId = await signIn(CUSTOMER);
+      const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+      await harness.database.db.insert(adminActions).values([
+        {
+          actorId,
+          action: 'user_banned',
+          subjectType: 'user',
+          subjectId,
+          detail: {},
+          createdAt: daysAgo(3),
+        },
+        {
+          actorId,
+          action: 'user_unbanned',
+          subjectType: 'user',
+          subjectId,
+          detail: {},
+          createdAt: daysAgo(20),
+        },
+      ]);
+
+      const read = async (range: string) => {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: `/admin/activity?range=${range}`,
+          headers: bearer(ADMIN),
+        });
+        expect(response.statusCode).toBe(200);
+
+        return response.json();
+      };
+
+      expect((await read('24h')).total).toBe(0);
+      expect((await read('7d')).items.map((row: { action: string }) => row.action)).toEqual([
+        'user_banned',
+      ]);
+      expect((await read('30d')).total).toBe(2);
+      expect((await read('24h')).widenings).toEqual([{ key: 'range', count: 2 }]);
+
+      const refused = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/activity?range=90d',
+        headers: bearer(ADMIN),
+      });
+      expect(refused.statusCode).toBe(400);
+    });
+
+    /** Pattern A's `Actor ▾` (VEN-388): only the operators the log names. */
+    it('lists the operators the log names, and refuses anyone else', async () => {
+      const actorId = await signIn(ADMIN, true);
+      await signIn(OTHER_ADMIN, true);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile();
+
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/ban`,
+        headers: bearer(ADMIN),
+      });
+      await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/unban`,
+        headers: bearer(ADMIN),
+      });
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/activity/actors',
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      // One entry for two rows, and none for the admin who never acted.
+      expect(response.json()).toEqual({ actors: [{ id: actorId, name: 'Test User' }] });
+
+      const refused = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/activity/actors',
+        headers: bearer(VENDOR),
+      });
+      expect(refused.statusCode).toBe(403);
+    });
   });
 });
 

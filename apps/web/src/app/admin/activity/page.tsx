@@ -1,20 +1,27 @@
 import Link from 'next/link';
-import { ADMIN_ACTIONS } from '@vendor-marketplace/shared';
-import { ACTION_LABELS, ActivityTable } from '@/components/admin/activity-table';
+import {
+  ADMIN_ACTION_SUBJECTS,
+  ADMIN_ACTIONS,
+  ADMIN_ACTIVITY_RANGES,
+  type AdminActivityRange,
+} from '@vendor-marketplace/shared';
+import { ACTION_LABELS, ActivityTable, SUBJECT_LABELS } from '@/components/admin/activity-table';
 import { AdminSurface } from '@/components/admin/admin-surface';
+import { ExportCsvLink } from '@/components/admin/export-csv-link';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
-import { getAdminActivity } from '@/lib/admin-data';
-import {
-  adminQueryString,
-  droppedKeys,
-  oneOf,
-  pageNumber,
-  uuidParam,
-  type RawParam,
-} from '@/lib/admin-params';
+import { getAdminActivity, getAdminActivityActors } from '@/lib/admin-data';
+import { activityParams } from '@/lib/admin-list-params';
+import { adminQueryString, droppedKeys, pageNumber, type RawParam } from '@/lib/admin-params';
 
 const PATH = '/admin/activity';
+
+/** Pattern A's date range, worded as the window it is. */
+const RANGE_LABELS: Record<AdminActivityRange, string> = {
+  '24h': 'Last 24 hours',
+  '7d': 'Last 7 days',
+  '30d': 'Last 30 days',
+};
 
 /**
  * The console's own record — #434.
@@ -35,6 +42,8 @@ export default async function AdminActivityPage({
     action?: RawParam;
     actor?: RawParam;
     subject?: RawParam;
+    subjectType?: RawParam;
+    range?: RawParam;
     page?: RawParam;
   }>;
 }): Promise<React.ReactElement> {
@@ -45,27 +54,13 @@ export default async function AdminActivityPage({
    * reach an API that validates a uuid and answers 400, which renders as the
    * 500 page for a URL anyone can paste into a support thread.
    */
-  const params = {
-    action: oneOf(raw.action, ADMIN_ACTIONS),
-    actor: uuidParam(raw.actor),
-    subject: uuidParam(raw.subject),
-  };
+  const params = activityParams(raw);
   const dropped = droppedKeys(raw, params);
-  const activity = await getAdminActivity(
-    adminQueryString({ ...params, page: pageNumber(raw.page) }),
-  );
-  const filtered = Boolean(params.action ?? params.actor ?? params.subject);
-  /*
-   * The two identity filters, as things to let go of.
-   *
-   * One entry each rather than two hand-written chips: they differ only in
-   * which parameter they drop, and the duplicated class string was the half
-   * that would have drifted. Each keeps every filter except its own.
-   */
-  const applied = [
-    { key: 'actor', label: 'Clear operator filter', href: { ...params, actor: undefined } },
-    { key: 'subject', label: 'Clear subject filter', href: { ...params, subject: undefined } },
-  ].filter((chip) => params[chip.key as 'actor' | 'subject'] !== undefined);
+  const [activity, { actors }] = await Promise.all([
+    getAdminActivity(adminQueryString({ ...params, page: pageNumber(raw.page) })),
+    getAdminActivityActors(),
+  ]);
+  const filtered = Object.values(params).some((value) => value !== undefined);
 
   /*
    * The active filters, each paired with the words that drop it (#454).
@@ -76,8 +71,10 @@ export default async function AdminActivityPage({
    * would say less than the word does.
    */
   const active: ActiveFilter[] = [
-    { key: 'action', widening: 'Any action' },
     { key: 'actor', widening: 'Any operator' },
+    { key: 'subjectType', widening: 'Any subject type' },
+    { key: 'range', widening: 'All time' },
+    { key: 'action', widening: 'Any action' },
     { key: 'subject', widening: 'Any subject' },
   ]
     .filter((filter) => params[filter.key as keyof typeof params] !== undefined)
@@ -99,7 +96,47 @@ export default async function AdminActivityPage({
       counts={[`${activity.total} ${activity.total === 1 ? 'action' : 'actions'} recorded`]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH} params={params}>
+        <FilterBar
+          action={PATH}
+          params={params}
+          trailing={<ExportCsvLink href={`${PATH}/export${adminQueryString(params)}`} />}
+        >
+          {/*
+            Pattern A's three facets — `Actor ▾`, `Subject type ▾`, date range —
+            in the order it names them (VEN-388), then `Action`, which predates
+            the pattern and narrows the firehose for nothing.
+
+            `Actor` lists only the operators the log names, so every choice
+            narrows to something; a row's own actor cell still sets the same
+            parameter.
+          */}
+          <FilterSelect
+            action={PATH}
+            name="actor"
+            label="Actor"
+            value={params.actor ?? ''}
+            options={actors.map((actor) => ({ value: actor.id, label: actor.name }))}
+          />
+          <FilterSelect
+            action={PATH}
+            name="subjectType"
+            label="Subject type"
+            value={params.subjectType ?? ''}
+            options={ADMIN_ACTION_SUBJECTS.map((subjectType) => ({
+              value: subjectType,
+              label: SUBJECT_LABELS[subjectType],
+            }))}
+          />
+          <FilterSelect
+            action={PATH}
+            name="range"
+            label="Date range"
+            value={params.range ?? ''}
+            options={ADMIN_ACTIVITY_RANGES.map((range) => ({
+              value: range,
+              label: RANGE_LABELS[range],
+            }))}
+          />
           <FilterSelect
             action={PATH}
             name="action"
@@ -111,25 +148,22 @@ export default async function AdminActivityPage({
             }))}
           />
           {/*
-            The identity filters have no dropdown and should not: they are
-            uuids, and a list of every operator and every subject the platform
-            holds is not a control. They arrive from a row's own cell — see
-            `ActivityTable` — and this is how they are let go of again.
+            The subject id has no dropdown and should not: it is a uuid, and a
+            list of every record the console ever touched is not a control. It
+            arrives from a row's own cell — see `ActivityTable` — and this is
+            how it is let go of again.
 
-            `Link`, not a raw `<a>`: every other control in the console uses it,
-            and an anchor here would reload the whole admin shell to drop one
-            query parameter. The treatment is the filter-bar pill
-            `/admin/vendors` and `/admin/tags` already draw.
+            `Link`, not a raw `<a>`: an anchor here would reload the whole admin
+            shell to drop one query parameter.
           */}
-          {applied.map((chip) => (
+          {params.subject ? (
             <Link
-              key={chip.key}
-              href={`${PATH}${adminQueryString(chip.href)}`}
-              className="rounded-md border border-stone-300 bg-stone-0 px-3.5 py-2 text-sm font-semibold text-stone-900 hover:bg-stone-150"
+              href={`${PATH}${adminQueryString({ ...params, subject: undefined })}`}
+              className="rounded-md border border-stone-300 bg-stone-0 px-3.5 py-2 text-sm font-semibold whitespace-nowrap text-stone-900 hover:bg-stone-150"
             >
-              {chip.label}
+              Clear subject filter
             </Link>
-          ))}
+          ) : null}
         </FilterBar>
       }
       pager={{

@@ -343,6 +343,31 @@ describe('the operations case queue (#431)', () => {
     expect((await readCases('?status=resolved')).total).toBe(0);
   });
 
+  /** The Cases panel's search field (VEN-388). */
+  it('searches by reference or sender, and treats a wildcard as a letter', async () => {
+    const fixture = await seed();
+
+    const sent = await report({ bookingId: fixture.bookingId });
+    expect(sent.statusCode).toBe(200);
+    const reference = sent.json().reference as string;
+
+    const byReference = await readCases(`?q=${reference.slice(-4).toLowerCase()}`);
+    expect(byReference.items.map((row) => row.reference)).toEqual([reference]);
+    expect((await readCases('?q=test%20user')).total).toBe(1);
+    expect((await readCases(`?q=${CUSTOMER}@example`)).total).toBe(1);
+    expect((await readCases('?q=nobody-at-all')).total).toBe(0);
+    // A bare `%` matches the letter, not every row.
+    expect((await readCases('?q=%25')).total).toBe(0);
+
+    // The widening that drops the search is counted like the other two.
+    const unmatched = await harness.app.inject({
+      method: 'GET',
+      url: '/admin/cases?q=nobody-at-all',
+      headers: bearer(ADMIN),
+    });
+    expect(unmatched.json().widenings).toEqual([{ key: 'q', count: 1 }]);
+  });
+
   it('shows every money field on the case the booking is under dispute on', async () => {
     const fixture = await seed();
     expect((await report({ bookingId: fixture.bookingId })).statusCode).toBe(200);

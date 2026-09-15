@@ -258,3 +258,31 @@ describe('a Refine bar dropdown', () => {
     spy.mockRestore();
   });
 });
+
+/*
+ * VEN-388. Frame `13` draws each trigger `padding:8px 14px`. The right side
+ * was 12px, a vestige of the removed caret; the caret itself must stay gone
+ * (`dropdown-caret.test.ts`), so padding is the whole of the fix.
+ */
+describe('a filter trigger', () => {
+  it('pads both sides at the frame’s 14px and draws no caret', () => {
+    render(
+      <FilterBar action="/admin/vendors" params={{}}>
+        <FilterSelect
+          action="/admin/vendors"
+          name="city"
+          label="City"
+          value=""
+          options={[{ value: 'Austin', label: 'Austin' }]}
+        />
+      </FilterBar>,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'City' });
+    const classes = trigger.className.split(/\s+/);
+    expect(classes).toContain('px-3.5');
+    expect(classes).toContain('py-2');
+    expect(classes.filter((name) => /^p[lr]-/.test(name))).toEqual([]);
+    expect(trigger.textContent).toBe('City');
+  });
+});

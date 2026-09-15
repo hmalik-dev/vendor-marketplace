@@ -17,14 +17,14 @@ offset            0.45 D  (left edge of the right circle sits at 0.45 D)
 stroke            0.08 D
 total mark width  1.45 D
 wordmark gap      whole pixels, per D — see the table below (0.60 D elsewhere)
-wordmark size     1.60 D, Instrument Serif, ink
+wordmark size     whole pixels where measured — D=15 → 23px (1.60 D elsewhere), Instrument Serif, ink
 ```
 
 ## Sizes
 
 | Context                    | D         | Mark width | Gap  | Wordmark |
 | -------------------------- | --------- | ---------- | ---- | -------- |
-| Desktop header             | 15px      | 22px       | 9px  | 24px     |
+| Desktop header             | 15px      | 22px       | 9px  | 23px     |
 | Mobile header              | 14px      | 20px       | 9px  | 21px     |
 | Auth panel                 | 19px      | 28px       | 10px | 29px     |
 | Marketing footer           | 20px      | 29px       | 12px | 32px     |
@@ -39,8 +39,11 @@ D=19 → 10px in `12 Sign up` (0.526). `0.50 D` was wrong at every one of them,
 and a corrected single ratio would only move the error around: 0.60 is exact at
 D=15 and D=20 and 1.4px out at the auth panel. So the measured sizes are stated
 here and `logo.tsx` reads them; 0.60 D is what an unmeasured diameter falls back
-to. **Mark width and wordmark size are still ratios** — 1.45 D and 1.60 D — and
-the wordmark's disagreement with the frames' 23px is still open under #118.
+to. **Mark width is still a ratio** — 1.45 D. **The wordmark follows the gap's
+rule at D=15 (VEN-388, 2026-09-15):** nine of the ten 1440 headers pair a 15px
+mark with a 23px wordmark and only `01 Landing` draws the 24px 1.60 D gives, so
+D30 builds 23. Other diameters stay on 1.60 D until one is corroborated the same
+way — the footer's 25px against 27.2 is still #118's.
 
 The favicon and the app icon ask for the mark alone (`variant="mark"`), where
 the wordmark would be illegible. That is the caller's choice, not an automatic

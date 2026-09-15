@@ -30,6 +30,9 @@ describe('boundedText', () => {
 
   it('drops an empty or whitespace-only term rather than sending `q=`', () => {
     expect(boundedText('   ')).toBeUndefined();
+    // Postgres refuses NUL in a text parameter, so it never reaches the API.
+    expect(boundedText('kess\0ler')).toBe('kessler');
+    expect(boundedText('\0')).toBeUndefined();
     expect(boundedText(undefined)).toBeUndefined();
   });
 
