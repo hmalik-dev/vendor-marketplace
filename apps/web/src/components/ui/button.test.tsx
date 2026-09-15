@@ -83,6 +83,40 @@ describe('Button', () => {
     expect(button.className).toContain('text-stone-50');
   });
 
+  /*
+   * `.btnP` is `padding:11px 20px` with no border, in the screens document,
+   * `contact-support` and `delta-legal` alike (VEN-418). The base's transparent
+   * border sat under `bg-clip-padding`, so the clay painted 2px shorter than
+   * the frame and than the bordered secondary beside it. Primary drops the
+   * border and takes the 11px as padding; the class list is split because
+   * `py-2.5` would otherwise read as a match for a shorter needle.
+   */
+  it('draws primary at the box frame .btnP measures', () => {
+    render(<Button>Browse vendors</Button>);
+
+    const classes = screen.getByRole('button', { name: 'Browse vendors' }).className.split(/\s+/);
+    expect(classes).toContain('border-0');
+    expect(classes).toContain('py-2.75');
+    expect(classes).not.toContain('py-2.5');
+    expect(classes).toContain('px-5');
+  });
+
+  it.each(['sm', 'lg'] as const)('keeps the %s primary on its size box', (size) => {
+    render(<Button size={size}>Save</Button>);
+
+    const classes = screen.getByRole('button', { name: 'Save' }).className.split(/\s+/);
+    expect(classes).not.toContain('border-0');
+    expect(classes).not.toContain('py-2.75');
+  });
+
+  it('keeps secondary on its bordered 10px box, as .btnS draws it', () => {
+    render(<Button variant="secondary">Back to home</Button>);
+
+    const classes = screen.getByRole('button', { name: 'Back to home' }).className.split(/\s+/);
+    expect(classes).toContain('py-2.5');
+    expect(classes).not.toContain('border-0');
+  });
+
   it('paints destructive in error rather than in clay', () => {
     render(<Button variant="destructive">Yes, cancel booking</Button>);
 

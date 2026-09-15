@@ -76,3 +76,27 @@ describe('NotFoundScreen — the category pills', () => {
     expect(await pillHrefs()).toEqual(SEEDED);
   });
 });
+
+/*
+ * Frame `15` draws the body line at `400 14px/1.65`, which is `text-cta` — the
+ * step frame `16`'s 500 screen already takes for the same role. It read
+ * `text-sm`, 12.5px (VEN-418). The class list is split so a longer utility that
+ * merely contains the needle cannot satisfy it.
+ */
+describe('NotFoundScreen — the frame type scale', () => {
+  afterEach(() => {
+    cleanup();
+    getCategories.mockReset();
+  });
+
+  it('sets the body line at 14px on 1.65', async () => {
+    getCategories.mockResolvedValue(taxonomy());
+    render(await NotFoundScreen());
+
+    const classes = screen.getByText(/The link may be old/).className.split(/\s+/);
+
+    expect(classes).toContain('text-cta');
+    expect(classes).toContain('leading-[1.65]');
+    expect(classes).not.toContain('text-sm');
+  });
+});

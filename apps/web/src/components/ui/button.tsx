@@ -96,7 +96,19 @@ const buttonVariants = cva(
      * same). It has to be a compound rather than part of the variant, because
      * cva emits `size` after `variant` and `px-5` would otherwise win.
      */
-    compoundVariants: [{ variant: 'ink', size: 'default', class: 'px-4.5' }],
+    /*
+     * Primary at the default size is `.btnP`: `padding:11px 20px` and **no
+     * border**, in the screens document, `contact-support` and `delta-legal`
+     * alike (VEN-418). The base's transparent border sits under
+     * `bg-clip-padding`, so it painted the clay 2px shorter than the frame and
+     * than the bordered secondary beside it — the ink residual again. The
+     * control keeps its height; the fill now reaches it. `sm` and `lg` have no
+     * `.btnP` counterpart and keep the base box.
+     */
+    compoundVariants: [
+      { variant: 'ink', size: 'default', class: 'px-4.5' },
+      { variant: 'primary', size: 'default', class: 'border-0 py-2.75' },
+    ],
     defaultVariants: {
       variant: 'primary',
       size: 'default',
