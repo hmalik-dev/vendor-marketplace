@@ -10,3 +10,4 @@
 - [Search bar has hidden duplicate inputs](search-bar-has-hidden-duplicate-inputs.md) — Vendor type/City/Search button each render twice (one display:none twin); disambiguate via offsetParent before selecting
 - [Admin storage state needs a public warm-up before a protected route](admin-storage-state-needs-public-warmup-before-protected-route.md) — hitting the same protected route twice redirected to sign-in; hit `/` first, then it stuck
 - [browser_run_code_unsafe hang leaks contexts](browser-run-code-unsafe-hang-leaks-contexts.md) — an aborted call skips its own cleanup; check `browser.contexts().length` and close stragglers
+- [e2e:auth session can age out mid-pass](e2e-auth-session-ages-out-within-one-pass.md) — mint the role's storage state immediately before the script that uses it, don't batch several roles ahead of time
