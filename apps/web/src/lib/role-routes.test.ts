@@ -48,6 +48,9 @@ describe('roleCanReach', () => {
     '/search',
     '/messages',
     '/vendor-guide',
+    // The public vendor agreement (VEN-402); the accept step at /vendor/agreement stays gated.
+    '/legal/vendor-agreement',
+    '/terms',
   ])('leaves %s reachable by every role', (path) => {
     for (const role of ROLES) {
       expect(roleCanReach(role, path)).toBe(true);

@@ -62,7 +62,14 @@ type Persona =
   { name: 'signed-out' } | { name: SignedInRole; role: SignedInRole } | { name: 'no-row' };
 
 /** Routes that must stay open to an account still owed the Terms — `terms-gate-paths.ts`. */
-const GATE_EXEMPT = new Set(['/terms', '/privacy', '/cookies', '/support', '/accept-terms']);
+const GATE_EXEMPT = new Set([
+  '/terms',
+  '/privacy',
+  '/cookies',
+  '/legal/vendor-agreement',
+  '/support',
+  '/accept-terms',
+]);
 
 /** The handlers that exist only to forward; landing on one is itself the defect (AC6). */
 const FORWARDERS = new Set(['/after-sign-in', '/dashboard']);

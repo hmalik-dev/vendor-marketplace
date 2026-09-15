@@ -7,6 +7,7 @@ import {
   DEFAULT_PLATFORM_FEE_RATE,
   FULL_REFUND_CUTOFF_HOURS,
   LATE_CANCELLATION_REFUND_RATE,
+  LEGAL_CONTENT_SLUGS,
   LEGAL_DOCUMENT_SLUGS,
   LEGAL_JUMP_RAIL_MIN_SECTIONS,
   LEGAL_PATHS,
@@ -162,8 +163,8 @@ describe('legal content', () => {
  * to write is therefore that each link **resolves**, not that the row is there.
  */
 describe('every footer legal link has a page behind it', () => {
-  it('has a page file for each path the footer links to', () => {
-    const missing = LEGAL_DOCUMENT_SLUGS.filter(
+  it('has a page file for each legal reading path, the vendor agreement included', () => {
+    const missing = LEGAL_CONTENT_SLUGS.filter(
       (slug) =>
         !existsSync(join(process.cwd(), 'src', 'app', LEGAL_PATHS[slug].slice(1), 'page.tsx')),
     );
@@ -177,6 +178,10 @@ describe('every footer legal link has a page behind it', () => {
       '/privacy',
       '/cookies',
     ]);
+  });
+
+  it('gives the vendor agreement a public path outside the vendor-only subtree', () => {
+    expect(LEGAL_PATHS['vendor-agreement']).toBe('/legal/vendor-agreement');
   });
 });
 

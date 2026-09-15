@@ -5,8 +5,8 @@ import {
   BRAND_TAGLINE,
   LANDING_JUMP_CATEGORY_SLUGS,
   CATEGORY_SEEDS,
+  LEGAL_PATHS,
   SUPPORT_PATH,
-  VENDOR_AGREEMENT_PATH,
 } from '@vendor-marketplace/shared';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { cn } from '@/lib/utils';
@@ -384,7 +384,7 @@ export async function SiteFooter(): Promise<React.ReactElement> {
             */}
             <OnPath path={FOR_VENDORS_PATH}>
               <li>
-                <Link href={VENDOR_AGREEMENT_PATH} className={LEGAL_CLASS}>
+                <Link href={LEGAL_PATHS['vendor-agreement']} className={LEGAL_CLASS}>
                   Vendor agreement
                 </Link>
               </li>

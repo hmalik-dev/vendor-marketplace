@@ -41,6 +41,17 @@ describe('sitemap', () => {
     }
   });
 
+  it('lists the legal reading pages, the public vendor agreement included', async () => {
+    apiRequest.mockResolvedValue(page([]));
+
+    const urls = (await sitemap()).map((entry) => entry.url);
+
+    for (const path of ['/terms', '/privacy', '/cookies', '/legal/vendor-agreement']) {
+      expect(urls).toContain(`https://orla.example.com${path}`);
+    }
+    expect(urls).not.toContain('https://orla.example.com/vendor/agreement');
+  });
+
   /*
    * The vendor list is paginated, and stopping after the first page would
    * quietly drop every vendor past the hundredth — which is exactly the kind
