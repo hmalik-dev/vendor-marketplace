@@ -16,3 +16,4 @@
 - [Rapid navigation loop leaves a stale DOM read](rapid-navigation-loop-leaves-stale-dom-read.md) — a page-wide query right after a burst of `goto()`s misread an unrelated element's `aria-current`; re-check isolated before reporting
 - [run_code_unsafe has no require/import](run-code-unsafe-has-no-require-use-storagestate-option.md) — load a stored identity via `browser.newContext({storageState: <path>})`, not `fs.readFileSync`
 - [API parity checks need a Clerk bearer, not cookies](api-parity-check-needs-clerk-bearer-not-cookies.md) — pull `window.Clerk.session.getToken()` and fetch the API's own port directly; cookie-only cross-port fetch 401s
+- [revalidateTag('categories') doesn't bust the public cache](revalidatetag-categories-does-not-bust-public-cache.md) — VEN-401: DB/audit/raw-API update instantly, but landing/header stayed stale 10+ min; verify via curl, not the admin's own no-store re-render

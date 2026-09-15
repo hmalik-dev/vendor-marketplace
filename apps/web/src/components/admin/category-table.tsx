@@ -7,7 +7,6 @@ import {
   adminCategoryRowSchema,
   type AdminCategoryRow,
 } from '@vendor-marketplace/shared';
-import { expirePublicCategories } from '@/app/admin/tags/actions';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { DataTable } from '@/components/admin/data-table';
 import { Button } from '@/components/ui/button';
@@ -20,9 +19,8 @@ import { userFacingError } from '@/lib/user-facing-error';
  * soft-remove dialog, plus the order the public list follows.
  *
  * Names and slugs are read-only here — they belong to the seeds. An operator
- * decides whether a category is offered and where it sits, and every write
- * expires the shared taxonomy cache so the landing pills and the search rail
- * change on the next request.
+ * decides whether a category is offered and where it sits; the public pages
+ * follow within the taxonomy's one-minute cache window.
  */
 export function CategoryTable({
   categories,
@@ -33,11 +31,6 @@ export function CategoryTable({
   const call = useApi();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function after(): Promise<void> {
-    await expirePublicCategories();
-    router.refresh();
-  }
 
   /** A row write outside the dialog: one at a time, and a failure says so above the table. */
   async function run(write: () => Promise<void>, fallback: string): Promise<void> {
@@ -64,7 +57,7 @@ export function CategoryTable({
         body: { categoryIds: ids, basedOnCategoryIds: basedOn },
         schema: adminCategoryListSchema,
       });
-      await after();
+      router.refresh();
     }, 'That order did not save.');
   }
 
@@ -75,7 +68,7 @@ export function CategoryTable({
       body: { isActive },
       schema: adminCategoryRowSchema,
     });
-    await after();
+    router.refresh();
   }
 
   return (

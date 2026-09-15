@@ -88,19 +88,8 @@ describe('reference reads', () => {
 
       expect(apiRequest).toHaveBeenCalledWith(
         '/categories',
-        expect.objectContaining({ revalidate: 3600 }),
-      );
-    });
-
-    /* VEN-401: the console's category writes expire this read by its tag. */
-    it('tags the cached taxonomy so a console write can expire it', async () => {
-      apiRequest.mockResolvedValue([]);
-
-      await getCategories();
-
-      expect(apiRequest).toHaveBeenCalledWith(
-        '/categories',
-        expect.objectContaining({ cacheTags: ['categories'] }),
+        // A minute, so a category hidden from the console leaves the header soon (VEN-401).
+        expect.objectContaining({ revalidate: 60 }),
       );
     });
 
