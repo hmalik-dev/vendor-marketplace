@@ -210,6 +210,80 @@ function redactValues(error: ErrorLike): ErrorLike {
   });
 }
 
+/** An object literal, or JSON parsed into one — not a class instance, a `Date` or a `Buffer`. */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const prototype: unknown = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * An `errors` array, with every entry pino will write redacted — returned as
+ * the same array when no entry changed.
+ *
+ * **Every entry, not only the error-like ones.** `pino-std-serializers` passes
+ * each entry through its own serialiser into `aggregateErrors`, which hands a
+ * non-error back untouched, and then writes the array a second time under
+ * `errors` as it found it. So a driver's field record carrying `detail`, a
+ * `{ query, params }` payload, a nested array of failures or a record wrapping
+ * one all reach the line raw unless the sink walks them — and nothing about the
+ * error type that carries the array (a `ClerkAPIResponseError`, an
+ * `AggregateError`, anyone's own) decides which of those arrives.
+ */
+function sanitizeEntries(entries: unknown[], seen: Set<unknown>, depth: number): unknown[] {
+  const sanitized = entries.map((entry) => sanitizeEntry(entry, seen, depth));
+
+  return sanitized.some((entry, index) => entry !== entries[index]) ? sanitized : entries;
+}
+
+/**
+ * One entry of an `errors` array: an error through `sanitize`, a nested array
+ * or plain record walked with the same withholdings, anything else as it was.
+ *
+ * Cycles and depth are answered as `sanitize` answers them, by dropping the
+ * link, for the same reason — handing the original back puts the values in.
+ */
+function sanitizeEntry(entry: unknown, seen: Set<unknown>, depth: number): unknown {
+  if (isErrorLike(entry)) {
+    return sanitize(entry, seen, depth);
+  }
+
+  if (!Array.isArray(entry) && !isPlainRecord(entry)) {
+    return entry;
+  }
+
+  if (seen.has(entry) || depth >= MAX_DEPTH) {
+    return undefined;
+  }
+
+  seen.add(entry);
+
+  if (Array.isArray(entry)) {
+    return sanitizeEntries(entry, seen, depth + 1);
+  }
+
+  const queryShaped = typeof entry.query === 'string' && Array.isArray(entry.params);
+  let rebuilt: Record<string, unknown> | null = null;
+
+  for (const [key, value] of Object.entries(entry)) {
+    const sanitized =
+      value !== undefined && (VALUE_BEARING.includes(key) || (queryShaped && key === 'params'))
+        ? REDACTED
+        : sanitizeEntry(value, seen, depth + 1);
+
+    if (sanitized !== value) {
+      rebuilt ??= { ...entry };
+      rebuilt[key] = sanitized;
+    }
+  }
+
+  return rebuilt ?? entry;
+}
+
 /**
  * The error a log line may see, with every bound parameter removed from it.
  *
@@ -262,9 +336,9 @@ function sanitize(value: unknown, seen: Set<unknown>, depth: number): unknown {
   }
 
   if (Array.isArray(value.errors)) {
-    const errors = value.errors.map((nested) => sanitize(nested, seen, depth + 1));
+    const errors = sanitizeEntries(value.errors, seen, depth + 1);
 
-    if (errors.some((nested, index) => nested !== (value.errors as unknown[])[index])) {
+    if (errors !== value.errors) {
       overrides.errors = errors;
     }
   }
