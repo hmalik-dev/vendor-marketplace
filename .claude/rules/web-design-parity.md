@@ -302,6 +302,41 @@ table is corrected as transcription drift under D30 — the same direction its
 Neither is a finding and neither is re-litigated per screen.
 `admin-delta-parity.test.ts` pins both with the ruling beside them.
 
+**The body is 13.5px; the frames' bodies are 16px (VEN-389, measured
+2026-09-14).** `globals.css` declares `body { font-size: var(--text-base) }`.
+`Orla - Screens.dc.html` declares no body size, so a frame wrapper with no
+`font-size` of its own sits at the browser's 16px. One visible label changed
+size — the mobile hero `Search` button, which has no `text-*` step below `sm`
+(below). Every other visible glyph carries a step and did not move; what moved
+is the invisible **strut** — the line box an unsized block builds around a
+smaller inline child.
+Each site was measured by rendering its route at both body sizes, and ruled:
+
+- **`27 Landing — 1024`: the hero column is 2px shorter than the frame, so the
+  search row sits 2px higher** (column 177.4 → 175.4). The frame's badge is an
+  `inline-flex` inside a 16px `padding-right:22px` div, so the frame has the
+  strut and the app no longer does. Accepted: restoring it means a per-site
+  `text-lg` on a wrapper that draws no text, and `01 Landing` at 1440 moved 0px.
+- **Closer to the frame, not deviations:** `14 Landing mobile`'s `Search` button
+  is 13.5px, the frame's `.btnP` exactly (was 16px; 42 → 38px tall). Frame
+  `27`/`14` vendor dashboard `Needs you` heading 20 → 16px against the frame's
+  `.lbl` + 9px margin. Frame `07`'s `Booking for something new?` card 106.5 →
+  102.5px — the frame's last line is a block, so it has no strut either.
+- **Inert:** frame `13`'s `Export CSV` wrapper 20 → 16px; the filter row's height
+  is set by the search input and #433's x-anchor is unchanged.
+- **No frame counterpart:** the vendor profile's report-link block (−4px), the
+  pending booking detail column (−3px), and
+  `/admin/settings` launch-switch rows (−4px each; `00-README.md:96` exempts it).
+- **Fixed at the site:** `VendorSurface`'s heading block was `max-w-prose`, and
+  `ch` follows the inherited size — it narrowed 400.2 → 337.7px and wrapped the
+  packages description a line further. It is `max-w-100` now.
+- **Held:** the footer (`1b8435f3`) measures 289px tall, a 27px link pitch in all
+  three columns and a 0px copyright-to-legal-links baseline delta.
+
+Zero visible resizes on every other ledger route, including `28` open, `22`
+submitted and `23` offline. A pass measuring any number above is reading this
+ruling; a width in `ch` or `em` on an unsized block is the class to look for.
+
 ## A one-shot read is a sample, not a measurement
 
 An animated property has no single computed value. Read it once, in the same
