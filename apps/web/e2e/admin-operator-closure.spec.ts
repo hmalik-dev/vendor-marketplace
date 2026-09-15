@@ -87,7 +87,8 @@ test('an operator closes another operator only after typing their address exactl
     await confirm.click();
 
     await expect(page.getByText(/^Closed \d{4}-\d{2}-\d{2}$/)).toBeVisible();
-    await expect(page.getByRole('alert')).toHaveCount(0);
+    // Not `getByRole('alert')`: Next's route announcer carries that role on every page.
+    await expect(page.getByText(/This needs a person/)).toHaveCount(0);
 
     // The closure deleted the sign-in itself, not just the row.
     expect((await clerk(`/users/${clerkUserId}`, { method: 'GET' })).status).toBe(404);
