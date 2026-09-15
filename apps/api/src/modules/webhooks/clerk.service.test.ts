@@ -34,12 +34,12 @@ function clerkHolding(...people: ClerkApiUser[]) {
   };
 }
 
-function claimAddress(clerkUserId = CLAIMANT, email = CONTESTED) {
+function claimAddress() {
   return {
     type: 'user.updated' as const,
     data: {
-      id: clerkUserId,
-      email_addresses: [{ id: 'idn_primary', email_address: email }],
+      id: CLAIMANT,
+      email_addresses: [{ id: 'idn_primary', email_address: CONTESTED }],
       primary_email_address_id: 'idn_primary',
     },
   };
