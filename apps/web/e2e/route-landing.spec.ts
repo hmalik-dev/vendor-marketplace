@@ -69,9 +69,18 @@ const FORWARDERS = new Set(['/after-sign-in', '/dashboard']);
 
 const RETURN_PATH_PARAM = 'returnTo';
 
-/** A route some role is turned away from — `ROLE_ROUTE_RULES`, minus the public home. */
-function isRoleGated(path: string): boolean {
-  return path !== '/' && ROLE_ROUTE_RULES.some((rule) => rule.pattern.test(path));
+/**
+ * A route some role is turned away from — `ROLE_ROUTE_RULES`, minus the public
+ * pages whose only gate is `redirectVendorToDashboard`. That helper sends a
+ * vendor on and renders for everyone else, a visitor with no session included,
+ * so `/` and `/for-vendors` are read out of their source rather than listed: a
+ * hand-kept exemption for `/` alone is what failed the signed-out sweep when
+ * VEN-384 added the second page.
+ */
+function isRoleGated(target: RouteTarget): boolean {
+  const file = segmentFile(target);
+  if (file !== null && /\bredirectVendorToDashboard\(/.test(codeOf(file))) return false;
+  return ROLE_ROUTE_RULES.some((rule) => rule.pattern.test(target.path));
 }
 
 const APP_ORIGIN = new URL(resolveE2EBaseUrl()).origin;
@@ -158,7 +167,7 @@ function expectationFor(
     if (path === '/after-sign-in')
       return { renders: false, refusal: { to: '/sign-in', returnTo: null } };
     const toSignIn = { to: '/sign-in', returnTo: path };
-    return isRoleGated(path) || isSessionGated(target) || path === '/dashboard'
+    return isRoleGated(target) || isSessionGated(target) || path === '/dashboard'
       ? { renders: false, refusal: toSignIn }
       : { renders: true, refusal: toSignIn };
   }
@@ -169,7 +178,7 @@ function expectationFor(
       return { renders: false, refusal: { to: '/accept-terms', returnTo: null } };
     }
     const toGate = { to: '/accept-terms', returnTo: path };
-    return isRoleGated(path) || isSessionGated(target) || path === '/dashboard'
+    return isRoleGated(target) || isSessionGated(target) || path === '/dashboard'
       ? { renders: false, refusal: toGate }
       : { renders: true, refusal: toGate };
   }

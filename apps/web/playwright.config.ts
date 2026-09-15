@@ -43,17 +43,28 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   /*
-   * No retry budget, on CI or locally. `.claude/rules/testing.md`: "a flaky test
-   * is a defect with a root cause, not a retry budget." A retry on CI would hide
-   * exactly the races an end-to-end suite exists to find, and would do it
-   * silently — the second attempt is the one that gets reported.
+   * No retry budget locally. `.claude/rules/testing.md`: "a flaky test is a
+   * defect with a root cause, not a retry budget."
+   *
+   * One on CI, where the suite is a merge gate (VEN-411): a flake there would
+   * otherwise block a correct pull request. The retry is **reported, never
+   * silent** — the JSON report marks such a test `flaky`, and
+   * `scripts/e2e-ci.mjs summary` names it in the job summary and as a warning,
+   * so the second attempt is not the only one anyone sees.
    */
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
   // Serial by default: the suites share one lane database, and two journeys
   // mutating the same vendor's bookings interleave into failures that look like
   // product defects.
   workers: 1,
-  reporter: process.env.CI ? [['github'], ['list']] : [['list']],
+  reporter: process.env.CI
+    ? [
+        ['github'],
+        ['list'],
+        ['html', { open: 'never', outputFolder: 'playwright-report' }],
+        ['json', { outputFile: 'playwright-results.json' }],
+      ]
+    : [['list']],
 
   use: {
     baseURL,
@@ -66,7 +77,12 @@ export default defineConfig({
      */
     navigationTimeout: 60_000,
     actionTimeout: 15_000,
-    trace: 'retain-on-failure',
+    /*
+     * Off on CI (VEN-411): a trace records the context's cookies and every
+     * request's headers — the E2E accounts' live Clerk sessions — and CI uploads
+     * the report from a public repository. Reproduce a CI failure on a lane.
+     */
+    trace: process.env.CI ? 'off' : 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
   },
