@@ -155,17 +155,23 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
    * (VEN-405). A 401 from this route is only ever a signature failure. Scoped
    * to this plugin, so no other route's errors are counted.
    */
-  const failures = createFailureWindow(app.clock);
+  const failures = {
+    signature: createFailureWindow(app.clock),
+    'server-error': createFailureWindow(app.clock),
+  } as const;
 
   app.addHook('onResponse', async (_request, reply) => {
-    if (reply.statusCode !== 401 && reply.statusCode < 500) {
+    const failure =
+      reply.statusCode === 401 ? 'signature' : reply.statusCode >= 500 ? 'server-error' : null;
+
+    if (failure === null) {
       return;
     }
 
-    const crossed = failures.record();
+    const crossed = failures[failure].record();
 
     if (crossed !== null) {
-      app.operatorAlerts.dispatch(stripeWebhookFailingAlert(crossed));
+      app.operatorAlerts.dispatch(stripeWebhookFailingAlert(failure, crossed));
     }
   });
 

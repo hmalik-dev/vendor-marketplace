@@ -862,6 +862,8 @@ export async function createTestHarness(
     payoutSweepIntervalMs: 0,
     // The digest likewise: suites call `runOperatorDigest` with a pinned clock.
     operatorDigestIntervalMs: 0,
+    // Alert send retries do not wait on a real timer in a suite.
+    operatorAlertWait: async () => undefined,
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     auth: {

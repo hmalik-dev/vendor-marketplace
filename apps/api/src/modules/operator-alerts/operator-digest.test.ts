@@ -39,6 +39,7 @@ describe('the operator digest (VEN-405)', () => {
       clock: () => NOW,
       to: TEST_ENV.OPERATOR_ALERT_EMAIL,
       webOrigin: TEST_ENV.WEB_URL,
+      wait: async () => undefined,
       timeZone: 'America/New_York',
       ...overrides,
     };

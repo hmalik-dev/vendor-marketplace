@@ -50,7 +50,12 @@ export interface OperatorAlertDeps {
   to: string | undefined;
   /** `canonicalWebOrigin(env)`, which every console link is built on. */
   webOrigin: string;
+  /** Pauses between send retries; the suites pass one that resolves at once. */
+  wait: (ms: number) => Promise<void>;
 }
+
+/** Waits before each retry of a failed alert send — two retries, then give up. */
+export const OPERATOR_ALERT_RETRY_DELAYS_MS = [2_000, 10_000] as const;
 
 export type AlertResult = 'sent' | 'logged' | 'deduplicated' | 'failed';
 
@@ -86,9 +91,15 @@ export function renderOperatorEmail(input: {
  * `OPERATOR_ALERT_DEDUPE_MS`.
  *
  * **Never throws.** Every caller is on a money or webhook path whose own
- * outcome must not depend on whether the operator's mail went out. A failed
- * send gives its dedupe row back, so the next occurrence tries again instead of
- * being silenced for six hours by an email nobody received.
+ * outcome must not depend on whether the operator's mail went out.
+ *
+ * **A failed send is retried here**, under the same idempotency key, because
+ * most of these events never recur: a chargeback's redelivery answers
+ * `already-recorded` and a report is filed once, so "the next occurrence" would
+ * never come. Only when every attempt fails is the dedupe row given back — so a
+ * recurring event (a payout the sweep keeps failing) can still alert later —
+ * and the loss is logged at `error`. A process killed mid-retry loses the
+ * alert; `background.drain` covers a graceful shutdown.
  */
 export async function alertNow(
   deps: OperatorAlertDeps,
@@ -128,13 +139,26 @@ export async function alertNow(
 
   const rendered = renderOperatorEmail({ summary: alert.summary, details: alert.details, link });
 
+  for (const [attempt, delayMs] of OPERATOR_ALERT_RETRY_DELAYS_MS.entries()) {
+    try {
+      await deps.email.send({ to: deps.to, ...rendered, idempotencyKey: id });
+      return 'sent';
+    } catch (error) {
+      deps.log.warn(
+        { kind: alert.kind, subjectId: alert.subjectId, attempt: attempt + 1, err: error },
+        'An operator alert send failed; retrying',
+      );
+      await deps.wait(delayMs);
+    }
+  }
+
   try {
     await deps.email.send({ to: deps.to, ...rendered, idempotencyKey: id });
     return 'sent';
   } catch (error) {
     deps.log.error(
       { kind: alert.kind, subjectId: alert.subjectId, err: error },
-      'An operator alert could not be sent',
+      'An operator alert could not be sent after every retry',
     );
     await releaseAlert(deps.db, id).catch((releaseError: unknown) => {
       deps.log.error(
@@ -289,16 +313,29 @@ export function reportFiledAlert(input: {
   };
 }
 
-/** The Stripe webhook keeps being refused or keeps failing. */
-export function stripeWebhookFailingAlert(failures: number): OperatorAlert {
+export type StripeWebhookFailure = 'signature' | 'server-error';
+
+/**
+ * The Stripe webhook keeps being refused or keeps failing.
+ *
+ * The two failures are **separate subjects**, deduplicated apart. Anybody can
+ * send an unsigned POST, so a signature burst is attacker-triggerable; sharing
+ * one dedupe key would let three anonymous requests silence a real handler 5xx
+ * outage for six hours.
+ */
+export function stripeWebhookFailingAlert(
+  failure: StripeWebhookFailure,
+  failures: number,
+): OperatorAlert {
   const minutes = STRIPE_WEBHOOK_FAILURE_WINDOW_MS / 60_000;
+  const described = failure === 'signature' ? 'a signature failure' : 'a server error';
 
   return {
     kind: 'stripe_webhook_failing',
-    subjectId: 'stripe',
-    summary: `Stripe webhook failed ${failures} times in ${minutes} minutes`,
+    subjectId: `stripe:${failure}`,
+    summary: `Stripe webhook ${failure === 'signature' ? 'refused' : 'failed'} ${failures} times in ${minutes} minutes`,
     details: [
-      `POST /webhooks/stripe answered a signature failure or a server error ${failures} times within ${minutes} minutes.`,
+      `POST /webhooks/stripe answered ${described} ${failures} times within ${minutes} minutes.`,
       'Payments, disputes and account updates may not be recorded. Check the API logs and the Stripe dashboard.',
     ],
     adminPath: null,

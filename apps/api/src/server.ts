@@ -111,6 +111,8 @@ export interface BuildServerOptions {
    * disables it. On by default for `payoutSweepIntervalMs`'s reason.
    */
   operatorDigestIntervalMs?: number;
+  /** Pause between operator alert send retries; defaults to a real timer. */
+  operatorAlertWait?: (ms: number) => Promise<void>;
 }
 
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
@@ -242,6 +244,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     webOrigin: canonicalWebOrigin(env),
     timeZone: env.OPERATOR_TIMEZONE,
     digestIntervalMs: options.operatorDigestIntervalMs ?? OPERATOR_DIGEST_POLL_INTERVAL_MS,
+    ...(options.operatorAlertWait ? { wait: options.operatorAlertWait } : {}),
   });
   await app.register(payoutReleasePlugin, {
     intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,

@@ -47,6 +47,7 @@ describe('operator alerts on two real connections', () => {
         clock: () => now,
         to: TEST_ENV.OPERATOR_ALERT_EMAIL,
         webOrigin: TEST_ENV.WEB_URL,
+        wait: async () => undefined,
         timeZone: 'America/New_York',
       },
     };

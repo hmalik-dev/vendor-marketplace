@@ -27,6 +27,8 @@ export interface OperatorAlertsPluginOptions {
    * `runOperatorDigest` directly instead.
    */
   digestIntervalMs: number;
+  /** Pause between alert send retries; the suites pass one that resolves at once. */
+  wait?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -48,6 +50,7 @@ export const operatorAlertsPlugin = fp<OperatorAlertsPluginOptions>(
       clock: app.clock,
       to: options.to,
       webOrigin: options.webOrigin,
+      wait: options.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     };
 
     app.decorate('operatorAlerts', createOperatorAlerts(deps));

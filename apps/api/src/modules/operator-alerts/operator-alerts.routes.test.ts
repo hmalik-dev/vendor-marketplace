@@ -239,28 +239,55 @@ describe('operator alerts', () => {
     expect(recorded).toEqual([{ kind: 'dispute_opened', subjectId: caseId, outcome: 'sent' }]);
   });
 
-  it('sends one email, not four, for repeated Stripe webhook failures inside ten minutes', async () => {
-    // Two refused signatures and a handler 5xx (a dispute Stripe cannot find) cross the threshold.
-    expect((await postStripe('forged-signature')).statusCode).toBe(401);
-    expect((await postStripe('forged-signature')).statusCode).toBe(401);
+  it('sends one email per failure kind for repeated Stripe webhook failures inside ten minutes', async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect((await postStripe('forged-signature')).statusCode).toBe(401);
+    }
+    await harness.flushEmail();
+    expect(operatorMail().map((message) => message.subject)).toEqual([
+      '[Orla ops] Stripe webhook refused 3 times in 10 minutes',
+    ]);
+
+    /*
+     * A burst of refused signatures — which anybody can send — must not
+     * silence a real handler outage: server errors are deduplicated apart.
+     */
     harness.stripe.nextEvent = {
       type: 'charge.dispute.created',
       accountId: null,
       objectId: 'dp_missing',
     };
-    expect((await postStripe()).statusCode).toBe(500);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect((await postStripe()).statusCode).toBe(500);
+    }
     await harness.flushEmail();
-
     expect(operatorMail().map((message) => message.subject)).toEqual([
+      '[Orla ops] Stripe webhook refused 3 times in 10 minutes',
       '[Orla ops] Stripe webhook failed 3 times in 10 minutes',
     ]);
 
-    // Three more cross it again, and the six-hour dedupe keeps the inbox at one.
+    // Crossing the threshold again inside six hours stays deduplicated.
     for (let attempt = 0; attempt < 3; attempt += 1) {
       expect((await postStripe('forged-signature')).statusCode).toBe(401);
     }
     await harness.flushEmail();
-    expect(operatorMail()).toHaveLength(1);
+    expect(operatorMail()).toHaveLength(2);
+  });
+
+  it('retries a failed alert send, because a chargeback is never redelivered to alert again', async () => {
+    const fixture = await seed();
+    harness.email.failNext = true;
+
+    expect((await deliverDispute('dp_alert_retry', fixture.paymentIntentId)).json().outcome).toBe(
+      'dispute-opened',
+    );
+
+    const sent = operatorMail();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.subject).toBe(`[Orla ops] Chargeback opened on booking ${fixture.bookingId}`);
+    expect(
+      await harness.database.db.select({ outcome: operatorAlerts.outcome }).from(operatorAlerts),
+    ).toEqual([{ outcome: 'sent' }]);
   });
 
   it('does not count an accepted webhook as a failure', async () => {
