@@ -176,11 +176,18 @@ describe('Logo', () => {
    * What decides it is the box-sizing, and that is asserted directly; the
    * rendered 17x17-over-15x15 is verified in the browser.
    *
-   * `EVERY_SIZE` now includes D=17, which #441 took from a bundle whose own
-   * reset is `border-box` — so this pins `box-content` at a diameter measured
-   * from a frame that draws the opposite. That contradiction is real, is #250's
-   * to re-open rather than this file's, and is written up at the `box-content`
-   * comment in `logo.tsx`. Read the two together before changing either.
+   * D=17 is the one diameter here read from a `border-box` bundle
+   * (`delta-band`, #441), and its number does not depend on that reset: D is
+   * the diameter of the **fill**, and the frame's fill disc carries no border,
+   * so it measures 17x17 under either box model — as does the 17px-high box
+   * holding it. Only the frame's *outline* circle changes with the reset, and
+   * that circle is what this test rules on, not where 17 came from.
+   *
+   * The ruling is settled (#449, 2026-09-07): `box-content` stands, #250 is
+   * upheld, and the screens document — content-box, no `*` reset — is the
+   * primary contract. The component therefore draws a 19px outline circle
+   * where `delta-band` draws 17, permanently; see `.claude/rules/
+   * web-design-parity.md` and the `box-content` comment in `logo.tsx`.
    */
   it.each(EVERY_SIZE)('sizes the stroke circle at %ipx of fill, not of footprint', (size) => {
     render(<Logo size={size} />);
