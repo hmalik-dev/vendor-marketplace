@@ -13,6 +13,7 @@ import {
 import {
   backupPrefix,
   compareRowCounts,
+  dumpKeyFor,
   latestManifestKey,
   parseManifest,
   type BackupManifest,
@@ -39,6 +40,8 @@ export interface RestoreTarget {
 export interface DrillDependencies {
   environment: string;
   identity: string;
+  /** Manifests dated after this are ignored — see `latestManifestKey`. */
+  now: Date;
   store: BackupStore;
   target: RestoreTarget;
   /** Leave the restored database in place — the runbook's single-table restore needs it. */
@@ -62,13 +65,21 @@ function drillDatabaseName(): string {
 async function fetchLatest(
   store: BackupStore,
   environment: string,
+  now: Date,
 ): Promise<{ manifest: BackupManifest; ciphertext: Uint8Array }> {
-  const key = latestManifestKey(await store.list(backupPrefix(environment)), environment);
+  const key = latestManifestKey(await store.list(backupPrefix(environment)), environment, now);
   if (!key) {
     throw new Error(`The backups bucket holds no ${environment} backup yet.`);
   }
 
   const manifest = parseManifest(new TextDecoder().decode(await store.get(key)));
+  // A manifest may only describe the dump beside it, for the environment asked
+  // for — never point the drill at some other object in the bucket.
+  if (manifest.dumpKey !== dumpKeyFor(key) || manifest.environment !== environment) {
+    throw new Error(
+      `${key} names a dump or environment other than its own. Refusing to restore it.`,
+    );
+  }
   const ciphertext = await store.get(manifest.dumpKey);
   if (sha256Hex(ciphertext) !== manifest.encryptedSha256) {
     throw new Error(`${manifest.dumpKey} does not match its manifest's digest — it is corrupt.`);
@@ -86,7 +97,7 @@ async function fetchLatest(
 export async function runRestoreDrill(deps: DrillDependencies): Promise<DrillReport> {
   assertSafeTarget('a backup', deps.repoRoot, RESTORE_TARGET);
 
-  const { manifest, ciphertext } = await fetchLatest(deps.store, deps.environment);
+  const { manifest, ciphertext } = await fetchLatest(deps.store, deps.environment, deps.now);
   const dump = await decryptBackup(ciphertext, deps.identity);
   deps.log(`Restoring ${manifest.dumpKey}, taken ${manifest.createdAt}.`);
 
@@ -198,6 +209,7 @@ async function main(): Promise<void> {
   const report = await runRestoreDrill({
     environment,
     identity,
+    now: new Date(),
     store: backupStoreFromEnv(),
     target: postgresTarget(process.env.RESTORE_DATABASE_URL ?? ''),
     keep: process.argv.includes('--keep'),

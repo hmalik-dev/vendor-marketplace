@@ -18,7 +18,9 @@ const MONTHLY_RETENTION_MONTHS = 12;
 const DAY_MS = 86_400_000;
 
 const ENVIRONMENT = /^[a-z0-9][a-z0-9-]{0,31}$/;
-const OBJECT_KEY = /^(\d{4})\/(\d{2})\/(\d{2})\.(dump\.age|manifest\.json)$/;
+const OBJECT_KEY = /^(\d{4})\/(\d{2})\/(\d{2})-\d{6}\.(dump\.age|manifest\.json)$/;
+const DUMP_SUFFIX = '.dump.age';
+const MANIFEST_SUFFIX = '.manifest.json';
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 export interface BackupManifest {
@@ -54,70 +56,103 @@ export function backupPrefix(environment: string): string {
   return `${BACKUP_ROOT}/${environment}/`;
 }
 
-/** `db/<environment>/YYYY/MM/DD.dump.age` and its manifest, by UTC date. */
+/**
+ * `db/<environment>/YYYY/MM/DD-HHMMSS.dump.age` and its manifest, by UTC time.
+ *
+ * The time is part of the key so a second run on the same day writes new objects
+ * instead of overwriting the first run's dump before its own manifest exists —
+ * which would leave a manifest describing a dump that is gone.
+ */
 export function backupKeys(environment: string, at: Date): { dump: string; manifest: string } {
-  const [date] = at.toISOString().split('T');
-  const stem = `${backupPrefix(environment)}${(date ?? '').replaceAll('-', '/')}`;
-  return { dump: `${stem}.dump.age`, manifest: `${stem}.manifest.json` };
+  const [date = '', time = ''] = at.toISOString().split('T');
+  const stem = `${backupPrefix(environment)}${date.replaceAll('-', '/')}-${time.slice(0, 8).replaceAll(':', '')}`;
+  return { dump: `${stem}${DUMP_SUFFIX}`, manifest: `${stem}${MANIFEST_SUFFIX}` };
 }
 
-interface DatedKey {
-  key: string;
+/** The dump a manifest listed under `manifestKey` must describe. */
+export function dumpKeyFor(manifestKey: string): string {
+  return `${manifestKey.slice(0, -MANIFEST_SUFFIX.length)}${DUMP_SUFFIX}`;
+}
+
+interface Backup {
+  /** The key without its suffix; sorts chronologically. */
+  stem: string;
+  keys: string[];
   date: Date;
 }
 
-function datedKeys(keys: readonly string[], environment: string): DatedKey[] {
+/**
+ * This environment's objects grouped per run. Keys dated after `now` are
+ * ignored: no run writes one, so one exists only if someone planted it to sort
+ * ahead of every real backup.
+ */
+function backupsOf(keys: readonly string[], environment: string, now: Date): Backup[] {
   const prefix = backupPrefix(environment);
-  const dated: DatedKey[] = [];
+  const byStem = new Map<string, Backup>();
 
   for (const key of keys) {
-    if (!key.startsWith(prefix)) {
-      continue;
-    }
-    const match = OBJECT_KEY.exec(key.slice(prefix.length));
+    const match = key.startsWith(prefix) ? OBJECT_KEY.exec(key.slice(prefix.length)) : null;
     if (!match) {
       continue;
     }
     const [, year, month, day] = match;
-    dated.push({ key, date: new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))) });
+    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (date.getTime() > now.getTime()) {
+      continue;
+    }
+    const stem = key.slice(
+      0,
+      key.lastIndexOf(key.endsWith(DUMP_SUFFIX) ? DUMP_SUFFIX : MANIFEST_SUFFIX),
+    );
+    const backup = byStem.get(stem) ?? { stem, keys: [], date };
+    backup.keys.push(key);
+    byStem.set(stem, backup);
   }
 
-  return dated;
+  return [...byStem.values()].sort((a, b) => a.stem.localeCompare(b.stem));
 }
 
 /**
  * The manifest is uploaded after its dump, so the newest manifest always names
  * a complete backup; a dump whose manifest never arrived is never picked.
  */
-export function latestManifestKey(keys: readonly string[], environment: string): string | null {
-  const manifests = datedKeys(keys, environment)
-    .map(({ key }) => key)
-    .filter((key) => key.endsWith('.manifest.json'))
-    .sort();
+export function latestManifestKey(
+  keys: readonly string[],
+  environment: string,
+  now: Date,
+): string | null {
+  const manifests = backupsOf(keys, environment, now)
+    .flatMap((backup) => backup.keys)
+    .filter((key) => key.endsWith(MANIFEST_SUFFIX));
   return manifests.at(-1) ?? null;
 }
 
 /**
- * Thirty dailies (today and the 29 days before it) plus the first of each month
- * for the last twelve months. The newest backup is always kept, so a job that
+ * Thirty days of backups plus the earliest backup of each of the last twelve
+ * months — the earliest rather than the 1st, so a failed run on the 1st does not
+ * leave a month with no copy. The newest backup is always kept, so a job that
  * stops running for a month cannot prune its way to an empty bucket.
  */
 export function keysToPrune(keys: readonly string[], environment: string, now: Date): string[] {
-  const dated = datedKeys(keys, environment);
-  const newest = Math.max(...dated.map(({ date }) => date.getTime()));
+  const backups = backupsOf(keys, environment, now);
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const thisMonth = now.getUTCFullYear() * 12 + now.getUTCMonth();
+  const monthIndex = (date: Date): number => date.getUTCFullYear() * 12 + date.getUTCMonth();
+  // `backups` is chronological, so the first stem seen per month is its earliest.
+  const earliestPerMonth = new Map<number, string>();
+  for (const backup of backups) {
+    const month = monthIndex(backup.date);
+    if (monthIndex(now) - month < MONTHLY_RETENTION_MONTHS && !earliestPerMonth.has(month)) {
+      earliestPerMonth.set(month, backup.stem);
+    }
+  }
+  const monthly = new Set(earliestPerMonth.values());
 
-  return dated
-    .filter(({ date }) => {
-      const time = date.getTime();
-      const daily = (today - time) / DAY_MS < DAILY_RETENTION_DAYS;
-      const monthly =
-        date.getUTCDate() === 1 &&
-        thisMonth - (date.getUTCFullYear() * 12 + date.getUTCMonth()) < MONTHLY_RETENTION_MONTHS;
-      return !(daily || monthly || time === newest);
+  return backups
+    .filter((backup, index) => {
+      const daily = (today - backup.date.getTime()) / DAY_MS < DAILY_RETENTION_DAYS;
+      return !(daily || monthly.has(backup.stem) || index === backups.length - 1);
     })
-    .map(({ key }) => key);
+    .flatMap((backup) => backup.keys);
 }
 
 function isCount(value: unknown): value is number {

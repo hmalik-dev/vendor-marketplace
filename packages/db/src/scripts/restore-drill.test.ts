@@ -80,20 +80,20 @@ describe('runBackup', () => {
     const store = await storeWithBackup(await identityToRecipient(identity));
 
     expect([...store.objects.keys()].sort()).toEqual([
-      'db/staging/2026/09/14.dump.age',
-      'db/staging/2026/09/14.manifest.json',
+      'db/staging/2026/09/14-030000.dump.age',
+      'db/staging/2026/09/14-030000.manifest.json',
     ]);
     const manifest = JSON.parse(
-      new TextDecoder().decode(store.objects.get('db/staging/2026/09/14.manifest.json')),
+      new TextDecoder().decode(store.objects.get('db/staging/2026/09/14-030000.manifest.json')),
     ) as { rowCounts: unknown; dumpBytes: number };
     expect(manifest.rowCounts).toEqual(ROW_COUNTS);
     expect(manifest.dumpBytes).toBe(4_096);
-    expect(store.objects.get('db/staging/2026/09/14.dump.age')).not.toEqual(DUMP);
+    expect(store.objects.get('db/staging/2026/09/14-030000.dump.age')).not.toEqual(DUMP);
   });
 
   it('fails a dump below the minimum and writes nothing, so no good backup is pruned for it', async () => {
     const store = memoryStore();
-    store.objects.set('db/staging/2026/08/01.manifest.json', new Uint8Array([1]));
+    store.objects.set('db/staging/2026/08/01-030000.manifest.json', new Uint8Array([1]));
 
     await expect(
       runBackup({
@@ -107,7 +107,7 @@ describe('runBackup', () => {
         log: () => undefined,
       }),
     ).rejects.toThrow('The dump is 4096 bytes, below the 65536-byte minimum.');
-    expect([...store.objects.keys()]).toEqual(['db/staging/2026/08/01.manifest.json']);
+    expect([...store.objects.keys()]).toEqual(['db/staging/2026/08/01-030000.manifest.json']);
   });
 });
 
@@ -130,6 +130,7 @@ describe('runRestoreDrill', () => {
     runRestoreDrill({
       environment: 'staging',
       identity: overrides.identity ?? identity,
+      now: NOW,
       store,
       target,
       keep: overrides.keep ?? false,
@@ -197,7 +198,7 @@ describe('runRestoreDrill', () => {
   });
 
   it('refuses an object whose bytes no longer match the manifest digest', async () => {
-    const key = 'db/staging/2026/09/14.dump.age';
+    const key = 'db/staging/2026/09/14-030000.dump.age';
     const tampered = new Uint8Array(store.objects.get(key) ?? []);
     tampered.set([(tampered.at(-1) ?? 0) ^ 0xff], tampered.length - 1);
     store.objects.set(key, tampered);
@@ -205,6 +206,21 @@ describe('runRestoreDrill', () => {
     await expect(drill(fakeTarget(ROW_COUNTS))).rejects.toThrow(
       `${key} does not match its manifest's digest`,
     );
+  });
+
+  it.each([
+    ['another dump', { dumpKey: 'db/staging/2026/01/01-030000.dump.age' }],
+    ['another environment', { environment: 'production' }],
+  ])('refuses a manifest that names %s', async (_label, change) => {
+    const key = 'db/staging/2026/09/14-030000.manifest.json';
+    const manifest = JSON.parse(new TextDecoder().decode(store.objects.get(key))) as object;
+    store.objects.set(key, new TextEncoder().encode(JSON.stringify({ ...manifest, ...change })));
+    const target = fakeTarget(ROW_COUNTS);
+
+    await expect(drill(target)).rejects.toThrow(
+      `${key} names a dump or environment other than its own. Refusing to restore it.`,
+    );
+    expect(target.created).toEqual([]);
   });
 
   it('drops the database even when counting fails', async () => {

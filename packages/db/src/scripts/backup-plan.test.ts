@@ -3,6 +3,7 @@ import {
   assertMinimumSize,
   backupKeys,
   compareRowCounts,
+  dumpKeyFor,
   keysToPrune,
   latestManifestKey,
   parseManifest,
@@ -14,7 +15,7 @@ const MANIFEST: BackupManifest = {
   version: 1,
   environment: 'staging',
   createdAt: '2026-09-14T03:00:12.000Z',
-  dumpKey: 'db/staging/2026/09/14.dump.age',
+  dumpKey: 'db/staging/2026/09/14-030012.dump.age',
   dumpBytes: 812_331,
   encryptedBytes: 812_540,
   encryptedSha256: 'a'.repeat(64),
@@ -23,12 +24,20 @@ const MANIFEST: BackupManifest = {
 };
 
 describe('backupKeys', () => {
-  it('files a dump and its manifest under the UTC date of the run', () => {
+  it('files a dump and its manifest under the UTC date and time of the run', () => {
     // 23:30 in New York on the 13th is already the 14th in UTC.
-    expect(backupKeys('production', new Date('2026-09-14T03:30:00.000Z'))).toEqual({
-      dump: 'db/production/2026/09/14.dump.age',
-      manifest: 'db/production/2026/09/14.manifest.json',
+    expect(backupKeys('production', new Date('2026-09-14T03:30:07.412Z'))).toEqual({
+      dump: 'db/production/2026/09/14-033007.dump.age',
+      manifest: 'db/production/2026/09/14-033007.manifest.json',
     });
+  });
+
+  it('gives a second run on the same day objects of its own, so it cannot overwrite the first', () => {
+    const first = backupKeys('production', new Date('2026-09-14T03:00:00.000Z'));
+    const second = backupKeys('production', new Date('2026-09-14T15:00:00.000Z'));
+
+    expect(second.dump).not.toBe(first.dump);
+    expect(second.manifest).not.toBe(first.manifest);
   });
 
   it('refuses an environment name that could escape its prefix', () => {
@@ -38,61 +47,108 @@ describe('backupKeys', () => {
   });
 });
 
+describe('dumpKeyFor', () => {
+  it('names the dump that sits beside a manifest', () => {
+    expect(dumpKeyFor('db/staging/2026/09/14-030000.manifest.json')).toBe(
+      'db/staging/2026/09/14-030000.dump.age',
+    );
+  });
+});
+
 describe('latestManifestKey', () => {
+  const now = new Date('2026-09-14T12:00:00.000Z');
+
   it('picks the newest manifest of the environment asked for, ignoring the others', () => {
     const keys = [
-      'db/staging/2026/08/31.manifest.json',
-      'db/staging/2026/09/02.manifest.json',
-      'db/staging/2026/09/02.dump.age',
-      'db/production/2026/09/03.manifest.json',
-      'db/staging-old/2026/12/01.manifest.json',
+      'db/staging/2026/08/31-030000.manifest.json',
+      'db/staging/2026/09/02-030000.manifest.json',
+      'db/staging/2026/09/02-150000.manifest.json',
+      'db/staging/2026/09/02-150000.dump.age',
+      'db/production/2026/09/03-030000.manifest.json',
+      'db/staging-old/2026/09/10-030000.manifest.json',
     ];
 
-    expect(latestManifestKey(keys, 'staging')).toBe('db/staging/2026/09/02.manifest.json');
+    expect(latestManifestKey(keys, 'staging', now)).toBe(
+      'db/staging/2026/09/02-150000.manifest.json',
+    );
+  });
+
+  it('ignores a manifest dated in the future, which no run could have written', () => {
+    const keys = [
+      'db/production/2026/09/14-030000.manifest.json',
+      'db/production/9999/12/31-000000.manifest.json',
+    ];
+
+    expect(latestManifestKey(keys, 'production', now)).toBe(
+      'db/production/2026/09/14-030000.manifest.json',
+    );
   });
 
   it('returns null when that environment has no backup yet', () => {
-    expect(latestManifestKey(['db/production/2026/09/03.manifest.json'], 'staging')).toBeNull();
+    expect(
+      latestManifestKey(['db/production/2026/09/03-030000.manifest.json'], 'staging', now),
+    ).toBeNull();
   });
 });
 
 describe('keysToPrune', () => {
   const now = new Date('2026-09-14T03:05:00.000Z');
-  const pair = (date: string): string[] => [
-    `db/production/${date}.dump.age`,
-    `db/production/${date}.manifest.json`,
+  const pair = (stem: string): string[] => [
+    `db/production/${stem}.dump.age`,
+    `db/production/${stem}.manifest.json`,
   ];
 
-  it('keeps thirty dailies — today back to 29 days ago — and prunes the 30th day back', () => {
-    const keys = [...pair('2026/09/14'), ...pair('2026/08/16'), ...pair('2026/08/15')];
+  it('keeps thirty days — today back to 29 days ago — and prunes the 30th day back', () => {
+    const keys = [
+      ...pair('2026/09/14-030000'),
+      ...pair('2026/08/16-030000'),
+      ...pair('2026/08/15-030000'),
+      // August's monthly copy, so the 15th is kept by nothing but its age.
+      ...pair('2026/08/01-030000'),
+    ];
 
-    expect(keysToPrune(keys, 'production', now)).toEqual(pair('2026/08/15'));
+    expect(keysToPrune(keys, 'production', now)).toEqual(pair('2026/08/15-030000'));
   });
 
-  it('keeps the first of the month for twelve months, and prunes the thirteenth', () => {
+  it('keeps the earliest backup of each of twelve months, and prunes the thirteenth', () => {
     const keys = [
-      ...pair('2026/09/14'),
-      ...pair('2025/10/01'),
-      ...pair('2025/09/01'),
-      ...pair('2025/10/02'),
+      ...pair('2026/09/14-030000'),
+      ...pair('2025/10/01-030000'),
+      ...pair('2025/10/01-150000'),
+      ...pair('2025/09/01-030000'),
     ];
 
     expect(keysToPrune(keys, 'production', now)).toEqual([
-      ...pair('2025/09/01'),
-      ...pair('2025/10/02'),
+      ...pair('2025/09/01-030000'),
+      ...pair('2025/10/01-150000'),
     ]);
   });
 
-  it('never touches another environment or a key it does not recognise', () => {
-    const keys = ['db/staging/2020/01/02.dump.age', 'db/production/notes.txt'];
+  it('keeps a month whose run on the 1st failed, through its earliest later backup', () => {
+    const keys = [
+      ...pair('2026/09/14-030000'),
+      ...pair('2025/11/02-091500'),
+      ...pair('2025/11/03-030000'),
+    ];
+
+    expect(keysToPrune(keys, 'production', now)).toEqual(pair('2025/11/03-030000'));
+  });
+
+  it('never touches another environment, a future-dated key, or a key it does not recognise', () => {
+    const keys = [
+      ...pair('2026/09/14-030000'),
+      'db/staging/2020/01/02-030000.dump.age',
+      'db/production/9999/01/01-030000.dump.age',
+      'db/production/notes.txt',
+    ];
 
     expect(keysToPrune(keys, 'production', now)).toEqual([]);
   });
 
   it('keeps the newest backup even when every one has aged out', () => {
-    const keys = [...pair('2024/03/05'), ...pair('2024/03/04')];
+    const keys = [...pair('2024/03/05-030000'), ...pair('2024/03/04-030000')];
 
-    expect(keysToPrune(keys, 'production', now)).toEqual(pair('2024/03/04'));
+    expect(keysToPrune(keys, 'production', now)).toEqual(pair('2024/03/04-030000'));
   });
 });
 

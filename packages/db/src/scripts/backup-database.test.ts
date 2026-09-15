@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { pgEnvironment, planPgCommand } from './backup-database.js';
+import { pgEnvironment, planPgCommand, runPg } from './backup-database.js';
 
 /** Minted per run and set on the URL object, so no credential is written here. */
 const fakeCredential = `x@${randomUUID()}`;
@@ -89,5 +89,25 @@ describe('planPgCommand', () => {
     expect(() =>
       planPgCommand('pg_dump', [], NEON, { nativeAvailable: false, container: 'pg' }),
     ).toThrow(/Install the Postgres 18 client/);
+  });
+});
+
+describe('runPg', () => {
+  /*
+   * pg_restore reads only the archive header before refusing a version it does
+   * not know, then exits with the rest of a multi-megabyte dump unread. That
+   * must come back as an exit code, not an EPIPE that escapes the drill's cleanup.
+   */
+  it('resolves with the exit code when the tool exits before reading its stdin', async () => {
+    const result = await runPg(
+      {
+        command: process.execPath,
+        args: ['-e', 'process.stderr.write("unsupported version"); process.exit(3)'],
+        env: {},
+      },
+      new Uint8Array(8 * 1024 * 1024),
+    );
+
+    expect([result.exitCode, result.stderrTail]).toEqual([3, 'unsupported version']);
   });
 });

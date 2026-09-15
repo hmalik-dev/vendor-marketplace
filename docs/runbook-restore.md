@@ -11,14 +11,16 @@ of your own — monthly, and after any change to the schema or this tooling.
 ## What is stored
 
 ```
-db/<environment>/YYYY/MM/DD.dump.age        pg_dump --format=custom, age-encrypted
-db/<environment>/YYYY/MM/DD.manifest.json   row counts per table, sizes, SHA-256
+db/<environment>/YYYY/MM/DD-HHMMSS.dump.age        pg_dump --format=custom, age-encrypted
+db/<environment>/YYYY/MM/DD-HHMMSS.manifest.json   row counts per table, sizes, SHA-256
 ```
 
 - The manifest's counts are read inside the **same snapshot** the dump is taken
   from, so a restore of that dump must reproduce them exactly.
-- Retention: the last 30 days, plus the 1st of each month for 12 months. The
-  newest backup is never pruned.
+- The time (UTC) is in the key, so a second run on the same day never overwrites
+  the first.
+- Retention: the last 30 days, plus the earliest backup of each month for 12
+  months. The newest backup is never pruned.
 - `<environment>` is `production` for the nightly run, `staging` for a manual
   dispatch — each GitHub environment carries its own secrets.
 
@@ -41,7 +43,9 @@ age out (12 months).
 
 ## Secrets the workflow needs
 
-In each GitHub environment (`production`, `staging`):
+In each GitHub environment (`production`, `staging`). Restrict the `production`
+environment to the `main` branch (Settings → Environments → Deployment branches):
+otherwise any pushed branch can add a workflow that names it and reads its secrets.
 
 | Secret                        | What                                                                 |
 | ----------------------------- | -------------------------------------------------------------------- |
@@ -86,7 +90,9 @@ Environment:
 | `RESTORE_DATABASE_URL` | The server to restore **onto**. Defaults to `DATABASE_URL` (the Docker Postgres) |
 | `RESTORE_NEON_BRANCH`  | Required when the target is Neon: the scratch branch's name                      |
 
-What it does: downloads the newest manifest and its dump, checks the SHA-256,
+What it does: downloads the newest manifest (ignoring any dated in the future),
+checks that it names the dump beside it and the environment asked for, downloads
+that dump, checks the SHA-256,
 decrypts, creates a **new** database `restore_drill_<timestamp>_<hex>` on the
 target server, runs `pg_restore` into it, counts every table, and prints the
 counts beside the manifest's. Exit 0 means every table matches. Without

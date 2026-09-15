@@ -101,6 +101,10 @@ export function runPg(invocation: PgInvocation, stdin?: Uint8Array): Promise<PgR
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
     child.on('error', reject);
+    // A tool that exits before reading all of stdin — a version it cannot read,
+    // a refused connection — closes the pipe mid-write. Its exit code and stderr
+    // say why; an unhandled EPIPE would crash past the caller's cleanup instead.
+    child.stdin.on('error', () => undefined);
     child.on('close', (code) => {
       const stderrTail = Buffer.concat(stderr)
         .toString('utf8')
