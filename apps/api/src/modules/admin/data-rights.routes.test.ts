@@ -1050,6 +1050,125 @@ describe('data rights', () => {
       expect(harness.deletedClerkUsers).toEqual([]);
     });
 
+    /*
+     * VEN-382. Driven through the real closure route rather than a row hand-set
+     * with `deleted_at`, so the fixture is whatever closure actually produces.
+     */
+    it('lists a closed account on the customers table only when asked, marked closed', async () => {
+      await signIn(ADMIN, true);
+      const closedId = await signIn(CUSTOMER);
+      const liveId = await signIn(OUTSIDER);
+
+      const closed = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${closedId}/close`,
+        headers: bearer(ADMIN),
+      });
+      expect(closed.statusCode).toBe(200);
+
+      const byDefault = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers',
+        headers: bearer(ADMIN),
+      });
+      expect(byDefault.statusCode).toBe(200);
+      expect(
+        byDefault
+          .json()
+          .items.map((row: { id: string; isClosed: boolean }) => [row.id, row.isClosed]),
+      ).toEqual([[liveId, false]]);
+
+      const explicitLive = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers?status=live',
+        headers: bearer(ADMIN),
+      });
+      expect(explicitLive.json().items.map((row: { id: string }) => row.id)).toEqual([liveId]);
+
+      const asked = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers?status=closed',
+        headers: bearer(ADMIN),
+      });
+      expect(asked.statusCode).toBe(200);
+      expect(asked.json().total).toBe(1);
+      expect(
+        asked.json().items.map((row: { id: string; isClosed: boolean }) => [row.id, row.isClosed]),
+      ).toEqual([[closedId, true]]);
+
+      /* The row's link target still answers for the closed account. */
+      const rights = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/users/${closedId}/data-rights`,
+        headers: bearer(ADMIN),
+      });
+      expect(rights.statusCode).toBe(200);
+      expect(rights.json().closedAt).not.toBeNull();
+
+      const bogus = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/customers?status=retired',
+        headers: bearer(ADMIN),
+      });
+      expect(bogus.statusCode).toBe(400);
+    });
+
+    /*
+     * An empty search on the live view, for a person whose account was closed,
+     * counts the closed set as its way out; from the closed view the same key
+     * counts the live set. Each count is the rows its link lands on.
+     */
+    it('counts the other set as the status route out of an empty customers search', async () => {
+      await signIn(ADMIN, true);
+      const closedId = await signIn(CUSTOMER);
+      await signIn(OUTSIDER);
+
+      const closed = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${closedId}/close`,
+        headers: bearer(ADMIN),
+      });
+      expect(closed.statusCode).toBe(200);
+
+      const live = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/customers?q=${CUSTOMER}`,
+        headers: bearer(ADMIN),
+      });
+      expect(live.json().total).toBe(0);
+      expect(
+        [...live.json().widenings].sort((a: { key: string }, b: { key: string }) =>
+          a.key.localeCompare(b.key),
+        ),
+      ).toEqual([
+        { key: 'q', count: 1 },
+        { key: 'status', count: 1 },
+      ]);
+
+      const closedView = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/customers?status=closed&q=${OUTSIDER}`,
+        headers: bearer(ADMIN),
+      });
+      expect(closedView.json().total).toBe(0);
+      expect(
+        [...closedView.json().widenings].sort((a: { key: string }, b: { key: string }) =>
+          a.key.localeCompare(b.key),
+        ),
+      ).toEqual([
+        { key: 'q', count: 1 },
+        { key: 'status', count: 1 },
+      ]);
+
+      /* A term matching nobody in either set gets no status route: it would find nothing. */
+      const nobody = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/customers?q=nobody-matches-this`,
+        headers: bearer(ADMIN),
+      });
+      expect(nobody.json().widenings).toEqual([{ key: 'q', count: 1 }]);
+    });
+
     /**
      * The second refusal #451 earns.
      *

@@ -2439,6 +2439,19 @@ export const ADMIN_CUSTOMER_FLAGS = ['email-stale'] as const;
 export const adminCustomerFlagSchema = z.enum(ADMIN_CUSTOMER_FLAGS);
 export type AdminCustomerFlag = (typeof ADMIN_CUSTOMER_FLAGS)[number];
 
+/**
+ * Which set of accounts `/admin/customers` lists (VEN-382).
+ *
+ * `live` is the default and what an absent parameter means. `closed` is the
+ * deliberate way to ask for accounts closure has set `deleted_at` on — the
+ * data-rights page is reached from this table, and every reason to open a
+ * closed account's page (a subject-access request, a regulator, a dispute)
+ * arrives after the closure and without the uuid.
+ */
+export const ADMIN_CUSTOMER_STATUSES = ['live', 'closed'] as const;
+export const adminCustomerStatusSchema = z.enum(ADMIN_CUSTOMER_STATUSES);
+export type AdminCustomerStatus = (typeof ADMIN_CUSTOMER_STATUSES)[number];
+
 export const adminCustomerRowSchema = z.object({
   id: uuidSchema,
   email: z.string(),
@@ -2448,6 +2461,8 @@ export const adminCustomerRowSchema = z.object({
   state: z.string().nullable(),
   totalBookingsCount: z.int(),
   isBanned: z.boolean(),
+  /** `users.deleted_at` is set, so the row renders a `Closed` pill (VEN-382). */
+  isClosed: z.boolean(),
   /**
    * The address the identity provider holds and this row could not be given,
    * or `null` when the two agree. Carried on every row rather than only on the
@@ -2467,6 +2482,7 @@ export type AdminCustomerRow = z.infer<typeof adminCustomerRowSchema>;
 export const adminCustomerQuerySchema = z.object({
   ...adminPaginationShape,
   q: trimmedString(MAX_NAME_LENGTH).optional(),
+  status: adminCustomerStatusSchema.optional(),
   flag: adminCustomerFlagSchema.optional(),
 });
 
