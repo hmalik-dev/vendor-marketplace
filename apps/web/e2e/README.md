@@ -78,9 +78,36 @@ editing the spec. Run it against `next start`, not `next dev`, with the rate
 limit raised; the no-row persona needs `CLERK_SECRET_KEY` from the environment
 or the root `.env`.
 
+## The paid booking journey
+
+`paid-booking.spec.ts` drives the money path against Stripe test mode: request,
+accept, pay with `4242`, a 3-D Secure card and a declined card, a cancellation
+refunded in full, and completion followed by a public review. It needs one more
+thing running than the rest — Stripe's webhooks forwarded to **this lane's** API:
+
+```
+stripe listen --forward-to localhost:<api port>/webhooks/stripe --forward-connect-to localhost:<api port>/webhooks/stripe
+pnpm lane:exec <n> -- pnpm --filter @vendor-marketplace/web test:e2e paid-booking
+```
+
+Pass the file name **without** a `--`: pnpm forwards the `--` to Playwright,
+which then ignores the filter and runs every suite.
+
+Scenario 1 holds the customer's arrival on `/bookings/<id>/confirmed` until the
+vendor's bookings page reads `Booked`, because that screen's read reconciles
+with Stripe directly and would book the date with no webhook at all. So a
+missing forwarder fails there, naming the webhook, rather than passing.
+
+Dates come from `pnpm --filter @vendor-marketplace/db e2e:dates`, which picks an
+untouched day per scenario and moves a paid event to yesterday for completion.
+It is a command, not a route, so nothing deployed can move an event date; and it
+refuses a production database exactly as `seed:e2e` does. Refund and completion
+pay server-side with `pm_card_visa` and read refunds from Stripe, so the run
+needs the test-mode `STRIPE_SECRET_KEY` from the environment or the root `.env`.
+
 ## Not here yet
 
-Vendor profile, search, payment, reviews and admin. Each is deferred for a named
+Vendor profile, search and admin. Each is deferred for a named
 reason — see the follow-up ticket rather than assuming they were forgotten. CI
 wiring is also absent: `ci.yml` runs on in-process PGlite with _placeholder_
 Clerk keys and never reaches Clerk, so real-auth E2E needs GitHub secrets the

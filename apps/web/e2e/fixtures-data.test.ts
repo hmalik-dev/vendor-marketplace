@@ -1,7 +1,8 @@
 import { DEMO_VENDORS, E2E_VENDOR_SLUG as SEEDED_E2E_VENDOR_SLUG } from '@vendor-marketplace/db';
+import { formatPrice } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 
-import { E2E_VENDOR_SLUG } from './fixtures-data.js';
+import { E2E_VENDOR_SLUG, formatWholeDollars } from './fixtures-data.js';
 
 /**
  * The drift guard.
@@ -41,6 +42,17 @@ describe('e2e fixture data agrees with the seeds', () => {
       'every demo vendor key now equals its slug — a suite may navigate by key, ' +
         'and the warning in fixtures-data.ts should be updated',
     ).toBeGreaterThan(0);
+  });
+
+  it('prints money exactly as formatPrice does on the screens the journey reads', () => {
+    for (const cents of [100, 145_000, 1_000_000]) {
+      expect(formatWholeDollars(cents)).toBe(formatPrice(cents));
+    }
+    expect(formatWholeDollars(145_000)).toBe('$1,450');
+  });
+
+  it('refuses a cents amount rather than rounding it into a wrong assertion', () => {
+    expect(() => formatWholeDollars(145_050)).toThrow('expects whole dollars in cents, got 145050');
   });
 
   it('gives every demo vendor a non-empty slug to navigate by', () => {
