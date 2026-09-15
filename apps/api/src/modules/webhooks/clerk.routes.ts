@@ -53,6 +53,7 @@ export const clerkWebhookRoutes: FastifyPluginAsyncZod<ClerkWebhookRoutesOptions
         bookingContextFor(app, app.log, options.webOrigin),
         event.data,
         app.clock(),
+        app.clerkUsers,
       );
       request.log.info(
         { clerkEvent: event.data.type, outcome },

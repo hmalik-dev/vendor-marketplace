@@ -1,7 +1,15 @@
 import { listLiveClerkIdentities } from '../users/users.dao.js';
 import { applyClerkUserEvent } from './clerk.service.js';
 import type { AdminContext } from '../admin/account-unwind.js';
-import type { ClerkWebhookUserData } from './clerk.schemas.js';
+import {
+  asWebhookData,
+  clerkUsersIn,
+  isClerkIdentity,
+  type ClerkApiUser,
+  type ClerkUserSource,
+} from './clerk-user-source.js';
+
+export { isClerkIdentity, type ClerkApiUser, type ClerkUserSource } from './clerk-user-source.js';
 
 /**
  * Repairs the drift a misrouted webhook left behind.
@@ -17,30 +25,6 @@ import type { ClerkWebhookUserData } from './clerk.schemas.js';
  * does, and is written to be re-runnable, because this will not be the last
  * time a webhook is misconfigured.
  */
-
-/** The subset of the Clerk SDK this pass needs, so the suite can supply it. */
-export interface ClerkUserSource {
-  /**
-   * Fetches a page of Clerk users restricted to the given ids.
-   *
-   * Batched rather than one request per row: a bulk pass over every user would
-   * otherwise be the thing most likely to hit Clerk's rate limit.
-   */
-  getUserList(params: {
-    userId: string[];
-    limit: number;
-  }): Promise<{ data: ClerkApiUser[] } | ClerkApiUser[]>;
-}
-
-/** The camelCase shape the Clerk SDK returns, as opposed to a webhook payload. */
-export interface ClerkApiUser {
-  id: string;
-  emailAddresses?: { id: string; emailAddress: string }[];
-  primaryEmailAddressId?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
-  imageUrl?: string | null;
-}
 
 export interface ReconcileSummary {
   /** Rows examined — every live local row, since Clerk owns none of the others. */
@@ -67,47 +51,8 @@ export interface ReconcileSummary {
   skipped: number;
 }
 
-/**
- * Clerk mints user ids with this prefix. The seeded marketplace accounts use
- * `seed_mkt_…`, which Clerk has never heard of.
- *
- * The distinction matters more than it looks: without it, every seeded vendor
- * reads as "deleted in Clerk" and the pass retires the entire public
- * marketplace on its first run. A row Clerk never issued is not a row Clerk
- * deleted, and is simply outside this pass's jurisdiction.
- */
-const CLERK_ID_PREFIX = 'user_';
-
-export function isClerkIdentity(clerkUserId: string): boolean {
-  return clerkUserId.startsWith(CLERK_ID_PREFIX);
-}
-
 /** Clerk's own cap on ids per `getUserList` query. */
 const BATCH_SIZE = 100;
-
-function unwrap(page: { data: ClerkApiUser[] } | ClerkApiUser[]): ClerkApiUser[] {
-  return Array.isArray(page) ? page : page.data;
-}
-
-/**
- * Rewrites an SDK user into the snake_case payload a webhook would have
- * carried, so reconciliation can hand it to the *same* handler the live event
- * uses. Translating once here is what keeps there being one update behaviour
- * and one deletion behaviour rather than two that can drift apart.
- */
-function asWebhookData(user: ClerkApiUser): ClerkWebhookUserData {
-  return {
-    id: user.id,
-    email_addresses: (user.emailAddresses ?? []).map((address) => ({
-      id: address.id,
-      email_address: address.emailAddress,
-    })),
-    primary_email_address_id: user.primaryEmailAddressId ?? null,
-    first_name: user.firstName ?? null,
-    last_name: user.lastName ?? null,
-    image_url: user.imageUrl ?? null,
-  };
-}
 
 export async function reconcileClerkUsers(
   /**
@@ -168,7 +113,7 @@ export async function reconcileClerkUsers(
       limit: BATCH_SIZE,
     });
 
-    for (const user of unwrap(page)) {
+    for (const user of clerkUsersIn(page)) {
       remote.set(user.id, user);
     }
   }
@@ -187,6 +132,7 @@ export async function reconcileClerkUsers(
         context,
         { type: 'user.deleted', data: { id: row.clerkUserId } },
         now,
+        clerk,
       );
 
       if (outcome === 'deleted') {
@@ -229,7 +175,7 @@ export async function reconcileClerkUsers(
       continue;
     }
 
-    const outcome = await applyClerkUserEvent(context, { type: 'user.updated', data }, now);
+    const outcome = await applyClerkUserEvent(context, { type: 'user.updated', data }, now, clerk);
 
     if (outcome === 'updated') {
       summary.updated += 1;

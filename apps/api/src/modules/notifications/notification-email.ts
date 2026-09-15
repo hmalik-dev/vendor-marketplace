@@ -13,7 +13,7 @@ import type { EmailGateway, EmailSendResult } from '../../lib/email.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import type { BackgroundWork } from '../../lib/background.js';
 import { insertEmailDelivery } from './email-delivery.dao.js';
-import { findUserEmail } from './notification-email.dao.js';
+import { findNotificationRecipient } from './notification-email.dao.js';
 
 /**
  * **The email is the notification, rendered for an inbox.**
@@ -167,7 +167,7 @@ export async function sendNotificationEmail(
   }
 
   try {
-    const recipient = await findUserEmail(deps.db, row.userId);
+    const recipient = await findNotificationRecipient(deps.db, row.userId);
 
     if (!recipient) {
       /*
@@ -178,6 +178,15 @@ export async function sendNotificationEmail(
       deps.log.info(
         { notificationId: row.id },
         'Skipped an email for a user that no longer exists',
+      );
+      return;
+    }
+
+    if ('emailDiverged' in recipient) {
+      // The stored address is one Clerk has moved off (VEN-386); no address in the log.
+      deps.log.info(
+        { notificationId: row.id, userId: row.userId, reason: 'email-diverged' },
+        'Skipped an email while the account address disagrees with Clerk',
       );
       return;
     }

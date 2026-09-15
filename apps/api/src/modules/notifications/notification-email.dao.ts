@@ -3,26 +3,18 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { AppDatabase } from '../../lib/database.js';
 
 /**
- * The address a notification is emailed to.
+ * The address stored for a live account, for mail about the person's **own**
+ * action — the support and report acknowledgements.
  *
- * `deletedAt is null` is the guard the ticket's edge case asks for: a user
- * removed between the event and the send has no inbox to reach, and the in-app
- * row is already durable. Returning `null` rather than throwing is what lets
- * the caller skip quietly instead of failing an operation that has committed.
+ * `deletedAt is null` is the guard: a user removed between the event and the
+ * send has no inbox to reach. Returning `null` rather than throwing is what
+ * lets the caller decide.
  *
- * **This column can be known-stale, and today that changes nothing here**
- * (#462). When Clerk sends an address `users_email_key` refuses,
- * `updateUserByClerkId` records it in `pending_email` and leaves `email` at the
- * old value, so a row can be flagged as disagreeing with the identity provider
- * while this read still returns the old address — and these messages carry
- * counterparty detail: names, event dates, booking specifics.
- *
- * Holding, redirecting or continuing is a product ruling and has not been made,
- * so nothing here reads `pending_email`: continuing to send is the behaviour
- * that was already in place, and quietly changing it would be this lane
- * choosing the answer. `/admin/customers?flag=email-stale` is what tells an
- * operator which accounts are in that state meanwhile. Once the ruling exists,
- * this function is where it goes.
+ * It deliberately ignores `pending_email`. An acknowledgement carries nothing
+ * about anyone else, and it answers a request the person made seconds ago, so
+ * the stored address is the right one to answer even mid-repair. Notifications
+ * read `findNotificationRecipient` instead, so neither can pick up the other's
+ * rule by accident.
  */
 export async function findUserEmail(
   db: AppDatabase,
@@ -35,4 +27,34 @@ export async function findUserEmail(
     .limit(1);
 
   return row ?? null;
+}
+
+/**
+ * Where a notification is emailed, or why it is not (VEN-386).
+ *
+ * **A diverged row gets no email.** `pending_email` set means Clerk has given
+ * this account a different address and `users_email_key` refused it (#462) —
+ * so `email` is an address the person has moved off, and a notification
+ * carries counterparty detail: names, event dates, booking specifics. The
+ * collision means another row is stale, the Clerk webhook repairs it
+ * (`clerk.service.ts`), and the window is one webhook hop; the in-app row is
+ * already durable and carries the content, so nothing is queued for later.
+ *
+ * `null` for an account that is gone, as `findUserEmail`.
+ */
+export async function findNotificationRecipient(
+  db: AppDatabase,
+  userId: string,
+): Promise<{ email: string } | { emailDiverged: true } | null> {
+  const [row] = await db
+    .select({ email: users.email, pendingEmail: users.pendingEmail })
+    .from(users)
+    .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  return row.pendingEmail === null ? { email: row.email } : { emailDiverged: true };
 }
