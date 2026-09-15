@@ -57,6 +57,7 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   payout_retried: 'Retried a payout',
   user_data_exported: 'Exported an account record',
   user_closed: 'Closed an account',
+  operator_account_closed: 'Closed an operator account',
   /*
    * Graduated moderation (#435). Written in the same register as the seven above
    * — what the operator did, past tense — and deliberately **not** using the

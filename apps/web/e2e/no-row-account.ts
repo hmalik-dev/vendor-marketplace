@@ -76,7 +76,10 @@ export function assertLoopbackOrigin(baseUrl: string): void {
   }
 }
 
-async function clerk(path: string, init: { method: string; body?: unknown }): Promise<Response> {
+export async function clerk(
+  path: string,
+  init: { method: string; body?: unknown },
+): Promise<Response> {
   return fetch(`${CLERK_API}${path}`, {
     method: init.method,
     headers: { authorization: `Bearer ${clerkSecretKey()}`, 'content-type': 'application/json' },

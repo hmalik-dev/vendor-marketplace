@@ -55,12 +55,15 @@ const BLOCKER: WireAdminCloseBlocker = {
   counterpartyName: 'Sunlit Studio',
 };
 
+const OPERATOR_EMAIL = 'dana.okafor@example.com';
+
 function renderActions(
   overrides: Partial<{
     closedAt: Date | null;
     closeBlockers: readonly WireAdminCloseBlocker[];
     bookingsRefundedOnClose: number;
     isSelf: boolean;
+    isOperator: boolean;
   }>,
 ): void {
   render(
@@ -71,6 +74,8 @@ function renderActions(
       closeBlockers={overrides.closeBlockers ?? []}
       bookingsRefundedOnClose={overrides.bookingsRefundedOnClose ?? 0}
       isSelf={overrides.isSelf ?? false}
+      email={OPERATOR_EMAIL}
+      isOperator={overrides.isOperator ?? false}
     />,
   );
 }
@@ -324,5 +329,93 @@ describe('the data-rights closure control', () => {
     expect(
       (screen.getByRole('button', { name: 'Export data' }) as HTMLButtonElement).disabled,
     ).toBe(false);
+  });
+});
+
+/**
+ * Closing another operator's account, past a typed hurdle (VEN-391).
+ *
+ * The near miss is the case under test: a guard proven only by the exact match
+ * would pass with the comparison deleted.
+ */
+describe('an operator closure', () => {
+  function typedField(dialog: HTMLElement): HTMLInputElement {
+    return within(dialog).getByLabelText(`Type ${OPERATOR_EMAIL} to confirm`) as HTMLInputElement;
+  }
+
+  function confirmButton(dialog: HTMLElement): HTMLButtonElement {
+    return within(dialog).getByRole('button', { name: 'Close account' }) as HTMLButtonElement;
+  }
+
+  it('keeps the confirm disabled until the address is typed, and says so', () => {
+    renderActions({ isOperator: true });
+    const dialog = openConfirmation();
+
+    expect(confirmButton(dialog).disabled).toBe(true);
+    expect(dialog.textContent).toContain('Close account stays unavailable until this matches.');
+  });
+
+  it('leaves a near miss disabled and names the mismatch', () => {
+    renderActions({ isOperator: true });
+    const dialog = openConfirmation();
+
+    fireEvent.change(typedField(dialog), { target: { value: 'Dana.Okafor@example.com' } });
+
+    expect(confirmButton(dialog).disabled).toBe(true);
+    expect(typedField(dialog).getAttribute('aria-invalid')).toBe('true');
+    expect(dialog.textContent).toContain(`Doesn't match ${OPERATOR_EMAIL} exactly.`);
+  });
+
+  it('enables the confirm on the exact address, and closes', async () => {
+    renderActions({ isOperator: true });
+    const dialog = openConfirmation();
+
+    fireEvent.change(typedField(dialog), { target: { value: OPERATOR_EMAIL } });
+
+    expect(confirmButton(dialog).disabled).toBe(false);
+    expect(dialog.textContent).toContain('Matches.');
+
+    await act(async () => {
+      fireEvent.click(confirmButton(dialog));
+    });
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('starts empty again when the dialog is reopened', () => {
+    renderActions({ isOperator: true });
+    let dialog = openConfirmation();
+    fireEvent.change(typedField(dialog), { target: { value: OPERATOR_EMAIL } });
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    dialog = openConfirmation();
+
+    expect(typedField(dialog).value).toBe('');
+    expect(confirmButton(dialog).disabled).toBe(true);
+  });
+
+  it("says the sign-in is deleted and only Clerk's dashboard restores it", () => {
+    renderActions({ isOperator: true });
+    const dialog = openConfirmation();
+
+    expect(within(dialog).getByRole('heading').textContent).toBe(
+      "Close Dana Okafor's operator account?",
+    );
+    expect(dialog.textContent).toContain(
+      "This deletes their sign-in, and it can't be restored from here.",
+    );
+    expect(dialog.textContent).toContain(
+      "Only someone with access to Clerk's dashboard can give them a sign-in again",
+    );
+  });
+
+  it('asks nothing typed of an ordinary closure', () => {
+    renderActions({});
+    const dialog = openConfirmation();
+
+    expect(within(dialog).queryByRole('textbox')).toBeNull();
+    expect(confirmButton(dialog).disabled).toBe(false);
+    expect(dialog.textContent).not.toContain("Clerk's dashboard");
   });
 });

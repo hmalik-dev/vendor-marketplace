@@ -80,7 +80,7 @@
 - [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino's three doors to a nested error, `PostgresError.detail` and [[drizzle-query-errors-log-bound-parameters]] were all closed there in #445; do not re-report
 - [Email is a label, `clerk_user_id` is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial since #451; audited, nothing in the tree resolves a person by email
 - [An unwind spares a request with a booking behind it](unwind-decline-spares-requests-with-a-booking.md) — only a succeeded PaymentIntent writes that row, so the exemption is unarrangeable; it closes a post-unban double-booking window
-- [Closure deletes the Clerk identity](closure-deletes-the-clerk-identity.md) — the console's only irreversible action; its self-inflicted `user.deleted` replay is sound, its admin-target and `seed_mkt_` gaps are not
+- [Closure deletes the Clerk identity](closure-deletes-the-clerk-identity.md) — the console's only irreversible action; replay is sound; admin-target gap FIXED in VEN-391 (last-operator 409 + lock), ban path still unlocked
 - [`violatesConstraint` is FIXED](violates-constraint-matches-bound-parameters.md) — VEN-385 removed the message arm; SQLSTATE + `constraint_name` only, do not re-report
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — FIXED before merge in VEN-405: `stripe:signature` and `stripe:server-error` dedupe apart; anonymous 401s can still mute only the signature alert
 - [Backup integrity is not authenticity](backup-integrity-is-not-authenticity.md) — VEN-408: bucket-token holder forges a dump the drill pg_restores as superuser

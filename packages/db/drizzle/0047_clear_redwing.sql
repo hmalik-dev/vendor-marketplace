@@ -1,0 +1,1 @@
+ALTER TYPE "public"."admin_action" ADD VALUE 'operator_account_closed' BEFORE 'vendor_unpublished';

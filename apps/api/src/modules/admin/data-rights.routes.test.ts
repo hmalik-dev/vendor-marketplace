@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import {
   adminActions,
@@ -21,6 +22,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { CLOSURE_UNWIND, DELETION_UNWIND, SUSPENSION_UNWIND } from './account-unwind.js';
+import { LAST_OPERATOR_REFUSAL } from './data-rights.service.js';
 import {
   bearer,
   createTestHarness,
@@ -1170,38 +1172,108 @@ describe('data rights', () => {
     });
 
     /**
-     * The second refusal #451 earns.
-     *
-     * Closing another operator was a reversible soft-delete until closure began
-     * deleting the Clerk identity. Now it destroys a sign-in that only the
-     * identity provider can restore — `db:seed:e2e` resolves Clerk ids rather
-     * than creating them, and `role = 'admin'` is unreachable from inside the
-     * product — so the console refuses it and the dashboard is where it goes.
-     *
-     * **This test is the one #460 replaces, not one it breaks.** The ruling is
-     * hurdles rather than refusal, so when the typed confirmation and the
-     * last-admin check land, this expectation becomes an assertion about
-     * *those* — in the same commit, never before them.
+     * Hurdles, not refusal (VEN-391): another operator's account closes, and the
+     * row says it was an operator's. Two live operators, then one — so the
+     * last-operator refusal is observed both not firing and firing.
      */
-    it('refuses to close another operator, because that deletion is unrecoverable', async () => {
-      await signIn(ADMIN, true);
-      const peerId = await signIn(OUTSIDER, true);
+    describe('an operator account', () => {
+      async function close(actor: string, userId: string) {
+        return harness.app.inject({
+          method: 'POST',
+          url: `/admin/users/${userId}/close`,
+          headers: bearer(actor),
+        });
+      }
 
-      const response = await harness.app.inject({
-        method: 'POST',
-        url: `/admin/users/${peerId}/close`,
-        headers: bearer(ADMIN),
+      it('closes past a second live operator, recorded as an operator closure', async () => {
+        const actorId = await signIn(ADMIN, true);
+        const peerId = await signIn(OUTSIDER, true);
+
+        const response = await close(ADMIN, peerId);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ userId: peerId, identityDeleted: true });
+        expect(harness.deletedClerkUsers).toEqual([OUTSIDER]);
+
+        const rows = await harness.database.db
+          .select({
+            actorId: adminActions.actorId,
+            action: adminActions.action,
+            subjectId: adminActions.subjectId,
+          })
+          .from(adminActions)
+          .where(eq(adminActions.subjectId, peerId));
+        expect(rows).toEqual([{ actorId, action: 'operator_account_closed', subjectId: peerId }]);
       });
 
-      expect(response.statusCode).toBe(403);
-      expect(response.json().message).toContain('operator account cannot be closed');
-      expect(harness.deletedClerkUsers).toEqual([]);
+      it('refuses the last live operator with a 409, even when they are the actor', async () => {
+        const actorId = await signIn(ADMIN, true);
+        const peerId = await signIn(OUTSIDER, true);
 
-      const [account] = await harness.database.db
-        .select({ deletedAt: users.deletedAt })
-        .from(users)
-        .where(eq(users.id, peerId));
-      expect(account!.deletedAt).toBeNull();
+        // Two live: the self-closure refusal answers, not the last-operator one.
+        const whileTwo = await close(ADMIN, actorId);
+        expect(whileTwo.statusCode).toBe(403);
+
+        expect((await close(ADMIN, peerId)).statusCode).toBe(200);
+
+        // One live: the structural refusal answers first, on its own terms.
+        const whileOne = await close(ADMIN, actorId);
+        expect(whileOne.statusCode).toBe(409);
+        expect(whileOne.json().message).toBe(LAST_OPERATOR_REFUSAL);
+
+        const [account] = await harness.database.db
+          .select({ deletedAt: users.deletedAt })
+          .from(users)
+          .where(eq(users.id, actorId));
+        expect(account!.deletedAt).toBeNull();
+      });
+
+      it('does not count a banned operator as one who can still sign in', async () => {
+        const actorId = await signIn(ADMIN, true);
+        const bannedId = await signIn(OUTSIDER, true);
+        await harness.database.db
+          .update(users)
+          .set({ isBanned: true })
+          .where(eq(users.id, bannedId));
+
+        const response = await close(ADMIN, actorId);
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toBe(LAST_OPERATOR_REFUSAL);
+      });
+
+      it('still writes user_closed for an ordinary account', async () => {
+        await signIn(ADMIN, true);
+        const customerId = await signIn(CUSTOMER);
+
+        expect((await close(ADMIN, customerId)).statusCode).toBe(200);
+
+        const rows = await harness.database.db
+          .select({ action: adminActions.action })
+          .from(adminActions)
+          .where(eq(adminActions.subjectId, customerId));
+        expect(rows).toEqual([{ action: 'user_closed' }]);
+      });
+
+      /**
+       * AC6's source guard: the flat refusal of operator targets is gone, so the
+       * only 403 left in `closeAccount` is the self-closure one. Counted on the
+       * code with comments stripped, because a needle a comment can carry is a
+       * guard that cannot fail.
+       */
+      it('keeps no refusal of operator targets in closeAccount', () => {
+        const source = readFileSync(new URL('./data-rights.service.ts', import.meta.url), 'utf8');
+        const start = source.indexOf('export async function closeAccount(');
+        const end = source.indexOf('\nexport ', start + 1);
+        const body = source
+          .slice(start, end)
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\/\/.*$/gm, '');
+
+        expect(start).toBeGreaterThan(-1);
+        expect(body.match(/forbidden\(/g)).toEqual(['forbidden(']);
+        expect(body).toContain("forbidden('You cannot close your own account')");
+      });
     });
 
     it('refuses a second closure of the same account', async () => {
@@ -1226,6 +1298,8 @@ describe('data rights', () => {
 
     it('refuses an operator closing their own account', async () => {
       const actorId = await signIn(ADMIN, true);
+      // A second live operator, so the last-operator refusal cannot be what answers.
+      await signIn(OUTSIDER, true);
 
       const response = await harness.app.inject({
         method: 'POST',
