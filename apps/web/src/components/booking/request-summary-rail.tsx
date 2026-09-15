@@ -222,7 +222,7 @@ export function RequestSummaryRail({
           <p className="flex items-center gap-2 text-sm font-medium text-error-500">
             <span
               aria-hidden="true"
-              className="size-4 shrink-0 rounded-full border-[1.5px] border-error-500 bg-error-50"
+              className="box-content size-4 shrink-0 rounded-full border-[1.5px] border-error-500 bg-error-50"
             />
             {blockerCount} {blockerCount === 1 ? 'field' : 'fields'} to fix
           </p>

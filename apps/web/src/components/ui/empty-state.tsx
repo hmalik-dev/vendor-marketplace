@@ -6,6 +6,10 @@ import { cn } from '@/lib/utils';
  * overlapping by 14px in a 58x36 box — `40-states.md` names it as *the* muted
  * geometric glyph, and frame `20` draws it above `No requests yet`.
  *
+ * The ring is `box-content` (VEN-420): the screens document ships no box-sizing
+ * reset, so its 1.5px border paints outside the 36px, a 39px ring, as frames
+ * `19` and `20` draw it. The filled disc has no border and is unaffected.
+ *
  * Circles rather than a lucide icon because there is no icon in the set that
  * says "nothing has arrived" without also saying what *kind* of thing.
  */
@@ -13,7 +17,7 @@ export function EmptyStateGlyph(): React.ReactElement {
   return (
     <span aria-hidden="true" className="relative block h-9 w-[58px]">
       <span className="absolute top-0 left-0 size-9 rounded-full bg-stone-150" />
-      <span className="absolute top-0 left-[22px] size-9 rounded-full border-[1.5px] border-dashed border-stone-400" />
+      <span className="absolute top-0 left-[22px] box-content size-9 rounded-full border-[1.5px] border-dashed border-stone-400" />
     </span>
   );
 }
@@ -33,6 +37,9 @@ export function EmptyStateGlyph(): React.ReactElement {
  * geometry, and it lands on top of `EmptyState`'s uniform 12px stack gap —
  * 12 + 2 = 14 at 1024, 12 + 8 = 20 at 1440.
  *
+ * Both rings are `box-content` (VEN-420), so the 1.5px border paints outside
+ * the diameter as the content-box frames do: 41px at 1440, 36px at 1024.
+ *
  * Replaced a 32x32 `lucide-search-x` (#417 item 2), which was an icon saying
  * "search failed" where the frame draws the product's own empty mark.
  */
@@ -42,8 +49,8 @@ export function SearchEmptyGlyph(): React.ReactElement {
       aria-hidden="true"
       className="relative mb-0.5 block h-[33px] w-[54px] min-[90rem]:mb-2 min-[90rem]:h-9.5 min-[90rem]:w-[62px]"
     >
-      <span className="absolute top-0 left-0 size-[33px] rounded-full border-[1.5px] border-stone-400 min-[90rem]:size-9.5" />
-      <span className="absolute top-0 left-[21px] size-[33px] rounded-full border-[1.5px] border-dashed border-stone-400 min-[90rem]:left-6 min-[90rem]:size-9.5" />
+      <span className="absolute top-0 left-0 box-content size-[33px] rounded-full border-[1.5px] border-stone-400 min-[90rem]:size-9.5" />
+      <span className="absolute top-0 left-[21px] box-content size-[33px] rounded-full border-[1.5px] border-dashed border-stone-400 min-[90rem]:left-6 min-[90rem]:size-9.5" />
     </span>
   );
 }
