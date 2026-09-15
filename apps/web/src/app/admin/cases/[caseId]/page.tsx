@@ -337,7 +337,7 @@ export default async function AdminCasePage({
             response knows them (VEN-412).
           */}
           {thread ? (
-            <CaseConversation conversationId={thread} />
+            <CaseConversation caseId={supportCase.id} conversationId={thread} />
           ) : (
             <AdminCard
               title="Reported thread"

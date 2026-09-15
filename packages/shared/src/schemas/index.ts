@@ -3806,6 +3806,13 @@ export type AdminConversationMessage = z.infer<typeof adminConversationMessageSc
  * would write four audit rows to read one argument.
  */
 export const adminConversationQuerySchema = z.object({
+  /**
+   * The case the operator is reading under (VEN-412). A thread can carry two
+   * open reports filed weeks apart, and each grants its own dates, so the case
+   * on screen names the window rather than whichever report is oldest. It is
+   * checked against the conversation, never trusted as a pairing.
+   */
+  caseId: uuidSchema,
   ...paginationQueryShape,
   pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(MESSAGE_PAGE_SIZE),
 });

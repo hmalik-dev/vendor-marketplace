@@ -97,8 +97,11 @@ function ScopeLine({ children }: { children: string }): React.ReactElement {
  * this component holds the response.
  */
 export function CaseConversation({
+  caseId,
   conversationId,
 }: {
+  /** The case on screen: its report, not the thread's oldest, dates the read. */
+  caseId: string;
   conversationId: string;
 }): React.ReactElement {
   const request = useApi();
@@ -112,7 +115,7 @@ export function CaseConversation({
 
     try {
       setThread(
-        await request(`/admin/conversations/${conversationId}/messages`, {
+        await request(`/admin/conversations/${conversationId}/messages?caseId=${caseId}`, {
           schema: wireAdminConversationMessagesSchema,
         }),
       );

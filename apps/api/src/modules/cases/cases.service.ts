@@ -750,9 +750,10 @@ export function reportedThreadWindow(grant: { createdAt: Date; eventDate: string
  *
  * Four constraints, and each one is an acceptance rather than a nicety.
  *
- * 1. **Scoped, not a browse.** The grant is looked up from the conversation —
- *    `findOpenCaseForConversation` — so a caller holding a case id cannot pair
- *    it with a conversation id of their choosing. No open case, no read; and a
+ * 1. **Scoped, not a browse.** The grant is one row that is the case *and*
+ *    names the conversation — `findOpenCaseForConversation` — so a caller
+ *    holding a case id cannot pair it with a conversation id of their choosing.
+ *    No open case, no read; and a
  *    **resolved** case is not a grant either, or every report ever filed would
  *    leave a permanent key to that thread behind it.
  * 2. **Logged, and the log is not best-effort.** `recordAdminActionBestEffort`
@@ -775,14 +776,15 @@ export async function readCaseConversation(
   deps: CaseDeps,
   actorId: string,
   conversationId: string,
+  caseId: string,
   page: number,
   pageSize: number,
 ): Promise<AdminConversationMessages> {
-  const grant = await findOpenCaseForConversation(deps.db, conversationId);
+  const grant = await findOpenCaseForConversation(deps.db, caseId, conversationId);
 
   if (!grant) {
     throw forbidden(
-      'No open case names this conversation. Threads are readable from the report that ' +
+      'No open case of this id names this conversation. Threads are readable from the report that ' +
         'raised them, and only while that case is open.',
     );
   }

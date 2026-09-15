@@ -697,6 +697,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
         { db: app.db, log: request.log },
         assertRole(request.auth, ['admin']).id,
         request.params.conversationId,
+        request.query.caseId,
         request.query.page,
         request.query.pageSize,
       ),

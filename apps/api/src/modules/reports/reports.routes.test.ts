@@ -6,6 +6,7 @@ import {
   SUPPORT_REFERENCE_PATTERN,
   type ReportSubject,
 } from '@vendor-marketplace/shared';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import {
@@ -247,10 +248,20 @@ describe('reporting and message visibility (#436)', () => {
     return { filed, row: row! };
   }
 
-  async function readThread(conversationId: string, clerkUserId = ADMIN) {
+  /**
+   * Reads under a named case (VEN-412). With none given it reads under the
+   * thread's only case, or under an id that names no case at all, which is the
+   * refused read the #436 tests assert.
+   */
+  async function readThread(
+    conversationId: string,
+    { clerkUserId = ADMIN, caseId }: { clerkUserId?: string; caseId?: string } = {},
+  ) {
+    const grant = caseId ?? (await casesFor(conversationId))[0]?.id ?? randomUUID();
+
     return harness.app.inject({
       method: 'GET',
-      url: `/admin/conversations/${conversationId}/messages`,
+      url: `/admin/conversations/${conversationId}/messages?caseId=${grant}`,
       headers: bearer(clerkUserId),
     });
   }
@@ -614,7 +625,7 @@ describe('reporting and message visibility (#436)', () => {
     await report(CUSTOMER, 'conversation', fixture.conversationId);
 
     for (const caller of [CUSTOMER, VENDOR]) {
-      const response = await readThread(fixture.conversationId, caller);
+      const response = await readThread(fixture.conversationId, { clerkUserId: caller });
       expect(response.statusCode).toBe(403);
     }
   });
@@ -753,6 +764,60 @@ describe('reporting and message visibility (#436)', () => {
       'We are at the venue, are you close?',
     ]);
     expect(body.messages.total).toBe(1);
+  });
+
+  it('dates the read by the case on screen, not by the oldest report on the thread', async () => {
+    const fixture = await seed();
+    await harness.database.db.insert(messages).values({
+      conversationId: fixture.conversationId,
+      senderId: fixture.vendorUserId,
+      content: 'The message the second report is about.',
+      createdAt: new Date('2020-06-20T08:00:00Z'),
+    });
+    const { row: first } = await fileCaseAt(fixture.conversationId, '2020-06-04T09:00:00Z');
+
+    const second = await report(VENDOR, 'conversation', fixture.conversationId);
+    expect(second.statusCode).toBe(200);
+    const [later] = await harness.database.db
+      .update(supportCases)
+      .set({ createdAt: new Date('2020-06-21T09:00:00Z') })
+      .where(eq(supportCases.reference, second.json().reference))
+      .returning();
+    expect(later!.id).not.toBe(first.id);
+
+    const underFirst = wireConversationSchema.parse(
+      (await readThread(fixture.conversationId, { caseId: first.id })).json(),
+    );
+    const underLater = wireConversationSchema.parse(
+      (await readThread(fixture.conversationId, { caseId: later!.id })).json(),
+    );
+
+    expect(underFirst.caseId).toBe(first.id);
+    expect(underFirst.messages.items.map((item) => item.content)).toEqual([
+      'Pay me directly and I will knock off the fee.',
+      'I would rather not.',
+    ]);
+    expect(underLater.caseId).toBe(later!.id);
+    expect(underLater.window).toEqual({
+      basis: 'report_filed',
+      from: '2020-06-15',
+      to: '2020-06-21',
+    });
+    expect(underLater.messages.items.map((item) => item.content)).toEqual([
+      'The message the second report is about.',
+    ]);
+  });
+
+  it('refuses an open case that names some other subject, paired with this thread', async () => {
+    const fixture = await seed();
+    await fileCaseAt(fixture.conversationId, '2020-06-04T09:00:00Z');
+
+    const elsewhere = await report(CUSTOMER, 'vendor_profile', fixture.vendorProfileId);
+    expect(elsewhere.statusCode).toBe(200);
+    const [unrelated] = await casesFor(fixture.vendorProfileId);
+
+    const response = await readThread(fixture.conversationId, { caseId: unrelated!.id });
+    expect(response.statusCode).toBe(403);
   });
 
   it('writes no action row for a refused read', async () => {

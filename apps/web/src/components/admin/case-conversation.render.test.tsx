@@ -18,11 +18,12 @@ const { CaseConversation, windowLabel } = await import('./case-conversation');
  */
 
 const CONVERSATION_ID = '44444444-4444-4444-8444-444444444444';
+const CASE_ID = '11111111-1111-4111-8111-111111111111';
 
 function thread(window: WireAdminConversationMessages['window']): WireAdminConversationMessages {
   return {
     conversationId: CONVERSATION_ID,
-    caseId: '11111111-1111-4111-8111-111111111111',
+    caseId: CASE_ID,
     caseReference: 'ORL-4K7Q-P2',
     customerName: 'Maya Rivera',
     vendorName: 'Kessler & Co.',
@@ -53,10 +54,17 @@ afterEach(() => {
 
 async function openThread(window: WireAdminConversationMessages['window']): Promise<HTMLElement> {
   request.mockResolvedValue(thread(window));
-  const { container } = render(<CaseConversation conversationId={CONVERSATION_ID} />);
+  const { container } = render(
+    <CaseConversation caseId={CASE_ID} conversationId={CONVERSATION_ID} />,
+  );
 
   fireEvent.click(screen.getByRole('button', { name: 'Read the reported thread' }));
   await screen.findByText('Hi — we’re at the venue, are you close?');
+  /* Under the case on screen: its report, not the thread's oldest, dates the window. */
+  expect(request).toHaveBeenCalledWith(
+    `/admin/conversations/${CONVERSATION_ID}/messages?caseId=${CASE_ID}`,
+    expect.anything(),
+  );
 
   return container.querySelector('[data-admin-card]') as HTMLElement;
 }
@@ -84,7 +92,9 @@ describe('CaseConversation', () => {
   });
 
   it('names no dates before the read, and keeps the conversation id visible', () => {
-    const { container } = render(<CaseConversation conversationId={CONVERSATION_ID} />);
+    const { container } = render(
+      <CaseConversation caseId={CASE_ID} conversationId={CONVERSATION_ID} />,
+    );
 
     expect(container.querySelector('[data-card-band]')?.textContent).toBe(
       'Reported threadCase-scoped read',
