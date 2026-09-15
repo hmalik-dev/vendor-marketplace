@@ -133,8 +133,13 @@ test.describe('paid booking', () => {
     await expect(row, 'the accepted request is still waiting on the dashboard').toHaveCount(0);
 
     await vendorPage.goto('/vendor/bookings');
-    // Mid-swap the streamed list holds both copies of the card (`e2e/hydration.ts`).
-    await waitForHydration(vendorPage, 'main li');
+    /*
+     * Every `li` in the document, not only `main`'s (`e2e/hydration.ts`). Mid-swap
+     * the streamed list's second copy sits in React's hidden boundary outside
+     * `#main`, so a wait scoped to `main li` let the read below resolve both
+     * copies — observed once in eight full runs after VEN-414 first landed.
+     */
+    await waitForHydration(vendorPage, 'li');
     await expect(
       vendorBookingCard(vendorPage, venue).getByText('Awaiting payment', { exact: true }),
     ).toBeVisible();
