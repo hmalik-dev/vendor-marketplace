@@ -5,11 +5,11 @@ import { CATEGORY_SEEDS, TAG_SEEDS } from '@vendor-marketplace/shared';
 import { type Check, type CheckContext, type CheckResult, fail, pass } from '../types.js';
 
 const CONNECT_TIMEOUT_SECONDS = 10;
-const NEON_HOST = /\.neon\.tech$/i;
+export const NEON_HOST = /\.neon\.tech$/i;
 /** Branches that hold real customer data and must never back local development. */
 const PROTECTED_BRANCHES = /^(production|main|master)$/i;
 
-interface JournalEntry {
+export interface JournalEntry {
   readonly tag: string;
   readonly when: number;
 }
@@ -112,16 +112,27 @@ function unreachable(name: string, reason: string): CheckResult {
   return fail('core', name, `not checked — ${reason}`, 'Fix the database connection first');
 }
 
-async function checkMigrations(sql: postgres.Sql, repoRoot: string): Promise<CheckResult> {
-  const name = 'Migrations applied';
-  const journalPath = path.join(repoRoot, 'packages/db/drizzle/meta/_journal.json');
+const JOURNAL_PATH = 'packages/db/drizzle/meta/_journal.json';
+
+/** The repository's migrations in order, or `null` when the journal is missing. */
+export function readMigrationJournal(repoRoot: string): readonly JournalEntry[] | null {
+  const journalPath = path.join(repoRoot, JOURNAL_PATH);
 
   if (!existsSync(journalPath)) {
-    return fail('core', name, 'packages/db/drizzle/meta/_journal.json is missing', 'pnpm install');
+    return null;
   }
 
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as Journal;
-  const expected = journal.entries ?? [];
+  return journal.entries ?? [];
+}
+
+async function checkMigrations(sql: postgres.Sql, repoRoot: string): Promise<CheckResult> {
+  const name = 'Migrations applied';
+  const expected = readMigrationJournal(repoRoot);
+
+  if (!expected) {
+    return fail('core', name, `${JOURNAL_PATH} is missing`, 'pnpm install');
+  }
 
   let applied: ReadonlySet<string>;
 
