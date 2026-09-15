@@ -88,7 +88,8 @@ describe('reference reads', () => {
 
       expect(apiRequest).toHaveBeenCalledWith(
         '/categories',
-        expect.objectContaining({ revalidate: 3600 }),
+        // A minute, so a category hidden from the console leaves the header soon (VEN-401).
+        expect.objectContaining({ revalidate: 60 }),
       );
     });
 

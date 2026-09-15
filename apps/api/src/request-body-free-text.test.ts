@@ -227,11 +227,14 @@ describe('free text on a request body', () => {
     // beside one; 27 since #436 added `createReportSchema`, whose `detail` is
     // free text a stranger types about somebody else; 29 since VEN-404 added
     // `updatePlatformSettingsSchema` and `setVendorPayoutHoldSchema`, booleans
-    // and a cap in cents with no free text.
+    // and a cap in cents with no free text; 31 since VEN-401 added
+    // `setCategoryActiveSchema` and `reorderCategoriesSchema`, a boolean and
+    // two uuid lists.
     //
     // A merge is where this number goes wrong: two lanes each add to 23 and a
     // both-sides union keeps one of the answers rather than the sum.
-    expect(names).toHaveLength(29);
+    expect(names).toHaveLength(31);
+    expect(names).toContain('reorderCategoriesSchema');
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
 

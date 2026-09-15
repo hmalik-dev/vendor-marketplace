@@ -1261,6 +1261,14 @@ export const ADMIN_ACTIONS = [
   'platform_setting_changed',
   'vendor_payout_hold_set',
   'vendor_payout_hold_released',
+  /*
+   * Category management (VEN-401). The two states a category can be moved to,
+   * and a move in the order — one row per category whose position changed, so
+   * the subject filter answers "what happened to Catering" on its own.
+   */
+  'category_deactivated',
+  'category_reactivated',
+  'category_reordered',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -1288,6 +1296,7 @@ export const ADMIN_ACTION_SUBJECTS = [
   'conversation',
   /* The singleton `platform_settings` row, named by `PLATFORM_SETTINGS_ID`. */
   'platform_settings',
+  'category',
 ] as const;
 export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
 

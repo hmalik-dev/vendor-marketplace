@@ -192,6 +192,21 @@ describe('HomePage', () => {
     expect(container.querySelector('a[href="/search?category=florals"]')).toBeNull();
   });
 
+  /* VEN-401: a category hidden from the console leaves the jump row too. */
+  it('drops a jump chip for a category the taxonomy no longer offers', async () => {
+    const offered = (await getCategories()).filter((category) => category.slug !== 'entertainment');
+    getCategories.mockResolvedValueOnce(offered);
+
+    render(await HomePage());
+
+    const row = screen.getByText('Or jump straight to').parentElement;
+    expect([...row!.querySelectorAll('a')].map((link) => link.textContent)).toEqual([
+      'Photography',
+      'Catering',
+      'Beauty',
+    ]);
+  });
+
   it('features the six categories the frame draws, in displayOrder', async () => {
     render(await HomePage());
 

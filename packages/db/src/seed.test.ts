@@ -56,13 +56,13 @@ describe('seedCategories', () => {
     expect(after.map((row) => row.id)).toEqual(before.map((row) => row.id));
   });
 
-  it('repairs a drifted category row in place', async () => {
+  it('repairs a drifted category name in place', async () => {
     const seed = CATEGORY_SEEDS[0];
     expect(seed).toBeDefined();
 
     await testDb.db
       .update(categories)
-      .set({ name: 'Wrong Name', isActive: false, displayOrder: 99 })
+      .set({ name: 'Wrong Name' })
       .where(eq(categories.slug, seed!.slug));
 
     await seedCategories(testDb.db);
@@ -70,8 +70,31 @@ describe('seedCategories', () => {
     const [row] = await testDb.db.select().from(categories).where(eq(categories.slug, seed!.slug));
     expect(row).toBeDefined();
     expect(row!.name).toBe(seed!.name);
-    expect(row!.isActive).toBe(true);
-    expect(row!.displayOrder).toBe(seed!.displayOrder);
+  });
+
+  /*
+   * VEN-401. The console deactivates and reorders categories; a re-seed that
+   * reset both would undo an operator's decision on the next lane or CI run.
+   */
+  it("keeps an operator's order and deactivation across a re-seed", async () => {
+    const seed = CATEGORY_SEEDS[1];
+    expect(seed).toBeDefined();
+
+    await testDb.db
+      .update(categories)
+      .set({ isActive: false, displayOrder: 99 })
+      .where(eq(categories.slug, seed!.slug));
+
+    await seedCategories(testDb.db);
+
+    const [row] = await testDb.db.select().from(categories).where(eq(categories.slug, seed!.slug));
+    expect(row!.isActive).toBe(false);
+    expect(row!.displayOrder).toBe(99);
+
+    await testDb.db
+      .update(categories)
+      .set({ isActive: true, displayOrder: seed!.displayOrder })
+      .where(eq(categories.slug, seed!.slug));
   });
 });
 
