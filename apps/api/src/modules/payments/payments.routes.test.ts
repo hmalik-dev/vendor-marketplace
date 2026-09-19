@@ -401,6 +401,92 @@ describe('payments', () => {
     });
 
     /* 404 rather than 403: a stranger probing ids learns nothing. */
+    /*
+     * Stripe forgets the creation key after 24 hours; the fake's key map is
+     * cleared to model that. The stored intent is what must come back.
+     */
+    it('hands back the stored intent instead of minting a second after the key expires', async () => {
+      const requestId = await acceptedRequest();
+      const first = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      harness.stripe.intentsByKey.clear();
+
+      const second = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(second.statusCode).toBe(200);
+      expect(second.json().paymentIntentId).toBe(first.json().paymentIntentId);
+      const [row] = await harness.database.db
+        .select({ intent: bookingRequests.stripePaymentIntentId })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+      expect(row?.intent).toBe(first.json().paymentIntentId);
+    });
+
+    it('mints a new intent when the stored one was cancelled', async () => {
+      const requestId = await acceptedRequest();
+      const first = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      harness.stripe.intentsByKey.clear();
+      harness.stripe.cancel(first.json().paymentIntentId);
+
+      const second = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(second.statusCode).toBe(200);
+      expect(second.json().paymentIntentId).not.toBe(first.json().paymentIntentId);
+    });
+
+    /*
+     * Both intents get paid: the second charge is the one nothing pointed at.
+     */
+    it('refunds and alerts on a second payment for an already-booked request', async () => {
+      const requestId = await acceptedRequest();
+      const firstIntentId = await payFor(requestId);
+      harness.stripe.intentsByKey.clear();
+      const stray = await harness.stripe.createPaymentIntent({
+        requestId,
+        amountCents: PRICE_CENTS,
+        customerId: 'cus_test',
+        vendorId: 'ven_test',
+      });
+      harness.stripe.succeed(stray.id);
+
+      const response = await redeliver(stray.id);
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().outcome).toBe('already-booked');
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(harness.stripe.refunds[0]).toMatchObject({
+        paymentIntentId: stray.id,
+        amountCents: PRICE_CENTS,
+      });
+      expect(harness.stripe.refunds[0]?.idempotencyKey).toMatch(
+        new RegExp(`^${stray.id}_duplicate_intent_\\d+$`),
+      );
+      const [mail] = harness.email.sent.filter(
+        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+      );
+      expect(mail?.subject).toContain('second payment');
+      expect(mail?.text).toContain(requestId);
+      const rows = await harness.database.db.select().from(bookings);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.stripePaymentIntentId).toBe(firstIntentId);
+    });
+
     it('will not let another customer open someone elses checkout', async () => {
       const requestId = await acceptedRequest();
 
@@ -1010,8 +1096,8 @@ describe('payments', () => {
     });
 
     it('refunds half inside the cutoff', async () => {
-      // A day out: inside 48 hours, and still in the future.
-      const requestId = await acceptedRequest(toDateString(addDays(START, 1)));
+      // Two days out: inside 48 hours of the event's midnight, and future in every zone.
+      const requestId = await acceptedRequest(toDateString(addDays(START, 2)));
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
 
@@ -1180,6 +1266,51 @@ describe('payments', () => {
         'That event already happened, so it cannot be cancelled',
       );
       expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    /*
+     * The case the test above never reached: it completes the booking first, so
+     * its 409 is the status message. A `confirmed` booking whose event has
+     * passed is what the vendor's optional `complete` leaves behind, and it used
+     * to refund half of a delivered event.
+     */
+    it('refuses to cancel a confirmed booking whose event has passed, refunding nothing', async () => {
+      const booking = await pastBooking();
+
+      const response = await inject('PUT', `/customer/bookings/${booking.id}/cancel`, CUSTOMER, {});
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toContain('too close to cancel');
+      expect(harness.stripe.refunds).toEqual([]);
+      expect(harness.stripe.reversals).toEqual([]);
+      const [row] = await harness.database.db.select().from(bookings);
+      expect(row?.status).toBe('confirmed');
+      const [held] = await harness.database.db.select().from(availability);
+      expect(held?.status).toBe('booked');
+    });
+
+    it('refuses to cancel a booking that has already been paid out, reversing nothing', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      await harness.database.db
+        .update(bookings)
+        .set({ payoutReleasedAt: new Date(), stripeTransferId: 'tr_test_released' })
+        .where(eq(bookings.id, booking!.id));
+
+      const response = await inject(
+        'PUT',
+        `/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toContain('already been paid out');
+      expect(harness.stripe.refunds).toEqual([]);
+      expect(harness.stripe.reversals).toEqual([]);
+      const [held] = await harness.database.db.select().from(availability);
+      expect(held?.status).toBe('booked');
     });
 
     it('refuses a second cancellation, and refunds nothing twice', async () => {

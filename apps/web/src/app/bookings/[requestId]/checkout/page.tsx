@@ -86,7 +86,7 @@ export default async function CheckoutPage({ params }: PageProps): Promise<React
  * the two: it promises the customer nothing.
  */
 async function unavailableScreen(
-  state: 'not-payable' | 'failed' | 'paused' | 'over-cap',
+  state: 'not-payable' | 'vendor-unavailable' | 'failed' | 'paused' | 'over-cap',
   requestId: string,
 ): Promise<React.ReactElement> {
   if (state === 'failed' || state === 'paused' || state === 'over-cap') {
@@ -101,11 +101,15 @@ async function unavailableScreen(
    * reason it was the vaguer of the two goes to the log.
    */
   const request = await getOwnBookingRequest(requestId).catch((error: unknown) => {
-    reportSwallowedError('checkout: reading the request to explain a 409', error);
+    reportSwallowedError('checkout: reading the request to explain a refusal', error);
     return null;
   });
-  const reason: CheckoutUnavailableReason =
-    request?.status === 'pending' || request?.status === 'quoted' ? 'not-accepted' : 'closed';
+  const notAccepted = request?.status === 'pending' || request?.status === 'quoted';
+  let reason: CheckoutUnavailableReason = notAccepted ? 'not-accepted' : 'closed';
+
+  if (state === 'vendor-unavailable') {
+    reason = state;
+  }
 
   return (
     <CheckoutUnavailable

@@ -347,6 +347,9 @@ export function refundFailedAlert(input: { bookingId: string; during: string }):
   };
 }
 
+/** Why a succeeded charge was given back rather than booked. */
+export type RefusedPaymentCause = 'declined_request' | 'duplicate_intent';
+
 /**
  * A refund Stripe later failed on a payment no booking owns — the refund of a
  * charge on a request the platform had already declined, which by design has no
@@ -374,15 +377,19 @@ export function unmatchedRefundFailedAlert(input: {
 
 /**
  * A charge succeeded on a request the platform had already refused, so it was
- * not booked. `refunded` says whether the money is already on its way back;
- * when it is not, the webhook answers 500 and Stripe redelivers.
+ * not booked, or a second charge landed on a request already booked.
+ * `refunded` says whether the money is already on its way back; when it is
+ * not, the webhook answers 500 and Stripe redelivers.
  */
 export function paymentRefusedAlert(input: {
   requestId: string;
   paymentIntentId: string;
   amountCents: number;
   refunded: boolean;
+  cause: RefusedPaymentCause;
 }): OperatorAlert {
+  const duplicate = input.cause === 'duplicate_intent';
+
   return {
     kind: 'payment_refused',
     /*
@@ -392,10 +399,12 @@ export function paymentRefusedAlert(input: {
      */
     subjectId: `${input.requestId}:${input.refunded ? 'refunded' : 'unrefunded'}`,
     summary: input.refunded
-      ? `Refunded a payment on a declined request ${input.requestId}`
-      : `A payment on a declined request ${input.requestId} has not been refunded`,
+      ? `Refunded ${duplicate ? 'a second payment on a booked' : 'a payment on a declined'} request ${input.requestId}`
+      : `A ${duplicate ? 'second payment on a booked' : 'payment on a declined'} request ${input.requestId} has not been refunded`,
     details: [
-      `A customer paid ${formatPrice(input.amountCents)} after the platform declined the request, so no booking was made.`,
+      duplicate
+        ? `A customer paid ${formatPrice(input.amountCents)} a second time on a request that was already booked, so the extra charge was not kept.`
+        : `A customer paid ${formatPrice(input.amountCents)} after the platform declined the request, so no booking was made.`,
       input.refunded
         ? 'The payment has been refunded in full.'
         : 'The payment has not been refunded: the refund failed and Stripe will redeliver the event.',

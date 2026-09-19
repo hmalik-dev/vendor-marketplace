@@ -24,6 +24,7 @@ import {
 import type { EventHub } from '../../lib/event-stream.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import {
+  PAYMENT_INTENT_CANCELED,
   PAYMENT_INTENT_SUCCEEDED,
   reversalAmountCents,
   transferGroupFor,
@@ -39,6 +40,7 @@ import {
 import { insertNotification } from '../messaging/messaging.dao.js';
 import {
   paymentRefusedAlert,
+  type RefusedPaymentCause,
   refundFailedAlert,
   type OperatorAlerts,
 } from '../operator-alerts/operator-alerts.service.js';
@@ -255,6 +257,22 @@ export async function openCheckout(
   await assertCheckoutOpen(context.db, amountCents);
 
   /*
+   * A stored intent that is still live is the one to hand back. Stripe forgets
+   * the creation key after 24 hours, so minting again on every open put a
+   * second payable intent on one request — and `recordPaymentIntent` then
+   * overwrote the first, whose payment nothing would reconcile. Only a
+   * cancelled intent is replaced; a `succeeded` one is returned as it is, and
+   * `/confirmed` reconciles it into a booking.
+   */
+  if (row.stripePaymentIntentId) {
+    const stored = await context.stripe.retrievePaymentIntent(row.stripePaymentIntentId);
+
+    if (stored.status !== PAYMENT_INTENT_CANCELED) {
+      return toCheckoutIntent(row, stored);
+    }
+  }
+
+  /*
    * The whole amount, into Orla's balance (#423). No fee and no destination:
    * `requirePayableByCustomer` still refuses a vendor who cannot receive a
    * transfer — there is no point charging a customer for a booking that can
@@ -365,6 +383,19 @@ export async function recordSuccessfulPayment(
   const existing = await findAnyBookingByRequest(context.db, requestId);
 
   if (existing) {
+    /*
+     * A booking is already held, so this charge is a *second* one unless it is
+     * the intent that made the booking: after Stripe's 24-hour idempotency
+     * window a reopened checkout used to mint another intent, and both could be
+     * paid. Nothing pointed at the extra money, so it is refunded and the
+     * operator told. The answer stays 200 `already-booked` — the booking is
+     * fine, and a 5xx would only make Stripe redeliver a decided event. A
+     * failed refund is rethrown by `refuseDeclinedPayment` and does redeliver.
+     */
+    if (existing.stripePaymentIntentId && existing.stripePaymentIntentId !== intent.id) {
+      await refuseDeclinedPayment(context, intent, requestId, 'duplicate_intent');
+    }
+
     return { outcome: 'already-booked', booking: existing };
   }
 
@@ -442,6 +473,11 @@ export async function recordSuccessfulPayment(
   return { outcome: 'booked', booking };
 }
 
+const REFUSED_PAYMENT_LOG: Record<RefusedPaymentCause, string> = {
+  declined_request: 'Refunded a payment made on a request the platform had already declined',
+  duplicate_intent: 'Refunded a second payment made on a request that was already booked',
+};
+
 /**
  * Gives back a charge that cannot become a booking, and says so.
  *
@@ -459,6 +495,7 @@ async function refuseDeclinedPayment(
   context: PaymentContext,
   intent: PaymentIntentSnapshot,
   requestId: string,
+  cause: RefusedPaymentCause = 'declined_request',
 ): Promise<RecordedPayment> {
   const alert = (refunded: boolean): void =>
     context.alerts?.dispatch(
@@ -467,6 +504,7 @@ async function refuseDeclinedPayment(
         paymentIntentId: intent.id,
         amountCents: intent.amountReceivedCents,
         refunded,
+        cause,
       }),
     );
 
@@ -483,7 +521,7 @@ async function refuseDeclinedPayment(
          * redelivery — a fixed key would answer every retry with the first
          * refusal. Concurrent deliveries in the same hour still share a key.
          */
-        idempotencyKey: `${intent.id}_declined_request_${Math.floor(Date.now() / REFUND_KEY_WINDOW_MS)}`,
+        idempotencyKey: `${intent.id}_${cause}_${Math.floor(Date.now() / REFUND_KEY_WINDOW_MS)}`,
       });
     }
   } catch (error) {
@@ -491,10 +529,7 @@ async function refuseDeclinedPayment(
     throw error;
   }
 
-  context.log.warn(
-    { requestId, paymentIntentId: intent.id },
-    'Refunded a payment made on a request the platform had already declined',
-  );
+  context.log.warn({ requestId, paymentIntentId: intent.id }, REFUSED_PAYMENT_LOG[cause]);
   alert(true);
 
   return { outcome: 'refunded', booking: null };
@@ -672,6 +707,14 @@ export async function reconcileBooking(
 
   return recorded.booking ? toBookingWithContext(recorded.booking, row.eventType) : null;
 }
+
+const EVENT_PASSED_CANCEL_MESSAGE =
+  'That event is too close to cancel online. ' +
+  'If something went wrong, report a problem with the booking and we will look into it.';
+
+const PAID_OUT_CANCEL_MESSAGE =
+  'This booking has already been paid out, so it cannot be cancelled. ' +
+  'Contact support and we will look into it.';
 
 /**
  * Why an action on a booking is refused, one sentence per status it is already
@@ -1060,6 +1103,22 @@ export async function cancelBooking(
 
   if (booking.status !== 'confirmed') {
     throw conflict(NOT_CANCELLABLE[booking.status]);
+  }
+
+  /*
+   * The same two refusals `placeDisputeHold` and `completeBooking` carry, so the
+   * three doors into a past-event booking agree. `calculateRefund` floors the
+   * hours at zero, which puts every past date in the late tier: without this a
+   * delivered event refunded half and clawed it back out of a payout that had
+   * already been released. A customer with a complaint about a delivered event
+   * takes the report path, where an operator decides.
+   */
+  if (booking.payoutReleasedAt) {
+    throw conflict(PAID_OUT_CANCEL_MESSAGE);
+  }
+
+  if (!isUniversallyFutureDate(booking.eventDate, now)) {
+    throw conflict(EVENT_PASSED_CANCEL_MESSAGE);
   }
 
   const quote = calculateRefund(booking.totalAmountCents, booking.eventDate, now);
