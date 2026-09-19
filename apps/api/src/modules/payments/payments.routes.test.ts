@@ -191,13 +191,13 @@ describe('payments', () => {
   beforeAll(async () => {
     harness = await createTestHarness({ clock: () => clockNow });
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
       [OUTSIDER, 'customer', 'edsger@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',

@@ -106,9 +106,9 @@ describe('migrations', () => {
 });
 
 describe('constraints', () => {
-  it('rejects a duplicate clerk_user_id', async () => {
+  it('rejects a duplicate auth_user_id', async () => {
     const row = {
-      clerkUserId: 'user_dupe',
+      authUserId: 'user_dupe',
       email: 'first@example.com',
       role: 'customer' as const,
       firstName: 'First',
@@ -144,7 +144,7 @@ describe('constraints', () => {
     const [owner] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: 'user_defaults',
+        authUserId: 'user_defaults',
         email: 'defaults@example.com',
         role: 'vendor',
         firstName: 'Vera',
@@ -180,7 +180,7 @@ describe('constraints', () => {
     const [row] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: 'user_customer_defaults',
+        authUserId: 'user_customer_defaults',
         email: 'customer-defaults@example.com',
         role: 'customer',
         firstName: 'Cara',
@@ -203,7 +203,7 @@ describe('constraints', () => {
     const [row] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: 'user_customer_profile',
+        authUserId: 'user_customer_profile',
         email: 'customer-profile@example.com',
         role: 'customer',
         firstName: 'Pia',
@@ -225,7 +225,7 @@ describe('constraints', () => {
   it('rejects a budget tier outside the enum', async () => {
     await expect(
       testDb.db.execute(
-        sql`INSERT INTO users (clerk_user_id, email, role, first_name, last_name, budget_tier)
+        sql`INSERT INTO users (auth_user_id, email, role, first_name, last_name, budget_tier)
             VALUES ('user_bad_tier', 'bad-tier@example.com', 'customer', 'Bad', 'Tier', 'champagne')`,
       ),
     ).rejects.toThrow();
@@ -283,7 +283,7 @@ describe('constraints', () => {
     const [owner] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: 'user_tag_fk',
+        authUserId: 'user_tag_fk',
         email: 'tag-fk@example.com',
         role: 'vendor',
         firstName: 'Tag',
@@ -310,7 +310,7 @@ describe('constraints', () => {
     const [owner] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: 'user_tag_pk',
+        authUserId: 'user_tag_pk',
         email: 'tag-pk@example.com',
         role: 'vendor',
         firstName: 'Dupe',
@@ -339,7 +339,7 @@ describe('constraints', () => {
     const [suggester] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: 'user_suggester',
+        authUserId: 'user_suggester',
         email: 'suggester@example.com',
         role: 'vendor',
         firstName: 'Sam',

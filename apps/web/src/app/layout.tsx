@@ -3,7 +3,7 @@ import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/goo
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
 import { siteOrigin } from '@/config/env';
-import { ClerkShell } from '@/components/auth/clerk-shell';
+import { getServerSession } from '@/lib/auth/server';
 import { ErrorReportingUser } from '@/components/errors/error-reporting-user';
 import { OutsideAdmin, PublicChrome } from '@/components/public-chrome';
 import { SiteFooter } from '@/components/site-footer';
@@ -67,24 +67,21 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image', title: BRAND_NAME, description: BRAND_DESCRIPTION },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getServerSession();
+
   return (
     <html
       lang="en"
       className={`${instrumentSerif.variable} ${instrumentSans.variable} ${jetBrainsMono.variable}`}
     >
       <body className="flex min-h-screen flex-col">
-        {/*
-          The provider is a Client Component so its localization can follow the
-          route: Clerk keys the submit label globally, and `/sign-up` is the
-          only screen with a frame that specifies it. See `clerk-shell.tsx`.
-        */}
-        <ClerkShell>
-          <ErrorReportingUser />
+        <>
+          <ErrorReportingUser userId={session?.userId ?? null} />
           {/*
             The adapter sits above the header, not inside the search page: on
             `/search` the query bar lives in the header and the results live in
@@ -158,7 +155,7 @@ export default function RootLayout({
             offset={{ bottom: TOAST_BOTTOM_OFFSET }}
             mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
           />
-        </ClerkShell>
+        </>
       </body>
     </html>
   );

@@ -42,8 +42,8 @@ describe('admin routes', () => {
    * needed it. Kept as a local alias so this file's several hundred call sites
    * read as they did.
    */
-  const signIn = (clerkUserId: string, promoteToAdmin = false): Promise<string> =>
-    signInAs(harness, clerkUserId, promoteToAdmin);
+  const signIn = (authUserId: string, promoteToAdmin = false): Promise<string> =>
+    signInAs(harness, authUserId, promoteToAdmin);
 
   async function createVendorProfile(
     overrides: { isPublished?: boolean; stripeOnboarded?: boolean } = {},
@@ -132,15 +132,15 @@ describe('admin routes', () => {
   beforeAll(async () => {
     harness = await createTestHarness({ clock: () => clockNow ?? new Date() });
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [OTHER_ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,
@@ -1190,7 +1190,7 @@ describe('admin routes', () => {
       const customerId = await signIn(CUSTOMER);
       // A second customer, so the filter has something to exclude.
       await harness.database.db.insert(users).values({
-        clerkUserId: OTHER_CUSTOMER,
+        authUserId: OTHER_CUSTOMER,
         email: `${OTHER_CUSTOMER}@example.com`,
         role: 'customer',
         firstName: 'Dorothy',
@@ -1326,7 +1326,7 @@ describe('admin routes', () => {
       const vendor = await createVendorProfile({ isPublished: true });
       const stuck = await createFutureBooking(customerId, vendor.profileId);
 
-      // Retired the way `retireUserByClerkId` retires: the user row and the
+      // Retired the way `retireUserByAuthId` retires: the user row and the
       // storefront, and nothing touching `is_banned`.
       await harness.database.db
         .update(users)

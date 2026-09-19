@@ -41,30 +41,30 @@ describe('/customers', () => {
    * The local row is created lazily on the identity's first authenticated
    * request, so this makes one rather than assuming the row is already there.
    */
-  async function idOf(clerkUserId: string): Promise<string> {
+  async function idOf(authUserId: string): Promise<string> {
     const me = await harness.app.inject({
       method: 'GET',
       url: '/users/me',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(me.statusCode).toBe(200);
 
     const rows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId));
+      .where(eq(users.authUserId, authUserId));
 
     return rows[0]!.id;
   }
 
   async function createVendor(
-    clerkUserId: string,
+    authUserId: string,
     businessName: string,
   ): Promise<{ vendorId: string; packageId: string }> {
     const profile = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         businessName,
         categoryIds: [photographyId],
@@ -79,7 +79,7 @@ describe('/customers', () => {
     const created = await harness.app.inject({
       method: 'POST',
       url: '/vendor/packages',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         name: 'Full day coverage',
         description: 'Six hours of coverage with two photographers on site.',
@@ -124,14 +124,14 @@ describe('/customers', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [OTHER_VENDOR, 'vendor', 'ada@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
       [OTHER_CUSTOMER, 'customer', 'edsger@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',

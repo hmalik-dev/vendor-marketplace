@@ -78,12 +78,12 @@ describe('several acceptances of one document at once, against a real Postgres',
   }
 
   /** The account row a sign-in would have written, for a suite that has no gate. */
-  async function seedUser(clerkUserId: string, role: 'customer' | 'vendor'): Promise<string> {
+  async function seedUser(authUserId: string, role: 'customer' | 'vendor'): Promise<string> {
     const [row] = await harness.database.db
       .insert(users)
       .values({
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+        authUserId,
+        email: `${authUserId}@example.com`,
         role,
         firstName: 'Ada',
         lastName: 'Reyes',
@@ -146,13 +146,13 @@ describe('several acceptances of one document at once, against a real Postgres',
     database = await createPostgresTestDatabase({ poolSize: 4 });
     harness = await createTestHarness({ database, acceptTerms: false });
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [CUSTOMER, 'customer'],
       [VENDOR, 'vendor'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Ada',
         lastName: 'Reyes',
         roleHint: role,

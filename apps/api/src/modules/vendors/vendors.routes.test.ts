@@ -46,13 +46,13 @@ describe('/vendor/profile', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [OTHER_VENDOR, 'vendor', 'ada@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',

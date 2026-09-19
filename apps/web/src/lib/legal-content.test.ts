@@ -131,7 +131,7 @@ describe('legal content', () => {
     expect(table?.header).toEqual(['What', 'Held by', 'Why']);
     expect(table?.rows.map((row) => row[1].map((span) => span.text).join(''))).toEqual([
       'Stripe',
-      'Clerk',
+      'Neon Auth',
       'Cloudflare R2',
       BRAND_NAME,
       'Stripe',
@@ -144,13 +144,13 @@ describe('legal content', () => {
     expect(blocks.at(-1)?.kind).toBe('note');
   });
 
-  it('names only the Clerk session cookie on the cookie notice', () => {
+  it('names only the Neon Auth session cookie on the cookie notice', () => {
     const table = legalDocument('cookies').lead.find((block) => block.kind === 'table');
 
     expect(table?.rows).toHaveLength(1);
     expect(table?.rows[0].map((cell) => cell.map((span) => span.text).join(''))).toEqual([
-      '__session',
-      'Clerk',
+      '__Secure-neon-auth.session_token',
+      'Neon Auth',
       'Strictly necessary — your sign-in.',
     ]);
   });

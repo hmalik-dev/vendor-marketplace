@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ReactNode } from 'react';
 import {
   BRAND_NAME,
   CATEGORY_SEEDS,
@@ -33,9 +32,8 @@ let currentRole: 'customer' | 'vendor' | 'admin' | null = null;
 const getOwnBookingRequests = vi.fn<() => Promise<WireBookingRequest[]>>();
 const getOwnBookings = vi.fn<() => Promise<WireBooking[]>>();
 
-vi.mock('@clerk/nextjs', () => ({
-  Show: ({ when, children }: { when: AuthState; children: ReactNode }) =>
-    when === authState ? children : null,
+vi.mock('@/lib/auth/server', () => ({
+  getServerSession: async () => (authState === 'signed-in' ? { userId: 'u1', token: 't' } : null),
 }));
 
 vi.mock('@/lib/current-user', () => ({
@@ -1024,7 +1022,7 @@ describe('HomePage, signed in as a customer', () => {
   /*
    * #33's law: a public route must render for a signed-in visitor even when the
    * API will not answer them. The two hub reads do not honour it on their own —
-   * `customerToken()` redirects when Clerk hands back no token, and
+   * `customerToken()` redirects when the session yields no token, and
    * `degradeToEmpty` redirects on a 401 before it can return its empty list.
    * Both are right for `/bookings`; here they would bounce a customer whose JWT
    * the API rejects off the marketing home to `/sign-in?returnTo=/`, and back

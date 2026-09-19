@@ -17,7 +17,7 @@ import {
   type OperatorAlerts,
 } from '../operator-alerts/operator-alerts.service.js';
 import { renderReportNotice } from '../support/support-email.js';
-import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
+import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import { findReportSubject, type ReportSubjectProjection } from './reports.dao.js';
 
 /**

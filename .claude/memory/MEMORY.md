@@ -69,3 +69,4 @@
 - [Check a lane's outcome, not its liveness](orchestrate-check-lane-outcome-not-liveness.md) — read the ticket state and comments, raise blockers first; `working` in `claude agents` proves nothing
 - [Neon dev and staging are safe, production is not](neon-dev-and-staging-are-safe-production-is-not.md) — lanes may use either for Neon Auth/Storage work; `neon connection-string --branch-id` defaults to production
 - [Markdown-only PRs merge without CI](markdown-only-prs-merge-without-ci.md) — branch + PR, then `gh pr merge --squash --admin`; anything non-.md goes the normal way
+- [Neon Auth E2E accounts live on dev](neon-auth-e2e-accounts-on-dev.md) — customer/vendor/no-row newcomer are persistent Neon identities (VEN-447); creds only in .env.e2e.local, never accept Terms as the newcomer

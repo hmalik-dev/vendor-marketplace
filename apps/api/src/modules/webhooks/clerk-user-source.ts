@@ -39,8 +39,8 @@ export interface ClerkApiUser {
  */
 const CLERK_ID_PREFIX = 'user_';
 
-export function isClerkIdentity(clerkUserId: string): boolean {
-  return clerkUserId.startsWith(CLERK_ID_PREFIX);
+export function isClerkIdentity(authUserId: string): boolean {
+  return authUserId.startsWith(CLERK_ID_PREFIX);
 }
 
 export function clerkUsersIn(page: { data: ClerkApiUser[] } | ClerkApiUser[]): ClerkApiUser[] {

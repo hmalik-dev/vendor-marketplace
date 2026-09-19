@@ -55,11 +55,11 @@ describe('admin payout health', () => {
   let customerId: string;
   let adminId: string;
 
-  async function signIn(clerkUserId: string, promoteToAdmin = false): Promise<string> {
+  async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
       url: '/users/me',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
 
@@ -67,13 +67,13 @@ describe('admin payout health', () => {
       await harness.database.db
         .update(users)
         .set({ role: 'admin' })
-        .where(eq(users.clerkUserId, clerkUserId));
+        .where(eq(users.authUserId, authUserId));
     }
 
     const rows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId))
+      .where(eq(users.authUserId, authUserId))
       .limit(1);
 
     return rows[0]!.id;
@@ -187,14 +187,14 @@ describe('admin payout health', () => {
   beforeAll(async () => {
     harness = await createTestHarness({ clock: () => NOW });
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,

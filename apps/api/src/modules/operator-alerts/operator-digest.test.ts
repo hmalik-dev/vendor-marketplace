@@ -52,7 +52,7 @@ describe('the operator digest (VEN-405)', () => {
     const [customer] = await db
       .insert(users)
       .values({
-        clerkUserId: 'user_digest_customer',
+        authUserId: 'user_digest_customer',
         email: CUSTOMER_EMAIL,
         phone: CUSTOMER_PHONE,
         role: 'customer',
@@ -64,7 +64,7 @@ describe('the operator digest (VEN-405)', () => {
     const [owner] = await db
       .insert(users)
       .values({
-        clerkUserId: 'user_digest_vendor',
+        authUserId: 'user_digest_vendor',
         email: 'digest-vendor@example.com',
         role: 'vendor',
         firstName: 'Wren',
@@ -74,7 +74,7 @@ describe('the operator digest (VEN-405)', () => {
       .returning({ id: users.id });
     // Signed up before the window, so not counted.
     await db.insert(users).values({
-      clerkUserId: 'user_digest_old',
+      authUserId: 'user_digest_old',
       email: 'digest-old@example.com',
       role: 'customer',
       firstName: 'Old',

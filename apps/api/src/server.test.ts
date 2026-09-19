@@ -211,7 +211,7 @@ describe('log redaction', () => {
       loggerStream: collector,
     });
     harness.clerkUsers.set('user_logged', {
-      clerkUserId: 'user_logged',
+      authUserId: 'user_logged',
       email: 'logged@example.com',
       firstName: 'Log',
       lastName: 'Redaction',

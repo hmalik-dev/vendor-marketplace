@@ -17,9 +17,9 @@ export interface HeaderRule {
 /**
  * Origins the browser is allowed to reach, beyond this one.
  *
- * Clerk serves its script and its Frontend API from `*.clerk.accounts.dev` in
- * development and from the instance's own domain in production, and it opens a
- * worker and an iframe of its own. The object store is wherever uploads were
+ * Authentication needs none: sign-in and sign-up talk to this origin's own
+ * `/api/auth` proxy, and no provider script, frame or avatar is loaded. The
+ * object store is wherever uploads were
  * written, which differs per environment — hence the parameters rather than a
  * baked-in list.
  */
@@ -40,14 +40,6 @@ export interface CspOrigins {
   /** Development only — webpack's HMR runtime needs `eval`. */
   allowEval?: boolean;
 }
-
-/** Clerk's own hosts. Wildcards cover both the dev and the production shapes. */
-const CLERK_HOSTS = [
-  'https://*.clerk.accounts.dev',
-  'https://*.clerk.com',
-  'https://clerk.com',
-  'https://challenges.cloudflare.com',
-];
 
 /**
  * Stripe's hosts, per directive, as Stripe documents them for Stripe.js and
@@ -130,21 +122,13 @@ export function contentSecurityPolicy({
   const connect = [
     "'self'",
     apiOrigin,
-    ...CLERK_HOSTS,
     ...STRIPE_HOSTS.connect,
     ...(errorIngestOrigin ? [errorIngestOrigin] : []),
   ];
-  /*
-   * `img.clerk.com` is Clerk's avatar CDN, and it is not covered by
-   * `*.clerk.com` on `connect-src` because avatars are images. Leaving it out
-   * broke the header avatar for every signed-in user in production — the
-   * policy was verified signed-out, where that element never renders.
-   */
   const images = [
     "'self'",
     'data:',
     'blob:',
-    'https://img.clerk.com',
     ...STRIPE_HOSTS.image,
     ...(imageOrigin ? [imageOrigin] : []),
   ];
@@ -158,10 +142,9 @@ export function contentSecurityPolicy({
     "'self'",
     "'unsafe-inline'",
     ...(allowEval === true ? ["'unsafe-eval'"] : []),
-    ...CLERK_HOSTS,
     ...STRIPE_HOSTS.script,
   ];
-  const frames = ["'self'", ...CLERK_HOSTS, ...STRIPE_HOSTS.frame];
+  const frames = ["'self'", ...STRIPE_HOSTS.frame];
 
   return [
     `default-src 'self'`,

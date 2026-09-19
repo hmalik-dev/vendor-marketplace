@@ -10,7 +10,7 @@ import {
   createPostgresTestDatabase,
   type PostgresTestDatabase,
 } from '@vendor-marketplace/db/testing/postgres';
-import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
+import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { liftDisputeHold, placeDisputeHold, type BookingContext } from './payments.service.js';
 
@@ -77,7 +77,7 @@ describe('withdrawing a dispute hold, against a real Postgres', () => {
 
   /** The customer, as the guards read them. */
   function customer(customerId: string): AuthenticatedUser {
-    return { id: customerId, clerkUserId: CUSTOMER, role: 'customer' };
+    return { id: customerId, authUserId: CUSTOMER, role: 'customer' };
   }
 
   async function currentBooking(): Promise<typeof bookings.$inferSelect> {
@@ -90,12 +90,12 @@ describe('withdrawing a dispute hold, against a real Postgres', () => {
     database = await createPostgresTestDatabase({ poolSize: 4 });
     harness = await createTestHarness({ database, clock: () => clockNow });
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',

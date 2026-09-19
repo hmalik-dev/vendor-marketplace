@@ -23,11 +23,11 @@ describe('/vendor/packages', () => {
     };
   }
 
-  async function createProfile(clerkUserId: string, businessName: string): Promise<void> {
+  async function createProfile(authUserId: string, businessName: string): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         businessName,
         categoryIds: [photographyId],
@@ -43,13 +43,13 @@ describe('/vendor/packages', () => {
   }
 
   async function createPackage(
-    clerkUserId: string,
+    authUserId: string,
     overrides: Record<string, unknown> = {},
   ): Promise<{ id: string; displayOrder: number }> {
     const response = await harness.app.inject({
       method: 'POST',
       url: '/vendor/packages',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: packageBody(overrides),
     });
 
@@ -60,13 +60,13 @@ describe('/vendor/packages', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [OTHER_VENDOR, 'vendor', 'ada@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',

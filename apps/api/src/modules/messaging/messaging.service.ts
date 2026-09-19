@@ -12,7 +12,7 @@ import type { MessageRow, NotificationRow } from '@vendor-marketplace/db/schema'
 import type { AppDatabase } from '../../lib/database.js';
 import type { EventHub } from '../../lib/event-stream.js';
 import { forbidden, notFound } from '../../lib/errors.js';
-import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
+import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import {
   countMessages,
   countNotifications,

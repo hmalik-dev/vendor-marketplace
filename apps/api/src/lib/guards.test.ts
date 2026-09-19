@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from './errors.js';
 import { assertRole, authenticated } from './guards.js';
-import type { AuthenticatedUser } from '../plugins/clerk-auth.js';
+import type { AuthenticatedUser } from '../plugins/neon-auth.js';
 
 const vendor: AuthenticatedUser = {
   id: '9f1c2f0e-0000-4000-8000-000000000001',
-  clerkUserId: 'user_vendor',
+  authUserId: 'user_vendor',
   role: 'vendor',
 };
 
-const customer: AuthenticatedUser = { ...vendor, clerkUserId: 'user_customer', role: 'customer' };
+const customer: AuthenticatedUser = { ...vendor, authUserId: 'user_customer', role: 'customer' };
 
 describe('authenticated', () => {
   it('returns the caller when one was resolved', () => {

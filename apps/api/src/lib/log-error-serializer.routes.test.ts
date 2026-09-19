@@ -43,7 +43,7 @@ describe('a query failure that reaches the logger unguarded', () => {
     harness = await createTestHarness({ env: { LOG_LEVEL: 'trace' }, loggerStream: collector });
 
     harness.clerkUsers.set(VENDOR, {
-      clerkUserId: VENDOR,
+      authUserId: VENDOR,
       email: `${VENDOR}@example.com`,
       firstName: 'Test',
       lastName: 'Vendor',

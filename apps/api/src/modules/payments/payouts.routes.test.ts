@@ -127,7 +127,7 @@ describe('payouts', () => {
     const vendorUser = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, VENDOR));
+      .where(eq(users.authUserId, VENDOR));
 
     return rows
       .filter((row) => row.userId === vendorUser[0]?.id)
@@ -240,14 +240,14 @@ describe('payouts', () => {
   beforeAll(async () => {
     harness = await createTestHarness({ clock: () => clockNow });
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
       [OUTSIDER, 'customer', 'edsger@example.com'],
       [ADMIN, 'admin', 'ada@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',
@@ -277,12 +277,12 @@ describe('payouts', () => {
     await harness.database.db
       .update(users)
       .set({ role: 'admin' })
-      .where(eq(users.clerkUserId, ADMIN));
+      .where(eq(users.authUserId, ADMIN));
 
     const rows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, ADMIN))
+      .where(eq(users.authUserId, ADMIN))
       .limit(1);
 
     return rows[0]!.id;

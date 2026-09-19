@@ -186,14 +186,14 @@ describe('an account unwind and the requests behind settled bookings', () => {
   beforeAll(async () => {
     harness = await createTestHarness({ clock: () => clockNow });
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,
@@ -336,13 +336,13 @@ describe('an account unwind and the requests behind settled bookings', () => {
     async (banned) => {
       vendorActor = `user_vendor_${banned}`;
       customerActor = `user_customer_${banned}`;
-      for (const [clerkUserId, role] of [
+      for (const [authUserId, role] of [
         [vendorActor, 'vendor'],
         [customerActor, 'customer'],
       ] as const) {
-        harness.clerkUsers.set(clerkUserId, {
-          clerkUserId,
-          email: `${clerkUserId}@example.com`,
+        harness.clerkUsers.set(authUserId, {
+          authUserId,
+          email: `${authUserId}@example.com`,
           firstName: 'Test',
           lastName: 'User',
           roleHint: role,

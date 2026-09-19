@@ -49,18 +49,18 @@ describe('reviews', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  async function idOf(clerkUserId: string): Promise<string> {
+  async function idOf(authUserId: string): Promise<string> {
     const me = await harness.app.inject({
       method: 'GET',
       url: '/users/me',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(me.statusCode).toBe(200);
 
     const rows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId));
+      .where(eq(users.authUserId, authUserId));
 
     return rows[0]!.id;
   }
@@ -69,15 +69,12 @@ describe('reviews', () => {
    * This user's review notifications only. Booking setup leaves `new_request`
    * rows behind, so a bare count over the table would assert about those too.
    */
-  async function reviewNotificationsFor(clerkUserId: string): Promise<NotificationRow[]> {
+  async function reviewNotificationsFor(authUserId: string): Promise<NotificationRow[]> {
     return harness.database.db
       .select()
       .from(notifications)
       .where(
-        and(
-          eq(notifications.userId, await idOf(clerkUserId)),
-          eq(notifications.type, 'new_review'),
-        ),
+        and(eq(notifications.userId, await idOf(authUserId)), eq(notifications.type, 'new_review')),
       );
   }
 
@@ -112,13 +109,13 @@ describe('reviews', () => {
   }
 
   async function createVendor(
-    clerkUserId: string,
+    authUserId: string,
     businessName: string,
   ): Promise<{ vendorId: string; slug: string; packageId: string }> {
     const profile = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         businessName,
         categoryIds: [photographyId],
@@ -133,7 +130,7 @@ describe('reviews', () => {
     const created = await harness.app.inject({
       method: 'POST',
       url: '/vendor/packages',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         name: 'Full day coverage',
         description: 'Six hours of coverage with two photographers on site.',
@@ -222,14 +219,14 @@ describe('reviews', () => {
 
     // The identities the fake token verifier resolves. Without them there is
     // no user row for a profile to hang off, and every route 500s.
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [OTHER_VENDOR, 'vendor', 'ada@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
       [OTHER_CUSTOMER, 'customer', 'lin@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',

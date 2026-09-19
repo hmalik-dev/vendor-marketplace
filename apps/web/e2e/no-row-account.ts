@@ -6,21 +6,23 @@ import { expect, type Page } from '@playwright/test';
 import { AUTH_DIR } from './fixtures.js';
 
 /**
- * A Clerk identity with **no `users` row** — the state a person is in between
+ * An identity with **no `users` row** — the state a person is in between
  * verifying a brand-new account and ticking the Terms box (VEN-379).
  *
  * No fixture represents it, because the acceptance gate is the only writer of
- * the row and every seeded account has been through it. It is minted here
- * through Clerk's Backend API rather than by driving `/sign-up`: the sign-up
- * card waits on a Cloudflare challenge that a headless browser does not pass,
- * and the state under test is the identity-without-a-row, not the form. The
- * identity is signed in through `/sign-in` exactly as a person signs in, and
- * deleted afterwards so nothing accumulates in the development instance.
+ * the row and every seeded account has been through it. On Neon Auth (VEN-447)
+ * it is a **persistent** third account, `E2E_NEWCOMER_EMAIL` /
+ * `E2E_NEWCOMER_PASSWORD` in the gitignored `.env.e2e.local`, that nothing ever
+ * accepts the Terms for: minting one per run would need an inbox, because sign-in
+ * refuses an unverified address, and deleting it afterwards would be the run
+ * destroying the fixture the next one needs. The suites only *look* at what it
+ * is shown; the moment anything ticks the box the state is gone and the account
+ * has to be replaced — `noRowStillHasNoRow` says so before it is used.
+ *
+ * The Clerk helpers below serve the operator-closure spec only, and go with it
+ * when VEN-448 moves the operator surface.
  */
 const CLERK_API = 'https://api.clerk.com/v1';
-
-/** Clerk's documented test mode: `+clerk_test` addresses always take this code. */
-const CLERK_TEST_CODE = '424242';
 
 const REPO_ROOT = dirname(AUTH_DIR);
 
@@ -88,42 +90,34 @@ export async function clerk(
 }
 
 export interface NoRowAccount {
-  clerkUserId: string;
   email: string;
   secret: string;
 }
 
+/** The persistent newcomer account, from the gitignored `.env.e2e.local`. */
 export async function mintNoRowAccount(): Promise<NoRowAccount> {
-  const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-  const email = `ven379-no-row-${stamp}+clerk_test@example.com`;
-  const secret = `No-Row-${stamp}-Qx!`;
+  const file = resolve(REPO_ROOT, '.env.e2e.local');
+  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  const read = (key: string): string | undefined =>
+    text
+      .match(new RegExp(`^${key}=(.*)$`, 'm'))?.[1]
+      ?.trim()
+      .replace(/^["']|["']$/g, '');
+  const email = process.env.E2E_NEWCOMER_EMAIL ?? read('E2E_NEWCOMER_EMAIL');
+  const secret = process.env.E2E_NEWCOMER_PASSWORD ?? read('E2E_NEWCOMER_PASSWORD');
 
-  const response = await clerk('/users', {
-    method: 'POST',
-    body: {
-      email_address: [email],
-      password: secret,
-      skip_password_checks: true,
-      // What the sign-up form sends; the gate narrows it when it writes the row.
-      unsafe_metadata: { role: 'customer' },
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Clerk refused to mint the no-row identity: HTTP ${response.status}`);
+  if (!email || !secret) {
+    throw new Error(
+      'E2E_NEWCOMER_EMAIL and E2E_NEWCOMER_PASSWORD are not in .env.e2e.local — the no-row persona needs them.',
+    );
   }
 
-  const { id } = (await response.json()) as { id: string };
-
-  return { clerkUserId: id, email, secret };
+  return { email, secret };
 }
 
+/** Nothing to remove: the persona is persistent by design. See the header. */
 export async function deleteNoRowAccount(account: NoRowAccount): Promise<void> {
-  const response = await clerk(`/users/${account.clerkUserId}`, { method: 'DELETE' });
-
-  if (!response.ok && response.status !== 404) {
-    throw new Error(`Clerk refused to delete ${account.clerkUserId}: HTTP ${response.status}`);
-  }
+  void account;
 }
 
 /**
@@ -145,17 +139,6 @@ export async function signInThroughTheForm(page: Page, account: NoRowAccount): P
     .getByRole('button', { name: /continue|sign in/i })
     .first()
     .click();
-
-  const leftSignIn = (url: URL): boolean =>
-    !url.pathname.startsWith('/sign-in') || url.pathname.includes('client-trust');
-  await page.waitForURL(leftSignIn);
-
-  // Clerk challenges every new browser; the OTP is segmented and submits itself.
-  if (page.url().includes('client-trust')) {
-    const code = page.getByLabel(/verification code/i).first();
-    await code.click();
-    await code.pressSequentially(CLERK_TEST_CODE, { delay: 80 });
-  }
 
   await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'));
   await expect(page.locator('#main')).toBeVisible();

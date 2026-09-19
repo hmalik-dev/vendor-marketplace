@@ -31,7 +31,7 @@ describe('GET /vendors — the New badge reads the instance clock', () => {
   beforeAll(async () => {
     harness = await createTestHarness({ clock: () => PINNED_NOW });
     harness.clerkUsers.set('user_a', {
-      clerkUserId: 'user_a',
+      authUserId: 'user_a',
       email: 'user_a@example.com',
       firstName: 'Test',
       lastName: 'Vendor',

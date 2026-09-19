@@ -22,7 +22,13 @@ const redirect = vi.fn((path: string) => {
  */
 let requestPath: string | null = null;
 
-vi.mock('@clerk/nextjs/server', () => ({ auth: async () => ({ getToken, userId }) }));
+vi.mock('./auth/server', () => ({
+  getServerSession: async () => {
+    const token = await getToken();
+
+    return token || userId ? { userId: userId ?? 'user-1', token: token ?? '' } : null;
+  },
+}));
 /*
  * The **isolation** scope, not the current one: `Sentry.setUser` is per request
  * only where the SDK's auto-instrumentation has wrapped the render, and the id
@@ -68,7 +74,7 @@ describe('getCurrentUser', () => {
     vi.clearAllMocks();
   });
 
-  it('attaches only the Clerk user id to server error reports', async () => {
+  it('attaches only the user id to server error reports', async () => {
     getToken.mockResolvedValue('token');
     userId = 'user_2abc';
     apiRequest.mockResolvedValue(CUSTOMER);
@@ -79,7 +85,7 @@ describe('getCurrentUser', () => {
     userId = null;
   });
 
-  it('returns null when there is no Clerk session', async () => {
+  it('returns null when there is no session', async () => {
     getToken.mockResolvedValue(null);
 
     await expect(getCurrentUser()).resolves.toBeNull();
@@ -184,6 +190,10 @@ describe('requireRole', () => {
 describe('redirectIfSignedIn', () => {
   beforeEach(() => {
     redirect.mockClear();
+  });
+
+  beforeEach(() => {
+    getToken.mockReset();
   });
 
   afterEach(() => {
@@ -517,8 +527,9 @@ describe('the destination survives the sign-in round trip', () => {
 describe('redirectIfSignedIn', () => {
   beforeEach(() => {
     redirect.mockClear();
+    getToken.mockReset();
     requestPath = null;
-    userId = 'clerk_123';
+    userId = 'user_123';
   });
 
   async function targetOf(call: Promise<unknown>): Promise<string> {

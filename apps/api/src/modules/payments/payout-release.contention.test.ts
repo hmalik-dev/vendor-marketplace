@@ -88,12 +88,12 @@ describe('two payout sweeps racing one booking, on two real connections', () => 
     database = await createPostgresTestDatabase({ poolSize: 4 });
     harness = await createTestHarness({ database, clock: () => clockNow });
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',

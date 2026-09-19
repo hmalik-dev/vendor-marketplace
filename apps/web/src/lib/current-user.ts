@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { getServerSession } from './auth/server';
 import * as Sentry from '@sentry/nextjs';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
@@ -18,7 +18,7 @@ import { wireUserSchema, type WireUser } from './wire-schemas';
 
 /**
  * Loads the caller's profile from the API. Server Components only — it reads
- * the Clerk session on the server and never ships a token to the browser.
+ * the session on the server and never ships a token to the browser.
  * Returns `null` when nobody is signed in or the session no longer resolves to
  * an account, which is the caller's cue to send them to sign-in.
  *
@@ -31,8 +31,8 @@ import { wireUserSchema, type WireUser } from './wire-schemas';
  * shared between two visitors.
  */
 export const getCurrentUser = cache(async function getCurrentUser(): Promise<WireUser | null> {
-  const { getToken, userId } = await auth();
-  const token = await getToken();
+  const session = await getServerSession();
+  const token = session?.token;
 
   if (!token) {
     return null;
@@ -40,7 +40,7 @@ export const getCurrentUser = cache(async function getCurrentUser(): Promise<Wir
 
   /*
    * A server render that fails after this point is reported against the caller
-   * — the Clerk id alone, the same one the browser and the API attach.
+   * — the auth user id alone, the same one the browser and the API attach.
    *
    * The **isolation** scope, named rather than inherited: `Sentry.setUser`
    * writes to the current scope, which is per request only while the SDK's
@@ -50,8 +50,8 @@ export const getCurrentUser = cache(async function getCurrentUser(): Promise<Wir
    * *previous* visitor's account. Nothing downstream can catch that: the
    * scrubber preserves whatever `user.id` it is handed.
    */
-  if (userId) {
-    Sentry.getIsolationScope().setUser({ id: userId });
+  if (session) {
+    Sentry.getIsolationScope().setUser({ id: session.userId });
   }
 
   try {
@@ -66,8 +66,8 @@ export const getCurrentUser = cache(async function getCurrentUser(): Promise<Wir
 
 /**
  * Loads the caller and sends them somewhere sensible when there is no usable
- * session. Role is read from the local database record, never from Clerk
- * metadata.
+ * session. Role is read from the local database record, never from the
+ * token's claims.
  */
 export async function requireCurrentUser(returnTo?: string): Promise<WireUser> {
   const user = await getCurrentUserOrSuspend();
@@ -143,9 +143,9 @@ export async function requireRole(role: UserRole, returnTo?: string): Promise<Wi
  * `returnTo` round trip exists to prevent.
  */
 export async function redirectIfSignedIn(returnTo?: string | null): Promise<void> {
-  const { userId } = await auth();
+  const session = await getServerSession();
 
-  if (!userId) {
+  if (!session) {
     return;
   }
 
@@ -187,7 +187,7 @@ export async function readRoleForChrome(): Promise<UserRole | null> {
  * `readRoleForChrome`.
  *
  * The header's account control draws the name and photograph from it (VEN-403)
- * — from our own row rather than Clerk's session claims, so the header never
+ * — from our own row rather than the session's claims, so the header never
  * shows a value the app does not hold. Still decoration: an unreadable record
  * costs the avatar its initials, not the page.
  */

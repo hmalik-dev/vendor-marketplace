@@ -1,8 +1,8 @@
 import { redirectIfSignedIn } from '@/lib/current-user';
 
 /**
- * The sign-up page itself is a Client Component — it picks the role before
- * Clerk's form renders — so the already-signed-in guard lives in this Server
+ * The sign-up form is a Client Component — it picks the role before
+ * the account is created — so the already-signed-in guard lives in this Server
  * Component wrapper instead.
  */
 export default async function SignUpLayout({

@@ -103,8 +103,8 @@ export function ReportDialog({
           Mounted only while it is open, and that is load-bearing rather than
           an optimisation.
 
-          The form calls `useApi`, which calls Clerk's `useAuth` — so a closed
-          trigger that held the hook would put Clerk's context on the critical
+          The form calls `useApi`, which reads the session token — so a closed
+          trigger that held the hook would put that fetch on the critical
           path of every surface carrying one, twenty times over on a portfolio
           tab. Unmounting on close is also what discards everything typed:
           a report is filed or it is not, and a half-written accusation

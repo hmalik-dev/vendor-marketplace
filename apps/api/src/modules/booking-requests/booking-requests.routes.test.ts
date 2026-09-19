@@ -59,14 +59,14 @@ describe('/booking-requests', () => {
 
   /** A published vendor with one active package, ready to be booked. */
   async function createVendor(
-    clerkUserId: string,
+    authUserId: string,
     businessName: string,
     options: { publish?: boolean; onboarded?: boolean } = {},
   ): Promise<{ vendorId: string; packageId: string }> {
     const profile = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         businessName,
         categoryIds: [photographyId],
@@ -81,7 +81,7 @@ describe('/booking-requests', () => {
     const created = await harness.app.inject({
       method: 'POST',
       url: '/vendor/packages',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         name: 'Full day coverage',
         description: 'Six hours of coverage with two photographers on site.',
@@ -112,14 +112,14 @@ describe('/booking-requests', () => {
   }
 
   async function post(
-    clerkUserId: string,
+    authUserId: string,
     url: string,
     payload?: Record<string, unknown>,
   ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
     return harness.app.inject({
       method: 'POST',
       url,
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       ...(payload ? { payload } : {}),
     });
   }
@@ -143,14 +143,14 @@ describe('/booking-requests', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [OTHER_VENDOR, 'vendor', 'ada@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
       [OTHER_CUSTOMER, 'customer', 'edsger@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',
@@ -901,7 +901,7 @@ describe('/booking-requests', () => {
       const [customer] = await harness.database.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.clerkUserId, CUSTOMER));
+        .where(eq(users.authUserId, CUSTOMER));
 
       const cancelledAt = new Date('2026-06-01T12:00:00.000Z');
       await harness.database.db.insert(bookings).values({
@@ -1349,7 +1349,7 @@ describe('/booking-requests', () => {
       const customer = await harness.database.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.clerkUserId, CUSTOMER));
+        .where(eq(users.authUserId, CUSTOMER));
       expect(rows[1]!.userId).toBe(customer[0]!.id);
     });
 
@@ -1379,7 +1379,7 @@ describe('/booking-requests', () => {
       const vendorUser = await harness.database.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.clerkUserId, VENDOR));
+        .where(eq(users.authUserId, VENDOR));
 
       expect(declined).toHaveLength(1);
       expect(declined[0]!.userId).toBe(vendorUser[0]!.id);
@@ -1399,7 +1399,7 @@ describe('/booking-requests', () => {
       const customer = await harness.database.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.clerkUserId, CUSTOMER));
+        .where(eq(users.authUserId, CUSTOMER));
 
       expect(declined).toHaveLength(1);
       expect(declined[0]!.userId).toBe(customer[0]!.id);
@@ -1520,7 +1520,7 @@ describe('/booking-requests', () => {
       const customer = await harness.database.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.clerkUserId, CUSTOMER));
+        .where(eq(users.authUserId, CUSTOMER));
 
       await harness.database.db.insert(bookings).values({
         requestId: request.id,
@@ -1561,7 +1561,7 @@ describe('/booking-requests', () => {
       const customer = await harness.database.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.clerkUserId, CUSTOMER));
+        .where(eq(users.authUserId, CUSTOMER));
 
       await harness.database.db.insert(bookings).values({
         requestId: request.id,

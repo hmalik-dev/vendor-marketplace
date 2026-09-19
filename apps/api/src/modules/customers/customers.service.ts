@@ -8,7 +8,7 @@ import {
 import type { UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { forbidden, notFound } from '../../lib/errors.js';
-import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
+import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import {
   findCustomerById,
   findCustomerReviews,

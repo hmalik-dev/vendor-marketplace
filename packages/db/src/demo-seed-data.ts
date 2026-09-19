@@ -13,7 +13,7 @@ import type { CATEGORY_SLUGS, EventType, PriceType, UsStateCode } from '@vendor-
  * together.
  */
 
-/** Every identity this seed creates carries this prefix in `clerk_user_id`. */
+/** Every identity this seed creates carries this prefix in `auth_user_id`. */
 export const DEMO_SEED_PREFIX = 'seed_demo_';
 
 /** Namespace prefix for every `deterministicUuid` this seed derives. */

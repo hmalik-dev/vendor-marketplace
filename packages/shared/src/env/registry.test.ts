@@ -188,7 +188,6 @@ describe('ENV_REGISTRY integrity', () => {
     const moded = ALL_VARIABLES.filter((variable) => variable.modes !== undefined);
 
     expect(moded.map((variable) => variable.key)).toEqual([
-      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
       'CLERK_SECRET_KEY',
       'STRIPE_SECRET_KEY',
       'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
@@ -287,6 +286,7 @@ describe('registrySchemaShape', () => {
       'CLERK_SECRET_KEY',
       'CLERK_WEBHOOK_ENDPOINT',
       'CLERK_WEBHOOK_SECRET',
+      'NEON_AUTH_BASE_URL',
     ]);
   });
 

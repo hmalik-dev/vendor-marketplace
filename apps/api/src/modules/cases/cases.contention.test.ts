@@ -46,11 +46,11 @@ describe('the case queue under contention, against a real Postgres', () => {
   let bookingId: string;
   let customerId: string;
 
-  async function signIn(clerkUserId: string, promoteToAdmin = false): Promise<string> {
+  async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness!.app.inject({
       method: 'GET',
       url: '/users/me',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
 
@@ -58,13 +58,13 @@ describe('the case queue under contention, against a real Postgres', () => {
       await harness!.database.db
         .update(users)
         .set({ role: 'admin' })
-        .where(eq(users.clerkUserId, clerkUserId));
+        .where(eq(users.authUserId, authUserId));
     }
 
     const rows = await harness!.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId))
+      .where(eq(users.authUserId, authUserId))
       .limit(1);
 
     return rows[0]!.id;
@@ -102,15 +102,15 @@ describe('the case queue under contention, against a real Postgres', () => {
     database = await createPostgresTestDatabase({ poolSize: 4 });
     harness = await createTestHarness({ database });
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
       [ADMIN, 'customer'],
       [OTHER_ADMIN, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,

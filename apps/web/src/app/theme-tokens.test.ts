@@ -256,7 +256,7 @@ describe('token roles', () => {
 });
 
 /*
- * shadcn and Clerk both address colour through the semantic slots below. If a
+ * shadcn addresses colour through the semantic slots below. If a
  * refactor unbinds one, every component using it silently falls back to
  * shadcn's own grey — which looks deliberate and is very hard to spot.
  */
@@ -296,7 +296,7 @@ describe('shadcn slot bindings', () => {
 });
 
 /**
- * #196 — `Sign in` on the sign-up panel drew Clerk's default `clay-400`.
+ * #196 — `Sign in` on the sign-up panel drew a provider's default `clay-400`.
  *
  * The contrast table in `01-foundations.md` names `clay-500` as *the* token for
  * clay as text on any cream and puts `clay-400` in the Never column. On
@@ -305,21 +305,16 @@ describe('shadcn slot bindings', () => {
  * ratio: passing the number does not make it the right colour.
  */
 describe('clay as text', () => {
-  const globals = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf8');
+  it.each(['sign-up-form.tsx', 'sign-in-form.tsx'])(
+    'gives the auth footer link in %s clay-500, never clay-400',
+    (file) => {
+      const form = readFileSync(join(process.cwd(), 'src/components/auth', file), 'utf8');
+      const link = form.match(/<Link href="\/sign-(?:in|up)" className="([^"]*)"/)?.[1] ?? '';
 
-  function declarationsFor(selector: string): string {
-    const match = globals.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`));
-    expect(match).not.toBeNull();
-
-    return match?.[1] ?? '';
-  }
-
-  it('gives the auth footer link clay-500, never clay-400', () => {
-    const rule = declarationsFor('\\[data-auth-screen\\] \\.cl-footerActionLink');
-
-    expect(rule).toContain('var(--color-clay-500)');
-    expect(rule).not.toContain('clay-400');
-  });
+      expect(link).toContain('text-clay-500');
+      expect(link).not.toContain('clay-400');
+    },
+  );
 
   it('clears 4.5:1 as clay-500 on stone-50, where clay-400 only scraped it', () => {
     const good = contrast('clay-500', 'stone-50');

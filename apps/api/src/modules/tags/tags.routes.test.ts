@@ -49,7 +49,7 @@ describe('tag routes', () => {
     const rows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, VENDOR))
+      .where(eq(users.authUserId, VENDOR))
       .limit(1);
 
     return { vendorId: rows[0]!.id };
@@ -70,14 +70,14 @@ describe('tag routes', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [VENDOR, 'vendor'],
       [OTHER_VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,

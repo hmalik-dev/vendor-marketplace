@@ -100,6 +100,15 @@ const APP_SETUP: EnvSetup = {
   steps: ['cp .env.example .env'],
 };
 
+const NEON_AUTH_SETUP: EnvSetup = {
+  url: 'https://neon.com/docs/auth/overview',
+  steps: [
+    'Enable Auth on the Neon branch (Project → Branch → Auth)',
+    'Copy the branch Auth URL into NEON_AUTH_BASE_URL',
+    'Generate the cookie secret: openssl rand -base64 32',
+  ],
+};
+
 const CLERK_SETUP: EnvSetup = {
   url: 'https://dashboard.clerk.com/last-active?path=api-keys',
   steps: ['Open the Clerk dashboard → API keys', 'Copy the key into .env'],
@@ -385,18 +394,27 @@ export const ENV_REGISTRY = [
 
   // --- auth ----------------------------------------------------------------
   {
-    key: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+    key: 'NEON_AUTH_BASE_URL',
     capability: 'auth',
-    audience: 'browser',
+    audience: 'server',
+    consumers: ['api', 'web'],
+    environments: 'per-environment',
+    shape: HTTPS_URL,
+    placeholder: '<neon-auth-base-url>',
+    description:
+      "The Neon Auth endpoint of the branch this deployment's users live on; the API verifies session tokens against its JWKS and the web proxies sign-in to it.",
+    setup: NEON_AUTH_SETUP,
+  },
+  {
+    key: 'NEON_AUTH_COOKIE_SECRET',
+    capability: 'auth',
+    audience: 'server',
     consumers: ['web'],
     environments: 'per-environment',
-    shape: /^pk_(test|live)_[A-Za-z0-9$/+=]{16,}$/,
-    localShape: /^pk_test_[A-Za-z0-9$/+=]{16,}$/,
-    productionShape: /^pk_live_[A-Za-z0-9$/+=]{16,}$/,
-    modes: TEST_LIVE_MODES,
-    placeholder: 'pk_test_...',
-    description: 'Clerk publishable key, read by the browser bundle.',
-    setup: CLERK_SETUP,
+    shape: /^[A-Za-z0-9+/=_-]{32,}$/,
+    placeholder: '<openssl rand -base64 32>',
+    description: 'Signs the cached Neon Auth session cookie of the web app.',
+    setup: NEON_AUTH_SETUP,
   },
   {
     key: 'CLERK_SECRET_KEY',
@@ -438,50 +456,6 @@ export const ENV_REGISTRY = [
     description:
       'The Svix endpoint configured on the Clerk app. Checked at startup against this deployment, because a webhook pointed elsewhere fails silently.',
     setup: CLERK_WEBHOOK_SETUP,
-  },
-  {
-    key: 'NEXT_PUBLIC_CLERK_SIGN_IN_URL',
-    capability: 'auth',
-    audience: 'browser',
-    consumers: ['web'],
-    environments: 'shared',
-    shape: APP_PATH,
-    defaultValue: '/sign-in',
-    description: 'Route rendering the hosted sign-in component.',
-    setup: CLERK_SETUP,
-  },
-  {
-    key: 'NEXT_PUBLIC_CLERK_SIGN_UP_URL',
-    capability: 'auth',
-    audience: 'browser',
-    consumers: ['web'],
-    environments: 'shared',
-    shape: APP_PATH,
-    defaultValue: '/sign-up',
-    description: 'Route rendering the hosted sign-up component.',
-    setup: CLERK_SETUP,
-  },
-  {
-    key: 'NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL',
-    capability: 'auth',
-    audience: 'browser',
-    consumers: ['web'],
-    environments: 'shared',
-    shape: APP_PATH,
-    defaultValue: '/after-sign-in',
-    description: 'Where sign-in lands when no redirect was requested.',
-    setup: CLERK_SETUP,
-  },
-  {
-    key: 'NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL',
-    capability: 'auth',
-    audience: 'browser',
-    consumers: ['web'],
-    environments: 'shared',
-    shape: APP_PATH,
-    defaultValue: '/after-sign-in',
-    description: 'Where sign-up lands when no redirect was requested.',
-    setup: CLERK_SETUP,
   },
 
   // --- storage -------------------------------------------------------------

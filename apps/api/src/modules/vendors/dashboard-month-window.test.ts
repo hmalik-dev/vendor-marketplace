@@ -66,12 +66,12 @@ describe('the vendor dashboard month window, at a boundary west of UTC', () => {
 
     harness = await createTestHarness({ clock: () => NOW });
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'tz-vendor@example.com'],
       [CUSTOMER, 'customer', 'tz-customer@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',
@@ -109,7 +109,7 @@ describe('the vendor dashboard month window, at a boundary west of UTC', () => {
     const customer = await harness.database.db
       .insert(users)
       .values({
-        clerkUserId: CUSTOMER,
+        authUserId: CUSTOMER,
         email: 'tz-customer@example.com',
         role: 'customer',
         firstName: 'Test',

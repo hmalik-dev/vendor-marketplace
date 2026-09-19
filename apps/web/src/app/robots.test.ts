@@ -8,7 +8,7 @@ describe('robots', () => {
   afterEach(() => vi.resetModules());
 
   /*
-   * These paths are all behind Clerk, so this is not about secrecy — a crawler
+   * These paths are all behind sign-in, so this is not about secrecy — a crawler
    * following them only ever reaches a sign-in redirect, and a marketplace
    * whose growth depends on vendor profiles ranking cannot spend its crawl
    * budget there.

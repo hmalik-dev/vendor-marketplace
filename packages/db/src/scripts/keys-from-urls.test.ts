@@ -18,7 +18,7 @@ describe('convertUrlsToKeys', () => {
     const [person] = await database.db
       .insert(users)
       .values({
-        clerkUserId: 'user_test',
+        authUserId: 'user_test',
         email: 'grace@example.com',
         firstName: 'Grace',
         lastName: 'Hopper',

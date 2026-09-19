@@ -7,6 +7,7 @@ import { OVERRIDDEN_KEYS, allowedOrigins, canonicalWebOrigin, parseEnv } from '.
 const REQUIRED: NodeJS.ProcessEnv = {
   DATABASE_URL:
     'postgresql://vendor_marketplace:vendor_marketplace_dev@localhost:5432/vendor_marketplace',
+  NEON_AUTH_BASE_URL: 'https://ep-x.neonauth.example.invalid/neondb/auth',
   CLERK_SECRET_KEY: 'sk_test_51ABCdefGHIjklMNOpqr',
   CLERK_WEBHOOK_SECRET: 'whsec_MfKQ9r8sTuVwXyZ0123456789',
   S3_ENDPOINT: 'http://localhost:9000',

@@ -30,7 +30,7 @@ import {
   type PaymentIntentSnapshot,
   type StripeConnectGateway,
 } from '../../lib/stripe.js';
-import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
+import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import {
   findVendorByUserId,
   findVendorContact,

@@ -24,7 +24,7 @@ describe('alignCoversWithPortfolios', () => {
     const [person] = await database.db
       .insert(users)
       .values({
-        clerkUserId: `user_${Math.random().toString(36).slice(2)}`,
+        authUserId: `user_${Math.random().toString(36).slice(2)}`,
         email: `${Math.random().toString(36).slice(2)}@example.com`,
         firstName: 'Cover',
         lastName: 'Vendor',

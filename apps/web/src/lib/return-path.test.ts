@@ -135,16 +135,15 @@ describe('safeReturnPath', () => {
 
 describe('RETURN_PATH_PARAM', () => {
   /*
-   * `redirect_url` is Clerk's own reserved query key. clerk-js reads it off
-   * `window.location` and prefers it over the `fallbackRedirectUrl` prop
-   * (`@clerk/shared` `redirectUrls.mjs`, `#getRedirectUrl`), so a destination
-   * carried under that name is consumed by Clerk and `/after-sign-in` — which
-   * resolves the role, handles a suspended account and re-validates the path —
-   * is skipped entirely. The app must carry its own destination under its own
-   * key.
+   * `redirect_url` and `callbackURL` are the query keys auth providers reserve
+   * for their own post-sign-in redirect. A destination carried under one can be
+   * consumed by the provider and `/after-sign-in` — which resolves the role,
+   * handles a suspended account and re-validates the path — skipped entirely.
+   * The app must carry its own destination under its own key.
    */
-  it('is not a key Clerk reserves', () => {
-    const CLERK_RESERVED = [
+  it('is not a key an auth provider reserves', () => {
+    const RESERVED = [
+      'callbackURL',
       'redirect_url',
       'after_sign_in_url',
       'after_sign_up_url',
@@ -156,7 +155,7 @@ describe('RETURN_PATH_PARAM', () => {
       'fallback_redirect_url',
     ];
 
-    expect(CLERK_RESERVED).not.toContain(RETURN_PATH_PARAM);
+    expect(RESERVED).not.toContain(RETURN_PATH_PARAM);
   });
 });
 

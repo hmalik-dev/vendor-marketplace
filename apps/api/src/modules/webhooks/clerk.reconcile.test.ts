@@ -51,12 +51,12 @@ describe('reconcileClerkUsers', () => {
    */
   const context = () => bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000');
 
-  async function seed(clerkUserId: string, overrides: Record<string, unknown> = {}) {
+  async function seed(authUserId: string, overrides: Record<string, unknown> = {}) {
     await harness.database.db.insert(users).values({
-      clerkUserId,
+      authUserId,
       // Derived, because `users.email` is unique and several tests seed more
       // than one row; the ones that care about the address override it.
-      email: `${clerkUserId}@example.com`,
+      email: `${authUserId}@example.com`,
       firstName: 'Katherine',
       lastName: 'Johnson',
       role: 'customer',
@@ -65,8 +65,8 @@ describe('reconcileClerkUsers', () => {
     });
   }
 
-  function read(clerkUserId: string) {
-    return harness.database.db.select().from(users).where(eq(users.clerkUserId, clerkUserId));
+  function read(authUserId: string) {
+    return harness.database.db.select().from(users).where(eq(users.authUserId, authUserId));
   }
 
   /* The drift the misrouted webhook left: a name changed in Clerk, never here. */

@@ -1,5 +1,5 @@
-import { SignOutButton } from '@clerk/nextjs';
-import { currentUser } from '@clerk/nextjs/server';
+import { SignOutButton } from '@/components/auth/sign-out-button';
+import { neonAuth } from '@/lib/auth/server';
 import { BRAND_NAME, pageTitle, SUPPORT_PATH } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -34,9 +34,8 @@ export default async function VendorApplyPage(): Promise<React.ReactElement> {
     redirect(DASHBOARD_PATH_BY_ROLE.vendor);
   }
 
-  const session = await currentUser();
-  const sessionEmail =
-    session?.primaryEmailAddress?.emailAddress ?? session?.emailAddresses[0]?.emailAddress ?? null;
+  const { data: session } = await neonAuth().getSession();
+  const sessionEmail = session?.user.email ?? null;
 
   return (
     <AuthScreen

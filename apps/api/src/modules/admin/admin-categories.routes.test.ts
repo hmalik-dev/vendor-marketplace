@@ -55,11 +55,11 @@ describe('admin category management', () => {
       .filter((row) => row.subjectId === subjectId)
       .map(({ subjectId: _subjectId, ...row }) => row);
 
-  const setActive = (categoryId: string, isActive: boolean, clerkUserId = ADMIN) =>
+  const setActive = (categoryId: string, isActive: boolean, authUserId = ADMIN) =>
     harness.app.inject({
       method: 'PUT',
       url: `/admin/categories/${categoryId}`,
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: { isActive },
     });
 
@@ -115,14 +115,14 @@ describe('admin category management', () => {
 
   beforeAll(async () => {
     harness = await createTestHarness();
-    for (const [clerkUserId, roleHint] of [
+    for (const [authUserId, roleHint] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint,
@@ -144,7 +144,7 @@ describe('admin category management', () => {
 
   afterEach(async () => {
     await harness.database.db.delete(vendorProfiles);
-    await harness.database.db.delete(users).where(eq(users.clerkUserId, VENDOR));
+    await harness.database.db.delete(users).where(eq(users.authUserId, VENDOR));
     for (const seed of CATEGORY_SEEDS) {
       await harness.database.db
         .update(categories)

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { users } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
-import { insertUserIfAbsent, retireUserByClerkId, updateUserByClerkId } from './users.dao.js';
+import { insertUserIfAbsent, retireUserByAuthId, updateUserByAuthId } from './users.dao.js';
 
 /**
  * One harness for the whole file. Two `createTestHarness()` instances in one
@@ -11,9 +11,9 @@ import { insertUserIfAbsent, retireUserByClerkId, updateUserByClerkId } from './
  */
 let harness: TestHarness;
 
-function newUser(clerkUserId: string, email: string) {
+function newUser(authUserId: string, email: string) {
   return {
-    clerkUserId,
+    authUserId,
     email,
     role: 'customer' as const,
     firstName: 'Ada',
@@ -40,7 +40,7 @@ afterAll(async () => {
  * **The race that motivated the change cannot be the only test of it.**
  * `legal-acceptance-race.contention.test.ts` reproduces the defect by firing
  * eight simultaneous first sign-ins, and it caught this at roughly one run in
- * four — which means restoring `{ target: users.clerkUserId }` leaves that
+ * four — which means restoring `{ target: users.authUserId }` leaves that
  * suite green about three runs in four, and the one red run reads as flake.
  * A probabilistic guard is not a guard.
  *
@@ -115,7 +115,7 @@ describe('insertUserIfAbsent, when the insert is declined', () => {
     const rows = await harness.database.db.select().from(users);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.clerkUserId).toBe('clerk_ada');
+    expect(rows[0]?.authUserId).toBe('clerk_ada');
   });
 
   /**
@@ -147,12 +147,12 @@ describe('insertUserIfAbsent, when the insert is declined', () => {
       newUser('clerk_returning', HELD_EMAIL),
     ).catch(() => null);
 
-    expect(resolved?.clerkUserId).not.toBe('clerk_ada');
+    expect(resolved?.authUserId).not.toBe('clerk_ada');
 
     const [retired] = await harness.database.db
       .select()
       .from(users)
-      .where(eq(users.clerkUserId, 'clerk_ada'));
+      .where(eq(users.authUserId, 'clerk_ada'));
 
     expect(retired?.deletedAt).not.toBeNull();
     expect(retired?.email).toBe(HELD_EMAIL);
@@ -162,19 +162,19 @@ describe('insertUserIfAbsent, when the insert is declined', () => {
   it('writes and returns the row when nothing conflicts', async () => {
     const created = await insertUserIfAbsent(harness.database.db, newUser('clerk_ada', HELD_EMAIL));
 
-    expect(created?.clerkUserId).toBe('clerk_ada');
+    expect(created?.authUserId).toBe('clerk_ada');
 
     const [stored] = await harness.database.db
       .select()
       .from(users)
-      .where(eq(users.clerkUserId, 'clerk_ada'));
+      .where(eq(users.authUserId, 'clerk_ada'));
 
     expect(stored?.id).toBe(created?.id);
   });
 });
 
 /**
- * `updateUserByClerkId` when `users_email_key` refuses the address (#462).
+ * `updateUserByAuthId` when `users_email_key` refuses the address (#462).
  *
  * **Driven against the real index, with a second row genuinely holding the
  * address.** A mocked rejection would prove the catch runs and not that
@@ -183,17 +183,17 @@ describe('insertUserIfAbsent, when the insert is declined', () => {
  * Every case below puts a real second row in the table and lets Postgres
  * decide.
  */
-describe('updateUserByClerkId, when another account already holds the address', () => {
+describe('updateUserByAuthId, when another account already holds the address', () => {
   const ADA = 'clerk_ada';
   const BEA = 'clerk_bea';
   const ADA_EMAIL = 'ada@example.com';
   const BEA_EMAIL = 'bea@example.com';
 
-  async function rowFor(clerkUserId: string) {
+  async function rowFor(authUserId: string) {
     const [row] = await harness.database.db
       .select()
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId));
+      .where(eq(users.authUserId, authUserId));
 
     return row;
   }
@@ -214,7 +214,7 @@ describe('updateUserByClerkId, when another account already holds the address', 
    * one contested address stop every other mirrored field on the account.
    */
   it('keeps the old address, records the one it could not write, and mirrors the rest', async () => {
-    const result = await updateUserByClerkId(harness.database.db, ADA, {
+    const result = await updateUserByAuthId(harness.database.db, ADA, {
       email: BEA_EMAIL,
       firstName: 'Grace',
     });
@@ -236,14 +236,14 @@ describe('updateUserByClerkId, when another account already holds the address', 
   /**
    * The narrowness of the catch, and it is not decoration.
    *
-   * A 23505 from `users_clerk_user_id_key` means two rows claiming one
+   * A 23505 from `users_auth_user_id_key` means two rows claiming one
    * identity — a broken invariant rather than a stale column — and swallowing
    * it would turn the loudest failure in this file into a silent no-op. Only
    * `users_email_key` is caught, so this still throws.
    */
   it('does not swallow a collision on any other unique index', async () => {
     await expect(
-      updateUserByClerkId(harness.database.db, ADA, { clerkUserId: BEA }),
+      updateUserByAuthId(harness.database.db, ADA, { authUserId: BEA }),
     ).rejects.toThrow();
 
     expect((await rowFor(ADA))?.pendingEmail).toBeNull();
@@ -255,10 +255,10 @@ describe('updateUserByClerkId, when another account already holds the address', 
    * would sit on the operator's list for ever.
    */
   it('clears the record once the address can be written', async () => {
-    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+    await updateUserByAuthId(harness.database.db, ADA, { email: BEA_EMAIL });
     expect((await rowFor(ADA))?.pendingEmail).toBe(BEA_EMAIL);
 
-    await updateUserByClerkId(harness.database.db, ADA, { email: 'ada.new@example.com' });
+    await updateUserByAuthId(harness.database.db, ADA, { email: 'ada.new@example.com' });
 
     const ada = await rowFor(ADA);
 
@@ -274,10 +274,10 @@ describe('updateUserByClerkId, when another account already holds the address', 
    * assertion in this file.
    */
   it('holds the timestamp at the first failure across repeated collisions', async () => {
-    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+    await updateUserByAuthId(harness.database.db, ADA, { email: BEA_EMAIL });
     const first = (await rowFor(ADA))?.emailSyncFailedAt;
 
-    await updateUserByClerkId(harness.database.db, ADA, {
+    await updateUserByAuthId(harness.database.db, ADA, {
       email: BEA_EMAIL,
       lastName: 'Lovelace',
     });
@@ -295,10 +295,10 @@ describe('updateUserByClerkId, when another account already holds the address', 
    * same call — nothing else would re-apply it.
    */
   it('hands a released address to the row waiting on it', async () => {
-    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+    await updateUserByAuthId(harness.database.db, ADA, { email: BEA_EMAIL });
     expect((await rowFor(ADA))?.pendingEmail).toBe(BEA_EMAIL);
 
-    const bea = await updateUserByClerkId(harness.database.db, BEA, {
+    const bea = await updateUserByAuthId(harness.database.db, BEA, {
       email: 'bea.new@example.com',
     });
 
@@ -318,10 +318,10 @@ describe('updateUserByClerkId, when another account already holds the address', 
    */
   it('hands a released address to nobody when more than one row waits on it', async () => {
     await harness.database.db.insert(users).values(newUser('clerk_cy', 'cy@example.com'));
-    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
-    await updateUserByClerkId(harness.database.db, 'clerk_cy', { email: BEA_EMAIL });
+    await updateUserByAuthId(harness.database.db, ADA, { email: BEA_EMAIL });
+    await updateUserByAuthId(harness.database.db, 'clerk_cy', { email: BEA_EMAIL });
 
-    await updateUserByClerkId(harness.database.db, BEA, { email: 'bea.new@example.com' });
+    await updateUserByAuthId(harness.database.db, BEA, { email: 'bea.new@example.com' });
 
     expect((await rowFor(ADA))?.email).toBe(ADA_EMAIL);
     expect((await rowFor(ADA))?.pendingEmail).toBe(BEA_EMAIL);
@@ -334,9 +334,9 @@ describe('updateUserByClerkId, when another account already holds the address', 
    * delivered before the holder's `user.deleted`.
    */
   it('hands the address of a retired account to the row waiting on it', async () => {
-    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+    await updateUserByAuthId(harness.database.db, ADA, { email: BEA_EMAIL });
 
-    await retireUserByClerkId(harness.database.db, BEA);
+    await retireUserByAuthId(harness.database.db, BEA);
 
     const ada = await rowFor(ADA);
 
@@ -350,9 +350,9 @@ describe('updateUserByClerkId, when another account already holds the address', 
    * so the waiter stays diverged rather than colliding a second time.
    */
   it('leaves the waiter diverged when the holder keeps the address', async () => {
-    await updateUserByClerkId(harness.database.db, ADA, { email: BEA_EMAIL });
+    await updateUserByAuthId(harness.database.db, ADA, { email: BEA_EMAIL });
 
-    await updateUserByClerkId(harness.database.db, BEA, {
+    await updateUserByAuthId(harness.database.db, BEA, {
       email: BEA_EMAIL,
       firstName: 'Beatrice',
     });

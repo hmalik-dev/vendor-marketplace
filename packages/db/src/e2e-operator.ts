@@ -29,14 +29,14 @@ function assertDisposable(email: string): void {
 
 export async function insertDisposableOperator(
   db: Database,
-  input: { clerkUserId: string; email: string },
+  input: { authUserId: string; email: string },
 ): Promise<{ userId: string }> {
   assertDisposable(input.email);
 
   const [row] = await db
     .insert(users)
     .values({
-      clerkUserId: input.clerkUserId,
+      authUserId: input.authUserId,
       email: input.email,
       role: 'admin',
       firstName: 'Disposable',
@@ -50,13 +50,13 @@ export async function insertDisposableOperator(
 /** Removes the row, closed or not. Returns how many rows went — `0` or `1`. */
 export async function removeDisposableOperator(
   db: Database,
-  input: { clerkUserId: string; email: string },
+  input: { authUserId: string; email: string },
 ): Promise<number> {
   assertDisposable(input.email);
 
   const removed = await db
     .delete(users)
-    .where(and(eq(users.clerkUserId, input.clerkUserId), eq(users.email, input.email)))
+    .where(and(eq(users.authUserId, input.authUserId), eq(users.email, input.email)))
     .returning({ id: users.id });
 
   return removed.length;

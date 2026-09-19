@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Show } from '@clerk/nextjs';
+import { Show } from '@/components/auth/show';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { AccountMenu } from '@/components/account-menu';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
@@ -17,8 +17,8 @@ import type { WireUser } from '@/lib/wire-schemas';
 import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
 
 /**
- * Global site header. Server Component — Clerk's control components resolve
- * auth state on the server, so the account actions never flash between signed
+ * Global site header. Server Component — the `Show` gates read the session
+ * on the server, so the account actions never flash between signed
  * -out and signed-in on first paint. The two route-specific pieces inside it
  * (`MarketingNav`, `HeaderQuery`) are client components that read the
  * pathname; keeping them small is what keeps the auth cluster on the server.
@@ -51,7 +51,7 @@ function homeFor(role: UserRole | null): string {
 
 /**
  * The name the avatar's initials are drawn from: our own record's, never
- * Clerk's session claims. Clerk's email-and-password sign-up collects no name,
+ * the session's claims. Sign-up collects no name,
  * so a fresh account falls back to its email address — one initial, which is
  * what frame `02` draws — and an unreadable record to an empty string, which
  * `Avatar` renders as `?`.
@@ -67,7 +67,7 @@ function displayNameFor(user: WireUser | null): string {
 export async function SiteHeader(): Promise<React.ReactElement> {
   /*
    * The role decides whether the header carries the vendor chip, and it is
-   * read from the local account record rather than Clerk metadata — the same
+   * read from the local account record rather than token claims — the same
    * rule `current-user.ts` states. Signed out, the read returns before it
    * makes a request, so a marketing page pays nothing for it.
    *
@@ -165,7 +165,7 @@ export async function SiteHeader(): Promise<React.ReactElement> {
               bar rather than going into the drawer.
 
               The route is a full page rather than a modal: sign-up has to
-              collect the customer/vendor role before Clerk's form renders.
+              collect the customer/vendor role before the account is created.
             */}
             {/*
               Stepped at the call site rather than in the variant: `ink` is one
@@ -222,12 +222,12 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             </Link>
             <NotificationBell />
             {/*
-              The account control is the app's own, never Clerk's
-              `UserButton` (VEN-403). Clerk's menu offered email changes and
-              deletion at the identity provider, and a Clerk deletion is
+              The account control is the app's own, never a
+              provider-hosted one (VEN-403). A hosted menu offers email changes
+              and deletion at the identity provider, and a deletion there is
               reactive — there is no request left to refuse — so D39's rule,
               enforced on `POST /admin/users/:userId/close`, could not answer
-              it. Users never access Clerk; `AccountMenu` says why at length.
+              it. Users never reach a hosted panel; `AccountMenu` says why at length.
             */}
             <AccountMenu
               name={displayNameFor(user)}

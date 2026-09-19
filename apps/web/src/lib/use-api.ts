@@ -1,6 +1,5 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
 import {
   apiErrorSchema,
   ERROR_CODES,
@@ -10,6 +9,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { apiOrigin } from '@/config/public-env';
+import { getSessionToken } from './auth/client';
 import { ApiClientError, apiRequest, type ApiRequestOptions } from './api-client';
 import { isGateExemptPath, isTermsRequired, termsAcceptancePath } from './terms-gate-paths';
 
@@ -22,17 +22,16 @@ const BASE_URL = apiOrigin();
 
 /**
  * The browser-side counterpart to `getCurrentUser`. Client components cannot
- * read the Clerk session synchronously, so the token is fetched per call —
- * Clerk caches it and refreshes it when it is close to expiring, so a form
+ * read the session synchronously, so the token is fetched per call —
+ * `getSessionToken` caches it and refreshes it when it is close to expiring, so a form
  * left open past the original token's lifetime still submits.
  */
 export function useApi(): BrowserRequest {
-  const { getToken } = useAuth();
   const router = useRouter();
 
   return useCallback(
     async <T>(path: string, options: BrowserRequestOptions<T>): Promise<T> => {
-      const token = await getToken();
+      const token = await getSessionToken();
 
       try {
         return await apiRequest(path, { ...options, token });
@@ -64,7 +63,7 @@ export function useApi(): BrowserRequest {
         throw error;
       }
     },
-    [getToken, router],
+    [router],
   );
 }
 
@@ -127,101 +126,96 @@ function uploadError(status: number, rawBody: string): ApiClientError {
  * `apiRequest`'s JSON path either way.
  */
 export function useImageUpload(): ImageUploader {
-  const { getToken } = useAuth();
+  return useCallback(async (file, prefix, options = {}) => {
+    const { signal, onProgress } = options;
 
-  return useCallback(
-    async (file, prefix, options = {}) => {
-      const { signal, onProgress } = options;
+    /*
+     * Checked before the token, and again below before the send.
+     *
+     * `AbortSignal` dispatches `abort` exactly once, at `abort()` time, so a
+     * listener attached afterwards never runs — and the listener below is
+     * attached after `await getSessionToken()`, which is a network round trip
+     * whenever the cache refreshes. Without these two checks a cancel landing in
+     * that window is silently lost: the request is sent anyway, the upload
+     * succeeds, and the photo the vendor cancelled appears in their gallery.
+     */
+    /*
+     * Read through a call, not a property access. `aborted` is live state
+     * that changes underneath us, and TypeScript narrows a repeated property
+     * read as though it could not — which turns the second check into a
+     * compile error and, worse, invites deleting it.
+     */
+    const cancelled = (): boolean => signal?.aborted === true;
 
-      /*
-       * Checked before the token, and again below before the send.
-       *
-       * `AbortSignal` dispatches `abort` exactly once, at `abort()` time, so a
-       * listener attached afterwards never runs — and the listener below is
-       * attached after `await getToken()`, which is a network round trip
-       * whenever Clerk refreshes. Without these two checks a cancel landing in
-       * that window is silently lost: the request is sent anyway, the upload
-       * succeeds, and the photo the vendor cancelled appears in their gallery.
-       */
-      /*
-       * Read through a call, not a property access. `aborted` is live state
-       * that changes underneath us, and TypeScript narrows a repeated property
-       * read as though it could not — which turns the second check into a
-       * compile error and, worse, invites deleting it.
-       */
-      const cancelled = (): boolean => signal?.aborted === true;
+    if (cancelled()) {
+      throw new UploadTransportError();
+    }
 
-      if (cancelled()) {
-        throw new UploadTransportError();
+    const token = await getSessionToken();
+
+    if (cancelled()) {
+      throw new UploadTransportError();
+    }
+
+    const body = new FormData();
+    body.append('file', file);
+
+    return new Promise<UploadedImage>((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open('POST', `${BASE_URL}/upload/image?prefix=${encodeURIComponent(prefix)}`);
+      if (token) {
+        request.setRequestHeader('authorization', `Bearer ${token}`);
       }
 
-      const token = await getToken();
-
-      if (cancelled()) {
-        throw new UploadTransportError();
-      }
-
-      const body = new FormData();
-      body.append('file', file);
-
-      return new Promise<UploadedImage>((resolve, reject) => {
-        const request = new XMLHttpRequest();
-        request.open('POST', `${BASE_URL}/upload/image?prefix=${encodeURIComponent(prefix)}`);
-        if (token) {
-          request.setRequestHeader('authorization', `Bearer ${token}`);
-        }
-
-        if (onProgress) {
-          request.upload.addEventListener('progress', (event) => {
-            if (event.lengthComputable && event.total > 0) {
-              onProgress(Math.round((event.loaded / event.total) * 100));
-            }
-          });
-        }
-
-        const abort = (): void => request.abort();
-        signal?.addEventListener('abort', abort);
-
-        request.addEventListener('loadend', () => {
-          signal?.removeEventListener('abort', abort);
-
-          // status 0 is the browser's report of a request that never completed
-          // — offline, DNS, TLS, or an abort. None of them blame the file.
-          if (request.status === 0) {
-            reject(new UploadTransportError());
-            return;
+      if (onProgress) {
+        request.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable && event.total > 0) {
+            onProgress(Math.round((event.loaded / event.total) * 100));
           }
-
-          if (request.status < 200 || request.status >= 300) {
-            reject(uploadError(request.status, request.responseText));
-            return;
-          }
-
-          let payload: unknown = null;
-          try {
-            payload = JSON.parse(request.responseText);
-          } catch {
-            payload = null;
-          }
-
-          const parsed = uploadedImageSchema.safeParse(payload);
-          if (!parsed.success) {
-            reject(
-              new ApiClientError(
-                request.status,
-                ERROR_CODES.INTERNAL_ERROR,
-                'Upload response did not match its schema',
-              ),
-            );
-            return;
-          }
-
-          resolve(parsed.data);
         });
+      }
 
-        request.send(body);
+      const abort = (): void => request.abort();
+      signal?.addEventListener('abort', abort);
+
+      request.addEventListener('loadend', () => {
+        signal?.removeEventListener('abort', abort);
+
+        // status 0 is the browser's report of a request that never completed
+        // — offline, DNS, TLS, or an abort. None of them blame the file.
+        if (request.status === 0) {
+          reject(new UploadTransportError());
+          return;
+        }
+
+        if (request.status < 200 || request.status >= 300) {
+          reject(uploadError(request.status, request.responseText));
+          return;
+        }
+
+        let payload: unknown = null;
+        try {
+          payload = JSON.parse(request.responseText);
+        } catch {
+          payload = null;
+        }
+
+        const parsed = uploadedImageSchema.safeParse(payload);
+        if (!parsed.success) {
+          reject(
+            new ApiClientError(
+              request.status,
+              ERROR_CODES.INTERNAL_ERROR,
+              'Upload response did not match its schema',
+            ),
+          );
+          return;
+        }
+
+        resolve(parsed.data);
       });
-    },
-    [getToken],
-  );
+
+      request.send(body);
+    });
+  }, []);
 }

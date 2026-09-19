@@ -18,11 +18,11 @@ describe('/vendor/portfolio', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  async function createProfile(clerkUserId: string, businessName: string): Promise<void> {
+  async function createProfile(authUserId: string, businessName: string): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         businessName,
         categoryIds: [photographyId],
@@ -35,23 +35,23 @@ describe('/vendor/portfolio', () => {
   }
 
   /** The `users.id` the upload route would write into a key for this account. */
-  async function ownerIdOf(clerkUserId: string): Promise<string> {
+  async function ownerIdOf(authUserId: string): Promise<string> {
     const [row] = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId));
+      .where(eq(users.authUserId, authUserId));
 
     return row!.id;
   }
 
   async function addItem(
-    clerkUserId: string,
+    authUserId: string,
     overrides: Record<string, unknown> = {},
   ): Promise<{ id: string; displayOrder: number; caption: string | null }> {
     const response = await harness.app.inject({
       method: 'POST',
       url: '/vendor/portfolio',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: { imageUrl: IMAGE_URL, thumbnailUrl: THUMBNAIL_URL, ...overrides },
     });
 
@@ -62,13 +62,13 @@ describe('/vendor/portfolio', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [OTHER_VENDOR, 'vendor', 'ada@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',
@@ -512,22 +512,22 @@ describe('the cover follows the first portfolio photo', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  async function coverOf(clerkUserId: string): Promise<string | null> {
+  async function coverOf(authUserId: string): Promise<string | null> {
     const response = await harness.app.inject({
       method: 'GET',
       url: '/vendor/profile',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
 
     return response.json().coverImageUrl as string | null;
   }
 
-  async function add(clerkUserId: string, imageUrl: string): Promise<string> {
+  async function add(authUserId: string, imageUrl: string): Promise<string> {
     const response = await harness.app.inject({
       method: 'POST',
       url: '/vendor/portfolio',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: { imageUrl, thumbnailUrl: `${imageUrl}-thumb` },
     });
     expect(response.statusCode).toBe(201);
@@ -538,7 +538,7 @@ describe('the cover follows the first portfolio photo', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
     harness.clerkUsers.set(VENDOR, {
-      clerkUserId: VENDOR,
+      authUserId: VENDOR,
       email: 'cover@example.com',
       firstName: 'Cover',
       lastName: 'Vendor',

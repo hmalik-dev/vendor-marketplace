@@ -7,6 +7,12 @@ import {
 } from '@vendor-marketplace/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from '@/lib/api-client';
+import {
+  readSignUpRole,
+  rememberSignUpRole,
+  SIGN_UP_ROLE_KEY,
+  SIGN_UP_ROLE_TTL_MS,
+} from '@/lib/auth/signup-role';
 import { legalDocument } from '@/lib/legal-content';
 import { AcceptTermsScreen } from './accept-terms-screen';
 
@@ -40,9 +46,71 @@ beforeEach(() => {
   post.mockReset();
   post.mockResolvedValue(status({ accepted: true, acceptedAt: new Date() }));
   replace.mockReset();
+  window.localStorage.clear();
 });
 
 afterEach(cleanup);
+
+describe('the role chosen at sign-up', () => {
+  it('is sent with the acceptance and cleared once it lands', async () => {
+    const user = userEvent.setup();
+    rememberSignUpRole('vendor');
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    await user.click(box());
+    await user.click(submit());
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post.mock.calls[0]?.[1]).toMatchObject({
+      body: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'vendor' },
+    });
+    expect(readSignUpRole()).toBeNull();
+  });
+
+  it('is left out when nobody chose one, so the API narrows to customer', async () => {
+    const user = userEvent.setup();
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    await user.click(box());
+    await user.click(submit());
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    const body = (post.mock.calls[0]?.[1] as { body: Record<string, unknown> }).body;
+    expect(body.role).toBeUndefined();
+  });
+
+  it('is never sent once it is older than a day', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      SIGN_UP_ROLE_KEY,
+      JSON.stringify({ role: 'vendor', at: Date.now() - SIGN_UP_ROLE_TTL_MS - 1 }),
+    );
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    await user.click(box());
+    await user.click(submit());
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    const body = (post.mock.calls[0]?.[1] as { body: Record<string, unknown> }).body;
+    expect(body.role).toBeUndefined();
+  });
+
+  it('is never sent when the stored value is not one of the two sign-up roles', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      SIGN_UP_ROLE_KEY,
+      JSON.stringify({ role: 'admin', at: Date.now() }),
+    );
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    await user.click(box());
+    await user.click(submit());
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    const body = (post.mock.calls[0]?.[1] as { body: Record<string, unknown> }).body;
+    expect(body.role).toBeUndefined();
+  });
+});
 
 describe('the acceptance gate', () => {
   /**

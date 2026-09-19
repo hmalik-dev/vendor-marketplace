@@ -28,14 +28,14 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
   const OTHER_VENDOR = 'user_vendor_reap_two';
 
   /** The `users.id` the upload route writes into a key for this account. */
-  async function ownerIdOf(clerkUserId: string): Promise<string> {
+  async function ownerIdOf(authUserId: string): Promise<string> {
     const [row] = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId));
+      .where(eq(users.authUserId, authUserId));
 
     if (!row) {
-      throw new Error(`No users row for ${clerkUserId}`);
+      throw new Error(`No users row for ${authUserId}`);
     }
     return row.id;
   }
@@ -56,11 +56,11 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
     return harness.storedObjects.some((object) => object.key === key);
   }
 
-  async function createProfile(clerkUserId: string, businessName: string): Promise<void> {
+  async function createProfile(authUserId: string, businessName: string): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         businessName,
         categoryIds: [photographyId],
@@ -72,25 +72,25 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
     expect(response.statusCode).toBe(201);
   }
 
-  async function save(clerkUserId: string, payload: Record<string, unknown>): Promise<void> {
+  async function save(authUserId: string, payload: Record<string, unknown>): Promise<void> {
     const response = await harness.app.inject({
       method: 'PUT',
       url: '/vendor/profile',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload,
     });
     expect(response.statusCode).toBe(200);
   }
 
   async function addPortfolioItem(
-    clerkUserId: string,
+    authUserId: string,
     imageUrl: string,
     thumbnailUrl: string | null,
   ): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
       url: '/vendor/portfolio',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: { imageUrl, thumbnailUrl },
     });
     expect(response.statusCode).toBe(201);
@@ -99,12 +99,12 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, email] of [
+    for (const [authUserId, email] of [
       [VENDOR, 'reap-one@example.com'],
       [OTHER_VENDOR, 'reap-two@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Reap',
         lastName: 'Vendor',

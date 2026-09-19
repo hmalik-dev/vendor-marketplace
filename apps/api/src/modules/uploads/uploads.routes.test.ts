@@ -42,14 +42,14 @@ describe('POST /upload/image', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
       [ADMIN, 'admin'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,
@@ -108,7 +108,7 @@ describe('POST /upload/image', () => {
       await harness.database.db
         .update(users)
         .set({ role: 'admin' })
-        .where(eq(users.clerkUserId, ADMIN));
+        .where(eq(users.authUserId, ADMIN));
     }
   }
 

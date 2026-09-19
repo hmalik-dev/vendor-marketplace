@@ -42,7 +42,7 @@ describe('two bookings recomputing one customer’s counters at once', () => {
     const [customer] = await database.db
       .insert(users)
       .values({
-        clerkUserId: 'user_counts_customer',
+        authUserId: 'user_counts_customer',
         email: 'counts-customer@example.test',
         role: 'customer',
         firstName: 'Ada',
@@ -54,7 +54,7 @@ describe('two bookings recomputing one customer’s counters at once', () => {
     const [vendorUser] = await database.db
       .insert(users)
       .values({
-        clerkUserId: 'user_counts_vendor',
+        authUserId: 'user_counts_vendor',
         email: 'counts-vendor@example.test',
         role: 'vendor',
         firstName: 'Grace',

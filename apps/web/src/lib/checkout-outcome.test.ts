@@ -14,8 +14,8 @@ import { ApiClientError, ApiTimeoutError } from './api-client';
 
 const apiRequest = vi.fn();
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: async () => ({ getToken: async () => 'token' }),
+vi.mock('./auth/server', () => ({
+  getServerSession: async () => ({ userId: 'user-1', token: 'token' }),
 }));
 
 vi.mock('next/headers', () => ({ headers: async () => ({ get: () => '/bookings/x/checkout' }) }));

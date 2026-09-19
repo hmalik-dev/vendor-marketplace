@@ -42,8 +42,8 @@ describe('admin graduated moderation', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  const signIn = (clerkUserId: string, promoteToAdmin = false): Promise<string> =>
-    signInAs(harness, clerkUserId, promoteToAdmin);
+  const signIn = (authUserId: string, promoteToAdmin = false): Promise<string> =>
+    signInAs(harness, authUserId, promoteToAdmin);
 
   /** A published storefront with one bookable package — the state moderation acts on. */
   async function seedVendor(
@@ -237,14 +237,14 @@ describe('admin graduated moderation', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,
@@ -420,7 +420,7 @@ describe('admin graduated moderation', () => {
       const owner = await harness.database.db
         .select({ isBanned: users.isBanned })
         .from(users)
-        .where(eq(users.clerkUserId, VENDOR))
+        .where(eq(users.authUserId, VENDOR))
         .limit(1);
       expect(owner[0]!.isBanned).toBe(false);
 
@@ -1580,7 +1580,7 @@ describe('admin graduated moderation', () => {
       const owner = await harness.database.db
         .select({ isBanned: users.isBanned })
         .from(users)
-        .where(eq(users.clerkUserId, VENDOR))
+        .where(eq(users.authUserId, VENDOR))
         .limit(1);
       expect(owner[0]!.isBanned).toBe(false);
     });

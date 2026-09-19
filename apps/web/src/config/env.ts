@@ -31,7 +31,7 @@ const WEB_CAPABILITIES = ['core', 'auth', 'storage', 'stripe', 'sentry'] as cons
  *
  * The stricter *production* set — live keys, https-only — stays with
  * `pnpm preflight --env production`: a preview deployment is a deployment, and
- * a live-mode Clerk key is the wrong value for one.
+ * a live-mode key is the wrong value for one.
  */
 const SCHEMAS = {
   baseline: z.object(

@@ -7,11 +7,11 @@ import {
 import { findVendorProfileByUserId } from '../admin/admin.dao.js';
 import {
   findLiveUserByEmail,
-  findUserByClerkId,
-  retireUserByClerkId,
-  updateUserByClerkId,
+  findUserByAuthId,
+  retireUserByAuthId,
+  updateUserByAuthId,
 } from '../users/users.dao.js';
-import { mirroredClerkName, syncUserFromClerk } from '../users/users.service.js';
+import { mirroredAuthName, syncUserFromAuth } from '../users/users.service.js';
 import {
   asWebhookData,
   clerkUsersIn,
@@ -52,7 +52,7 @@ export async function applyClerkUserEvent(
   clerk: ClerkUserSource,
 ): Promise<ClerkWebhookOutcome> {
   const db = context.db;
-  const clerkUserId = event.data.id;
+  const authUserId = event.data.id;
 
   switch (event.type) {
     case 'user.created': {
@@ -61,8 +61,8 @@ export async function applyClerkUserEvent(
         return 'ignored';
       }
 
-      const created: UserRow | null = await syncUserFromClerk(db, {
-        clerkUserId,
+      const created: UserRow | null = await syncUserFromAuth(db, {
+        authUserId,
         email,
         firstName: event.data.first_name ?? '',
         lastName: event.data.last_name ?? '',
@@ -77,8 +77,8 @@ export async function applyClerkUserEvent(
       // Role is fixed at sign-up; only contact details are mirrored onward.
       const email = primaryEmail(event.data);
       /*
-       * The names go through `mirroredClerkName` here as well as on the create
-       * path: this patch does not pass through `syncUserFromClerk`, so a bidi
+       * The names go through `mirroredAuthName` here as well as on the create
+       * path: this patch does not pass through `syncUserFromAuth`, so a bidi
        * control stripped at sign-up would come straight back the next time the
        * account holder edited their Clerk profile (#398).
        */
@@ -86,14 +86,14 @@ export async function applyClerkUserEvent(
         ...(email === null ? {} : { email }),
         ...(event.data.first_name === undefined || event.data.first_name === null
           ? {}
-          : { firstName: mirroredClerkName(event.data.first_name) }),
+          : { firstName: mirroredAuthName(event.data.first_name) }),
         ...(event.data.last_name === undefined || event.data.last_name === null
           ? {}
-          : { lastName: mirroredClerkName(event.data.last_name) }),
+          : { lastName: mirroredAuthName(event.data.last_name) }),
         ...(event.data.image_url === undefined ? {} : { avatarUrl: event.data.image_url || null }),
       };
 
-      let mirrored = await updateUserByClerkId(db, clerkUserId, patch);
+      let mirrored = await updateUserByAuthId(db, authUserId, patch);
 
       /*
        * A collision means the holder is the stale row — Clerk gives an address
@@ -105,7 +105,7 @@ export async function applyClerkUserEvent(
         email !== null &&
         (await releaseStaleHolder(context, clerk, mirrored.user, email, now))
       ) {
-        mirrored = await updateUserByClerkId(db, clerkUserId, patch);
+        mirrored = await updateUserByAuthId(db, authUserId, patch);
       }
 
       if (!mirrored) {
@@ -126,7 +126,7 @@ export async function applyClerkUserEvent(
        */
       if (mirrored.emailDiverged) {
         context.log.error(
-          { userId: mirrored.user.id, clerkUserId },
+          { userId: mirrored.user.id, authUserId },
           'Clerk sent an address another account already holds; users.email is now stale',
         );
 
@@ -137,7 +137,7 @@ export async function applyClerkUserEvent(
     }
 
     case 'user.deleted': {
-      return applyUserDeleted(context, clerkUserId, now);
+      return applyUserDeleted(context, authUserId, now);
     }
 
     default:
@@ -173,7 +173,7 @@ async function releaseStaleHolder(
   email: string,
   now: Date,
 ): Promise<boolean> {
-  const { id: claimantId, clerkUserId: claimantClerkUserId } = claimant;
+  const { id: claimantId, authUserId: claimantClerkUserId } = claimant;
   const holder = await findLiveUserByEmail(context.db, email);
 
   if (!holder) {
@@ -181,7 +181,7 @@ async function releaseStaleHolder(
     return true;
   }
 
-  if (holder.id === claimantId || !isClerkIdentity(holder.clerkUserId)) {
+  if (holder.id === claimantId || !isClerkIdentity(holder.authUserId)) {
     return false;
   }
 
@@ -194,14 +194,14 @@ async function releaseStaleHolder(
      * would retire live accounts and refund their bookings.
      */
     const found = clerkUsersIn(
-      await clerk.getUserList({ userId: [holder.clerkUserId, claimantClerkUserId], limit: 2 }),
+      await clerk.getUserList({ userId: [holder.authUserId, claimantClerkUserId], limit: 2 }),
     );
 
     if (!found.some((user) => user.id === claimantClerkUserId)) {
       throw new Error('Clerk does not know the identity whose event it just delivered');
     }
 
-    remote = found.find((user) => user.id === holder.clerkUserId);
+    remote = found.find((user) => user.id === holder.authUserId);
   } catch (error) {
     context.log.error(
       { userId: claimantId, holderId: holder.id, err: error },
@@ -212,7 +212,7 @@ async function releaseStaleHolder(
   }
 
   if (!remote) {
-    await applyUserDeleted(context, holder.clerkUserId, now);
+    await applyUserDeleted(context, holder.authUserId, now);
 
     return true;
   }
@@ -223,7 +223,7 @@ async function releaseStaleHolder(
     return false;
   }
 
-  const corrected = await updateUserByClerkId(context.db, holder.clerkUserId, {
+  const corrected = await updateUserByAuthId(context.db, holder.authUserId, {
     email: remoteEmail,
   });
 
@@ -275,17 +275,17 @@ async function releaseStaleHolder(
  */
 async function applyUserDeleted(
   context: AdminContext,
-  clerkUserId: string,
+  authUserId: string,
   now: Date,
 ): Promise<ClerkWebhookOutcome> {
-  const target = await findUserByClerkId(context.db, clerkUserId);
+  const target = await findUserByAuthId(context.db, authUserId);
 
   if (!target) {
     return 'ignored';
   }
 
   const profile = await findVendorProfileByUserId(context.db, target.id);
-  const retired = await retireUserByClerkId(context.db, clerkUserId);
+  const retired = await retireUserByAuthId(context.db, authUserId);
 
   if (!retired) {
     // Another delivery of this event took the claim first.

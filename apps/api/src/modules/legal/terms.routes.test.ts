@@ -60,7 +60,7 @@ describe('the Terms of Service acceptance gate', () => {
       [VENDOR, 'vendor'],
     ] as const) {
       harness.clerkUsers.set(id, {
-        clerkUserId: id,
+        authUserId: id,
         email: `${id}@example.com`,
         firstName: 'Ada',
         lastName: 'Reyes',
@@ -185,7 +185,7 @@ describe('the Terms of Service acceptance gate', () => {
     beforeEach(async () => {
       await harness.database.db.insert(users).values({
         id: WEBHOOK_USER,
-        clerkUserId: CUSTOMER,
+        authUserId: CUSTOMER,
         email: `${CUSTOMER}@example.com`,
         role: 'customer',
         firstName: 'Ada',

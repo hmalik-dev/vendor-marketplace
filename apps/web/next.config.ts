@@ -13,8 +13,8 @@ import { securityHeaders, shouldEnforceCsp } from './src/config/security-headers
 // deployment platform still wins.
 loadDotenv({ path: path.resolve(process.cwd(), '../../.env'), quiet: true });
 
-// Fail the build here rather than shipping a bundle with an undefined Clerk key
-// baked in. `process.env` is complete at config time; after the build only the
+// Fail the build here rather than shipping a bundle with an undefined Neon Auth
+// setting baked in. `process.env` is complete at config time; after the build only the
 // inlined NEXT_PUBLIC_* values remain, so this is the last place to check.
 // On a deployment it also refuses every per-environment localhost default, so
 // the values read below are the ones this build was configured with.

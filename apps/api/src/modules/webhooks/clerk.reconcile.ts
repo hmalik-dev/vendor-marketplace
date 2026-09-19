@@ -85,7 +85,7 @@ export async function reconcileClerkUsers(
 ): Promise<ReconcileSummary> {
   const db = context.db;
   const rows = await listLiveClerkIdentities(db);
-  const local = rows.filter((row) => isClerkIdentity(row.clerkUserId));
+  const local = rows.filter((row) => isClerkIdentity(row.authUserId));
   const summary: ReconcileSummary = {
     examined: local.length,
     updated: 0,
@@ -109,7 +109,7 @@ export async function reconcileClerkUsers(
   for (let index = 0; index < local.length; index += BATCH_SIZE) {
     const batch = local.slice(index, index + BATCH_SIZE);
     const page = await clerk.getUserList({
-      userId: batch.map((row) => row.clerkUserId),
+      userId: batch.map((row) => row.authUserId),
       limit: BATCH_SIZE,
     });
 
@@ -119,7 +119,7 @@ export async function reconcileClerkUsers(
   }
 
   for (const row of local) {
-    const user = remote.get(row.clerkUserId);
+    const user = remote.get(row.authUserId);
 
     if (!user) {
       if (options.dryRun) {
@@ -130,7 +130,7 @@ export async function reconcileClerkUsers(
       // The same path the event would have taken, so deletion behaves once.
       const outcome = await applyClerkUserEvent(
         context,
-        { type: 'user.deleted', data: { id: row.clerkUserId } },
+        { type: 'user.deleted', data: { id: row.authUserId } },
         now,
         clerk,
       );

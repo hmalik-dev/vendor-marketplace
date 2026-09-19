@@ -31,7 +31,7 @@ describe('the date lock an accept takes', () => {
     // The FK the lock's insert has to satisfy. Raw SQL rather than the seed
     // helper, because this suite needs a vendor id and nothing else about one.
     await database.client.exec(`
-      insert into users (id, clerk_user_id, email, first_name, last_name, role)
+      insert into users (id, auth_user_id, email, first_name, last_name, role)
         values ('00000000-0000-4000-8000-000000000001', 'user_lock', 'lock@example.com', 'Lock', 'Studio', 'vendor');
       insert into vendor_profiles (id, user_id, business_name, slug)
         values ('${VENDOR}', '00000000-0000-4000-8000-000000000001', 'Lock Studio', 'lock-studio');

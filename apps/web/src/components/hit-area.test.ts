@@ -95,7 +95,7 @@ describe('icon-only controls carry the law’s hit area', () => {
    * which is what makes the law's "icon-only" clause reach it. At the frame's
    * D=17 the lockup is 27px tall, well under the floor.
    *
-   * Grown the way Clerk's trigger is: the target changes and the mark does not.
+   * Grown the way the account trigger is: the target changes and the mark does not.
    *
    * Only the floor is asserted. How this markup pays for it — an inline flex, a
    * negative margin that keeps the tagline where the frame draws it — is the
@@ -122,7 +122,7 @@ describe('icon-only controls carry the law’s hit area', () => {
 
   /*
    * VEN-403: the header's account control is the app's own now, so the target
-   * is a utility on its trigger rather than CSS aimed at Clerk's markup.
+   * is a utility on its trigger rather than CSS aimed at a provider's markup.
    */
   it('gives the header account menu trigger the full hit area', () => {
     const menu = read('src/components/account-menu.tsx');

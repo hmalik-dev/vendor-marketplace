@@ -14,7 +14,7 @@ export interface BookingActors {
  * test needs before it can insert a row.
  *
  * `suffix` keeps two suites sharing a database from colliding on the unique
- * `clerk_user_id`, `email` and `slug` columns. Internal to this package: it is
+ * `auth_user_id`, `email` and `slug` columns. Internal to this package: it is
  * deliberately not on the `@vendor-marketplace/db/testing` entry point, which
  * exists for the API harness rather than for these suites.
  */
@@ -25,7 +25,7 @@ export async function seedBookingActors(
   const [customer] = await db
     .insert(users)
     .values({
-      clerkUserId: `user_${suffix}_customer`,
+      authUserId: `user_${suffix}_customer`,
       email: `${suffix}-customer@example.com`,
       role: 'customer',
       firstName: 'Dora',
@@ -36,7 +36,7 @@ export async function seedBookingActors(
   const [owner] = await db
     .insert(users)
     .values({
-      clerkUserId: `user_${suffix}_vendor`,
+      authUserId: `user_${suffix}_vendor`,
       email: `${suffix}-vendor@example.com`,
       role: 'vendor',
       firstName: 'Wren',

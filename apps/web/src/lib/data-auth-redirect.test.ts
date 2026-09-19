@@ -16,7 +16,9 @@ let token: string | null = null;
 let requestPath: string | null = null;
 const apiRequest = vi.fn();
 
-vi.mock('@clerk/nextjs/server', () => ({ auth: async () => ({ getToken: async () => token }) }));
+vi.mock('./auth/server', () => ({
+  getServerSession: async () => (token ? { userId: 'user-1', token } : null),
+}));
 
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => requestPath }),

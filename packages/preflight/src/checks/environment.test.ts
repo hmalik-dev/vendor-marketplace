@@ -18,7 +18,7 @@ function contextWith(env: NodeJS.ProcessEnv, target: Target = 'local'): CheckCon
 }
 
 const STRIPE_KEY = findVariable('STRIPE_SECRET_KEY')!;
-const CLERK_PUBLISHABLE_KEY = findVariable('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY')!;
+const CLERK_SECRET = findVariable('CLERK_SECRET_KEY')!;
 const CLERK_WEBHOOK = findVariable('CLERK_WEBHOOK_SECRET')!;
 const API_URL = findVariable('API_URL')!;
 const EMAIL_FROM = findVariable('EMAIL_FROM')!;
@@ -138,8 +138,8 @@ describe('evaluateVariable', () => {
 
   it('rejects a live Clerk key against a local target too, not only Stripe', () => {
     const result = evaluateVariable(
-      CLERK_PUBLISHABLE_KEY,
-      contextWith({ [CLERK_PUBLISHABLE_KEY.key]: liveKeyFor(CLERK_PUBLISHABLE_KEY) }),
+      CLERK_SECRET,
+      contextWith({ [CLERK_SECRET.key]: liveKeyFor(CLERK_SECRET) }),
     );
 
     expect(result.ok).toBe(false);
@@ -213,12 +213,12 @@ describe('environmentCheck', () => {
     const results = await environmentCheck.run(
       contextWith({
         [STRIPE_KEY.key]: liveKeyFor(STRIPE_KEY),
-        [CLERK_PUBLISHABLE_KEY.key]: liveKeyFor(CLERK_PUBLISHABLE_KEY),
+        [CLERK_SECRET.key]: liveKeyFor(CLERK_SECRET),
       }),
     );
     const byName = new Map(results.map((result) => [result.name, result]));
 
-    for (const variable of [STRIPE_KEY, CLERK_PUBLISHABLE_KEY]) {
+    for (const variable of [STRIPE_KEY, CLERK_SECRET]) {
       expect(byName.get(variable.key)?.ok, variable.key).toBe(false);
       expect(byName.get(variable.key)?.detail, variable.key).toBe(
         'is a live key — the local target needs a test key',

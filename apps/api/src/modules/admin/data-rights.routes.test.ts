@@ -58,11 +58,11 @@ describe('data rights', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  async function signIn(clerkUserId: string, promoteToAdmin = false): Promise<string> {
+  async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
       url: '/users/me',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
 
@@ -70,13 +70,13 @@ describe('data rights', () => {
       await harness.database.db
         .update(users)
         .set({ role: 'admin' })
-        .where(eq(users.clerkUserId, clerkUserId));
+        .where(eq(users.authUserId, authUserId));
     }
 
     const rows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId))
+      .where(eq(users.authUserId, authUserId))
       .limit(1);
 
     return rows[0]!.id;
@@ -167,9 +167,9 @@ describe('data rights', () => {
     return harness.database.db.select().from(adminActions);
   }
 
-  function registerIdentity(clerkUserId: string, role: 'customer' | 'vendor', email: string): void {
-    harness.clerkUsers.set(clerkUserId, {
-      clerkUserId,
+  function registerIdentity(authUserId: string, role: 'customer' | 'vendor', email: string): void {
+    harness.clerkUsers.set(authUserId, {
+      authUserId,
       email,
       firstName: 'Test',
       lastName: 'User',
@@ -188,13 +188,13 @@ describe('data rights', () => {
    * longer exists.
    */
   function registerFixtureIdentities(): void {
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
       [OUTSIDER, 'customer'],
     ] as const) {
-      registerIdentity(clerkUserId, role, `${clerkUserId}@example.com`);
+      registerIdentity(authUserId, role, `${authUserId}@example.com`);
     }
   }
 
@@ -364,7 +364,7 @@ describe('data rights', () => {
       expect(serialized).not.toContain('acct_rights_vendor');
       expect(serialized).not.toContain('sk_');
       expect(serialized).not.toContain('whsec_');
-      expect(serialized).not.toContain('clerkUserId":"user_');
+      expect(serialized).not.toContain('authUserId":"user_');
     });
 
     it('succeeds for an account with no vendor profile, no bookings and no reviews', async () => {
@@ -867,7 +867,7 @@ describe('data rights', () => {
       /*
        * The refusal has to come from the **identity being gone**, not from the
        * retired row — those are different fixes and only one of them is this
-       * ticket's. `clerk-auth.ts` answers the retired row with "No account is
+       * ticket's. `neon-auth.ts` answers the retired row with "No account is
        * linked to this session", which is the behaviour that already existed
        * and which the ticket names as the bug: every read 401s while the
        * browser keeps rendering signed-in chrome. A token Clerk will no longer
@@ -942,8 +942,8 @@ describe('data rights', () => {
      * Acceptances 3 and 4 — #451, against the real partial index.
      *
      * `users_email_key` is now `UNIQUE (email) WHERE deleted_at IS NULL`, and
-     * this runs the whole sign-up path — `syncUserFromClerk` into
-     * `insertUserIfAbsent`, whose `onConflictDoNothing` targets `clerk_user_id`
+     * this runs the whole sign-up path — `syncUserFromAuth` into
+     * `insertUserIfAbsent`, whose `onConflictDoNothing` targets `auth_user_id`
      * and therefore does **not** swallow an email collision — against the real
      * engine. A mocked insert could not tell a partial index from a full one,
      * which is the entire content of the change.
@@ -970,7 +970,7 @@ describe('data rights', () => {
         .select({
           id: users.id,
           email: users.email,
-          clerkUserId: users.clerkUserId,
+          authUserId: users.authUserId,
           deletedAt: users.deletedAt,
         })
         .from(users)
@@ -982,11 +982,11 @@ describe('data rights', () => {
       const returning = rows.find((row) => row.id === returningId);
 
       /* The retired row stays retired, and stays readable under its address. */
-      expect(retired).toMatchObject({ email: address, clerkUserId: CUSTOMER });
+      expect(retired).toMatchObject({ email: address, authUserId: CUSTOMER });
       expect(retired?.deletedAt).not.toBeNull();
       expect(returning).toMatchObject({
         email: address,
-        clerkUserId: RETURNING,
+        authUserId: RETURNING,
         deletedAt: null,
       });
     });
@@ -1005,7 +1005,7 @@ describe('data rights', () => {
 
       await expect(
         harness.database.db.insert(users).values({
-          clerkUserId: 'user_rights_duplicate',
+          authUserId: 'user_rights_duplicate',
           email: address,
           role: 'customer',
           firstName: 'Test',
@@ -1064,7 +1064,7 @@ describe('data rights', () => {
       const seeded = await harness.database.db
         .insert(users)
         .values({
-          clerkUserId: 'seed_mkt_customer_0',
+          authUserId: 'seed_mkt_customer_0',
           email: 'seed_mkt_customer_0@example.com',
           role: 'customer',
           firstName: 'Seeded',

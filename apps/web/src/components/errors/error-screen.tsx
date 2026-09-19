@@ -88,8 +88,8 @@ export function ErrorScreen({
               digest,
               /*
                 The query goes too — it says what broke — but scrubbed of
-                anything credential-shaped. Clerk puts a single-use
-                `__clerk_ticket` on the auth routes, and a crash there would
+                anything credential-shaped. An identity provider can put a single-use
+                ticket on the auth routes, and a crash there would
                 otherwise have mailed it to support.
               */
               route: scrubbedRoute(window.location.pathname, window.location.search),

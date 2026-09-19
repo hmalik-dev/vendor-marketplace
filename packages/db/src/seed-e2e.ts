@@ -105,7 +105,7 @@ export interface E2eAccount {
    * and the throw is raised deliberately afterwards, precisely so this stays a
    * loud lockout rather than becoming a silent one.
    */
-  clerkUserId: string;
+  authUserId: string;
   email: string;
   firstName: string;
   lastName: string;
@@ -124,7 +124,7 @@ export interface E2eSeedInput {
    * product: the role is read from Clerk's `unsafeMetadata` at first sign-in,
    * falls back to `customer`, and is immutable afterwards — so no sign-up flow
    * produces an admin, and `seed-demo.ts` gives its admin a synthetic
-   * `clerk_user_id` that cannot authenticate. Before this, the only route to
+   * `auth_user_id` that cannot authenticate. Before this, the only route to
    * frame `13`'s screens was promoting a customer in the database by hand,
    * which is a privileged write nobody should be making to run a test.
    */
@@ -345,14 +345,14 @@ async function upsertAccount(
   const [row] = await tx
     .insert(users)
     .values({
-      clerkUserId: account.clerkUserId,
+      authUserId: account.authUserId,
       email: account.email,
       role,
       firstName: account.firstName,
       lastName: account.lastName,
     })
     .onConflictDoUpdate({
-      target: users.clerkUserId,
+      target: users.authUserId,
       set: {
         email: sql`excluded.email`,
         role: sql`excluded.role`,

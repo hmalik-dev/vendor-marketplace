@@ -31,8 +31,9 @@ import {
   findAcceptanceOfVersion,
   insertAcceptance,
 } from '../modules/legal/legal-acceptance.dao.js';
-import { displayName, syncUserFromClerk } from '../modules/users/users.service.js';
-import type { ClerkUserSnapshot } from '../modules/users/users.service.js';
+import type { NeonAuthPluginOptions } from '../plugins/neon-auth.js';
+import { displayName, syncUserFromAuth } from '../modules/users/users.service.js';
+import type { AuthUserSnapshot } from '../modules/users/users.service.js';
 import { buildServer } from '../server.js';
 import type { Clock } from '../plugins/clock.js';
 
@@ -42,6 +43,7 @@ export const TEST_ENV: ApiEnv = {
   HOST: '127.0.0.1',
   LOG_LEVEL: 'silent',
   DATABASE_URL: 'postgres://test',
+  NEON_AUTH_BASE_URL: 'https://ep-test.neonauth.example.invalid/neondb/auth',
   CLERK_SECRET_KEY: 'sk_test_not_used',
   CLERK_WEBHOOK_SECRET: 'whsec_not_used',
   CLERK_WEBHOOK_ENDPOINT: 'http://localhost:4000/webhooks/clerk',
@@ -111,6 +113,12 @@ export interface HarnessDatabase {
 
 export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestDatabase> {
   env?: Partial<ApiEnv>;
+  /**
+   * The real Neon Auth token verifier and loader (over a local key set), in
+   * place of the fakes that read the literal `token-<id>` — for the suite whose
+   * subject is the trust boundary itself.
+   */
+  neonAuth?: Pick<NeonAuthPluginOptions, 'verifySessionToken' | 'loadAuthUser'>;
   loggerStream?: NodeJS.WritableStream;
   /**
    * Pins "now" for every date-sensitive route. A suite that leaves it unset
@@ -172,20 +180,20 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
  * stay that way rather than being memoised per identity: many suites clear
  * `users` in `afterEach`, so "already provisioned" is not a fact that survives
  * the test that established it. The account row
- * goes through `syncUserFromClerk` so role narrowing and name normalisation are
+ * goes through `syncUserFromAuth` so role narrowing and name normalisation are
  * the production ones, and the acceptance is written straight to the table
  * rather than through the accept route — the route is what several suites are
  * *testing*, and setup that goes through the subject under test proves nothing.
  */
 async function ensureAcceptedAccount(
   db: AppDatabase,
-  snapshot: ClerkUserSnapshot | undefined,
+  snapshot: AuthUserSnapshot | undefined,
 ): Promise<void> {
   if (!snapshot) {
     return;
   }
 
-  const user = await syncUserFromClerk(db, snapshot);
+  const user = await syncUserFromAuth(db, snapshot);
 
   if (
     !user ||
@@ -761,7 +769,7 @@ export interface TestHarness<TDatabase extends HarnessDatabase = TestDatabase> {
   /** Objects written through `app.storage`, in the order they were stored. */
   storedObjects: RecordedObject[];
   /** Clerk identities the fake token verifier and lazy-sync loader resolve. */
-  clerkUsers: Map<string, ClerkUserSnapshot>;
+  clerkUsers: Map<string, AuthUserSnapshot>;
   /** Signatures the fake svix verifier accepts; anything else is rejected. */
   validWebhookSignatures: Set<string>;
   /** The Stripe Connect boundary, recorded rather than called. */
@@ -818,7 +826,7 @@ export async function createTestHarness(
   // the suites see the same rows the running application does.
   await seedReferenceData(database.db);
 
-  const clerkUsers = new Map<string, ClerkUserSnapshot>();
+  const clerkUsers = new Map<string, AuthUserSnapshot>();
   const acceptTerms = options.acceptTerms ?? true;
   const validWebhookSignatures = new Set<string>(['valid-signature']);
   const stripe = createFakeStripe();
@@ -877,7 +885,7 @@ export async function createTestHarness(
           throw new Error('Unrecognised test token');
         }
 
-        const clerkUserId = token.slice('token-'.length);
+        const authUserId = token.slice('token-'.length);
 
         /*
          * The account behind the token, made ordinary.
@@ -901,20 +909,20 @@ export async function createTestHarness(
          * refusals carry different messages, which is what lets a suite say
          * which one it got.
          */
-        if (deletedClerkUsers.includes(clerkUserId)) {
-          throw new Error(`Test Clerk identity ${clerkUserId} was deleted`);
+        if (deletedClerkUsers.includes(authUserId)) {
+          throw new Error(`Test Clerk identity ${authUserId} was deleted`);
         }
 
         if (acceptTerms) {
-          await ensureAcceptedAccount(database.db, clerkUsers.get(clerkUserId));
+          await ensureAcceptedAccount(database.db, clerkUsers.get(authUserId));
         }
 
-        return clerkUserId;
+        return authUserId;
       },
-      loadClerkUser: async (clerkUserId) => {
-        const snapshot = clerkUsers.get(clerkUserId);
+      loadAuthUser: async (authUserId) => {
+        const snapshot = clerkUsers.get(authUserId);
         if (!snapshot) {
-          throw new Error(`No test Clerk identity registered for ${clerkUserId}`);
+          throw new Error(`No test Clerk identity registered for ${authUserId}`);
         }
         return snapshot;
       },
@@ -949,14 +957,15 @@ export async function createTestHarness(
               : [];
           }),
       },
-      deleteClerkUser: async (clerkUserId) => {
+      deleteClerkUser: async (authUserId) => {
         if (clerkDeletionFails) {
           throw new Error('Test Clerk deletion refused');
         }
 
-        deletedClerkUsers.push(clerkUserId);
-        clerkUsers.delete(clerkUserId);
+        deletedClerkUsers.push(authUserId);
+        clerkUsers.delete(authUserId);
       },
+      ...options.neonAuth,
     },
     webhooks: {
       verifySignature: (_payload, headers) => {
@@ -993,8 +1002,8 @@ export async function createTestHarness(
   };
 }
 
-export function bearer(clerkUserId: string): Record<string, string> {
-  return { authorization: `Bearer token-${clerkUserId}` };
+export function bearer(authUserId: string): Record<string, string> {
+  return { authorization: `Bearer token-${authUserId}` };
 }
 
 /**
@@ -1002,7 +1011,7 @@ export function bearer(clerkUserId: string): Record<string, string> {
  *
  * A sign-in is the only thing that writes a `users` row, so a test that wants a
  * user has to make the request rather than insert one — the row carries columns
- * (`role`, `clerk_user_id`, the mirrored name) that the sync owns.
+ * (`role`, `auth_user_id`, the mirrored name) that the sync owns.
  *
  * `promoteToAdmin` is a second step and cannot be a first one: `normalizeRole`
  * refuses `admin` from Clerk metadata **by design**, precisely so the role can
@@ -1012,35 +1021,35 @@ export function bearer(clerkUserId: string): Record<string, string> {
  */
 export async function signInAs(
   harness: TestHarness<HarnessDatabase>,
-  clerkUserId: string,
+  authUserId: string,
   promoteToAdmin = false,
 ): Promise<string> {
   const response = await harness.app.inject({
     method: 'GET',
     url: '/users/me',
-    headers: bearer(clerkUserId),
+    headers: bearer(authUserId),
   });
 
   if (response.statusCode !== 200) {
-    throw new Error(`Sign-in for ${clerkUserId} answered ${response.statusCode}`);
+    throw new Error(`Sign-in for ${authUserId} answered ${response.statusCode}`);
   }
 
   if (promoteToAdmin) {
     await harness.database.db
       .update(users)
       .set({ role: 'admin' })
-      .where(eq(users.clerkUserId, clerkUserId));
+      .where(eq(users.authUserId, authUserId));
   }
 
   const rows = await harness.database.db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.clerkUserId, clerkUserId))
+    .where(eq(users.authUserId, authUserId))
     .limit(1);
   const row = rows[0];
 
   if (!row) {
-    throw new Error(`No users row for ${clerkUserId} after signing in`);
+    throw new Error(`No users row for ${authUserId} after signing in`);
   }
 
   return row.id;

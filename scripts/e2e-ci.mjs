@@ -12,12 +12,13 @@ import { appendFileSync, readFileSync } from 'node:fs';
  * `[variable, secret]`: each variable the job's `env:` fills from a repository
  * secret, and that secret's own name — the one a missing value is reported
  * under, since it is what someone adds. Every one is needed: the E2E accounts
- * sign in against the Clerk test instance, `seed:e2e` resolves their Clerk ids
+ * sign in against the Neon Auth dev branch, `seed:e2e` resolves their Neon ids
  * and pins the Stripe connected account, and `paid-booking.spec.ts` pays
  * through Stripe test mode.
  */
 export const REQUIRED_SECRETS = [
-  ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'E2E_CLERK_PUBLISHABLE_KEY'],
+  ['NEON_AUTH_BASE_URL', 'E2E_NEON_AUTH_BASE_URL'],
+  ['NEON_AUTH_COOKIE_SECRET', 'E2E_NEON_AUTH_COOKIE_SECRET'],
   ['CLERK_SECRET_KEY', 'E2E_CLERK_SECRET_KEY'],
   ['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'E2E_STRIPE_PUBLISHABLE_KEY'],
   ['STRIPE_SECRET_KEY', 'E2E_STRIPE_SECRET_KEY'],

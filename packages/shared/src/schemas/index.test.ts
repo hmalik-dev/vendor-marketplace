@@ -46,7 +46,7 @@ const UUID = '11111111-1111-4111-8111-111111111111';
 describe('userSchema', () => {
   const valid = {
     id: UUID,
-    clerkUserId: 'user_2abc',
+    authUserId: 'user_2abc',
     email: 'jane@example.com',
     role: 'customer',
     firstName: 'Jane',

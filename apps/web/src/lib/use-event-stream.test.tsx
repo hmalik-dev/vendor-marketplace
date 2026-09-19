@@ -2,15 +2,12 @@ import { cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getTokenMock = vi.fn();
-let signedIn = true;
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({ getToken: getTokenMock, isSignedIn: signedIn }),
-}));
+vi.mock('./auth/client', () => ({ getSessionToken: () => getTokenMock() }));
 
 const { requestStreamTicket, useEventStream } = await import('./use-event-stream');
 
-/** A Clerk session token, in the shape anything reading a URL would see. */
+/** A session token, in the shape anything reading a URL would see. */
 const SESSION_JWT = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEifQ.signature-part';
 const JWT_SHAPED = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/;
 
@@ -46,7 +43,6 @@ class FakeEventSource {
 beforeEach(() => {
   opened.length = 0;
   sources.length = 0;
-  signedIn = true;
   getTokenMock.mockReset().mockResolvedValue(SESSION_JWT);
   vi.stubGlobal('EventSource', FakeEventSource);
   vi.stubGlobal(
@@ -120,7 +116,7 @@ describe('useEventStream', () => {
   });
 
   it('does not open a stream at all when signed out', async () => {
-    signedIn = false;
+    getTokenMock.mockResolvedValue(null);
 
     render(<Subscriber />);
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -307,7 +303,7 @@ describe('useEventStream', () => {
   });
 
   /*
-   * #402. `getToken` rejects on a network blip or a Clerk outage, and the
+   * #402. `getToken` rejects on a network blip or an auth outage, and the
    * rejection escaped `void connect()` with nothing scheduled behind it: the
    * tab never reconnected for the rest of its life, showing "Reconnecting"
    * permanently while nothing was reconnecting.

@@ -128,10 +128,10 @@ describe('GET /vendors', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const clerkUserId of VENDOR_USERS) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+    for (const authUserId of VENDOR_USERS) {
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'Vendor',
         roleHint: 'vendor',

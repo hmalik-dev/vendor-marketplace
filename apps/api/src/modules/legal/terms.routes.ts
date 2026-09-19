@@ -1,6 +1,6 @@
 import { acceptTermsSchema, termsAcceptanceStatusSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { clerkSubject, requireClerkSubject } from '../../lib/guards.js';
+import { authSubject, requireAuthSubject } from '../../lib/guards.js';
 import { acceptanceContext } from './acceptance-context.js';
 import { acceptTerms, readTermsStatus, unacceptedTermsStatus } from './terms.service.js';
 
@@ -16,7 +16,7 @@ import { acceptTerms, readTermsStatus, unacceptedTermsStatus } from './terms.ser
 export const termsRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/legal/terms',
-    { onRequest: requireClerkSubject, schema: { response: { 200: termsAcceptanceStatusSchema } } },
+    { onRequest: requireAuthSubject, schema: { response: { 200: termsAcceptanceStatusSchema } } },
     async (request) =>
       /*
        * No account row yet is the ordinary case here — it is every first
@@ -39,15 +39,15 @@ export const termsRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/legal/terms/accept',
     {
-      onRequest: requireClerkSubject,
+      onRequest: requireAuthSubject,
       schema: { body: acceptTermsSchema, response: { 200: termsAcceptanceStatusSchema } },
     },
     async (request) => {
-      const identity = clerkSubject(request.clerkIdentity);
+      const identity = authSubject(request.authIdentity);
 
       return acceptTerms(
         app.db,
-        identity.clerkUserId,
+        identity.authUserId,
         identity.loadSnapshot,
         request.body,
         acceptanceContext(request),

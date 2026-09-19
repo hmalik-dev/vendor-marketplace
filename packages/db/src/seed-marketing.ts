@@ -33,7 +33,7 @@ import {
 } from './schema/index.js';
 
 /**
- * Every identity this seed creates carries this prefix in `clerk_user_id`.
+ * Every identity this seed creates carries this prefix in `auth_user_id`.
  *
  * It is the only handle on "rows this seed owns". Re-running deletes the
  * booking graph belonging to these users and rebuilds it, which is what makes
@@ -193,7 +193,7 @@ export async function seedMarketingData<
     .insert(users)
     .values(
       MARKETING_CUSTOMERS.map((customer, index) => ({
-        clerkUserId: `${MARKETING_SEED_PREFIX}customer_${index}`,
+        authUserId: `${MARKETING_SEED_PREFIX}customer_${index}`,
         email: `${customer.first.toLowerCase()}.${customer.last.toLowerCase()}@orla-demo.example`,
         role: 'customer' as const,
         firstName: customer.first,
@@ -203,18 +203,18 @@ export async function seedMarketingData<
       })),
     )
     .onConflictDoUpdate({
-      target: users.clerkUserId,
+      target: users.authUserId,
       set: {
         firstName: sql`excluded.first_name`,
         lastName: sql`excluded.last_name`,
         email: sql`excluded.email`,
       },
     })
-    .returning({ id: users.id, clerkUserId: users.clerkUserId });
+    .returning({ id: users.id, authUserId: users.authUserId });
 
   // `returning` order is not guaranteed, so index by the key we control.
   const customerIds = [...customerRows]
-    .sort((a, b) => a.clerkUserId.localeCompare(b.clerkUserId))
+    .sort((a, b) => a.authUserId.localeCompare(b.authUserId))
     .map((row) => row.id);
 
   await clearSeededBookingGraph(db, customerIds);
@@ -227,7 +227,7 @@ export async function seedMarketingData<
     const [vendorUser] = await db
       .insert(users)
       .values({
-        clerkUserId: `${MARKETING_SEED_PREFIX}vendor_${vendor.slug}`,
+        authUserId: `${MARKETING_SEED_PREFIX}vendor_${vendor.slug}`,
         email: `${vendor.slug}@orla-demo.example`,
         role: 'vendor' as const,
         firstName: vendor.firstName,
@@ -236,7 +236,7 @@ export async function seedMarketingData<
         state: vendor.state,
       })
       .onConflictDoUpdate({
-        target: users.clerkUserId,
+        target: users.authUserId,
         set: {
           firstName: sql`excluded.first_name`,
           lastName: sql`excluded.last_name`,
@@ -565,7 +565,7 @@ async function seedAvailability<
 
 /**
  * Removes everything this seed owns. Exposed for tests and for a developer who
- * wants their database back; the `clerk_user_id` prefix is what scopes it.
+ * wants their database back; the `auth_user_id` prefix is what scopes it.
  */
 export async function clearMarketingData<
   TQueryResult extends PgQueryResultHKT,
@@ -575,7 +575,7 @@ export async function clearMarketingData<
   const seeded = await db
     .select({ id: users.id })
     .from(users)
-    .where(like(users.clerkUserId, `${MARKETING_SEED_PREFIX}%`));
+    .where(like(users.authUserId, `${MARKETING_SEED_PREFIX}%`));
   const seededIds = seeded.map((row) => row.id);
 
   await clearSeededBookingGraph(db, seededIds);

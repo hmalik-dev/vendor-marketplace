@@ -434,7 +434,7 @@ describe('seedDemoData', () => {
       .select({ type: notifications.type })
       .from(notifications)
       .innerJoin(users, eq(users.id, notifications.userId))
-      .where(like(users.clerkUserId, `${DEMO_SEED_PREFIX}%`));
+      .where(like(users.authUserId, `${DEMO_SEED_PREFIX}%`));
 
     expect(new Set(rows.map((row) => row.type))).toEqual(new Set(NOTIFICATION_TYPES));
   });
@@ -445,7 +445,7 @@ describe('seedDemoData', () => {
     const rows = await testDb.db
       .select({ role: users.role })
       .from(users)
-      .where(like(users.clerkUserId, `${DEMO_SEED_PREFIX}%`));
+      .where(like(users.authUserId, `${DEMO_SEED_PREFIX}%`));
 
     const byRole = rows.reduce<Record<string, number>>((counts, row) => {
       counts[row.role] = (counts[row.role] ?? 0) + 1;
@@ -569,7 +569,7 @@ describe('seedDemoData', () => {
     const [outsider] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: 'outsider_prune_guard',
+        authUserId: 'outsider_prune_guard',
         email: 'prune-guard@example.test',
         role: 'customer',
         firstName: 'Outside',
@@ -664,7 +664,7 @@ describe('idempotency and determinism', () => {
     const owned = await testDb.db
       .select({ id: users.id })
       .from(users)
-      .where(like(users.clerkUserId, `${DEMO_SEED_PREFIX}%`));
+      .where(like(users.authUserId, `${DEMO_SEED_PREFIX}%`));
     const ownedIds = owned.map((row) => row.id);
 
     const count = async (rows: Promise<unknown[]>): Promise<number> => (await rows).length;
@@ -889,7 +889,7 @@ describe('clearDemoData', () => {
     const remainingUsers = await testDb.db
       .select({ id: users.id })
       .from(users)
-      .where(like(users.clerkUserId, `${DEMO_SEED_PREFIX}%`));
+      .where(like(users.authUserId, `${DEMO_SEED_PREFIX}%`));
     const remainingVendors = await demoVendorIds();
 
     expect(remainingUsers).toHaveLength(0);
@@ -921,7 +921,7 @@ describe('clearDemoData', () => {
     const [outsider] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: 'outsider_not_a_demo_row',
+        authUserId: 'outsider_not_a_demo_row',
         email: 'outsider@example.test',
         role: 'customer',
         firstName: 'Outside',

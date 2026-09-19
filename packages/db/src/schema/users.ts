@@ -16,8 +16,8 @@ import { budgetTierEnum, userRoleEnum } from './enums.js';
 /**
  * The unique index behind `users.email`, named once (#462).
  *
- * `updateUserByClerkId` has to recognise the 23505 this index raises and no
- * other — a collision on `users_clerk_user_id_key` means something quite
+ * `updateUserByAuthId` has to recognise the 23505 this index raises and no
+ * other — a collision on `users_auth_user_id_key` means something quite
  * different and must keep failing loudly. Recognising it means matching the
  * constraint name Postgres reports, so the name is a constant both the schema
  * and that catch read rather than a string spelled out twice.
@@ -31,7 +31,7 @@ export const users = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     /** Clerk identity link — the join key for token verification. */
-    clerkUserId: varchar('clerk_user_id', { length: 255 }).notNull(),
+    authUserId: varchar('auth_user_id', { length: 255 }).notNull(),
     email: varchar('email', { length: 255 }).notNull(),
     role: userRoleEnum('role').notNull(),
     firstName: varchar('first_name', { length: 100 }).notNull(),
@@ -100,7 +100,7 @@ export const users = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('users_clerk_user_id_key').on(table.clerkUserId),
+    uniqueIndex('users_auth_user_id_key').on(table.authUserId),
     /**
      * One live account per address — and only the live ones (#451).
      *

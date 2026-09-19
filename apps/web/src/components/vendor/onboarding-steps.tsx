@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
  * the platform keeps, and a refusal at step 4 would leave a verified Connect
  * account attached to a listing nobody can pay.
  *
- * Step 1 is Clerk's, and it is drawn here even though this component never
+ * Step 1 is the sign-up's, and it is drawn here even though this component never
  * renders on it — a rail that starts at 2 tells a vendor they are further from
  * the start than they are.
  */

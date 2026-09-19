@@ -26,7 +26,7 @@ import {
   type BookingContext,
   type DisputeHoldAudience,
 } from '../payments/payments.service.js';
-import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
+import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import {
   renderSupportConfirmation,
   renderSupportReport,

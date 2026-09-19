@@ -76,7 +76,7 @@ export interface ApiRequestOptions<T> {
   schema: z.ZodType<T>;
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
-  /** Clerk session token. `null` sends the request unauthenticated. */
+  /** Session bearer token. `null` sends the request unauthenticated. */
   token?: string | null;
   signal?: AbortSignal;
   /**

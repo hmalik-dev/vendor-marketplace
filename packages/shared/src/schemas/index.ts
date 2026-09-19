@@ -235,7 +235,7 @@ export const phoneSchema = z
  * every string field of every schema a route attaches as a request body, so a
  * field that goes back to a bare `z.string()` fails on the day it is written.
  * Write paths that are **not** request bodies — names mirrored from Clerk —
- * cannot be seen from there and go through `mirroredClerkName` instead.
+ * cannot be seen from there and go through `mirroredAuthName` instead.
  */
 const freeText = () => z.string().overwrite(stripBidiControls).trim();
 
@@ -294,7 +294,7 @@ export const vendorSortOptionSchema = z.enum(VENDOR_SORT_OPTIONS);
 
 export const userSchema = z.object({
   id: uuidSchema,
-  clerkUserId: z.string().min(1).max(255),
+  authUserId: z.string().min(1).max(255),
   email: emailSchema,
   role: userRoleSchema,
   /*
@@ -1296,6 +1296,12 @@ export type TermsAcceptanceStatus = z.infer<typeof termsAcceptanceStatusSchema>;
 export const acceptTermsSchema = z.object({
   version: legalVersionSchema,
   accepted: z.boolean(),
+  /**
+   * The role the person chose at sign-up: a **hint**. Neon Auth has no field to
+   * carry it, so it rides here, and the service narrows it (`admin` is never
+   * reachable) and gates `vendor` on an invite before any row is written.
+   */
+  role: z.enum(['customer', 'vendor']).optional(),
 });
 export type AcceptTerms = z.infer<typeof acceptTermsSchema>;
 
@@ -3680,7 +3686,7 @@ export const adminUserExportSchema = z.object({
     avatarUrl: z.string().nullable(),
     /**
      * The Stripe **customer** id, which is the subject's own payment record and
-     * therefore theirs. `clerk_user_id` is deliberately absent: it is the
+     * therefore theirs. `auth_user_id` is deliberately absent: it is the
      * platform's join key into another system, not a fact about the person.
      */
     stripeCustomerId: z.string().nullable(),

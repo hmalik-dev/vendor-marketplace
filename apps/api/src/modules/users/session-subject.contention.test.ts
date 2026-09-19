@@ -38,7 +38,7 @@ describe('the acceptance gate’s folded read, on the real driver', () => {
     await database.db.insert(users).values([
       {
         id: ACCEPTED,
-        clerkUserId: 'clerk_accepted',
+        authUserId: 'clerk_accepted',
         email: 'accepted@example.com',
         role: 'customer',
         firstName: 'Ada',
@@ -46,7 +46,7 @@ describe('the acceptance gate’s folded read, on the real driver', () => {
       },
       {
         id: GATED,
-        clerkUserId: 'clerk_gated',
+        authUserId: 'clerk_gated',
         email: 'gated@example.com',
         role: 'customer',
         firstName: 'Bo',

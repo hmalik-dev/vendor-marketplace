@@ -68,14 +68,14 @@ describe('flipping the payout pause during overlapping sweeps, on real connectio
     database = await createPostgresTestDatabase({ poolSize: 8 });
     harness = await createTestHarness({ database, clock: () => clockNow });
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,
@@ -92,7 +92,7 @@ describe('flipping the payout pause during overlapping sweeps, on real connectio
     await harness.database.db
       .update(users)
       .set({ role: 'admin' })
-      .where(eq(users.clerkUserId, ADMIN));
+      .where(eq(users.authUserId, ADMIN));
 
     const [photography] = await harness.database.db
       .select({ id: categories.id })

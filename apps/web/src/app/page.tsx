@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Show } from '@clerk/nextjs';
 import {
   BRAND_NAME,
   CATEGORY_SEEDS,
@@ -16,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { StockPhoto } from '@/components/ui/stock-photo';
 import { VendorCard } from '@/components/vendors/vendor-card';
 import { siteOrigin } from '@/config/env';
+import { getServerSession } from '@/lib/auth/server';
 import { readRoleForChrome, redirectVendorToDashboard } from '@/lib/current-user';
 import { FOR_VENDORS_PATH, FOR_VENDORS_PAYOUTS_ANCHOR } from '@/lib/for-vendors';
 import { GENERIC_TRUST_COPY } from '@/lib/landing-status';
@@ -242,8 +242,8 @@ function landingCategories(categories: readonly Category[]): Category[] {
 /**
  * Never prerendered, and **declared rather than inherited** (#428).
  *
- * This route is already dynamic — `redirectVendorToDashboard()` reaches Clerk's
- * `auth()` on the first line of `HomePage`, and `SiteHeader` does the same in
+ * This route is already dynamic — `redirectVendorToDashboard()` reaches the
+ * session read on the first line of `HomePage`, and `SiteHeader` does the same in
  * the root layout, so a dynamic API is in the tree either way.
  *
  * **The stake dropped on 2026-09-07 and the declaration still stands.** #428
@@ -284,6 +284,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
    * this costs nothing beyond the first request.
    */
   const isCustomer = (await readRoleForChrome()) === 'customer';
+  const signedOut = (await getServerSession()) === null;
 
   /*
     One wave, and every read in it bounded by `API_REQUEST_TIMEOUT_MS` (#390).
@@ -742,8 +743,8 @@ export default async function HomePage(): Promise<React.ReactElement> {
         worth keeping — and it spends the reclaimed width on how the thing
         works, three steps deep, instead of repeating a CTA.
 
-        `Show` rather than the role read above, because "signed out" is a
-        question about the session and Clerk is the one that can answer it: a
+        The session read rather than the role read above, because "signed out"
+        is a question about the session and the session is what answers it: a
         signed-in customer whose account record cannot be read still holds a
         session, and they must not be shown a vendor pitch they cannot act on.
         A signed-in vendor never reaches this page at all.
@@ -753,7 +754,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
         it is the fragment the page has advertised, and dropping it would break
         any link already written down.
       */}
-      <Show when="signed-out">
+      {signedOut ? (
         <section
           id="for-vendors"
           aria-labelledby="cta-heading"
@@ -841,7 +842,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
             </ol>
           </div>
         </section>
-      </Show>
+      ) : null}
     </>
   );
 }

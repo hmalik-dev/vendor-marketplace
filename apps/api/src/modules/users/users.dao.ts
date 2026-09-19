@@ -18,25 +18,25 @@ const notDeleted = isNull(users.deletedAt);
 /**
  * The row for a Clerk subject **including a retired one**.
  *
- * Almost nothing wants this — `findUserByClerkId` below hides a retired row on
+ * Almost nothing wants this — `findUserByAuthId` below hides a retired row on
  * purpose, and is what every caller should reach for. The two exceptions are
  * the acceptance gate and the acceptance itself, which have to tell "no account
  * yet" from "account erased": since #429 the absence of a row means "has not
  * accepted, send them to the interstitial", and a Clerk-deleted identity
  * offered that interstitial would try to bring its erased account back, where
- * `insertUserIfAbsent` finds the retired row under the same `clerk_user_id` and
+ * `insertUserIfAbsent` finds the retired row under the same `auth_user_id` and
  * answers `null` rather than reviving it. A retired identity keeps getting the
  * 401 it always got.
  */
-export async function findUserByClerkIdIncludingRetired(
+export async function findUserByAuthIdIncludingRetired(
   db: AppDatabase,
-  clerkUserId: string,
+  authUserId: string,
 ): Promise<UserRow | null> {
-  if (!clerkUserId) {
+  if (!authUserId) {
     return null;
   }
 
-  const rows = await db.select().from(users).where(eq(users.clerkUserId, clerkUserId)).limit(1);
+  const rows = await db.select().from(users).where(eq(users.authUserId, authUserId)).limit(1);
 
   return rows?.[0] ?? null;
 }
@@ -49,11 +49,11 @@ export async function findUserByClerkIdIncludingRetired(
  * the rule to be edited out of, and the rule is what stops a deleted identity
  * resolving to a session.
  */
-export async function findUserByClerkId(
+export async function findUserByAuthId(
   db: AppDatabase,
-  clerkUserId: string,
+  authUserId: string,
 ): Promise<UserRow | null> {
-  const row = await findUserByClerkIdIncludingRetired(db, clerkUserId);
+  const row = await findUserByAuthIdIncludingRetired(db, authUserId);
 
   return row?.deletedAt ? null : row;
 }
@@ -68,16 +68,16 @@ export async function findUserByClerkId(
  * it is evaluated for the single outer row and short-circuits on the first
  * match, which costs a fraction of a millisecond of planner work instead.
  *
- * Retired rows are included for the reason `findUserByClerkIdIncludingRetired`
+ * Retired rows are included for the reason `findUserByAuthIdIncludingRetired`
  * gives: the gate has to answer "erased" differently from "not accepted yet".
  */
 export async function findSessionSubject(
   db: AppDatabase,
-  clerkUserId: string,
+  authUserId: string,
   document: LegalAcceptanceDocument,
   version: string,
 ): Promise<{ user: UserRow; holdsDocument: boolean } | null> {
-  if (!clerkUserId) {
+  if (!authUserId) {
     return null;
   }
 
@@ -98,7 +98,7 @@ export async function findSessionSubject(
       )}`,
     })
     .from(users)
-    .where(eq(users.clerkUserId, clerkUserId))
+    .where(eq(users.authUserId, authUserId))
     .limit(1);
 
   return rows?.[0] ?? null;
@@ -123,7 +123,7 @@ export async function findUserById(db: AppDatabase, id: string): Promise<UserRow
  * own first API call. Returns the winning row either way.
  *
  * **The `DO NOTHING` names no target, and that is the whole point** (#442).
- * `users` carries two unique indexes — `users_clerk_user_id_key` and
+ * `users` carries two unique indexes — `users_auth_user_id_key` and
  * `users_email_key` — and one identity signing in twice at once collides on
  * *both*, because the two inserts carry the same Clerk id and the same address.
  * A targeted `DO NOTHING` arbitrates only the index it names, so whenever
@@ -134,7 +134,7 @@ export async function findUserById(db: AppDatabase, id: string): Promise<UserRow
  *
  * **Naming both keys is not available**, which is why the target is dropped
  * rather than widened: `ON CONFLICT (a, b)` names one arbiter *index* over
- * those columns, and there is no unique index on `(clerk_user_id, email)`. Nor
+ * those columns, and there is no unique index on `(auth_user_id, email)`. Nor
  * can the email violation be caught and retried — the first-sign-in caller runs
  * this inside `db.transaction`, and a raised 23505 aborts the whole transaction,
  * so every statement after it fails with 25P02. Not raising is the only shape
@@ -195,9 +195,9 @@ export async function insertUserIfAbsent(
   /*
    * Retired rows included, deliberately: a Clerk-deleted identity signing in
    * again is the one case that must read as "no account" rather than as a
-   * collision, and it is the reason this is not simply `findUserByClerkId`.
+   * collision, and it is the reason this is not simply `findUserByAuthId`.
    */
-  const held = await findUserByClerkIdIncludingRetired(db, values.clerkUserId);
+  const held = await findUserByAuthIdIncludingRetired(db, values.authUserId);
 
   if (held) {
     return held.deletedAt ? null : held;
@@ -219,9 +219,9 @@ export async function insertUserIfAbsent(
   const holder = await findUserByEmailIncludingRetired(db, values.email);
 
   throw new Error(
-    `users: the insert for ${values.clerkUserId} was declined — its address is held by ` +
+    `users: the insert for ${values.authUserId} was declined — its address is held by ` +
       (holder
-        ? `${holder.clerkUserId} (${holder.deletedAt ? 'retired' : 'live'})`
+        ? `${holder.authUserId} (${holder.deletedAt ? 'retired' : 'live'})`
         : 'a row this read could not find'),
   );
 }
@@ -329,12 +329,12 @@ type EmailDivergenceWrite =
  * of Clerk and hands it to this function — a diverged row records its pending
  * address on that pass, and an agreeing one is left alone.
  */
-export async function updateUserByClerkId(
+export async function updateUserByAuthId(
   db: AppDatabase,
-  clerkUserId: string,
+  authUserId: string,
   patch: Partial<NewUserRow>,
 ): Promise<ClerkMirrorResult | null> {
-  if (!clerkUserId || Object.keys(patch).length === 0) {
+  if (!authUserId || Object.keys(patch).length === 0) {
     return null;
   }
 
@@ -356,8 +356,8 @@ export async function updateUserByClerkId(
   try {
     // Read first: `RETURNING` carries only the new address, and the old one is what is released.
     const previousEmail =
-      email === undefined ? undefined : (await findUserByClerkId(db, clerkUserId))?.email;
-    const user = await writeClerkPatch(db, clerkUserId, patch, resolving);
+      email === undefined ? undefined : (await findUserByAuthId(db, authUserId))?.email;
+    const user = await writeClerkPatch(db, authUserId, patch, resolving);
 
     if (user && previousEmail !== undefined && previousEmail !== user.email) {
       await handAddressToWaiter(db, previousEmail);
@@ -393,7 +393,7 @@ export async function updateUserByClerkId(
      * redeliveries and across later events that collide again, so it answers
      * "since when has this been wrong" rather than "when did we last look".
      */
-    const user = await writeClerkPatch(db, clerkUserId, rest, {
+    const user = await writeClerkPatch(db, authUserId, rest, {
       pendingEmail: email,
       emailSyncFailedAt: sql`coalesce(${users.emailSyncFailedAt}, now())`,
     });
@@ -469,14 +469,14 @@ export async function findLiveUserByEmail(db: AppDatabase, email: string): Promi
 /** The one `UPDATE` both branches above run, so they cannot drift apart. */
 async function writeClerkPatch(
   db: AppDatabase,
-  clerkUserId: string,
+  authUserId: string,
   patch: Partial<NewUserRow>,
   divergence: EmailDivergenceWrite,
 ): Promise<UserRow | null> {
   const updated = await db
     .update(users)
     .set({ ...patch, ...divergence, updatedAt: sql`now()` })
-    .where(and(eq(users.clerkUserId, clerkUserId), notDeleted))
+    .where(and(eq(users.authUserId, authUserId), notDeleted))
     .returning();
 
   return updated?.[0] ?? null;
@@ -513,15 +513,15 @@ async function writeClerkPatch(
  * which is the whole of the answer; it is a pre-launch database and there is no
  * migration worth writing for it.
  */
-export async function retireUserByClerkId(
+export async function retireUserByAuthId(
   db: AppDatabase,
-  clerkUserId: string,
+  authUserId: string,
 ): Promise<UserRow | null> {
-  if (!clerkUserId) {
+  if (!authUserId) {
     return null;
   }
 
-  const retired = await retireUserWhere(db, and(eq(users.clerkUserId, clerkUserId), notDeleted));
+  const retired = await retireUserWhere(db, and(eq(users.authUserId, authUserId), notDeleted));
 
   return retired?.user ?? null;
 }
@@ -755,7 +755,7 @@ async function retireUserInTransaction(
  */
 export async function listLiveClerkIdentities(db: AppDatabase): Promise<
   {
-    clerkUserId: string;
+    authUserId: string;
     email: string;
     firstName: string;
     lastName: string;
@@ -764,7 +764,7 @@ export async function listLiveClerkIdentities(db: AppDatabase): Promise<
 > {
   return db
     .select({
-      clerkUserId: users.clerkUserId,
+      authUserId: users.authUserId,
       email: users.email,
       firstName: users.firstName,
       lastName: users.lastName,
@@ -772,5 +772,5 @@ export async function listLiveClerkIdentities(db: AppDatabase): Promise<
     })
     .from(users)
     .where(notDeleted)
-    .orderBy(users.clerkUserId);
+    .orderBy(users.authUserId);
 }

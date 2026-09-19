@@ -5,7 +5,7 @@ import type {
 } from 'fastify';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { forbidden, termsRequiredError, unauthorized } from './errors.js';
-import type { AuthenticatedUser, ClerkIdentity } from '../plugins/clerk-auth.js';
+import type { AuthenticatedUser, AuthIdentity } from '../plugins/neon-auth.js';
 
 /**
  * The acceptance gate, checked by every guard before it decides anything else.
@@ -74,16 +74,16 @@ export function assertRole(
  * It is an `onRequest` guard because both routes take a body or would otherwise
  * answer a caller with no session by describing their payload.
  */
-export const requireClerkSubject: onRequestAsyncHookHandler = async (request) => {
-  clerkSubject(request.clerkIdentity);
+export const requireAuthSubject: onRequestAsyncHookHandler = async (request) => {
+  authSubject(request.authIdentity);
 };
 
 /**
- * Narrows the identity `requireClerkSubject` has already established, the way
+ * Narrows the identity `requireAuthSubject` has already established, the way
  * `authenticated` narrows `request.auth` after `requireAuth`. Both live here so
  * a route cannot pick its own refusal for the same condition.
  */
-export function clerkSubject(identity: ClerkIdentity | null): ClerkIdentity {
+export function authSubject(identity: AuthIdentity | null): AuthIdentity {
   if (!identity) {
     throw unauthorized();
   }

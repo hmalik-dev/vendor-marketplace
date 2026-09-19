@@ -27,9 +27,6 @@ const globalsCss = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf
 /** The unbordered treatment: the four utilities the law names, in its order. */
 const RING = ['ring-2', 'ring-clay-400/40', 'ring-offset-2', 'ring-offset-stone-50'] as const;
 
-/** The bordered-field treatment. No offset — a field has an edge already. */
-const FIELD = ['border-clay-400', 'ring-3', 'ring-clay-400/15'] as const;
-
 function ruleFor(selector: string): string {
   const match = globalsCss.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`));
   expect(match).not.toBeNull();
@@ -73,77 +70,15 @@ describe('the product’s focus ring reaches every control', () => {
   });
 
   /*
-   * #195. The auth form's three Clerk-styled controls drew Clerk's own ring — a 4px clay at 50% with no offset layer. The nodes Clerk
-   * does *not* style itself (its footer link, its logo link) already take the
-   * base rule correctly, which is what proves the layer is the cause rather
-   * than the selector.
+   * #195 fixed the auth form's controls by out-ranking a provider's injected
+   * stylesheet. The form is the app's own now — `Input` and `Button` carry the
+   * product's ring — so nothing needs out-ranking, and the overrides that did
+   * are gone. A provider selector coming back would be the return of that
+   * fight.
    */
-  it('restates the treatments for the three controls Clerk styles itself', () => {
-    const start = globalsCss.indexOf(
-      '[data-auth-screen] .cl-formButtonPrimary.cl-formButtonPrimary:focus-visible',
-    );
-
-    expect(start).toBeGreaterThan(-1);
-
-    const selectors = globalsCss.slice(start, start + 280);
-
-    /*
-     * Each class is repeated to reach (0,4,0). Clerk's submit rule ties at
-     * (0,3,0) and, being injected at runtime, wins every tie on source order.
-     */
-    for (const control of [
-      '.cl-formButtonPrimary.cl-formButtonPrimary:focus-visible',
-      '.cl-formFieldInputShowPasswordButton.cl-formFieldInputShowPasswordButton:focus-visible',
-    ]) {
-      expect(selectors).toContain(control);
-    }
-
-    /*
-     * The two buttons are unbordered controls and take the offset ring; the
-     * text field is a bordered field and takes the tight one with no offset.
-     * They shared a block, at the unbordered value, until #383 — which is the
-     * same "one treatment for everything" the base rule was carrying.
-     */
-    const buttons = globalsCss.slice(start).match(/\{([^}]*)\}/)?.[1] ?? '';
-
-    for (const utility of RING) {
-      expect(buttons).toContain(utility);
-    }
-
-    const rule = ruleFor(
-      '\\[data-auth-screen\\] \\.cl-formFieldInput\\.cl-formFieldInput:focus-visible',
-    );
-
-    for (const utility of FIELD) {
-      expect(rule).toContain(utility);
-    }
-
-    /*
-     * And it must zero the offset rather than merely not set one. Clerk's nodes
-     * cannot carry `data-focus-own`, so the base rule still reaches them and
-     * `ring-offset-*` is a separate property from `ring-*`: without this the
-     * field kept the unbordered treatment's 2px band under the bordered
-     * treatment's ring.
-     */
-    expect(rule).toContain('ring-offset-0');
-    expect(buttons).toContain('outline-none');
-    expect(rule).toContain('outline-none');
-    /*
-     * And it must NOT reset `box-shadow`. Tailwind's `ring-*` utilities are
-     * themselves a box-shadow, so a `box-shadow: none` after them removes the
-     * product's ring too — the browser check for this fix read `none` on a
-     * focused input before the reset came out.
-     */
-    expect(rule).not.toContain('box-shadow: none');
-  });
-
-  it('keeps the auth-form overrides outside @layer base too', () => {
-    const base = globalsCss.match(/@layer base \{[\s\S]*?\n\}/)?.[0] ?? '';
-
-    expect(base).not.toContain('cl-formFieldInput');
-    expect(globalsCss).toContain(
-      '[data-auth-screen] .cl-formFieldInput.cl-formFieldInput:focus-visible',
-    );
+  it('carries no provider-styling override for the auth form', () => {
+    expect(globalsCss).not.toMatch(/\.cl-|clerk/i);
+    expect(globalsCss).not.toContain('.cl-formFieldInput');
   });
 
   /*
@@ -157,22 +92,5 @@ describe('the product’s focus ring reaches every control', () => {
     expect(form).toContain('has-focus-visible:ring-offset-stone-50');
     // And at the law's opacity, like every other copy of this treatment.
     expect(form).toContain('has-focus-visible:ring-clay-400/40');
-  });
-
-  it('names tokens rather than hexes, so the palette stays one source', () => {
-    /*
-     * The auth field's rule, since the user button that used to carry this
-     * check is gone (VEN-403). Its comments cite issues as `#383`, which reads
-     * as a hex, so only the declarations are scanned — and they are asserted
-     * present, so an empty body cannot pass.
-     */
-    const declarations = ruleFor(
-      '\\[data-auth-screen\\] \\.cl-formFieldInput\\.cl-formFieldInput:focus-visible',
-    ).replace(/\/\*[\s\S]*?\*\//g, '');
-
-    expect(declarations).toContain('ring-clay-400/15');
-    // #B4552F is clay-400 and #F8F5EF is stone-50; either appearing here would
-    // be the second source of truth `layout.tsx` warns about.
-    expect(declarations).not.toMatch(/#[0-9a-f]{3,8}/i);
   });
 });

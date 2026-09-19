@@ -35,7 +35,7 @@ beforeAll(async () => {
   await database.runMigrations();
 
   await database.client.exec(`
-    insert into users (id, clerk_user_id, email, first_name, last_name, role) values
+    insert into users (id, auth_user_id, email, first_name, last_name, role) values
       ('${CUSTOMER}', 'user_msg_customer', 'msg-customer@example.com', 'Ada', 'Byron', 'customer'),
       ('${VENDOR_USER}', 'user_msg_vendor', 'msg-vendor@example.com', 'Wren', 'Field', 'vendor');
     insert into vendor_profiles (id, user_id, business_name, slug)

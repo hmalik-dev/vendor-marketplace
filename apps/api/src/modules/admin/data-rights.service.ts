@@ -8,7 +8,7 @@ import type {
 } from '@vendor-marketplace/shared';
 import type { LegalAcceptanceRow, UserRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
-import type { ClerkUserDeleter } from '../../plugins/clerk-auth.js';
+import type { ClerkUserDeleter } from '../../plugins/clerk-admin.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import { hasAnotherLiveOperator, retireOperatorById, retireUserById } from '../users/users.dao.js';
 import { isClerkIdentity } from '../webhooks/clerk.reconcile.js';
@@ -70,13 +70,13 @@ const COUNTERPARTY_WITHHOLDING = {
 /**
  * The identifiers that name our systems rather than the person.
  *
- * `clerk_user_id` is the join key into the identity provider. Returning it
+ * `auth_user_id` is the join key into the identity provider. Returning it
  * discloses how the platform is wired without telling the subject anything
  * about themselves, so it is left out and said so.
  */
 const INTERNAL_ID_WITHHOLDING = {
   section: 'subject',
-  fields: ['clerkUserId'],
+  fields: ['authUserId'],
   reason:
     'An internal join key into the identity provider. It names how the platform is wired rather than anything about the subject.',
 };
@@ -598,7 +598,7 @@ export async function closeAccount(
    * Deleting the Clerk user fires `user.deleted` straight back at our own
    * webhook, so the local row has to be retired and the marketplace already
    * tidied by the time that arrives. It is: `applyUserDeleted` looks for a
-   * **live** row and finds none, and `retireUserByClerkId` would fail its
+   * **live** row and finds none, and `retireUserByAuthId` would fail its
    * `notDeleted` predicate anyway. The redelivery is therefore `ignored` and
    * cannot unwind this account a second time or refund anything twice, which
    * is #433's replay guard doing exactly the job it was built for.
@@ -610,11 +610,11 @@ export async function closeAccount(
    * nothing happened. It comes back as `identityDeleted: false`, and the
    * console asks for a person, the shape a refused refund already takes.
    */
-  const identityDeleted = isClerkIdentity(user.clerkUserId)
+  const identityDeleted = isClerkIdentity(user.authUserId)
     ? await bestEffortNotice(
         context,
         { userId },
-        () => deleteClerkUser(user.clerkUserId),
+        () => deleteClerkUser(user.authUserId),
         'An account closure could not delete its Clerk identity; that person is still signed in',
       )
     : /*

@@ -80,11 +80,11 @@ describe('the operations case queue (#431)', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  async function signIn(clerkUserId: string, promoteToAdmin = false): Promise<string> {
+  async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
       url: '/users/me',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
 
@@ -92,13 +92,13 @@ describe('the operations case queue (#431)', () => {
       await harness.database.db
         .update(users)
         .set({ role: 'admin' })
-        .where(eq(users.clerkUserId, clerkUserId));
+        .where(eq(users.authUserId, authUserId));
     }
 
     const rows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId))
+      .where(eq(users.authUserId, authUserId))
       .limit(1);
 
     return rows[0]!.id;
@@ -228,14 +228,14 @@ describe('the operations case queue (#431)', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,
@@ -886,14 +886,14 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
       }),
     });
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,
@@ -912,13 +912,13 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
     await harness.database.db
       .update(users)
       .set({ role: 'admin' })
-      .where(eq(users.clerkUserId, ADMIN));
+      .where(eq(users.authUserId, ADMIN));
 
     await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
     const customers = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, CUSTOMER))
+      .where(eq(users.authUserId, CUSTOMER))
       .limit(1);
     const customerId = customers[0]!.id;
 
@@ -1024,7 +1024,7 @@ describe('a case row that cannot be written (#431 security review)', () => {
     harness = await createTestHarness({ env: { LOG_LEVEL: 'trace' }, loggerStream: collector });
 
     harness.clerkUsers.set(CUSTOMER, {
-      clerkUserId: CUSTOMER,
+      authUserId: CUSTOMER,
       email: `${CUSTOMER}@example.com`,
       firstName: 'Test',
       lastName: 'User',

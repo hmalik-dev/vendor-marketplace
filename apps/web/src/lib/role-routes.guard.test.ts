@@ -42,7 +42,7 @@ const SAMPLE_SEGMENT = 'sample';
 /**
  * The URL a file under `app/` gates — its directory path, with the App Router's
  * own notation resolved: route groups `(hub)` are organisational and contribute
- * no segment, and `[slug]`, `[requestId]` and `[[...sign-in]]` each stand for
+ * no segment, and `[slug]` and `[requestId]` each stand for
  * one.
  */
 function routeOf(name: string): string {

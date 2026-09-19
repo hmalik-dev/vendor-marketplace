@@ -37,7 +37,7 @@ import type { EventHub } from '../../lib/event-stream.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
-import type { AuthenticatedUser } from '../../plugins/clerk-auth.js';
+import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import {
   applyTransition,
   ensureConversation,

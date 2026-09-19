@@ -318,7 +318,7 @@ export interface DisputedBookingProjection {
    * rather than through the report form — so the hold is placed as them, which
    * is what keeps `placeDisputeHold` the single writer rather than needing a
    * webhook-shaped second one. Read from the row rather than fabricated: the
-   * real `clerk_user_id` and `role` reach the primitive, so nothing downstream
+   * real `auth_user_id` and `role` reach the primitive, so nothing downstream
    * is looking at a synthetic account.
    */
   customerId: string;
@@ -344,7 +344,7 @@ export async function findBookingForDispute(
     .select({
       bookingId: bookings.id,
       customerId: users.id,
-      customerClerkUserId: users.clerkUserId,
+      customerClerkUserId: users.authUserId,
       customerRole: users.role,
       bookingStatus: bookings.status,
       payoutReleasedAt: bookings.payoutReleasedAt,

@@ -855,7 +855,7 @@ function customerCondition(filters: AdminCustomerFilters) {
    *
    * Stored rather than derived, unlike `refundStuck`: nothing else in the
    * database knows what Clerk currently believes, so `pending_email` — written
-   * by `updateUserByClerkId` when `users_email_key` refuses the new address —
+   * by `updateUserByAuthId` when `users_email_key` refuses the new address —
    * is the only record that the two disagree. Keyed on it rather than on
    * `email_sync_failed_at` because it is the column the console prints, and a
    * filter that can select a row the table then renders as blank is a filter

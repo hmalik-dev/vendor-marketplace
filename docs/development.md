@@ -25,7 +25,7 @@ or Docker is not running. When there is no `.env` it creates one from
 placeholders are not empty to the apps: the migrator would prefer the unpooled
 placeholder, and the API refuses to boot on `operator@...`. An existing `.env` is
 only ever read. It then lists every key the apps refuse to boot without that
-still holds its placeholder (Clerk, Stripe, Resend) and exits non-zero before
+still holds its placeholder (Neon Auth, Clerk, Stripe, Resend) and exits non-zero before
 `pnpm install`. The key lists are held against the env registry by
 `scripts/start-local.test.mjs`.
 

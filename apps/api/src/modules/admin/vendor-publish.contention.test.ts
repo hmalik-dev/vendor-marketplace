@@ -91,14 +91,14 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
     database = await createPostgresTestDatabase({ poolSize: 4 });
     harness = await createTestHarness({ database });
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN_ONE, 'customer'],
       [ADMIN_TWO, 'customer'],
       [VENDOR, 'vendor'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,

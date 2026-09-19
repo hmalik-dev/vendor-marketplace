@@ -33,7 +33,7 @@ describe('the notification recipient of a diverged account', () => {
     const [row] = await harness.database.db
       .insert(users)
       .values({
-        clerkUserId: 'user_diverged',
+        authUserId: 'user_diverged',
         email: 'old@example.com',
         pendingEmail,
         emailSyncFailedAt: pendingEmail ? new Date('2026-09-14T00:00:00Z') : null,

@@ -20,14 +20,15 @@ plugins, and use `onRequest` / `preHandler` hooks for middleware.
 
 ## Authorization reads the local column, never the token
 
-Role is chosen once, at sign-up, and travels as Clerk `unsafeMetadata`. The
-account holder can write that field, so it is narrowed by `normalizeRole` at the
-single point where a user row is created. **Every later authorization decision
-reads the local `users.role` column.** A guard that trusts `unsafeMetadata` at
-request time is a privilege-escalation bug.
-
-A new or modified endpoint carries auth and authz consistent with its neighbours.
-An unguarded route beside guarded ones is a finding.
+Role is chosen once, at sign-up, and travels as a `role` field on the Terms
+acceptance request (Neon Auth has no sign-up field to carry it, VEN-444). The
+caller can write that field, so it is narrowed by `normalizeRole` at the single
+point where a user row is created, and `vendor` is gated on an invite before any
+row exists. **Every later authorization decision reads the local `users.role`
+column.** The Neon JWT's own `role` claim is always `authenticated` and is never
+read; a guard that trusts a token claim or the request body at request time is a
+privilege-escalation bug. A valid token proves an identity and nothing else: the
+API never creates a `users` row from a token alone.
 
 ## Derived columns are recomputed, never incremented
 

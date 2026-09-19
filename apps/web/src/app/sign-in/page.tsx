@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import { SignIn } from '@clerk/nextjs';
 import { pageTitle } from '@vendor-marketplace/shared';
 import { AuthScreen } from '@/components/auth/auth-screen';
+import { SignInForm } from '@/components/auth/sign-in-form';
 import { redirectIfSignedIn } from '@/lib/current-user';
 import { RETURN_PATH_PARAM, safeReturnPath } from '@/lib/return-path';
 
@@ -18,10 +18,9 @@ export default async function SignInPage({ searchParams }: PageProps): Promise<R
    * bounce anyone off our origin. Anything it rejects falls back to the plain
    * post-sign-in routing, which is where a bare `/sign-in` visit already goes.
    *
-   * The key is the app's own (`returnTo`), never Clerk's reserved
-   * `redirect_url`: clerk-js prefers that param over `fallbackRedirectUrl` and
-   * would redirect straight to it, skipping `/after-sign-in` and with it the
-   * role resolution, the suspended-account branch and the re-validation.
+   * Sign-in always lands on `/after-sign-in` with this carried as `returnTo`,
+   * never straight on the destination: that handler does the role resolution,
+   * the suspended-account branch and the re-validation.
    */
   const raw = (await searchParams)[RETURN_PATH_PARAM];
   const returnTo = safeReturnPath(Array.isArray(raw) ? raw[0] : raw);
@@ -36,8 +35,8 @@ export default async function SignInPage({ searchParams }: PageProps): Promise<R
   return (
     <AuthScreen headline="Welcome back" subhead="Pick up where you left off.">
       {/* `/after-sign-in` resolves the role from the local record and forwards on. */}
-      <SignIn
-        fallbackRedirectUrl={
+      <SignInForm
+        destination={
           returnTo
             ? `/after-sign-in?${RETURN_PATH_PARAM}=${encodeURIComponent(returnTo)}`
             : '/after-sign-in'

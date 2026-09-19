@@ -43,14 +43,17 @@ type AuthState = 'signed-in' | 'signed-out';
 
 let authState: AuthState = 'signed-out';
 
-vi.mock('@clerk/nextjs', () => ({
+vi.mock('@/components/auth/show', () => ({
   Show: ({ when, children }: { when: AuthState; children: ReactNode }) =>
     when === authState ? children : null,
-  /*
-   * Clerk's own control, rendered as the button it clones its child into. The
-   * session mutation behind it is Clerk's to test; what this file asserts is
-   * that the control is offered to the right reader and to nobody else.
-   */
+}));
+
+/*
+ * Rendered as the button it clones its child into. The session mutation behind
+ * it is `sign-out-button.test.tsx`'s to test; what this file asserts is that
+ * the control is offered to the right reader and to nobody else.
+ */
+vi.mock('@/components/auth/sign-out-button', () => ({
   SignOutButton: ({ children }: { children: ReactNode }) => children,
 }));
 
