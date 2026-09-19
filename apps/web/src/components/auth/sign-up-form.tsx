@@ -198,7 +198,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
                   <span className="block text-[14.5px] font-semibold text-stone-900">
                     {choice.title}
                   </span>
-                  <span className="mt-1 block text-sm leading-normal text-stone-700">
+                  <span className="mt-1 block text-[12px] leading-normal text-stone-700">
                     {choice.description}
                   </span>
                 </label>

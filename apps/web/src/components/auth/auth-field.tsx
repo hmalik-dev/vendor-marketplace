@@ -14,7 +14,12 @@ export function AuthField({ label, helper, ...input }: AuthFieldProps): React.Re
   return (
     <div className="mb-4 flex flex-col gap-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} aria-describedby={helper ? `${id}-helper` : undefined} {...input} />
+      <Input
+        id={id}
+        className="bg-stone-0"
+        aria-describedby={helper ? `${id}-helper` : undefined}
+        {...input}
+      />
       {helper ? (
         <p id={`${id}-helper`} className="text-helper text-stone-600">
           {helper}

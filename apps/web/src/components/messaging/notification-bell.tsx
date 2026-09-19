@@ -2,6 +2,8 @@
 
 import { Bell } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { TERMS_ACCEPTANCE_PATH, VENDOR_APPLY_PATH } from '@vendor-marketplace/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EmptyStateGlyph } from '@/components/ui/empty-state';
 import { useApi } from '@/lib/use-api';
@@ -39,7 +41,25 @@ export interface NotificationBellProps {
  * cannot drift from what the panel shows. New notifications arrive over the
  * shared stream, so the badge moves without a reload.
  */
-export function NotificationBell({ initial = [] }: NotificationBellProps): React.ReactElement {
+export function NotificationBell(props: NotificationBellProps): React.ReactElement | null {
+  const pathname = usePathname();
+
+  /*
+   * An account that has not accepted the Terms sits on these two screens, and
+   * the API answers both of the bell's calls (`/notifications` and the stream
+   * ticket) with the gate's 403 — a console error on a screen that is
+   * otherwise correct (VEN-451). The bell has nothing to show there, so it
+   * does not ask; the stream is only opened from here and `/messages`, which
+   * is gated itself.
+   */
+  if (pathname === TERMS_ACCEPTANCE_PATH || pathname === VENDOR_APPLY_PATH) {
+    return null;
+  }
+
+  return <NotificationBellPanel {...props} />;
+}
+
+function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.ReactElement {
   const call = useApi();
   const [items, setItems] = useState<WireNotification[]>([...initial]);
   const [open, setOpen] = useState(false);

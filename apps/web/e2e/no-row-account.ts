@@ -126,11 +126,8 @@ export async function deleteNoRowAccount(account: NoRowAccount): Promise<void> {
  */
 export async function signInThroughTheForm(page: Page, account: NoRowAccount): Promise<URL> {
   await page.goto('/sign-in');
+  // One step on Neon Auth: the submit stays disabled until both fields are filled.
   await page.getByLabel(/email/i).first().fill(account.email);
-  await page
-    .getByRole('button', { name: /continue|sign in/i })
-    .first()
-    .click();
   await page
     .getByLabel(/password/i)
     .first()
