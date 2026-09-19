@@ -121,8 +121,30 @@ describe('assertWebEnv', () => {
         API_URL: 'https://api.orla.test',
         NEXT_PUBLIC_API_URL: 'https://api.orla.test',
         NEXT_PUBLIC_S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+        NEXT_PUBLIC_SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',
       }).NEXT_PUBLIC_CLERK_SIGN_IN_URL,
     ).toBe('/sign-in');
+  });
+
+  /*
+   * VEN-397: a deployed build with no DSN would ship a web app that reports
+   * none of its errors, and a laptop build must not need one.
+   */
+  it('refuses a deployed build with a missing or malformed Sentry DSN, and builds locally without one', () => {
+    const deployed = {
+      ...VALID,
+      VERCEL: '1',
+      WEB_URL: 'https://orla.test',
+      API_URL: 'https://api.orla.test',
+      NEXT_PUBLIC_API_URL: 'https://api.orla.test',
+      NEXT_PUBLIC_S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+    };
+
+    expect(() => assertWebEnv(deployed)).toThrow(/NEXT_PUBLIC_SENTRY_DSN is required/);
+    expect(() =>
+      assertWebEnv({ ...deployed, NEXT_PUBLIC_SENTRY_DSN: 'https://...@sentry.io/...' }),
+    ).toThrow(/NEXT_PUBLIC_SENTRY_DSN does not look like a real value/);
+    expect(assertWebEnv(VALID).NEXT_PUBLIC_SENTRY_DSN).toBeUndefined();
   });
 
   it('requires the Stripe key, so no deploy ships a checkout with no card field', () => {

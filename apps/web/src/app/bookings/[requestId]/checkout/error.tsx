@@ -1,7 +1,9 @@
 'use client';
 
+import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
 import { ErrorScreen } from '@/components/errors/error-screen';
+import { boundaryCaptureContext } from '@/config/error-reporting';
 
 /**
  * A throw on the screen that takes the money, inside this segment's own shell.
@@ -25,6 +27,7 @@ export default function CheckoutError({
 }): React.ReactElement {
   useEffect(() => {
     console.error(`Unhandled checkout error${error.digest ? ` [${error.digest}]` : ''}`, error);
+    Sentry.captureException(error, boundaryCaptureContext({ payment: true, digest: error.digest }));
   }, [error]);
 
   /*

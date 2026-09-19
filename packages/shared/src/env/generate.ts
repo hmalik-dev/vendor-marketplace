@@ -1,5 +1,6 @@
 import { CAPABILITIES, CAPABILITY_LABELS, variablesFor } from './capabilities.js';
 import { PLATFORM_ENV_KEYS } from './deployment.js';
+import { RELEASE_ENV_KEYS } from './release.js';
 import { ENV_REGISTRY, exampleValue } from './registry.js';
 
 const HEADER = `# ---------------------------------------------------------------------------
@@ -74,6 +75,12 @@ export const TURBO_GLOBAL_ENV_KEYS: readonly string[] = [
   'NODE_ENV',
   'CSP_ENFORCE',
   ...PLATFORM_ENV_KEYS,
+  /*
+   * The release identifier is baked into the web bundle and named in its
+   * uploaded source maps, so a build for one commit must never be replayed as
+   * another's (VEN-397).
+   */
+  ...RELEASE_ENV_KEYS,
 ];
 
 /**

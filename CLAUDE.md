@@ -81,6 +81,17 @@ Dependency direction is one-way: `apps -> packages`.
   user-reachable change, `parity-checker` for every screen with a frame, at
   1440×900, all six axes. Whole-app sweep: `/hunt-bugs` (needs the stack up).
 
+## Releasing
+
+`.github/workflows/deploy.yml` (VEN-397) runs after `CI` succeeds on `main`:
+gate (still `main`'s tip) → preflight (every input configured, or red by name)
+→ migrate over `DATABASE_URL_UNPOOLED` + reference seed → API → web (prebuilt
+Vercel, source maps to Sentry) → `/ready` must name the commit within ten
+minutes. `SENTRY_RELEASE` is that commit end to end. **Inert until VEN-377**
+provisions its secrets and decides the API host (`vars.API_HOST`, D10), so it
+fails at preflight on every merge — expected, like the smoke check. Every
+migration must stay backwards-compatible with the release still serving.
+
 ## Merging
 
 No merge queue. `main` requires the CI check, an up-to-date branch and linear

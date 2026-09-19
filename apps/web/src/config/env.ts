@@ -14,9 +14,10 @@ import { LOCAL_WEB_ORIGIN } from './public-env';
  * each and a build that omitted them shipped anyway: every stored-key image
  * resolved to `null` and rendered as the empty state, and checkout called
  * `loadStripe('')`, which Stripe.js rejects — a card field that never mounts
- * behind a Pay button that does nothing. Sentry joins in #15.
+ * behind a Pay button that does nothing. `sentry` joined in VEN-397: a deployed
+ * build with no DSN would ship a web app that reports none of its errors.
  */
-const WEB_CAPABILITIES = ['core', 'auth', 'storage', 'stripe'] as const;
+const WEB_CAPABILITIES = ['core', 'auth', 'storage', 'stripe', 'sentry'] as const;
 
 /**
  * Two value sets, chosen per build.

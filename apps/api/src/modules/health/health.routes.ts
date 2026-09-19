@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { releaseIdentifier } from '@vendor-marketplace/shared/env';
 
 export const healthResponseSchema = z.object({
   status: z.literal('ok'),
@@ -37,12 +38,15 @@ type DependencyState = z.infer<typeof dependencyStateSchema>;
 const DEPENDENCY_TIMEOUT_MS = 2_000;
 
 /**
- * Railway injects the deployed commit; there is no equivalent when the API runs
- * from a working copy, and a local `null` is the honest answer rather than a
- * guess read out of the developer's git checkout.
+ * The release this process is: the commit the deploy workflow set as
+ * `SENTRY_RELEASE`, or the platform's own commit variable. It is the identifier
+ * the error tracker tags events with, so the commit `/ready` names is the commit
+ * an error resolves to. There is no equivalent when the API runs from a working
+ * copy, and a local `null` is the honest answer rather than a guess read out of
+ * the developer's own clone.
  */
 export function deployedCommit(source: NodeJS.ProcessEnv = process.env): string | null {
-  return source.RAILWAY_GIT_COMMIT_SHA?.trim() || null;
+  return releaseIdentifier(source);
 }
 
 interface ProbeResult {

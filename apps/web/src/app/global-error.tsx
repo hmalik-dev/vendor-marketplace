@@ -1,7 +1,9 @@
 'use client';
 
+import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
 import { ErrorScreen } from '@/components/errors/error-screen';
+import { boundaryCaptureContext } from '@/config/error-reporting';
 import './globals.css';
 
 /**
@@ -24,6 +26,10 @@ export default function GlobalError({
 }): React.ReactElement {
   useEffect(() => {
     console.error(`Root layout error${error.digest ? ` [${error.digest}]` : ''}`, error);
+    Sentry.captureException(
+      error,
+      boundaryCaptureContext({ payment: false, digest: error.digest }),
+    );
   }, [error]);
 
   return (

@@ -4,6 +4,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
 import { siteOrigin } from '@/config/env';
 import { ClerkShell } from '@/components/auth/clerk-shell';
+import { ErrorReportingUser } from '@/components/errors/error-reporting-user';
 import { OutsideAdmin, PublicChrome } from '@/components/public-chrome';
 import { SiteFooter } from '@/components/site-footer';
 import { SearchStatusProvider } from '@/components/search/search-status';
@@ -83,6 +84,7 @@ export default function RootLayout({
           only screen with a frame that specifies it. See `clerk-shell.tsx`.
         */}
         <ClerkShell>
+          <ErrorReportingUser />
           {/*
             The adapter sits above the header, not inside the search page: on
             `/search` the query bar lives in the header and the results live in
