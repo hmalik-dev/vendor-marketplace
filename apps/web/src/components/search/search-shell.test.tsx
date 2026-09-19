@@ -1,5 +1,5 @@
 import { ERROR_CODES } from '@vendor-marketplace/shared';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiClientError } from '@/lib/api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -806,14 +806,11 @@ describe('SearchShell unknown vendor type', () => {
  * heading still claimed the full count — 17 vendors and nothing drawn under a
  * line reading "17 photographers".
  *
- * `pageSize` is 20 against 17 vendors, so nothing is lost today. It stops being
- * true the moment the marketplace outgrows one page, and the URL is reachable
- * by hand and by any crawler that guesses it.
+ * The URL is reachable by hand and by any crawler that guesses it.
  *
- * The correction is a clamp rather than a message: frame `02` draws no
- * pagination at all, so there is no approved string for "that page does not
- * exist" and inventing one would fail the text axis. Going back to the first
- * page is the behaviour the frame can support.
+ * The correction is a clamp rather than a message: there is no approved string
+ * for "that page does not exist" and inventing one would fail the text axis.
+ * Going back to the first page is the behaviour available.
  */
 describe('SearchShell out-of-range page', () => {
   beforeEach(() => {
@@ -1048,5 +1045,50 @@ describe('a tag filter the searched category cannot answer', () => {
     rerender(<SearchShell categories={CATEGORIES} tags={TAGS} />);
 
     expect(screen.getByText(/Dietary filters/)).toBeDefined();
+  });
+});
+
+/*
+ * VEN-442. Past twenty matches the shell offers Previous / Next. The patch it
+ * hands `setState` has to be `{ page }` and nothing else: any second key makes
+ * the hook treat it as a filter change and snap the URL back to page 1.
+ */
+describe('SearchShell pagination', () => {
+  beforeEach(() => {
+    apiRequest.mockReset();
+    setState.mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('asks for exactly page 2 when Next is pressed on 21 matches', async () => {
+    state = baseState({ page: 1 });
+    apiRequest.mockResolvedValue({
+      items: [],
+      total: 21,
+      page: 1,
+      pageSize: 20,
+      facets: { categories: [] },
+    });
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Next' }));
+
+    expect(setState).toHaveBeenCalledExactlyOnceWith({ page: 2 });
+  });
+
+  it('draws no pager on the no-results state', async () => {
+    state = baseState({ page: 1 });
+    apiRequest.mockResolvedValue(emptyResult());
+
+    render(<SearchShell categories={CATEGORIES} tags={[]} />);
+
+    await waitFor(() =>
+      expect(screen.getByText('Try a different vendor type or city.')).toBeDefined(),
+    );
+    expect(screen.queryByRole('navigation', { name: 'Search results pages' })).toBeNull();
   });
 });

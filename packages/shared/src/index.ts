@@ -5,6 +5,7 @@ export * from './constants/legal-manifest.js';
 export * from './constants/operator-alerts.js';
 export * from './constants/support.js';
 export * from './constants/vendor-invites.js';
+export * from './constants/web-tier.js';
 export * from './schemas/index.js';
 export * from './schemas/admin-categories.js';
 export * from './utils/index.js';

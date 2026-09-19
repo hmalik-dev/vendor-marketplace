@@ -10,6 +10,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import { DataTable } from '@/components/admin/data-table';
+import { Pager, type PagerProps } from '@/components/admin/pager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
@@ -42,6 +43,8 @@ const NO_CONTENT = z.null();
 export interface VendorApplicationsPanelProps {
   applications: readonly WireAdminVendorApplicationRow[];
   invites: readonly WireAdminVendorInviteRow[];
+  /** Walks the invites table; the applications pager is the surface's own. */
+  invitesPager: PagerProps;
 }
 
 /**
@@ -55,6 +58,7 @@ export interface VendorApplicationsPanelProps {
 export function VendorApplicationsPanel({
   applications,
   invites,
+  invitesPager,
 }: VendorApplicationsPanelProps): React.ReactElement {
   const router = useRouter();
   const call = useApi();
@@ -218,7 +222,10 @@ export function VendorApplicationsPanel({
         />
       )}
 
-      <h2 className="mt-6 mb-2.5 font-display text-[21px] text-stone-900">Invites</h2>
+      <div className="mt-6 mb-2.5 flex items-center justify-between gap-3">
+        <h2 className="font-display text-[21px] text-stone-900">Invites</h2>
+        <Pager {...invitesPager} />
+      </div>
       <form
         noValidate
         className="mb-3 flex flex-wrap items-end gap-3"

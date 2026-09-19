@@ -1,4 +1,9 @@
-import { VENDOR_PAYMENTS_PATH, pageTitle } from '@vendor-marketplace/shared';
+import {
+  BRAND_NAME,
+  PAYOUT_RELEASE_HOURS,
+  VENDOR_PAYMENTS_PATH,
+  pageTitle,
+} from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -39,7 +44,7 @@ export default async function VendorPaymentsReturnPage(): Promise<React.ReactEle
       heading={isOnboarded ? "You're set up" : 'Stripe is still checking'}
       description={
         isOnboarded
-          ? 'Payouts are connected, so you can accept bookings now. Stripe holds each payment until the event is complete, then pays it out to you.'
+          ? `Payouts are connected, so you can accept bookings now. ${BRAND_NAME} holds each payment and pays it out to you ${PAYOUT_RELEASE_HOURS} hours after the event date.`
           : 'Stripe has your details and is verifying them. This usually takes a minute or two, and sometimes longer if a document needs a look.'
       }
     >

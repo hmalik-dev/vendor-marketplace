@@ -403,10 +403,9 @@ describe('/vendor/portfolio', () => {
     });
 
     /*
-     * The cover is a designation on an existing tile, not a second upload —
-     * `syncCoverFromPortfolio` copies a tile's key onto the profile. Reaping on
-     * the strength of one row would destroy an object the other still points
-     * at, and the vendor would have done it to themselves.
+     * The cover may name a key a tile also holds. Reaping on the strength of
+     * one row would destroy an object the other still points at, and the vendor
+     * would have done it to themselves.
      */
     it('never reaps an object another row still references', async () => {
       await createProfile(VENDOR, 'Sunlit Studio');
@@ -504,11 +503,12 @@ describe('/vendor/portfolio', () => {
 });
 
 /**
- * "Cover is a designation on an existing tile (drag to first slot), never a
- * second uploader" — `40-states.md`. The cover stays a stored column, so what
- * matters is that the column and the list can never disagree.
+ * The cover is its own upload (`vendor-cover`), written only by the profile
+ * editor. A portfolio add, delete or reorder used to rewrite it to the first
+ * tile, overwriting the photo the vendor chose on purpose.
  */
-describe('the cover follows the first portfolio photo', () => {
+describe('portfolio writes never touch the cover', () => {
+  const CHOSEN_COVER = 'http://cdn.test/vendor-cover/chosen.webp';
   let harness: TestHarness;
   let photographyId: string;
 
@@ -559,7 +559,8 @@ describe('the cover follows the first portfolio photo', () => {
     await harness.close();
   });
 
-  async function profile(): Promise<void> {
+  /** A profile whose cover the vendor set independently of any portfolio tile. */
+  async function profileWithChosenCover(): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
@@ -573,27 +574,19 @@ describe('the cover follows the first portfolio photo', () => {
       },
     });
     expect(response.statusCode).toBe(201);
+
+    await harness.database.db.update(vendorProfiles).set({ coverImageUrl: CHOSEN_COVER });
   }
 
-  /* Otherwise a vendor has a portfolio and no banner until they reorder a list of one. */
-  it('adopts the first photo uploaded as the cover', async () => {
-    await profile();
+  it('keeps the chosen cover when a photo is added', async () => {
+    await profileWithChosenCover();
     await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
 
-    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/first.webp');
+    expect(await coverOf(VENDOR)).toBe(CHOSEN_COVER);
   });
 
-  it('leaves the cover alone when a second photo goes on the end', async () => {
-    await profile();
-    await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
-    await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
-
-    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/first.webp');
-  });
-
-  /* The designation *is* the drag: first slot means cover. */
-  it('moves the cover when a photo is dragged into first place', async () => {
-    await profile();
+  it('keeps the chosen cover when photos are reordered', async () => {
+    await profileWithChosenCover();
     const first = await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
     const second = await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
 
@@ -605,45 +598,27 @@ describe('the cover follows the first portfolio photo', () => {
     });
     expect(response.statusCode).toBe(200);
 
-    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/second.webp');
+    expect(await coverOf(VENDOR)).toBe(CHOSEN_COVER);
   });
 
-  it('promotes the next photo when the cover is deleted', async () => {
-    await profile();
+  it('keeps the chosen cover when the first, and then the last, photo is deleted', async () => {
+    await profileWithChosenCover();
     const first = await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
-    await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
+    const second = await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
 
-    const response = await harness.app.inject({
-      method: 'DELETE',
-      url: `/vendor/portfolio/${first}`,
-      headers: bearer(VENDOR),
-    });
-    expect(response.statusCode).toBe(204);
-
-    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/second.webp');
+    for (const id of [first, second]) {
+      const response = await harness.app.inject({
+        method: 'DELETE',
+        url: `/vendor/portfolio/${id}`,
+        headers: bearer(VENDOR),
+      });
+      expect(response.statusCode).toBe(204);
+      expect(await coverOf(VENDOR)).toBe(CHOSEN_COVER);
+    }
   });
 
-  /* An empty portfolio means no cover. The profile has a placeholder for it. */
-  it('clears the cover when the last photo goes', async () => {
-    await profile();
-    const only = await add(VENDOR, 'http://cdn.test/portfolio/only.webp');
-
-    await harness.app.inject({
-      method: 'DELETE',
-      url: `/vendor/portfolio/${only}`,
-      headers: bearer(VENDOR),
-    });
-
-    expect(await coverOf(VENDOR)).toBeNull();
-  });
-
-  /*
-   * The acceptance criterion: order and cover are one write. A reorder that
-   * names a photo the vendor does not own is refused, and must leave the
-   * order and the cover exactly as they were — not one of the two.
-   */
   it('changes neither the order nor the cover when the reorder is refused', async () => {
-    await profile();
+    await profileWithChosenCover();
     const first = await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
     const second = await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
 
@@ -661,28 +636,7 @@ describe('the cover follows the first portfolio photo', () => {
       headers: bearer(VENDOR),
     });
     expect(listed.json().map((item: { id: string }) => item.id)).toEqual([first, second]);
-    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/first.webp');
-  });
-
-  it('is unchanged by two reorders in a row', async () => {
-    await profile();
-    const first = await add(VENDOR, 'http://cdn.test/portfolio/first.webp');
-    const second = await add(VENDOR, 'http://cdn.test/portfolio/second.webp');
-
-    for (const order of [
-      [second, first],
-      [first, second],
-    ]) {
-      const response = await harness.app.inject({
-        method: 'PUT',
-        url: '/vendor/portfolio/reorder',
-        headers: bearer(VENDOR),
-        payload: { itemIds: order },
-      });
-      expect(response.statusCode).toBe(200);
-    }
-
-    expect(await coverOf(VENDOR)).toBe('http://cdn.test/portfolio/first.webp');
+    expect(await coverOf(VENDOR)).toBe(CHOSEN_COVER);
   });
 });
 

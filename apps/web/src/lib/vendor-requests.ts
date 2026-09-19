@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
+import { readEveryPage } from './read-every-page';
 import { redirectIfTermsRequired } from './terms-gate';
 import { wireBookingRequestListSchema, type WireBookingRequest } from './wire-schemas';
 
@@ -11,9 +12,11 @@ import { wireBookingRequestListSchema, type WireBookingRequest } from './wire-sc
  *
  * The endpoint scopes to the caller's own vendor profile — there is no
  * parameter naming whose queue to read, so a vendor cannot ask for another's.
+ * `allPages` walks the whole history instead of the newest page, for the list
+ * whose subject is every accepted date (VEN-433).
  */
 export async function getOwnBookingRequests(
-  options: { onFailure?: 'empty' | 'throw' } = {},
+  options: { onFailure?: 'empty' | 'throw'; allPages?: boolean } = {},
 ): Promise<WireBookingRequest[]> {
   const token = (await getServerSession())?.token ?? null;
 
@@ -22,10 +25,10 @@ export async function getOwnBookingRequests(
   }
 
   try {
-    return await apiRequest('/booking-requests', {
-      schema: wireBookingRequestListSchema,
-      token,
-    });
+    const read = (query: string): Promise<WireBookingRequest[]> =>
+      apiRequest(`/booking-requests${query}`, { schema: wireBookingRequestListSchema, token });
+
+    return options.allPages ? await readEveryPage(read) : await read('');
   } catch (error) {
     if (isNavigationSignal(error)) {
       throw error;

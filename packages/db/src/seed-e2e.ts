@@ -27,6 +27,7 @@ import {
   vendorInvites,
   vendorProfiles,
 } from './schema/index.js';
+import { deleteBookingRequests } from './delete-booking-requests.js';
 
 /**
  * Any Drizzle Postgres database — the pooled `postgres-js` client the script
@@ -496,19 +497,18 @@ async function ensureProfile(
  * fixture's to do.
  */
 async function clearLiveRequests(tx: Tx, vendorProfileId: string): Promise<void> {
-  await tx
-    .delete(bookingRequests)
-    .where(
-      and(
-        eq(bookingRequests.vendorId, vendorProfileId),
-        notExists(
-          tx
-            .select({ id: bookings.id })
-            .from(bookings)
-            .where(eq(bookings.requestId, bookingRequests.id)),
-        ),
+  await deleteBookingRequests(
+    tx,
+    and(
+      eq(bookingRequests.vendorId, vendorProfileId),
+      notExists(
+        tx
+          .select({ id: bookings.id })
+          .from(bookings)
+          .where(eq(bookings.requestId, bookingRequests.id)),
       ),
-    );
+    )!,
+  );
 }
 
 /**
@@ -1052,7 +1052,7 @@ async function removeReviewedBooking(
     .returning({ requestId: bookings.requestId });
 
   if (removed) {
-    await tx.delete(bookingRequests).where(eq(bookingRequests.id, removed.requestId));
+    await deleteBookingRequests(tx, eq(bookingRequests.id, removed.requestId));
   }
 
   await rederiveRatings(tx, vendorProfileId, customerUserId);

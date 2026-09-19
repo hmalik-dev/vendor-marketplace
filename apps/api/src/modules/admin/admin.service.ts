@@ -1,11 +1,14 @@
 import {
+  MAX_TAGS_PER_CATEGORY,
   addDays,
   generateSlug,
   isPayoutFailing,
+  isPayoutStranded,
   payoutStatusOf,
   toDateString,
   unwindFloorDate,
 } from '@vendor-marketplace/shared';
+import type { TagRow } from '@vendor-marketplace/db/schema';
 import type {
   AdminActivityActorList,
   AdminActivityPage,
@@ -73,7 +76,7 @@ import { banOperatorById, hasAnotherLiveOperator } from '../users/users.dao.js';
 import { resolveDispute } from '../payments/payments.service.js';
 import { retryPayoutRelease } from '../payments/payouts.service.js';
 import {
-  assignTagToVendor,
+  assignTagToVendorWithinLimit,
   countActionWidenings,
   countAdminActions,
   countAdminBookings,
@@ -727,6 +730,7 @@ export async function listBookings(
       customerName: fullName(row.customerFirstName, row.customerLastName),
       vendorName: row.vendorName,
       vendorSlug: row.vendorSlug,
+      vendorId: row.vendorId,
       refundStuck: row.refundStuck,
       createdAt: row.createdAt,
     })),
@@ -766,6 +770,7 @@ export async function listPayments(
       stripePaymentIntentId: row.stripePaymentIntentId,
       vendorName: row.vendorName,
       vendorSlug: row.vendorSlug,
+      vendorId: row.vendorId,
       customerName: fullName(row.customerFirstName, row.customerLastName),
       paidAt: row.paidAt,
       /*
@@ -785,7 +790,8 @@ export async function listPayments(
        * comes from the same shared function the sweep's own retry uses, so the
        * filter and the rows it returns cannot answer differently.
        */
-      payoutFailing: isPayoutFailing(row),
+      payoutFailing: isPayoutFailing(row) && !row.vendorUnpayable,
+      payoutStranded: isPayoutStranded(row),
     })),
     total,
     page: query.page,
@@ -1379,6 +1385,51 @@ function tagSlug(category: TagCategory, name: string): string {
   return `${category}-${generateSlug(name)}`;
 }
 
+/**
+ * A deactivated tag is hidden from the picker and from search, so approving or
+ * merging a suggestion into one would close it by giving the vendor a tag
+ * nobody can see. Refused rather than reactivated: bringing vocabulary back is
+ * a decision of its own, not a side effect of a queue button.
+ */
+function assertTagIsOffered(tag: Pick<TagRow, 'name' | 'isActive'>): void {
+  if (!tag.isActive) {
+    throw conflict(
+      `“${tag.name}” is a deactivated tag, so the suggestion cannot be approved into it. Reactivate or rename it on the Tags page first.`,
+    );
+  }
+}
+
+type TagAssignment = NonNullable<AdminTagSuggestionResult['assignment']>;
+
+/**
+ * Adds an approved tag to the suggester's selection — when they have a
+ * storefront to add it to and room in that category. The vocabulary decision
+ * stands either way; the outcome says what the vendor was and was not given.
+ */
+async function assignToSuggester(
+  tx: AppDatabase,
+  suggesterProfileId: string | null,
+  tag: Pick<TagRow, 'id' | 'category'>,
+): Promise<TagAssignment> {
+  if (!suggesterProfileId) {
+    return 'no-profile';
+  }
+
+  return assignTagToVendorWithinLimit(tx, suggesterProfileId, tag, MAX_TAGS_PER_CATEGORY);
+}
+
+/** The tail of the vendor's notification: only claims what actually happened. */
+function assignmentSentence(assignment: TagAssignment): string {
+  switch (assignment) {
+    case 'assigned':
+      return 'it has been added to your profile.';
+    case 'category-full':
+      return `it was not added to your profile because you already have ${MAX_TAGS_PER_CATEGORY} tags in that category. Remove one in your storefront editor to choose it.`;
+    case 'no-profile':
+      return 'you can choose it in your storefront editor once your profile is set up.';
+  }
+}
+
 async function notifyVendorOfTag(
   context: AdminContext,
   userId: string,
@@ -1486,7 +1537,11 @@ export async function resolveTagSuggestion(
      * No notification, by design. The queue records why; telling a vendor their
      * idea was turned down is how a product stops receiving suggestions.
      */
-    return { suggestion: await readResolved(context.db, suggestionId), tag: null };
+    return {
+      suggestion: await readResolved(context.db, suggestionId),
+      tag: null,
+      assignment: null,
+    };
   }
 
   if (input.action === 'merge') {
@@ -1506,6 +1561,8 @@ export async function resolveTagSuggestion(
       } satisfies FieldErrorDetails);
     }
 
+    assertTagIsOffered(target);
+
     /*
      * Three writes, one transaction — the resolution, the vendor's new tag, and
      * the audit row. They were two loose statements before the log arrived, and
@@ -1513,7 +1570,7 @@ export async function resolveTagSuggestion(
      * atomic; a suggestion resolved without the tag it promised the vendor is
      * the failure that leaves behind.
      */
-    await context.db.transaction(async (tx) => {
+    const assignment = await context.db.transaction(async (tx) => {
       const resolved = await resolveTagSuggestionRow(tx, {
         suggestionId,
         status: 'approved',
@@ -1526,9 +1583,7 @@ export async function resolveTagSuggestion(
         throw conflict('That suggestion has already been resolved');
       }
 
-      if (suggesterProfileId) {
-        await assignTagToVendor(tx, suggesterProfileId, target.id);
-      }
+      const outcome = await assignToSuggester(tx, suggesterProfileId, target);
 
       await insertAdminAction(tx, {
         actorId,
@@ -1537,16 +1592,18 @@ export async function resolveTagSuggestion(
         subjectId: suggestionId,
         detail: { outcome: 'merged', tagId: target.id },
       });
+
+      return outcome;
     });
 
     await notifyVendorOfTag(
       context,
       suggestion.vendorId,
       'Your tag suggestion matched an existing tag',
-      `“${suggestion.suggestedName}” matched our existing tag “${target.name}” — it has been added to your profile.`,
+      `“${suggestion.suggestedName}” matched our existing tag “${target.name}” — ${assignmentSentence(assignment)}`,
     );
 
-    return { suggestion: await readResolved(context.db, suggestionId), tag: target };
+    return { suggestion: await readResolved(context.db, suggestionId), tag: target, assignment };
   }
 
   const normalized = normalizeTagName(suggestion.suggestedName);
@@ -1562,6 +1619,7 @@ export async function resolveTagSuggestion(
   const sameName = await findTagByCategoryAndName(context.db, suggestion.category, normalized);
 
   if (sameName) {
+    // The merge branch refuses when `sameName` is deactivated.
     return resolveTagSuggestion(
       context,
       actorId,
@@ -1588,7 +1646,7 @@ export async function resolveTagSuggestion(
     throw conflict(`A similar tag already exists: ${slugTaken.name}. Merge into it instead.`);
   }
 
-  const created = await context.db.transaction(async (tx) => {
+  const { created, assignment } = await context.db.transaction(async (tx) => {
     const tag = await insertTag(tx, {
       name: suggestion.suggestedName,
       slug,
@@ -1612,9 +1670,7 @@ export async function resolveTagSuggestion(
       throw conflict('That suggestion has already been resolved');
     }
 
-    if (suggesterProfileId) {
-      await assignTagToVendor(tx, suggesterProfileId, tag.id);
-    }
+    const outcome = await assignToSuggester(tx, suggesterProfileId, tag);
 
     await insertAdminAction(tx, {
       actorId,
@@ -1624,17 +1680,17 @@ export async function resolveTagSuggestion(
       detail: { outcome: 'approved', tagId: tag.id },
     });
 
-    return tag;
+    return { created: tag, assignment: outcome };
   });
 
   await notifyVendorOfTag(
     context,
     suggestion.vendorId,
     'Your tag suggestion was approved',
-    `“${created.name}” is now available, and has been added to your profile.`,
+    `“${created.name}” is now available — ${assignmentSentence(assignment)}`,
   );
 
-  return { suggestion: await readResolved(context.db, suggestionId), tag: created };
+  return { suggestion: await readResolved(context.db, suggestionId), tag: created, assignment };
 }
 
 /** Re-reads the suggestion through the list projection, so the response and the queue agree. */

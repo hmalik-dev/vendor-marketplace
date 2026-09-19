@@ -28,9 +28,16 @@ export const eventsPlugin = fp(
      */
     app.decorate('streamTickets', new StreamTicketStore());
 
-    // Streams are held open deliberately, so they have to be let go
-    // deliberately too — otherwise `app.close()` never resolves.
-    app.addHook('onClose', async () => hub.closeAll());
+    /*
+     * Streams are held open deliberately, so they have to be let go
+     * deliberately too — and *before* the server is asked to stop.
+     *
+     * `onClose` is too late: Fastify's own hook calls `server.close()` first,
+     * which waits for every connection to finish and so waits on the stream
+     * forever, and the hooks queued behind it — this one and the background
+     * queue's drain — never run. `preClose` runs ahead of it.
+     */
+    app.addHook('preClose', async () => hub.closeAll());
   },
   { name: 'events' },
 );

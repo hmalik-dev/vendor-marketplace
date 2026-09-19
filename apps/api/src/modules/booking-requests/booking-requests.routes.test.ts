@@ -5,19 +5,26 @@ import {
   categories,
   conversations,
   notifications,
+  platformSettings,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import {
   addDays,
+  BOOKING_PAYMENT_WINDOW_DAYS,
   BOOKING_REQUEST_EXPIRY_DAYS,
+  CURRENT_VENDOR_AGREEMENT_VERSION,
   ERROR_CODES,
   MAX_PACKAGE_PRICE_CENTS,
   MIN_BOOKING_AMOUNT_CENTS,
+  paymentDeadline,
   toDateString,
   universallyPastFrom,
 } from '@vendor-marketplace/shared';
 import { eq, sql } from 'drizzle-orm';
+import { confirmBooking } from '../payments/payments.dao.js';
+import { forgetPlatformSwitches } from '../platform-settings/platform-settings.service.js';
+import { expireLapsedRequests } from './booking-requests.service.js';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
@@ -61,7 +68,7 @@ describe('/booking-requests', () => {
   async function createVendor(
     authUserId: string,
     businessName: string,
-    options: { publish?: boolean; onboarded?: boolean } = {},
+    options: { publish?: boolean; onboarded?: boolean; agreement?: boolean } = {},
   ): Promise<{ vendorId: string; packageId: string }> {
     const profile = await harness.app.inject({
       method: 'POST',
@@ -107,6 +114,17 @@ describe('/booking-requests', () => {
         stripeAccountId: onboarded ? 'acct_test_vendor' : null,
       })
       .where(eq(vendorProfiles.id, vendorId));
+
+    // Accepting a request needs the agreement in force (VEN-428), as checkout does.
+    if (options.agreement ?? true) {
+      const agreed = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/agreement/accept',
+        headers: bearer(authUserId),
+        payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
+      });
+      expect(agreed.statusCode).toBe(200);
+    }
 
     return { vendorId, packageId: created.json().id };
   }
@@ -176,6 +194,8 @@ describe('/booking-requests', () => {
      */
     harness.email.sent.length = 0;
     harness.email.messageIdsByKey.clear();
+    await harness.database.db.delete(platformSettings);
+    forgetPlatformSwitches(harness.database.db);
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -749,6 +769,39 @@ describe('/booking-requests', () => {
       expect(second.json<RequestBody>().id).toBe(first.json<RequestBody>().id);
     });
 
+    it('ages a lapsed request a resubmission matches, and opens a new one the vendor is told about', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+      const first = await createRequest(vendorId, { packageId });
+      const firstId = first.json<RequestBody>().id;
+
+      // Lapsed, but nobody has read it since — so it is still stored as `pending`.
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: addDays(new Date(), -1) })
+        .where(eq(bookingRequests.id, firstId));
+
+      const second = await createRequest(vendorId, { packageId });
+
+      expect(second.statusCode).toBe(201);
+      expect(second.json<RequestBody>().id).not.toBe(firstId);
+      expect(second.json<RequestBody>().status).toBe('pending');
+
+      const [aged] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, firstId));
+      expect(aged?.status).toBe('expired');
+
+      const types = await harness.database.db
+        .select({ type: notifications.type })
+        .from(notifications);
+      expect(types.map((row) => row.type).sort()).toEqual([
+        'new_request',
+        'new_request',
+        'request_expired',
+      ]);
+    });
+
     it('returns the stored request unchanged when a resubmission carries edited details', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
       const first = await createRequest(vendorId, { packageId, eventLocation: 'Barr Mansion' });
@@ -946,6 +999,8 @@ describe('/booking-requests', () => {
           'cancelledAt',
           'cancelledBy',
           'paidAt',
+          /* A timestamp only, no amount: the customer's own screen never reads it. */
+          'paidOutAt',
           'refundAmountCents',
           'status',
           'totalAmountCents',
@@ -986,6 +1041,221 @@ describe('/booking-requests', () => {
         .select({ type: notifications.type })
         .from(notifications);
       expect(types.map((row) => row.type)).toContain('request_expired');
+    });
+
+    it('ages a lapsed request and emails the customer once with no read, however often it sweeps', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const requestId: string = created.json().id;
+
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: addDays(new Date(), -1) })
+        .where(eq(bookingRequests.id, requestId));
+      await harness.flushEmail();
+      harness.email.sent.length = 0;
+
+      const mail = {
+        db: harness.app.db,
+        email: harness.app.email,
+        log: harness.app.log,
+        webOrigin: 'https://web.test',
+        background: harness.app.background,
+      };
+
+      // Nobody opens the request: only the sweep runs.
+      expect(await expireLapsedRequests(harness.app.db, new Date(), mail)).toBe(1);
+      expect(await expireLapsedRequests(harness.app.db, new Date(), mail)).toBe(0);
+      await harness.flushEmail();
+
+      const [row] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+      expect(row?.status).toBe('expired');
+
+      expect(harness.email.sent).toHaveLength(1);
+      expect(harness.email.sent[0]?.subject).toBe('Your request expired');
+    });
+
+    describe('an accepted request nobody pays for (VEN-433)', () => {
+      const mailDeps = (): Parameters<typeof expireLapsedRequests>[2] => ({
+        db: harness.app.db,
+        email: harness.app.email,
+        log: harness.app.log,
+        webOrigin: 'https://web.test',
+        background: harness.app.background,
+      });
+
+      async function acceptedRequest(): Promise<{
+        vendorId: string;
+        packageId: string;
+        requestId: string;
+      }> {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+        const created = await createRequest(vendorId, { packageId });
+        const requestId: string = created.json().id;
+        const accepted = await post(VENDOR, `/booking-requests/${requestId}/accept`);
+        expect(accepted.statusCode).toBe(200);
+
+        return { vendorId, packageId, requestId };
+      }
+
+      async function availabilityStatusOn(vendorId: string, date: string): Promise<string | null> {
+        const rows = await harness.database.db
+          .select({ status: availability.status, date: availability.date })
+          .from(availability)
+          .where(eq(availability.vendorId, vendorId));
+
+        return rows.find((row) => row.date === date)?.status ?? null;
+      }
+
+      it('gives the accepted request a payment deadline a week out', async () => {
+        const { requestId } = await acceptedRequest();
+
+        const [row] = await harness.database.db
+          .select({ expiresAt: bookingRequests.expiresAt, acceptedAt: bookingRequests.acceptedAt })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId));
+
+        expect(row?.expiresAt?.getTime()).toBe(
+          paymentDeadline(row!.acceptedAt!, EVENT_DATE).getTime(),
+        );
+        expect(row!.expiresAt!.getTime() - row!.acceptedAt!.getTime()).toBe(
+          BOOKING_PAYMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+        );
+      });
+
+      it('caps the deadline at the event date for a request accepted the day before', () => {
+        const acceptedAt = new Date('2026-06-13T12:00:00.000Z');
+
+        expect(paymentDeadline(acceptedAt, '2026-06-14').toISOString()).toBe(
+          '2026-06-16T00:00:00.000Z',
+        );
+      });
+
+      it('releases the held date once the window closes, so another customer can book it', async () => {
+        const { vendorId, packageId, requestId } = await acceptedRequest();
+        expect(await availabilityStatusOn(vendorId, EVENT_DATE)).toBe('booked');
+
+        const blocked = await createRequest(vendorId, { packageId }, OTHER_CUSTOMER);
+        expect(blocked.statusCode).toBe(409);
+
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ expiresAt: addDays(new Date(), -1) })
+          .where(eq(bookingRequests.id, requestId));
+
+        expect(await expireLapsedRequests(harness.app.db, new Date(), mailDeps())).toBe(1);
+
+        const [row] = await harness.database.db
+          .select({ status: bookingRequests.status })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId));
+        expect(row?.status).toBe('expired');
+        expect(await availabilityStatusOn(vendorId, EVENT_DATE)).toBeNull();
+
+        const [vendor] = await harness.database.db
+          .select({ slug: vendorProfiles.slug })
+          .from(vendorProfiles)
+          .where(eq(vendorProfiles.id, vendorId));
+        const calendar = await harness.app.inject({
+          method: 'GET',
+          url: `/vendors/${vendor!.slug}/availability`,
+        });
+        expect(calendar.statusCode).toBe(200);
+        expect(
+          (calendar.json() as { date: string; status: string }[]).filter(
+            (cell) => cell.date === EVENT_DATE && cell.status === 'booked',
+          ),
+        ).toEqual([]);
+
+        const retried = await createRequest(vendorId, { packageId }, OTHER_CUSTOMER);
+        expect(retried.statusCode).toBe(201);
+        expect(
+          (await post(VENDOR, `/booking-requests/${retried.json().id}/accept`)).statusCode,
+        ).toBe(200);
+      });
+
+      it('tells the customer their booking was not paid in time', async () => {
+        const { requestId } = await acceptedRequest();
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ expiresAt: addDays(new Date(), -1) })
+          .where(eq(bookingRequests.id, requestId));
+        await harness.flushEmail();
+        harness.email.sent.length = 0;
+
+        await expireLapsedRequests(harness.app.db, new Date(), mailDeps());
+        await harness.flushEmail();
+
+        expect(harness.email.sent.map((mail) => mail.subject).sort()).toEqual([
+          'A booking was not paid in time',
+          'Your booking was not paid in time',
+        ]);
+      });
+
+      it('lets a payment that lands as the sweep expires the request win', async () => {
+        const { vendorId, requestId } = await acceptedRequest();
+        const [customer] = await harness.database.db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.authUserId, CUSTOMER));
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ status: 'expired' })
+          .where(eq(bookingRequests.id, requestId));
+
+        const booking = await confirmBooking(harness.app.db, {
+          booking: {
+            requestId,
+            customerId: customer!.id,
+            vendorId,
+            eventDate: EVENT_DATE,
+            totalAmountCents: 145_000,
+            platformFeeCents: 17_400,
+            vendorPayoutCents: 127_600,
+          },
+        });
+
+        expect(booking?.requestId).toBe(requestId);
+        const [row] = await harness.database.db
+          .select({ status: bookingRequests.status, expiresAt: bookingRequests.expiresAt })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId));
+        expect(row).toEqual({ status: 'accepted', expiresAt: null });
+        expect(await availabilityStatusOn(vendorId, EVENT_DATE)).toBe('booked');
+      });
+
+      it('never expires an accepted request that has been paid for', async () => {
+        const { vendorId, requestId } = await acceptedRequest();
+        const [customer] = await harness.database.db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.authUserId, CUSTOMER));
+        await harness.database.db.insert(bookings).values({
+          requestId,
+          customerId: customer!.id,
+          vendorId,
+          eventDate: EVENT_DATE,
+          totalAmountCents: 145_000,
+          platformFeeCents: 17_400,
+          vendorPayoutCents: 127_600,
+        });
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ expiresAt: addDays(new Date(), -1) })
+          .where(eq(bookingRequests.id, requestId));
+
+        expect(await expireLapsedRequests(harness.app.db, new Date(), mailDeps())).toBe(0);
+
+        const [row] = await harness.database.db
+          .select({ status: bookingRequests.status })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId));
+        expect(row?.status).toBe('accepted');
+        expect(await availabilityStatusOn(vendorId, EVENT_DATE)).toBe('booked');
+      });
     });
 
     it('refuses to accept a request that has already expired', async () => {
@@ -1497,6 +1767,71 @@ describe('/booking-requests', () => {
       expect(response.json().error).toBe('PAYMENT_REQUIRED');
     });
 
+    it('refuses acceptance while the vendor has not accepted the current agreement', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio', {
+        agreement: false,
+      });
+      const created = await createRequest(vendorId, { packageId });
+
+      const response = await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+
+      expect(response.statusCode).toBe(402);
+      expect(response.json().error).toBe('PAYMENT_REQUIRED');
+
+      const [row] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests);
+      expect(row?.status).toBe('pending');
+    });
+
+    it('refuses acceptance of a request priced over the beta cap, before any write', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      // The cap was lowered after the request was made at 145,000.
+      await harness.database.db.insert(platformSettings).values({ maxBookingCents: 100_000 });
+      forgetPlatformSwitches(harness.database.db);
+
+      const response = await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error).toBe(ERROR_CODES.OVER_BETA_CAP);
+
+      const [row] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests);
+      expect(row?.status).toBe('pending');
+      const held = await harness.database.db.select().from(availability);
+      expect(held).toEqual([]);
+    });
+
+    it('refuses a quote over the beta cap, before any write', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'A two-hour engagement shoot in the botanical garden.',
+      });
+      await harness.database.db.insert(platformSettings).values({ maxBookingCents: 100_000 });
+      forgetPlatformSwitches(harness.database.db);
+
+      const response = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+        quotedPriceCents: 100_001,
+        quoteNote: 'Two hours, one photographer.',
+      });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error).toBe(ERROR_CODES.OVER_BETA_CAP);
+
+      const [row] = await harness.database.db
+        .select({ status: bookingRequests.status, quoted: bookingRequests.quotedPriceCents })
+        .from(bookingRequests);
+      expect(row).toEqual({ status: 'pending', quoted: null });
+
+      const atCap = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+        quotedPriceCents: 100_000,
+        quoteNote: 'Two hours, one photographer.',
+      });
+      expect(atCap.statusCode).toBe(200);
+    });
+
     it('refuses acceptance once the date was booked elsewhere', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
@@ -1674,6 +2009,31 @@ describe('/booking-requests', () => {
         email: 'alan@example.com',
         phone: null,
       });
+    });
+
+    /*
+     * The identity provider decides what an address is, and it accepts ones
+     * `z.email()` refuses; serialising such a row used to 500 the request.
+     */
+    it('discloses an address the strict email check refuses, without failing', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const requestId: string = created.json().id;
+      await post(VENDOR, `/booking-requests/${requestId}/accept`);
+      await harness.database.db
+        .update(users)
+        .set({ email: 'first&last@example.com' })
+        .where(eq(users.authUserId, CUSTOMER));
+
+      expect(await customerOn(requestId, VENDOR)).toMatchObject({
+        email: 'first&last@example.com',
+      });
+      const queue = await harness.app.inject({
+        method: 'GET',
+        url: '/booking-requests',
+        headers: bearer(VENDOR),
+      });
+      expect(queue.statusCode).toBe(200);
     });
 
     it('keeps the details withheld when the vendor declined instead', async () => {

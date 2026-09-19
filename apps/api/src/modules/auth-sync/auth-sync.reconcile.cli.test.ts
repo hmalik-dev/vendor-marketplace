@@ -82,6 +82,7 @@ describe('the Neon Auth reconciliation CLI', () => {
      * the one caller for which the opposite is true.
      */
     expect(buildServer).toHaveBeenCalledWith(expect.objectContaining({ payoutSweepIntervalMs: 0 }));
+    expect(buildServer).toHaveBeenCalledWith(expect.objectContaining({ expirySweepIntervalMs: 0 }));
 
     expect(listen).not.toHaveBeenCalled();
 

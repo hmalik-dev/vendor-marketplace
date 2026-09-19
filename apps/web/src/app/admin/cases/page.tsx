@@ -218,10 +218,28 @@ export default async function AdminCasesPage({
            * a filter would put the *filtered*-empty copy on a view nothing is
            * filtering.
            */
-          cases.widenings.length > 0 ||
-          status !== undefined ||
-          booking !== undefined ||
-          q !== undefined ? (
+          cases.total > 0 ? (
+            /*
+             * A page past the end of a queue that is not empty. Neither empty
+             * state is true, and "Nothing is disputed" above a count of open
+             * cases is the contradiction this replaces.
+             */
+            <EmptyState
+              headline="There are no cases on this page"
+              description={`The queue has ${cases.total} ${cases.total === 1 ? 'case' : 'cases'}, all on earlier pages.`}
+              action={
+                <Link
+                  href={`${PATH}${adminQueryString({ ...params, page: undefined })}`}
+                  className="text-sm font-semibold text-clay-600 hover:underline"
+                >
+                  Back to the first page
+                </Link>
+              }
+            />
+          ) : cases.widenings.length > 0 ||
+            status !== undefined ||
+            booking !== undefined ||
+            q !== undefined ? (
             <FilteredEmpty
               headline={filteredHeadline}
               path={PATH}

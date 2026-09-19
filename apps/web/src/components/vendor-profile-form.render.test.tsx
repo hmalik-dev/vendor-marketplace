@@ -84,6 +84,23 @@ function savedProfile(overrides: Partial<WireVendorProfile> = {}): WireVendorPro
   };
 }
 
+describe('a tag an operator deactivated after the vendor chose it', () => {
+  it('still draws a removable pill, though the active list no longer offers it', () => {
+    const hidden = {
+      id: 'language-24',
+      name: 'Amharic',
+      slug: 'language-amharic',
+      category: 'language' as const,
+      displayOrder: 24,
+      isActive: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+    renderSaved({ tags: [hidden] });
+
+    expect(screen.getByRole('button', { name: 'Remove Amharic' })).toBeDefined();
+  });
+});
+
 function renderSaved(overrides: Partial<WireVendorProfile> = {}): void {
   render(
     <VendorProfileForm profile={savedProfile(overrides)} categories={CATEGORIES} allTags={[]} />,
@@ -852,5 +869,50 @@ describe('VendorProfileForm under a moderation hold', () => {
     expect(
       screen.getByRole('switch', { name: 'Visible to customers' }).hasAttribute('disabled'),
     ).toBe(false);
+  });
+});
+
+/*
+ * VEN-442. The Preview link opens the storefront's public address, which is
+ * filtered to published storefronts — for a draft it is a guaranteed 404.
+ */
+describe('VendorProfileForm — the Preview link', () => {
+  it('is offered for a published storefront', () => {
+    renderSaved({ isPublished: true });
+
+    const preview = screen.getByRole('link', { name: 'Preview' });
+    expect(preview.getAttribute('href')).toBe('/vendors/sunlit-studio');
+  });
+
+  it('is withheld while the storefront is unpublished', () => {
+    renderSaved({ isPublished: false });
+
+    expect(screen.queryByRole('link', { name: 'Preview' })).toBeNull();
+  });
+});
+
+/*
+ * VEN-442. A blanked "Years in business" was sent as an absent key, which the
+ * API reads as "leave it alone" — so the bar said Saved over a value the server
+ * still held.
+ */
+describe('VendorProfileForm — clearing years in business', () => {
+  it('sends null, not an absent key', async () => {
+    const user = userEvent.setup();
+    requestMock.mockResolvedValue(savedProfile({ yearsInBusiness: null }));
+    renderSaved({ isPublished: false, state: 'TX' });
+
+    await user.clear(screen.getByLabelText('Years in business'));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(requestMock).toHaveBeenCalledWith(
+        '/vendor/profile',
+        expect.objectContaining({
+          method: 'PUT',
+          body: expect.objectContaining({ yearsInBusiness: null }),
+        }),
+      );
+    });
   });
 });

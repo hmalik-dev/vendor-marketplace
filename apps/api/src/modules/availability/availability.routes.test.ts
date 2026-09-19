@@ -1,15 +1,23 @@
 import {
   availability,
   bookingRequests,
+  bookings,
   categories,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { addDays, toDateString } from '@vendor-marketplace/shared';
+import {
+  AVAILABILITY_MONTHS_AHEAD,
+  CURRENT_VENDOR_AGREEMENT_VERSION,
+  addDays,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { expireLapsedRequests } from '../booking-requests/booking-requests.service.js';
 import { applyAvailability } from './availability.dao.js';
+import { toCalendarRow } from './availability.service.js';
 
 const VENDOR = 'user_vendor';
 const OTHER_VENDOR = 'user_vendor_two';
@@ -70,7 +78,7 @@ describe('/vendor/availability', () => {
   }
 
   beforeAll(async () => {
-    harness = await createTestHarness();
+    harness = await createTestHarness({ clock: () => NOW });
 
     for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
@@ -168,6 +176,26 @@ describe('/vendor/availability', () => {
     });
   });
 
+  it('reads a block in the last week of the final rendered month back as blocked', async () => {
+    await createProfile(VENDOR, 'Sunlit Studio');
+    const tomorrow = addDays(NOW, 1);
+    const lastDay = new Date(
+      Date.UTC(
+        tomorrow.getUTCFullYear(),
+        tomorrow.getUTCMonth() + AVAILABILITY_MONTHS_AHEAD + 1,
+        0,
+      ),
+    );
+    const tail = toDateString(lastDay);
+
+    const response = await put(VENDOR, [{ date: tail, status: 'blocked' }]);
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      (response.json() as AvailabilityBody[]).map(({ date, status }) => ({ date, status })),
+    ).toEqual([{ date: tail, status: 'blocked' }]);
+  });
+
   /**
    * `#212`: a live request has to read `Pending request` on the vendor's own
    * calendar, but must not be stored — search excludes any date row that is not
@@ -198,6 +226,15 @@ describe('/vendor/availability', () => {
         .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
         .where(eq(vendorProfiles.id, vendorId));
 
+      // Accepting a request needs the agreement in force (VEN-428), as checkout does.
+      const agreed = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/agreement/accept',
+        headers: bearer(VENDOR),
+        payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
+      });
+      expect(agreed.statusCode).toBe(200);
+
       const request = await harness.app.inject({
         method: 'POST',
         url: '/booking-requests',
@@ -208,6 +245,45 @@ describe('/vendor/availability', () => {
 
       return request.json().id;
     }
+
+    /*
+     * VEN-433. An accepted request nobody pays for held the cell `booked` for
+     * good, and this edit answered 409 "already booked" to the vendor it was
+     * holding. Once the request settles, the cell is theirs again.
+     */
+    it('lets the vendor edit a cell an unpaid accepted request held, once it has settled', async () => {
+      const requestId = await requestOn(TOMORROW);
+      const accepted = await harness.app.inject({
+        method: 'POST',
+        url: `/booking-requests/${requestId}/accept`,
+        headers: bearer(VENDOR),
+      });
+      expect(accepted.statusCode).toBe(200);
+
+      const held = await put(VENDOR, [{ date: TOMORROW, status: 'blocked' }]);
+      expect(held.statusCode).toBe(409);
+      expect(held.json().details.bookedDates).toEqual([TOMORROW]);
+
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: addDays(NOW, -1) })
+        .where(eq(bookingRequests.id, requestId));
+      expect(
+        await expireLapsedRequests(harness.app.db, NOW, {
+          db: harness.app.db,
+          email: harness.app.email,
+          log: harness.app.log,
+          webOrigin: 'https://web.test',
+          background: harness.app.background,
+        }),
+      ).toBe(1);
+
+      const released = await put(VENDOR, [{ date: TOMORROW, status: 'blocked' }]);
+      expect(released.statusCode).toBe(200);
+      expect(
+        (released.json() as AvailabilityBody[]).map(({ date, status }) => ({ date, status })),
+      ).toEqual([{ date: TOMORROW, status: 'blocked' }]);
+    });
 
     async function calendar(): Promise<{ date: string; status: string }[]> {
       const response = await harness.app.inject({
@@ -230,6 +306,16 @@ describe('/vendor/availability', () => {
 
       const stored = await harness.database.db.select().from(availability);
       expect(stored).toEqual([]);
+    });
+
+    it('shows a request on a date a cancellation freed as pending', async () => {
+      await requestOn(TOMORROW);
+      const [profile] = await harness.database.db.select().from(vendorProfiles);
+      await harness.database.db
+        .insert(availability)
+        .values({ vendorId: profile!.id, date: TOMORROW, status: 'available' });
+
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'pending' }]);
     });
 
     it('shows the date booked, and stored, once the vendor accepts', async () => {
@@ -359,6 +445,8 @@ describe('/vendor/availability', () => {
     });
 
     afterEach(async () => {
+      await derived.database.db.delete(bookings);
+      await derived.database.db.delete(bookingRequests);
       await derived.database.db.delete(vendorProfiles);
       await derived.database.db.delete(users);
     });
@@ -397,8 +485,37 @@ describe('/vendor/availability', () => {
       }));
     }
 
+    /** The customer, accepted request and paid booking that make a `booked` cell real. */
+    async function paidBookingOn(vendorId: string, date: string): Promise<void> {
+      const [customer] = await derived.database.db
+        .insert(users)
+        .values({
+          authUserId: 'user_paid_customer',
+          email: 'paid-customer@example.com',
+          firstName: 'Paid',
+          lastName: 'Customer',
+          role: 'customer',
+        })
+        .returning({ id: users.id });
+      const [request] = await derived.database.db
+        .insert(bookingRequests)
+        .values({ customerId: customer!.id, vendorId, eventDate: date, status: 'accepted' })
+        .returning({ id: bookingRequests.id });
+
+      await derived.database.db.insert(bookings).values({
+        requestId: request!.id,
+        customerId: customer!.id,
+        vendorId,
+        eventDate: date,
+        totalAmountCents: 145_000,
+        platformFeeCents: 17_400,
+        vendorPayoutCents: 127_600,
+      });
+    }
+
     it('reads as completed, while the stored row still says booked', async () => {
       const vendorId = await profileFor();
+      await paidBookingOn(vendorId, PINNED_PAST);
       await derived.database.db
         .insert(availability)
         .values({ vendorId, date: PINNED_PAST, status: 'booked' });
@@ -409,6 +526,44 @@ describe('/vendor/availability', () => {
         .select({ status: availability.status })
         .from(availability);
       expect(stored).toEqual([{ status: 'booked' }]);
+    });
+
+    /*
+     * VEN-433. `booked` is written by acceptance, before payment, so a hold
+     * nobody paid for stays `booked` for good; reading it as `completed` claimed
+     * an event that never happened.
+     */
+    it('leaves a past booked date booked when no paid booking stands behind it', async () => {
+      const vendorId = await profileFor();
+      await derived.database.db
+        .insert(availability)
+        .values({ vendorId, date: PINNED_PAST, status: 'booked' });
+
+      expect(await read()).toEqual([{ date: PINNED_PAST, status: 'booked' }]);
+    });
+
+    it('does not count a cancelled booking as work that was delivered', async () => {
+      const vendorId = await profileFor();
+      await paidBookingOn(vendorId, PINNED_PAST);
+      await derived.database.db.update(bookings).set({ status: 'cancelled' });
+      await derived.database.db
+        .insert(availability)
+        .values({ vendorId, date: PINNED_PAST, status: 'booked' });
+
+      expect(await read()).toEqual([{ date: PINNED_PAST, status: 'booked' }]);
+    });
+
+    it('derives completed in toCalendarRow only for a date in the paid set', () => {
+      const row = {
+        id: 'cell-1',
+        vendorId: 'ven-1',
+        date: PINNED_PAST,
+        status: 'booked' as const,
+        note: null,
+      };
+
+      expect(toCalendarRow(PINNED, new Set([PINNED_PAST]))(row).status).toBe('completed');
+      expect(toCalendarRow(PINNED, new Set<string>())(row).status).toBe('booked');
     });
 
     it('leaves a future booked date booked', async () => {

@@ -100,6 +100,31 @@ describe('contentSecurityPolicy', () => {
   });
 
   /*
+   * Sign-in reaches Neon Auth through the same-origin proxy, so the enforced
+   * production policy needs no allowance for the auth base URL — and adding one
+   * would only widen `connect-src` to a host the browser never calls.
+   */
+  it('lets a production-shaped policy connect to this origin, the API, Stripe and the error ingest only', () => {
+    const policy = contentSecurityPolicy({
+      ...ORIGINS,
+      https: true,
+      errorIngestOrigin: 'https://o1.ingest.sentry.io',
+    });
+    const connect = policy.split('; ').find((d) => d.startsWith('connect-src'));
+
+    expect(connect?.split(' ').slice(1)).toEqual([
+      "'self'",
+      'https://api.example.com',
+      'https://api.stripe.com',
+      'https://m.stripe.com',
+      'https://r.stripe.com',
+      'https://link.com',
+      'https://*.link.com',
+      'https://o1.ingest.sentry.io',
+    ]);
+  });
+
+  /*
    * Authentication talks to this origin's own `/api/auth` proxy, so the policy
    * names no identity provider anywhere: no script, frame, image or connection.
    */

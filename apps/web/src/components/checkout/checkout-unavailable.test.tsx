@@ -9,6 +9,24 @@ describe('CheckoutUnavailable', () => {
     cleanup();
   });
 
+  /* VEN-439: the API's 402, which used to render "This page isn't here". */
+  it('names the vendor who cannot take payment and says the account is fine', () => {
+    render(
+      <CheckoutUnavailable
+        reason="vendor-unavailable"
+        requestId={REQUEST_ID}
+        vendorName="Kessler & Co."
+      />,
+    );
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      "Kessler & Co. can't take payment right now",
+    );
+    expect(screen.getByText(/nothing is wrong with your account/)).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Try this payment again' })).toBeDefined();
+    expect(screen.queryByText(/isn't here/)).toBeNull();
+  });
+
   /* VEN-404: over the beta cap, where a retry can never succeed. */
   it('sends a customer over the beta cap to support rather than a retry', () => {
     render(<CheckoutUnavailable reason="over-cap" requestId={REQUEST_ID} vendorName={null} />);
@@ -150,5 +168,22 @@ describe('CheckoutUnavailable', () => {
     render(<CheckoutUnavailable reason="not-accepted" requestId={REQUEST_ID} vendorName={null} />);
 
     expect(screen.getByText(/This vendor/).textContent).toContain("hasn't accepted your request");
+  });
+
+  /*
+   * Frame `16`'s composition: 38px headline (`text-display-error`) and a 14px
+   * body at 1.65 (`text-cta`). They read 34 and 12.5 (VEN-452). Class-level
+   * check; jsdom has no layout.
+   */
+  it('sets the headline and body at frame 16 sizes', () => {
+    render(<CheckoutUnavailable reason="failed" requestId={REQUEST_ID} vendorName={null} />);
+
+    const h1 = screen.getByRole('heading', { level: 1 }).className.split(/\s+/);
+    const body = screen.getByText(/Something on our side/).className.split(/\s+/);
+
+    expect(h1).toContain('text-display-error');
+    expect(h1).not.toContain('text-display-lg');
+    expect(body).toContain('text-cta');
+    expect(body).not.toContain('text-sm');
   });
 });

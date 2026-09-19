@@ -595,6 +595,17 @@ describe('AvailabilityCalendar', () => {
     expect(past).not.toContain('line-through');
   });
 
+  it('does not count a booked date the viewer has already passed as booked ahead', () => {
+    render(
+      <AvailabilityCalendar
+        initialEntries={[entry('2026-06-14', 'booked'), entry('2026-06-20', 'booked')]}
+        serverToday={viewerOn('2026-06-15')}
+      />,
+    );
+
+    expect(quarterCount('Booked ahead')).toBe('1 dates');
+  });
+
   it('says event rather than events for a single completed date', () => {
     renderCalendar([entry('2026-06-02', 'completed')]);
 

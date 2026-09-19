@@ -21,6 +21,7 @@ describe('apiRequest', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it('returns the parsed body on success', async () => {
@@ -40,6 +41,17 @@ describe('apiRequest', () => {
     const init = fetchMock.mock.calls[0]?.[1];
     expect(init).toBeDefined();
     expect((init?.headers as Record<string, string>).authorization).toBe('Bearer session-token');
+  });
+
+  it('never sends the web tier key from a browser', async () => {
+    vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+    fetchMock.mockResolvedValue(jsonResponse(200, { id: 'u1', name: 'Ada' }));
+
+    await apiRequest('/users/me', { schema: bodySchema });
+
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers['x-web-tier-key']).toBeUndefined();
+    expect(headers['x-visitor-ip']).toBeUndefined();
   });
 
   it('omits the authorization header when there is no token', async () => {

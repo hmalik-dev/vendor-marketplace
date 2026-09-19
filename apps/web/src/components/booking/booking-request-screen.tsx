@@ -4,6 +4,7 @@ import {
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
   EVENT_TYPES,
   EVENT_TYPE_LABELS,
+  MAX_ADDRESS_LENGTH,
   MAX_GUEST_COUNT,
   expiryCountdown,
   formatDurationHours,
@@ -228,6 +229,27 @@ export function mergeRestoredDraft(
   return { merged, chosenNow, keptFromDraft };
 }
 
+/** Between the brief and the notes in the one `customDetails` the API stores. */
+const DETAILS_SEPARATOR = '\n\n';
+
+/**
+ * What goes to the vendor as `customDetails`, and the only thing the length
+ * limit is measured against.
+ *
+ * The API has one free-text field for both inputs. A package request only has
+ * the notes; a custom one has a brief **and** notes, and the notes used to be
+ * dropped on the way out (VEN-428). The brief leads because it is what the
+ * vendor quotes from.
+ */
+export function requestDetails(notes: string, customDetails: string, hasPackage: boolean): string {
+  const parts = hasPackage ? [notes] : [customDetails, notes];
+
+  return parts
+    .map((part) => part.trim())
+    .filter((part) => part !== '')
+    .join(DETAILS_SEPARATOR);
+}
+
 /**
  * Frame `04`, with frame `22`'s validation vocabulary applied to it.
  *
@@ -299,10 +321,23 @@ export function BookingRequestScreen({
   const customDetailsRef = useRef(customDetails);
   customDetailsRef.current = customDetails;
 
+  /*
+   * Set once storage has been read **and** its draft merged into the form. The
+   * autosave below waits for it: `useSavedDraft`'s read lands a render later
+   * than this mount, and a save in between writes the still-seeded form, which
+   * is empty and so deletes the draft that was just found.
+   */
+  const [restoreSettled, setRestoreSettled] = useState(false);
+
   useEffect(() => {
+    if (!draft.checked) {
+      return;
+    }
+
     const restored = draft.restored;
 
     if (restored === null) {
+      setRestoreSettled(true);
       return;
     }
 
@@ -315,7 +350,8 @@ export function BookingRequestScreen({
     setForm(merged.form);
     setCustomDetails(merged.customDetails);
     setRestoreNote(keptFromDraft ? chosenNow : null);
-  }, [draft.restored, seed]);
+    setRestoreSettled(true);
+  }, [draft.checked, draft.restored, seed]);
 
   /*
    * Written on every change rather than on a timer: the events this protects
@@ -327,17 +363,19 @@ export function BookingRequestScreen({
    * offered their own sent request as an unfinished one.
    */
   useEffect(() => {
-    if (sent !== null) {
+    if (sent !== null || !restoreSettled) {
       return;
     }
 
     draft.save(stripSeeded({ form, customDetails }, seed));
-  }, [draft, form, customDetails, seed, sent]);
+  }, [draft, form, customDetails, seed, sent, restoreSettled]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]): void =>
     setForm((current) => ({ ...current, [key]: value }));
 
   const dateStatus = form.eventDate ? (calendar[form.eventDate] ?? 'available') : 'available';
+
+  const details = requestDetails(form.notes, customDetails, servicePackage !== null);
 
   const issues = useMemo<FieldIssue[]>(() => {
     const found: FieldIssue[] = [];
@@ -409,10 +447,23 @@ export function BookingRequestScreen({
       }
     }
 
+    if (form.eventLocation.trim().length > MAX_ADDRESS_LENGTH) {
+      blocker(
+        'eventLocation',
+        `You are ${form.eventLocation.trim().length - MAX_ADDRESS_LENGTH} characters over. Trim the venue to ${MAX_ADDRESS_LENGTH}.`,
+      );
+    }
+
     if (form.notes.length > BOOKING_REQUEST_NOTES_MAX_LENGTH) {
       blocker(
         'notes',
         `You are ${form.notes.length - BOOKING_REQUEST_NOTES_MAX_LENGTH} characters over. Trim it to ${BOOKING_REQUEST_NOTES_MAX_LENGTH}.`,
+      );
+    } else if (!servicePackage && details.length > BOOKING_REQUEST_NOTES_MAX_LENGTH) {
+      // The brief and the notes travel as one field, so the limit is on the pair.
+      blocker(
+        'customDetails',
+        `Your description and notes are ${details.length - BOOKING_REQUEST_NOTES_MAX_LENGTH} characters over the ${BOOKING_REQUEST_NOTES_MAX_LENGTH} the vendor can be sent. Trim either.`,
       );
     }
 
@@ -424,7 +475,16 @@ export function BookingRequestScreen({
     }
 
     return found;
-  }, [form, customDetails, dateStatus, servicePackage, vendor.businessName, today, fieldId]);
+  }, [
+    form,
+    customDetails,
+    details,
+    dateStatus,
+    servicePackage,
+    vendor.businessName,
+    today,
+    fieldId,
+  ]);
 
   const validation = useSubmitValidation(issues);
 
@@ -459,11 +519,7 @@ export function BookingRequestScreen({
           ...(form.guestCount
             ? { guestCount: guestCountFromInput(form.guestCount) ?? undefined }
             : {}),
-          ...(servicePackage
-            ? form.notes.trim()
-              ? { customDetails: form.notes.trim() }
-              : {}
-            : { customDetails: customDetails.trim() }),
+          ...(details ? { customDetails: details } : {}),
         },
       });
 
@@ -735,6 +791,7 @@ export function BookingRequestScreen({
           vendor={vendor}
           servicePackage={servicePackage}
           customDetails={customDetails}
+          detailsLength={details.length}
           onCustomDetailsChange={setCustomDetails}
           customDetailsId={`${fieldId}-customDetails`}
           customDetailsIssue={validation.issueFor(`${fieldId}-customDetails`)}
@@ -882,10 +939,10 @@ function ReviewSummary({
     { label: FIELD_LABELS.eventStartTime, value: formatClockTime(form.eventStartTime) },
     { label: FIELD_LABELS.guestCount, value: form.guestCount || 'Not set' },
     { label: FIELD_LABELS.eventLocation, value: form.eventLocation || 'Not set' },
-    {
-      label: hasPackage ? FIELD_LABELS.notes : FIELD_LABELS.customDetails,
-      value: (hasPackage ? form.notes : customDetails) || 'Nothing added',
-    },
+    ...(hasPackage
+      ? []
+      : [{ label: FIELD_LABELS.customDetails, value: customDetails.trim() || 'Nothing added' }]),
+    { label: FIELD_LABELS.notes, value: form.notes.trim() || 'Nothing added' },
   ];
 
   return (

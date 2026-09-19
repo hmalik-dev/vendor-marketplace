@@ -46,6 +46,48 @@ describe('csvExport', () => {
     );
   });
 
+  it('ends with a line saying so when the set changed between pages', async () => {
+    const rows = Array.from({ length: MAX_PAGE_SIZE + 1 }, (_, index) => `row ${index}`);
+    let reads = 0;
+    // A row is resolved after page 1 is read: the total shrinks by one and the
+    // next offset skips the row that slid into page 1's range.
+    const readPage = vi.fn(async (query: string) => {
+      const page = Number(new URLSearchParams(query.slice(1)).get('page'));
+      reads += 1;
+      const live = reads === 1 ? rows : rows.slice(1);
+
+      return {
+        items: live.slice((page - 1) * MAX_PAGE_SIZE, page * MAX_PAGE_SIZE),
+        total: live.length,
+      };
+    });
+
+    const response = await csvExport({
+      name: 'cases',
+      columns: ['Reference'],
+      query: '',
+      readPage,
+      row: (row) => [row],
+    });
+    const lines = (await response.text()).trimEnd().split('\r\n');
+
+    expect(lines.at(-1)).toBe(
+      `"The rows changed while this file was being exported (${MAX_PAGE_SIZE + 1} at the start, ${MAX_PAGE_SIZE} at the end), so it may be incomplete or repeat a row — export again to confirm."`,
+    );
+  });
+
+  it('adds no note when the set held still', async () => {
+    const response = await csvExport({
+      name: 'cases',
+      columns: ['Reference'],
+      query: '',
+      readPage: async () => ({ items: ['a', 'b'], total: 2 }),
+      row: (row) => [row],
+    });
+
+    expect((await response.text()).trimEnd().split('\r\n')).toEqual(['"Reference"', '"a"', '"b"']);
+  });
+
   it('neutralises a formula and doubles an embedded quote', () => {
     expect(csvField('=HYPERLINK("x")')).toBe('"\t=HYPERLINK(""x"")"');
     expect(csvField(null)).toBe('""');

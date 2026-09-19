@@ -169,6 +169,12 @@ describe('reviews', () => {
        * several distinct bookings has to move the date.
        */
       dayOffset?: number;
+      /**
+       * Moves the event date to this many days ago *after* the request exists —
+       * a booking request for a past date is refused, and a booking whose date
+       * has passed is exactly the state under test.
+       */
+      pastByDays?: number;
     } = {},
   ): Promise<string> {
     const customer = options.customer ?? CUSTOMER;
@@ -198,9 +204,16 @@ describe('reviews', () => {
         platformFeeCents: 17_400,
         vendorPayoutCents: 127_600,
         status: options.status ?? 'completed',
-        completedAt: new Date(),
+        completedAt: options.status === 'confirmed' ? null : new Date(),
       })
       .returning();
+
+    if (options.pastByDays !== undefined) {
+      await harness.database.db
+        .update(bookings)
+        .set({ eventDate: toDateString(addDays(new Date(), -options.pastByDays)) })
+        .where(eq(bookings.id, booking[0]!.id));
+    }
 
     return booking[0]!.id;
   }
@@ -506,6 +519,101 @@ describe('reviews', () => {
 
       expect(response.statusCode).toBe(400);
       expect(response.json().message).toContain('once the event has happened');
+    });
+
+    it('accepts a confirmed booking whose event date has passed, without the vendor completing it', async () => {
+      const { vendorId, packageId, slug } = await createVendor(VENDOR, 'Kessler & Co.');
+      const bookingId = await completedBooking(vendorId, packageId, {
+        status: 'confirmed',
+        pastByDays: 3,
+      });
+
+      const visible = (
+        await harness.app.inject({
+          method: 'GET',
+          url: `/vendors/${slug}/reviews`,
+          headers: bearer(CUSTOMER),
+        })
+      ).json() as ReviewsBody;
+      expect(visible.viewer).toEqual({ canReview: true, bookingId });
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/bookings/${bookingId}/reviews`,
+        headers: bearer(CUSTOMER),
+        payload: reviewBody({ rating: 4 }),
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(await vendorRating(vendorId)).toEqual({ avgRating: 4, reviewCount: 1 });
+    });
+
+    it('refuses a confirmed booking whose event date is today, and offers no write action', async () => {
+      const { vendorId, packageId, slug } = await createVendor(VENDOR, 'Kessler & Co.');
+      const bookingId = await completedBooking(vendorId, packageId, {
+        status: 'confirmed',
+        pastByDays: 0,
+      });
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/bookings/${bookingId}/reviews`,
+        headers: bearer(CUSTOMER),
+        payload: reviewBody(),
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().message).toContain('once the event has happened');
+
+      const page = (
+        await harness.app.inject({
+          method: 'GET',
+          url: `/vendors/${slug}/reviews`,
+          headers: bearer(CUSTOMER),
+        })
+      ).json() as ReviewsBody;
+      expect(page.viewer).toEqual({ canReview: false, bookingId: null });
+    });
+
+    it('closes the booking to that reviewer for good once an admin deletes their review', async () => {
+      const { vendorId, packageId, slug } = await createVendor(VENDOR, 'Kessler & Co.');
+      const bookingId = await completedBooking(vendorId, packageId);
+
+      const first = await harness.app.inject({
+        method: 'POST',
+        url: `/bookings/${bookingId}/reviews`,
+        headers: bearer(CUSTOMER),
+        payload: reviewBody(),
+      });
+      expect(first.statusCode).toBe(201);
+
+      // The admin route calls exactly this inside its audit transaction.
+      expect(await deleteReviewAndRecalculate(harness.database.db, first.json().id)).toBe(true);
+      expect(await vendorRating(vendorId)).toEqual({ avgRating: 0, reviewCount: 0 });
+
+      for (const payload of [
+        reviewBody(),
+        reviewBody({ rating: 1, content: 'A different take.' }),
+      ]) {
+        const again = await harness.app.inject({
+          method: 'POST',
+          url: `/bookings/${bookingId}/reviews`,
+          headers: bearer(CUSTOMER),
+          payload,
+        });
+        expect(again.statusCode).toBe(409);
+        expect(again.json().message).toBe('You have already reviewed this booking');
+      }
+
+      const page = (
+        await harness.app.inject({
+          method: 'GET',
+          url: `/vendors/${slug}/reviews`,
+          headers: bearer(CUSTOMER),
+        })
+      ).json() as ReviewsBody;
+      expect(page.viewer).toEqual({ canReview: false, bookingId: null });
+      expect(page.items).toEqual([]);
+      expect(await vendorRating(vendorId)).toEqual({ avgRating: 0, reviewCount: 0 });
     });
 
     /*

@@ -63,6 +63,19 @@ export function CompleteBooking({
   }
 
   /*
+   * The customer's report freezes the payout, and the API refuses completion
+   * while it stands (VEN-425). Named rather than offering a button that can
+   * only fail, so the vendor learns of the hold from the card.
+   */
+  if (status === 'disputed') {
+    return (
+      <p className="max-w-[16rem] text-right text-xs text-stone-600">
+        Payout on hold while the customer&apos;s report is reviewed.
+      </p>
+    );
+  }
+
+  /*
    * String comparison on two calendar dates, which is what they are. Reading
    * either through a `Date` would put a timezone into a comparison that has
    * none of its own.

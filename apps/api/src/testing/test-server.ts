@@ -12,6 +12,7 @@ import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
 import {
   paymentIntentParams,
   refundParams,
+  assertUsableRefund,
   refusedRefundParams,
   refusedReversalParams,
   refusedTransferParams,
@@ -337,6 +338,10 @@ export interface FakeStripe extends StripeConnectGateway {
    * with nobody told (#400). There is no other way to reach it from a test.
    */
   refundsToRefuse: Set<string>;
+  /** The status Stripe answers the next `createRefund` with; unset means `succeeded`. */
+  nextRefundStatus: string | undefined;
+  /** Runs inside the next `createRefund`, once: the interleave a race test needs (VEN-425). */
+  duringNextRefund: (() => Promise<void>) | undefined;
   /** Every intent the fake has minted, keyed by id, in Stripe's own shape. */
   paymentIntents: Map<string, PaymentIntentSnapshot>;
   /**
@@ -426,6 +431,8 @@ export interface FakeStripe extends StripeConnectGateway {
   disputes: Map<string, StripeDisputeSnapshot>;
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
+  /** Moves an intent to `canceled`, as Stripe does once it can never be paid. */
+  cancel: (paymentIntentId: string) => PaymentIntentSnapshot;
 }
 
 function createFakeStripe(): FakeStripe {
@@ -453,12 +460,31 @@ function createFakeStripe(): FakeStripe {
     intentsByKey,
     refunds,
     refundsToRefuse,
+    nextRefundStatus: undefined,
+    duringNextRefund: undefined,
     transfers,
     reversals,
     transfersToRefuse,
     failedTransferKeys,
     disputes,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
+
+    cancel: (paymentIntentId) => {
+      const intent = paymentIntents.get(paymentIntentId);
+
+      if (!intent) {
+        throw new Error(`No fake payment intent ${paymentIntentId}`);
+      }
+
+      const cancelled: PaymentIntentSnapshot = {
+        ...intent,
+        status: 'canceled',
+        clientSecret: null,
+      };
+      paymentIntents.set(paymentIntentId, cancelled);
+
+      return cancelled;
+    },
 
     succeed: (paymentIntentId) => {
       const intent = paymentIntents.get(paymentIntentId);
@@ -702,6 +728,10 @@ function createFakeStripe(): FakeStripe {
     },
 
     createRefund: async (input) => {
+      const interleave = fake.duringNextRefund;
+      fake.duringNextRefund = undefined;
+      await interleave?.();
+
       if (refundsToRefuse.has(input.paymentIntentId)) {
         throw new Error(`Fake Stripe refused a refund for ${input.paymentIntentId}`);
       }
@@ -720,6 +750,8 @@ function createFakeStripe(): FakeStripe {
         throw new Error(refusal);
       }
 
+      assertUsableRefund(`re_test_${refunds.length + 1}`, fake.nextRefundStatus ?? 'succeeded');
+
       refunds.push({
         paymentIntentId: input.paymentIntentId,
         amountCents: input.amountCents,
@@ -735,6 +767,21 @@ function createFakeStripe(): FakeStripe {
       });
 
       return { refundId: `re_test_${refunds.length}`, amountCents: input.amountCents };
+    },
+
+    retrieveRefund: async (refundId) => {
+      const refund = refunds[Number(refundId.replace('re_test_', '')) - 1];
+
+      if (!refund) {
+        throw new Error(`No fake refund ${refundId}`);
+      }
+
+      return {
+        refundId,
+        status: refund.status ?? 'succeeded',
+        paymentIntentId: refund.paymentIntentId,
+        amountCents: refund.amountCents,
+      };
     },
 
     findRefund: async (paymentIntentId) => {
@@ -873,6 +920,8 @@ export async function createTestHarness(
      * directly, which is the same function the timer calls.
      */
     payoutSweepIntervalMs: 0,
+    // Nor does the expiry sweep: suites call `expireLapsedRequests` with a pinned clock.
+    expirySweepIntervalMs: 0,
     // The digest likewise: suites call `runOperatorDigest` with a pinned clock.
     operatorDigestIntervalMs: 0,
     // Alert send retries do not wait on a real timer in a suite.

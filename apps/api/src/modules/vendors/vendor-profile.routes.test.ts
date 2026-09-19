@@ -1,4 +1,11 @@
-import { availability, categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import {
+  availability,
+  categories,
+  tags,
+  users,
+  vendorProfiles,
+  vendorTags,
+} from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -128,6 +135,25 @@ describe('GET /vendors/:slug', () => {
     expect(profile.city).toBe('Austin');
     expect(profile.categories).toHaveLength(1);
     expect(profile.categories[0].slug).toBe('photography');
+  });
+
+  /*
+   * `findPublicVendorTags` once left `displayOrder` out of its select while
+   * `tagSchema` requires it, so the response parse threw for any vendor holding
+   * a tag — a 500 on the page, the request page and the sitemap that no
+   * tag-free fixture could show.
+   */
+  it('answers 200 with each tag and its display order for a tagged vendor', async () => {
+    const { id, slug } = await seedVendor({ user: 'vendor-a', businessName: 'Tagged Studio' });
+    const [tag] = await harness.database.db.select().from(tags).where(eq(tags.isActive, true));
+    await harness.database.db.insert(vendorTags).values({ vendorId: id, tagId: tag!.id });
+
+    const response = await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().tags).toEqual([
+      expect.objectContaining({ id: tag!.id, slug: tag!.slug, displayOrder: tag!.displayOrder }),
+    ]);
   });
 
   it('carries the cheapest active package as the rail price', async () => {

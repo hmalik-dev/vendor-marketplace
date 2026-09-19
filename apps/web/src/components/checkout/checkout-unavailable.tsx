@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
  * replaced, moved one bucket over.
  */
 export type CheckoutUnavailableReason =
-  'failed' | 'not-accepted' | 'closed' | 'paused' | 'over-cap';
+  'failed' | 'not-accepted' | 'closed' | 'paused' | 'over-cap' | 'vendor-unavailable';
 
 export interface CheckoutUnavailableProps {
   reason: CheckoutUnavailableReason;
@@ -101,6 +101,23 @@ function copyFor(
     };
   }
 
+  /*
+   * The API's 402, which covers two things a customer cannot tell apart and
+   * cannot act on: the vendor's payout account, or their agreement. Both are
+   * the vendor's to fix, both are temporary, and neither is the customer's
+   * account — so one message, and the retry is the same link as `failed`'s.
+   */
+  if (reason === 'vendor-unavailable') {
+    return {
+      eyebrow: 'Payment unavailable',
+      heading: `${vendor} can't take payment right now`,
+      body: `${vendor} needs to finish a step on their side before they can accept payment. This is temporary and nothing is wrong with your account. Try again a little later.`,
+      money: 'No payment was taken and your booking is still accepted.',
+      action: { label: 'Try this payment again', href: `${booking}/checkout` },
+      secondary: { label: 'Back to this booking', href: booking },
+    };
+  }
+
   if (reason === 'not-accepted') {
     return {
       eyebrow: 'Not payable yet',
@@ -178,11 +195,11 @@ export function CheckoutUnavailable({
         {copy.eyebrow}
       </p>
 
-      <h1 className="mt-3 font-display text-display-lg tracking-[-.015em] text-stone-900">
+      <h1 className="mt-3 font-display text-display-error tracking-[-.015em] text-stone-900">
         {copy.heading}
       </h1>
 
-      <p className="mt-3 max-w-[460px] text-sm leading-[1.65] text-stone-700">{copy.body}</p>
+      <p className="mt-3 max-w-[460px] text-cta leading-[1.65] text-stone-700">{copy.body}</p>
 
       {/* Sage because the money position is settled, not because it is good news. */}
       <Banner status="settled" className="mt-5.5 text-left">

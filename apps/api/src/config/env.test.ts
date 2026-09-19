@@ -34,6 +34,9 @@ for (const borrower of [
 }
 delete REQUIRED.WEBHOOK_SIGNING_FIXTURE;
 
+// Optional, but the key-list test needs it present to see it parsed.
+REQUIRED.WEB_TIER_KEY = 'w'.repeat(40);
+
 /*
  * Resend's key is composed rather than written out, for the same reason and one
  * more. Its registry `shape` is `/^re_[A-Za-z0-9_]{16,}$/`, so unlike the
@@ -503,6 +506,15 @@ describe('parseEnv on a deployment', () => {
     expect(env.PORT).toBe(4000);
     expect(env.LOG_LEVEL).toBe('info');
     expect(env.STRIPE_PLATFORM_FEE_RATE).toBe(0.12);
+  });
+
+  it('refuses a commission that differs from the rate the legal copy states', () => {
+    expect(() => parseEnv({ ...DEPLOYED, STRIPE_PLATFORM_FEE_RATE: '0.15' })).toThrow(
+      /STRIPE_PLATFORM_FEE_RATE: must equal the 0\.12 the legal copy states/,
+    );
+    expect(
+      parseEnv({ ...DEPLOYED, STRIPE_PLATFORM_FEE_RATE: '0.12' }).STRIPE_PLATFORM_FEE_RATE,
+    ).toBe(0.12);
   });
 });
 

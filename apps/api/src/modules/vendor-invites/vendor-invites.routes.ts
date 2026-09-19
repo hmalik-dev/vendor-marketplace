@@ -3,6 +3,7 @@ import {
   adminVendorApplicationListSchema,
   adminVendorApplicationRowSchema,
   adminVendorInviteListSchema,
+  adminVendorInviteQuerySchema,
   adminVendorInviteRowSchema,
   createVendorInviteSchema,
   decideVendorApplicationSchema,
@@ -98,8 +99,14 @@ export const adminVendorInviteRoutes: FastifyPluginAsyncZod<VendorInviteRoutesOp
 
   app.get(
     '/admin/vendor-applications',
-    { onRequest: adminOnly, schema: { response: { 200: adminVendorApplicationListSchema } } },
-    async () => listVendorApplications(app.db),
+    {
+      onRequest: adminOnly,
+      schema: {
+        querystring: adminVendorInviteQuerySchema,
+        response: { 200: adminVendorApplicationListSchema },
+      },
+    },
+    async (request) => listVendorApplications(app.db, request.query),
   );
 
   app.put(
@@ -123,8 +130,14 @@ export const adminVendorInviteRoutes: FastifyPluginAsyncZod<VendorInviteRoutesOp
 
   app.get(
     '/admin/vendor-invites',
-    { onRequest: adminOnly, schema: { response: { 200: adminVendorInviteListSchema } } },
-    async () => listVendorInvites(app.db),
+    {
+      onRequest: adminOnly,
+      schema: {
+        querystring: adminVendorInviteQuerySchema,
+        response: { 200: adminVendorInviteListSchema },
+      },
+    },
+    async (request) => listVendorInvites(app.db, request.query),
   );
 
   app.post(

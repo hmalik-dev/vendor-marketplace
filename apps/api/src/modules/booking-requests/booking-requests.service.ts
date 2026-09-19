@@ -7,6 +7,7 @@ import {
   isUniversallyPastDate,
   pageWindow,
   parseDurationHours,
+  paymentDeadline,
   replyDeadline,
   requestStatusAsRead,
   toDateString,
@@ -39,6 +40,7 @@ import { notificationHref } from '../messaging/messaging.service.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import {
+  applyExpiry,
   applyTransition,
   ensureConversation,
   findActivePackage,
@@ -47,6 +49,7 @@ import {
   findSettlements,
   findLiveRequest,
   findPackagesByIds,
+  findLapsedRequests,
   findRequestById,
   findRequests,
   findBookableVendorById,
@@ -60,8 +63,12 @@ import {
   statusesOnDate,
   hasRivalAcceptanceOn,
   lockHeldDate,
+  vendorHoldsCurrentAgreement,
 } from './booking-requests.dao.js';
-import { assertBookingRequestsOpen } from '../platform-settings/platform-settings.service.js';
+import {
+  assertBookingRequestsOpen,
+  assertUnderBetaCap,
+} from '../platform-settings/platform-settings.service.js';
 import type { CustomerIdentityRow, VendorSummaryRow } from './booking-requests.dao.js';
 
 /** The four things either party can do to a live request. */
@@ -236,8 +243,8 @@ async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerIden
 const EXPIRY_CONCURRENCY = 4;
 
 /**
- * Expiry is lazy: nothing sweeps the table on a timer, so a request that has
- * run past its window is aged on the next read of it. The write is guarded on
+ * Ages a request that has run past its window — on the next read of it, or in
+ * `expireLapsedRequests`' sweep, whichever comes first. The write is guarded on
  * the status it was read at, so a vendor accepting in the same second either
  * wins or is told the request expired — never both.
  */
@@ -251,7 +258,8 @@ async function ageIfExpired(
     return row;
   }
 
-  const expired = await applyTransition(db, row.id, row.status, { status: 'expired' });
+  const wasAccepted = row.status === 'accepted';
+  const expired = await applyExpiry(db, row.id, row.status);
   if (!expired) {
     // Something else moved it first; that decision stands.
     return (await findRequestById(db, row.id)) ?? row;
@@ -276,7 +284,7 @@ async function ageIfExpired(
       'customer',
       'request_expired',
       {
-        title: 'Your request expired',
+        title: wasAccepted ? 'Your booking was not paid in time' : 'Your request expired',
         /*
          * "for a week" was a literal that #401 made false: the reply window is
          * now capped at the event, so a request sent four days before its date
@@ -285,14 +293,62 @@ async function ageIfExpired(
          * waited, and a second place that states this deadline is a second place
          * for it to drift.
          */
-        body: 'It closed without a reply. Send it again, or find another vendor for the date.',
+        body: wasAccepted
+          ? 'The payment window closed, so the date was released. Send a new request if you still want it.'
+          : 'It closed without a reply. Send it again, or find another vendor for the date.',
       },
       undefined,
       mail,
     ),
   );
 
+  /*
+   * The vendor lost the date too, and nothing else on their side records it:
+   * the booking leaves `/vendor/bookings` and the calendar cell frees.
+   */
+  if (wasAccepted) {
+    await bestEffortAnnouncement(mail, expired.id, () =>
+      notifyParty(
+        db,
+        expired,
+        'vendor',
+        'request_expired',
+        {
+          title: 'A booking was not paid in time',
+          body: 'The customer did not pay inside the window, so the date is open on your calendar again.',
+        },
+        undefined,
+        mail,
+      ),
+    );
+  }
+
   return expired;
+}
+
+/** How many lapsed requests one sweep tick works; the next tick takes the rest. */
+const EXPIRY_SWEEP_BATCH = 100;
+
+/**
+ * Ages every request whose window has run out, without waiting for a read.
+ *
+ * The same `ageIfExpired` a read runs, so the guarded UPDATE that makes the
+ * status change and the `request_expired` email happen once per request holds
+ * here too: two instances sweeping at once, or a sweep racing a read, cannot
+ * send it twice. Returns how many rows this call moved to `expired`.
+ */
+export async function expireLapsedRequests(
+  db: AppDatabase,
+  now: Date,
+  mail: NotificationEmailDeps,
+): Promise<number> {
+  const lapsed = await findLapsedRequests(db, now, EXPIRY_SWEEP_BATCH);
+  const aged = await mapWithConcurrency(lapsed, EXPIRY_CONCURRENCY, async (row) => {
+    const after = await ageIfExpired(db, row, now, mail);
+    return after.status === 'expired' && row.status !== 'expired';
+  });
+
+  return aged.filter(Boolean).length;
 }
 
 interface NotificationCopy {
@@ -609,6 +665,23 @@ export async function createBookingRequest(
       throw conflict('That request could not be sent. Try again.');
     }
 
+    /*
+     * The unique index matches on the stored status, so a request nobody has
+     * read since its window closed still reads as live here. Age it first: if
+     * it lapsed, it stops being the answer and the submission starts again
+     * against a free slot, so the vendor is told about the new request.
+     */
+    const current = await ageIfExpired(db, existing, now, mail);
+
+    if (current.status === 'expired') {
+      return createBookingRequest(db, hub, user, input, now, mail);
+    }
+
+    // Something else moved it while it was being aged; it is no longer the live one.
+    if (current.status !== 'pending' && current.status !== 'quoted') {
+      throw conflict('That request could not be sent. Try again.');
+    }
+
     return {
       /*
        * `null`, and provably so: this branch returns a request the unique index
@@ -616,10 +689,10 @@ export async function createBookingRequest(
        * `accepted`.
        */
       request: toDetail(
-        existing,
+        current,
         vendor,
         servicePackage,
-        await nameOf(db, existing.customerId),
+        await nameOf(db, current.customerId),
         null,
       ),
       created: false,
@@ -970,6 +1043,9 @@ async function prepareTransition({
       throw validationFailed('A quote needs a price');
     }
 
+    // A quote over the cap would be accepted into a booking checkout refuses.
+    await assertUnderBetaCap(db, quote.quotedPriceCents);
+
     return { quotedPriceCents: quote.quotedPriceCents, quoteNote: quote.quoteNote ?? null };
   }
 
@@ -987,6 +1063,21 @@ async function prepareTransition({
       ERROR_CODES.PAYMENT_REQUIRED,
       party === 'vendor'
         ? 'Finish your payout setup before accepting bookings'
+        : `${vendor.businessName} cannot take payment yet`,
+    );
+  }
+
+  /*
+   * The same 402 checkout raises for the same reason (`payments.service.ts`):
+   * `accepted` is terminal, so an accept from a vendor who has not signed the
+   * agreement in force would book the date and never be payable.
+   */
+  if (!(await vendorHoldsCurrentAgreement(db, row.vendorId))) {
+    throw new AppError(
+      402,
+      ERROR_CODES.PAYMENT_REQUIRED,
+      party === 'vendor'
+        ? 'Accept the current vendor agreement before accepting bookings'
         : `${vendor.businessName} cannot take payment yet`,
     );
   }
@@ -1041,7 +1132,14 @@ async function prepareTransition({
    * checkout opens on "…accepted your request on May 2", and `updatedAt` moves
    * again the moment a payment intent is recorded against the request.
    */
-  const acceptance = { acceptedAt: options.now ?? new Date() };
+  await assertUnderBetaCap(db, row.finalPriceCents ?? row.quotedPriceCents ?? 0);
+
+  const acceptedAt = options.now ?? new Date();
+  /*
+   * The deadline moves from "reply by" to "pay by": an accepted request that
+   * nobody pays for lapses and frees the vendor's date (VEN-433).
+   */
+  const acceptance = { acceptedAt, expiresAt: paymentDeadline(acceptedAt, row.eventDate) };
 
   return row.finalPriceCents === null && row.quotedPriceCents !== null
     ? { ...acceptance, finalPriceCents: row.quotedPriceCents }

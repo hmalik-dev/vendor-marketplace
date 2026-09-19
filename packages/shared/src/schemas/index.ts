@@ -111,6 +111,17 @@ export const slugSchema = z
 
 export const emailSchema = z.email().max(MAX_EMAIL_LENGTH);
 
+/*
+ * An address as it is stored, for a response.
+ *
+ * The identity provider decides what counts as an address, and it accepts some
+ * that `z.email()` refuses (`first&last@example.com`, most punycode domains).
+ * Validated again on the way out, one such row made `GET /users/me` and the
+ * vendor's whole booking queue answer 500 for something the reader cannot fix.
+ * Input keeps `emailSchema`; a response only has to say what is there.
+ */
+export const storedEmailSchema = z.string().max(MAX_EMAIL_LENGTH);
+
 export const urlSchema = z.url().max(MAX_URL_LENGTH);
 
 /*
@@ -295,7 +306,7 @@ export const vendorSortOptionSchema = z.enum(VENDOR_SORT_OPTIONS);
 export const userSchema = z.object({
   id: uuidSchema,
   authUserId: z.string().min(1).max(255),
-  email: emailSchema,
+  email: storedEmailSchema,
   role: userRoleSchema,
   /*
    * Empty until the user provides one. Clerk's email-and-password sign-up does
@@ -496,7 +507,7 @@ export const fullCustomerProfileSchema = z.object({
   ...limitedCustomerProfileShape,
   visibility: z.literal('full'),
   lastName: trimmedString(MAX_NAME_LENGTH, 0),
-  email: emailSchema,
+  email: storedEmailSchema,
   phone: phoneSchema.nullable(),
   avatarUrl: imageRefSchema.nullable(),
 });
@@ -595,6 +606,7 @@ export const createVendorProfileSchema = z.object({
     .int()
     .min(MIN_YEARS_IN_BUSINESS, 'Years in business cannot be negative')
     .max(MAX_YEARS_IN_BUSINESS, `Enter ${MAX_YEARS_IN_BUSINESS} or fewer years`)
+    .nullable()
     .optional(),
   address: freeText().max(MAX_ADDRESS_LENGTH).optional(),
   latitude: latitudeSchema.optional(),
@@ -605,6 +617,7 @@ export const createVendorProfileSchema = z.object({
     .refine((hours) => (RESPONSE_TIME_HOURS_OPTIONS as readonly number[]).includes(hours), {
       message: 'Choose one of the offered response windows',
     })
+    .nullable()
     .optional(),
   profileImageUrl: imageRefSchema.optional(),
   coverImageUrl: imageRefSchema.optional(),
@@ -686,8 +699,9 @@ const servicePackageFieldsSchema = z.object({
   description: trimmedString(5_000, 10),
   priceCents: priceCentsSchema,
   priceType: priceTypeSchema,
-  durationHours: z.number().min(0.5).max(999.9).optional(),
-  maxGuests: z.int().min(1).max(MAX_GUEST_COUNT).optional(),
+  // `null` clears the column; omitting the key leaves it alone.
+  durationHours: z.number().min(0.5).max(999.9).nullable().optional(),
+  maxGuests: z.int().min(1).max(MAX_GUEST_COUNT).nullable().optional(),
   inclusions: inclusionsSchema,
   displayOrder: z.int().min(0).max(MAX_DISPLAY_ORDER).optional(),
 });
@@ -877,7 +891,7 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
     firstName: trimmedString(MAX_NAME_LENGTH, 0),
     lastInitial: z.string().max(1),
     lastName: trimmedString(MAX_NAME_LENGTH, 0).nullable(),
-    email: emailSchema.nullable(),
+    email: storedEmailSchema.nullable(),
     phone: phoneSchema.nullable(),
   }),
   /** `null` for a custom request, and for a package the vendor later deleted. */
@@ -912,6 +926,12 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
       /** What the customer paid, which under D1 is the quoted price. */
       totalAmountCents: z.int(),
       paidAt: z.date().nullable(),
+      /**
+       * When the vendor's payout was transferred, `null` while the platform still
+       * holds it — the one fact that decides whether a cancellation took money
+       * back out of the vendor's balance.
+       */
+      paidOutAt: z.date().nullable(),
       cancelledAt: z.date().nullable(),
       cancelledBy: bookingCancelledBySchema.nullable(),
       refundAmountCents: z.int().nullable(),
@@ -1007,6 +1027,11 @@ export type QuoteBookingRequestInput = z.infer<typeof quoteBookingRequestSchema>
 
 export const cancelBookingSchema = z.object({
   reason: freeText().max(1_000).optional(),
+  /**
+   * The refund the customer was shown and confirmed. A mismatch with the
+   * server's own quote answers 409 before any money moves (VEN-425).
+   */
+  expectedRefundCents: z.number().int().nonnegative().optional(),
 });
 export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 
@@ -1409,6 +1434,11 @@ export const vendorDashboardSchema = z.object({
   /** The vendor's share, not the gross — what actually reaches them. */
   earningsThisMonthCents: z.int().min(0),
   isPublished: z.boolean(),
+  /**
+   * An operator took the storefront down. Not a draft the vendor can finish:
+   * they cannot clear it from the dashboard, so the page must say so.
+   */
+  moderationHold: z.boolean(),
   /** The **real** publish gate, so the checklist cannot disagree with it. */
   publishBlockers: z.array(z.enum(PUBLISH_BLOCKER_KEYS)),
   /**
@@ -1865,7 +1895,10 @@ export const vendorSearchQuerySchema = z
     tags: z
       .union([z.array(uuidSchema), uuidSchema.transform((one) => [one])])
       .optional()
-      .transform((value) => (value === undefined || value.length === 0 ? undefined : value)),
+      // Deduplicated: the AND-match compares a distinct count against this length.
+      .transform((value) =>
+        value === undefined || value.length === 0 ? undefined : [...new Set(value)],
+      ),
     sort: vendorSortOptionSchema.default('relevance'),
     // Spread, not restated. These two were declared here as well as in
     // `paginationQuerySchema`, and the copies disagreed: only one of them ever
@@ -2212,13 +2245,15 @@ export const supportMessageSchema = z.object({
 export type SupportMessageInput = z.infer<typeof supportMessageSchema>;
 
 /**
- * What a send hands back: the reference, and nothing else.
+ * What a send hands back: the reference, and the address the answer goes to.
  *
- * There is no status to poll and no thread to open, so there is nothing else
- * for this to carry — which is the scope line the screen states in words.
+ * There is no status to poll and no thread to open. The address is the one the
+ * server actually used — a signed-in sender's is read off their account, so the
+ * screen must show this rather than what it believed or what was typed.
  */
 export const supportMessageReceiptSchema = z.object({
   reference: z.string().regex(SUPPORT_REFERENCE_PATTERN),
+  replyTo: emailSchema,
 });
 export type SupportMessageReceipt = z.infer<typeof supportMessageReceiptSchema>;
 
@@ -2230,7 +2265,9 @@ export type SupportMessageReceipt = z.infer<typeof supportMessageReceiptSchema>;
  * is the whole reason this shape exists: without it a failure hands back
  * nothing, and the one state that most needs a handle has none.
  */
-export const supportSendFailureDetailsSchema = supportMessageReceiptSchema;
+export const supportSendFailureDetailsSchema = supportMessageReceiptSchema.pick({
+  reference: true,
+});
 export type SupportSendFailureDetails = z.infer<typeof supportSendFailureDetailsSchema>;
 
 // --- In-product reporting (#436) -------------------------------------------
@@ -2264,12 +2301,12 @@ export type CreateReportInput = z.infer<typeof createReportSchema>;
 /**
  * What a report hands back: the reference, and nothing else.
  *
- * Deliberately the same shape as a support send's receipt. There is no status
+ * The support receipt's reference, without its reply address. There is no status
  * to poll and no case the reporter can open — the queue is the operator's
  * screen — so the reference is the whole of what they are given, and the
  * dialog says so in words.
  */
-export const reportReceiptSchema = supportMessageReceiptSchema;
+export const reportReceiptSchema = supportMessageReceiptSchema.pick({ reference: true });
 export type ReportReceipt = z.infer<typeof reportReceiptSchema>;
 
 // --- Errors ----------------------------------------------------------------
@@ -2534,6 +2571,12 @@ export const adminBookingRowSchema = z.object({
   vendorName: z.string(),
   vendorSlug: z.string(),
   /**
+   * The vendor profile the console opens. The storefront link cannot serve this:
+   * a banned or retired vendor's page is not public, and those are exactly the
+   * vendors the flagged rows are about.
+   */
+  vendorId: uuidSchema,
+  /**
    * Whether this row is the state above. Carried on every row rather than only
    * on the filtered list, so an operator scanning the unfiltered table sees it
    * without having to know the filter exists.
@@ -2560,6 +2603,8 @@ export const adminPaymentRowSchema = z.object({
   stripePaymentIntentId: z.string().nullable(),
   vendorName: z.string(),
   vendorSlug: z.string(),
+  /** The vendor profile the console opens; the storefront may not be public. */
+  vendorId: uuidSchema,
   customerName: z.string(),
   paidAt: z.date().nullable(),
   /**
@@ -2596,6 +2641,8 @@ export const adminPaymentRowSchema = z.object({
    * was precisely a state you had to already know about in order to find.
    */
   payoutFailing: z.boolean(),
+  /** Owed and never to be sent: the vendor is banned or closed — `isPayoutStranded` (VEN-445). */
+  payoutStranded: z.boolean(),
 });
 export type AdminPaymentRow = z.infer<typeof adminPaymentRowSchema>;
 
@@ -2915,6 +2962,13 @@ export const adminTagSuggestionResultSchema = z.object({
   suggestion: adminTagSuggestionRowSchema,
   /** The tag the suggestion now points at — created by `approve`, chosen by `merge`. */
   tag: tagSchema.nullable(),
+  /**
+   * What happened to the suggester's own selection. `assigned` — they now hold
+   * the tag; `no-profile` — they have no storefront to add it to; `category-full`
+   * — they were already at the per-category ceiling. `null` for a rejection,
+   * which assigns nothing by design.
+   */
+  assignment: z.enum(['assigned', 'no-profile', 'category-full']).nullable(),
 });
 export type AdminTagSuggestionResult = z.infer<typeof adminTagSuggestionResultSchema>;
 
@@ -3084,8 +3138,15 @@ export const adminVendorApplicationRowSchema = z.object({
 });
 export type AdminVendorApplicationRow = z.infer<typeof adminVendorApplicationRowSchema>;
 
-export const adminVendorApplicationListSchema = z.object({
-  items: z.array(adminVendorApplicationRowSchema),
+/** One page of either waitlist table, walked with `page` like every other console list. */
+export const adminVendorInviteQuerySchema = z.object({ ...adminPaginationShape });
+export type AdminVendorInviteQuery = z.infer<typeof adminVendorInviteQuerySchema>;
+
+export const adminVendorApplicationListSchema = paginatedSchema(
+  adminVendorApplicationRowSchema,
+).extend({
+  /** Applications still awaiting a decision, across every page — the headline count. */
+  waiting: z.int().min(0),
 });
 export type AdminVendorApplicationList = z.infer<typeof adminVendorApplicationListSchema>;
 
@@ -3105,7 +3166,7 @@ export const adminVendorInviteRowSchema = z.object({
 });
 export type AdminVendorInviteRow = z.infer<typeof adminVendorInviteRowSchema>;
 
-export const adminVendorInviteListSchema = z.object({ items: z.array(adminVendorInviteRowSchema) });
+export const adminVendorInviteListSchema = paginatedSchema(adminVendorInviteRowSchema);
 export type AdminVendorInviteList = z.infer<typeof adminVendorInviteListSchema>;
 
 /** `POST /admin/vendor-invites`. */
@@ -3257,6 +3318,8 @@ export const adminBookingDetailSchema = z.object({
   payoutModel: z.enum(PAYOUT_MODELS),
   payoutStatus: payoutStatusSchema,
   payoutFailing: z.boolean(),
+  /** `isPayoutStranded`: owed to a banned or closed vendor, so the sweep will never send it. */
+  payoutStranded: z.boolean(),
   payoutAttempts: z.int(),
   payoutFailureReason: z.string().nullable(),
   payoutReleasedAt: z.date().nullable(),

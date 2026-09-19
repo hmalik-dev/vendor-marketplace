@@ -4,6 +4,7 @@ import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
+import { readEveryPage } from './read-every-page';
 import { redirectIfTermsRequired } from './terms-gate';
 import {
   wireBookingListSchema,
@@ -69,7 +70,9 @@ export async function getOwnBookingRequests(): Promise<WireBookingRequest[]> {
   const token = await customerToken();
 
   return degradeToEmpty(() =>
-    apiRequest('/booking-requests', { schema: wireBookingRequestListSchema, token }),
+    readEveryPage((query) =>
+      apiRequest(`/booking-requests${query}`, { schema: wireBookingRequestListSchema, token }),
+    ),
   );
 }
 
@@ -127,15 +130,16 @@ export async function getOwnBookingRequest(requestId: string): Promise<WireBooki
 export type CheckoutOutcome =
   /** The intent exists and the card form can render. */
   | { state: 'ready'; checkout: WireCheckoutIntent }
-  /**
-   * There is nothing here to pay for: no such request, or not this customer's.
-   *
-   * **402 is deliberately folded in with them.** The vendor has not finished
-   * connecting payouts, the booking may well become payable later, and there is
-   * nothing the customer can do about it from here — naming the vendor's Stripe
-   * status to their customer is not information they are owed.
-   */
+  /** There is nothing here to pay for: no such request, or not this customer's. */
   | { state: 'not-found' }
+  /**
+   * The vendor cannot take payment right now — 402. Their payout account or
+   * agreement is not in order, the booking is live and may well become payable,
+   * and which of the two it is is the vendor's business, so this is one state.
+   * It used to be folded into `not-found`, which told the customer a live
+   * request "isn't here".
+   */
+  | { state: 'vendor-unavailable' }
   /** The request left `accepted` underneath the customer — 409. */
   | { state: 'not-payable' }
   /**
@@ -190,8 +194,11 @@ export async function openCheckout(requestId: string): Promise<CheckoutOutcome> 
     if (error.statusCode === 401) {
       redirect(await signInPathReturningHere());
     }
-    if (error.statusCode === 404 || error.statusCode === 402) {
+    if (error.statusCode === 404) {
       return { state: 'not-found' };
+    }
+    if (error.statusCode === 402) {
+      return { state: 'vendor-unavailable' };
     }
     if (error.statusCode === 409) {
       return { state: 'not-payable' };
@@ -244,7 +251,11 @@ export async function getBookingForRequest(requestId: string): Promise<WireBooki
 export async function getOwnBookings(): Promise<WireBooking[]> {
   const token = await customerToken();
 
-  return degradeToEmpty(() => apiRequest('/bookings', { schema: wireBookingListSchema, token }));
+  return degradeToEmpty(() =>
+    readEveryPage((query) =>
+      apiRequest(`/bookings${query}`, { schema: wireBookingListSchema, token }),
+    ),
+  );
 }
 
 /**

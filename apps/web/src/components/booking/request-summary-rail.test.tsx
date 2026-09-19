@@ -37,6 +37,7 @@ function renderRail(avatarUrl: string | null, blockerCount = 0) {
         durationHours: 8,
       }}
       customDetails=""
+      detailsLength={0}
       onCustomDetailsChange={vi.fn()}
       customDetailsId="brief"
       customDetailsIssue={null}

@@ -144,6 +144,14 @@ export const users = pgTable(
     index('users_deleted_at_idx')
       .on(table.id)
       .where(sql`${table.deletedAt} IS NOT NULL`),
+    /**
+     * The suspended accounts, and only those (VEN-431): the same argument as
+     * `users_deleted_at_idx` for `OWNER_NOT_BANNED`, the anti-join every public
+     * vendor read carries.
+     */
+    index('users_banned_idx')
+      .on(table.id)
+      .where(sql`${table.isBanned} = true`),
   ],
 );
 

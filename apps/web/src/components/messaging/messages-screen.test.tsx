@@ -1107,4 +1107,134 @@ describe('MessagesScreen', () => {
       );
     });
   });
+
+  describe('a list that failed to load, then recovers (VEN-426)', () => {
+    it('shows the real conversations once Try again delivers them', async () => {
+      respondWith([]);
+      const { rerender } = render(
+        <MessagesScreen
+          initialConversations={[]}
+          viewerId={VIEWER}
+          initialConversationId={null}
+          listFailed
+        />,
+      );
+
+      expect(await screen.findByText('We could not load your messages')).toBeDefined();
+
+      // What `router.refresh()` delivers: new props, the same mounted component.
+      rerender(
+        <MessagesScreen
+          initialConversations={twoThreads()}
+          viewerId={VIEWER}
+          initialConversationId={null}
+          listFailed={false}
+        />,
+      );
+
+      expect(await screen.findByText('Kessler & Co.')).toBeDefined();
+      expect(screen.getByText('Marlow Sound')).toBeDefined();
+      expect(screen.queryByText('No conversations yet')).toBeNull();
+      expect(screen.queryByText('We could not load your messages')).toBeNull();
+    });
+
+    it('says the list failed, not "not found", for a thread link opened during the outage', async () => {
+      respondWith([]);
+      render(
+        <MessagesScreen
+          initialConversations={[]}
+          viewerId={VIEWER}
+          initialConversationId={CONVERSATION}
+          listFailed
+        />,
+      );
+
+      expect(await screen.findByText('We could not load your messages')).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeDefined();
+      expect(screen.queryByText('We could not find that conversation')).toBeNull();
+    });
+
+    it('still says not found for a foreign thread when the list did load', async () => {
+      respondWith([]);
+      render(
+        <MessagesScreen
+          initialConversations={[conversation()]}
+          viewerId={VIEWER}
+          initialConversationId={OTHER_CONVERSATION}
+          listFailed={false}
+        />,
+      );
+
+      expect(await screen.findByText('We could not find that conversation')).toBeDefined();
+    });
+  });
+
+  describe('a message arriving in a background tab (VEN-426)', () => {
+    const readPath = `/conversations/${CONVERSATION}/read`;
+    const readCalls = (): unknown[][] => call.mock.calls.filter(([path]) => path === readPath);
+
+    function setVisibility(state: 'hidden' | 'visible'): void {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
+    }
+
+    afterEach(() => setVisibility('visible'));
+
+    function arrive(): Promise<void> {
+      return act(async () => {
+        onEventRef.current?.({
+          type: 'new_message',
+          conversationId: CONVERSATION,
+          message: {
+            ...message('88888888-8888-4888-8888-888888888888', THEM, 'While you were away'),
+            createdAt: new Date('2026-04-21T15:00:00Z').toISOString(),
+          },
+        });
+      });
+    }
+
+    it('does not mark it read until the tab is shown, then does', async () => {
+      respondWith([]);
+      render(
+        <MessagesScreen
+          initialConversations={[conversation()]}
+          viewerId={VIEWER}
+          initialConversationId={null}
+          listFailed={false}
+        />,
+      );
+      await screen.findByLabelText('Write a message');
+      // Opening the thread marks it read once; the assertions count from here.
+      await waitFor(() => expect(readCalls()).toHaveLength(1));
+
+      setVisibility('hidden');
+      await arrive();
+      expect(await screen.findByText('While you were away')).toBeDefined();
+      expect(readCalls()).toHaveLength(1);
+
+      setVisibility('visible');
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+
+      await waitFor(() => expect(readCalls()).toHaveLength(2));
+    });
+
+    it('marks it read at once when the tab is showing', async () => {
+      respondWith([]);
+      render(
+        <MessagesScreen
+          initialConversations={[conversation()]}
+          viewerId={VIEWER}
+          initialConversationId={null}
+          listFailed={false}
+        />,
+      );
+      await screen.findByLabelText('Write a message');
+      await waitFor(() => expect(readCalls()).toHaveLength(1));
+
+      await arrive();
+
+      await waitFor(() => expect(readCalls()).toHaveLength(2));
+    });
+  });
 });

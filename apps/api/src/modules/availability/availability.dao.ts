@@ -2,6 +2,7 @@ import { and, asc, eq, gt, gte, inArray, isNull, lte, ne, or, sql } from 'drizzl
 import {
   availability,
   bookingRequests,
+  bookings,
   type AvailabilityRow,
   type NewAvailabilityRow,
 } from '@vendor-marketplace/db/schema';
@@ -46,6 +47,35 @@ export async function findLiveRequestDates(
          * vendor cannot free or block their own Saturday.
          */
         or(isNull(bookingRequests.expiresAt), gt(bookingRequests.expiresAt, now)),
+      ),
+    );
+
+  return rows.map((row) => row.date);
+}
+
+/**
+ * The dates in `[from, to]` a paid booking stands on. A `booked` cell with no
+ * booking behind it is a hold, not delivered work (VEN-433).
+ */
+export async function findPaidBookingDates(
+  db: AppDatabase,
+  vendorId: string,
+  from: string,
+  to: string,
+): Promise<string[]> {
+  if (!vendorId) {
+    return [];
+  }
+
+  const rows = await db
+    .selectDistinct({ date: bookings.eventDate })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.vendorId, vendorId),
+        gte(bookings.eventDate, from),
+        lte(bookings.eventDate, to),
+        ne(bookings.status, 'cancelled'),
       ),
     );
 

@@ -201,23 +201,86 @@ describe('messaging', () => {
       expect(response.statusCode).toBe(401);
     });
 
-    it('refuses a non-participant on every conversation route', async () => {
+    /*
+     * 404, and the *same* 404 as a thread that does not exist: a 403 would
+     * confirm that a guessed uuid is a real conversation (VEN-426).
+     */
+    it('answers a non-participant exactly as it answers a missing thread', async () => {
       const conversationId = await openConversation();
+      const missingId = '00000000-0000-4000-8000-000000000000';
 
-      for (const [method, url] of [
-        ['GET', `/conversations/${conversationId}/messages`],
-        ['PUT', `/conversations/${conversationId}/read`],
+      for (const [method, path] of [
+        ['GET', 'messages'],
+        ['PUT', 'read'],
+        ['POST', 'messages'],
       ] as const) {
-        const response = await harness.app.inject({
-          method,
-          url,
-          headers: bearer(OUTSIDER),
-        });
+        const call = (id: string) =>
+          harness.app.inject({
+            method,
+            url: `/conversations/${id}/${path}`,
+            headers: bearer(OUTSIDER),
+            ...(method === 'POST' ? { payload: { content: 'Let me in' } } : {}),
+          });
 
-        expect(response.statusCode).toBe(403);
+        const real = await call(conversationId);
+        const missing = await call(missingId);
+
+        expect(real.statusCode).toBe(404);
+        expect(missing.statusCode).toBe(404);
+        expect(real.json()).toEqual(missing.json());
+      }
+    });
+
+    describe('a counterpart who can no longer receive', () => {
+      async function countMessages(): Promise<number> {
+        return (await harness.database.db.select().from(messages)).length;
       }
 
-      expect((await send(OUTSIDER, conversationId, 'Let me in')).statusCode).toBe(403);
+      it.each([
+        ['banned', { isBanned: true }],
+        ['deleted', { deletedAt: new Date('2026-09-01T00:00:00Z') }],
+      ] as const)('refuses a customer message to a %s vendor', async (_label, change) => {
+        const conversationId = await openConversation();
+        const [owner] = await harness.database.db
+          .select({ userId: vendorProfiles.userId })
+          .from(vendorProfiles);
+        await harness.database.db.update(users).set(change).where(eq(users.id, owner!.userId));
+
+        const response = await send(CUSTOMER, conversationId, 'Are you there?');
+
+        expect(response.statusCode).toBe(409);
+        expect(await countMessages()).toBe(0);
+      });
+
+      it('refuses a customer message to a vendor whose storefront is unpublished', async () => {
+        const conversationId = await openConversation();
+        await harness.database.db.update(vendorProfiles).set({ isPublished: false });
+
+        expect((await send(CUSTOMER, conversationId, 'Hello?')).statusCode).toBe(409);
+        expect(await countMessages()).toBe(0);
+      });
+
+      it.each([
+        ['banned', { isBanned: true }],
+        ['deleted', { deletedAt: new Date('2026-09-01T00:00:00Z') }],
+      ] as const)('refuses a vendor message to a %s customer', async (_label, change) => {
+        const conversationId = await openConversation();
+        const customerId = await idOf(CUSTOMER);
+        await harness.database.db.update(users).set(change).where(eq(users.id, customerId));
+
+        const response = await send(VENDOR, conversationId, 'Hi there');
+
+        expect(response.statusCode).toBe(409);
+        expect(await countMessages()).toBe(0);
+      });
+
+      it('still delivers between two reachable parties', async () => {
+        const conversationId = await openConversation();
+
+        expect((await send(CUSTOMER, conversationId, 'Hello')).statusCode).toBe(201);
+        expect((await send(VENDOR, conversationId, 'Hi')).statusCode).toBe(201);
+        expect(await countMessages()).toBe(2);
+      });
     });
 
     it('does not list a conversation the caller is not in', async () => {

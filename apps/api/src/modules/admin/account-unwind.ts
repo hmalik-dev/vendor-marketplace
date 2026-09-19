@@ -182,6 +182,9 @@ export async function unwindAccountBookings(
   now: Date,
   copy: AccountUnwindCopy,
 ): Promise<AccountUnwindResult> {
+  // Every caller is removing this account: an open tab must stop hearing it now.
+  context.hub.closeFor(targetId);
+
   const floorDate = unwindFloorDate(now);
   const affected = await findConfirmedBookingsToUnwind(
     context.db,

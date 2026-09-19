@@ -1,5 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import { ADMIN_PAGE_SIZE, DEFAULT_PAGE_SIZE } from '@vendor-marketplace/shared';
+import {
+  ADMIN_PAGE_SIZE,
+  DEFAULT_PAGE_SIZE,
+  MAX_TAGS_PER_CATEGORY,
+} from '@vendor-marketplace/shared';
 import { eq, notInArray } from 'drizzle-orm';
 import {
   bookingRequests,
@@ -1263,6 +1267,8 @@ describe('admin routes', () => {
         totalCents: 120_000,
         customerName: 'Test User',
         vendorName: 'Sunlit Studio',
+        // The console's own id, for a link that survives the storefront going away.
+        vendorId: vendor.profileId,
       });
 
       const filtered = await harness.app.inject({
@@ -1307,6 +1313,7 @@ describe('admin routes', () => {
         id: stuck,
         status: 'confirmed',
         refundStuck: true,
+        vendorId: vendor.profileId,
       });
     });
 
@@ -1742,6 +1749,166 @@ describe('admin routes', () => {
         .from(vendorTags)
         .where(eq(vendorTags.vendorId, profileId));
       expect(assigned.map((row) => row.tagId)).toEqual([existing[0]!.id]);
+    });
+
+    describe('when the tag or the vendor cannot take the assignment', () => {
+      /** The resolved suggestion's tag id and the vendor's held ids, after an action. */
+      async function heldBy(profileId: string): Promise<string[]> {
+        const rows = await harness.database.db
+          .select({ tagId: vendorTags.tagId })
+          .from(vendorTags)
+          .where(eq(vendorTags.vendorId, profileId));
+        return rows.map((row) => row.tagId);
+      }
+
+      async function notificationBodies(): Promise<string[]> {
+        const rows = await harness.database.db
+          .select({ body: notifications.body })
+          .from(notifications);
+        return rows.map((row) => row.body ?? '');
+      }
+
+      async function fillDietary(profileId: string): Promise<void> {
+        const inserted = await harness.database.db
+          .insert(tags)
+          .values(
+            Array.from({ length: MAX_TAGS_PER_CATEGORY }, (_, index) => ({
+              name: `Diet ${index}`,
+              slug: `dietary-diet-${index}`,
+              category: 'dietary' as const,
+            })),
+          )
+          .returning({ id: tags.id });
+        await harness.database.db
+          .insert(vendorTags)
+          .values(inserted.map((row) => ({ vendorId: profileId, tagId: row.id })));
+      }
+
+      it('refuses to approve into a deactivated tag of the same name, and assigns nothing', async () => {
+        await signIn(ADMIN, true);
+        await signIn(VENDOR);
+        await harness.database.db.insert(tags).values({
+          name: 'Soy Free',
+          slug: 'dietary-soy-free',
+          category: 'dietary',
+          isActive: false,
+        });
+        const { id, profileId } = await suggest('soy free');
+
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: `/admin/tag-suggestions/${id}`,
+          headers: bearer(ADMIN),
+          payload: { action: 'approve' },
+        });
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toContain('“Soy Free” is a deactivated tag');
+        expect(await heldBy(profileId)).toEqual([]);
+
+        const rows = await harness.database.db
+          .select({ status: tagSuggestions.status })
+          .from(tagSuggestions)
+          .where(eq(tagSuggestions.id, id));
+        expect(rows).toEqual([{ status: 'pending' }]);
+      });
+
+      it('refuses an explicit merge into a deactivated tag', async () => {
+        await signIn(ADMIN, true);
+        await signIn(VENDOR);
+        const hidden = await harness.database.db
+          .insert(tags)
+          .values({
+            name: 'Nut Free',
+            slug: 'dietary-nut-free',
+            category: 'dietary',
+            isActive: false,
+          })
+          .returning({ id: tags.id });
+        const { id, profileId } = await suggest('Peanut Free');
+
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: `/admin/tag-suggestions/${id}`,
+          headers: bearer(ADMIN),
+          payload: { action: 'merge', mergeTagId: hidden[0]!.id },
+        });
+
+        expect(response.statusCode).toBe(409);
+        expect(await heldBy(profileId)).toEqual([]);
+      });
+
+      it('approves the tag but adds no sixth row to a vendor already at the ceiling', async () => {
+        await signIn(ADMIN, true);
+        await signIn(VENDOR);
+        const { id, profileId } = await suggest('Gluten Free');
+        await fillDietary(profileId);
+
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: `/admin/tag-suggestions/${id}`,
+          headers: bearer(ADMIN),
+          payload: { action: 'approve' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().tag.name).toBe('Gluten Free');
+        expect(response.json().assignment).toBe('category-full');
+        expect(await heldBy(profileId)).toHaveLength(MAX_TAGS_PER_CATEGORY);
+        expect(await heldBy(profileId)).not.toContain(response.json().tag.id);
+
+        const bodies = await notificationBodies();
+        expect(bodies).toHaveLength(1);
+        expect(bodies[0]).toContain('was not added to your profile');
+        expect(bodies[0]).not.toContain('has been added to your profile');
+      });
+
+      it('merges without a sixth row for a vendor at the ceiling', async () => {
+        await signIn(ADMIN, true);
+        await signIn(VENDOR);
+        const existing = await harness.database.db
+          .insert(tags)
+          .values({ name: 'Zero Sugar', slug: 'dietary-zero-sugar', category: 'dietary' })
+          .returning({ id: tags.id });
+        const { id, profileId } = await suggest('Sugar Free');
+        await fillDietary(profileId);
+
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: `/admin/tag-suggestions/${id}`,
+          headers: bearer(ADMIN),
+          payload: { action: 'merge', mergeTagId: existing[0]!.id },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().assignment).toBe('category-full');
+        expect(await heldBy(profileId)).toHaveLength(MAX_TAGS_PER_CATEGORY);
+      });
+
+      it('does not tell a suggester with no profile the tag was added to it', async () => {
+        await signIn(ADMIN, true);
+        const suggesterId = await signIn(VENDOR);
+        const rows = await harness.database.db
+          .insert(tagSuggestions)
+          .values({ vendorId: suggesterId, suggestedName: 'Gluten Free', category: 'dietary' })
+          .returning({ id: tagSuggestions.id });
+
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: `/admin/tag-suggestions/${rows[0]!.id}`,
+          headers: bearer(ADMIN),
+          payload: { action: 'approve' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().assignment).toBe('no-profile');
+        expect(await harness.database.db.select().from(vendorTags)).toEqual([]);
+
+        const bodies = await notificationBodies();
+        expect(bodies).toEqual([
+          '“Gluten Free” is now available — you can choose it in your storefront editor once your profile is set up.',
+        ]);
+      });
     });
 
     it('keeps the operator’s note when an approval turns out to be a merge', async () => {

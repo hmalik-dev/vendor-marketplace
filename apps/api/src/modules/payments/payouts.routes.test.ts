@@ -700,6 +700,84 @@ describe('payouts', () => {
       expect((await currentBooking()).stripeTransferId).toBe(orphan.transferId);
     });
 
+    /*
+     * VEN-424 finding 2. The transfer landed but the sweep recorded a failure,
+     * so the row carries no transfer id. Every unwind used to read the row.
+     */
+    async function orphanedTransfer(requestId: string): Promise<{ transferId: string }> {
+      return harness.stripe.createTransfer({
+        bookingId: 'a-run-whose-commit-was-lost',
+        attempt: 0,
+        amountCents: EXPECTED_PAYOUT_CENTS,
+        destinationAccountId: VENDOR_ACCOUNT,
+        transferGroup: `booking_${requestId}`,
+      });
+    }
+
+    it('reverses a transfer the row never recorded when a dispute is upheld', async () => {
+      const paid = await paidBooking();
+      const orphan = await orphanedTransfer(paid.requestId);
+      clockNow = JUST_AFTER_EVENT;
+      await report(paid.id, CUSTOMER);
+      await signInAsAdmin();
+
+      const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+        outcome: 'customer',
+      });
+
+      expect(resolved.statusCode).toBe(200);
+      expect(harness.stripe.reversals).toHaveLength(1);
+      expect(harness.stripe.reversals[0]).toMatchObject({
+        transferId: orphan.transferId,
+        amountCents: EXPECTED_PAYOUT_CENTS,
+      });
+      expect((await currentBooking()).vendorPayoutCents).toBe(0);
+    });
+
+    it('reverses the refunded half of an unrecorded transfer at the 50% tier, leaving the vendor the retained half', async () => {
+      const paid = await paidBooking();
+      const orphan = await orphanedTransfer(paid.requestId);
+      clockNow = addDays(START, 28);
+
+      const cancelled = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      expect(cancelled.statusCode).toBe(200);
+      clockNow = AFTER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      const retained = EXPECTED_PAYOUT_CENTS / 2;
+      expect((await currentBooking()).vendorPayoutCents).toBe(retained);
+      expect(harness.stripe.transfers).toHaveLength(1);
+      expect(harness.stripe.transfers[0]).toMatchObject({
+        transferId: orphan.transferId,
+        amountCents: EXPECTED_PAYOUT_CENTS,
+        reversedCents: retained,
+      });
+      expect((await currentBooking()).stripeTransferId).toBe(orphan.transferId);
+    });
+
+    it('reverses the surplus when the sweep finds a full-share transfer for a half-share obligation', async () => {
+      const paid = await paidBooking();
+      const orphan = await orphanedTransfer(paid.requestId);
+      const retained = EXPECTED_PAYOUT_CENTS / 2;
+      await harness.database.db
+        .update(bookings)
+        .set({ status: 'cancelled', vendorPayoutCents: retained })
+        .where(eq(bookings.id, paid.id));
+      clockNow = AFTER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      expect(harness.stripe.reversals).toHaveLength(1);
+      expect(harness.stripe.reversals[0]).toMatchObject({
+        transferId: orphan.transferId,
+        amountCents: retained,
+      });
+      const [transfer] = harness.stripe.transfers;
+      expect(transfer!.amountCents - transfer!.reversedCents).toBe(retained);
+      expect((await currentBooking()).stripeTransferId).toBe(orphan.transferId);
+    });
+
     /**
      * The deploy window, and the demo seed, in one predicate.
      *
@@ -1312,10 +1390,14 @@ describe('payouts', () => {
   });
 
   describe('the refund boundary', () => {
-    /* #423 acceptance 13. */
-    it('reverses the vendor transfer when a released booking is cancelled', async () => {
+    /*
+     * #423 acceptance 13 answered "reverse the transfer". VEN-439 answers it by
+     * never getting there: once the sweep has paid the vendor, a customer's
+     * cancellation used to refund half and claw it back out of their connected
+     * account. Nothing moves now — the customer is sent to the report path.
+     */
+    it('refuses to cancel a released booking, moving no money', async () => {
       const released = await releasedBooking();
-      const transferId = harness.stripe.transfers[0]!.transferId;
 
       const response = await inject(
         'PUT',
@@ -1324,28 +1406,11 @@ describe('payouts', () => {
         {},
       );
 
-      expect(response.statusCode).toBe(200);
-      /*
-       * The event is past, so D3's second tier applies: half the total comes
-       * back to the customer, and the vendor gives back the same proportion of
-       * their payout. Orla keeps half its commission, and the three shares sum
-       * back exactly.
-       */
-      expect(response.json().refundCents).toBe(PRICE_CENTS / 2);
-      expect(harness.stripe.refunds).toHaveLength(1);
-      expect(harness.stripe.refunds[0]).toMatchObject({
-        amountCents: PRICE_CENTS / 2,
-        // Never on the refund. The charge is a plain one into the platform
-        // balance, and Stripe refuses `reverse_transfer` on a charge with no
-        // transfer — the reversal is its own call against the transfer object.
-        reverseTransfer: false,
-        refundApplicationFee: false,
-      });
-      expect(harness.stripe.reversals).toHaveLength(1);
-      expect(harness.stripe.reversals[0]).toMatchObject({
-        transferId,
-        amountCents: EXPECTED_PAYOUT_CENTS / 2,
-      });
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toContain('already been paid out');
+      expect(harness.stripe.refunds).toEqual([]);
+      expect(harness.stripe.reversals).toEqual([]);
+      expect((await currentBooking()).status).toBe('confirmed');
     });
 
     /* #423 acceptance 12, stated against the reversal list rather than a flag. */
@@ -1375,8 +1440,8 @@ describe('payouts', () => {
      */
     it('still owes the vendor their share after a late cancellation, and pays it', async () => {
       const paid = await paidBooking();
-      // Inside the cutoff: the event is tomorrow.
-      clockNow = addDays(new Date(`${EVENT_DATE}T00:00:00Z`), -1);
+      // Inside the cutoff (36 hours out) and still future in every zone.
+      clockNow = addDays(new Date(`${EVENT_DATE}T12:00:00Z`), -2);
 
       const response = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
@@ -1408,49 +1473,22 @@ describe('payouts', () => {
       expect(harness.stripe.transfers).toEqual([]);
     });
 
-    /**
-     * Past Stripe's 24-hour idempotency window, a repeated cancellation is a
-     * *fresh* reversal request — and Stripe refuses an over-reversal, which
-     * would then wedge the booking: refunded, uncancellable, still holding the
-     * date. `reverseOutstanding` asks what is already reversed, exactly as
-     * `findRefund` asks what is already refunded.
-     */
-    it('does not reverse twice when a released cancellation is retried', async () => {
-      const released = await releasedBooking();
-      await inject('PUT', `/customer/bookings/${released.id}/cancel`, CUSTOMER, {});
-      expect(harness.stripe.reversals).toHaveLength(1);
-
-      // The state a failed row write leaves: money moved, booking still live.
-      await harness.database.db
-        .update(bookings)
-        .set({ status: 'confirmed', cancelledAt: null, refundAmountCents: null })
-        .where(eq(bookings.id, released.id));
-      // ...and the key Stripe has since forgotten.
-      harness.stripe.reversals.length = 0;
-
-      const retry = await inject('PUT', `/customer/bookings/${released.id}/cancel`, CUSTOMER, {});
-
-      expect(retry.statusCode).toBe(200);
-      // No second reversal: the transfer is already fully reversed.
-      expect(harness.stripe.reversals).toEqual([]);
-      expect((await currentBooking()).status).toBe('cancelled');
-    });
-
     /* #423 acceptance 14 — `refundAmountCents` records what actually moved. */
-    it('records the amount that moved on both sides of the boundary', async () => {
-      const released = await releasedBooking();
-      await inject('PUT', `/customer/bookings/${released.id}/cancel`, CUSTOMER, {});
+    it('records the amount that moved on the late-cancellation tier', async () => {
+      const paid = await paidBooking();
+      clockNow = addDays(new Date(`${EVENT_DATE}T12:00:00Z`), -2);
+      await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
       expect((await currentBooking()).refundAmountCents).toBe(PRICE_CENTS / 2);
     });
 
     /**
-     * The vendor is told the truth about their own balance, and which sentence
-     * they get is a money claim rather than a copy choice.
+     * The vendor is told the truth about their own balance: a booking that was
+     * never paid out has no reversal to name, so the notice must not claim one.
      */
-    it('names the reversal to the vendor only when there is one', async () => {
-      const released = await releasedBooking();
-      await inject('PUT', `/customer/bookings/${released.id}/cancel`, CUSTOMER, {});
+    it('does not name a reversal to the vendor for a booking never paid out', async () => {
+      const paid = await paidBooking();
+      await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
       const rows = await harness.database.db
         .select()
@@ -1459,9 +1497,8 @@ describe('payouts', () => {
 
       expect(rows).toHaveLength(1);
       expect(rows[0]?.body).toBe(
-        'The date is free again on your calendar. Their refund takes back the same share of ' +
-          'your payout, out of your Stripe balance — which can leave it negative, because this ' +
-          'booking had already been paid out.',
+        'The date is free again on your calendar. This booking had not been paid out yet, so ' +
+          'nothing is taken back out of your Stripe balance.',
       );
     });
   });

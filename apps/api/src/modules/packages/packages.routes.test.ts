@@ -1,4 +1,4 @@
-import { users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { servicePackages, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { categories } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -246,6 +246,26 @@ describe('/vendor/packages', () => {
       expect(response.json().priceCents).toBe(150_000);
       expect(response.json().name).toBe('Half-day coverage');
       expect(response.json().inclusions).toEqual(['4 hours coverage']);
+    });
+
+    it('clears the duration and guest cap when sent as null', async () => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+      const created = await createPackage(VENDOR, { durationHours: 4, maxGuests: 80 });
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: `/vendor/packages/${created.id}`,
+        headers: bearer(VENDOR),
+        payload: { durationHours: null, maxGuests: null },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().durationHours).toBeNull();
+      expect(response.json().maxGuests).toBeNull();
+
+      const rows = await harness.database.db.select().from(servicePackages);
+      expect(rows[0]?.durationHours).toBeNull();
+      expect(rows[0]?.maxGuests).toBeNull();
     });
 
     it('answers 404 for a package owned by another vendor', async () => {

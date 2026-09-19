@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   bookings,
@@ -332,6 +332,9 @@ export interface DisputedBookingProjection {
    * written for the customer's report form. Free: this row is already read.
    */
   bookingStatus: BookingStatus;
+  vendorId: string;
+  /** What the hold wrote — a chargeback's hold carries its own message here. */
+  disputeReason: string | null;
   payoutReleasedAt: Date | null;
 }
 
@@ -347,6 +350,8 @@ export async function findBookingForDispute(
       customerClerkUserId: users.authUserId,
       customerRole: users.role,
       bookingStatus: bookings.status,
+      vendorId: bookings.vendorId,
+      disputeReason: bookings.disputeReason,
       payoutReleasedAt: bookings.payoutReleasedAt,
     })
     .from(bookings)
@@ -452,9 +457,9 @@ export async function findOpenCaseForConversation(
 export async function findOpenChargebackCase(
   db: AppDatabase,
   bookingId: string,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; networkOutcome: string | null } | null> {
   const rows = await db
-    .select({ id: supportCases.id })
+    .select({ id: supportCases.id, networkOutcome: supportCases.networkOutcome })
     .from(supportCases)
     .where(
       and(
@@ -463,6 +468,8 @@ export async function findOpenChargebackCase(
         eq(supportCases.status, 'open'),
       ),
     )
+    // Newest first: with two chargebacks on one booking the latest is the live one.
+    .orderBy(desc(supportCases.createdAt))
     .limit(1);
 
   return rows[0] ?? null;

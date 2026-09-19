@@ -20,6 +20,7 @@ const BASE: WireAdminPaymentRow = {
   stripePaymentIntentId: 'pi_test_1',
   vendorName: 'Sunlit Studio',
   vendorSlug: 'sunlit-studio',
+  vendorId: '22222222-2222-4222-8222-222222222222',
   customerName: 'Anjali Rao',
   paidAt: new Date('2026-05-01T00:00:00.000Z'),
   payoutStatus: 'pending',
@@ -28,6 +29,7 @@ const BASE: WireAdminPaymentRow = {
   payoutFailureReason: null,
   stripeTransferId: null,
   payoutFailing: false,
+  payoutStranded: false,
 };
 
 const row = (overrides: Partial<WireAdminPaymentRow>): WireAdminPaymentRow => ({
@@ -55,6 +57,13 @@ const retryResult = (
 });
 
 describe('the payments table', () => {
+  it('links the vendor to the console, not to a storefront a banned vendor no longer has', () => {
+    render(<PaymentTable empty={EMPTY} rows={[BASE]} />);
+
+    const link = screen.getAllByRole('link', { name: 'Sunlit Studio' })[0]!;
+    expect(link.getAttribute('href')).toBe('/admin/vendors/22222222-2222-4222-8222-222222222222');
+  });
+
   it('draws the payout state each row is in, in the shared vocabulary', () => {
     render(
       <PaymentTable
@@ -85,6 +94,16 @@ describe('the payments table', () => {
       0,
     );
     expect(screen.queryByText('Awaiting release')).toBeNull();
+  });
+
+  it('says stranded, never Awaiting release, for a payout owed to a banned or closed vendor', () => {
+    const stranded = row({ payoutStatus: 'pending', payoutFailing: true, payoutStranded: true });
+    render(<PaymentTable empty={EMPTY} rows={[stranded]} />);
+
+    expect(screen.getAllByText('Stranded — vendor banned or closed').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Awaiting release')).toBeNull();
+    expect(screen.queryByText('Retry payout')).toBeNull();
+    expect(canRetryPayout(stranded)).toBe(false);
   });
 
   it('says attempt in the singular for the first failure', () => {

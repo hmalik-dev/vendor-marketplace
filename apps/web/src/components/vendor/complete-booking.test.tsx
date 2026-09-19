@@ -77,6 +77,17 @@ describe('CompleteBooking', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
+  it('names the hold instead of offering Mark complete on a disputed booking', () => {
+    render(
+      <CompleteBooking booking={paid({ status: 'disputed' })} serverToday={viewerOn(TODAY)} />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Mark complete' })).toBeNull();
+    expect(
+      screen.getByText(/Payout on hold while the customer.s report is reviewed/),
+    ).toBeDefined();
+  });
+
   it('keeps the control and says so when the API refuses', async () => {
     requestMock.mockRejectedValue(new Error('offline'));
 

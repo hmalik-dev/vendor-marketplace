@@ -53,6 +53,7 @@
     "STRIPE_WEBHOOK_SECRET",
     "SUPPORT_EMAIL_TO",
     "WEB_PORT",
+    "WEB_TIER_KEY",
     "WEB_URL"
   ],
   "tasks": {

@@ -221,6 +221,73 @@ describe('the event stream authenticates with a ticket, not the session', () => 
         .where(eq(users.authUserId, CUSTOMER));
     }
   });
+  it('refuses a valid ticket belonging to an account that has since been deleted', async () => {
+    const ticket = await issueTicket();
+
+    await harness.database.db
+      .update(users)
+      .set({ deletedAt: new Date('2026-09-01T00:00:00Z') })
+      .where(eq(users.authUserId, CUSTOMER));
+
+    const response = await harness.app.inject({
+      method: 'GET',
+      url: `/events/stream?ticket=${ticket}`,
+    });
+
+    try {
+      expect(response.statusCode).toBe(401);
+    } finally {
+      await harness.database.db
+        .update(users)
+        .set({ deletedAt: null })
+        .where(eq(users.authUserId, CUSTOMER));
+    }
+  });
+
+  it("closes a banned account's open stream without the client closing it", async () => {
+    harness.clerkUsers.set('user_admin_stream', {
+      authUserId: 'user_admin_stream',
+      email: 'ops@example.com',
+      firstName: 'Ops',
+      lastName: 'Admin',
+      roleHint: 'customer',
+      avatarUrl: null,
+    });
+    // Provisioned through a guarded route, the way `issueTicket` does the customer.
+    await harness.app.inject({
+      method: 'POST',
+      url: '/events/stream-ticket',
+      headers: bearer('user_admin_stream'),
+    });
+    await harness.database.db
+      .update(users)
+      .set({ role: 'admin' })
+      .where(eq(users.authUserId, 'user_admin_stream'));
+    const ticket = await issueTicket();
+
+    const [row] = await harness.database.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.authUserId, CUSTOMER));
+    // Earlier tests in this file abandoned their streams open, so this one is not alone.
+    const before = harness.app.events.countFor(row!.id);
+
+    const stream = harness.app.inject({ method: 'GET', url: `/events/stream?ticket=${ticket}` });
+    await vi.waitFor(() => expect(harness.app.events.countFor(row!.id)).toBe(before + 1));
+
+    const ban = await harness.app.inject({
+      method: 'PUT',
+      url: `/admin/users/${row!.id}/ban`,
+      headers: bearer('user_admin_stream'),
+    });
+    expect(ban.statusCode).toBe(200);
+
+    // The server ended the response itself, so the pending request resolves.
+    await stream;
+    expect(harness.app.events.countFor(row!.id)).toBe(0);
+
+    await harness.database.db.update(users).set({ isBanned: false }).where(eq(users.id, row!.id));
+  });
 });
 
 describe('no URL the API logs carries a credential', () => {

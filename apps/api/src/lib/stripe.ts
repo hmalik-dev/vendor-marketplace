@@ -147,6 +147,22 @@ export interface StripeConnectGateway {
    * instead of paying it out again.
    */
   findRefund(paymentIntentId: string): Promise<{ refundId: string; amountCents: number } | null>;
+
+  /**
+   * Reads a refund back (VEN-430). A refund accepted as `pending` can move to
+   * `failed` or `canceled` later, and the `charge.refund.updated` handler
+   * re-reads it for the reason every webhook here does: the payload is signed,
+   * not trusted.
+   */
+  retrieveRefund(refundId: string): Promise<StripeRefundSnapshot>;
+}
+
+export interface StripeRefundSnapshot {
+  refundId: string;
+  /** `pending`, `succeeded`, `requires_action`, `failed`, `canceled`. */
+  status: string;
+  paymentIntentId: string | null;
+  amountCents: number;
 }
 
 export interface CreatePaymentIntentInput {
@@ -504,6 +520,9 @@ export interface PaymentIntentSnapshot {
 /** Stripe's terminal success state for an intent. */
 export const PAYMENT_INTENT_SUCCEEDED = 'succeeded';
 
+/** Stripe's terminal failure state: the intent can never be paid. */
+export const PAYMENT_INTENT_CANCELED = 'canceled';
+
 /**
  * A chargeback as this platform reads it (#431).
  *
@@ -537,6 +556,24 @@ export interface StripeDisputeSnapshot {
  * in the platform balance and the customer has none of it.
  */
 const USABLE_REFUND_STATUSES = new Set(['succeeded', 'pending', 'requires_action']);
+
+/** Whether a refund in this status is money on its way to the customer. */
+export function isUsableRefundStatus(status: string | null | undefined): boolean {
+  return USABLE_REFUND_STATUSES.has(status ?? '');
+}
+
+/**
+ * Refuses a refund Stripe answered with a status that returns nothing.
+ *
+ * Thrown rather than returned so every caller's existing failure path — the
+ * `refund_failed` alert and the untouched booking row — applies, and
+ * `refund_amount_cents` is never written for money that did not move (VEN-430).
+ */
+export function assertUsableRefund(refundId: string, status: string | null | undefined): void {
+  if (!isUsableRefundStatus(status)) {
+    throw new Error(`Stripe answered refund ${refundId} with status ${status ?? 'unknown'}`);
+  }
+}
 
 export interface CreateRecipientAccountInput {
   /** Stored on the Stripe account so a support question can be traced back. */
@@ -965,7 +1002,23 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
         input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
       );
 
+      assertUsableRefund(refund.id, refund.status);
+
       return { refundId: refund.id, amountCents: refund.amount };
+    },
+
+    async retrieveRefund(refundId) {
+      const refund = await stripe.refunds.retrieve(refundId);
+
+      return {
+        refundId: refund.id,
+        status: refund.status ?? 'unknown',
+        paymentIntentId:
+          typeof refund.payment_intent === 'string'
+            ? refund.payment_intent
+            : (refund.payment_intent?.id ?? null),
+        amountCents: refund.amount,
+      };
     },
 
     async findRefund(paymentIntentId) {
@@ -981,7 +1034,7 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
        * returned, so a bank rejection would have the product state a refund
        * that never landed.
        */
-      const refund = data.find((candidate) => USABLE_REFUND_STATUSES.has(candidate.status ?? ''));
+      const refund = data.find((candidate) => isUsableRefundStatus(candidate.status));
 
       return refund ? { refundId: refund.id, amountCents: refund.amount } : null;
     },

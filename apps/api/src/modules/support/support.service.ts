@@ -5,6 +5,7 @@ import {
   SUPPORT_REFERENCE_PREFIX,
   type SupportMessageInput,
   type SupportMessageReceipt,
+  type SupportSendFailureDetails,
 } from '@vendor-marketplace/shared';
 import type { BookingRow } from '@vendor-marketplace/db/schema';
 import type { FastifyBaseLogger } from 'fastify';
@@ -393,7 +394,7 @@ export async function sendSupportMessage(
        * so the copy for this state lives on the screen, where the design put
        * it.
        */
-      { reference } satisfies SupportMessageReceipt,
+      { reference } satisfies SupportSendFailureDetails,
     );
   }
 
@@ -411,7 +412,9 @@ export async function sendSupportMessage(
    * on the other, and sequencing them only lengthened the request.
    */
   await Promise.all([
-    audience === null ? Promise.resolve() : announceDisputeHold(deps.bookings, audience),
+    audience === null
+      ? Promise.resolve()
+      : announceDisputeHold(deps.bookings, audience, 'customer'),
     deps.email
       .send({
         to: replyTo,
@@ -425,5 +428,5 @@ export async function sendSupportMessage(
       }),
   ]);
 
-  return { reference };
+  return { reference, replyTo };
 }

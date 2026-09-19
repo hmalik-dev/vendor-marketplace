@@ -32,6 +32,7 @@ const PAID_DASHBOARD = {
   reviewCount: 127,
   earningsThisMonthCents: 894_000,
   isPublished: true,
+  moderationHold: false,
   publishBlockers: [],
   stripeOnboarded: true,
   bookingWindow: Array.from({ length: 9 }, (_, offset) => ({
@@ -259,6 +260,7 @@ const RELEASED_PAYMENT = {
   stripePaymentIntentId: 'pi_test_1',
   vendorName: 'Sunlit Studio',
   vendorSlug: 'sunlit-studio',
+  vendorId: '22222222-2222-4222-8222-222222222222',
   customerName: 'Anjali Rao',
   paidAt: '2026-05-01T00:00:00.000Z',
   payoutStatus: 'released' as const,
@@ -267,6 +269,7 @@ const RELEASED_PAYMENT = {
   payoutFailureReason: null,
   stripeTransferId: 'tr_test_1',
   payoutFailing: false,
+  payoutStranded: false,
 };
 
 describe('the admin payments row at the wire boundary', () => {

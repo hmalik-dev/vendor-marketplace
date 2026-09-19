@@ -2,6 +2,7 @@ import {
   adminCaseBookingSchema,
   adminCaseDetailSchema,
   adminCaseRowSchema,
+  formatPrice,
   paginatedSchema,
   SUPPORT_REFERENCE_PATTERN,
 } from '@vendor-marketplace/shared';
@@ -19,7 +20,7 @@ import {
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import { Writable } from 'node:stream';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createResendGateway } from '../../lib/email.js';
 import {
   bearer,
@@ -662,6 +663,207 @@ describe('the operations case queue (#431)', () => {
     expect((await readCases()).total).toBe(1);
   });
 
+  describe('ruling on a chargeback (VEN-429)', () => {
+    beforeEach(() => {
+      // The Stripe stub outlives a test; a refund left by an earlier one is not this test's.
+      harness.stripe.refunds.length = 0;
+    });
+
+    async function openChargeback(status: string, outcome?: string) {
+      const fixture = await seed();
+      const dispute = {
+        id: `dp_ruling_${status}`,
+        status,
+        reason: 'fraudulent',
+        amountCents: TOTAL_CENTS,
+        intentId: fixture.paymentIntentId,
+      };
+      expect((await deliverDispute('charge.dispute.created', dispute)).statusCode).toBe(200);
+
+      if (outcome) {
+        const closed = await deliverDispute('charge.dispute.closed', {
+          ...dispute,
+          status: outcome,
+        });
+        expect(closed.json().outcome).toBe('dispute-recorded');
+      }
+
+      return fixture;
+    }
+
+    function rule(bookingId: string, outcome: 'vendor' | 'customer') {
+      return harness.app.inject({
+        method: 'PUT',
+        url: `/admin/bookings/${bookingId}/dispute`,
+        headers: bearer(ADMIN),
+        payload: { outcome },
+      });
+    }
+
+    async function bookingStatus(bookingId: string) {
+      const [row] = await harness.database.db
+        .select({ status: bookings.status })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+
+      return row?.status;
+    }
+
+    it('refuses a refund while the dispute is still with the network, without calling Stripe', async () => {
+      const fixture = await openChargeback('needs_response');
+
+      const response = await rule(fixture.bookingId, 'customer');
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toContain('Stripe will not refund a disputed charge');
+      expect(harness.stripe.refunds).toHaveLength(0);
+      expect(await bookingStatus(fixture.bookingId)).toBe('disputed');
+    });
+
+    it('refuses both rulings once the network has taken the money back', async () => {
+      const fixture = await openChargeback('needs_response', 'lost');
+
+      const customer = await rule(fixture.bookingId, 'customer');
+      expect(customer.statusCode).toBe(409);
+      expect(customer.json().message).toContain('already taken this payment back');
+
+      const vendor = await rule(fixture.bookingId, 'vendor');
+      expect(vendor.statusCode).toBe(409);
+      expect(vendor.json().message).toContain('cannot be paid it out as well');
+
+      expect(harness.stripe.refunds).toHaveLength(0);
+      // Still on hold: the sweep has nothing to pay.
+      expect(await bookingStatus(fixture.bookingId)).toBe('disputed');
+    });
+
+    it('carries a loss the network reached before the case existed, so the vendor is not paid it', async () => {
+      // `created` failed and was retried after the `closed` (lost) had matched
+      // no case: the retry's read from Stripe already says `lost`.
+      const fixture = await openChargeback('lost');
+
+      const detail = await readCase((await readCases()).items[0]!.id);
+      expect(detail.networkOutcome).toBe('lost');
+
+      const vendor = await rule(fixture.bookingId, 'vendor');
+      expect(vendor.statusCode).toBe(409);
+      expect(await bookingStatus(fixture.bookingId)).toBe('disputed');
+    });
+
+    it('still lifts the hold for the vendor while the dispute is live', async () => {
+      const fixture = await openChargeback('needs_response');
+
+      const response = await rule(fixture.bookingId, 'vendor');
+
+      expect(response.statusCode).toBe(200);
+      expect(await bookingStatus(fixture.bookingId)).toBe('confirmed');
+    });
+
+    it('refunds once the network has found for the platform', async () => {
+      const fixture = await openChargeback('needs_response', 'won');
+
+      const response = await rule(fixture.bookingId, 'customer');
+
+      expect(response.statusCode).toBe(200);
+      expect(harness.stripe.refunds).toHaveLength(1);
+    });
+
+    it('tells the vendor and the customer a bank acted, not that a customer reported a problem', async () => {
+      const chargeback = await openChargeback('needs_response');
+      expect((await rule(chargeback.bookingId, 'vendor')).statusCode).toBe(200);
+
+      const rows = await harness.database.db
+        .select({ title: notifications.title, body: notifications.body })
+        .from(notifications);
+      const titles = rows.map((row) => row.title);
+
+      expect(titles).toContain('A chargeback was opened');
+      expect(titles).toContain('We have reviewed the chargeback');
+      expect(titles).not.toContain('A customer reported a problem');
+      expect(titles).not.toContain('We have reviewed your report');
+      expect(rows.find((row) => row.title === 'A chargeback was opened')?.body).toContain(
+        "customer's bank",
+      );
+    });
+
+    it("keeps the customer-report wording for a customer's own report", async () => {
+      const fixture = await seed();
+      expect((await report({ bookingId: fixture.bookingId })).statusCode).toBe(200);
+      expect((await rule(fixture.bookingId, 'vendor')).statusCode).toBe(200);
+
+      const titles = (
+        await harness.database.db.select({ title: notifications.title }).from(notifications)
+      ).map((row) => row.title);
+
+      expect(titles).toContain('A customer reported a problem');
+      expect(titles).toContain('We have reviewed your report');
+    });
+
+    it('does not record a false refusal, and notifies once, when a retry finds its own hold', async () => {
+      /*
+       * The first delivery placed the hold and died before its case was
+       * written — the audience lookup threw. The retry finds the booking already
+       * `disputed` with this dispute's own message as the reason.
+       */
+      const fixture = await seed();
+      const dispute = {
+        id: 'dp_own_hold',
+        status: 'needs_response',
+        reason: 'fraudulent',
+        amountCents: TOTAL_CENTS,
+        intentId: fixture.paymentIntentId,
+      };
+      await harness.database.db
+        .update(bookings)
+        .set({
+          status: 'disputed',
+          disputeReason:
+            `The card network opened a chargeback for ${formatPrice(TOTAL_CENTS)}. ` +
+            `Stripe gives the reason as "fraudulent" and the dispute id as dp_own_hold. ` +
+            'Nobody typed this message; it is the platform recording a network event.',
+        })
+        .where(eq(bookings.id, fixture.bookingId));
+
+      const delivered = await deliverDispute('charge.dispute.created', dispute);
+      expect(delivered.json().outcome).toBe('dispute-opened');
+
+      const detail = await readCase((await readCases()).items[0]!.id);
+      expect(detail.holdRefusal).toBeNull();
+
+      const notices = await harness.database.db
+        .select({ title: notifications.title })
+        .from(notifications)
+        .where(eq(notifications.title, 'A chargeback was opened'));
+      expect(notices).toHaveLength(1);
+
+      // And a further replay neither re-announces nor rewrites anything.
+      const replay = await deliverDispute('charge.dispute.created', dispute);
+      expect(replay.json().outcome).toBe('already-recorded');
+      expect(
+        await harness.database.db
+          .select({ title: notifications.title })
+          .from(notifications)
+          .where(eq(notifications.title, 'A chargeback was opened')),
+      ).toHaveLength(1);
+    });
+
+    it("still records that a customer's report placed the hold, as the operator's sentence", async () => {
+      const fixture = await seed();
+      expect((await report({ bookingId: fixture.bookingId })).statusCode).toBe(200);
+
+      const delivered = await deliverDispute('charge.dispute.created', {
+        id: 'dp_someone_elses_hold',
+        status: 'needs_response',
+        reason: 'fraudulent',
+        amountCents: TOTAL_CENTS,
+        intentId: fixture.paymentIntentId,
+      });
+      expect(delivered.json().outcome).toBe('dispute-opened');
+
+      const chargeback = (await readCases()).items.find((row) => row.origin === 'chargeback');
+      expect((await readCase(chargeback!.id)).holdRefusal).toContain('did not place it');
+    });
+  });
+
   it('ignores a dispute on a charge this platform did not make', async () => {
     await seed();
 
@@ -788,7 +990,8 @@ describe('the operations case queue (#431)', () => {
       .where(eq(notifications.type, 'booking_cancelled'));
 
     expect(bells).toHaveLength(1);
-    expect(bells[0]?.title).toBe('A customer reported a problem');
+    // The network filed this, not a customer (VEN-429).
+    expect(bells[0]?.title).toBe('A chargeback was opened');
     expect(bells[0]?.body).toContain('on hold');
   });
 

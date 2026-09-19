@@ -14,7 +14,9 @@ import {
   CURRENT_VENDOR_AGREEMENT_VERSION,
   DEFAULT_PLATFORM_FEE_RATE,
   ERROR_CODES,
+  paymentDeadline,
   toDateString,
+  formatPrice,
 } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -128,8 +130,28 @@ describe('payments', () => {
     });
     expect(request.statusCode).toBe(201);
 
-    const accepted = await inject('POST', `/booking-requests/${request.json().id}/accept`, VENDOR);
-    expect(accepted.statusCode).toBe(200);
+    if (acceptsAgreement) {
+      const accepted = await inject(
+        'POST',
+        `/booking-requests/${request.json().id}/accept`,
+        VENDOR,
+      );
+      expect(accepted.statusCode).toBe(200);
+    } else {
+      /*
+       * Accepting refuses a vendor without the agreement (VEN-428), so the only
+       * way to reach this state is a request accepted before the agreement was
+       * bumped. Written as the accept would have, straight to the row.
+       */
+      await harness.database.db
+        .update(bookingRequests)
+        .set({
+          status: 'accepted',
+          acceptedAt: new Date(),
+          expiresAt: paymentDeadline(new Date(), eventDate),
+        })
+        .where(eq(bookingRequests.id, request.json().id));
+    }
 
     return request.json().id;
   }
@@ -239,6 +261,54 @@ describe('payments', () => {
 
   afterAll(async () => {
     await harness.close();
+  });
+
+  describe('opening checkout on a date that has passed (VEN-433)', () => {
+    it('refuses with 409 and mints no PaymentIntent', async () => {
+      const requestId = await acceptedRequest();
+      clockNow = addDays(START, 33);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe(
+        'That date has passed, so this booking can no longer be paid for',
+      );
+      expect(harness.stripe.paymentIntents.size).toBe(0);
+    });
+
+    it('still opens on the day of the event, which has not passed everywhere', async () => {
+      const requestId = await acceptedRequest();
+      clockNow = new Date(`${EVENT_DATE}T12:00:00Z`);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(harness.stripe.paymentIntents.size).toBe(1);
+    });
+
+    it('keeps answering succeeded for a request that was paid before its date passed', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      clockNow = addDays(START, 33);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('succeeded');
+    });
   });
 
   describe('opening checkout', () => {
@@ -401,6 +471,92 @@ describe('payments', () => {
     });
 
     /* 404 rather than 403: a stranger probing ids learns nothing. */
+    /*
+     * Stripe forgets the creation key after 24 hours; the fake's key map is
+     * cleared to model that. The stored intent is what must come back.
+     */
+    it('hands back the stored intent instead of minting a second after the key expires', async () => {
+      const requestId = await acceptedRequest();
+      const first = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      harness.stripe.intentsByKey.clear();
+
+      const second = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(second.statusCode).toBe(200);
+      expect(second.json().paymentIntentId).toBe(first.json().paymentIntentId);
+      const [row] = await harness.database.db
+        .select({ intent: bookingRequests.stripePaymentIntentId })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+      expect(row?.intent).toBe(first.json().paymentIntentId);
+    });
+
+    it('mints a new intent when the stored one was cancelled', async () => {
+      const requestId = await acceptedRequest();
+      const first = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      harness.stripe.intentsByKey.clear();
+      harness.stripe.cancel(first.json().paymentIntentId);
+
+      const second = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(second.statusCode).toBe(200);
+      expect(second.json().paymentIntentId).not.toBe(first.json().paymentIntentId);
+    });
+
+    /*
+     * Both intents get paid: the second charge is the one nothing pointed at.
+     */
+    it('refunds and alerts on a second payment for an already-booked request', async () => {
+      const requestId = await acceptedRequest();
+      const firstIntentId = await payFor(requestId);
+      harness.stripe.intentsByKey.clear();
+      const stray = await harness.stripe.createPaymentIntent({
+        requestId,
+        amountCents: PRICE_CENTS,
+        customerId: 'cus_test',
+        vendorId: 'ven_test',
+      });
+      harness.stripe.succeed(stray.id);
+
+      const response = await redeliver(stray.id);
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().outcome).toBe('already-booked');
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(harness.stripe.refunds[0]).toMatchObject({
+        paymentIntentId: stray.id,
+        amountCents: PRICE_CENTS,
+      });
+      expect(harness.stripe.refunds[0]?.idempotencyKey).toMatch(
+        new RegExp(`^${stray.id}_duplicate_intent_\\d+$`),
+      );
+      const [mail] = harness.email.sent.filter(
+        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+      );
+      expect(mail?.subject).toContain('second payment');
+      expect(mail?.text).toContain(requestId);
+      const rows = await harness.database.db.select().from(bookings);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.stripePaymentIntentId).toBe(firstIntentId);
+    });
+
     it('will not let another customer open someone elses checkout', async () => {
       const requestId = await acceptedRequest();
 
@@ -956,6 +1112,66 @@ describe('payments', () => {
     });
 
     /*
+     * VEN-425. The page quotes on the browser's clock; a booking that crossed the
+     * cutoff between render and press must not refund a different amount than the
+     * one confirmed. Refused before any money moves, with the true figure named.
+     */
+    it('refuses a cancel confirmed against a stale refund quote', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      clockNow = addDays(START, 28);
+
+      const stale = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {
+        expectedRefundCents: PRICE_CENTS,
+      });
+
+      expect(stale.statusCode).toBe(409);
+      expect(stale.json().message).toContain(formatPrice(PRICE_CENTS / 2));
+      expect(harness.stripe.refunds).toEqual([]);
+
+      const confirmed = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {
+        expectedRefundCents: PRICE_CENTS / 2,
+      });
+
+      expect(confirmed.statusCode).toBe(200);
+      expect(confirmed.json().refundCents).toBe(PRICE_CENTS / 2);
+    });
+
+    /*
+     * VEN-425. The vendor completes across the event-date boundary while the
+     * refund is in flight: the refund stands, so the row must end cancelled and
+     * not `completed` with a full payout owed.
+     */
+    it('leaves a cancel that raced a completion cancelled, not completed and refunded', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      clockNow = addDays(START, 28);
+      harness.stripe.duringNextRefund = async () => {
+        await harness.database.db
+          .update(bookings)
+          .set({ status: 'completed', completedAt: clockNow })
+          .where(eq(bookings.id, booking!.id));
+      };
+
+      const response = await inject(
+        'PUT',
+        `/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
+
+      expect(response.statusCode).toBe(200);
+      const [after] = await harness.database.db.select().from(bookings);
+      expect(after).toMatchObject({
+        status: 'cancelled',
+        refundAmountCents: PRICE_CENTS / 2,
+      });
+      expect(harness.stripe.refunds).toHaveLength(1);
+    });
+
+    /*
      * #415. The screens on both sides have to say who ended the booking and
      * what came back, and neither survived on the row: `cancellation_reason`
      * is the customer's free text here and an operator's sentence on the ban
@@ -1010,8 +1226,8 @@ describe('payments', () => {
     });
 
     it('refunds half inside the cutoff', async () => {
-      // A day out: inside 48 hours, and still in the future.
-      const requestId = await acceptedRequest(toDateString(addDays(START, 1)));
+      // Two days out: inside 48 hours of the event's midnight, and future in every zone.
+      const requestId = await acceptedRequest(toDateString(addDays(START, 2)));
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
 
@@ -1180,6 +1396,51 @@ describe('payments', () => {
         'That event already happened, so it cannot be cancelled',
       );
       expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    /*
+     * The case the test above never reached: it completes the booking first, so
+     * its 409 is the status message. A `confirmed` booking whose event has
+     * passed is what the vendor's optional `complete` leaves behind, and it used
+     * to refund half of a delivered event.
+     */
+    it('refuses to cancel a confirmed booking whose event has passed, refunding nothing', async () => {
+      const booking = await pastBooking();
+
+      const response = await inject('PUT', `/customer/bookings/${booking.id}/cancel`, CUSTOMER, {});
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toContain('too close to cancel');
+      expect(harness.stripe.refunds).toEqual([]);
+      expect(harness.stripe.reversals).toEqual([]);
+      const [row] = await harness.database.db.select().from(bookings);
+      expect(row?.status).toBe('confirmed');
+      const [held] = await harness.database.db.select().from(availability);
+      expect(held?.status).toBe('booked');
+    });
+
+    it('refuses to cancel a booking that has already been paid out, reversing nothing', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      await harness.database.db
+        .update(bookings)
+        .set({ payoutReleasedAt: new Date(), stripeTransferId: 'tr_test_released' })
+        .where(eq(bookings.id, booking!.id));
+
+      const response = await inject(
+        'PUT',
+        `/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toContain('already been paid out');
+      expect(harness.stripe.refunds).toEqual([]);
+      expect(harness.stripe.reversals).toEqual([]);
+      const [held] = await harness.database.db.select().from(availability);
+      expect(held?.status).toBe('booked');
     });
 
     it('refuses a second cancellation, and refunds nothing twice', async () => {

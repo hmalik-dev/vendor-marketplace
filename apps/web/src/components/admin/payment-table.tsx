@@ -13,6 +13,7 @@ import { StatusPill } from '@/components/ui/status-pill';
 import {
   BOOKING_PRESENTATION,
   PAYOUT_FAILING_LABEL,
+  PAYOUT_STRANDED_LABEL,
   PAYOUT_PRESENTATION,
 } from '@/lib/booking-entries';
 import { useApi } from '@/lib/use-api';
@@ -39,7 +40,7 @@ const PAID_AT = new Intl.DateTimeFormat('en-US', {
  * teaches an operator to distrust the whole column.
  */
 export function canRetryPayout(row: WireAdminPaymentRow): boolean {
-  return row.payoutFailing && row.status !== 'cancelled';
+  return row.payoutFailing && !row.payoutStranded && row.status !== 'cancelled';
 }
 
 /**
@@ -175,7 +176,7 @@ export function PaymentTable({
             header: 'Vendor',
             className: 'font-semibold text-stone-900',
             cell: (row) => (
-              <Link href={`/vendors/${row.vendorSlug}`} className="hover:underline">
+              <Link href={`/admin/vendors/${row.vendorId}`} className="hover:underline">
                 {row.vendorName}
               </Link>
             ),
@@ -245,7 +246,9 @@ export function PaymentTable({
               where the pill beside it is red.
             */
             cell: (row) =>
-              row.payoutFailing ? (
+              row.payoutStranded ? (
+                <StatusPill tone="failed">{PAYOUT_STRANDED_LABEL}</StatusPill>
+              ) : row.payoutFailing ? (
                 <span className="flex flex-col items-start gap-1">
                   <span className="flex items-center gap-2">
                     <StatusPill tone="failed">{PAYOUT_FAILING_LABEL}</StatusPill>

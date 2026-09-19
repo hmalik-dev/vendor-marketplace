@@ -137,6 +137,15 @@ export async function assertBookingRequestsOpen(
   }
 }
 
+/** Refuses a price over the beta cap, and nothing else — for a step that is not itself a payment. */
+export async function assertUnderBetaCap(db: AppDatabase, priceCents: number): Promise<void> {
+  const switches = await readPlatformSwitches(db);
+
+  if (exceedsCap(switches, priceCents)) {
+    throw overBetaCap(switches.maxBookingCents, priceCents);
+  }
+}
+
 /**
  * Refuses to open a payment while checkout is paused, or for a price over the
  * beta cap — including a request created before the cap was lowered, since its

@@ -6,6 +6,7 @@ import {
   calculateRefund,
   centsToDollars,
   dollarsToCents,
+  expiryCountdown,
   formatDurationHours,
   formatPrice,
   generateSlug,
@@ -22,6 +23,7 @@ import {
   payoutDueThroughDate,
   payoutReleaseAt,
   isPayoutFailing,
+  isPayoutStranded,
   payoutStatusOf,
   unwindFloorDate,
   replyDeadline,
@@ -47,10 +49,15 @@ describe('requestStatusAsRead', () => {
     expect(requestStatusAsRead({ status: 'pending', expiresAt: NOW }, NOW)).toBe('expired');
   });
 
+  it('reads an accepted request past its payment deadline as expired', () => {
+    expect(requestStatusAsRead({ status: 'accepted', expiresAt: BEFORE }, NOW)).toBe('expired');
+    expect(requestStatusAsRead({ status: 'accepted', expiresAt: null }, NOW)).toBe('accepted');
+  });
+
   it('leaves an open window, a missing deadline and every settled status alone', () => {
     expect(requestStatusAsRead({ status: 'quoted', expiresAt: AFTER }, NOW)).toBe('quoted');
     expect(requestStatusAsRead({ status: 'pending', expiresAt: null }, NOW)).toBe('pending');
-    for (const status of ['accepted', 'declined', 'cancelled', 'expired'] as const) {
+    for (const status of ['declined', 'cancelled', 'expired'] as const) {
       expect(requestStatusAsRead({ status, expiresAt: BEFORE }, NOW)).toBe(status);
     }
   });
@@ -623,6 +630,28 @@ describe('payoutStatusOf', () => {
   });
 });
 
+describe('isPayoutStranded', () => {
+  const STRANDED = {
+    status: 'completed',
+    payoutReleasedAt: null,
+    payoutModel: 'separate',
+    vendorPayoutCents: 127_600,
+    vendorUnpayable: true,
+  } as const;
+
+  it('is true for an owed payout whose vendor is banned or closed', () => {
+    expect(isPayoutStranded(STRANDED)).toBe(true);
+    expect(isPayoutStranded({ ...STRANDED, vendorUnpayable: false })).toBe(false);
+  });
+
+  it('is false once released, held, refunded to zero, or a destination charge', () => {
+    expect(isPayoutStranded({ ...STRANDED, payoutReleasedAt: new Date('2026-06-18') })).toBe(false);
+    expect(isPayoutStranded({ ...STRANDED, status: 'disputed' })).toBe(false);
+    expect(isPayoutStranded({ ...STRANDED, vendorPayoutCents: 0 })).toBe(false);
+    expect(isPayoutStranded({ ...STRANDED, payoutModel: 'destination' })).toBe(false);
+  });
+});
+
 describe('isPayoutFailing', () => {
   /** A transfer the sweep owes and has tried once — the state under test. */
   const FAILING = {
@@ -749,5 +778,38 @@ describe('unwindFloorDate', () => {
   it('is today from noon UTC, so an event already delivered today is not refunded', () => {
     expect(unwindFloorDate(new Date('2026-10-08T12:00:00Z'))).toBe('2026-10-08');
     expect(unwindFloorDate(new Date('2026-10-08T22:00:00Z'))).toBe('2026-10-08');
+  });
+});
+
+describe('expiryCountdown', () => {
+  /** Built from local parts so the assertions hold under every `TZ`. */
+  function local(day: number, hour: number): Date {
+    return new Date(2026, 8, day, hour, 0);
+  }
+
+  it('says nothing when there is no deadline', () => {
+    expect(expiryCountdown(null, local(10, 9))).toBeNull();
+  });
+
+  it('says expired at and after the deadline', () => {
+    expect(expiryCountdown(local(10, 9), local(10, 9))).toBe('expired');
+    expect(expiryCountdown(local(10, 8), local(10, 9))).toBe('expired');
+  });
+
+  it('says today for a deadline later on the same calendar day', () => {
+    expect(expiryCountdown(local(10, 23), local(10, 9))).toBe('expires today');
+  });
+
+  /*
+   * 20 hours away is under one 24-hour block, but past the reader's midnight —
+   * so it is tomorrow's deadline, not today's.
+   */
+  it('counts a deadline 20 hours away across midnight as a day away', () => {
+    expect(expiryCountdown(local(11, 18), local(10, 22))).toBe('expires in 1d');
+  });
+
+  it('counts calendar days rather than elapsed 24-hour blocks', () => {
+    expect(expiryCountdown(local(12, 1), local(10, 23))).toBe('expires in 2d');
+    expect(expiryCountdown(local(17, 9), local(10, 9))).toBe('expires in 7d');
   });
 });

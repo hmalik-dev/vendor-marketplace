@@ -4,7 +4,11 @@ import {
   categories,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { addDays, toDateString } from '@vendor-marketplace/shared';
+import {
+  addDays,
+  CURRENT_VENDOR_AGREEMENT_VERSION,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -118,6 +122,12 @@ describe('two accepts on one vendor date, on two real connections', () => {
       .update(vendorProfiles)
       .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
       .where(eq(vendorProfiles.id, vendorId));
+
+    // An accept needs the agreement in force (VEN-428), as checkout does.
+    const agreed = await post(VENDOR, '/vendor/agreement/accept', {
+      version: CURRENT_VENDOR_AGREEMENT_VERSION,
+    });
+    expect(agreed.statusCode).toBe(200);
 
     const detail = {
       vendorId,

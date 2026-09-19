@@ -259,6 +259,28 @@ describe('/vendor/profile', () => {
       expect(second.statusCode).toBe(409);
       expect(second.json().error).toBe('CONFLICT');
     });
+
+    /*
+     * Both requests pass the "no profile yet" read before either inserts, so the
+     * loser is stopped by the unique index and not by the service's own check.
+     */
+    it('answers 409, not 500, to two concurrent creates for the same vendor', async () => {
+      const responses = await Promise.all(
+        ['First Studio', 'Second Studio'].map((businessName) =>
+          harness.app.inject({
+            method: 'POST',
+            url: '/vendor/profile',
+            headers: bearer(VENDOR),
+            payload: validBody({ businessName }),
+          }),
+        ),
+      );
+
+      expect(responses.map((response) => response.statusCode).sort()).toEqual([201, 409]);
+      const loser = responses.find((response) => response.statusCode === 409);
+      expect(loser?.json().error).toBe('CONFLICT');
+      expect(loser?.json().message).toBe('You already have a vendor profile');
+    });
   });
 
   describe('GET', () => {
@@ -538,6 +560,25 @@ describe('/vendor/profile', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json().address).toBeNull();
+    });
+
+    it('clears years in business and the response window when sent as null', async () => {
+      await createProfile({ yearsInBusiness: 7, responseTimeHours: 24 });
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { yearsInBusiness: null, responseTimeHours: null },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().yearsInBusiness).toBeNull();
+      expect(response.json().responseTimeHours).toBeNull();
+
+      const rows = await harness.database.db.select().from(vendorProfiles);
+      expect(rows[0]?.yearsInBusiness).toBeNull();
+      expect(rows[0]?.responseTimeHours).toBeNull();
     });
 
     it('refuses to publish once the bio has been cleared', async () => {

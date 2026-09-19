@@ -106,8 +106,12 @@ really closes is the reap-blocking one.
 
 **How to apply:** treat any new code that _acts on_ one of these columns —
 delete, copy, sign, fetch, move, or **normalise** — as taking an attacker-chosen
-key. `syncCoverFromPortfolio` copies a key between two of the same owner's rows,
-so a "still referenced?" test is needed alongside the ownership test. The
+key. VEN-442 deleted `syncCoverFromPortfolio`: the cover is its own upload now
+and no code copies a key between rows, but the vendor may still _name_ a tile's
+key in `coverImageUrl`, so one object with two rows survives and
+`findUnreferencedKeys` (which queries `cover_image_url`) remains the only thing
+stopping a portfolio delete from reaping a live cover. A "still referenced?"
+test is needed alongside the ownership test. The
 cross-route guard is `apps/api/src/request-body-image-ref.test.ts`: it discovers
 body schemas from the route files but proves the call only by **scanning the
 service source**, so it cannot see a call passing the wrong refs or the wrong

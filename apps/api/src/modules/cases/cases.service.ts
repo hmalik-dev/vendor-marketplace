@@ -16,7 +16,7 @@ import {
   type ReportSubject,
   type SupportTopic,
 } from '@vendor-marketplace/shared';
-import type { SupportCaseRow } from '@vendor-marketplace/db/schema';
+import type { BookingRow, SupportCaseRow } from '@vendor-marketplace/db/schema';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
 import type { StripeDisputeSnapshot } from '../../lib/stripe.js';
@@ -24,6 +24,11 @@ import { AppError, conflict, forbidden, notFound } from '../../lib/errors.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
 import { fullName } from '../admin/admin.service.js';
 import {
+  unmatchedDisputeAlert,
+  type OperatorAlerts,
+} from '../operator-alerts/operator-alerts.service.js';
+import {
+  AlreadyHeldError,
   announceDisputeHold,
   disputeHoldAudience,
   placeDisputeHold,
@@ -273,6 +278,8 @@ export type ChargebackOutcome =
 export interface ChargebackDeps extends CaseDeps {
   /** The payments module's context, so the hold is placed by its own primitive. */
   bookings: BookingContext;
+  /** Told of a dispute that matches no booking; absent in a suite that does not care. */
+  alerts?: OperatorAlerts;
 }
 
 /**
@@ -292,6 +299,12 @@ function chargebackMessage(dispute: StripeDisputeSnapshot): string {
     `Stripe gives the reason as "${dispute.reason}" and the dispute id as ${dispute.id}. ` +
     'Nobody typed this message; it is the platform recording a network event.'
   );
+}
+
+/** What a chargeback's hold attempt came to: who was frozen, or why not. */
+interface HoldResult {
+  held: Pick<BookingRow, 'id' | 'vendorId'> | null;
+  holdRefusal: string | null;
 }
 
 /**
@@ -375,9 +388,18 @@ export async function openChargebackCase(
    * payment, another product on the same Stripe account. Acknowledged rather
    * than refused, for the reason the intent handler beside it gives: a 4xx
    * makes Stripe retry for three days and count the endpoint as failing, for
-   * an event that could never be applied.
+   * an event that could never be applied. But Stripe has still debited the
+   * platform and the evidence deadline still runs, so the operator is told
+   * (VEN-430): with no case and no email it would pass by default.
    */
   if (!target) {
+    deps.alerts?.dispatch(
+      unmatchedDisputeAlert({
+        disputeId,
+        paymentIntentId: dispute.paymentIntentId,
+        amountCents: dispute.amountCents,
+      }),
+    );
     return 'ignored';
   }
 
@@ -431,8 +453,8 @@ export async function openChargebackCase(
      */
     'network',
   ).then(
-    (held) => ({ held, holdRefusal: null as string | null }),
-    (error: unknown) => {
+    (held): HoldResult => ({ held, holdRefusal: null }),
+    async (error: unknown): Promise<HoldResult> => {
       /*
        * **Only the 409s, and not the retryable one.**
        *
@@ -470,6 +492,22 @@ export async function openChargebackCase(
        * `StaleBookingError` exists: the copy will be edited and this would not
        * follow it.
        */
+      /*
+       * **Whose hold is it?** `AlreadyHeldError` from a concurrent delivery of
+       * this very dispute, or from an earlier delivery that placed the hold and
+       * then failed before its case was written, means *this* case did place
+       * it — the hold's reason is this dispute's message, and a customer's
+       * report cannot carry it. `target` was read before either, so it is read
+       * again: it may still say `confirmed`.
+       */
+      if (error instanceof AlreadyHeldError) {
+        const current = (await findBookingForDispute(deps.db, dispute.paymentIntentId!)) ?? target;
+
+        return current.disputeReason === message
+          ? { held: { id: current.bookingId, vendorId: current.vendorId }, holdRefusal: null }
+          : { held: null, holdRefusal: describeHoldRefusal(current) };
+      }
+
       return { held: null, holdRefusal: describeHoldRefusal(target) };
     },
   );
@@ -489,10 +527,15 @@ export async function openChargebackCase(
    * happen is the mistake in the other direction — and best-effort inside
    * `announceDisputeHold` itself, because a bell that did not ring must not undo
    * money that did move.
+   *
+   * **The lookup is before the case is written and the bell after.** A lookup
+   * that throws 5xxs the webhook and the redelivery finds the hold already
+   * placed by this dispute (above), so it still gets here — whereas a bell rung
+   * before the write rings once per delivery that reaches it, and two concurrent
+   * deliveries both do. Ringing only for the delivery whose insert wins is
+   * exactly once.
    */
-  if (held) {
-    await announceDisputeHold(deps.bookings, await disputeHoldAudience(deps.bookings, held));
-  }
+  const audience = held ? await disputeHoldAudience(deps.bookings, held) : null;
 
   const written = await insertSupportCase(deps.db, {
     reference,
@@ -503,7 +546,18 @@ export async function openChargebackCase(
     bookingId: target.bookingId,
     stripeDisputeId: dispute.id,
     holdRefusal,
+    /*
+     * A `lost` that closed while this delivery was failing and being retried
+     * matched no case and was dropped; `retrieve` is the only place left that
+     * still knows it. Only `lost`: every other open status means the dispute is
+     * still with the network, which is what `null` says.
+     */
+    networkOutcome: dispute.status === 'lost' ? 'lost' : null,
   });
+
+  if (written && audience) {
+    await announceDisputeHold(deps.bookings, audience, 'network');
+  }
 
   return written ? 'dispute-opened' : 'already-recorded';
 }

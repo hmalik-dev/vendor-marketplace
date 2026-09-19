@@ -193,15 +193,16 @@ function toPayload(form: FormState): Record<string, unknown> {
     slug: form.slug.trim() === '' ? undefined : form.slug.trim(),
     bio: form.bio.trim(),
     tagline: form.tagline.trim(),
-    // Left blank means "not answered" and is sent as absent; `0` is a real
-    // answer and must survive, which `Number('') === 0` would quietly destroy.
-    yearsInBusiness: form.yearsInBusiness.trim() === '' ? undefined : Number(form.yearsInBusiness),
+    // Left blank means "not answered" and is sent as `null` so a stored value is
+    // cleared (an absent key leaves it alone); `0` is a real answer and must
+    // survive, which `Number('') === 0` would quietly destroy.
+    yearsInBusiness: form.yearsInBusiness.trim() === '' ? null : Number(form.yearsInBusiness),
     address: form.address.trim(),
     city: form.city.trim(),
     state: form.state.trim(),
     serviceRadiusKm: milesToKm(form.serviceRadiusMiles),
     responseTimeHours:
-      form.responseTimeHours === NO_RESPONSE_TIME ? undefined : Number(form.responseTimeHours),
+      form.responseTimeHours === NO_RESPONSE_TIME ? null : Number(form.responseTimeHours),
     profileImageUrl: form.profileImageUrl ?? undefined,
     coverImageUrl: form.coverImageUrl ?? undefined,
     categoryIds: form.categoryIds,
@@ -335,6 +336,16 @@ export function VendorProfileForm({
   const request = useApi();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => initialState(profile));
+  // A tag the vendor holds but an operator has since deactivated is not in the
+  // active list; without it the picker draws no pill and no Remove control, and
+  // the vendor cannot see what they are saving.
+  const pickerTags = useMemo(
+    () => [
+      ...allTags,
+      ...(profile?.tags ?? []).filter((held) => !allTags.some((known) => known.id === held.id)),
+    ],
+    [allTags, profile],
+  );
   const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(initialState(profile)));
   const [isSaving, setIsSaving] = useState(false);
   /*
@@ -1089,7 +1100,7 @@ export function VendorProfileForm({
                 {...describedByProps(validation.issueFor('tags'))}
               >
                 <TagPicker
-                  allTags={allTags}
+                  allTags={pickerTags}
                   selectedTagIds={form.tagIds}
                   onTagsChange={(ids) => update('tagIds', ids)}
                   disabled={isSaving}
@@ -1217,7 +1228,8 @@ export function VendorProfileForm({
                         ? ''
                         : `Saved ${savedAgo} ago`}
               </span>
-              {profile !== null ? (
+              {/* An unpublished profile is a 404 at its public address. */}
+              {profile !== null && isPublished ? (
                 <Button type="button" variant="secondary" asChild>
                   <a href={`/vendors/${profile.slug}`}>Preview</a>
                 </Button>

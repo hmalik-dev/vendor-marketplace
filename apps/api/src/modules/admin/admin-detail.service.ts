@@ -3,6 +3,7 @@ import {
   ADMIN_CUSTOMER_DETAIL_LIST_LIMIT,
   ADMIN_DETAIL_NOTIFICATION_LIMIT,
   isPayoutFailing,
+  isPayoutStranded,
   LIVE_BOOKING_REQUEST_STATUSES,
   pageWindow,
   payoutStatusOf,
@@ -80,11 +81,10 @@ function groupByDate<T extends { eventDate: string }>(rows: readonly T[]): Map<s
 /**
  * What holds each date, composed the way the vendor's calendar composes it.
  *
- * **Any** stored row wins its date, exactly as `readCalendar` overlays —
- * including an `available` one a cancelled booking leaves, which is not a lock
- * and is not listed, but which the vendor's calendar shows free whatever
- * request sits on it. A live request makes a date `pending` only where nothing
- * is stored.
+ * A stored `blocked`, `booked` or `pending` row wins its date, exactly as
+ * `readCalendar` overlays. An `available` one — what a cancelled booking leaves
+ * — is not a lock and is not listed, and a live request on its date still reads
+ * `pending`, as on the vendor's calendar.
  *
  * A held date lists what stands on it — bookings for `booked`, live requests
  * for a stored `pending` (`lockHeldDate` writes one) — and **an empty list is
@@ -98,7 +98,9 @@ export function composeLocks(
 ): AdminAvailabilityLock[] {
   const requestsByDate = groupByDate(requests);
   const bookingsByDate = groupByDate(heldBookings);
-  const storedDates = new Set(stored.map((row) => row.date));
+  const storedDates = new Set(
+    stored.filter((row) => row.status !== 'available').map((row) => row.date),
+  );
 
   const bookingHolders = (date: string): AdminLockHolder[] =>
     (bookingsByDate.get(date) ?? []).map((booking) => ({
@@ -228,6 +230,7 @@ export async function readBookingDetail(
     vendorName,
     vendorPayoutHold,
     vendorUserId,
+    vendorUnpayable,
     customerId,
     customerFirstName,
     customerLastName,
@@ -247,7 +250,8 @@ export async function readBookingDetail(
   return {
     ...booking,
     payoutStatus: payoutStatusOf(booking),
-    payoutFailing: isPayoutFailing(booking),
+    payoutFailing: isPayoutFailing(booking) && !vendorUnpayable,
+    payoutStranded: isPayoutStranded({ ...booking, vendorUnpayable }),
     vendor: { id: vendorId, businessName: vendorName, payoutHold: vendorPayoutHold },
     customer: {
       id: customerId,

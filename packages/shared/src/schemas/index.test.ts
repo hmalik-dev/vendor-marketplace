@@ -80,8 +80,18 @@ describe('userSchema', () => {
     expect(userSchema.safeParse({ ...valid, role: 'superadmin' }).success).toBe(false);
   });
 
-  it('rejects a malformed email', () => {
-    expect(userSchema.safeParse({ ...valid, email: 'not-an-email' }).success).toBe(false);
+  // A response says what is stored: the identity provider decides what an
+  // address is, and one `z.email()` refuses must not turn a read into a 500.
+  it('serialises an address the strict email check refuses', () => {
+    expect(userSchema.parse({ ...valid, email: 'first&last@example.com' }).email).toBe(
+      'first&last@example.com',
+    );
+  });
+
+  it('still bounds the stored address', () => {
+    expect(userSchema.safeParse({ ...valid, email: `${'a'.repeat(256)}@x.com` }).success).toBe(
+      false,
+    );
   });
 
   it('accepts a filled-in customer profile', () => {

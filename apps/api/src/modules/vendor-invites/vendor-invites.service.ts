@@ -5,6 +5,7 @@ import {
   type AdminVendorApplicationList,
   type AdminVendorApplicationRow,
   type AdminVendorInviteList,
+  type AdminVendorInviteQuery,
   type AdminVendorInviteRow,
   type UserRole,
   type VendorApplicationDecision,
@@ -25,6 +26,8 @@ import {
 } from '../platform-settings/platform-settings.service.js';
 import {
   deleteUnusedInvite,
+  countAdminApplications,
+  countAdminInvites,
   findAdminApplications,
   findAdminInvites,
   findInviteByEmail,
@@ -116,12 +119,34 @@ export async function submitVendorApplication(
   return { received: true };
 }
 
-export async function listVendorApplications(db: AppDatabase): Promise<AdminVendorApplicationList> {
-  return { items: await findAdminApplications(db) };
+export async function listVendorApplications(
+  db: AppDatabase,
+  query: AdminVendorInviteQuery,
+): Promise<AdminVendorApplicationList> {
+  const [items, counts] = await Promise.all([
+    findAdminApplications(db, query.pageSize, (query.page - 1) * query.pageSize),
+    countAdminApplications(db),
+  ]);
+
+  return {
+    items,
+    total: counts.total,
+    waiting: counts.waiting,
+    page: query.page,
+    pageSize: query.pageSize,
+  };
 }
 
-export async function listVendorInvites(db: AppDatabase): Promise<AdminVendorInviteList> {
-  return { items: await findAdminInvites(db) };
+export async function listVendorInvites(
+  db: AppDatabase,
+  query: AdminVendorInviteQuery,
+): Promise<AdminVendorInviteList> {
+  const [items, total] = await Promise.all([
+    findAdminInvites(db, query.pageSize, (query.page - 1) * query.pageSize),
+    countAdminInvites(db),
+  ]);
+
+  return { items, total, page: query.page, pageSize: query.pageSize };
 }
 
 export function renderVendorInviteEmail(webOrigin: string): {
@@ -173,12 +198,13 @@ async function inviteAddress(
   }
 
   await setApplicationStatus(tx, { email }, 'invited');
+  // An empty `detail`: the invite id resolves to the address, and the log is immutable.
   await insertAdminAction(tx, {
     actorId,
     action: 'vendor_invited',
     subjectType: 'vendor_invite',
     subjectId: invite.id,
-    detail: { email: invite.email },
+    detail: {},
   });
 
   return {
@@ -234,7 +260,7 @@ export async function revokeVendorInvite(
       action: 'vendor_invite_revoked',
       subjectType: 'vendor_invite',
       subjectId: inviteId,
-      detail: { email: invite.email },
+      detail: {},
     });
   });
 }
@@ -277,7 +303,7 @@ export async function decideVendorApplication(
         action: 'vendor_application_declined',
         subjectType: 'vendor_application',
         subjectId: row.id,
-        detail: { email: row.email, before: row.status },
+        detail: { before: row.status },
       });
 
       return { application: { ...row, status: 'declined' as const }, invite: null };

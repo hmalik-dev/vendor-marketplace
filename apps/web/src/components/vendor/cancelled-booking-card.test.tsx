@@ -58,6 +58,7 @@ function cancelled(
       status: 'cancelled',
       totalAmountCents: 120_000,
       paidAt: new Date('2026-12-01T00:00:00Z'),
+      paidOutAt: new Date('2026-12-05T00:00:00Z'),
       cancelledAt: new Date('2027-01-04T12:00:00Z'),
       cancelledBy: 'customer',
       refundAmountCents: 120_000,

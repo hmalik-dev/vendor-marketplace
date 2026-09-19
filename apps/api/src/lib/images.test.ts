@@ -106,6 +106,29 @@ describe('processUploadedImage', () => {
     });
   });
 
+  it.each([
+    ['PNG', 'image/png'],
+    ['JPEG', 'image/jpeg'],
+  ] as const)('refuses a truncated %s without echoing the decoder', async (format, mimeType) => {
+    const whole = await sharp({
+      create: { width: 1400, height: 1400, channels: 3, background: '#d94f70' },
+    })
+      [format === 'PNG' ? 'png' : 'jpeg']()
+      .toBuffer();
+    const error: unknown = await processUploadedImage(
+      whole.subarray(0, Math.floor(whole.length / 2)),
+      mimeType,
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({
+      statusCode: 400,
+      message: 'That file could not be read as an image.',
+    });
+    expect(JSON.stringify(error, Object.getOwnPropertyNames(error))).not.toMatch(
+      /vips|jpeg.*(load|premature)|png.*load/i,
+    );
+  });
+
   it('rejects bytes that are not a decodable image', async () => {
     await expect(
       processUploadedImage(Buffer.from('this is not an image'), 'image/png'),
@@ -145,5 +168,37 @@ describe('processUploadedImage', () => {
 
     expect(processed.image.length).toBeGreaterThan(0);
     expect(processed.thumbnail.length).toBeGreaterThan(0);
+  });
+
+  describe('EXIF orientation and the width floor', () => {
+    /** Stored landscape, flagged to display as portrait (orientation 6). */
+    async function oriented(width: number, height: number, orientation: number): Promise<Buffer> {
+      return sharp({
+        create: { width, height, channels: 3, background: { r: 9, g: 9, b: 9 } },
+      })
+        .withMetadata({ orientation })
+        .jpeg()
+        .toBuffer();
+    }
+
+    it('refuses a stored-wide photo that displays narrower than the floor', async () => {
+      const buffer = await oriented(MIN_UPLOAD_IMAGE_WIDTH + 400, MIN_UPLOAD_IMAGE_WIDTH - 200, 6);
+
+      await expect(processUploadedImage(buffer, 'image/jpeg')).rejects.toMatchObject({
+        statusCode: 400,
+      });
+    });
+
+    it('accepts a stored-narrow photo that displays wide enough', async () => {
+      const buffer = await oriented(MIN_UPLOAD_IMAGE_WIDTH - 200, MIN_UPLOAD_IMAGE_WIDTH + 400, 6);
+
+      const processed = await processUploadedImage(buffer, 'image/jpeg');
+
+      const meta = await sharp(processed.image).metadata();
+
+      // Rotated upright: the long stored side is now the width.
+      expect(meta.width).toBe(MIN_UPLOAD_IMAGE_WIDTH + 400);
+      expect(meta.height).toBe(MIN_UPLOAD_IMAGE_WIDTH - 200);
+    });
   });
 });

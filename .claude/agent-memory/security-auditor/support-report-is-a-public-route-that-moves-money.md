@@ -26,6 +26,13 @@ email and compensated by `unwindReportHold` if the send throws. Only
 `placeReportHold` (today: `disputeHoldAudience`, `support.service.ts:167`) can
 throw and leave a payout frozen with no support email and no unwind.
 
+**The receipt now carries `replyTo` (VEN-435)** — the address the server chose,
+which is `resolveReplyTo`'s output: the account's own email for a signed-in
+caller (a supplied one is ignored), the typed one otherwise. Audited as not an
+enumeration surface: reaching the account branch needs a valid session for that
+account. `supportSendFailureDetailsSchema` was narrowed to `pick({reference})`
+so the 502 path keeps carrying no address.
+
 **Not a disclosure surface.** `dispute_reason` holds the customer's 4,000-char
 free text and is read back by nothing — it is in no response projection, and the
 two emails route every interpolation through `escapeHtml`. The vendor's hold

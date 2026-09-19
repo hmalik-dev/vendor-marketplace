@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ErrorScreen } from './error-screen';
 import CheckoutError from '@/app/bookings/[requestId]/checkout/error';
+import ConfirmedError from '@/app/bookings/[requestId]/confirmed/error';
 
 /** `apps/web/src`, from this file's own location. */
 const WEB_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -343,5 +344,24 @@ describe('ErrorScreen — chrome={false}, under a shell that has its own header'
     expect(container.querySelector('[data-error-screen]')).not.toBeNull();
     expect(container.querySelector('[data-slot="error-header"]')).toBeNull();
     expect(screen.getAllByRole('link', { name: 'Contact support' })).toHaveLength(1);
+  });
+
+  /*
+   * After the card has cleared the boundary cannot tell a failed read from a
+   * failed charge, so it must not claim that no money moved.
+   */
+  it('is what the confirmed boundary renders, and claims nothing about money', () => {
+    const error = Object.assign(new Error('boom'), { digest: 'err_9F3K2QX7' });
+    render(<ConfirmedError error={error} reset={vi.fn()} />);
+
+    const banner = screen.getByRole('status');
+
+    expect(banner.textContent).toBe(
+      "We're confirming your payment. Check My bookings before paying again.",
+    );
+    expect(banner.textContent).not.toContain('No payment was taken');
+    expect(within(banner).getByRole('link', { name: 'My bookings' }).getAttribute('href')).toBe(
+      '/bookings',
+    );
   });
 });

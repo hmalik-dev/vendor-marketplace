@@ -2,6 +2,8 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import { timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
 import {
@@ -14,7 +16,10 @@ import { createDatabase, loadEnv } from '@vendor-marketplace/db';
 import {
   MAX_UPLOAD_BYTES,
   OPERATOR_DIGEST_POLL_INTERVAL_MS,
+  EXPIRY_SWEEP_INTERVAL_MS,
   PAYOUT_SWEEP_INTERVAL_MS,
+  VISITOR_IP_HEADER,
+  WEB_TIER_KEY_HEADER,
 } from '@vendor-marketplace/shared';
 import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
 import { allowedOrigins, canonicalWebOrigin, parseEnv, type ApiEnv } from './config/env.js';
@@ -33,6 +38,7 @@ import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { createErrorReporter, type ErrorReporter } from './lib/error-reporting.js';
 import { eventsPlugin } from './plugins/events.js';
 import { operatorAlertsPlugin } from './plugins/operator-alerts.js';
+import { expirySweepPlugin } from './plugins/expiry-sweep.js';
 import { payoutReleasePlugin } from './plugins/payout-release.js';
 import { storagePlugin } from './plugins/storage.js';
 import { emailPlugin } from './plugins/email.js';
@@ -111,6 +117,11 @@ export interface BuildServerOptions {
    */
   payoutSweepIntervalMs?: number;
   /**
+   * How often lapsed booking requests are aged and announced; `0` disables it.
+   * On by default for `payoutSweepIntervalMs`'s reason.
+   */
+  expirySweepIntervalMs?: number;
+  /**
    * How often each instance asks whether the operator digest is due; `0`
    * disables it. On by default for `payoutSweepIntervalMs`'s reason.
    */
@@ -143,6 +154,57 @@ function recordingRoutes<TOptions extends FastifyPluginOptions>(
     });
     await plugin(scope, options);
   };
+}
+
+/**
+ * How many times `RATE_LIMIT_MAX` the Stripe webhook route may receive per
+ * minute. Stripe delivers from a handful of egress addresses, so a payout sweep
+ * or a checkout burst is one caller by this API's keying; the ceiling stays
+ * finite so a runaway sender is still refused, and still counted as a failure.
+ */
+const WEBHOOK_RATE_LIMIT_FACTOR = 10;
+
+/** Longest textual IP address, IPv6 with an embedded IPv4 tail. */
+const MAX_IP_LENGTH = 45;
+
+/**
+ * The rate-limit key: the visitor the web tier forwarded, when the caller proves
+ * it is the web tier, otherwise the caller's own address.
+ *
+ * Server-rendered calls all arrive from the web platform's egress address, so
+ * keying on `request.ip` alone puts every visitor in one bucket. The forwarded
+ * address is honoured only alongside the shared secret; without it, or with a
+ * wrong one, the header is ignored and a caller cannot mint buckets by writing it.
+ */
+function rateLimitKey(
+  request: {
+    ip: string;
+    headers: Record<string, string | string[] | undefined>;
+    log: { warn: (message: string) => void };
+  },
+  secret: string | undefined,
+): string {
+  const presented = request.headers[WEB_TIER_KEY_HEADER];
+  const visitor = request.headers[VISITOR_IP_HEADER];
+  if (
+    secret === undefined ||
+    typeof presented !== 'string' ||
+    typeof visitor !== 'string' ||
+    visitor.length === 0 ||
+    visitor.length > MAX_IP_LENGTH ||
+    !isIP(visitor)
+  ) {
+    return request.ip;
+  }
+  const expected = Buffer.from(secret);
+  const actual = Buffer.from(presented);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    // A rotated key on one side only puts every visitor back in one bucket, and
+    // nothing else would say so.
+    request.log.warn('web tier key mismatch: rate limit is keyed on the socket address');
+    return request.ip;
+  }
+  return `visitor:${visitor}`;
 }
 
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
@@ -185,6 +247,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
         'req.headers.cookie',
         'req.headers["svix-signature"]',
         'req.headers["stripe-signature"]',
+        'req.headers["x-web-tier-key"]',
       ],
       formatters: {
         /*
@@ -248,7 +311,45 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     credentials: true,
     methods: [...ALLOWED_METHODS],
   });
-  await app.register(rateLimit, { max: env.RATE_LIMIT_MAX, timeWindow: '1 minute' });
+  await app.register(rateLimit, {
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: '1 minute',
+    keyGenerator: (request) => rateLimitKey(request, env.WEB_TIER_KEY),
+  });
+  /*
+   * The limiter, ahead of authentication.
+   *
+   * The plugin above attaches its check to each *route*, and Fastify runs a
+   * route's hooks after every instance-level hook — so the auth plugin's 401 or
+   * 403 ended the request before it was counted, and a flood of garbage tokens
+   * was never limited while still costing a verification and a lookup each.
+   * Registered here, before the auth plugin, this runs first; the plugin's own
+   * route hook then sees the request already counted and skips it.
+   *
+   * A route that declares its own `config.rateLimit` (a limit, or `false`) keeps
+   * the route-level hook for that limit: the support route keys on the resolved
+   * account, which only exists once the auth hook has run, and the ceilings are
+   * not the API-wide one. A bearer token on such a route is also counted in the
+   * API-wide bucket here, so a flood of bad tokens is limited there too —
+   * `createRateLimit` never consults the "already ran" flag the plugin's own
+   * hook uses, which is why it can count without silencing the route's ceiling.
+   */
+  const limitRequest = app.rateLimit();
+  const countBearer = app.createRateLimit();
+  // The plugin types `this` as a bare FastifyInstance; ours carries the Zod provider.
+  const plain = app as unknown as FastifyInstance;
+  app.addHook('onRequest', async (request, reply) => {
+    const routeLimit = request.routeOptions.config?.rateLimit;
+
+    if (routeLimit === undefined || routeLimit === null) {
+      await limitRequest.call(plain, request, reply);
+    } else if (routeLimit !== false && request.headers.authorization !== undefined) {
+      const counted = await countBearer.call(plain, request);
+      if (!counted.isAllowed && counted.isExceeded) {
+        throw Object.assign(new Error('Rate limit exceeded'), { statusCode: 429 });
+      }
+    }
+  });
   // The per-file ceiling is also enforced when the part is buffered, so an
   // oversized upload is refused rather than read into memory in full.
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
@@ -291,6 +392,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   });
   await app.register(payoutReleasePlugin, {
     intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,
+    reporter: errorReporter,
+  });
+  await app.register(expirySweepPlugin, {
+    intervalMs: options.expirySweepIntervalMs ?? EXPIRY_SWEEP_INTERVAL_MS,
+    webOrigin: canonicalWebOrigin(env),
     reporter: errorReporter,
   });
 
@@ -350,6 +456,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     webOrigin: canonicalWebOrigin(env),
   });
   await app.register(recordingRoutes(stripeWebhookRoutes, moneyRoutes), {
+    rateLimitMax: env.RATE_LIMIT_MAX * WEBHOOK_RATE_LIMIT_FACTOR,
     platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
     webOrigin: canonicalWebOrigin(env),
   });

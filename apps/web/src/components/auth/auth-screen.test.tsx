@@ -23,7 +23,7 @@ describe('AuthScreen', () => {
    */
   it('hangs the decorative disc on the screen, not inside the scrolling column', () => {
     const screen = renderScreen();
-    const disc = screen.querySelector('[class*="rounded-full"][class*="bg-clay-400/5"]');
+    const disc = screen.querySelector('[class*="rounded-full"][class*="bg-stone-900/[.035]"]');
 
     expect(disc?.parentElement).toBe(screen);
     expect(screen.className).toContain('overflow-hidden');

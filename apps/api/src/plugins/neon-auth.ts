@@ -26,6 +26,15 @@ export interface AuthIdentity {
 }
 
 declare module 'fastify' {
+  interface FastifyContextConfig {
+    /**
+     * A route a suspended or retired account must still reach — set on the one
+     * route that exists for somebody who cannot get in. The account is then
+     * read as signed out (`auth` stays null) instead of failing the request.
+     */
+    openToLockedOut?: boolean;
+  }
+
   interface FastifyRequest {
     auth: AuthenticatedUser | null;
     /** Set whenever a valid session token was presented. */
@@ -221,7 +230,13 @@ export const neonAuthPlugin = fp<NeonAuthPluginOptions>(
        * indistinguishable to it: an erased account would be invited to accept
        * the Terms and bring itself back.
        */
+      const openToLockedOut = request.routeOptions.config.openToLockedOut === true;
+
       if (subject?.user.deletedAt) {
+        if (openToLockedOut) {
+          return;
+        }
+
         throw unauthorized('No account is linked to this session');
       }
 
@@ -241,6 +256,10 @@ export const neonAuthPlugin = fp<NeonAuthPluginOptions>(
       const { user } = subject;
 
       if (user.isBanned) {
+        if (openToLockedOut) {
+          return;
+        }
+
         throw forbidden('This account has been suspended');
       }
 

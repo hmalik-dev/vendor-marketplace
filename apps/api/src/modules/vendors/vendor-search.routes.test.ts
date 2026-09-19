@@ -1,4 +1,11 @@
-import { categories, servicePackages, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import {
+  categories,
+  servicePackages,
+  tags,
+  users,
+  vendorProfiles,
+  vendorTags,
+} from '@vendor-marketplace/db/schema';
 import { addDays, ERROR_CODES, MAX_PAGE } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -151,6 +158,24 @@ describe('GET /vendors', () => {
 
   afterAll(async () => {
     await harness.close();
+  });
+
+  /*
+   * The tag filter compares a distinct count of matched tags with the number
+   * requested, so a repeated id in the URL made every real match fail it.
+   */
+  it('treats a repeated tag id as the one tag it names', async () => {
+    const vendorId = await seedVendor({ user: 'user_a', businessName: 'Tagged & Co.' });
+    await seedVendor({ user: 'user_b', businessName: 'Untagged & Co.' });
+    const [tag] = await harness.database.db.select().from(tags).where(eq(tags.isActive, true));
+    await harness.database.db.insert(vendorTags).values({ vendorId, tagId: tag!.id });
+
+    const once = await search(`?tags=${tag!.id}`);
+    const twice = await search(`?tags=${tag!.id}&tags=${tag!.id}`);
+
+    expect(names(once.items)).toEqual(['Tagged & Co.']);
+    expect(names(twice.items)).toEqual(['Tagged & Co.']);
+    expect(twice.total).toBe(1);
   });
 
   it('returns an empty page rather than an error when nothing matches', async () => {

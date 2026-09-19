@@ -1,4 +1,5 @@
 import {
+  BOOKING_PAYMENT_WINDOW_DAYS,
   BOOKING_REQUEST_EXPIRY_DAYS,
   DEFAULT_PLATFORM_FEE_RATE,
   EXPIRABLE_BOOKING_REQUEST_STATUSES,
@@ -97,13 +98,23 @@ export function expiryCountdown(expiresAt: Date | null, now: Date = new Date()):
     return null;
   }
 
-  const days = Math.ceil((expiresAt.getTime() - now.getTime()) / MS_PER_DAY);
-
-  if (days <= 0) {
+  if (expiresAt.getTime() <= now.getTime()) {
     return 'expired';
   }
 
-  return days === 1 ? 'expires today' : `expires in ${days}d`;
+  /*
+   * Whole calendar days in the reader's own zone, not elapsed 24-hour blocks:
+   * viewed at 22:00 with a deadline at 18:00 the next day, the deadline is 20
+   * hours away and still tomorrow. `Math.round` absorbs a DST day's 23 or 25
+   * hours, since both operands are local midnights.
+   */
+  const days = Math.round((localMidnight(expiresAt) - localMidnight(now)) / MS_PER_DAY);
+
+  return days === 0 ? 'expires today' : `expires in ${days}d`;
+}
+
+function localMidnight(instant: Date): number {
+  return new Date(instant.getFullYear(), instant.getMonth(), instant.getDate()).getTime();
 }
 
 /**
@@ -698,6 +709,33 @@ export function isPayoutFailing(booking: PayoutFailureSubject): boolean {
   );
 }
 
+/** What `isPayoutStranded` needs: the payout facts plus whether the owner can still be paid. */
+export type PayoutStrandedSubject = PayoutStatusSubject & {
+  payoutModel: PayoutModel;
+  vendorPayoutCents: number;
+  /** The vendor's owner is banned, or their account is closed (`deleted_at` set). */
+  vendorUnpayable: boolean;
+};
+
+/**
+ * A payout that is still owed and that the sweep will never send, because the
+ * vendor's owner is banned or closed (VEN-445).
+ *
+ * The sweep leaves such rows out without touching `payout_attempts`, so neither
+ * `isPayoutFailing` nor `payoutStatusOf` can see them and the console printed
+ * `Awaiting release` for money nothing was going to release. It is a flag beside
+ * the shared status for the same reason `isPayoutFailing` is: an operator's fact,
+ * not a fourth state a vendor or customer surface should have to draw.
+ */
+export function isPayoutStranded(booking: PayoutStrandedSubject): boolean {
+  return (
+    booking.vendorUnpayable &&
+    payoutStatusOf(booking) === 'pending' &&
+    booking.payoutModel === 'separate' &&
+    booking.vendorPayoutCents > 0
+  );
+}
+
 /**
  * True for a booking paid by the **destination charge** this product used
  * before #423 — released, with no transfer object to show for it.
@@ -745,6 +783,19 @@ export function isLegacyDestinationPayout(booking: PayoutSubject): boolean {
  */
 export function replyDeadline(createdAt: Date, eventDate: string): Date {
   const week = addDays(createdAt, BOOKING_REQUEST_EXPIRY_DAYS);
+  const cap = universallyPastFrom(eventDate);
+
+  return cap !== null && cap.getTime() < week.getTime() ? cap : week;
+}
+
+/**
+ * When an accepted request stops awaiting payment: a week from acceptance, or
+ * the moment its event date is past everywhere, whichever comes first — the
+ * same cap `replyDeadline` uses, so a date is never held for an event that can
+ * no longer happen (VEN-433).
+ */
+export function paymentDeadline(acceptedAt: Date, eventDate: string): Date {
+  const week = addDays(acceptedAt, BOOKING_PAYMENT_WINDOW_DAYS);
   const cap = universallyPastFrom(eventDate);
 
   return cap !== null && cap.getTime() < week.getTime() ? cap : week;

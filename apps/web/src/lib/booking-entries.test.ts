@@ -384,3 +384,21 @@ describe('applyRefinements', () => {
     ).toEqual(['2026-05', '2026-06', '2026-07']);
   });
 });
+
+describe('toEntries past the first page of each list (VEN-433)', () => {
+  it('reads a paid booking as paid when its request sits beyond the hundredth row', () => {
+    const count = 150;
+    const requests = Array.from({ length: count }, (_, index) =>
+      request({ id: `req-${index}`, status: 'accepted', eventDate: '2026-06-14' }),
+    );
+    const bookings = Array.from({ length: count }, (_, index) =>
+      booking({ id: `bok-${index}`, requestId: `req-${index}`, status: 'confirmed' }),
+    );
+
+    const entries = toEntries(requests, bookings, NOW);
+
+    expect(entries).toHaveLength(count);
+    expect(entries.filter((entry) => entry.status === 'accepted')).toEqual([]);
+    expect(entries.find((entry) => entry.id === 'bok-149')?.status).toBe('confirmed');
+  });
+});

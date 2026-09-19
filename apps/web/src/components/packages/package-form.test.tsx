@@ -234,3 +234,46 @@ describe('PackageForm — a parent that replaces its list objects', () => {
     expect(screen.getByLabelText<HTMLInputElement>('Package name').value).toBe('Elopement');
   });
 });
+
+/*
+ * VEN-442. A blanked Duration or Maximum guests was dropped from the body, and
+ * the API only patches the keys it receives — so "Package saved" was shown over
+ * a value the server never cleared. A blank has to travel as `null`.
+ */
+describe('PackageForm — clearing an optional number', () => {
+  const SAVED: WireServicePackage = {
+    id: '55555555-5555-4555-8555-555555555555',
+    vendorId: '66666666-6666-4666-8666-666666666666',
+    name: 'Half-day coverage',
+    description: 'Four hours of documentary coverage and an online gallery.',
+    priceCents: 120_000,
+    priceType: 'fixed',
+    durationHours: 4,
+    maxGuests: 80,
+    inclusions: ['Online gallery'],
+    isActive: true,
+    displayOrder: 0,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+  };
+
+  it('sends null for a duration and guest cap the vendor blanked', async () => {
+    const user = userEvent.setup();
+    requestMock.mockResolvedValue({ ...SAVED, durationHours: null, maxGuests: null });
+    render(<PackageForm servicePackage={SAVED} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.clear(screen.getByLabelText('Duration (hours)'));
+    await user.clear(screen.getByLabelText('Maximum guests'));
+    await user.click(screen.getByRole('button', { name: 'Save package' }));
+
+    await waitFor(() => {
+      expect(requestMock).toHaveBeenCalledWith(
+        `/vendor/packages/${SAVED.id}`,
+        expect.objectContaining({
+          method: 'PUT',
+          body: expect.objectContaining({ durationHours: null, maxGuests: null }),
+        }),
+      );
+    });
+  });
+});

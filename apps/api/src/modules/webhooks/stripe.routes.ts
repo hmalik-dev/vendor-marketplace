@@ -1,7 +1,16 @@
+import {
+  STRIPE_WEBHOOK_PERSISTED_FAILURE_WINDOW_MS,
+  type StripeWebhookFailureKind,
+} from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { unauthorized } from '../../lib/errors.js';
-import { PAYMENT_INTENT_SUCCEEDED, type StripeEventNotification } from '../../lib/stripe.js';
+import type { FastifyRequest } from 'fastify';
+import {
+  isUsableRefundStatus,
+  PAYMENT_INTENT_SUCCEEDED,
+  type StripeEventNotification,
+} from '../../lib/stripe.js';
 import {
   openChargebackCase,
   recordChargebackOutcome,
@@ -10,9 +19,13 @@ import {
 import {
   createFailureWindow,
   disputeOpenedAlert,
+  recordPersistedWebhookFailure,
+  refundFailedAlert,
   stripeWebhookFailingAlert,
+  unmatchedRefundFailedAlert,
   vendorPayoutsDisabledAlert,
 } from '../operator-alerts/operator-alerts.service.js';
+import { findBookingIdByPaymentIntent } from '../operator-alerts/operator-alerts.dao.js';
 import { bookingContextFor, recordSuccessfulPayment } from '../payments/payments.service.js';
 import { generateSupportReference } from '../support/support.service.js';
 import {
@@ -55,9 +68,21 @@ const disputeOutcomeSchema = z.enum([
   'ignored',
 ]);
 
+/**
+ * A refund Stripe reports on (VEN-430). `refund-failed` is one that was
+ * accepted and later moved to `failed` or `canceled`; `refund-unchanged` is
+ * every other update, acknowledged and left alone.
+ */
+const refundOutcomeSchema = z.enum(['refund-failed', 'refund-unchanged']);
+
 const webhookResponseSchema = z.object({
   received: z.literal(true),
-  outcome: z.union([accountUpdateOutcomeSchema, paymentOutcomeSchema, disputeOutcomeSchema]),
+  outcome: z.union([
+    accountUpdateOutcomeSchema,
+    paymentOutcomeSchema,
+    disputeOutcomeSchema,
+    refundOutcomeSchema,
+  ]),
 });
 
 /**
@@ -126,6 +151,28 @@ const DISPUTE_CREATED_EVENT = 'charge.dispute.created';
  */
 const DISPUTE_CLOSED_EVENTS = new Set(['charge.dispute.closed', 'charge.dispute.funds_reinstated']);
 
+/**
+ * The events that can say an accepted refund did not land. `refund.failed` is
+ * the dedicated one; `charge.refund.updated` and `refund.updated` carry the same
+ * transition for an endpoint subscribed to those instead.
+ */
+const REFUND_EVENTS = new Set(['refund.failed', 'refund.updated', 'charge.refund.updated']);
+
+function failureKindOf(
+  statusCode: number,
+  signatureMissing: boolean,
+): StripeWebhookFailureKind | null {
+  if (statusCode === 401) {
+    return signatureMissing ? 'signature-missing' : 'signature';
+  }
+
+  if (statusCode === 429) {
+    return 'rate-limited';
+  }
+
+  return statusCode >= 500 ? 'server-error' : null;
+}
+
 function isDisputeEvent(type: string): boolean {
   return type === DISPUTE_CREATED_EVENT || DISPUTE_CLOSED_EVENTS.has(type);
 }
@@ -143,9 +190,12 @@ export const HANDLED_STRIPE_EVENT_TYPES: readonly string[] = [
   PAYMENT_SUCCEEDED_EVENT,
   DISPUTE_CREATED_EVENT,
   ...DISPUTE_CLOSED_EVENTS,
+  ...REFUND_EVENTS,
 ];
 
 export interface StripeWebhookRoutesOptions {
+  /** Deliveries per minute per caller; a generous ceiling of its own, not the API-wide one. */
+  rateLimitMax: number;
   /** `STRIPE_PLATFORM_FEE_RATE`, resolved and coerced at boot. */
   platformFeeRate: number;
   /** `canonicalWebOrigin(env)` — the origin every emailed link is built from. */
@@ -159,19 +209,28 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
   keepRawJsonBody(app);
 
   /*
-   * A webhook refused on its signature or failing with a 5xx is the one money
-   * path that fails silently: Stripe retries and nothing here is recorded
-   * (VEN-405). A 401 from this route is only ever a signature failure. Scoped
-   * to this plugin, so no other route's errors are counted.
+   * A webhook refused on its signature, rate limited or failing with a 5xx is
+   * the one money path that fails silently: Stripe retries and nothing here is
+   * recorded (VEN-405). A 401 from this route is only ever a signature failure,
+   * and a header that is absent altogether is counted apart from one that does
+   * not verify, so scanner traffic cannot use up the dedupe window a rotated
+   * secret needs (VEN-430). Scoped to this plugin, so no other route's errors
+   * are counted.
+   *
+   * Two windows: the in-process one catches a burst within minutes; the
+   * persisted one counts across instances and restarts over a day, because a
+   * single event Stripe keeps redelivering does so hours apart.
    */
   const failures = {
     signature: createFailureWindow(app.clock),
+    'signature-missing': createFailureWindow(app.clock),
     'server-error': createFailureWindow(app.clock),
-  } as const;
+    'rate-limited': createFailureWindow(app.clock),
+  } as const satisfies Record<StripeWebhookFailureKind, unknown>;
+  const missingSignature = new WeakSet<FastifyRequest>();
 
-  app.addHook('onResponse', async (_request, reply) => {
-    const failure =
-      reply.statusCode === 401 ? 'signature' : reply.statusCode >= 500 ? 'server-error' : null;
+  app.addHook('onResponse', async (request, reply) => {
+    const failure = failureKindOf(reply.statusCode, missingSignature.has(request));
 
     if (failure === null) {
       return;
@@ -181,16 +240,48 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
 
     if (crossed !== null) {
       app.operatorAlerts.dispatch(stripeWebhookFailingAlert(failure, crossed));
+      return;
     }
+
+    /*
+     * Only a server error is written to the persisted window. It is the one
+     * kind an anonymous caller cannot produce, so the rate limiter still caps
+     * what a flood costs the database; the other kinds alert from the
+     * in-process window alone.
+     */
+    if (failure !== 'server-error') {
+      return;
+    }
+
+    app.operatorAlerts.dispatch(async () => {
+      try {
+        const persisted = await recordPersistedWebhookFailure(app.db, app.clock, failure);
+
+        return persisted === null
+          ? null
+          : stripeWebhookFailingAlert(
+              failure,
+              persisted,
+              STRIPE_WEBHOOK_PERSISTED_FAILURE_WINDOW_MS,
+            );
+      } catch (error) {
+        request.log.error({ err: error }, 'Could not record a Stripe webhook failure');
+        return null;
+      }
+    });
   });
 
   app.post(
     '/webhooks/stripe',
-    { schema: { response: { 200: webhookResponseSchema } } },
+    {
+      config: { rateLimit: { max: options.rateLimitMax } },
+      schema: { response: { 200: webhookResponseSchema } },
+    },
     async (request, reply) => {
       const signature = request.headers['stripe-signature'];
 
       if (typeof signature !== 'string') {
+        missingSignature.add(request);
         throw unauthorized('Webhook signature headers are missing');
       }
 
@@ -225,6 +316,10 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
 
         if (isDisputeEvent(event.type) && event.objectId) {
           return applyDisputeEvent(event.type, event.objectId);
+        }
+
+        if (REFUND_EVENTS.has(event.type) && event.objectId) {
+          return applyRefundEvent(event.objectId);
         }
 
         if (event.type !== PAYMENT_SUCCEEDED_EVENT || !event.objectId) {
@@ -284,6 +379,41 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
       }
 
       /**
+       * A refund that was accepted and has since failed (VEN-430). The row is
+       * left as it is — reversing a cancellation is a person's decision, and the
+       * alert is how they hear of it. Redeliveries and the neighbouring
+       * `refund.failed` / `charge.refund.updated` pair deduplicate on the booking.
+       */
+      async function applyRefundEvent(
+        refundId: string,
+      ): Promise<z.infer<typeof refundOutcomeSchema>> {
+        const refund = await app.stripe.retrieveRefund(refundId);
+
+        if (isUsableRefundStatus(refund.status) || !refund.paymentIntentId) {
+          return 'refund-unchanged';
+        }
+
+        const bookingId = await findBookingIdByPaymentIntent(app.db, refund.paymentIntentId);
+
+        if (!bookingId) {
+          app.operatorAlerts.dispatch(
+            unmatchedRefundFailedAlert({
+              refundId: refund.refundId,
+              paymentIntentId: refund.paymentIntentId,
+              status: refund.status,
+              amountCents: refund.amountCents,
+            }),
+          );
+          return 'refund-failed';
+        }
+
+        app.operatorAlerts.dispatch(
+          refundFailedAlert({ bookingId, during: `a refund Stripe later marked ${refund.status}` }),
+        );
+        return 'refund-failed';
+      }
+
+      /**
        * A chargeback, re-read from Stripe and handed to the case queue.
        *
        * **The hold is not placed here.** `openChargebackCase` calls
@@ -319,6 +449,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
             db: app.db,
             log: request.log,
             bookings: bookingContextFor(app, request.log, options.webOrigin),
+            alerts: app.operatorAlerts,
           },
           disputeId,
           () => app.stripe.retrieveDispute(disputeId),

@@ -1,6 +1,6 @@
 ---
 name: reply-deadline-cap-must-match-accept-guard
-description: One instant — event date + 2 UTC days — is written in four unrelated places; if they drift, a booking request becomes live-but-unacceptable or expires while it is still someone's today
+description: One instant — event date + 2 UTC days — is written in five unrelated places, and since VEN-433 expires_at carries two different deadlines with no backfill between them
 metadata:
   type: project
 ---
@@ -30,7 +30,29 @@ two-day tail is that timezone allowance, not a rounding choice, and
 `replyDeadline` deliberately has **no floor**: a request sent at the edge of its
 date is born with hours to live, which is honest rather than a defect.
 
-**How to apply:** a diff touching any one of the four must be checked against
+5. `paymentDeadline` (VEN-433, same file) — `accepted_at + 7d` under the same
+   cap, written by `prepareTransition`'s accept.
+
+**`expires_at` now means two things.** Before acceptance it is the reply
+deadline; from acceptance it is the payment deadline, and `accepted` joined
+`EXPIRABLE_BOOKING_REQUEST_STATUSES`. A row accepted under an older image still
+holds its _reply_ deadline, usually already past, so without a backfill the
+first sweep after deploy expires every accepted unpaid request with no payment
+window at all. Paid rows are held back by one predicate only — a `not exists`
+on `bookings` in `hasLapsed`/`applyExpiry`; the TypeScript twin
+`requestStatusAsRead` has no such arm, so a paid row whose `expires_at`
+predates `confirmBooking`'s new `expires_at = null` still _reads_ expired.
+
+**The cap is also what bounds `createBookingRequest`'s retry** (VEN-428). A
+duplicate submission whose matched live row has lapsed is now aged and the
+create **recurses**. It terminates only because creation refuses
+`isUniversallyPastDate` and `replyDeadline` derives from the same instant, so a
+freshly inserted row can never be born already expired — and because the live
+partial unique index drops the row the moment `applyExpiry` writes `expired`, so
+the retry's `onConflictDoNothing` arbiter no longer matches it. Move either half
+and the recursion stops being depth-1.
+
+**How to apply:** a diff touching any one of the five must be checked against
 the other three, including the SQL. Verified aligned 2026-09-04. Also note the
 knock-on: expiry calls `syncHeldDate`, so a shorter window releases a vendor's
 calendar cell sooner — that path is safe only because `setHeldDate(…, null)`

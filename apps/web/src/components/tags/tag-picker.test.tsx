@@ -323,6 +323,47 @@ describe('TagSuggestionForm within the picker', () => {
   });
 
   /*
+   * A tag an operator deactivated after the vendor chose it. The profile still
+   * carries it and the save sends it back, but the picker only offers active
+   * tags, so it drew no pill and no Remove control (VEN-436).
+   */
+  describe('a held tag an operator has since deactivated', () => {
+    const HIDDEN: WireTag = { ...tag('Amharic', 'language', 24), isActive: false };
+
+    it('shows it as a removable pill', async () => {
+      const user = userEvent.setup();
+      const state = { ids: [HIDDEN.id] };
+      const onTagsChange = vi.fn((ids: string[]) => {
+        state.ids = ids;
+      });
+
+      render(
+        <TagPicker
+          allTags={[...ALL_TAGS, HIDDEN]}
+          selectedTagIds={state.ids}
+          onTagsChange={onTagsChange}
+        />,
+      );
+
+      expect(screen.getByText('(no longer offered)')).toBeDefined();
+      await user.click(screen.getByRole('button', { name: `Remove ${HIDDEN.name}` }));
+      expect(onTagsChange).toHaveBeenCalledWith([]);
+    });
+
+    it('is not offered as a choice once it is not held', async () => {
+      const user = userEvent.setup();
+      render(
+        <TagPicker allTags={[...ALL_TAGS, HIDDEN]} selectedTagIds={[]} onTagsChange={vi.fn()} />,
+      );
+
+      await user.click(screen.getByRole('combobox', { name: 'Choose languages spoken' }));
+
+      expect(screen.queryByRole('option', { name: /Amharic/ })).toBeNull();
+      expect(await screen.findByRole('option', { name: 'English' })).toBeDefined();
+    });
+  });
+
+  /*
    * #405. A tag an admin approved *after* this page loaded is not in `allTags`,
    * and everything downstream resolves a held id through that list — the
    * per-category count, the "n of 5" line, and the pills. So a suggestion the

@@ -535,5 +535,40 @@ describe('the vendor gate', () => {
       expect(revoked.statusCode).toBe(204);
       expect(await harness.database.db.select().from(vendorInvites)).toHaveLength(0);
     });
+
+    it('walks past 200 applications, with server-side totals for both lists', async () => {
+      const APPLICATIONS = 201;
+      await harness.database.db.insert(vendorApplications).values(
+        Array.from({ length: APPLICATIONS }, (_, index) => ({
+          email: `applicant-${index}@example.com`,
+          businessName: `Business ${index}`,
+          category: 'photography',
+          city: 'Austin',
+          message: '',
+          status: index < 3 ? ('declined' as const) : ('new' as const),
+          createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)),
+        })),
+      );
+      await harness.database.db
+        .insert(vendorInvites)
+        .values(
+          Array.from({ length: 17 }, (_, index) => ({ email: `invitee-${index}@example.com` })),
+        );
+
+      const first = (await inject('GET', '/admin/vendor-applications', ADMIN)).json();
+      expect(first).toMatchObject({ total: APPLICATIONS, waiting: APPLICATIONS - 3, page: 1 });
+      expect(first.items).toHaveLength(first.pageSize);
+
+      // The oldest applicant is on the last page, not silently dropped.
+      const lastPage = Math.ceil(APPLICATIONS / first.pageSize);
+      const last = (
+        await inject('GET', `/admin/vendor-applications?page=${lastPage}`, ADMIN)
+      ).json();
+      expect(last.items.at(-1)).toMatchObject({ email: 'applicant-0@example.com' });
+
+      const invites = (await inject('GET', '/admin/vendor-invites?page=2', ADMIN)).json();
+      expect(invites).toMatchObject({ total: 17, page: 2 });
+      expect(invites.items).toHaveLength(17 - invites.pageSize);
+    });
   });
 });

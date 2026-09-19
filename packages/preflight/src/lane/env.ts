@@ -36,6 +36,17 @@ export function renderLaneEnv(manifest: LaneManifest, databaseUrl: string): stri
     `WEB_URL=http://localhost:${manifest.webPort}`,
     `DATABASE_URL=${databaseUrl}`,
     /*
+     * Sentry is off in a lane. The root `.env` is usually `.env.example` copied,
+     * whose DSN rows hold the `https://...@sentry.io/...` placeholder; the API
+     * rejects that shape at boot, so an inherited copy kept every lane API from
+     * starting and every browser pass from running (VEN-453). Blank, because the
+     * lane file wins over an inherited value and the registry reads an empty
+     * optional row as absent. Only a deployment requires a DSN, and a deployment
+     * never reads this file.
+     */
+    'SENTRY_DSN=',
+    'NEXT_PUBLIC_SENTRY_DSN=',
+    /*
      * DATABASE_URL_UNPOOLED and NEON_BRANCH are deliberately absent. They
      * describe a Neon deployment; the env registry marks them optional for
      * `local`, and setting them against the Docker container fails the gate.

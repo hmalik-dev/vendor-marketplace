@@ -392,6 +392,9 @@ describe('the Stripe webhook subscription', () => {
         'charge.dispute.created',
         'charge.dispute.closed',
         'charge.dispute.funds_reinstated',
+        'refund.failed',
+        'refund.updated',
+        'charge.refund.updated',
       ]);
 
       // Mutation: a type added to the route's set is one the check now demands.
