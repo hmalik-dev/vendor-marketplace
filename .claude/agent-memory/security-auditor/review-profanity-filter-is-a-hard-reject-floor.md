@@ -1,6 +1,6 @@
 ---
 name: review-profanity-filter-is-a-hard-reject-floor
-description: The reviews blocked-word regex rejects the submission outright by design (no moderation queue until #15) — do not re-litigate the failure mode, but its \w* suffix has confirmed false positives on "spicy", "spice", "retardant"
+description: Reviews module boundaries — the blocked-word floor (hard reject by design, \w* over-match now FIXED), and VEN-421's eligibility widening plus the review_tombstones finality record
 metadata:
   type: project
 ---
@@ -9,19 +9,24 @@ metadata:
 the whole write with a 400 rather than publishing-then-flagging.
 
 **Why:** #12 was asked for "profanity filtered" reviews and there is nowhere to
-queue to — admin/moderation is #15. Rejecting at the boundary was the only
-behaviour available, and the module documents it as "a floor, not a moderation
-system". Trivially bypassable (`f u c k`, homoglyphs, misspellings) **on
-purpose**; that is not a finding.
+queue to — moderation is #15. Trivially bypassable (`f u c k`, homoglyphs,
+misspellings) **on purpose**; that is not a finding. The `\w*` suffix that
+rejected "spicy" / "retardant" / "shitake" is **FIXED** — every inflection is
+now written out and nothing matches by prefix. Do not re-report either half.
 
-**Confirmed defect, separate from the design:** the pattern is
-`\b(?:word|…)\w*\b`, and the `\w*` suffix over-matches short stems. Verified:
-`spic` matches "spicy" / "spice" / "spices", `retard` matches "retardant",
-`shit` matches "shitake". On a marketplace whose categories include caterers
-and florists, that rejects a genuine review with an accusation and no appeal
-path. The fix is the suffix, not the word list.
+**Eligibility (VEN-421):** `isBookingReviewable` = `completed`, or `confirmed`
+with `isUniversallyPastDate(eventDate)`. Audited clean: no endpoint writes
+`bookings.event_date` (it is copied from the request, whose schema refines away
+a universally-past date), so the reviewable state cannot be arranged. The
+consequence that _is_ new: `cancelBooking` only accepts `confirmed`, so a review
+can now be filed and the booking then cancelled at the 50% late tier — the
+review keeps counting in `publicVendorReviews`.
 
-**How to apply:** when a later audit touches this filter, report only the
-over-match, and treat the hard-reject failure mode and the easy bypasses as
-settled until #15 lands a queue. Related:
-[[error-handler-4xx-passthrough-leaks-sdk-messages]].
+**`review_tombstones` (booking_id, reviewer_id) finality:** the re-review race
+is closed by statement _order_, not by a lock — `createReview` reads `reviews`
+then the tombstone, and `deleteReviewAndRecalculate` commits the delete and the
+tombstone insert in one transaction, so a reader that sees the review gone must
+see the tombstone. Keep that order if either side is touched, or re-check the
+tombstone inside `insertReviewAndRecalculate`'s transaction. Nothing deletes a
+tombstone and it is absent from the hand-enumerated DSAR
+([[data-rights-export-is-hand-enumerated]]).

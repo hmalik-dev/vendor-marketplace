@@ -1,5 +1,6 @@
-import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import {
+  isUniversallyPastDate,
   REVIEW_RATINGS,
   type CreateReviewInput,
   type PublicReview,
@@ -11,6 +12,7 @@ import {
   bookings,
   notifications,
   reviews,
+  reviewTombstones,
   users,
   vendorProfiles,
   type NotificationRow,
@@ -32,11 +34,24 @@ export interface ReviewableBooking {
   vendorId: string;
   vendorUserId: string;
   status: string;
+  eventDate: string;
   /** Both parties' display names, so the notification needs no second read. */
   customerFirstName: string;
   vendorBusinessName: string;
   /** Where a public review becomes readable — the notification's destination. */
   vendorSlug: string;
+}
+
+/**
+ * A finished booking, or a confirmed one whose event date has passed everywhere.
+ * Lives beside the query that post-filters on it; the service applies the same
+ * rule to the single booking it loads.
+ */
+export function isBookingReviewable(booking: { status: string; eventDate: string }): boolean {
+  return (
+    booking.status === 'completed' ||
+    (booking.status === 'confirmed' && isUniversallyPastDate(booking.eventDate))
+  );
 }
 
 /** The booking a review would be filed against, with both parties resolved. */
@@ -60,6 +75,7 @@ export async function findReviewableBooking(
        */
       vendorUserId: vendorProfiles.userId,
       status: bookings.status,
+      eventDate: bookings.eventDate,
       customerFirstName: users.firstName,
       vendorBusinessName: vendorProfiles.businessName,
       vendorSlug: vendorProfiles.slug,
@@ -71,6 +87,27 @@ export async function findReviewableBooking(
     .limit(1);
 
   return rows[0] ?? null;
+}
+
+/** Whether an admin deleted this reviewer's review of the booking. */
+export async function hasReviewTombstone(
+  db: AppDatabase,
+  bookingId: string,
+  reviewerId: string,
+): Promise<boolean> {
+  if (!bookingId || !reviewerId) {
+    return false;
+  }
+
+  const rows = await db
+    .select({ bookingId: reviewTombstones.bookingId })
+    .from(reviewTombstones)
+    .where(
+      and(eq(reviewTombstones.bookingId, bookingId), eq(reviewTombstones.reviewerId, reviewerId)),
+    )
+    .limit(1);
+
+  return rows.length > 0;
 }
 
 /** Whether this reviewer has already used up their one review of a booking. */
@@ -114,22 +151,34 @@ export async function findUnreviewedCompletedBooking(
     return null;
   }
 
+  /*
+   * `confirmed` counts once its event date has passed everywhere: a vendor who
+   * never presses "Mark complete" must not be able to dodge reviews, and
+   * payouts already treat the two statuses alike. The date test is the shared
+   * helper, so it runs here on the few rows this pair can have, not in SQL.
+   */
   const rows = await db
-    .select({ id: bookings.id })
+    .select({ id: bookings.id, status: bookings.status, eventDate: bookings.eventDate })
     .from(bookings)
     .leftJoin(reviews, and(eq(reviews.bookingId, bookings.id), eq(reviews.reviewerId, customerId)))
+    .leftJoin(
+      reviewTombstones,
+      and(eq(reviewTombstones.bookingId, bookings.id), eq(reviewTombstones.reviewerId, customerId)),
+    )
     .where(
       and(
         eq(bookings.vendorId, vendorId),
         eq(bookings.customerId, customerId),
-        eq(bookings.status, 'completed'),
+        inArray(bookings.status, ['completed', 'confirmed']),
         isNull(reviews.id),
+        isNull(reviewTombstones.bookingId),
       ),
     )
-    .orderBy(bookings.completedAt)
-    .limit(1);
+    .orderBy(bookings.eventDate, bookings.id);
 
-  return rows[0] ?? null;
+  const open = rows.find((row) => isBookingReviewable(row));
+
+  return open ? { id: open.id } : null;
 }
 
 /**
@@ -538,7 +587,8 @@ export async function setReviewVisibilityAndRecalculate(
 }
 
 /**
- * Removes a review and re-derives whichever rating it was counted in.
+ * Removes a review and re-derives whichever rating it was counted in, leaving a
+ * tombstone so the reviewer cannot file another for the same booking.
  *
  * Moderation (#15) owns *who* may call this and *why*. The recompute lives here
  * because it is the same derivation the insert uses, and running it from two
@@ -563,6 +613,12 @@ export async function deleteReviewAndRecalculate(
     if (!row) {
       return false;
     }
+
+    // Final: the reviewer may never post another review for this booking.
+    await tx
+      .insert(reviewTombstones)
+      .values({ bookingId: row.bookingId, reviewerId: row.reviewerId })
+      .onConflictDoNothing();
 
     if (row.type === 'customer_to_vendor') {
       await recalculateVendorRating(tx, row.vendorId);
