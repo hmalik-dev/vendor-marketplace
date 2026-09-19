@@ -237,8 +237,8 @@ async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerIden
 const EXPIRY_CONCURRENCY = 4;
 
 /**
- * Expiry is lazy: nothing sweeps the table on a timer, so a request that has
- * run past its window is aged on the next read of it. The write is guarded on
+ * Ages a request that has run past its window — on the next read of it, or in
+ * `expireLapsedRequests`' sweep, whichever comes first. The write is guarded on
  * the status it was read at, so a vendor accepting in the same second either
  * wins or is told the request expired — never both.
  */

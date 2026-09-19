@@ -1,15 +1,30 @@
 ---
 name: terms-gate-is-a-five-state-session
-description: Since #429 request.auth is null for a signed-in account that has not accepted the Terms; requireClerkSubject is a deliberate weaker guard for exactly two routes
+description: request.auth is null for a signed-in account that has not accepted the Terms, and for a locked-out account on an openToLockedOut route; requireClerkSubject is a deliberate weaker guard for exactly two routes
 metadata:
   type: project
 ---
 
-`apps/api/src/plugins/clerk-auth.ts` resolves a bearer token into one of five
-states and the order is load-bearing: retired (`deleted_at`) -> 401, **no local
-row -> gated**, banned -> 403 `FORBIDDEN`, not-accepted -> gated, otherwise
-`request.auth`. Banned is checked _before_ the acceptance check, so a suspended
-account can never present as merely gated.
+`apps/api/src/plugins/neon-auth.ts` (was `clerk-auth.ts` before VEN-447)
+resolves a bearer token into one of five states and the order is load-bearing:
+retired (`deleted_at`) -> 401, **no local row -> gated**, banned -> 403
+`FORBIDDEN`, not-accepted -> gated, otherwise `request.auth`. Banned is checked
+_before_ the acceptance check, so a suspended account can never present as
+merely gated.
+
+**`openToLockedOut` is the sixth state (VEN-435).** A route may set
+`config.openToLockedOut = true`; the retired and banned branches then `return`
+instead of throwing. Audited: `auth` stays null, `termsRequired` stays false, so
+the route reads a suspended or retired caller as a visitor, and every downstream
+refusal that keys on `!auth` still fires (a `bookingId` on `/support/messages`
+gets 401, so no dispute hold and no payout freeze). Two things make it safe and
+both are the finding if they change: **`request.authIdentity` is still set
+before those returns**, so this flag on a route that calls `requireClerkSubject`
+/ `authSubject` would authorise a banned account; and the flag is per-route
+config, so it must never appear on anything but a route whose whole purpose is
+reachability while locked out — today only `POST /support/messages`. Fastify's
+404 context carries `config: {}`, so the unconditional `routeOptions.config`
+read cannot throw on an unmatched path.
 
 Two consequences a later diff must not undo:
 

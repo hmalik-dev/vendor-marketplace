@@ -2279,12 +2279,12 @@ export type CreateReportInput = z.infer<typeof createReportSchema>;
 /**
  * What a report hands back: the reference, and nothing else.
  *
- * Deliberately the same shape as a support send's receipt. There is no status
+ * The support receipt's reference, without its reply address. There is no status
  * to poll and no case the reporter can open — the queue is the operator's
  * screen — so the reference is the whole of what they are given, and the
  * dialog says so in words.
  */
-export const reportReceiptSchema = supportMessageReceiptSchema;
+export const reportReceiptSchema = supportMessageReceiptSchema.pick({ reference: true });
 export type ReportReceipt = z.infer<typeof reportReceiptSchema>;
 
 // --- Errors ----------------------------------------------------------------
