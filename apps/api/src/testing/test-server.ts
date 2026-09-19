@@ -343,6 +343,8 @@ export interface FakeStripe extends StripeConnectGateway {
   refundsToRefuse: Set<string>;
   /** The status Stripe answers the next `createRefund` with; unset means `succeeded`. */
   nextRefundStatus: string | undefined;
+  /** Runs inside the next `createRefund`, once: the interleave a race test needs (VEN-425). */
+  duringNextRefund: (() => Promise<void>) | undefined;
   /** Every intent the fake has minted, keyed by id, in Stripe's own shape. */
   paymentIntents: Map<string, PaymentIntentSnapshot>;
   /**
@@ -462,6 +464,7 @@ function createFakeStripe(): FakeStripe {
     refunds,
     refundsToRefuse,
     nextRefundStatus: undefined,
+    duringNextRefund: undefined,
     transfers,
     reversals,
     transfersToRefuse,
@@ -728,6 +731,10 @@ function createFakeStripe(): FakeStripe {
     },
 
     createRefund: async (input) => {
+      const interleave = fake.duringNextRefund;
+      fake.duringNextRefund = undefined;
+      await interleave?.();
+
       if (refundsToRefuse.has(input.paymentIntentId)) {
         throw new Error(`Fake Stripe refused a refund for ${input.paymentIntentId}`);
       }

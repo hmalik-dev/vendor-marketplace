@@ -3,6 +3,7 @@ import {
   MIN_BOOKING_AMOUNT_CENTS,
   calculateFees,
   calculateRefund,
+  formatPrice,
   isLegacyDestinationPayout,
   isUniversallyFutureDate,
   parseDurationHours,
@@ -1120,6 +1121,7 @@ export async function cancelBooking(
   bookingId: string,
   reason: string | undefined,
   now: Date,
+  expectedRefundCents?: number,
 ): Promise<CancelledBooking> {
   const { booking, side } = await participantIn(context, user, bookingId);
 
@@ -1149,35 +1151,64 @@ export async function cancelBooking(
 
   const quote = calculateRefund(booking.totalAmountCents, booking.eventDate, now);
 
+  /*
+   * The amount the customer was shown and confirmed (VEN-425). The page quotes
+   * on the browser's clock; this is the server's, and a booking that crossed
+   * the cutoff between render and press would otherwise refund half against a
+   * button that said "in full". Nothing has moved yet, so refusing is free, and
+   * the message carries the true figure for the second confirm.
+   */
+  if (expectedRefundCents !== undefined && expectedRefundCents !== quote.refundCents) {
+    throw conflict(
+      `The refund for this booking is now ${formatPrice(quote.refundCents)}, not ${formatPrice(expectedRefundCents)}. Review it and confirm again`,
+    );
+  }
+
   const refund = await refundAndUnwind(context, booking, quote.refundCents, 'cancel');
 
-  const cancelled = await cancelBookingAndFreeDate(
+  /*
+   * Written down rather than left to be inferred (#415), and what the vendor keeps is
+   * zero at the full tier or half their share inside the cutoff (D31, D3).
+   */
+  const cancellation = {
+    cancelledAt: now,
+    cancellationReason: reason ?? null,
+    cancelledBy: 'customer',
+    refundAmountCents: refund.amountCents,
+    vendorPayoutCents: refund.retainedPayoutCents,
+    disputeReason: null,
+  } as const;
+
+  let cancelled = await cancelBookingAndFreeDate(
     context.db,
     bookingId,
-    {
-      cancelledAt: now,
-      cancellationReason: reason ?? null,
-      /*
-       * Written down rather than left to be inferred (#415). The customer's own
-       * screen has to say who ended the booking and what came back, and neither
-       * fact survives on the row otherwise: `cancellation_reason` is the
-       * customer's free text here and an operator's sentence on the ban path, so
-       * telling the two apart meant string-matching a copy edit, and the refund
-       * figure existed only in this response.
-       */
-      cancelledBy: 'customer',
-      refundAmountCents: refund.amountCents,
-      /*
-       * What the vendor keeps. Zero at the full-refund tier; half their share
-       * inside the 48-hour cutoff, which the sweep pays out on the original
-       * schedule rather than the platform quietly keeping it (D31, D3).
-       */
-      vendorPayoutCents: refund.retainedPayoutCents,
-      disputeReason: null,
-    },
+    cancellation,
     'confirmed',
     booking.payoutReleasedAt,
   );
+
+  if (!cancelled) {
+    /*
+     * The refund is out, so the row has to agree with it. The one way to lose
+     * the `confirmed` predicate with a live refund is the vendor completing the
+     * booking across the event-date boundary during the Stripe round trips
+     * (VEN-425). Left as `completed` it would pay the vendor in full after the
+     * customer has been refunded, and a retry is refused, so the cancellation
+     * is carried through from `completed`. Any other loser (a dispute hold, a
+     * sweep that released the payout) still needs a human.
+     */
+    const current = await findBookingById(context.db, bookingId);
+
+    if (current?.status === 'completed') {
+      cancelled = await cancelBookingAndFreeDate(
+        context.db,
+        bookingId,
+        cancellation,
+        'completed',
+        current.payoutReleasedAt,
+      );
+    }
+  }
 
   if (!cancelled) {
     /*

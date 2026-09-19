@@ -1016,6 +1016,11 @@ export type QuoteBookingRequestInput = z.infer<typeof quoteBookingRequestSchema>
 
 export const cancelBookingSchema = z.object({
   reason: freeText().max(1_000).optional(),
+  /**
+   * The refund the customer was shown and confirmed. A mismatch with the
+   * server's own quote answers 409 before any money moves (VEN-425).
+   */
+  expectedRefundCents: z.number().int().nonnegative().optional(),
 });
 export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 
