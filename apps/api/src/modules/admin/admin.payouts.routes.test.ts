@@ -314,6 +314,34 @@ describe('admin payout health', () => {
       expect(detail.json()).toMatchObject({ payoutStranded: true });
     });
 
+    it('is stranded rather than failing once a vendor with a failed attempt is banned', async () => {
+      await paidBooking({
+        status: 'completed',
+        payoutAttempts: 2,
+        payoutFailureReason: 'Stripe said no',
+      });
+      const filtered = async () => (await payments('?flag=payout-failing')).json();
+
+      /* The control: before the ban it is failing and listed under the filter. */
+      expect((await filtered()).total).toBe(1);
+
+      const [profile] = await harness.database.db
+        .select({ userId: vendorProfiles.userId })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendorProfileId));
+      await harness.database.db
+        .update(users)
+        .set({ isBanned: true })
+        .where(eq(users.id, profile!.userId));
+
+      expect((await payments()).json().items[0]).toMatchObject({
+        payoutStranded: true,
+        payoutFailing: false,
+        payoutAttempts: 2,
+      });
+      expect((await filtered()).total).toBe(0);
+    });
+
     it('does not flag a released payout on a banned vendor', async () => {
       await paidBooking({
         status: 'completed',

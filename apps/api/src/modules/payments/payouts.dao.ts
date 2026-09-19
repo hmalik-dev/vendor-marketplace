@@ -83,6 +83,17 @@ export function payoutFailingClauses(): SQL[] {
     ...payoutOwedClauses(),
     gt(bookings.payoutAttempts, 0),
     notInArray(bookings.status, [...HELD_PAYOUT_STATUSES]),
+    /*
+     * A banned or closed owner is **stranded**, not failing (VEN-445): the sweep
+     * no longer selects the row, so "the scheduled release keeps trying" would
+     * be false. A subquery, so the count queries need no new join.
+     */
+    sql`not exists (
+      select 1 from ${vendorProfiles}
+      inner join ${users} on ${users.id} = ${vendorProfiles.userId}
+      where ${vendorProfiles.id} = ${bookings.vendorId}
+        and (${users.isBanned} or ${users.deletedAt} is not null)
+    )`,
   ];
 }
 

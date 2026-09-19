@@ -790,7 +790,7 @@ export async function listPayments(
        * comes from the same shared function the sweep's own retry uses, so the
        * filter and the rows it returns cannot answer differently.
        */
-      payoutFailing: isPayoutFailing(row),
+      payoutFailing: isPayoutFailing(row) && !row.vendorUnpayable,
       payoutStranded: isPayoutStranded(row),
     })),
     total,

@@ -250,7 +250,7 @@ export async function readBookingDetail(
   return {
     ...booking,
     payoutStatus: payoutStatusOf(booking),
-    payoutFailing: isPayoutFailing(booking),
+    payoutFailing: isPayoutFailing(booking) && !vendorUnpayable,
     payoutStranded: isPayoutStranded({ ...booking, vendorUnpayable }),
     vendor: { id: vendorId, businessName: vendorName, payoutHold: vendorPayoutHold },
     customer: {
