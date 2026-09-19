@@ -51,6 +51,15 @@ describe('alertNow', () => {
     expect(log.error).toHaveBeenCalledTimes(1);
   });
 
+  it('sends an unrecorded alert once per subject per window, so an outage cannot mailbomb', async () => {
+    const { all, sent } = deps();
+    const alert = refundFailedAlert({ bookingId: 'b-flood', during: 'a test' });
+
+    expect(await alertNow(all, alert)).toBe('sent');
+    expect(await alertNow(all, alert)).toBe('deduplicated');
+    expect(sent).toHaveLength(1);
+  });
+
   it('reports failed, and skips releasing a row it never wrote, when the unrecorded send also fails', async () => {
     const { all, log } = deps({
       send: async () => {

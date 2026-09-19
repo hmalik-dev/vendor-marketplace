@@ -62,6 +62,9 @@ export interface OperatorAlertDeps {
 /** Waits before each retry of a failed alert send — two retries, then give up. */
 export const OPERATOR_ALERT_RETRY_DELAYS_MS = [2_000, 10_000] as const;
 
+/** When each alert last went out with no dedupe row behind it, per instance. */
+const unrecordedSends = new Map<string, number>();
+
 export type AlertResult = 'sent' | 'logged' | 'deduplicated' | 'failed';
 
 export interface RenderedOperatorEmail {
@@ -118,7 +121,9 @@ export async function alertNow(
    * telling a person. When it cannot be written — a database outage, which is
    * the likeliest cause of the incidents this watches for — the alert goes out
    * anyway under a fresh idempotency key: a duplicate email is the cheaper
-   * mistake than a page that never happens (VEN-430).
+   * mistake than a page that never happens (VEN-430). Duplicates are capped at
+   * one per kind and subject per instance per dedupe window, so an outage an
+   * anonymous flood rides cannot turn into a mailbomb.
    */
   let id: string | null;
   let recorded = true;
@@ -133,6 +138,14 @@ export async function alertNow(
       { kind: alert.kind, subjectId: alert.subjectId, err: error },
       'Could not record an operator alert; sending it unrecorded',
     );
+    const key = `${alert.kind}:${alert.subjectId}`;
+    const last = unrecordedSends.get(key);
+
+    if (last !== undefined && now.getTime() - last < OPERATOR_ALERT_DEDUPE_MS) {
+      return 'deduplicated';
+    }
+
+    unrecordedSends.set(key, now.getTime());
     id = randomUUID();
     recorded = false;
   }
@@ -331,6 +344,31 @@ export function refundFailedAlert(input: { bookingId: string; during: string }):
       `Booking: ${input.bookingId}`,
     ],
     adminPath: '/admin/bookings',
+  };
+}
+
+/**
+ * A refund Stripe later failed on a payment no booking owns — the refund of a
+ * charge on a request the platform had already declined, which by design has no
+ * booking row. The operator was told that refund was on its way, so this is the
+ * correction, keyed on the payment intent.
+ */
+export function unmatchedRefundFailedAlert(input: {
+  refundId: string;
+  paymentIntentId: string;
+  status: string;
+  amountCents: number;
+}): OperatorAlert {
+  return {
+    kind: 'refund_failed',
+    subjectId: `pi:${input.paymentIntentId}`,
+    summary: `Refund ${input.refundId} on ${input.paymentIntentId} ${input.status}`,
+    details: [
+      `Stripe marked the ${formatPrice(input.amountCents)} refund ${input.status} after accepting it; the customer's money has not moved.`,
+      `Payment intent: ${input.paymentIntentId}`,
+      'No booking owns this payment (a charge on a declined request). Refund it from the Stripe dashboard.',
+    ],
+    adminPath: '/admin/payments',
   };
 }
 

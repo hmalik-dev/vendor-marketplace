@@ -22,6 +22,7 @@ import {
   recordPersistedWebhookFailure,
   refundFailedAlert,
   stripeWebhookFailingAlert,
+  unmatchedRefundFailedAlert,
   vendorPayoutsDisabledAlert,
 } from '../operator-alerts/operator-alerts.service.js';
 import { findBookingIdByPaymentIntent } from '../operator-alerts/operator-alerts.dao.js';
@@ -240,6 +241,16 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
       return;
     }
 
+    /*
+     * Only a server error is written to the persisted window. It is the one
+     * kind an anonymous caller cannot produce, so the rate limiter still caps
+     * what a flood costs the database; the other kinds alert from the
+     * in-process window alone.
+     */
+    if (failure !== 'server-error') {
+      return;
+    }
+
     app.operatorAlerts.dispatch(async () => {
       try {
         const persisted = await recordPersistedWebhookFailure(app.db, app.clock, failure);
@@ -380,7 +391,15 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
         const bookingId = await findBookingIdByPaymentIntent(app.db, refund.paymentIntentId);
 
         if (!bookingId) {
-          return 'refund-unchanged';
+          app.operatorAlerts.dispatch(
+            unmatchedRefundFailedAlert({
+              refundId: refund.refundId,
+              paymentIntentId: refund.paymentIntentId,
+              status: refund.status,
+              amountCents: refund.amountCents,
+            }),
+          );
+          return 'refund-failed';
         }
 
         app.operatorAlerts.dispatch(

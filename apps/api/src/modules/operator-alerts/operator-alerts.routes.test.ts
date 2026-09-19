@@ -476,6 +476,28 @@ describe('operator alerts', () => {
     ]);
   });
 
+  it('alerts when a refund on a payment with no booking later fails', async () => {
+    harness.stripe.refunds.push({
+      paymentIntentId: 'pi_declined_request',
+      amountCents: TOTAL_CENTS,
+      reason: 'requested_by_customer',
+      idempotencyKey: undefined,
+      reverseTransfer: false,
+      refundApplicationFee: false,
+      status: 'failed',
+    });
+    harness.stripe.nextEvent = { type: 'refund.failed', accountId: null, objectId: 're_test_1' };
+
+    expect((await postStripe()).json().outcome).toBe('refund-failed');
+    await harness.flushEmail();
+
+    const sent = operatorMail();
+    expect(sent.map((message) => message.subject)).toEqual([
+      '[Orla ops] Refund re_test_1 on pi_declined_request failed',
+    ]);
+    expect(sent[0]!.text).toContain('Payment intent: pi_declined_request');
+  });
+
   it('emails when a dispute names a payment intent no booking owns', async () => {
     const response = await deliverDispute('dp_orphan', 'pi_no_booking');
 
