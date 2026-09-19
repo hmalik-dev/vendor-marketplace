@@ -188,7 +188,6 @@ describe('ENV_REGISTRY integrity', () => {
     const moded = ALL_VARIABLES.filter((variable) => variable.modes !== undefined);
 
     expect(moded.map((variable) => variable.key)).toEqual([
-      'CLERK_SECRET_KEY',
       'STRIPE_SECRET_KEY',
       'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
     ]);
@@ -210,7 +209,7 @@ describe('ENV_REGISTRY integrity', () => {
   });
 
   it('leaves a credential with no mode in its prefix unrestricted by target', () => {
-    for (const key of ['CLERK_WEBHOOK_SECRET', 'DATABASE_URL', 'S3_ACCESS_KEY_ID']) {
+    for (const key of ['STRIPE_WEBHOOK_SECRET', 'DATABASE_URL', 'S3_ACCESS_KEY_ID']) {
       const variable = findVariable(key);
 
       expect(variable, key).toBeDefined();
@@ -220,7 +219,7 @@ describe('ENV_REGISTRY integrity', () => {
   });
 
   it('falls back to the local shape in production when none is tightened', () => {
-    const webhook = findVariable('CLERK_WEBHOOK_SECRET');
+    const webhook = findVariable('STRIPE_WEBHOOK_SECRET');
 
     expect(webhook).toBeDefined();
     expect(shapeFor(webhook!, 'production')).toBe(webhook?.shape);
@@ -256,7 +255,7 @@ describe('capability index', () => {
     const keys = variablesForAll(['auth', 'core']).map((variable) => variable.key);
 
     expect(keys[0]).toBe('NODE_ENV');
-    expect(keys).toContain('CLERK_SECRET_KEY');
+    expect(keys).toContain('NEON_AUTH_BASE_URL');
     expect(keys).not.toContain('STRIPE_SECRET_KEY');
   });
 });
@@ -282,12 +281,7 @@ describe('registrySchemaShape', () => {
   it('includes only the rows the consumer reads', () => {
     const shape = registrySchemaShape({ consumer: 'api', capabilities: ['auth'] });
 
-    expect(Object.keys(shape).sort()).toEqual([
-      'CLERK_SECRET_KEY',
-      'CLERK_WEBHOOK_ENDPOINT',
-      'CLERK_WEBHOOK_SECRET',
-      'NEON_AUTH_BASE_URL',
-    ]);
+    expect(Object.keys(shape).sort()).toEqual(['NEON_AUTH_BASE_URL', 'NEON_AUTH_DATABASE_URL']);
   });
 
   it('keeps tooling-only rows out of the API contract', () => {

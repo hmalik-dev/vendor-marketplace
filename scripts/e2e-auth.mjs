@@ -13,10 +13,10 @@
 // Output: .auth/<role>.json — gitignored. Load it with
 //   browser.newContext({ storageState: '.auth/vendor.json' })
 //
-// The accounts are Neon Auth identities on the dev branch (VEN-447), created
-// once with a verified address, so signing in needs no inbox and no code. The
-// operator account is still a Clerk identity until VEN-448 moves it, so `admin`
-// is skipped here unless it is named on argv.
+// The accounts are Neon Auth identities on the dev branch (VEN-447, VEN-448),
+// created once with a verified address, so signing in needs no inbox and no
+// code. The operator account is one of them; its `users.role` is granted by
+// `db:seed:e2e`, never by signing in.
 import { chromium } from 'playwright';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -94,10 +94,6 @@ try {
   for (const role of wanted) {
     const email = env[`E2E_${role.toUpperCase()}_EMAIL`];
     const password = env[`E2E_${role.toUpperCase()}_PASSWORD`];
-    if (role === 'admin' && !explicit) {
-      console.log('  admin: skipped — the operator account is still a Clerk identity (VEN-448)');
-      continue;
-    }
     if (!email || !password) {
       /*
        * A role nobody asked for individually is skipped, not failed. `admin` is

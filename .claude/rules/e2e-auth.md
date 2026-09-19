@@ -31,8 +31,14 @@ Customer and vendor are **Neon Auth** identities on the `dev` branch
 is an email and a password: no challenge, no code, no inbox. A third persistent
 account, `E2E_NEWCOMER_EMAIL`, has **no `users` row** and must never accept the
 Terms — it is the no-row persona (`e2e/no-row-account.ts`). The operator account
-is still a Clerk identity until VEN-448 moves it, so `pnpm e2e:auth` skips
-`admin` unless you name it, and `/admin` is unreachable meanwhile.
+is the fourth, `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD`: an identity like the
+others, but the one that `db:seed:e2e` gives `users.role = 'admin'` — the role
+is never reachable by signing up. `db:seed:e2e` resolves its id by signing in
+as it, exactly as it does the customer and vendor, so all three roles come from
+one mechanism. **Never close it**: closing an account deletes its Neon Auth
+identity, the seed resolves ids and cannot rebuild one, and `/admin` is then
+unreachable until a person recreates it. The operator-closure spec closes a
+disposable `seed_e2e_…` operator row instead.
 
 ## Rules
 
@@ -63,7 +69,7 @@ is still a Clerk identity until VEN-448 moves it, so `pnpm e2e:auth` skips
 - **Off localhost there is no default.** `resolveBaseUrl` puts `E2E_BASE_URL` at
   the top of its chain precisely so a run can be aimed at a deployed origin, and
   `docs/pre-launch.md` records that production still authenticates against the
-  **same Clerk development instance** — so the E2E passwords work there and
+  **same Neon Auth branch** — so the E2E passwords work there and
   `admin` carries authority over the real console. `pnpm e2e:auth` therefore
   refuses to choose roles for a non-loopback origin and makes you name them
   (`scripts/e2e-roles.mjs`). Signing in against a deployment stays possible; it

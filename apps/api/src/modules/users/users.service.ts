@@ -67,6 +67,12 @@ export function mirroredAuthName(value: string): string {
   return stripBidiControls(value).trim();
 }
 
+/** First and last name out of Better Auth's single `name` field. */
+export function splitAuthName(name: string): { firstName: string; lastName: string } {
+  const [first = '', ...rest] = name.trim().split(/\s+/);
+  return { firstName: first, lastName: rest.join(' ') };
+}
+
 /**
  * A Clerk identity as the local row records it — normalised, and stated once,
  * so `normalizeRole` and `mirroredAuthName` cannot be forgotten by a caller.

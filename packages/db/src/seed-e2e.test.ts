@@ -243,6 +243,74 @@ describe('seedE2eFixtures', () => {
     expect(row?.role).toBe('admin');
   });
 
+  /**
+   * A database that predates the Clerk to Neon Auth swap holds the operator under
+   * a Clerk id. The identity Neon Auth now resolves has the same address, so an
+   * upsert keyed on `auth_user_id` alone inserts a second row and dies on the
+   * unique email — leaving `/admin` unreachable.
+   */
+  describe('a row the previous identity provider issued', () => {
+    const CLERK_ID = 'user_3Ih6Qg2FLQhY4qUsPAE7dS8lL5r';
+    const NEON_ID = 'b139cd4d-6f64-4860-913d-86137bc605fb';
+    const ADMIN = {
+      authUserId: NEON_ID,
+      email: 'admin+clerk_test@example.com',
+      firstName: 'Ada',
+      lastName: 'Admin',
+    };
+
+    it('is re-keyed to the Neon id rather than duplicated, and a second run changes nothing', async () => {
+      const [legacy] = await database.db
+        .insert(users)
+        .values({
+          authUserId: CLERK_ID,
+          email: ADMIN.email,
+          role: 'admin',
+          firstName: 'Old',
+          lastName: 'Admin',
+        })
+        .returning({ id: users.id });
+
+      const first = await seedE2eFixtures(database.db, { ...INPUT, admin: ADMIN });
+      const second = await seedE2eFixtures(database.db, { ...INPUT, admin: ADMIN });
+
+      const rows = await database.db
+        .select({ id: users.id, authUserId: users.authUserId, role: users.role })
+        .from(users)
+        .where(eq(users.email, ADMIN.email));
+
+      expect(first.adminUserId).toBe(legacy?.id);
+      expect(second.adminUserId).toBe(legacy?.id);
+      expect(rows).toEqual([{ id: legacy?.id, authUserId: NEON_ID, role: 'admin' }]);
+    });
+
+    it('is left alone when the Neon id already has its own row', async () => {
+      await database.db.insert(users).values({
+        authUserId: NEON_ID,
+        email: 'someone-else@example.com',
+        role: 'customer',
+        firstName: 'Sam',
+        lastName: 'Else',
+      });
+      await database.db.insert(users).values({
+        authUserId: CLERK_ID,
+        email: ADMIN.email,
+        role: 'customer',
+        firstName: 'Old',
+        lastName: 'Admin',
+      });
+
+      await expect(seedE2eFixtures(database.db, { ...INPUT, admin: ADMIN })).rejects.toThrow();
+
+      const legacy = await database.db
+        .select({ authUserId: users.authUserId })
+        .from(users)
+        .where(eq(users.email, ADMIN.email));
+
+      expect(legacy).toEqual([{ authUserId: CLERK_ID }]);
+    });
+  });
+
   it('marks the vendor able to take payment, so accept is not blocked by the payout gate', async () => {
     const result = published(await seedE2eFixtures(database.db, INPUT));
 

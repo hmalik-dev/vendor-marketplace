@@ -338,9 +338,9 @@ describe('log redaction', () => {
 
     await harness.app.inject({
       method: 'POST',
-      url: '/webhooks/clerk',
+      url: '/webhooks/resend',
       headers: { ...SVIX_HEADERS, 'content-type': 'application/json' },
-      payload: JSON.stringify({ type: 'session.created', data: { id: 'sess_1' } }),
+      payload: JSON.stringify({ type: 'email.delivered', data: { email_id: 'em_1' } }),
     });
 
     expect(captured.join('')).not.toContain('valid-signature');

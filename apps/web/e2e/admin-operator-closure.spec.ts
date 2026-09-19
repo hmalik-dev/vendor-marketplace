@@ -3,20 +3,24 @@ import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { promisify } from 'node:util';
 
-import { resolveE2EBaseUrl } from './base-url';
 import { AUTH_DIR, expect, expectSignedIn, storageStatePath, test } from './fixtures';
-import { assertLoopbackOrigin, clerk } from './no-row-account';
 
 /**
  * VEN-391: an operator closes **another operator's** account, past a typed
  * confirmation on the target's address.
  *
- * The target is a disposable operator minted by this spec — a `+clerk_test`
- * identity created through Clerk's Backend API and given an operator row by
+ * The target is a disposable operator row minted by this spec through
  * `e2e:operator` — never the persistent E2E admin, whose identity the seed
  * resolves and cannot rebuild. The persistent admin is the **actor**; the two of
- * them are the two live operators that let the closure through. Whatever
- * happens, the identity and the row are removed afterwards.
+ * them are the two live operators that let the closure through.
+ *
+ * The row carries a `seed_e2e_…` id rather than a Neon Auth identity, on
+ * purpose: a Neon Auth identity cannot be minted without an inbox (sign-in
+ * refuses an unverified address), and this spec must not spend one of the
+ * persistent accounts. A closure owes a seeded id nothing at the identity
+ * provider, so the console and the unwind are exercised in full; the identity
+ * deletion itself is asserted in `data-rights.routes.test.ts`. Whatever
+ * happens, the row is removed afterwards.
  */
 const ADMIN_STATE = storageStatePath('admin');
 const run = promisify(execFile);
@@ -41,20 +45,9 @@ test('an operator closes another operator only after typing their address exactl
     );
   }
 
-  assertLoopbackOrigin(resolveE2EBaseUrl());
-
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-  const email = `e2e-operator-${stamp}+clerk_test@example.com`;
-  const minted = await clerk('/users', {
-    method: 'POST',
-    body: {
-      email_address: [email],
-      password: `Operator-${stamp}-Qx!`,
-      skip_password_checks: true,
-    },
-  });
-  expect(minted.ok, `Clerk refused to mint the disposable operator: ${minted.status}`).toBe(true);
-  const { id: authUserId } = (await minted.json()) as { id: string };
+  const email = `e2e-operator-${stamp}@example.com`;
+  const authUserId = `seed_e2e_operator_${stamp}`;
   const context = await browser.newContext({ storageState: ADMIN_STATE });
 
   try {
@@ -73,7 +66,7 @@ test('an operator closes another operator only after typing their address exactl
       "Close Disposable Operator's operator account?",
     );
     await expect(dialog).toContainText(
-      "Only someone with access to Clerk's dashboard can give them a sign-in again",
+      'Only someone with access to the Neon Auth console can give them a sign-in again',
     );
     await expect(confirm).toBeDisabled();
 
@@ -89,14 +82,8 @@ test('an operator closes another operator only after typing their address exactl
     await expect(page.getByText(/^Closed \d{4}-\d{2}-\d{2}$/)).toBeVisible();
     // Not `getByRole('alert')`: Next's route announcer carries that role on every page.
     await expect(page.getByText(/This needs a person/)).toHaveCount(0);
-
-    // The closure deleted the sign-in itself, not just the row.
-    expect((await clerk(`/users/${authUserId}`, { method: 'GET' })).status).toBe(404);
   } finally {
     await context.close();
-    // The row first, so a Clerk failure below cannot leave it behind.
     await e2eOperator('remove', authUserId, email);
-    const deleted = await clerk(`/users/${authUserId}`, { method: 'DELETE' });
-    expect([200, 404]).toContain(deleted.status);
   }
 });

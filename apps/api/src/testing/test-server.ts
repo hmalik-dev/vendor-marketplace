@@ -45,9 +45,6 @@ export const TEST_ENV: ApiEnv = {
   LOG_LEVEL: 'silent',
   DATABASE_URL: 'postgres://test',
   NEON_AUTH_BASE_URL: 'https://ep-test.neonauth.example.invalid/neondb/auth',
-  CLERK_SECRET_KEY: 'sk_test_not_used',
-  CLERK_WEBHOOK_SECRET: 'whsec_not_used',
-  CLERK_WEBHOOK_ENDPOINT: 'http://localhost:4000/webhooks/clerk',
   WEB_URL: 'http://localhost:3000',
   /*
    * Deliberately not shaped like real Stripe credentials, and deliberately too
@@ -815,7 +812,9 @@ export interface TestHarness<TDatabase extends HarnessDatabase = TestDatabase> {
   database: TDatabase;
   /** Objects written through `app.storage`, in the order they were stored. */
   storedObjects: RecordedObject[];
-  /** Clerk identities the fake token verifier and lazy-sync loader resolve. */
+  /** Neon Auth identities the fake token verifier and acceptance-gate loader resolve. */
+  authUsers: Map<string, AuthUserSnapshot>;
+  /** The old name of `authUsers`, kept so peer lanes' suites still compile; VEN-449 retires it. */
   clerkUsers: Map<string, AuthUserSnapshot>;
   /** Signatures the fake svix verifier accepts; anything else is rejected. */
   validWebhookSignatures: Set<string>;
@@ -838,13 +837,16 @@ export interface TestHarness<TDatabase extends HarnessDatabase = TestDatabase> {
    * Clerk identities the fake deleter ended, in order (#451).
    *
    * Also the fake's record of **who is gone**: the token verifier refuses an
-   * id in this list, and the deleter drops it from `clerkUsers` as well, so an
+   * id in this list, and the deleter drops it from `authUsers` as well, so an
    * identity a closure ended stops resolving on both paths. That is what makes
    * "that person is signed out now" assertable rather than assumed. Clearing
    * it between tests brings those identities back.
    */
+  deletedAuthUsers: string[];
+  /** Simulates the identity store refusing the deletion, for the half-closed account case. */
+  setAuthDeletionFails: (fails: boolean) => void;
+  /** The old names of the two above, kept for the same reason as `clerkUsers`. */
   deletedClerkUsers: string[];
-  /** Simulates Clerk refusing the deletion, for the half-closed account case. */
   setClerkDeletionFails: (fails: boolean) => void;
   close: () => Promise<void>;
 }
@@ -873,7 +875,7 @@ export async function createTestHarness(
   // the suites see the same rows the running application does.
   await seedReferenceData(database.db);
 
-  const clerkUsers = new Map<string, AuthUserSnapshot>();
+  const authUsers = new Map<string, AuthUserSnapshot>();
   const acceptTerms = options.acceptTerms ?? true;
   const validWebhookSignatures = new Set<string>(['valid-signature']);
   const stripe = createFakeStripe();
@@ -881,8 +883,8 @@ export async function createTestHarness(
   const storedObjects: RecordedObject[] = [];
 
   let storageAvailable = true;
-  let clerkDeletionFails = false;
-  const deletedClerkUsers: string[] = [];
+  let authDeletionFails = false;
+  const deletedAuthUsers: string[] = [];
 
   const storage: ObjectStorage = {
     put: async (key, body, contentType) => {
@@ -958,61 +960,58 @@ export async function createTestHarness(
          * refusals carry different messages, which is what lets a suite say
          * which one it got.
          */
-        if (deletedClerkUsers.includes(authUserId)) {
-          throw new Error(`Test Clerk identity ${authUserId} was deleted`);
+        if (deletedAuthUsers.includes(authUserId)) {
+          throw new Error(`Test auth identity ${authUserId} was deleted`);
         }
 
         if (acceptTerms) {
-          await ensureAcceptedAccount(database.db, clerkUsers.get(authUserId));
+          await ensureAcceptedAccount(database.db, authUsers.get(authUserId));
         }
 
         return authUserId;
       },
       loadAuthUser: async (authUserId) => {
-        const snapshot = clerkUsers.get(authUserId);
+        const snapshot = authUsers.get(authUserId);
         if (!snapshot) {
-          throw new Error(`No test Clerk identity registered for ${authUserId}`);
+          throw new Error(`No test auth identity registered for ${authUserId}`);
         }
         return snapshot;
       },
       /*
-       * The identity really goes, rather than being counted.
-       *
-       * It is recorded in `deletedClerkUsers`, which the token verifier above
-       * refuses, and dropped from `clerkUsers`, which the lazy-sync loader
-       * reads — so a suite can present the deleted person's token afterwards
-       * and watch it fail the way a deleted Clerk session does, instead of
-       * asserting only that a function was called.
-       */
-      /*
-       * Clerk's user list is the same registry the loader reads, so an id a
+       * The identity store is the same registry the loader reads, so an id a
        * suite never registered — or one a closure deleted — reads as gone.
+       *
+       * A deletion really happens, rather than being counted: it is recorded in
+       * `deletedAuthUsers`, which the token verifier above refuses, and dropped
+       * from `authUsers`, which the acceptance gate's loader reads — so a suite
+       * can present the deleted person's token afterwards and watch it fail the
+       * way a deleted session does, instead of asserting only that a function
+       * was called.
        */
-      clerkUsers: {
-        getUserList: async ({ userId }) =>
-          userId.flatMap((id) => {
-            const snapshot = clerkUsers.get(id);
+      directory: {
+        lookup: async (ids) =>
+          ids.flatMap((id) => {
+            const snapshot = authUsers.get(id);
             return snapshot
               ? [
                   {
                     id,
-                    emailAddresses: [{ id: 'idn_primary', emailAddress: snapshot.email }],
-                    primaryEmailAddressId: 'idn_primary',
-                    firstName: snapshot.firstName,
-                    lastName: snapshot.lastName,
-                    imageUrl: snapshot.avatarUrl ?? null,
+                    email: snapshot.email,
+                    name: [snapshot.firstName, snapshot.lastName].filter(Boolean).join(' '),
+                    image: snapshot.avatarUrl ?? null,
                   },
                 ]
               : [];
           }),
-      },
-      deleteClerkUser: async (authUserId) => {
-        if (clerkDeletionFails) {
-          throw new Error('Test Clerk deletion refused');
-        }
+        deleteIdentity: async (authUserId) => {
+          if (authDeletionFails) {
+            throw new Error('Test identity deletion refused');
+          }
 
-        deletedClerkUsers.push(authUserId);
-        clerkUsers.delete(authUserId);
+          deletedAuthUsers.push(authUserId);
+          return authUsers.delete(authUserId);
+        },
+        close: async () => {},
       },
       ...options.neonAuth,
     },
@@ -1033,16 +1032,21 @@ export async function createTestHarness(
     database,
     email,
     storedObjects,
-    clerkUsers,
+    authUsers,
+    clerkUsers: authUsers,
     validWebhookSignatures,
     stripe,
     flushEmail: () => app.background.drain(),
     setStorageAvailable: (available) => {
       storageAvailable = available;
     },
-    deletedClerkUsers,
+    deletedAuthUsers,
+    setAuthDeletionFails: (fails) => {
+      authDeletionFails = fails;
+    },
+    deletedClerkUsers: deletedAuthUsers,
     setClerkDeletionFails: (fails) => {
-      clerkDeletionFails = fails;
+      authDeletionFails = fails;
     },
     close: async () => {
       await app.close();

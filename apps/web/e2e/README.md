@@ -105,13 +105,12 @@ one drifts.
 ## The route-landing sweep
 
 `route-landing.spec.ts` visits every route and every literal redirect
-destination as five personas — signed out, customer, vendor, admin, and a
-freshly minted Clerk identity with **no `users` row** (`no-row-account.ts`,
-deleted afterwards). The targets come from `route-targets.ts`, which walks
+destination as five personas — signed out, customer, vendor, admin, and the
+persistent newcomer identity with **no `users` row** (`no-row-account.ts`). The targets come from `route-targets.ts`, which walks
 `src/app` and greps the redirect calls, so a new route is covered without
 editing the spec. Run it against `next start`, not `next dev`, with the rate
-limit raised; the no-row persona needs `CLERK_SECRET_KEY` from the environment
-or the root `.env`.
+limit raised; the no-row persona needs `E2E_NEWCOMER_EMAIL` and
+`E2E_NEWCOMER_PASSWORD` from `.env.e2e.local`.
 
 ## The paid booking journey
 

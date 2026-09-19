@@ -97,9 +97,9 @@ export interface E2eAccount {
    * Not optional and not inventable. A `users` row carrying the end-to-end
    * email under a made-up id makes the account's first real sign-in hit
    * `users_email_key`: `insertUserIfAbsent` declines the write, finds no row
-   * under the real Clerk id, and **throws** naming that id — so the account
+   * under the real Neon Auth id, and **throws** naming that id — so the account
    * cannot sign in until somebody removes the fixture's row. The fixture is
-   * therefore only ever allowed to attach to the identity Clerk actually has.
+   * therefore only ever allowed to attach to the identity Neon Auth actually has.
    *
    * #442 changed how it fails without changing that it fails. The conflict is
    * now swallowed by an untargeted `DO NOTHING` rather than raising a 23505,
@@ -122,7 +122,7 @@ export interface E2eSeedInput {
    * seeds, rather than every lane breaking on a file it cannot edit for itself.
    *
    * It exists because `role = 'admin'` cannot be reached from inside the
-   * product: the role is read from Clerk's `unsafeMetadata` at first sign-in,
+   * product: the role is chosen at first acceptance,
    * falls back to `customer`, and is immutable afterwards — so no sign-up flow
    * produces an admin, and `seed-demo.ts` gives its admin a synthetic
    * `auth_user_id` that cannot authenticate. Before this, the only route to
@@ -329,11 +329,44 @@ export async function seedE2eFixtures<
 }
 
 /**
- * Ensures the local row for a Clerk identity, and that it holds the role the
+ * A `users` row the previous identity provider issued (a Clerk id, `user_` plus
+ * 24 or more alphanumerics) or a seeded one (`seed_…`), as SQL. Mirrors
+ * `isUnbackedIdentity` in the API, which this package cannot import.
+ */
+const UNBACKED_AUTH_ID = sql`(${users.authUserId} ~ '^user_[A-Za-z0-9]{24,}$' or ${users.authUserId} like 'seed\\_%')`;
+
+/**
+ * Re-keys a pre-swap row to the identity Neon Auth actually holds.
+ *
+ * A database that predates the Clerk to Neon Auth swap already has the fixture's
+ * row under a Clerk id. The upsert below is keyed on `auth_user_id`, so without
+ * this it would insert a second row and die on the unique email. Only a row no
+ * identity backs is touched, and only when the Neon id has no row yet: a
+ * Neon-keyed row is never re-keyed, and its email and role are left to the
+ * upsert exactly as before. Re-running finds nothing to adopt.
+ */
+async function adoptUnbackedRow(tx: Tx, account: E2eAccount): Promise<void> {
+  const [existing] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.authUserId, account.authUserId));
+
+  if (existing) {
+    return;
+  }
+
+  await tx
+    .update(users)
+    .set({ authUserId: account.authUserId, updatedAt: sql`now()` })
+    .where(and(sql`lower(${users.email}) = lower(${account.email})`, UNBACKED_AUTH_ID));
+}
+
+/**
+ * Ensures the local row for a Neon Auth identity, and that it holds the role the
  * fixture needs.
  *
- * The role is forced rather than left alone: it comes from Clerk's
- * `unsafeMetadata` at first sign-in, falls back to `customer` for anything
+ * The role is forced rather than left alone: it comes from the sign-up choice
+ * at first acceptance, falls back to `customer` for anything
  * unrecognised, and is immutable afterwards — so an end-to-end vendor account
  * that signed up without the hint has a `customer` row that nothing in the
  * application can correct, and every vendor guard refuses it.
@@ -343,6 +376,8 @@ async function upsertAccount(
   account: E2eAccount,
   role: 'vendor' | 'customer' | 'admin',
 ): Promise<string> {
+  await adoptUnbackedRow(tx, account);
+
   const [row] = await tx
     .insert(users)
     .values({

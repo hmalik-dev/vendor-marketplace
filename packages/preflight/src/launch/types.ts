@@ -7,7 +7,7 @@ import type { HttpGet } from './http.js';
  */
 export type LaunchStatus = 'PASS' | 'FAIL' | 'SKIP' | 'MANUAL';
 
-export type LaunchGroup = 'clerk' | 'stripe' | 'resend' | 'storage' | 'database' | 'env' | 'app';
+export type LaunchGroup = 'auth' | 'stripe' | 'resend' | 'storage' | 'database' | 'env' | 'app';
 
 export interface LaunchResult {
   readonly group: LaunchGroup;

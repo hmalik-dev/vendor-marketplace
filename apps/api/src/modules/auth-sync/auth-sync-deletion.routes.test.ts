@@ -10,43 +10,45 @@ import {
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import {
-  SVIX_HEADERS,
-  bearer,
-  createTestHarness,
-  type TestHarness,
-} from '../../testing/test-server.js';
+import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { bookingContextFor } from '../payments/payments.service.js';
+import { reconcileAuthUsers } from './auth-sync.reconcile.js';
 
 /* Inside the booking horizon, so a rejection here is the vendor and not the date. */
 const REQUEST_EVENT_DATE = toDateString(addDays(new Date(), 30));
 
 const VENDOR = 'user_deleted_vendor';
 const CUSTOMER = 'user_deleted_customer';
+/** Stays in Neon Auth throughout, so an empty answer is never what a deletion looks like. */
+const CONTROL = 'user_deleted_control';
 
 /**
  * The deletion unwind (#433).
  *
- * A vendor who deleted their Clerk identity used to keep a published,
+ * A vendor whose Neon Auth identity was deleted used to keep a published,
  * searchable, bookable storefront: `softDeleteUserByAuthId` set `deleted_at`
  * and stopped, and no visibility predicate anywhere joined it. Every test here
  * drives the public surface rather than reading the column the fix writes — a
  * grep for `is_deleted` cannot tell a retired storefront from a live one.
  */
-describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
+describe('the reconcile pass — a deleted Neon Auth identity retires a vendor', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  async function post(payload: string) {
-    return harness.app.inject({
-      method: 'POST',
-      url: '/webhooks/clerk',
-      headers: { ...SVIX_HEADERS, 'content-type': 'application/json' },
-      payload,
-    });
-  }
+  /**
+   * The identity is deleted at Neon Auth, then the pass runs — the only way a
+   * deletion reaches the marketplace, since Neon Auth sends no delete event.
+   */
+  async function deleteIdentityAndReconcile(authUserId: string) {
+    await signIn(CONTROL);
+    harness.authUsers.delete(authUserId);
 
-  function deleteEvent(authUserId: string): string {
-    return JSON.stringify({ type: 'user.deleted', data: { id: authUserId, deleted: true } });
+    return reconcileAuthUsers(
+      bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+      harness.app.authDirectory!,
+      {},
+      new Date(),
+    );
   }
 
   async function signIn(authUserId: string): Promise<string> {
@@ -139,14 +141,14 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
     return bookingRows[0]!.id;
   }
 
-  beforeAll(async () => {
-    harness = await createTestHarness();
-
+  /** Neon Auth knowing all three people; a test deletes one and the next gets it back. */
+  function registerIdentities() {
     for (const [authUserId, role] of [
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
+      [CONTROL, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',
@@ -155,6 +157,12 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
         avatarUrl: null,
       });
     }
+  }
+
+  beforeAll(async () => {
+    harness = await createTestHarness();
+
+    registerIdentities();
 
     const rows = await harness.database.db
       .select({ id: categories.id })
@@ -173,6 +181,7 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
     await harness.database.db.delete(users);
     harness.stripe.refunds.length = 0;
     harness.stripe.refundsToRefuse.clear();
+    registerIdentities();
   });
 
   afterAll(async () => {
@@ -182,9 +191,8 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
   it('retires the storefront in the same transaction as the user row', async () => {
     const vendor = await createPublishedVendor();
 
-    const response = await post(deleteEvent(VENDOR));
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ received: true, outcome: 'deleted' });
+    const summary = await deleteIdentityAndReconcile(VENDOR);
+    expect(summary).toMatchObject({ deleted: 1, updated: 0 });
 
     const profiles = await harness.database.db
       .select()
@@ -203,7 +211,7 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
     // a storefront that was never reachable.
     expect((await harness.app.inject({ url: `/vendors/${vendor.slug}` })).statusCode).toBe(200);
 
-    await post(deleteEvent(VENDOR));
+    await deleteIdentityAndReconcile(VENDOR);
 
     const profile = await harness.app.inject({ url: `/vendors/${vendor.slug}` });
     expect(profile.statusCode).toBe(404);
@@ -242,7 +250,7 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
       })
       .returning({ id: bookingRequests.id });
 
-    await post(deleteEvent(VENDOR));
+    await deleteIdentityAndReconcile(VENDOR);
 
     expect(harness.stripe.refunds).toHaveLength(1);
     expect(harness.stripe.refunds[0]).toMatchObject({
@@ -281,7 +289,7 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
     });
     harness.stripe.refundsToRefuse.add('pi_test_refused');
 
-    await post(deleteEvent(VENDOR));
+    await deleteIdentityAndReconcile(VENDOR);
 
     const refusedRow = await harness.database.db
       .select()
@@ -304,22 +312,22 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
     expect(profiles[0]).toMatchObject({ isDeleted: true, isPublished: false });
   });
 
-  it('does not re-refund when Clerk redelivers user.deleted', async () => {
+  it('does not re-refund when the pass runs again over the same deletion', async () => {
     const customerId = await signIn(CUSTOMER);
     const vendor = await createPublishedVendor();
     await createFutureBooking(customerId, vendor.profileId);
 
-    await post(deleteEvent(VENDOR));
-    const replay = await post(deleteEvent(VENDOR));
+    await deleteIdentityAndReconcile(VENDOR);
+    const replay = await deleteIdentityAndReconcile(VENDOR);
 
-    expect(replay.json()).toEqual({ received: true, outcome: 'ignored' });
+    expect(replay).toMatchObject({ deleted: 0, updated: 0 });
     expect(harness.stripe.refunds).toHaveLength(1);
   });
 
   it('hides a storefront whose retirement failed but whose owner is deleted', async () => {
     const vendor = await createPublishedVendor();
 
-    await post(deleteEvent(VENDOR));
+    await deleteIdentityAndReconcile(VENDOR);
 
     /*
      * The belt-and-braces case: the read side must not depend on the write
@@ -365,8 +373,8 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
    * walking away than for asking, repeatable behind a fresh sign-up.
    *
    * D39 ruled that such an account cannot be closed at all, and #438 builds
-   * that refusal. But a Clerk deletion is reactive — the identity is gone
-   * before the webhook hears about it — so this path must still hold the line
+   * that refusal. But a deletion at Neon Auth is reactive — the identity is gone
+   * before the pass hears about it — so this path must still hold the line
    * for a closure that arrives anyway. It leaves the booking standing.
    */
   it('refuses to refund a booking the closed account itself paid for', async () => {
@@ -374,8 +382,8 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
     const vendor = await createPublishedVendor();
     const bookingId = await createFutureBooking(customerId, vendor.profileId);
 
-    const response = await post(deleteEvent(CUSTOMER));
-    expect(response.json()).toEqual({ received: true, outcome: 'deleted' });
+    const summary = await deleteIdentityAndReconcile(CUSTOMER);
+    expect(summary).toMatchObject({ deleted: 1 });
 
     // No money moved, and the row is untouched — still confirmed, still payable.
     expect(harness.stripe.refunds).toEqual([]);
@@ -396,7 +404,7 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
     const vendor = await createPublishedVendor();
     const bookingId = await createFutureBooking(customerId, vendor.profileId);
 
-    await post(deleteEvent(VENDOR));
+    await deleteIdentityAndReconcile(VENDOR);
 
     expect(harness.stripe.refunds).toHaveLength(1);
     expect(harness.stripe.refunds[0]).toMatchObject({ amountCents: 120_000 });
@@ -415,9 +423,9 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
   it('retires nothing for a customer, and still soft-deletes the row', async () => {
     const customerId = await signIn(CUSTOMER);
 
-    const response = await post(deleteEvent(CUSTOMER));
+    const summary = await deleteIdentityAndReconcile(CUSTOMER);
 
-    expect(response.json()).toEqual({ received: true, outcome: 'deleted' });
+    expect(summary).toMatchObject({ deleted: 1 });
     const rows = await harness.database.db.select().from(users).where(eq(users.id, customerId));
     expect(rows[0]?.deletedAt).toBeInstanceOf(Date);
   });

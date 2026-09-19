@@ -1,6 +1,13 @@
 export * from './client.js';
 export { refreshCustomerBookingCounts } from './seed-support.js';
 export { loadEnv } from './load-env.js';
+export {
+  createNeonAuthDirectory,
+  createNeonAuthDirectoryOver,
+  type NeonAuthDirectory,
+  type NeonAuthIdentity,
+  type SqlExecutor,
+} from './neon-auth-directory.js';
 export * from './schema/index.js';
 export {
   seedCategories,

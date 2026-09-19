@@ -3,13 +3,14 @@ import { users } from '@vendor-marketplace/db/schema';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { bookingContextFor } from '../payments/payments.service.js';
-import type { ClerkApiUser, ClerkUserSource } from './clerk-user-source.js';
-import { applyClerkUserEvent } from './clerk.service.js';
+import type { NeonAuthIdentity } from '@vendor-marketplace/db';
+import type { AuthIdentitySource, MirroredIdentity } from './identity.js';
+import { applyAuthSyncEvent } from './auth-sync.service.js';
 
 /*
- * VEN-386. A `user.updated` whose address a live row still holds means that
- * row is the stale one — Clerk allows one identity per address — so the
- * handler asks Clerk about the holder before settling for `diverged`.
+ * VEN-386. An update whose address a live row still holds means that row is the
+ * stale one — Neon Auth allows one identity per address — so the handler asks
+ * it about the holder before settling for `diverged`.
  */
 
 const CLAIMANT = 'user_bea';
@@ -17,35 +18,33 @@ const HOLDER = 'user_ada';
 const CONTESTED = 'x@example.com';
 const NOW = new Date('2026-09-15T12:00:00Z');
 
-function clerkUser(id: string, email: string): ClerkApiUser {
-  return {
-    id,
-    emailAddresses: [{ id: 'idn_primary', emailAddress: email }],
-    primaryEmailAddressId: 'idn_primary',
-  };
+function neonIdentity(id: string, email: string): NeonAuthIdentity {
+  return { id, email, name: '', image: null };
 }
 
-/** Clerk knowing exactly these identities; any other id reads as deleted. */
-function clerkHolding(...people: ClerkApiUser[]) {
+/** Neon Auth knowing exactly these identities; any other id reads as deleted. */
+function directoryHolding(...people: NeonAuthIdentity[]) {
   return {
-    getUserList: vi.fn<ClerkUserSource['getUserList']>(async ({ userId }) => ({
-      data: people.filter((person) => userId.includes(person.id)),
-    })),
+    lookup: vi.fn<AuthIdentitySource['lookup']>(async (ids) =>
+      people.filter((person) => ids.includes(person.id)),
+    ),
   };
 }
 
 function claimAddress() {
   return {
-    type: 'user.updated' as const,
-    data: {
-      id: CLAIMANT,
-      email_addresses: [{ id: 'idn_primary', email_address: CONTESTED }],
-      primary_email_address_id: 'idn_primary',
-    },
+    type: 'updated' as const,
+    identity: {
+      authUserId: CLAIMANT,
+      email: CONTESTED,
+      firstName: null,
+      lastName: null,
+      avatarUrl: null,
+    } satisfies MirroredIdentity,
   };
 }
 
-describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
+describe('applyAuthSyncEvent, when an update meets a stale holder', () => {
   let harness: TestHarness;
   const errors: unknown[][] = [];
 
@@ -91,10 +90,10 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
     return row;
   }
 
-  it('retires a holder Clerk no longer has, and lands the address', async () => {
-    const clerk = clerkHolding(clerkUser(CLAIMANT, CONTESTED));
+  it('retires a holder Neon Auth no longer has, and lands the address', async () => {
+    const directory = directoryHolding(neonIdentity(CLAIMANT, CONTESTED));
 
-    const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
+    const outcome = await applyAuthSyncEvent(context(), claimAddress(), NOW, directory);
 
     expect(outcome).toBe('updated');
     expect((await rowFor(HOLDER))?.deletedAt).toBeInstanceOf(Date);
@@ -106,10 +105,13 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
     expect(claimant?.emailSyncFailedAt).toBeNull();
   });
 
-  it('mirrors a holder Clerk has moved, and lands the address', async () => {
-    const clerk = clerkHolding(clerkUser(CLAIMANT, CONTESTED), clerkUser(HOLDER, 'w@example.com'));
+  it('mirrors a holder Neon Auth has moved, and lands the address', async () => {
+    const directory = directoryHolding(
+      neonIdentity(CLAIMANT, CONTESTED),
+      neonIdentity(HOLDER, 'w@example.com'),
+    );
 
-    const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
+    const outcome = await applyAuthSyncEvent(context(), claimAddress(), NOW, directory);
 
     expect(outcome).toBe('updated');
     expect((await rowFor(HOLDER))?.email).toBe('w@example.com');
@@ -118,13 +120,13 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
     expect((await rowFor(CLAIMANT))?.pendingEmail).toBeNull();
   });
 
-  it('stays diverged, answering normally, when Clerk cannot be reached', async () => {
-    const failure = new Error('Clerk API unavailable');
-    const clerk = {
-      getUserList: vi.fn<ClerkUserSource['getUserList']>().mockRejectedValue(failure),
+  it('stays diverged, answering normally, when Neon Auth cannot be reached', async () => {
+    const failure = new Error('Neon Auth unavailable');
+    const directory = {
+      lookup: vi.fn<AuthIdentitySource['lookup']>().mockRejectedValue(failure),
     };
 
-    const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
+    const outcome = await applyAuthSyncEvent(context(), claimAddress(), NOW, directory);
 
     expect(outcome).toBe('diverged');
     expect((await rowFor(CLAIMANT))?.email).toBe('z@example.com');
@@ -141,12 +143,15 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
       firstName: 'Cy',
       lastName: 'T',
     });
-    const clerk = clerkHolding(clerkUser(CLAIMANT, CONTESTED), clerkUser(HOLDER, 'w@example.com'));
+    const directory = directoryHolding(
+      neonIdentity(CLAIMANT, CONTESTED),
+      neonIdentity(HOLDER, 'w@example.com'),
+    );
 
-    const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
+    const outcome = await applyAuthSyncEvent(context(), claimAddress(), NOW, directory);
 
     expect(outcome).toBe('diverged');
-    expect(clerk.getUserList.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(directory.lookup.mock.calls.length).toBeLessThanOrEqual(2);
     expect((await rowFor(HOLDER))?.email).toBe(CONTESTED);
     expect((await rowFor(HOLDER))?.pendingEmail).toBe('w@example.com');
     expect((await rowFor(CLAIMANT))?.pendingEmail).toBe(CONTESTED);
@@ -154,13 +159,13 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
   });
 
   /*
-   * Clerk not knowing the claimant whose event it just delivered means the key
-   * belongs to another Clerk instance; every holder would read as deleted.
+   * Neon Auth not knowing the claimant being synced means the source is another
+   * branch's; every holder would read as deleted.
    */
-  it('retires nobody when Clerk does not know the claimant either', async () => {
-    const clerk = clerkHolding();
+  it('retires nobody when Neon Auth does not know the claimant either', async () => {
+    const directory = directoryHolding();
 
-    const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
+    const outcome = await applyAuthSyncEvent(context(), claimAddress(), NOW, directory);
 
     expect(outcome).toBe('diverged');
     expect((await rowFor(HOLDER))?.deletedAt).toBeNull();
@@ -168,27 +173,30 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
     expect(errors).toHaveLength(2);
   });
 
-  it('stays diverged when Clerk says the holder still owns the address', async () => {
-    const clerk = clerkHolding(clerkUser(CLAIMANT, CONTESTED), clerkUser(HOLDER, CONTESTED));
+  it('stays diverged when Neon Auth says the holder still owns the address', async () => {
+    const directory = directoryHolding(
+      neonIdentity(CLAIMANT, CONTESTED),
+      neonIdentity(HOLDER, CONTESTED),
+    );
 
-    const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
+    const outcome = await applyAuthSyncEvent(context(), claimAddress(), NOW, directory);
 
     expect(outcome).toBe('diverged');
     expect((await rowFor(HOLDER))?.deletedAt).toBeNull();
     expect((await rowFor(CLAIMANT))?.pendingEmail).toBe(CONTESTED);
   });
 
-  it('never asks Clerk about, or retires, a seeded holder Clerk never issued', async () => {
+  it('never asks Neon Auth about, or retires, a seeded holder it never issued', async () => {
     await harness.database.db
       .update(users)
       .set({ authUserId: 'seed_mkt_ada' })
       .where(eq(users.authUserId, HOLDER));
-    const clerk = clerkHolding();
+    const directory = directoryHolding();
 
-    const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);
+    const outcome = await applyAuthSyncEvent(context(), claimAddress(), NOW, directory);
 
     expect(outcome).toBe('diverged');
-    expect(clerk.getUserList).not.toHaveBeenCalled();
+    expect(directory.lookup).not.toHaveBeenCalled();
     expect((await rowFor('seed_mkt_ada'))?.deletedAt).toBeNull();
   });
 });

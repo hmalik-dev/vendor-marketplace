@@ -1,4 +1,3 @@
-import { ClerkAPIResponseError } from '@clerk/backend/errors';
 import { DrizzleQueryError } from 'drizzle-orm';
 import pino from 'pino';
 import { describe, expect, it } from 'vitest';
@@ -176,25 +175,39 @@ describe('the API error serialiser', () => {
     }
   });
 
-  it("withholds a failure carried in a real ClerkAPIResponseError's errors array", () => {
+  it("withholds a failure carried in a provider SDK error's errors array", () => {
     /*
-     * Built by Clerk's own class, whose `errors` is an own enumerable array of
-     * `ClerkAPIError`s that pino files under both `aggregateErrors` and `errors`.
-     * Both entries below are Clerk's own: one parsed from a response, one a
-     * `ClerkAPIError` that carries a record — the entry shape pino calls an
-     * error and serialises field by field.
+     * The shape an identity or payment SDK gives its API error: an `Error` whose
+     * own enumerable `errors` is an array of `Error` subclasses that pino files
+     * under both `aggregateErrors` and `errors`. One entry is a plain response
+     * entry; the other carries a record — the entry shape pino calls an error and
+     * serialises field by field.
      */
-    const clerk = new ClerkAPIResponseError('Unprocessable Entity', {
-      data: [
-        { code: 'form_identifier_exists', message: 'Taken', long_message: 'That email is taken.' },
-        { code: 'form_param_invalid', message: 'Invalid', long_message: 'Not written.' },
-      ],
-      status: 422,
-    });
-    Object.assign(clerk.errors[1]!, { payload: { query: STATEMENT, params: [SENTINEL] } });
+    class ApiEntry extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+        readonly longMessage: string,
+      ) {
+        super(message);
+      }
+    }
+
+    class ApiResponseError extends Error {
+      readonly status = 422;
+      constructor(readonly errors: ApiEntry[]) {
+        super('Unprocessable Entity');
+      }
+    }
+
+    const failure = new ApiResponseError([
+      new ApiEntry('form_identifier_exists', 'Taken', 'That email is taken.'),
+      new ApiEntry('form_param_invalid', 'Invalid', 'Not written.'),
+    ]);
+    Object.assign(failure.errors[1]!, { payload: { query: STATEMENT, params: [SENTINEL] } });
 
     for (const key of ['err', 'failure']) {
-      const line = loggedLine({ [key]: clerk });
+      const line = loggedLine({ [key]: failure });
 
       expect(line).not.toContain(SENTINEL);
       // What says what went wrong survives, under every key pino wrote it to.

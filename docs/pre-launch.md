@@ -18,8 +18,8 @@ by the operator before a release and never in CI.
 Launch readiness is a run with no `FAIL`, every `MANUAL` line confirmed by hand,
 and every item below done.
 
-**Current state:** not launched. The deployment authenticates against a Clerk
-**development** instance and Stripe is in **test mode**, so `launch:check` fails
+**Current state:** not launched. The deployment authenticates against a Neon Auth
+**development** branch and Stripe is in **test mode**, so `launch:check` fails
 on both today — correctly. `docs/demo.md` describes the showcase deployment,
 which is not a launch; `docs/credentials.md` is the credential runbook.
 
@@ -29,10 +29,8 @@ which is not a launch; `docs/credentials.md` is the credential runbook.
 
 | Group       | Check                                                    | Passes when                                                                                                                                                                                                                                                                                                                               |
 | ----------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Clerk       | `clerk key`                                              | `CLERK_SECRET_KEY` is `sk_live_`                                                                                                                                                                                                                                                                                                          |
-| Clerk       | `clerk instance`                                         | the Backend API reports `environment_type: production`                                                                                                                                                                                                                                                                                    |
-| Clerk       | `clerk webhook endpoint`                                 | `CLERK_WEBHOOK_ENDPOINT` is `API_URL/webhooks/clerk` — Clerk has no read API for its webhook endpoints, so this is the declared value the API refuses to boot without                                                                                                                                                                     |
-| Clerk       | `clerk self-serve deletion`                              | the instance's `delete_self` is off (`MANUAL` when the instance settings cannot be read)                                                                                                                                                                                                                                                  |
+| Neon Auth   | `neon auth endpoint`                                     | `NEON_AUTH_BASE_URL` serves a JWKS with at least one signing key                                                                                                                                                                                                                                                                          |
+| Neon Auth   | `neon auth identity store`                               | `NEON_AUTH_DATABASE_URL` names the same database host as `DATABASE_URL` — a source on another branch answers empty and the reconcile pass refuses to run                                                                                                                                                                                  |
 | Stripe      | `stripe key`                                             | `STRIPE_SECRET_KEY` is `sk_live_`                                                                                                                                                                                                                                                                                                         |
 | Stripe      | `stripe webhook endpoint`                                | one enabled endpoint at `API_URL/webhooks/stripe` per configured signing secret (`STRIPE_WEBHOOK_SECRET`, plus `STRIPE_CONNECT_WEBHOOK_SECRET` for the connected-account endpoint) subscribes, between them, to every type in `HANDLED_STRIPE_EVENT_TYPES` (`apps/api/src/modules/webhooks/stripe.routes.ts`); the missing ones are named |
 | Stripe      | `stripe connected-account events`                        | `PASS` once `STRIPE_CONNECT_WEBHOOK_SECRET` is set and the second endpoint exists; otherwise `MANUAL`: the endpoint list does not say which endpoint listens to connected accounts, and vendor `account.updated` arrives only there                                                                                                       |
@@ -61,7 +59,7 @@ which is not a launch; `docs/credentials.md` is the credential runbook.
       in the privacy policy, the one paragraph asserting that staff can read a
       user's private messages — and the legal entity and a monitored support
       destination are named.
-- [ ] **Provider accounts** (VEN-377): the Clerk production instance on the real
+- [ ] **Provider accounts** (VEN-377): the Neon Auth production branch on the real
       domain, the live Stripe Connect platform, the Resend domain's DNS, the
       Cloudflare custom domain for the R2 bucket, and the **Neon upgrade from
       Free to Launch** — on Free, `production` has a 6-hour history window, no

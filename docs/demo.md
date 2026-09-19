@@ -20,7 +20,7 @@ Concretely, what that means:
   counts. That is the whole reason they stay off `production`; the
   `seeded rows` check in `pre-launch.md` fails a launch while any of those
   rows are in the production database.
-- Clerk is a **development instance** and Stripe is in **test mode**. No real
+- Neon Auth is on the **`staging` branch** and Stripe is in **test mode**. No real
   money can move; no real account is reachable.
 - It is on free infrastructure that sleeps when idle.
 
@@ -39,7 +39,7 @@ serving rather than billing.
 | Web (Next.js) | Vercel Hobby                | $0 — no overage billing, limits throttle instead             |
 | API (Fastify) | Render free web service     | $0 — 750 instance-hours/month, sleeps after ~15 min idle     |
 | Database      | Neon Free, `staging` branch | $0 — 191.9 CU-hours/month, 0.5 GB, scale-to-zero after 5 min |
-| Auth          | Clerk development instance  | $0 — capped at 100 users                                     |
+| Auth          | Neon Auth, `staging` branch | $0 — part of the Neon Free branch                            |
 | Payments      | Stripe test mode            | $0 — no live charges exist                                   |
 | Images        | Cloudflare R2 free tier     | $0 — the bucket is effectively empty                         |
 
@@ -107,30 +107,27 @@ Preview deployment would be behind Vercel's deployment protection anyway.
 Root directory `apps/web`. Set these in the new project's Production
 environment:
 
-| Variable                                          | Value                                    |
-| ------------------------------------------------- | ---------------------------------------- |
-| `NEXT_PUBLIC_API_URL`                             | the Render service URL                   |
-| `API_URL`                                         | the same Render service URL              |
-| `WEB_URL`                                         | this project's own `*.vercel.app` origin |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`               | the `pk_test_` key                       |
-| `CLERK_SECRET_KEY`                                | the `sk_test_` key                       |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL`                   | `/sign-in`                               |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_URL`                   | `/sign-up`                               |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | `/after-sign-in`                         |
-| `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` | `/after-sign-in`                         |
-| `NEXT_PUBLIC_S3_PUBLIC_URL`                       | the R2 public base URL                   |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`              | the `pk_test_` key                       |
+| Variable                             | Value                                    |
+| ------------------------------------ | ---------------------------------------- |
+| `NEXT_PUBLIC_API_URL`                | the Render service URL                   |
+| `API_URL`                            | the same Render service URL              |
+| `WEB_URL`                            | this project's own `*.vercel.app` origin |
+| `NEON_AUTH_BASE_URL`                 | the `staging` branch's Neon Auth URL     |
+| `NEON_AUTH_COOKIE_SECRET`            | `openssl rand -base64 32`                |
+| `NEXT_PUBLIC_S3_PUBLIC_URL`          | the R2 public base URL                   |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | the `pk_test_` key                       |
 
 The last two are not in the web app's validated capability set — it checks
 `core` and `auth` only — so leaving either out fails at render time on an image
 or at the checkout screen, not at build time.
 
-### 3. Point Clerk at the demo
+### 3. Point Neon Auth at the demo
 
-Add the demo web origin to the Clerk development instance's allowed origins, and
-repoint `CLERK_WEBHOOK_ENDPOINT` at `<render-url>/webhooks/clerk` if you want
-`user.updated` and `user.deleted` to reach the demo at all. A development
-instance is capped at 100 users, which is the right ceiling for this.
+Add the demo web origin to the branch's trusted domains in the Neon console.
+Neon Auth sends no update or delete events, so there is no webhook to
+repoint: set `NEON_AUTH_DATABASE_URL` on the API to the `staging` connection
+string and run `pnpm reconcile:auth` when you want name changes and deleted
+identities to reach the demo's `users` rows.
 
 ### 4. Required — migrate and seed the branch
 
@@ -154,7 +151,7 @@ pnpm db:seed:demo    # the marketplace itself
 ```
 
 The demo seed is additive and disjoint from the reference and marketing seeds,
-needs no Clerk or Stripe credentials, and refuses to run against `production` or
+needs no Neon Auth or Stripe credentials, and refuses to run against `production` or
 with `NODE_ENV=production`. It gives every category vendors, packages, portfolio
 items, live booking requests, message threads, reviews and notifications, all
 deterministic. `pnpm db:seed:demo -- --clear` removes exactly the rows it owns.
@@ -185,5 +182,5 @@ API.
 ## Tearing it down
 
 Delete the Render service and the second Vercel project. Nothing else was
-created — no Neon branch, no bucket, no Clerk instance — so nothing else has to
+created — no Neon branch, no bucket, no auth instance — so nothing else has to
 be cleaned up, and `production` was never in the blast radius to begin with.
