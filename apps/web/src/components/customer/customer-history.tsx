@@ -161,7 +161,7 @@ export function CustomerHistory({
       {visibleRequests.map((request) => (
         <HistoryRow
           key={request.id}
-          href={`/vendors/${request.vendor.slug}`}
+          href={`/bookings/${request.id}`}
           title={request.vendor.businessName}
           subline={[occasionOf(request.eventType), formatEventDate(request.eventDate)]
             .filter(Boolean)
