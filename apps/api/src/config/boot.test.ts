@@ -32,6 +32,7 @@ const DEPLOYED: Record<string, string> = {
   S3_BUCKET: 'orla-uploads',
   S3_PUBLIC_URL: 'https://cdn.orla.example.invalid',
   OPERATOR_ALERT_EMAIL: 'ops@orla.example.invalid',
+  SUPPORT_EMAIL_TO: 'help@orla.example.invalid',
   SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',
   WEB_URL: 'http://orla.example.invalid',
   API_URL: 'https://api.orla.example.invalid',
