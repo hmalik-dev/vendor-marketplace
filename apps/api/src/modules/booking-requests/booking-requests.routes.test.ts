@@ -1140,7 +1140,7 @@ describe('/booking-requests', () => {
         await expireLapsedRequests(harness.app.db, new Date(), mailDeps());
         await harness.flushEmail();
 
-        expect(harness.email.sent.map((mail) => mail.subject).toSorted()).toEqual([
+        expect(harness.email.sent.map((mail) => mail.subject).sort()).toEqual([
           'A booking was not paid in time',
           'Your booking was not paid in time',
         ]);
