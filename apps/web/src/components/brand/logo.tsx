@@ -89,6 +89,8 @@ const WORDMARK_SIZE_RATIO = 1.6;
  */
 export const WORDMARK_SIZES: Partial<Record<number, number>> = {
   15: 23,
+  // `12 Sign up` draws 29px beside its 19px mark, where 1.60 D renders 30.4 (VEN-451).
+  19: 29,
 };
 /**
  * The diameters the design calls for, by context. Named so no surface picks a

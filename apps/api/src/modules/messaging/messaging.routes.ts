@@ -270,7 +270,18 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
      * service instead — a ban landing between issue and connect must not be
      * ignored, because a stream, once open, stays open.
      */
+    let aborted = request.raw.destroyed;
+    request.raw.once('close', () => {
+      aborted = true;
+    });
+
     const user = await resolveStreamSubject(app.db, userId);
+
+    // The client left during that await: there is nobody to stream to, and a
+    // subscription or heartbeat made now would never see a `close` to end it.
+    if (aborted) {
+      return reply;
+    }
 
     // Echoed only when it is on the list, never reflected blindly.
     const origin = request.headers.origin;

@@ -11,7 +11,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { MessageRow, NotificationRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import type { EventHub } from '../../lib/event-stream.js';
-import { forbidden, notFound } from '../../lib/errors.js';
+import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import {
   countMessages,
@@ -270,12 +270,13 @@ async function requireParticipant(
 ): Promise<void> {
   const row = await findConversationById(db, conversationId);
 
-  if (!row) {
+  /*
+   * One answer for "no such thread" and "not your thread": a 403 here would
+   * confirm that a guessed uuid is a real conversation, the one fact this
+   * route must not leak (see `reports.service.ts`).
+   */
+  if (!row || sideOf(row, user.id) === null) {
     throw notFound('That conversation does not exist');
-  }
-
-  if (sideOf(row, user.id) === null) {
-    throw forbidden('You are not part of that conversation');
   }
 }
 
@@ -325,13 +326,20 @@ export async function sendMessage(
 ): Promise<SendMessageResult> {
   const row = await findConversationById(db, conversationId);
 
-  if (!row) {
+  const side = row ? sideOf(row, user.id) : null;
+
+  if (!row || side === null) {
     throw notFound('That conversation does not exist');
   }
 
-  const side = sideOf(row, user.id);
-  if (side === null) {
-    throw forbidden('You are not part of that conversation');
+  /*
+   * A thread already open bypassed the visibility `openConversation` enforces:
+   * a message to a banned, retired or deleted account is one nobody will read,
+   * and the send used to report success. The caller is a verified party, so
+   * there is no id to protect and the refusal can say why.
+   */
+  if (!(side === 'customer' ? row.vendorReachable : row.customerReachable)) {
+    throw conflict('That person can no longer receive messages');
   }
 
   const inserted = await insertMessage(db, {
