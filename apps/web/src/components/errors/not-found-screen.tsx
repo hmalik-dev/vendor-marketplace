@@ -26,7 +26,7 @@ export async function NotFoundScreen(): Promise<React.ReactElement> {
   const categories = offeredRecoveryCategories(await getCategories());
 
   return (
-    <div className="mx-auto flex min-h-[620px] w-full max-w-3xl flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
+    <div className="mx-auto flex min-h-[620px] w-full flex-1 max-w-3xl flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
       <BrokenMark className="mb-6.5" />
 
       <p className="font-mono text-label font-medium tracking-[.16em] text-stone-600 uppercase">

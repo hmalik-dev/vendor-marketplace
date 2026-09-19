@@ -70,3 +70,38 @@ order is left alone: it is a dated record of what was ordered, not a spec.
 **The layout question this was wearing the clothes of does not exist** — the row's
 bottom sits at 302 in a 640px frame, so nothing about the fold constrains the
 label's length.
+
+## Accepted deviations from frame `05`, `15` and `16` — ruled 2026-09-19 (VEN-452)
+
+Each is the shipped design being the intent. A parity pass reading one is
+reading this record, not drift. The frames are corrected by a design pass.
+
+**Frame `05 Checkout`**
+
+- **The left column is Stripe's Payment Element** (Card / Bank / Klarna tabs,
+  Link block), not four drawn inputs. The frame's fields are a picture of what
+  Elements renders; the card data never touches our DOM.
+- **`If plans change` lives in the rail as `RefundScheduleBlock`**, a four-row
+  schedule on `stone-100` at 14px radius with a 10.5px uppercase heading.
+  Frame `33` draws it there, and one block replaces the two-sentence panel so
+  the policy is stated once (`/terms` section 5).
+- **The summary card ends at the total and the pay button is its sibling**, with
+  the schedule between them (frame `33`'s composition).
+- **The line under the button reads `Held by Orla until …`, not `Held by
+Stripe`.** Since #423 the charge lands in the platform balance; "Stripe" names
+  the wrong holder.
+- **A `By paying you accept the Terms and the refund schedule above.` line is
+  added.** Acceptance of the Terms at the point of payment is a legal
+  requirement the frame predates.
+
+**Frame `15 404`** — the block now centres in the space under the header
+(`flex-1`), so it lands where the frame does inside the checkout segment. The
+marketing nav and category set are already ruled in `web-design-parity.md`
+(VEN-419, #419). The root 404 sits above a footer the frame does not draw, so
+its centre is higher by half the footer's height.
+
+**`CheckoutUnavailable` (frame `16` composition)** — headline 38px and body
+14px/1.65 now match. The money strip stays the bordered `Banner` (`sage-50` on
+`sage-300`, radius 12, weight 400) where frame `16` draws it borderless at
+radius 10, weight 500 with `11px 16px` padding: ruled 2026-09-06 (#372) in
+`03-components.md`, one `Banner` for every screen.

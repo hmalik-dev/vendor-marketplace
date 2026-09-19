@@ -169,4 +169,21 @@ describe('CheckoutUnavailable', () => {
 
     expect(screen.getByText(/This vendor/).textContent).toContain("hasn't accepted your request");
   });
+
+  /*
+   * Frame `16`'s composition: 38px headline (`text-display-error`) and a 14px
+   * body at 1.65 (`text-cta`). They read 34 and 12.5 (VEN-452). Class-level
+   * check; jsdom has no layout.
+   */
+  it('sets the headline and body at frame 16 sizes', () => {
+    render(<CheckoutUnavailable reason="failed" requestId={REQUEST_ID} vendorName={null} />);
+
+    const h1 = screen.getByRole('heading', { level: 1 }).className.split(/\s+/);
+    const body = screen.getByText(/Something on our side/).className.split(/\s+/);
+
+    expect(h1).toContain('text-display-error');
+    expect(h1).not.toContain('text-display-lg');
+    expect(body).toContain('text-cta');
+    expect(body).not.toContain('text-sm');
+  });
 });
