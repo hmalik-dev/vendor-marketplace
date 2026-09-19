@@ -17,6 +17,7 @@ import {
   type TestHarness,
 } from '../../testing/test-server.js';
 import { forgetPlatformSwitches } from '../platform-settings/platform-settings.service.js';
+import { renderVendorInviteEmail, vendorNotInvited } from './vendor-invites.service.js';
 
 /**
  * The vendor gate (VEN-406): while `vendorInviteOnly` is on, the Terms
@@ -184,6 +185,24 @@ describe('the vendor gate', () => {
         .select({ role: users.role })
         .from(users)
         .where(eq(users.authUserId, vendor));
+      expect(row).toEqual({ role: 'vendor' });
+      const [stamped] = await harness.database.db.select().from(vendorInvites);
+      expect(stamped!.acceptedAt).toBeInstanceOf(Date);
+    });
+
+    it('opens a vendor account for an invited address that signs in with no remembered role', async () => {
+      await setGate(true);
+      await invite('signed-in-later@example.com');
+      const later = freshIdentity('customer', 'signed-in-later@example.com');
+      const snapshot = harness.clerkUsers.get(later)!;
+      harness.clerkUsers.set(later, { ...snapshot, roleHint: undefined });
+
+      expect((await accept(later)).statusCode).toBe(200);
+
+      const [row] = await harness.database.db
+        .select({ role: users.role })
+        .from(users)
+        .where(eq(users.authUserId, later));
       expect(row).toEqual({ role: 'vendor' });
       const [stamped] = await harness.database.db.select().from(vendorInvites);
       expect(stamped!.acceptedAt).toBeInstanceOf(Date);
@@ -534,6 +553,135 @@ describe('the vendor gate', () => {
       const revoked = await inject('DELETE', `/admin/vendor-invites/${created.json().id}`, ADMIN);
       expect(revoked.statusCode).toBe(204);
       expect(await harness.database.db.select().from(vendorInvites)).toHaveLength(0);
+    });
+
+    it('refuses an application from a signed-in address that already has an account', async () => {
+      const customer = freshIdentity('customer', 'holder@example.com');
+      expect((await accept(customer)).statusCode).toBe(200);
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        headers: bearer(customer),
+        payload: application('holder@example.com'),
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe(
+        'That address already has an account, and an account cannot become a vendor. Use a different email address to apply.',
+      );
+      expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(0);
+    });
+
+    it('files nothing for a signed-out application from an address with an account, and says nothing about it', async () => {
+      const customer = freshIdentity('customer', 'quiet@example.com');
+      expect((await accept(customer)).statusCode).toBe(200);
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        payload: application('quiet@example.com'),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ received: true });
+      expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(0);
+    });
+
+    it('refuses to invite an address that already has an account, and sends nothing', async () => {
+      const customer = freshIdentity('customer', 'taken@example.com');
+      expect((await accept(customer)).statusCode).toBe(200);
+
+      const response = await inject('POST', '/admin/vendor-invites', ADMIN, {
+        email: 'Taken@Example.com',
+      });
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toContain('already has an account');
+      expect(await harness.database.db.select().from(vendorInvites)).toHaveLength(0);
+      expect(harness.email.sent).toHaveLength(0);
+    });
+
+    it('refuses to invite an existing account through its waiting application too', async () => {
+      await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        payload: application('late@example.com'),
+      });
+      const customer = freshIdentity('customer', 'late@example.com');
+      expect((await accept(customer)).statusCode).toBe(200);
+      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+
+      const response = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
+        decision: 'invite',
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(await harness.database.db.select().from(vendorInvites)).toHaveLength(0);
+    });
+
+    it('puts a declined applicant back to declined when a direct invite is revoked', async () => {
+      await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        payload: application('declined-twice@example.com'),
+      });
+      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, { decision: 'decline' });
+
+      const created = await inject('POST', '/admin/vendor-invites', ADMIN, {
+        email: 'declined-twice@example.com',
+      });
+      expect(created.statusCode).toBe(201);
+      const [invited] = await harness.database.db.select().from(vendorApplications);
+      expect(invited?.status).toBe('invited');
+
+      const revoked = await inject('DELETE', `/admin/vendor-invites/${created.json().id}`, ADMIN);
+      expect(revoked.statusCode).toBe(204);
+
+      const [restored] = await harness.database.db.select().from(vendorApplications);
+      expect(restored).toMatchObject({ status: 'declined', statusBeforeInvite: null });
+      const list = (await inject('GET', '/admin/vendor-applications', ADMIN)).json();
+      expect(list.waiting).toBe(0);
+    });
+
+    it('puts a waiting applicant back to waiting when their invite is revoked', async () => {
+      await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        payload: application('waiting@example.com'),
+      });
+      const created = await inject('POST', '/admin/vendor-invites', ADMIN, {
+        email: 'waiting@example.com',
+      });
+
+      await inject('DELETE', `/admin/vendor-invites/${created.json().id}`, ADMIN);
+
+      const [row] = await harness.database.db.select().from(vendorApplications);
+      expect(row?.status).toBe('new');
+    });
+
+    it('tells a refused vendor and an invitee that signing in is the path', () => {
+      expect(vendorNotInvited().message).toBe(
+        'Vendor accounts are by invitation for now. No account was created — apply to join, then sign in with this same email once you are invited.',
+      );
+
+      const mail = renderVendorInviteEmail('https://orla.test');
+      expect(mail.text).toBe(
+        [
+          "You're invited to open a vendor account on Orla.",
+          '',
+          'Sign up with this email address and choose vendor to list your services. If you already signed up with it, sign in instead: your vendor account opens then.',
+          '',
+          `https://orla.test${VENDOR_SIGN_UP_PATH}`,
+        ].join('\n'),
+      );
     });
 
     it('walks past 200 applications, with server-side totals for both lists', async () => {

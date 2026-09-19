@@ -75,7 +75,7 @@ export function ExpandableDocumentCard({
               <h3 className="mb-2.5 font-display text-[19px] text-stone-900">
                 {section.number}&nbsp;&nbsp;{section.title}
               </h3>
-              <LegalBlocks blocks={section.blocks} />
+              <LegalBlocks blocks={section.blocks} newTabLinks />
             </section>
           ))}
         </div>
