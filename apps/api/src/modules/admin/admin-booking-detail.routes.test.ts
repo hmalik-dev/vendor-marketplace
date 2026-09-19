@@ -181,6 +181,7 @@ describe('admin booking detail and requests', () => {
       payoutModel: 'separate',
       payoutStatus: 'pending',
       payoutFailing: true,
+      payoutStranded: false,
       payoutAttempts: 2,
       payoutFailureReason: 'account_closed',
       payoutReleasedAt: null,
