@@ -6,7 +6,7 @@ import { eq, sql } from 'drizzle-orm';
 import { createDatabase } from '../client.js';
 import { loadEnv } from '../load-env.js';
 import { users, vendorProfiles } from '../schema/index.js';
-import { seedE2eFixtures, type E2eAccount } from '../seed-e2e.js';
+import { seedE2eFixtures } from '../seed-e2e.js';
 import { resolveNeonAccount } from './e2e-neon-account.js';
 import { createStripeFixtureGateway, ensureE2eConnectedAccount } from './e2e-stripe-account.js';
 import { assertSafeTarget } from './safe-target.js';
