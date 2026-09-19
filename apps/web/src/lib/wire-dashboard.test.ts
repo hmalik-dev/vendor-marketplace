@@ -260,6 +260,7 @@ const RELEASED_PAYMENT = {
   stripePaymentIntentId: 'pi_test_1',
   vendorName: 'Sunlit Studio',
   vendorSlug: 'sunlit-studio',
+  vendorId: '22222222-2222-4222-8222-222222222222',
   customerName: 'Anjali Rao',
   paidAt: '2026-05-01T00:00:00.000Z',
   payoutStatus: 'released' as const,
