@@ -80,15 +80,23 @@ describe('openCheckout', () => {
     await expect(openCheckout(REQUEST_ID)).resolves.toEqual({ state: 'not-payable' });
   });
 
-  /*
-   * 404 is a request that does not exist or is not this customer's. 402 joins
-   * it deliberately: the vendor's payout status is not the customer's business,
-   * and the booking may well become payable later.
-   */
-  it.each([404, 402])('reports %i as not found', async (statusCode) => {
-    refuseWith(statusCode);
+  /* A request that does not exist or is not this customer's. */
+  it('reports 404 as not found', async () => {
+    refuseWith(404);
 
     await expect(openCheckout(REQUEST_ID)).resolves.toEqual({ state: 'not-found' });
+  });
+
+  /*
+   * 402 is a live request on a vendor who cannot take payment right now. It
+   * used to share the 404 bucket, so the customer was told the page was not
+   * there and that nothing was wrong with their account, over a booking that
+   * exists.
+   */
+  it('reports 402 as a vendor who cannot take payment, not as not found', async () => {
+    refuseWith(402);
+
+    await expect(openCheckout(REQUEST_ID)).resolves.toEqual({ state: 'vendor-unavailable' });
   });
 
   it('sends an unauthenticated caller to sign in', async () => {
