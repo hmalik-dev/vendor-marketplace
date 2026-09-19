@@ -20,10 +20,10 @@ env:
   DATABASE_URL: postgresql://vendor_marketplace:vendor_marketplace_ci@localhost:5432/vendor_marketplace
   # The web build validates the `auth` capability, so both Neon Auth values must
   # be well-formed. CI never reaches Neon's servers. The cookie key signs
-  # nothing real, so it is derived (64 hex characters of the lockfile's hash)
+  # nothing real, so it is derived (the commit hash, twice)
   # rather than written down: a literal here would read as a credential.
   NEON_AUTH_BASE_URL: https://ep-ci.neonauth.example.invalid/neondb/auth
-  NEON_AUTH_COOKIE_SECRET: ${{ hashFiles('pnpm-lock.yaml') }}
+  NEON_AUTH_COOKIE_SECRET: ${{ github.sha }}${{ github.sha }}
   CLERK_SECRET_KEY: sk_test_ci_placeholder
   CLERK_WEBHOOK_SECRET: whsec_ci_placeholder
   NEXT_PUBLIC_API_URL: http://localhost:4000
