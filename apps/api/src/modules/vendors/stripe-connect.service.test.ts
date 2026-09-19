@@ -66,7 +66,7 @@ describe('applyAccountStatusChange under interleaved handlers', () => {
     const [owner] = await harness.database.db
       .insert(users)
       .values({
-        clerkUserId: 'user_interleaved',
+        authUserId: 'user_interleaved',
         email: 'interleaved@example.com',
         role: 'vendor',
         firstName: 'Ines',
