@@ -305,7 +305,12 @@ export function paymentRefusedAlert(input: {
 }): OperatorAlert {
   return {
     kind: 'payment_refused',
-    subjectId: input.requestId,
+    /*
+     * Two subjects, deduplicated apart: the failed refund is raised and then
+     * redelivered into a success, and one shared key would let the first alert
+     * swallow the second, leaving the operator told a charge is still unrefunded.
+     */
+    subjectId: `${input.requestId}:${input.refunded ? 'refunded' : 'unrefunded'}`,
     summary: input.refunded
       ? `Refunded a payment on a declined request ${input.requestId}`
       : `A payment on a declined request ${input.requestId} has not been refunded`,

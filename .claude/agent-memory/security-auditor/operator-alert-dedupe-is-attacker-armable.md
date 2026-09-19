@@ -9,4 +9,6 @@ metadata:
 
 **Why:** `recordAlertUnlessRecent` dedupes on kind+subject only; an attacker-reachable trigger and a trusted trigger share the key.
 
-**How to apply:** any new alert whose trigger an unauthenticated caller can reach must not share a dedupe subject with a trusted trigger. Settled on that lane: alert bodies carry no customer PII (reporter text/email excluded), `renderOperatorEmail` escapes every line, advisory-lock/digest SQL is parameterised, `OPERATOR_ALERT_EMAIL` throws on a deployment (env.test), `/reports` is per-account rate limited. Related: [[idempotency-guards-orphan-side-effects]].
+**Second shape, VEN-434:** `paymentRefusedAlert` sends _both_ "refunded" and "has not been refunded" under `payment_refused` + the same `requestId`. The failure fires first (it rethrows so Stripe redelivers), so the later truth is deduplicated away and the operator is left holding the inverted state. An alert kind that reports two opposite outcomes of the same subject needs two subject ids, not two summaries.
+
+**How to apply:** any new alert whose trigger an unauthenticated caller can reach must not share a dedupe subject with a trusted trigger, and no two contradictory outcomes may share one. Settled on that lane: alert bodies carry no customer PII (reporter text/email excluded), `renderOperatorEmail` escapes every line, advisory-lock/digest SQL is parameterised, `OPERATOR_ALERT_EMAIL` throws on a deployment (env.test), `/reports` is per-account rate limited. Related: [[idempotency-guards-orphan-side-effects]].

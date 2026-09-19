@@ -501,8 +501,10 @@ describe('payments', () => {
       expect(harness.stripe.refunds[0]).toMatchObject({
         paymentIntentId: intentId,
         amountCents: PRICE_CENTS,
-        idempotencyKey: `${intentId}_declined_request`,
       });
+      expect(harness.stripe.refunds[0]?.idempotencyKey).toMatch(
+        new RegExp(`^${intentId}_declined_request_\\d+$`),
+      );
       const [mail] = harness.email.sent.filter(
         (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
       );
@@ -541,6 +543,17 @@ describe('payments', () => {
         (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
       );
       expect(mail?.text).toContain('has not been refunded');
+
+      // The redelivery refunds, and its alert is not swallowed by the first one's dedupe.
+      harness.stripe.refundsToRefuse.clear();
+      const retried = await redeliver(intentId);
+      await harness.flushEmail();
+
+      expect(retried.statusCode).toBe(200);
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(
+        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL),
+      ).toHaveLength(2);
     });
 
     it('still answers 200 with no new row when the delivery follows a cancellation', async () => {

@@ -322,6 +322,9 @@ function toRailPackage(row: PayableRequestRow): CheckoutIntent['servicePackage']
   };
 }
 
+/** How long one refund idempotency key for a declined request's charge stays in use. */
+const REFUND_KEY_WINDOW_MS = 60 * 60_000;
+
 /** What became of a succeeded intent. `refunded` is a charge that was not booked. */
 export type RecordedPayment =
   | { outcome: 'booked' | 'already-booked'; booking: BookingRow }
@@ -474,7 +477,13 @@ async function refuseDeclinedPayment(
       await context.stripe.createRefund({
         paymentIntentId: intent.id,
         amountCents: intent.amountReceivedCents,
-        idempotencyKey: `${intent.id}_declined_request`,
+        /*
+         * Versioned by the hour, not fixed (D36). Stripe replays a *failed*
+         * idempotent result for 24 hours, and this path exists to be retried by
+         * redelivery — a fixed key would answer every retry with the first
+         * refusal. Concurrent deliveries in the same hour still share a key.
+         */
+        idempotencyKey: `${intent.id}_declined_request_${Math.floor(Date.now() / REFUND_KEY_WINDOW_MS)}`,
       });
     }
   } catch (error) {

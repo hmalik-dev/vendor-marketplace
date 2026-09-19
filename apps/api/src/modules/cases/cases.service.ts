@@ -276,15 +276,11 @@ export interface ChargebackDeps extends CaseDeps {
 }
 
 /**
- * Stripe's terminal dispute statuses. Both `charge.dispute.closed` and
- * `funds_reinstated` end in one of these; every other status is still live.
+ * Closed disputes that moved no money, so there is nothing to freeze. `lost`
+ * and `charge_refunded` are deliberately absent: the platform was debited, so
+ * they still go through the hold and a payout is not released on top of them.
  */
-const CLOSED_DISPUTE_STATUSES: ReadonlySet<string> = new Set([
-  'won',
-  'lost',
-  'warning_closed',
-  'charge_refunded',
-]);
+const CLOSED_DISPUTE_STATUSES: ReadonlySet<string> = new Set(['won', 'warning_closed']);
 
 /**
  * The sentence the operator reads. Composed here, from figures Stripe answered
