@@ -28,7 +28,7 @@
 - [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — the write guard decides on what a URL parser resolves to; probe with the bucket-path base, not a bare origin
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes were left as low-severity on purpose
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — adding hosts to script-src is never the escalation; CSP_ENFORCE can only turn enforcement on
-- [The review profanity filter is a hard-reject floor](review-profanity-filter-is-a-hard-reject-floor.md) — the failure mode and the easy bypasses are settled until #15; the `\w*` over-match on "spicy" is not
+- [Reviews: profanity floor + VEN-421 eligibility and tombstones](review-profanity-filter-is-a-hard-reject-floor.md) — the hard reject and the `\w*` over-match are both settled; tombstone finality rests on read order, and a review can outlive a cancel
 - [JSON-LD is the only raw-HTML sink in web](json-ld-is-the-only-raw-html-sink.md) — `serialiseJsonLd` is mandatory; the source-scan guard misses `next/script` + a non-literal type
 - [`'use client'` publishes a pane's props](client-component-props-are-public-html.md) — the RSC-payload lesson stands; the availability `note` endpoint half is FIXED in #407
 - [Availability floors are one day wider than UTC](availability-date-floors-are-universally-past.md) — since #409; the `booked` predicates in the DAO, not the floor, are what protect history

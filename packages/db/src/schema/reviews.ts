@@ -5,6 +5,7 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -58,3 +59,31 @@ export const reviews = pgTable(
 
 export type ReviewRow = typeof reviews.$inferSelect;
 export type NewReviewRow = typeof reviews.$inferInsert;
+
+/**
+ * One row per review an admin has deleted, so the deletion is final.
+ *
+ * "One review per booking, permanently": `reviews_booking_reviewer_key` only
+ * holds while the row exists, and a hard delete removes it. This records the
+ * (booking, reviewer) pair that has already used its review, holding no content
+ * and no rating. The eligibility check reads it alongside `reviews`; nothing
+ * else does, so no display or rating query can leak a deleted review.
+ *
+ * **Legacy:** reviews deleted before this table existed have no tombstone, and
+ * none can be backfilled — the audit row names only the review id, and the row
+ * it named is gone. Those pairs stay open to one resubmission; the rule is
+ * permanent from the first deletion after this migration.
+ */
+export const reviewTombstones = pgTable(
+  'review_tombstones',
+  {
+    bookingId: uuid('booking_id')
+      .notNull()
+      .references(() => bookings.id, { onDelete: 'cascade' }),
+    reviewerId: uuid('reviewer_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.bookingId, table.reviewerId] })],
+);
