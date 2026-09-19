@@ -82,7 +82,7 @@
 - [An unwind spares a request with a booking behind it](unwind-decline-spares-requests-with-a-booking.md) — only a succeeded PaymentIntent writes that row, so the exemption is unarrangeable; it closes a post-unban double-booking window
 - [Closure deletes the Clerk identity](closure-deletes-the-clerk-identity.md) — the console's only irreversible action; replay is sound; admin-target gap FIXED in VEN-391, ban path FIXED in VEN-417 (same lock + predicate)
 - [`violatesConstraint` is FIXED](violates-constraint-matches-bound-parameters.md) — VEN-385 removed the message arm; SQLSTATE + `constraint_name` only, do not re-report
-- [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — FIXED before merge in VEN-405: `stripe:signature` and `stripe:server-error` dedupe apart; anonymous 401s can still mute only the signature alert
+- [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — the webhook failure hook is unauthenticated-paced; VEN-430 made a _shed_ 429 cost a DB write and dropped the email cap on a DB outage
 - [Backup integrity is not authenticity](backup-integrity-is-not-authenticity.md) — VEN-408: bucket-token holder forges a dump the drill pg_restores as superuser
 - [Launch switches gate new intents, not open ones](launch-switches-gate-new-intents-not-open-ones.md) — VEN-404 checkout pause/cap miss an already-issued client secret; retry bypass is intended
 - [launch:check bearer hosts are fixed](launch-check-bearer-hosts-are-fixed.md) — VEN-409 PASS; re-open only if bearer() meets an env-built URL or a seed module gains a top-level main

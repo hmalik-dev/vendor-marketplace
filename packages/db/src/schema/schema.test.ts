@@ -36,6 +36,7 @@ const EXPECTED_TABLES = [
   'portfolio_items',
   'reviews',
   'service_packages',
+  'stripe_webhook_failures',
   'support_cases',
   'tag_suggestions',
   'tags',

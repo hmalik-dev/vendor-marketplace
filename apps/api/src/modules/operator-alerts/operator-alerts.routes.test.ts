@@ -199,6 +199,7 @@ describe('operator alerts', () => {
     harness.stripe.disputes.clear();
     harness.stripe.accountStatuses.clear();
     harness.stripe.refundsToRefuse.clear();
+    harness.stripe.refunds.length = 0;
   });
 
   afterAll(async () => {
@@ -415,6 +416,100 @@ describe('operator alerts', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toBe(`[Orla ops] Refund failed on booking ${fixture.bookingId}`);
     expect(sent[0]!.text).toContain('A refund attempted during a cancellation did not go through');
+  });
+
+  it('does not write a refund Stripe answered as failed, and alerts once', async () => {
+    const fixture = await seed({ payoutModel: 'separate', eventDate: FUTURE_EVENT });
+    harness.stripe.nextRefundStatus = 'failed';
+
+    const cancelled = await harness.app.inject({
+      method: 'PUT',
+      url: `/customer/bookings/${fixture.bookingId}/cancel`,
+      headers: bearer(CUSTOMER),
+      payload: {},
+    });
+    harness.stripe.nextRefundStatus = undefined;
+    expect(cancelled.statusCode).toBe(500);
+    await harness.flushEmail();
+
+    const row = (
+      await harness.database.db
+        .select({ refund: bookings.refundAmountCents, status: bookings.status })
+        .from(bookings)
+    )[0]!;
+    expect(row).toEqual({ refund: null, status: 'confirmed' });
+    expect(operatorMail().map((message) => message.subject)).toEqual([
+      `[Orla ops] Refund failed on booking ${fixture.bookingId}`,
+    ]);
+  });
+
+  it('alerts once when a pending refund later fails, however many events say so', async () => {
+    const fixture = await seed({ payoutModel: 'separate', eventDate: FUTURE_EVENT });
+    harness.stripe.refunds.push({
+      paymentIntentId: fixture.paymentIntentId,
+      amountCents: TOTAL_CENTS,
+      reason: 'requested_by_customer',
+      idempotencyKey: undefined,
+      reverseTransfer: false,
+      refundApplicationFee: false,
+      status: 'pending',
+    });
+
+    harness.stripe.nextEvent = {
+      type: 'charge.refund.updated',
+      accountId: null,
+      objectId: 're_test_1',
+    };
+    expect((await postStripe()).json().outcome).toBe('refund-unchanged');
+    await harness.flushEmail();
+    expect(operatorMail()).toEqual([]);
+
+    harness.stripe.refunds[0]!.status = 'failed';
+    for (const type of ['charge.refund.updated', 'refund.failed', 'charge.refund.updated']) {
+      harness.stripe.nextEvent = { type, accountId: null, objectId: 're_test_1' };
+      expect((await postStripe()).json().outcome).toBe('refund-failed');
+    }
+    await harness.flushEmail();
+
+    expect(operatorMail().map((message) => message.subject)).toEqual([
+      `[Orla ops] Refund failed on booking ${fixture.bookingId}`,
+    ]);
+  });
+
+  it('alerts when a refund on a payment with no booking later fails', async () => {
+    harness.stripe.refunds.push({
+      paymentIntentId: 'pi_declined_request',
+      amountCents: TOTAL_CENTS,
+      reason: 'requested_by_customer',
+      idempotencyKey: undefined,
+      reverseTransfer: false,
+      refundApplicationFee: false,
+      status: 'failed',
+    });
+    harness.stripe.nextEvent = { type: 'refund.failed', accountId: null, objectId: 're_test_1' };
+
+    expect((await postStripe()).json().outcome).toBe('refund-failed');
+    await harness.flushEmail();
+
+    const sent = operatorMail();
+    expect(sent.map((message) => message.subject)).toEqual([
+      '[Orla ops] Refund re_test_1 on pi_declined_request failed',
+    ]);
+    expect(sent[0]!.text).toContain('Payment intent: pi_declined_request');
+  });
+
+  it('emails when a dispute names a payment intent no booking owns', async () => {
+    const response = await deliverDispute('dp_orphan', 'pi_no_booking');
+
+    expect(response.json().outcome).toBe('ignored');
+    expect(await harness.database.db.select({ id: supportCases.id }).from(supportCases)).toEqual(
+      [],
+    );
+    const sent = operatorMail();
+    expect(sent.map((message) => message.subject)).toEqual([
+      '[Orla ops] Chargeback on pi_no_booking matches no booking',
+    ]);
+    expect(sent[0]!.text).toContain('dispute dp_orphan for $1,200 on payment intent pi_no_booking');
   });
 
   it('emails when a refund fails while a ban unwinds the account', async () => {
