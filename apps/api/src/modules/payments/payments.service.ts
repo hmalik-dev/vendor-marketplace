@@ -52,6 +52,7 @@ import {
   cancelBookingAndFreeDate,
   confirmBooking,
   findBookingById,
+  findOpenChargebackCase,
   findAnyBookingByRequest,
   findBookingByRequest,
   findPayableRequest,
@@ -1524,7 +1525,7 @@ export interface DisputeHoldAudience {
  */
 export async function disputeHoldAudience(
   context: BookingContext,
-  held: BookingRow,
+  held: Pick<BookingRow, 'id' | 'vendorId'>,
 ): Promise<DisputeHoldAudience> {
   const vendor = await findVendorContact(context.db, held.vendorId);
 
@@ -1543,6 +1544,8 @@ export async function disputeHoldAudience(
 export async function announceDisputeHold(
   context: BookingContext,
   audience: DisputeHoldAudience,
+  /** A chargeback is the network's report, not a customer's — see `DisputeHoldOrigin`. */
+  origin: DisputeHoldOrigin,
 ): Promise<void> {
   const { bookingId, vendorUserId } = audience;
 
@@ -1556,8 +1559,11 @@ export async function announceDisputeHold(
       vendorUserId,
       'booking_cancelled',
       {
-        title: 'A customer reported a problem',
-        body: 'Your payout for this booking is on hold until we have looked into it.',
+        title: origin === 'network' ? 'A chargeback was opened' : 'A customer reported a problem',
+        body:
+          origin === 'network'
+            ? "The customer's bank opened a chargeback on this booking. Your payout for it is on hold until the case is resolved."
+            : 'Your payout for this booking is on hold until we have looked into it.',
         bookingId,
       },
       'vendor',
@@ -1600,6 +1606,34 @@ export async function resolveDispute(
     throw conflict('That booking has no open report to resolve');
   }
 
+  const chargeback = await findOpenChargebackCase(context.db, bookingId);
+
+  /*
+   * A chargeback is settled by the card network, and both rulings assume money
+   * the platform may not have. Stripe refuses a refund on a charge under
+   * dispute, and a `lost` one has already been debited from the platform, so
+   * refunding it pays the customer twice and lifting the hold pays the vendor
+   * out of the platform's own pocket. `won` and `warning_closed` are over
+   * without a debit, so the charge is refundable and the payout is real again.
+   */
+  if (
+    chargeback &&
+    outcome === 'customer' &&
+    (chargeback.networkOutcome === null || chargeback.networkOutcome === 'lost')
+  ) {
+    throw conflict(
+      chargeback.networkOutcome === 'lost'
+        ? 'The card network ruled against the platform and has already taken this payment back, so it cannot be refunded again. Recover it from the vendor through support.'
+        : 'A chargeback is still open on this payment and Stripe will not refund a disputed charge. Wait for the network to decide it.',
+    );
+  }
+
+  if (chargeback?.networkOutcome === 'lost' && outcome === 'vendor') {
+    throw conflict(
+      'The card network ruled against the platform and has already taken this payment back, so the vendor cannot be paid it out as well.',
+    );
+  }
+
   if (outcome === 'vendor') {
     /*
      * The prior status is **derived from `completed_at`** rather than remembered
@@ -1616,8 +1650,10 @@ export async function resolveDispute(
 
     await bestEffortNotice(context, { bookingId: restored.id }, () =>
       notify(context, restored.customerId, 'booking_completed', {
-        title: 'We have reviewed your report',
-        body: 'We were not able to uphold it, so the booking stands. Contact support to discuss it.',
+        title: chargeback ? 'We have reviewed the chargeback' : 'We have reviewed your report',
+        body: chargeback
+          ? 'The booking stands and the vendor will be paid. Contact support to discuss it.'
+          : 'We were not able to uphold it, so the booking stands. Contact support to discuss it.',
         bookingId: restored.id,
       }),
     );

@@ -332,6 +332,9 @@ export interface DisputedBookingProjection {
    * written for the customer's report form. Free: this row is already read.
    */
   bookingStatus: BookingStatus;
+  vendorId: string;
+  /** What the hold wrote — a chargeback's hold carries its own message here. */
+  disputeReason: string | null;
   payoutReleasedAt: Date | null;
 }
 
@@ -347,6 +350,8 @@ export async function findBookingForDispute(
       customerClerkUserId: users.authUserId,
       customerRole: users.role,
       bookingStatus: bookings.status,
+      vendorId: bookings.vendorId,
+      disputeReason: bookings.disputeReason,
       payoutReleasedAt: bookings.payoutReleasedAt,
     })
     .from(bookings)

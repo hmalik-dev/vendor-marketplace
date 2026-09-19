@@ -56,7 +56,7 @@ const CASE: WireAdminCaseDetail = {
   message: 'Nobody arrived.',
   holdRefusal: null,
   emailFailedAt: null,
-  networkOutcome: null,
+  networkOutcome: 'won',
   stripeDisputeId: 'dp_1QaB7cKz9LmN4dTvXy82Rq',
   resolvedByName: null,
   resolvedAt: null,
@@ -222,13 +222,12 @@ describe('the two confirms', () => {
    * the vendor confirm would describe money that is not moving — but the
    * dispute half catches people both ways, so both carry it.
    */
-  it('cautions that a refund does not withdraw the bank dispute', () => {
+  it('cautions the refund position about when the money lands, and no more', () => {
     openConfirm(/^Refund and cancel$/);
 
-    expect(screen.getByRole('alertdialog').textContent).toContain(
-      "Refunds settle to the customer's bank in 5–10 days",
-    );
-    expect(screen.getByRole('alertdialog').textContent).toContain('refunding does not withdraw it');
+    const body = screen.getByRole('alertdialog').textContent ?? '';
+    expect(body).toContain("Refunds settle to the customer's bank in 5–10 days");
+    expect(body).not.toContain('refunding does not withdraw it');
   });
 
   it('cautions the vendor position about the dispute without promising a refund', () => {
@@ -237,6 +236,42 @@ describe('the two confirms', () => {
     const body = screen.getByRole('alertdialog').textContent ?? '';
     expect(body).toContain("Stripe's dispute stays open until the bank closes it");
     expect(body).not.toContain('Refunds settle');
+  });
+});
+
+describe('a chargeback the network has not closed, or has lost', () => {
+  it('offers no refund while the dispute is still with the network', () => {
+    render(<CaseResolution supportCase={{ ...CASE, networkOutcome: null }} />);
+
+    expect(screen.queryByRole('button', { name: 'Refund and cancel' })).toBeNull();
+    expect(screen.getByText(/Stripe will not refund a disputed charge/)).toBeTruthy();
+    // The vendor ruling is still open: the hold can be lifted while it is live.
+    expect(screen.getByRole('button', { name: 'Resolve for the vendor' })).toBeTruthy();
+  });
+
+  it('offers neither money position once the network has lost it', () => {
+    render(<CaseResolution supportCase={{ ...CASE, networkOutcome: 'lost' }} />);
+
+    expect(screen.queryByRole('button', { name: 'Refund and cancel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Resolve for the vendor' })).toBeNull();
+    expect(screen.getAllByText(/has already taken this payment back/)).toHaveLength(2);
+  });
+
+  it("does not talk about a bank dispute on a customer's own report", () => {
+    render(
+      <CaseResolution
+        supportCase={{
+          ...CASE,
+          origin: 'user_report',
+          networkOutcome: null,
+          stripeDisputeId: null,
+        }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Refund and cancel' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Resolve for the vendor$/ }));
+
+    expect(screen.getByRole('alertdialog').textContent).not.toContain("Stripe's dispute");
   });
 });
 

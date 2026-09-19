@@ -25,16 +25,15 @@ const SWEEP_DATE = new Intl.DateTimeFormat('en-US', {
 /**
  * The thing operators get wrong, drawn into Pattern C's `ConfirmAction`.
  *
- * Both positions carry a caution and they are **not the same sentence**, which
- * is deliberate: the refund one is about money that only moves on the customer
- * position, and putting it on the vendor position would describe a refund that
- * is not happening. What both share is the half that catches people either
- * way — the bank's dispute is open regardless of which way the platform rules,
- * and an operator who releases a payout and assumes the chargeback went with it
- * has made the same mistake in the other direction.
+ * The refund position carries a caution about when the money lands. The vendor
+ * position carries one only on a chargeback, because only a chargeback has a
+ * bank dispute that stays open whichever way the platform rules — an operator
+ * who releases a payout and assumes the chargeback went with it has made a
+ * mistake. A customer's report has no Stripe dispute, so it says nothing of one.
+ * A chargeback's refund is offered only once the network has closed it, since
+ * refunding never withdraws a dispute.
  */
-const CUSTOMER_CAUTION =
-  "Refunds settle to the customer's bank in 5–10 days. Stripe's dispute stays open until the bank closes it — refunding does not withdraw it.";
+const CUSTOMER_CAUTION = "Refunds settle to the customer's bank in 5–10 days.";
 const VENDOR_CAUTION =
   "Stripe's dispute stays open until the bank closes it. Releasing the payout is the platform's ruling, not the network's — if the bank later finds for the customer, the money comes back out of the platform.";
 
@@ -133,6 +132,18 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
     );
   }
 
+  /*
+   * What the API refuses for a chargeback, so the control is not drawn at all
+   * (`resolveDispute`): Stripe will not refund a charge still under dispute, and
+   * one the network already `lost` has been debited from the platform, so
+   * refunding it or paying the vendor out of it would be paid twice.
+   */
+  const chargeback = supportCase.origin === 'chargeback';
+  const lost = chargeback && supportCase.networkOutcome === 'lost';
+  const refundBlocked = chargeback && (supportCase.networkOutcome === null || lost);
+  const lostNote =
+    'The card network ruled against the platform and has already taken this payment back. Recovering it is a conversation with the vendor through support, not a ruling here.';
+
   const payout = formatPrice(booking.vendorPayoutCents);
   const total = formatPrice(booking.totalAmountCents);
   const fee = formatPrice(booking.platformFeeCents);
@@ -181,36 +192,41 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
           . {booking.customerName} is refunded <span className="font-mono">{nothing}</span> and is
           told why in writing.
         </p>
-        <div className="mt-3">
-          <ConfirmAction
-            trigger={
-              <Button type="button" size="sm" variant="secondary" className="w-full">
-                Resolve for the vendor
-              </Button>
-            }
-            title={`Release ${payout} to ${booking.vendorName}?`}
-            description={
-              <>
-                <p>
-                  The payout hold comes off and <strong className="font-semibold">{payout}</strong>{' '}
-                  goes to {booking.vendorName} on the next sweep,{' '}
-                  <strong className="font-semibold">{sweep}</strong>. The booking stands, so{' '}
-                  <span className="font-mono">cancelled_by</span> is not written.
-                </p>
-                <p className="mt-2">
-                  {booking.customerName} is refunded{' '}
-                  <strong className="font-semibold">{nothing}</strong> and is told the report was
-                  not upheld. Case <span className="font-mono">{supportCase.reference}</span> closes
-                  as <em>resolved for the vendor</em>. This can&apos;t be undone here.
-                </p>
-              </>
-            }
-            caution={VENDOR_CAUTION}
-            confirmLabel="Release the payout"
-            cancelLabel={KEEP_OPEN}
-            onConfirm={() => rule('vendor')}
-          />
-        </div>
+        {lost ? (
+          <p className="mt-3 text-sm text-stone-600">{lostNote}</p>
+        ) : (
+          <div className="mt-3">
+            <ConfirmAction
+              trigger={
+                <Button type="button" size="sm" variant="secondary" className="w-full">
+                  Resolve for the vendor
+                </Button>
+              }
+              title={`Release ${payout} to ${booking.vendorName}?`}
+              description={
+                <>
+                  <p>
+                    The payout hold comes off and{' '}
+                    <strong className="font-semibold">{payout}</strong> goes to {booking.vendorName}{' '}
+                    on the next sweep, <strong className="font-semibold">{sweep}</strong>. The
+                    booking stands, so <span className="font-mono">cancelled_by</span> is not
+                    written.
+                  </p>
+                  <p className="mt-2">
+                    {booking.customerName} is refunded{' '}
+                    <strong className="font-semibold">{nothing}</strong> and is told the report was
+                    not upheld. Case <span className="font-mono">{supportCase.reference}</span>{' '}
+                    closes as <em>resolved for the vendor</em>. This can&apos;t be undone here.
+                  </p>
+                </>
+              }
+              caution={chargeback ? VENDOR_CAUTION : undefined}
+              confirmLabel="Release the payout"
+              cancelLabel={KEEP_OPEN}
+              onConfirm={() => rule('vendor')}
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col rounded-xl border border-error-200 bg-stone-0 p-3.5">
@@ -221,56 +237,65 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
           <span className="font-mono">{nothing}</span>; the <span className="font-mono">{fee}</span>{' '}
           platform fee is returned too.
         </p>
-        <div className="mt-3">
-          <ConfirmAction
-            trigger={
+        {refundBlocked ? (
+          <p className="mt-3 text-sm text-stone-600">
+            {lost
+              ? lostNote
+              : 'A chargeback is still open on this payment and Stripe will not refund a disputed charge. This position opens when the network decides it.'}
+          </p>
+        ) : (
+          <div className="mt-3">
+            <ConfirmAction
+              trigger={
+                /*
+                 * Outlined red, never filled — the frame's `btnD`. The `Button`
+                 * primitive's `destructive` variant is a red *fill*, which this
+                 * position must not carry while it sits beside its equal.
+                 */
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="w-full border-error-200 text-error-500 hover:bg-error-50"
+                >
+                  Refund and cancel
+                </Button>
+              }
+              title={`Refund ${total} and cancel this booking?`}
               /*
-               * Outlined red, never filled — the frame's `btnD`. The `Button`
-               * primitive's `destructive` variant is a red *fill*, which this
-               * position must not carry while it sits beside its equal.
+               * `destructive` on the *confirm*, where the red fill is earned: the
+               * refund is a real card movement and the cancellation cannot be
+               * undone from this console.
                */
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="w-full border-error-200 text-error-500 hover:bg-error-50"
-              >
-                Refund and cancel
-              </Button>
-            }
-            title={`Refund ${total} and cancel this booking?`}
-            /*
-             * `destructive` on the *confirm*, where the red fill is earned: the
-             * refund is a real card movement and the cancellation cannot be
-             * undone from this console.
-             */
-            destructive
-            description={
-              <>
-                <p>
-                  {booking.customerName} is refunded{' '}
-                  <strong className="font-semibold">{total}</strong>, including the{' '}
-                  <strong className="font-semibold">{fee}</strong> platform fee. The booking is
-                  cancelled with <span className="font-mono">cancelled_by = admin</span>.
-                </p>
-                <p className="mt-2">
-                  {booking.vendorName} receives <strong className="font-semibold">{nothing}</strong>{' '}
-                  for this booking. The payout hold is released as cancelled rather than paid, so
-                  nothing reaches them on the <strong className="font-semibold">{sweep}</strong>{' '}
-                  sweep or any later one, and they are notified with the reason.
-                </p>
-                <p className="mt-2">
-                  Case <span className="font-mono">{supportCase.reference}</span> closes as{' '}
-                  <em>resolved for the customer</em>. This can&apos;t be undone here.
-                </p>
-              </>
-            }
-            caution={CUSTOMER_CAUTION}
-            confirmLabel="Refund and cancel"
-            cancelLabel={KEEP_OPEN}
-            onConfirm={() => rule('customer')}
-          />
-        </div>
+              destructive
+              description={
+                <>
+                  <p>
+                    {booking.customerName} is refunded{' '}
+                    <strong className="font-semibold">{total}</strong>, including the{' '}
+                    <strong className="font-semibold">{fee}</strong> platform fee. The booking is
+                    cancelled with <span className="font-mono">cancelled_by = admin</span>.
+                  </p>
+                  <p className="mt-2">
+                    {booking.vendorName} receives{' '}
+                    <strong className="font-semibold">{nothing}</strong> for this booking. The
+                    payout hold is released as cancelled rather than paid, so nothing reaches them
+                    on the <strong className="font-semibold">{sweep}</strong> sweep or any later
+                    one, and they are notified with the reason.
+                  </p>
+                  <p className="mt-2">
+                    Case <span className="font-mono">{supportCase.reference}</span> closes as{' '}
+                    <em>resolved for the customer</em>. This can&apos;t be undone here.
+                  </p>
+                </>
+              }
+              caution={CUSTOMER_CAUTION}
+              confirmLabel="Refund and cancel"
+              cancelLabel={KEEP_OPEN}
+              onConfirm={() => rule('customer')}
+            />
+          </div>
+        )}
       </div>
 
       <p className="text-sm text-stone-600 sm:col-span-2">
