@@ -31,6 +31,8 @@ const ALLOWED_FILES: Readonly<Record<string, string>> = {
     'the original architecture plan, marked superseded at its head',
   'design/Orla-Screens-all.html': 'compiled design export, left as imported',
   'design/delta-legal/Orla-Legal-Surfaces.html': 'compiled design export, left as imported',
+  '.gitleaks.toml':
+    'CI scans every commit in history, so the allow-lists for values older commits carried must stay',
   'pnpm-lock.yaml': 'the resolved graph of the webhook-signature package Resend uses',
   'packages/preflight/src/secrets/patterns.ts':
     'the secret scanner still recognises the retired providers key shapes until they are revoked (VEN-377)',
