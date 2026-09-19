@@ -39,9 +39,14 @@ export const REQUIRED_KEYS = {
 };
 
 /* Rows with a placeholder that nothing validates at boot. */
-export const OPTIONAL_KEYS = {
-  SENTRY_DSN: 'Sentry, error reporting',
-};
+/*
+ * Keys the app runs without and that are still worth naming to a reader. Empty
+ * since VEN-397: `SENTRY_DSN` was the only entry and the registry now marks it
+ * absent-able on the baseline, which moves it — with the three other error
+ * reporting keys — into `OPTIONAL_PLACEHOLDER_KEYS` below, written empty rather
+ * than listed. The shape stays because the next optional key belongs here.
+ */
+export const OPTIONAL_KEYS = {};
 
 /*
  * Rows the registry marks absent-able locally. Their placeholders are not
@@ -54,6 +59,12 @@ export const OPTIONAL_PLACEHOLDER_KEYS = [
   'NEON_BRANCH',
   'RESEND_WEBHOOK_SECRET',
   'OPERATOR_ALERT_EMAIL',
+  // Error reporting (VEN-397). Optional off a deployment — a laptop reports
+  // nothing rather than into the production project — and required on one.
+  'SENTRY_DSN',
+  'NEXT_PUBLIC_SENTRY_DSN',
+  'SENTRY_AUTH_TOKEN',
+  'SENTRY_WEB_PROJECT',
 ];
 
 const DOCKER_NOT_INSTALLED =
