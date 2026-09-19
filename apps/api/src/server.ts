@@ -161,6 +161,14 @@ function recordingRoutes<TOptions extends FastifyPluginOptions>(
   };
 }
 
+/**
+ * How many times `RATE_LIMIT_MAX` the Stripe webhook route may receive per
+ * minute. Stripe delivers from a handful of egress addresses, so a payout sweep
+ * or a checkout burst is one caller by this API's keying; the ceiling stays
+ * finite so a runaway sender is still refused, and still counted as a failure.
+ */
+const WEBHOOK_RATE_LIMIT_FACTOR = 10;
+
 /** Longest textual IP address, IPv6 with an embedded IPv4 tail. */
 const MAX_IP_LENGTH = 45;
 
@@ -313,8 +321,38 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     timeWindow: '1 minute',
     keyGenerator: (request) => rateLimitKey(request, env.WEB_TIER_KEY),
   });
-  // The per-file ceiling is also enforced when the part is buffered, so an
-  // oversized upload is refused rather than read into memory in full.
+  /*
+   * The limiter, ahead of authentication.
+   *
+   * The plugin above attaches its check to each *route*, and Fastify runs a
+   * route's hooks after every instance-level hook — so the auth plugin's 401 or
+   * 403 ended the request before it was counted, and a flood of garbage tokens
+   * was never limited while still costing a verification and a lookup each.
+   * Registered here, before the auth plugin, this runs first; the plugin's own
+   * route hook then sees the request already counted and skips it.
+   *
+   * A route that declares its own `config.rateLimit` (a limit, or `false`) keeps
+   * the route-level hook for that limit: the support route keys on the resolved
+   * account, which only exists once the auth hook has run, and the ceilings are
+   * not the API-wide one. A bearer token on such a route is also counted in the
+   * API-wide bucket here, so a flood of bad tokens is limited there too —
+   * `createRateLimit` never consults the "already ran" flag the plugin's own
+   * hook uses, which is why it can count without silencing the route's ceiling.
+   */
+  const limitRequest = app.rateLimit();
+  const countBearer = app.createRateLimit();
+  app.addHook('onRequest', async (request, reply) => {
+    const routeLimit = request.routeOptions.config?.rateLimit;
+
+    if (routeLimit == null) {
+      await limitRequest(request, reply);
+    } else if (routeLimit !== false && request.headers.authorization !== undefined) {
+      const { isExceeded } = await countBearer(request);
+      if (isExceeded) {
+        throw Object.assign(new Error('Rate limit exceeded'), { statusCode: 429 });
+      }
+    }
+  });
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
 
   await app.register(backgroundPlugin);
@@ -425,6 +463,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     webOrigin: canonicalWebOrigin(env),
   });
   await app.register(recordingRoutes(stripeWebhookRoutes, moneyRoutes), {
+    rateLimitMax: env.RATE_LIMIT_MAX * WEBHOOK_RATE_LIMIT_FACTOR,
     platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
     webOrigin: canonicalWebOrigin(env),
   });

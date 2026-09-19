@@ -146,11 +146,10 @@ export async function processUploadedImage(
       .toBuffer();
 
     return { image, thumbnail };
-  } catch (error) {
+  } catch {
     // Anything sharp rejects here is a malformed or unreadable upload, which
-    // is the caller's fault rather than a server fault.
-    throw validationFailed('That file could not be read as an image.', {
-      reason: error instanceof Error ? error.message : 'unknown',
-    });
+    // is the caller's fault rather than a server fault. Its own message names
+    // libvips loaders and offsets, which are internals, so none of it is echoed.
+    throw validationFailed('That file could not be read as an image.');
   }
 }

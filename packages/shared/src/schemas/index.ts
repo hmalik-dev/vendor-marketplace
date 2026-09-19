@@ -111,6 +111,17 @@ export const slugSchema = z
 
 export const emailSchema = z.email().max(MAX_EMAIL_LENGTH);
 
+/*
+ * An address as it is stored, for a response.
+ *
+ * The identity provider decides what counts as an address, and it accepts some
+ * that `z.email()` refuses (`first&last@example.com`, most punycode domains).
+ * Validated again on the way out, one such row made `GET /users/me` and the
+ * vendor's whole booking queue answer 500 for something the reader cannot fix.
+ * Input keeps `emailSchema`; a response only has to say what is there.
+ */
+export const storedEmailSchema = z.string().max(MAX_EMAIL_LENGTH);
+
 export const urlSchema = z.url().max(MAX_URL_LENGTH);
 
 /*
@@ -295,7 +306,7 @@ export const vendorSortOptionSchema = z.enum(VENDOR_SORT_OPTIONS);
 export const userSchema = z.object({
   id: uuidSchema,
   authUserId: z.string().min(1).max(255),
-  email: emailSchema,
+  email: storedEmailSchema,
   role: userRoleSchema,
   /*
    * Empty until the user provides one. Clerk's email-and-password sign-up does
@@ -496,7 +507,7 @@ export const fullCustomerProfileSchema = z.object({
   ...limitedCustomerProfileShape,
   visibility: z.literal('full'),
   lastName: trimmedString(MAX_NAME_LENGTH, 0),
-  email: emailSchema,
+  email: storedEmailSchema,
   phone: phoneSchema.nullable(),
   avatarUrl: imageRefSchema.nullable(),
 });
@@ -880,7 +891,7 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
     firstName: trimmedString(MAX_NAME_LENGTH, 0),
     lastInitial: z.string().max(1),
     lastName: trimmedString(MAX_NAME_LENGTH, 0).nullable(),
-    email: emailSchema.nullable(),
+    email: storedEmailSchema.nullable(),
     phone: phoneSchema.nullable(),
   }),
   /** `null` for a custom request, and for a package the vendor later deleted. */

@@ -6,7 +6,7 @@ describe('Stripe webhook rate limiting', () => {
   let harness: TestHarness;
 
   beforeAll(async () => {
-    harness = await createTestHarness({ env: { RATE_LIMIT_MAX: 2 } });
+    harness = await createTestHarness({ env: { RATE_LIMIT_MAX: 1 } });
   });
 
   afterAll(async () => {
@@ -19,7 +19,7 @@ describe('Stripe webhook rate limiting', () => {
     harness.stripe.nextEvent = { type: 'customer.created', accountId: null, objectId: null };
     const statuses: number[] = [];
 
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    for (let attempt = 0; attempt < 13; attempt += 1) {
       const response = await harness.app.inject({
         method: 'POST',
         url: '/webhooks/stripe',
@@ -30,7 +30,9 @@ describe('Stripe webhook rate limiting', () => {
     }
     await harness.flushEmail();
 
-    expect(statuses).toEqual([200, 200, 429, 429, 429]);
+    // The webhook bucket is ten times the API-wide one: a burst of deliveries
+    // is normal, and only a runaway sender crosses it.
+    expect(statuses).toEqual([...Array<number>(10).fill(200), 429, 429, 429]);
     expect(
       harness.email.sent
         .filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL)

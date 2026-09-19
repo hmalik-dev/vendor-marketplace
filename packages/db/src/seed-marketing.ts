@@ -7,6 +7,7 @@ import {
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgQueryResultHKT } from 'drizzle-orm/pg-core';
+import { deleteBookingRequests } from './delete-booking-requests.js';
 import { hashString, makeRandom } from './deterministic.js';
 import {
   recomputeVendorRatings,
@@ -153,7 +154,7 @@ async function clearSeededBookingGraph<
 
   await db.delete(reviews).where(inArray(reviews.reviewerId, seededUserIds));
   await db.delete(bookings).where(inArray(bookings.customerId, seededUserIds));
-  await db.delete(bookingRequests).where(inArray(bookingRequests.customerId, seededUserIds));
+  await deleteBookingRequests(db, inArray(bookingRequests.customerId, seededUserIds));
 }
 
 /**
@@ -598,7 +599,7 @@ export async function clearMarketingData<
     if (seededVendorIds.length > 0) {
       await db.delete(reviews).where(inArray(reviews.vendorId, seededVendorIds));
       await db.delete(bookings).where(inArray(bookings.vendorId, seededVendorIds));
-      await db.delete(bookingRequests).where(inArray(bookingRequests.vendorId, seededVendorIds));
+      await deleteBookingRequests(db, inArray(bookingRequests.vendorId, seededVendorIds));
     }
   }
 
