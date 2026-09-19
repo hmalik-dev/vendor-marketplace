@@ -38,8 +38,25 @@ export const OWNER_NOT_DELETED = sql`NOT EXISTS (
 )`;
 
 /**
+ * The owner of this storefront is not suspended (VEN-431).
+ *
+ * `setBanned` unpublishes the profile once, at ban time, and nothing re-read
+ * `users.is_banned` afterwards: a publish already in flight, or any path that
+ * flips `is_published` back, left a banned vendor searchable, viewable and
+ * bookable. This reads the authority itself on every public read.
+ *
+ * Same correlated `NOT EXISTS` and same literal names as `OWNER_NOT_DELETED`,
+ * for the same reasons; `users_banned_idx` is its partial index.
+ */
+export const OWNER_NOT_BANNED = sql`NOT EXISTS (
+  SELECT 1 FROM users
+  WHERE users.id = vendor_profiles.user_id
+    AND users.is_banned = true
+)`;
+
+/**
  * A storefront the public may see: published, not retired, and owned by an
- * account that still exists.
+ * account that still exists and is not suspended.
  *
  * Defined once and imported. It used to be three identical copies plus a fourth
  * spelling in `messaging.dao.ts`, which is how the fourth one comes to be missed
@@ -52,4 +69,5 @@ export const OWNER_NOT_DELETED = sql`NOT EXISTS (
  */
 export const VENDOR_VISIBLE: SQL = sql`${eq(vendorProfiles.isPublished, true)}
   AND ${eq(vendorProfiles.isDeleted, false)}
-  AND ${OWNER_NOT_DELETED}`;
+  AND ${OWNER_NOT_DELETED}
+  AND ${OWNER_NOT_BANNED}`;
