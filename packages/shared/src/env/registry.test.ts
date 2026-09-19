@@ -371,6 +371,7 @@ describe('registrySchemaShape', () => {
       'API_URL',
       'CSP_ENFORCE',
       'NEXT_PUBLIC_API_URL',
+      'WEB_TIER_KEY',
     ]);
   });
 
@@ -435,6 +436,7 @@ describe('registrySchemaShape', () => {
       'STRIPE_CONNECT_WEBHOOK_SECRET',
       'SENTRY_AUTH_TOKEN',
       'SENTRY_WEB_PROJECT',
+      'WEB_TIER_KEY',
     ];
 
     it('requires exactly the per-environment rows, and every one of them', () => {

@@ -2,6 +2,8 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import { timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
 import {
@@ -15,6 +17,8 @@ import {
   MAX_UPLOAD_BYTES,
   OPERATOR_DIGEST_POLL_INTERVAL_MS,
   PAYOUT_SWEEP_INTERVAL_MS,
+  VISITOR_IP_HEADER,
+  WEB_TIER_KEY_HEADER,
 } from '@vendor-marketplace/shared';
 import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
 import { allowedOrigins, canonicalWebOrigin, parseEnv, type ApiEnv } from './config/env.js';
@@ -150,6 +154,49 @@ function recordingRoutes<TOptions extends FastifyPluginOptions>(
   };
 }
 
+/** Longest textual IP address, IPv6 with an embedded IPv4 tail. */
+const MAX_IP_LENGTH = 45;
+
+/**
+ * The rate-limit key: the visitor the web tier forwarded, when the caller proves
+ * it is the web tier, otherwise the caller's own address.
+ *
+ * Server-rendered calls all arrive from the web platform's egress address, so
+ * keying on `request.ip` alone puts every visitor in one bucket. The forwarded
+ * address is honoured only alongside the shared secret; without it, or with a
+ * wrong one, the header is ignored and a caller cannot mint buckets by writing it.
+ */
+function rateLimitKey(
+  request: {
+    ip: string;
+    headers: Record<string, string | string[] | undefined>;
+    log: { warn: (message: string) => void };
+  },
+  secret: string | undefined,
+): string {
+  const presented = request.headers[WEB_TIER_KEY_HEADER];
+  const visitor = request.headers[VISITOR_IP_HEADER];
+  if (
+    secret === undefined ||
+    typeof presented !== 'string' ||
+    typeof visitor !== 'string' ||
+    visitor.length === 0 ||
+    visitor.length > MAX_IP_LENGTH ||
+    !isIP(visitor)
+  ) {
+    return request.ip;
+  }
+  const expected = Buffer.from(secret);
+  const actual = Buffer.from(presented);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    // A rotated key on one side only puts every visitor back in one bucket, and
+    // nothing else would say so.
+    request.log.warn('web tier key mismatch: rate limit is keyed on the socket address');
+    return request.ip;
+  }
+  return `visitor:${visitor}`;
+}
+
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
   const { env, db, storage } = options;
   const errorReporter = options.errorReporter ?? createErrorReporter(env);
@@ -190,6 +237,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
         'req.headers.cookie',
         'req.headers["svix-signature"]',
         'req.headers["stripe-signature"]',
+        'req.headers["x-web-tier-key"]',
       ],
       formatters: {
         /*
@@ -253,7 +301,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     credentials: true,
     methods: [...ALLOWED_METHODS],
   });
-  await app.register(rateLimit, { max: env.RATE_LIMIT_MAX, timeWindow: '1 minute' });
+  await app.register(rateLimit, {
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: '1 minute',
+    keyGenerator: (request) => rateLimitKey(request, env.WEB_TIER_KEY),
+  });
   // The per-file ceiling is also enforced when the part is buffered, so an
   // oversized upload is refused rather than read into memory in full.
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
