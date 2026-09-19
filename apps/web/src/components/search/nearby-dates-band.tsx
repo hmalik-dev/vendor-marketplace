@@ -26,12 +26,15 @@ export interface NearbyDatesBandProps {
   date: string;
   category: string;
   city: string;
+  /** Pairs with `city`: Portland, OR and Portland, ME are different places. */
+  state: string;
 }
 
 export function NearbyDatesBand({
   date,
   category,
   city,
+  state,
 }: NearbyDatesBandProps): React.ReactElement | null {
   const [vendors, setVendors] = useState<WireNearbyVendor[]>([]);
   const [total, setTotal] = useState(0);
@@ -52,6 +55,9 @@ export function NearbyDatesBand({
     }
     if (city !== '') {
       params.set('city', city);
+    }
+    if (state !== '') {
+      params.set('state', state);
     }
 
     apiRequest(`/vendors/availability/nearby?${params.toString()}`, {
@@ -79,7 +85,7 @@ export function NearbyDatesBand({
       });
 
     return () => controller.abort();
-  }, [date, category, city]);
+  }, [date, category, city, state]);
 
   if (vendors.length === 0) {
     return null;
@@ -91,6 +97,9 @@ export function NearbyDatesBand({
   }
   if (city !== '') {
     seeAllParams.set('city', city);
+  }
+  if (state !== '') {
+    seeAllParams.set('state', state);
   }
 
   return (

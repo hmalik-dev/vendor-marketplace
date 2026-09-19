@@ -80,14 +80,16 @@ function initialState(servicePackage: WireServicePackage | null): FormState {
 }
 
 /**
- * Reads an optional number field. A blank field means "not specified"; the
- * schemas reject anything else that is not a number, so a typo surfaces as a
- * field error rather than being silently dropped.
+ * Reads an optional number field. A blank field means "not specified" and is
+ * sent as `null`, because an omitted key leaves the stored value alone and a
+ * vendor could then never clear one. The schemas reject anything else that is
+ * not a number, so a typo surfaces as a field error rather than being silently
+ * dropped.
  */
-function optionalNumber(value: string): number | undefined {
+function optionalNumber(value: string): number | null {
   const trimmed = value.trim();
   if (trimmed === '') {
-    return undefined;
+    return null;
   }
 
   const parsed = Number(trimmed);

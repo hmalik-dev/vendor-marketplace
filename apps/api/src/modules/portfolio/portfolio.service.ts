@@ -18,7 +18,6 @@ import {
   findUnreferencedKeys,
   insertPortfolioItem,
   nextDisplayOrder,
-  syncCoverFromPortfolio,
   updatePortfolioItemById,
 } from './portfolio.dao.js';
 
@@ -52,15 +51,6 @@ export async function addPortfolioItem(
   };
 
   const row = await insertPortfolioItem(db, values);
-
-  /*
-   * The first photo a vendor uploads becomes their cover, because otherwise
-   * they would have a portfolio and no banner until they thought to reorder a
-   * list of one.
-   */
-  await db.transaction(async (tx) => {
-    await syncCoverFromPortfolio(tx, vendor.id);
-  });
 
   return toPortfolioItem(row);
 }
@@ -128,9 +118,8 @@ export async function removePortfolioItem(
  * take the rival's photo with it. Nothing else records who uploaded a key, so
  * the owner segment in the key is the only check available.
  *
- * *Still referenced.* The cover is a **designation on an existing tile**, not
- * a second upload — `syncCoverFromPortfolio` copies a portfolio item's key
- * onto `vendor_profiles`. Two rows, one object, on purpose. Reaping on the
+ * *Still referenced.* A vendor can point the cover at a key a portfolio tile
+ * also holds, so two rows may name one object. Reaping on the
  * strength of one row would destroy an object the other still points at, and
  * the vendor would have done it to themselves with a legal request.
  *

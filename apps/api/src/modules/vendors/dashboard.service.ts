@@ -164,6 +164,7 @@ export async function getVendorDashboard(
     reviewCount: vendor.reviewCount,
     earningsThisMonthCents,
     isPublished: vendor.isPublished,
+    moderationHold: vendor.moderationHold,
     publishBlockers: publishBlockers(vendor, categoryIds, activePackageCount),
     stripeOnboarded: vendor.stripeOnboarded,
     /*

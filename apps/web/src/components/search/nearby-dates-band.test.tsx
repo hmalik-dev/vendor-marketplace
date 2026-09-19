@@ -52,7 +52,7 @@ describe('NearbyDatesBand', () => {
       windowDays: 14,
     });
 
-    render(<NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" />);
+    render(<NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" state="TX" />);
 
     await waitFor(() => expect(screen.getAllByTestId('vendor-card')).toHaveLength(2));
     expect(screen.getByText(/June Harlow — 2026-06-20/)).toBeDefined();
@@ -63,7 +63,7 @@ describe('NearbyDatesBand', () => {
     apiRequest.mockResolvedValue({ items: [], total: 0, windowDays: 14 });
 
     const { container } = render(
-      <NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" />,
+      <NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" state="TX" />,
     );
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
@@ -75,7 +75,7 @@ describe('NearbyDatesBand', () => {
     apiRequest.mockRejectedValue(new Error('offline'));
 
     const { container } = render(
-      <NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" />,
+      <NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" state="TX" />,
     );
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
@@ -83,7 +83,7 @@ describe('NearbyDatesBand', () => {
   });
 
   it('asks nothing at all without a date to be near', () => {
-    render(<NearbyDatesBand date="" category="photography" city="Marfa" />);
+    render(<NearbyDatesBand date="" category="photography" city="Marfa" state="TX" />);
 
     expect(apiRequest).not.toHaveBeenCalled();
   });
@@ -99,10 +99,10 @@ describe('NearbyDatesBand', () => {
       windowDays: 14,
     });
 
-    render(<NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" />);
+    render(<NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" state="TX" />);
 
     const link = await screen.findByRole('link', { name: /See all 14 in the region/ });
-    expect(link.getAttribute('href')).toBe('/search?category=photography&city=Marfa');
+    expect(link.getAttribute('href')).toBe('/search?category=photography&city=Marfa&state=TX');
   });
 
   it('draws no link when the band already shows everyone', async () => {
@@ -112,7 +112,7 @@ describe('NearbyDatesBand', () => {
       windowDays: 14,
     });
 
-    render(<NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" />);
+    render(<NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" state="TX" />);
 
     await waitFor(() => expect(screen.getAllByTestId('vendor-card')).toHaveLength(1));
     expect(screen.queryByRole('link')).toBeNull();
@@ -121,23 +121,26 @@ describe('NearbyDatesBand', () => {
   it('carries the category and city into the question it asks', async () => {
     apiRequest.mockResolvedValue({ items: [], total: 0, windowDays: 14 });
 
-    render(<NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" />);
+    render(<NearbyDatesBand date="2026-06-14" category="photography" city="Marfa" state="TX" />);
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
     const url = apiRequest.mock.calls[0]?.[0] as string;
     expect(url).toContain('date=2026-06-14');
     expect(url).toContain('category=photography');
     expect(url).toContain('city=Marfa');
+    // Portland, OR and Portland, ME are different places.
+    expect(url).toContain('state=TX');
   });
 
   it('omits an unset filter rather than sending an empty one', async () => {
     apiRequest.mockResolvedValue({ items: [], total: 0, windowDays: 14 });
 
-    render(<NearbyDatesBand date="2026-06-14" category="" city="" />);
+    render(<NearbyDatesBand date="2026-06-14" category="" city="" state="" />);
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
     const url = apiRequest.mock.calls[0]?.[0] as string;
     expect(url).not.toContain('category=');
     expect(url).not.toContain('city=');
+    expect(url).not.toContain('state=');
   });
 });

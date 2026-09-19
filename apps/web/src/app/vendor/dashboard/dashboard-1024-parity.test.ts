@@ -150,3 +150,23 @@ describe('the checklist is a card inside the pane, not a rail beside it', () => 
     expect(checklist).toContain('lg:box-content');
   });
 });
+
+/*
+ * VEN-442: a storefront an operator took down is not a draft. The API now
+ * reports `moderationHold`; the page has to name it rather than call the vendor's
+ * listing unfinished, and withhold a checklist they cannot complete.
+ */
+describe('a moderation hold is not presented as a draft', () => {
+  it('names the takedown with the sentence the API refuses a publish with', () => {
+    expect(page).toContain('dashboard.moderationHold ? (');
+    expect(page).toContain('title="Your storefront is off search"');
+    expect(page).toContain('{VENDOR_PROFILE_MODERATION_HOLD_MESSAGE}');
+  });
+
+  it('keeps the draft sentence and the checklist for a storefront that is not held', () => {
+    expect(page).toContain(
+      "dashboard.moderationHold\n              ? 'Nothing can come in while your storefront is off search.'\n              : 'Nothing has come in because your listing is still a draft.'",
+    );
+    expect(page).toContain('dashboard.moderationHold ? null : (\n            <PublishChecklist');
+  });
+});

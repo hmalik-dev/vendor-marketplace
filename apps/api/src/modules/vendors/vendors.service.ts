@@ -16,15 +16,18 @@ import {
 import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
+import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import { assertOwnedImageRefs, thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
 import { reapObjects } from '../portfolio/portfolio.service.js';
 import { replaceVendorTags } from '../tags/tags.dao.js';
 import { resolveVendorTagSelection } from '../tags/tags.service.js';
+import { lockVendorProfile } from '../admin/admin.dao.js';
 import { countActivePackages } from '../packages/packages.dao.js';
 import {
   findActiveCategoryIds,
   findVendorCategoryIds,
+  findVendorProfileById,
   findVendorProfileByUserId,
   findVendorTags,
   insertVendorProfile,
@@ -32,6 +35,25 @@ import {
   slugExists,
   updateVendorProfileById,
 } from './vendors.dao.js';
+
+const PROFILE_USER_UNIQUE = 'vendor_profiles_user_id_key';
+const PROFILE_SLUG_UNIQUE = 'vendor_profiles_slug_key';
+
+/**
+ * A lost race on either unique index — the slug, or one profile per user — is
+ * the caller's conflict to resolve, not a server fault. Anything else is left
+ * for the caller to rethrow untouched.
+ */
+function asProfileConflict(error: unknown): ReturnType<typeof conflict> | null {
+  if (violatesUniqueConstraint(error, PROFILE_USER_UNIQUE)) {
+    return conflict('You already have a vendor profile');
+  }
+  if (violatesUniqueConstraint(error, PROFILE_SLUG_UNIQUE)) {
+    return conflict('That web address was just taken. Choose another.');
+  }
+
+  return null;
+}
 
 /** How many `-2`, `-3`, … suffixes to try before giving up on a slug. */
 const MAX_SLUG_ATTEMPTS = 50;
@@ -264,7 +286,13 @@ export async function unpublishForMissingPackages(
   db: AppDatabase,
   vendor: VendorProfileRow,
 ): Promise<boolean> {
-  if (!vendor.isPublished) {
+  /*
+   * Re-read rather than trusting the caller's row: it was fetched before the
+   * caller's own write, and a publish that committed in between would leave a
+   * stale `isPublished: false` here and skip the unpublish.
+   */
+  const current = await findVendorProfileById(db, vendor.id);
+  if (!current?.isPublished) {
     return false;
   }
 
@@ -348,15 +376,19 @@ export async function createVendorProfile(
     coverImageUrl: input.coverImageUrl ?? null,
   };
 
-  const row = await db.transaction(async (tx) => {
-    const inserted = await insertVendorProfile(tx, values);
-    await replaceVendorCategories(tx, inserted.id, categoryIds);
-    if (tags !== undefined) {
-      await replaceVendorTags(tx, inserted.id, tags.tagIds);
-    }
+  const row = await db
+    .transaction(async (tx) => {
+      const inserted = await insertVendorProfile(tx, values);
+      await replaceVendorCategories(tx, inserted.id, categoryIds);
+      if (tags !== undefined) {
+        await replaceVendorTags(tx, inserted.id, tags.tagIds);
+      }
 
-    return inserted;
-  });
+      return inserted;
+    })
+    .catch((error: unknown) => {
+      throw asProfileConflict(error) ?? error;
+    });
 
   return loadDetail(db, row);
 }
@@ -435,10 +467,10 @@ export async function updateVendorProfile(
     patch.responseTimeHours = input.responseTimeHours;
   }
   if (input.profileImageUrl !== undefined) {
-    patch.profileImageUrl = input.profileImageUrl;
+    patch.profileImageUrl = keepStoredKey(existing.profileImageUrl, input.profileImageUrl);
   }
   if (input.coverImageUrl !== undefined) {
-    patch.coverImageUrl = input.coverImageUrl;
+    patch.coverImageUrl = keepStoredKey(existing.coverImageUrl, input.coverImageUrl);
   }
 
   // Resolved before anything is written, and concurrently — see
@@ -489,48 +521,73 @@ export async function updateVendorProfile(
    * the whole save with it rather than leaving the row edited and its
    * selections not (#405).
    */
-  const row = await db.transaction(async (tx) => {
-    if (categoryIds !== undefined) {
-      await replaceVendorCategories(tx, existing.id, categoryIds);
-    }
-    if (tags !== undefined) {
-      await replaceVendorTags(tx, existing.id, tags.tagIds);
-    }
-
-    if (Object.keys(patch).length === 0) {
-      return existing;
-    }
-
-    /*
-     * The hold is re-checked **in the statement that publishes** (#457).
-     *
-     * `existing` was read before `resolveSlug`, the category and tag
-     * resolution and two counts, and nothing here locks the row — so the guard
-     * above is a fast refusal, not the guarantee. An operator's takedown
-     * committing inside that window would otherwise be overwritten by a publish
-     * that had already passed the check, leaving `is_published = true` beside
-     * `moderation_hold = true`: on search, `Held` in the console, and the
-     * operator's own republish answering 409 with no lever left but a ban.
-     */
-    const updated = await updateVendorProfileById(tx, existing.id, patch, {
-      requireUnheld: patch.isPublished === true,
-    });
-
-    if (!updated && patch.isPublished === true) {
-      /*
-       * Re-read to say which of the two things happened, rather than reporting
-       * a hold as a missing profile or the reverse. Only on this path, so the
-       * ordinary save still costs one statement.
-       */
-      const current = await findVendorProfileByUserId(tx, userId);
-
-      if (current?.moderationHold) {
-        throw forbidden(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
+  const row = await db
+    .transaction(async (tx) => {
+      if (categoryIds !== undefined) {
+        await replaceVendorCategories(tx, existing.id, categoryIds);
       }
-    }
+      if (tags !== undefined) {
+        await replaceVendorTags(tx, existing.id, tags.tagIds);
+      }
 
-    return updated;
-  });
+      if (Object.keys(patch).length === 0) {
+        return existing;
+      }
+
+      if (patch.isPublished === true) {
+        /*
+         * Taken after the category and tag writes, so every save touches the child
+         * rows before the profile row and two saves cannot deadlock on the order.
+         * Serialises with a package deactivation, which takes the same lock before
+         * it counts. The count that gated this publish was taken before the
+         * transaction, so it is only a fast refusal: a last package switched off
+         * since would otherwise go live with nothing bookable.
+         */
+        await lockVendorProfile(tx, existing.id);
+        if ((await countActivePackages(tx, existing.id)) === 0) {
+          throw validationFailed('Complete your profile before publishing it.', {
+            blockers: publishBlockers(
+              { ...existing, ...patch } as VendorProfileRow,
+              categoryIds ?? (await findVendorCategoryIds(tx, existing.id)),
+              0,
+            ),
+          });
+        }
+      }
+
+      /*
+       * The hold is re-checked **in the statement that publishes** (#457).
+       *
+       * `existing` was read before `resolveSlug`, the category and tag
+       * resolution and two counts, and nothing here locks the row — so the guard
+       * above is a fast refusal, not the guarantee. An operator's takedown
+       * committing inside that window would otherwise be overwritten by a publish
+       * that had already passed the check, leaving `is_published = true` beside
+       * `moderation_hold = true`: on search, `Held` in the console, and the
+       * operator's own republish answering 409 with no lever left but a ban.
+       */
+      const updated = await updateVendorProfileById(tx, existing.id, patch, {
+        requireUnheld: patch.isPublished === true,
+      });
+
+      if (!updated && patch.isPublished === true) {
+        /*
+         * Re-read to say which of the two things happened, rather than reporting
+         * a hold as a missing profile or the reverse. Only on this path, so the
+         * ordinary save still costs one statement.
+         */
+        const current = await findVendorProfileByUserId(tx, userId);
+
+        if (current?.moderationHold) {
+          throw forbidden(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
+        }
+      }
+
+      return updated;
+    })
+    .catch((error: unknown) => {
+      throw asProfileConflict(error) ?? error;
+    });
 
   if (!row) {
     throw notFound('You have not created a vendor profile yet');
@@ -550,8 +607,7 @@ export async function updateVendorProfile(
     [
       ...withThumbnail(replacedKey(existing.profileImageUrl, row.profileImageUrl)),
       /*
-       * The cover is a designation on an existing portfolio tile, not an
-       * upload of its own — `syncCoverFromPortfolio` copies a tile's key here.
+       * The cover may name a key a portfolio tile also holds.
        * `reapObjects` refuses to remove a key another row still references, so
        * passing it is safe; it only ever reaps a cover that was genuinely
        * uploaded as one and is now referenced by nothing.
@@ -562,6 +618,19 @@ export async function updateVendorProfile(
   );
 
   return loadDetail(db, row);
+}
+
+/**
+ * The editor holds each image as the resolved URL the API served and sends it
+ * back on every save, so an untouched cover arrives as `<base>/<stored key>`.
+ * Storing that would swap the key for a URL and read as a replacement, and the
+ * reap would then delete the object the URL still points at. A submitted value
+ * that is the stored key behind a base URL is the same image: keep the key.
+ */
+function keepStoredKey(stored: string | null, submitted: string | null): string | null {
+  return stored !== null && submitted !== null && submitted.endsWith(`/${stored}`)
+    ? stored
+    : submitted;
 }
 
 /** The old key, when a write actually replaced it with a different one. */

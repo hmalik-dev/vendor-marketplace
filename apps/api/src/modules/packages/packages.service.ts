@@ -8,6 +8,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { NewServicePackageRow, ServicePackageRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import { lockVendorProfile } from '../admin/admin.dao.js';
 import { forbidden, notFound } from '../../lib/errors.js';
 import { assertCompleteOrder } from '../../lib/ordering.js';
 import {
@@ -92,7 +93,7 @@ export async function updatePackage(
     patch.priceType = input.priceType;
   }
   if (input.durationHours !== undefined) {
-    patch.durationHours = input.durationHours.toString();
+    patch.durationHours = input.durationHours?.toString() ?? null;
   }
   if (input.maxGuests !== undefined) {
     patch.maxGuests = input.maxGuests;
@@ -123,9 +124,25 @@ export async function updatePackage(
    * was read before this statement and nothing locks the row, so an operator's
    * deactivation committing in between would otherwise be overwritten by a
    * reactivation that had already passed.
+   *
+   * A deactivation takes the vendor lock before it writes, the order the vendor's
+   * own publish uses, so the count `unpublishForMissingPackages` takes below and
+   * the count a concurrent publish takes cannot both pass on the same package.
    */
-  const row = await updatePackageById(db, vendor.id, packageId, patch, {
-    requireUnheld: patch.isActive === true,
+  const row = await db.transaction(async (tx) => {
+    if (input.isActive === false) {
+      await lockVendorProfile(tx, vendor.id);
+    }
+
+    const updated = await updatePackageById(tx, vendor.id, packageId, patch, {
+      requireUnheld: patch.isActive === true,
+    });
+
+    if (updated && input.isActive === false) {
+      await unpublishForMissingPackages(tx, vendor);
+    }
+
+    return updated;
   });
 
   if (!row) {
@@ -137,10 +154,6 @@ export async function updatePackage(
     }
 
     throw notFound('That package does not exist');
-  }
-
-  if (input.isActive === false) {
-    await unpublishForMissingPackages(db, vendor);
   }
 
   return toServicePackage(row);

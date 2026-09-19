@@ -98,23 +98,38 @@ export interface ResponseCounts {
  *
  * A request the **customer** withdrew is excluded from both: the vendor was
  * never given the chance, and counting it against them would punish them for
- * somebody else's change of mind. An expired one *is* counted as offered and
- * not answered, because that is exactly the failure the rate measures.
+ * somebody else's change of mind. An expired one is counted as offered, and as
+ * answered only when the vendor had sent a quote (`quotedPriceCents` is set):
+ * one they never touched is exactly the failure the rate measures.
  */
 export async function countResponses(
   db: AppDatabase,
   vendorId: string,
   since: Date,
 ): Promise<ResponseCounts> {
+  const quoted = sql<boolean>`${bookingRequests.quotedPriceCents} is not null`;
   const rows = await db
-    .select({ status: bookingRequests.status, total: sql<number>`count(*)::int` })
+    .select({ status: bookingRequests.status, quoted, total: sql<number>`count(*)::int` })
     .from(bookingRequests)
     .where(and(eq(bookingRequests.vendorId, vendorId), gte(bookingRequests.createdAt, since)))
-    .groupBy(bookingRequests.status);
+    .groupBy(bookingRequests.status, quoted);
 
-  const byStatus = Object.fromEntries(rows.map((row) => [row.status, row.total]));
-  const answered = (byStatus.quoted ?? 0) + (byStatus.accepted ?? 0) + (byStatus.declined ?? 0);
-  const unanswered = (byStatus.pending ?? 0) + (byStatus.expired ?? 0);
+  let answered = 0;
+  let unanswered = 0;
+  for (const row of rows) {
+    // An expired request the vendor had already quoted was answered; the
+    // customer let it lapse.
+    const wasAnswered =
+      row.status === 'quoted' ||
+      row.status === 'accepted' ||
+      row.status === 'declined' ||
+      (row.status === 'expired' && row.quoted);
+    if (wasAnswered) {
+      answered += row.total;
+    } else if (row.status === 'pending' || row.status === 'expired') {
+      unanswered += row.total;
+    }
+  }
 
   return { offered: answered + unanswered, answered };
 }

@@ -106,6 +106,7 @@ export async function findPublicVendorTags(db: AppDatabase, vendorId: string) {
       name: tags.name,
       slug: tags.slug,
       category: tags.category,
+      displayOrder: tags.displayOrder,
       isActive: tags.isActive,
       createdAt: tags.createdAt,
     })

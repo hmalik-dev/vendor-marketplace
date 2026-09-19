@@ -34,6 +34,7 @@ interface DashboardBody {
   reviewCount: number;
   earningsThisMonthCents: number;
   isPublished: boolean;
+  moderationHold: boolean;
   publishBlockers: string[];
   bookingWindow: { date: string; status: string }[];
   payouts: {
@@ -279,6 +280,43 @@ describe('/vendor/dashboard', () => {
 
     // 1 answered of 2 offered; the cancelled request is in neither half.
     expect(((await read()).json() as DashboardBody).responseRate).toBe(0.5);
+  });
+
+  /*
+   * `expired` covers both a request nobody answered and a quote the customer let
+   * lapse. Only the first is the vendor's miss.
+   */
+  it('counts a lapsed quote as answered, and a lapsed ignored request as not', async () => {
+    const vendorId = await createProfile();
+    const packageId = await addPackage();
+    await publish(vendorId);
+    const lapsedQuote = await request(vendorId, packageId, 30);
+    const ignored = await request(vendorId, packageId, 31);
+
+    await harness.database.db
+      .update(bookingRequests)
+      .set({ status: 'expired', quotedPriceCents: 145_000 })
+      .where(eq(bookingRequests.id, lapsedQuote));
+    await harness.database.db
+      .update(bookingRequests)
+      .set({ status: 'expired' })
+      .where(eq(bookingRequests.id, ignored));
+
+    // 1 answered of 2 offered.
+    expect(((await read()).json() as DashboardBody).responseRate).toBe(0.5);
+  });
+
+  it('reports whether the storefront has been taken down by moderation', async () => {
+    const vendorId = await createProfile();
+
+    expect(((await read()).json() as DashboardBody).moderationHold).toBe(false);
+
+    await harness.database.db
+      .update(vendorProfiles)
+      .set({ moderationHold: true })
+      .where(eq(vendorProfiles.id, vendorId));
+
+    expect(((await read()).json() as DashboardBody).moderationHold).toBe(true);
   });
 
   it('reports the payout share, not the gross the customer paid', async () => {
