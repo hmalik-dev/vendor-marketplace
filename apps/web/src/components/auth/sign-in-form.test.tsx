@@ -34,6 +34,13 @@ describe('SignInForm', () => {
 
   afterEach(cleanup);
 
+  it("draws frame 12's placeholders in both fields", () => {
+    render(<SignInForm destination="/after-sign-in" />);
+
+    expect(screen.getByLabelText('Email').getAttribute('placeholder')).toBe('you@example.com');
+    expect(screen.getByLabelText('Password').getAttribute('placeholder')).toBe('••••••••••');
+  });
+
   it('signs in and goes to the destination it was given', async () => {
     const user = userEvent.setup();
     render(<SignInForm destination="/after-sign-in?returnTo=%2Fbookings" />);

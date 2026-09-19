@@ -232,6 +232,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
           <AuthField
             label={AUTH_COPY.emailLabel}
             type="email"
+            placeholder="you@example.com"
             name="email"
             autoComplete="email"
             required
@@ -242,6 +243,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             label={AUTH_COPY.passwordLabel}
             helper={AUTH_COPY.passwordHelper}
             type="password"
+            placeholder="••••••••••"
             name="password"
             autoComplete="new-password"
             minLength={10}

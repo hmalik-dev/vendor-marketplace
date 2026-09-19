@@ -78,6 +78,7 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
       <AuthField
         label={AUTH_COPY.emailLabel}
         type="email"
+        placeholder="you@example.com"
         name="email"
         autoComplete="email"
         required
@@ -87,6 +88,7 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
       <AuthField
         label={AUTH_COPY.passwordLabel}
         type="password"
+        placeholder="••••••••••"
         name="password"
         autoComplete="current-password"
         required
