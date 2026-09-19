@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
  *
  * A client component because the route is what selects the inset, and the
  * header itself is a Server Component. The children are passed through rather
- * than imported here, so the Clerk auth cluster stays server-rendered — the
+ * than imported here, so the auth cluster stays server-rendered — the
  * same reason `MarketingNav` and `HeaderQuery` are small.
  */
 

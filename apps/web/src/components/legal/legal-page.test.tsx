@@ -75,10 +75,10 @@ describe('the legal reading layout', () => {
     expect(screen.getAllByText('Stripe').length).toBe(2);
   });
 
-  it('names only the Clerk session cookie, and no consent control', () => {
+  it('names only the Neon Auth session cookie, and no consent control', () => {
     render(<LegalPage document={legalDocument('cookies')} />);
 
-    expect(screen.getByText('__session')).toBeTruthy();
+    expect(screen.getByText('__Secure-neon-auth.session_token')).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.queryByRole('checkbox')).toBeNull();
   });

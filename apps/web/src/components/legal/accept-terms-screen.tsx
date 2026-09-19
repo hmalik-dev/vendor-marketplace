@@ -14,6 +14,7 @@ import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { ExpandableDocumentCard } from '@/components/legal/expandable-document-card';
 import { ApiClientError } from '@/lib/api-client';
+import { clearSignUpRole, readSignUpRole } from '@/lib/auth/signup-role';
 import type { LegalDocument } from '@/lib/legal-markdown';
 import { useApi } from '@/lib/use-api';
 
@@ -70,9 +71,16 @@ export function AcceptTermsScreen({
     try {
       await request('/legal/terms/accept', {
         method: 'POST',
-        body: { version: status.current, accepted: true },
+        /*
+         * The role chosen at sign-up, which Neon Auth has no field to carry.
+         * Read fresh and validated here; the API narrows it again, so a
+         * tampered stored value can at worst pick between the two public roles.
+         */
+        body: { version: status.current, accepted: true, role: readSignUpRole() ?? undefined },
         schema: termsAcceptanceStatusSchema,
       });
+
+      clearSignUpRole();
 
       /*
        * Back through `/after-sign-in` rather than straight to `returnTo`: the
@@ -87,7 +95,9 @@ export function AcceptTermsScreen({
     } catch (error) {
       /*
        * The vendor gate (VEN-406): no account was created for this address, so
-       * the next step is the application form rather than a retry.
+       * the next step is the application form rather than a retry. The stored
+       * choice stays: clearing it would let a return visit here quietly make
+       * them a customer, after a screen that said the choice cannot change.
        */
       if (error instanceof ApiClientError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
         router.replace(VENDOR_APPLY_PATH);

@@ -6,10 +6,10 @@ import {
 import type { UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, unauthorized, validationFailed } from '../../lib/errors.js';
-import { findUserByClerkIdIncludingRetired } from '../users/users.dao.js';
-import { displayName, syncUserFromClerk } from '../users/users.service.js';
+import { findUserByAuthIdIncludingRetired } from '../users/users.dao.js';
+import { displayName, syncUserFromAuth } from '../users/users.service.js';
 import { admitVendor } from '../vendor-invites/vendor-invites.service.js';
-import type { ClerkUserSnapshot } from '../users/users.service.js';
+import type { AuthUserSnapshot } from '../users/users.service.js';
 import {
   findAcceptanceOfVersion,
   findAcceptancesByUser,
@@ -107,9 +107,9 @@ function termsAcceptanceRow(user: UserRow, context: AcceptanceContext): NewAccep
  */
 export async function acceptTerms(
   db: AppDatabase,
-  clerkUserId: string,
-  loadSnapshot: () => Promise<ClerkUserSnapshot>,
-  input: { version: string; accepted: boolean },
+  authUserId: string,
+  loadSnapshot: () => Promise<AuthUserSnapshot>,
+  input: { version: string; accepted: boolean; role?: 'customer' | 'vendor' | undefined },
   context: AcceptanceContext,
 ): Promise<TermsAcceptanceStatus> {
   if (!input.accepted) {
@@ -123,14 +123,14 @@ export async function acceptTerms(
   }
 
   /*
-   * Retired rows included, and refused. `findUserByClerkId` would hide one and
-   * fall through to the insert below, which then collides on `clerk_user_id`
+   * Retired rows included, and refused. `findUserByAuthId` would hide one and
+   * fall through to the insert below, which then collides on `auth_user_id`
    * and fails as an opaque 500 — and if it did not, an erased account would
    * have brought itself back by ticking a box. The gate answers this identity
    * 401 before the route runs; agreeing with it here is what keeps the two
    * modules from depending on a filter neither of them states.
    */
-  const existing = await findUserByClerkIdIncludingRetired(db, clerkUserId);
+  const existing = await findUserByAuthIdIncludingRetired(db, authUserId);
 
   if (existing?.deletedAt) {
     throw unauthorized('No account is linked to this session');
@@ -176,14 +176,15 @@ export async function acceptTerms(
   }
 
   /*
-   * The Clerk read stays outside the transaction: it is a network call, and
+   * The identity read stays outside the transaction: it is a network call, and
    * holding a database transaction open across one is how a slow upstream
    * becomes a held connection.
    */
-  const snapshot = await loadSnapshot();
+  const loaded = await loadSnapshot();
+  const snapshot = { ...loaded, roleHint: input.role ?? loaded.roleHint };
 
   const userId = await db.transaction(async (tx) => {
-    const user = await syncUserFromClerk(tx, snapshot);
+    const user = await syncUserFromAuth(tx, snapshot);
 
     if (!user) {
       throw new Error('legal acceptance: the account row could not be resolved');
@@ -192,7 +193,7 @@ export async function acceptTerms(
     /*
      * The vendor gate (VEN-406), on the row as saved rather than the snapshot:
      * a `user.created` webhook landing mid-request can make that row the one
-     * `syncUserFromClerk` returns, with the role the sign-up first chose. A
+     * `syncUserFromAuth` returns, with the role the sign-up first chose. A
      * refusal rolls the whole transaction back, so no account this path wrote
      * and no acceptance survives it.
      */

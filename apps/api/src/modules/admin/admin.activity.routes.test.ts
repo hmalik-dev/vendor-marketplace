@@ -42,11 +42,11 @@ describe('the admin action log', () => {
    * `normalizeRole` refuses `admin` from Clerk metadata on purpose, so an admin
    * cannot be minted through sync. Sign in to create the row, then promote it.
    */
-  async function signIn(clerkUserId: string, promoteToAdmin = false): Promise<string> {
+  async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
       url: '/users/me',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
 
@@ -54,13 +54,13 @@ describe('the admin action log', () => {
       await harness.database.db
         .update(users)
         .set({ role: 'admin' })
-        .where(eq(users.clerkUserId, clerkUserId));
+        .where(eq(users.authUserId, authUserId));
     }
 
     const rows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId))
+      .where(eq(users.authUserId, authUserId))
       .limit(1);
 
     return rows[0]!.id;
@@ -142,15 +142,15 @@ describe('the admin action log', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [OTHER_ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,
@@ -904,14 +904,14 @@ describe('a failed action write', () => {
   beforeAll(async () => {
     harness = await createTestHarness({ env: { LOG_LEVEL: 'trace' }, loggerStream: collector });
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,
@@ -925,7 +925,7 @@ describe('a failed action write', () => {
     await harness.database.db
       .update(users)
       .set({ role: 'admin' })
-      .where(eq(users.clerkUserId, ADMIN));
+      .where(eq(users.authUserId, ADMIN));
 
     const categoryRows = await harness.database.db
       .select({ id: categories.id })
@@ -951,7 +951,7 @@ describe('a failed action write', () => {
     const customerRows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, CUSTOMER))
+      .where(eq(users.authUserId, CUSTOMER))
       .limit(1);
     vendorUserId = vendorRows[0]!.userId;
 

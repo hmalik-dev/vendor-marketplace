@@ -4,6 +4,9 @@ import { RETURN_PATH_PARAM } from '@/lib/return-path';
 
 const getCurrentUser = vi.fn();
 
+/* The real module loads the Neon SDK, which these route tests never sign in through. */
+vi.mock('@/lib/auth/server', () => ({ getServerSession: async () => null }));
+
 vi.mock('@/lib/current-user', async () => {
   const actual = await vi.importActual<typeof import('@/lib/current-user')>('@/lib/current-user');
   return { ...actual, getCurrentUser: () => getCurrentUser() };

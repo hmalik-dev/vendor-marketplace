@@ -7,6 +7,7 @@ import { createDatabase } from '../client.js';
 import { loadEnv } from '../load-env.js';
 import { users, vendorProfiles } from '../schema/index.js';
 import { seedE2eFixtures, type E2eAccount } from '../seed-e2e.js';
+import { defaultLastName, resolveNeonAccount } from './e2e-neon-account.js';
 import { createStripeFixtureGateway, ensureE2eConnectedAccount } from './e2e-stripe-account.js';
 import { assertSafeTarget } from './safe-target.js';
 
@@ -42,17 +43,10 @@ function readE2eEnv(): Record<string, string> {
   return parse(readFileSync(file, 'utf8'));
 }
 
-/** The surname a Clerk profile with no last name falls back to, by role. */
-function defaultLastName(role: string): string {
-  if (role === 'vendor') {
-    return 'Vendor';
-  }
-
-  return role === 'admin' ? 'Admin' : 'Customer';
-}
-
 /**
- * Resolves an end-to-end account's **real** Clerk id from its email.
+ * Resolves the **operator** account's real Clerk id from its email. The customer
+ * and vendor accounts live on Neon Auth (VEN-447); the operator account moves
+ * with VEN-448, which deletes this and the Clerk lookup above.
  *
  * The id cannot be invented. A row carrying this email under a made-up id makes
  * the account's first real sign-in hit `users_email_key` instead:
@@ -82,7 +76,7 @@ async function resolveAccount(email: string, secretKey: string, role: string): P
   }
 
   return {
-    clerkUserId: user.id,
+    authUserId: user.id,
     email: user.email_addresses[0]?.email_address ?? email,
     firstName: user.first_name?.trim() || 'E2E',
     lastName: user.last_name?.trim() || defaultLastName(role),
@@ -239,31 +233,60 @@ async function main(): Promise<void> {
    */
   assertSafeTarget('end-to-end fixtures');
 
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!secretKey) {
-    throw new Error('CLERK_SECRET_KEY is not set, so the accounts cannot be resolved.');
-  }
-
   const values = readE2eEnv();
   const vendorEmail = values.E2E_VENDOR_EMAIL;
   const customerEmail = values.E2E_CUSTOMER_EMAIL;
+  const vendorPassword = values.E2E_VENDOR_PASSWORD;
+  const customerPassword = values.E2E_CUSTOMER_PASSWORD;
   /*
-   * Optional, unlike the other two. An admin row is what makes `/admin`
+   * Optional, unlike the others. An admin row is what makes `/admin`
    * reachable — the role cannot be reached from inside the product, because it
-   * is read from Clerk at first sign-in and immutable after — but a checkout
-   * that predates the account should still seed the vendor and customer
-   * fixtures rather than failing outright on a gitignored file it cannot fix.
+   * is set at first acceptance and immutable after — but a checkout that
+   * predates the account should still seed the vendor and customer fixtures
+   * rather than failing outright on a gitignored file it cannot fix.
    */
   const adminEmail = values.E2E_ADMIN_EMAIL;
 
-  if (!vendorEmail || !customerEmail) {
-    throw new Error(`${E2E_ENV_FILE} must supply E2E_VENDOR_EMAIL and E2E_CUSTOMER_EMAIL.`);
+  if (!vendorEmail || !customerEmail || !vendorPassword || !customerPassword) {
+    throw new Error(
+      `${E2E_ENV_FILE} must supply E2E_VENDOR_EMAIL, E2E_VENDOR_PASSWORD, E2E_CUSTOMER_EMAIL and ` +
+        'E2E_CUSTOMER_PASSWORD.',
+    );
   }
 
+  const authBaseUrl = process.env.NEON_AUTH_BASE_URL;
+  if (!authBaseUrl) {
+    throw new Error('NEON_AUTH_BASE_URL is not set, so the accounts cannot be resolved.');
+  }
+
+  /* Neon accepts a sign-in from a trusted origin; localhost is trusted on dev. */
+  const origin = (process.env.WEB_URL ?? 'http://localhost:3000').split(',')[0]!.trim();
+  const clerkSecretKey = process.env.CLERK_SECRET_KEY;
+
   const [vendor, customer, admin] = await Promise.all([
-    resolveAccount(vendorEmail, secretKey, 'vendor'),
-    resolveAccount(customerEmail, secretKey, 'customer'),
-    adminEmail === undefined ? undefined : resolveAccount(adminEmail, secretKey, 'admin'),
+    resolveNeonAccount(
+      {
+        baseUrl: authBaseUrl,
+        origin,
+        email: vendorEmail,
+        password: vendorPassword,
+        role: 'vendor',
+      },
+      fetch,
+    ),
+    resolveNeonAccount(
+      {
+        baseUrl: authBaseUrl,
+        origin,
+        email: customerEmail,
+        password: customerPassword,
+        role: 'customer',
+      },
+      fetch,
+    ),
+    adminEmail === undefined || clerkSecretKey === undefined
+      ? undefined
+      : resolveAccount(adminEmail, clerkSecretKey, 'admin'),
   ]);
 
   /*

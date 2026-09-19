@@ -189,7 +189,7 @@ describe('seedCategories — retired slugs', () => {
     const [user] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: `user_${name}_419`,
+        authUserId: `user_${name}_419`,
         email: `${name}-419@example.com`,
         role: 'vendor',
         firstName: 'Saoirse',

@@ -6,7 +6,7 @@
  * The list read `['customer', 'vendor']`, predating the persistent admin
  * account (D27), so a no-argument run refreshed two of three sessions and every
  * lane inherited the main checkout's expired `.auth/admin.json`. The symptom is
- * nothing like the cause: `/admin` enters Clerk's handshake loop and reads as
+ * nothing like the cause: `/admin` redirects to sign-in and reads as
  * the console being broken.
  *
  * Adding `admin` then made the *default* able to reach production, which is a
@@ -21,7 +21,7 @@
  * in at module scope.
  *
  * Runs under plain `node` via `pnpm test:agents`, beside `e2e-base-url.test.mjs`
- * and `e2e-handshake.test.mjs`.
+ * and the other agent-script suites.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

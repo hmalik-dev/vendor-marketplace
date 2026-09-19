@@ -59,7 +59,7 @@ import {
  * two seeded databases.
  *
  * It is additive against the reference seed and disjoint from the marketing
- * seed: different `clerk_user_id` prefix, different vendor slugs, different
+ * seed: different `auth_user_id` prefix, different vendor slugs, different
  * email domain. Running all three leaves each one's rows intact.
  */
 
@@ -312,7 +312,7 @@ export function buildDemoBookingPlan(): readonly DemoBookingPlan[] {
 }
 
 /**
- * Removes every row this seed owns, identified by the `clerk_user_id` prefix.
+ * Removes every row this seed owns, identified by the `auth_user_id` prefix.
  *
  * Two deletes, not twelve. Every table this seed writes is cascade-reachable
  * from `users` — `vendor_profiles` cascades from `users`, and `availability`,
@@ -335,7 +335,7 @@ export async function clearDemoData<
   const owned = await db
     .select({ id: users.id })
     .from(users)
-    .where(like(users.clerkUserId, `${DEMO_SEED_PREFIX}%`));
+    .where(like(users.authUserId, `${DEMO_SEED_PREFIX}%`));
 
   if (owned.length === 0) {
     return;
@@ -402,7 +402,7 @@ export async function seedDemoData<
   const userValues = [
     {
       id: adminId,
-      clerkUserId: `${DEMO_SEED_PREFIX}admin_${DEMO_ADMIN.key}`,
+      authUserId: `${DEMO_SEED_PREFIX}admin_${DEMO_ADMIN.key}`,
       email: `admin@${DEMO_EMAIL_DOMAIN}`,
       role: 'admin' as const,
       firstName: DEMO_ADMIN.firstName,
@@ -415,7 +415,7 @@ export async function seedDemoData<
     },
     ...DEMO_CUSTOMERS.map((customer, index) => ({
       id: customerIds[index] as string,
-      clerkUserId: `${DEMO_SEED_PREFIX}customer_${customer.key}`,
+      authUserId: `${DEMO_SEED_PREFIX}customer_${customer.key}`,
       email: `${customer.key}@${DEMO_EMAIL_DOMAIN}`,
       role: 'customer' as const,
       firstName: customer.firstName,
@@ -428,7 +428,7 @@ export async function seedDemoData<
     })),
     ...DEMO_VENDORS.map((vendor, index) => ({
       id: vendorUserIds[index] as string,
-      clerkUserId: `${DEMO_SEED_PREFIX}vendor_${vendor.key}`,
+      authUserId: `${DEMO_SEED_PREFIX}vendor_${vendor.key}`,
       email: `${vendor.key}@${DEMO_EMAIL_DOMAIN}`,
       role: 'vendor' as const,
       firstName: vendor.firstName,
@@ -447,7 +447,7 @@ export async function seedDemoData<
     .onConflictDoUpdate({
       target: users.id,
       set: {
-        clerkUserId: sql`excluded.clerk_user_id`,
+        authUserId: sql`excluded.auth_user_id`,
         email: sql`excluded.email`,
         role: sql`excluded.role`,
         firstName: sql`excluded.first_name`,

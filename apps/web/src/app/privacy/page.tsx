@@ -12,8 +12,8 @@ export const metadata: Metadata = { title: pageTitle(document.title) };
  * element.
  *
  * That element is the data map, which is a table because it is genuinely
- * tabular: what · held by · why. Its rows are the real stack — Stripe, Clerk,
- * Cloudflare R2 and this product — and a row that stops being true is a defect
+ * tabular: what · held by · why. Its rows are the real stack — Stripe, the
+ * identity provider, Cloudflare R2 and this product — and a row that stops being true is a defect
  * rather than stale copy.
  */
 export default function PrivacyPage(): React.ReactElement {

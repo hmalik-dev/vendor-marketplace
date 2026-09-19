@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_REQUEST_TIMEOUT_MS, ApiClientError, ApiTimeoutError } from './api-client';
 
 /*
- * `vendor-data` resolves the Clerk session at module scope for its protected
+ * `vendor-data` resolves the session at module scope for its protected
  * reads. The reference reads under test here are unauthenticated, so both
  * server dependencies are stubbed down to nothing.
  */
-const clerk = vi.hoisted(() => ({ token: 'session-token' as string | null }));
+const session = vi.hoisted(() => ({ token: 'session-token' as string | null }));
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: async () => ({ getToken: async () => clerk.token }),
+vi.mock('./auth/server', () => ({
+  getServerSession: async () => (session.token ? { userId: 'user-1', token: session.token } : null),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -369,7 +369,7 @@ describe('readOwnVendorProfileIdForChrome', () => {
   };
 
   beforeEach(() => {
-    clerk.token = 'session-token';
+    session.token = 'session-token';
     apiRequest.mockReset();
   });
 
@@ -382,7 +382,7 @@ describe('readOwnVendorProfileIdForChrome', () => {
   });
 
   it('asks the API nothing when nobody is signed in', async () => {
-    clerk.token = null;
+    session.token = null;
 
     await expect(readOwnVendorProfileIdForChrome()).resolves.toBeNull();
 

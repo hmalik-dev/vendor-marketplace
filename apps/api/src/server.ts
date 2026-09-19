@@ -25,7 +25,8 @@ import { redactQueryValues } from './lib/log-redaction.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import type { EmailGateway } from './lib/email.js';
 import type { StripeConnectGateway } from './lib/stripe.js';
-import { clerkAuthPlugin, type ClerkAuthPluginOptions } from './plugins/clerk-auth.js';
+import { neonAuthPlugin, type NeonAuthPluginOptions } from './plugins/neon-auth.js';
+import { clerkAdminPlugin, type ClerkAdminPluginOptions } from './plugins/clerk-admin.js';
 import { backgroundPlugin } from './plugins/background.js';
 import { clockPlugin, type Clock } from './plugins/clock.js';
 import { databasePlugin } from './plugins/database.js';
@@ -90,11 +91,9 @@ export interface BuildServerOptions {
    * run happens to start at.
    */
   clock?: Clock;
-  /** Test seams; production wiring uses the real Clerk and svix clients. */
-  auth?: Pick<
-    ClerkAuthPluginOptions,
-    'verifySessionToken' | 'loadClerkUser' | 'deleteClerkUser' | 'clerkUsers'
-  >;
+  /** Test seams; production wiring uses the real Neon Auth, Clerk and svix clients. */
+  auth?: Pick<NeonAuthPluginOptions, 'verifySessionToken' | 'loadAuthUser'> &
+    Pick<ClerkAdminPluginOptions, 'deleteClerkUser' | 'clerkUsers'>;
   /**
    * The svix seam, shared by both webhooks that use it — Clerk's and Resend's.
    * One verifier because it stands in for one library.
@@ -274,9 +273,17 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     from: env.EMAIL_FROM,
     ...(options.email ? { gateway: options.email } : {}),
   });
-  await app.register(clerkAuthPlugin, {
+  await app.register(neonAuthPlugin, {
+    baseUrl: env.NEON_AUTH_BASE_URL,
+    ...(options.auth?.verifySessionToken
+      ? { verifySessionToken: options.auth.verifySessionToken }
+      : {}),
+    ...(options.auth?.loadAuthUser ? { loadAuthUser: options.auth.loadAuthUser } : {}),
+  });
+  await app.register(clerkAdminPlugin, {
     secretKey: env.CLERK_SECRET_KEY,
-    ...options.auth,
+    ...(options.auth?.deleteClerkUser ? { deleteClerkUser: options.auth.deleteClerkUser } : {}),
+    ...(options.auth?.clerkUsers ? { clerkUsers: options.auth.clerkUsers } : {}),
   });
   await app.register(operatorAlertsPlugin, {
     to: env.OPERATOR_ALERT_EMAIL,

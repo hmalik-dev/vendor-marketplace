@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { getServerSession } from './auth/server';
 import { redirect } from 'next/navigation';
 import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
@@ -22,12 +22,11 @@ import {
 
 /**
  * Server-side reads for the customer's own surfaces. Server Components only —
- * the Clerk session is resolved on the server, so no token reaches the browser.
+ * the session is resolved on the server, so no token reaches the browser.
  */
 
 async function customerToken(): Promise<string> {
-  const { getToken } = await auth();
-  const token = await getToken();
+  const token = (await getServerSession())?.token ?? null;
 
   if (!token) {
     redirect(await signInPathReturningHere());
@@ -261,8 +260,7 @@ export async function getOwnBookings(): Promise<WireBooking[]> {
  * because the API answers each of them 404.
  */
 export async function readOwnBookingForSupport(bookingId: string): Promise<WireBookingView | null> {
-  const { getToken } = await auth();
-  const token = await getToken();
+  const token = (await getServerSession())?.token ?? null;
 
   if (!token) {
     return null;

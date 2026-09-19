@@ -26,7 +26,7 @@ describe('wireUserSchema', () => {
   it('coerces the ISO timestamps a JSON response carries', () => {
     const parsed = wireUserSchema.parse({
       id: UUID,
-      clerkUserId: 'user_123',
+      authUserId: 'user_123',
       email: 'grace@example.com',
       role: 'vendor',
       firstName: 'Grace',

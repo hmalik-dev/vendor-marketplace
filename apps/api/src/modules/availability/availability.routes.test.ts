@@ -39,11 +39,11 @@ describe('/vendor/availability', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  async function createProfile(clerkUserId: string, businessName: string): Promise<string> {
+  async function createProfile(authUserId: string, businessName: string): Promise<string> {
     const response = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         businessName,
         categoryIds: [photographyId],
@@ -58,13 +58,13 @@ describe('/vendor/availability', () => {
   }
 
   async function put(
-    clerkUserId: string,
+    authUserId: string,
     entries: readonly Record<string, unknown>[],
   ): Promise<ReturnType<TestHarness['app']['inject']>> {
     return harness.app.inject({
       method: 'PUT',
       url: '/vendor/availability',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: { entries },
     });
   }
@@ -72,13 +72,13 @@ describe('/vendor/availability', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [OTHER_VENDOR, 'vendor', 'ada@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',
@@ -342,7 +342,7 @@ describe('/vendor/availability', () => {
     beforeAll(async () => {
       derived = await createTestHarness({ clock: () => PINNED });
       derived.clerkUsers.set(VENDOR, {
-        clerkUserId: VENDOR,
+        authUserId: VENDOR,
         email: 'grace@example.com',
         firstName: 'Test',
         lastName: 'User',
@@ -638,7 +638,7 @@ describe('applyAvailability never touches a booked date', () => {
     harness = await createTestHarness();
     await harness.database.db.insert(users).values({
       id: '44444444-4444-4444-8444-444444444444',
-      clerkUserId: 'user_dao_probe',
+      authUserId: 'user_dao_probe',
       email: 'dao-probe@example.com',
       firstName: 'Dao',
       lastName: 'Probe',

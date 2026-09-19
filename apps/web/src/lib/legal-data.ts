@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { getServerSession } from './auth/server';
 import { redirect } from 'next/navigation';
 import { ApiClientError, apiRequest } from './api-client';
 import { signInPathReturningHere } from './requested-path';
@@ -15,8 +15,7 @@ import { wireTermsAcceptanceStatusSchema, type WireTermsAcceptanceStatus } from 
  * nothing and has no account row yet.
  */
 export async function getTermsStatus(): Promise<WireTermsAcceptanceStatus> {
-  const { getToken } = await auth();
-  const token = await getToken();
+  const token = (await getServerSession())?.token ?? null;
 
   if (!token) {
     redirect(await signInPathReturningHere());

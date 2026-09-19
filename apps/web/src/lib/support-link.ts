@@ -42,8 +42,8 @@ export interface SupportLinkContext {
  *
  * The route the visitor was on is genuinely useful — `/search?category=x` says
  * what broke — but it is copied off `window.location`, and not every parameter
- * in a URL is the app's. Clerk puts `__clerk_ticket` on the auth routes, which
- * is a single-use sign-in credential; a crash on exactly that URL would have
+ * in a URL is the app's. An identity provider can put a `__`-prefixed ticket on the
+ * auth routes, which is a single-use sign-in credential; a crash on exactly that URL would have
  * emailed it to the support inbox and stored it on the message.
  *
  * A denylist rather than an allowlist, deliberately: the app's own parameters

@@ -52,11 +52,11 @@ describe('wire bounds agree with their columns', () => {
   /** A well-formed id that names nothing — the read must 400 before it 404s. */
   const NIL_UUID = '11111111-1111-4111-8111-111111111111';
 
-  async function createVendorProfile(clerkUserId: string, businessName: string): Promise<string> {
+  async function createVendorProfile(authUserId: string, businessName: string): Promise<string> {
     const profile = await harness.app.inject({
       method: 'POST',
       url: '/vendor/profile',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         businessName,
         categoryIds: [photographyId],
@@ -71,7 +71,7 @@ describe('wire bounds agree with their columns', () => {
     const servicePackage = await harness.app.inject({
       method: 'POST',
       url: '/vendor/packages',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       payload: {
         name: 'Full day coverage',
         description: 'Six hours of coverage with two photographers on site.',
@@ -91,15 +91,15 @@ describe('wire bounds agree with their columns', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [VENDOR, 'vendor'],
       [OTHER_VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
       [ADMIN, 'admin'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,
@@ -131,7 +131,7 @@ describe('wire bounds agree with their columns', () => {
     await harness.database.db
       .update(users)
       .set({ role: 'admin' })
-      .where(eq(users.clerkUserId, ADMIN));
+      .where(eq(users.authUserId, ADMIN));
   }
 
   afterEach(async () => {
@@ -238,7 +238,7 @@ describe('wire bounds agree with their columns', () => {
     const vendorUser = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, VENDOR));
+      .where(eq(users.authUserId, VENDOR));
 
     const suggestion = await harness.database.db
       .insert(tagSuggestions)

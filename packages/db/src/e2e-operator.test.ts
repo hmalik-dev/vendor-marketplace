@@ -5,7 +5,7 @@ import { users } from './schema/index.js';
 import { createTestDatabase, type TestDatabase } from './testing/test-db.js';
 
 const OPERATOR = {
-  clerkUserId: 'user_disposable_operator',
+  authUserId: 'user_disposable_operator',
   email: 'e2e-operator-1757000000000-42+clerk_test@example.com',
 };
 

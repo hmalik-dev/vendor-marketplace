@@ -152,12 +152,12 @@ describe('/vendor/dashboard', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',
@@ -290,7 +290,7 @@ describe('/vendor/dashboard', () => {
     const customer = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, CUSTOMER));
+      .where(eq(users.authUserId, CUSTOMER));
 
     await harness.database.db.insert(bookings).values({
       requestId,
@@ -339,7 +339,7 @@ describe('/vendor/dashboard', () => {
     const customer = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, CUSTOMER));
+      .where(eq(users.authUserId, CUSTOMER));
 
     await harness.database.db.insert(bookings).values([
       {
@@ -448,7 +448,7 @@ describe('/vendor/dashboard', () => {
       const customer = await harness.database.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.clerkUserId, CUSTOMER));
+        .where(eq(users.authUserId, CUSTOMER));
 
       const [row] = await harness.database.db
         .insert(bookings)

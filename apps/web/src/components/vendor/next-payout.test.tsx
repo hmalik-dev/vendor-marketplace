@@ -111,7 +111,7 @@ describe('NextPayout', () => {
   });
 
   /*
-   * `users.first_name` is written as `firstName ?? ''` at both Clerk entry
+   * `users.first_name` is written as `firstName ?? ''` at both sign-up entry
    * points, so a customer who signed up without one yields an empty string. The
    * separator has to go with it.
    */

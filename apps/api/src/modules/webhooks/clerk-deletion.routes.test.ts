@@ -27,7 +27,7 @@ const CUSTOMER = 'user_deleted_customer';
  * The deletion unwind (#433).
  *
  * A vendor who deleted their Clerk identity used to keep a published,
- * searchable, bookable storefront: `softDeleteUserByClerkId` set `deleted_at`
+ * searchable, bookable storefront: `softDeleteUserByAuthId` set `deleted_at`
  * and stopped, and no visibility predicate anywhere joined it. Every test here
  * drives the public surface rather than reading the column the fix writes — a
  * grep for `is_deleted` cannot tell a retired storefront from a live one.
@@ -45,22 +45,22 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
     });
   }
 
-  function deleteEvent(clerkUserId: string): string {
-    return JSON.stringify({ type: 'user.deleted', data: { id: clerkUserId, deleted: true } });
+  function deleteEvent(authUserId: string): string {
+    return JSON.stringify({ type: 'user.deleted', data: { id: authUserId, deleted: true } });
   }
 
-  async function signIn(clerkUserId: string): Promise<string> {
+  async function signIn(authUserId: string): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
       url: '/users/me',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
 
     const rows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId))
+      .where(eq(users.authUserId, authUserId))
       .limit(1);
 
     return rows[0]!.id;
@@ -142,13 +142,13 @@ describe('POST /webhooks/clerk — user.deleted retires a vendor', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,

@@ -1,9 +1,9 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
 import { useEffect, useRef, useState } from 'react';
 import { apiOrigin } from '@/config/public-env';
 import { ApiClientError, apiRequest } from '@/lib/api-client';
+import { getSessionToken } from '@/lib/auth/client';
 import { wireStreamTicketSchema } from '@/lib/wire-schemas';
 
 const BASE_URL = apiOrigin();
@@ -96,7 +96,6 @@ export interface UseEventStreamOptions {
  * rebuild it several times a second.
  */
 export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions): EventStream {
-  const { getToken, isSignedIn } = useAuth();
   const [connected, setConnected] = useState(false);
 
   const handler = useRef(onEvent);
@@ -105,10 +104,6 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
   reconnected.current = onReconnect;
 
   useEffect(() => {
-    if (!isSignedIn) {
-      return;
-    }
-
     let source: EventSource | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
@@ -123,7 +118,7 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
      *
      * `void connect()` used to let any rejection escape as an unhandled one
      * with nothing scheduled behind it (#402) — `getToken` rejects on a network
-     * blip, a Clerk outage, or a clock skew its refresh cannot ride out.
+     * blip, an auth outage, or a clock skew its refresh cannot ride out.
      * `exhausted` then stayed false, so both `online` and `visibilitychange`
      * returned early at `resume()` and the tab never reconnected for the rest
      * of its life: no notifications, and `/messages` showing "Reconnecting"
@@ -145,7 +140,7 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
     }
 
     async function connect(): Promise<void> {
-      const token = await getToken();
+      const token = await getSessionToken();
 
       if (cancelled || !token) {
         return;
@@ -274,7 +269,7 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
       source?.close();
       setConnected(false);
     };
-  }, [getToken, isSignedIn]);
+  }, []);
 
   return { connected };
 }

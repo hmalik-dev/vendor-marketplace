@@ -35,7 +35,7 @@ import { cn } from '@/lib/utils';
  * this file does not relitigate: the destination is an env var, so it ships
  * before #374 rules on a monitored address and is never scraped; it carries
  * the error reference *for* the visitor rather than asking them to paste it;
- * Clerk already knows who a signed-in sender is; and the transport exists.
+ * the session already knows who a signed-in sender is; and the transport exists.
  *
  * **It is not a helpdesk.** There is no thread, no in-app reply, no ticket
  * status and no attachment, and both the sent state and the confirmation email

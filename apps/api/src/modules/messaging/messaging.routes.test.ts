@@ -29,11 +29,11 @@ describe('messaging', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  async function idOf(clerkUserId: string): Promise<string> {
+  async function idOf(authUserId: string): Promise<string> {
     const me = await harness.app.inject({
       method: 'GET',
       url: '/users/me',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(me.statusCode).toBe(200);
 
@@ -154,14 +154,14 @@ describe('messaging', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
       [OUTSIDER, 'customer', 'edsger@example.com'],
       [OTHER_VENDOR, 'vendor', 'barbara@example.com'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',

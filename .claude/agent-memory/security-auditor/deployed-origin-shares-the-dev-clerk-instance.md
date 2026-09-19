@@ -51,7 +51,16 @@ so the spec's `toBeEnabled()` times out — but the attempt would already have
 been made against the instance production shares. Addresses are `@example.com`
 (IANA-reserved), so the verification mail goes nowhere.
 
-**VEN-379 went further and actually creates one (2026-09-14, reported).**
+**Superseded in part by VEN-447 (2026-09-19).** Customer and vendor sign-in is
+Neon Auth now; only the operator account is still a Clerk identity (VEN-448
+moves it), so the sign-up specs and the throwaway-account path below are gone —
+`e2e/no-row-account.ts` uses a **persistent** `E2E_NEWCOMER_EMAIL` and mints
+nothing, and its Clerk helpers survive only for the operator-closure spec behind
+an `sk_test_` check and `assertLoopbackOrigin`. **Do not re-report VEN-379.**
+The shared-instance question moves to Neon: `NEON_AUTH_BASE_URL` is per
+environment, so check the deployed origin does not name the dev branch.
+
+**VEN-379 went further and actually created one (2026-09-14, reported; FIXED in VEN-447).**
 `route-landing.spec.ts`'s no-row persona calls Clerk's Backend API
 (`e2e/no-row-account.ts`) to create a `+clerk_test` user, signs it in on
 `baseURL` and deletes it in `finally`. It sits in the default `playwright test`

@@ -3,7 +3,7 @@ title: Privacy Policy
 lastUpdated: 2026-09-07
 ---
 
-Short version: we hold the booking. Your card is held by Stripe, your sign-in is held by Clerk, and your uploaded files are held by Cloudflare R2. We do not sell anything to anyone, and we run no advertising or analytics trackers.
+Short version: we hold the booking. Your card is held by Stripe, your sign-in is held by Neon Auth, and your uploaded files are held by Cloudflare R2. We do not sell anything to anyone, and we run no advertising or analytics trackers.
 
 ## Where your data actually lives
 
@@ -12,7 +12,7 @@ Four companies hold something between them, and it is worth knowing which holds 
 | What                 | Held by       | Why                                                        |
 | -------------------- | ------------- | ---------------------------------------------------------- |
 | Card details         | Stripe        | Taking the payment. These never reach an {{brand}} server. |
-| Name, email, session | Clerk         | Signing you in and keeping you signed in.                  |
+| Name, email, session | Neon Auth     | Signing you in and keeping you signed in.                  |
 | Photos and files     | Cloudflare R2 | Vendor covers and portfolio images.                        |
 | Bookings, messages   | {{brand}}     | The record of what was agreed, and the thread about it.    |
 | Payout details       | Stripe        | Vendors only. Collected by Stripe Connect, not by us.      |

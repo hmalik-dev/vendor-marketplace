@@ -58,7 +58,7 @@ const PAGE_FILES = walk(APP_DIR).filter(
  * `(name)` are zero-width, dynamic segments `[slug]` are kept literally, and
  * a trailing catch-all (`[...x]` / `[[...x]]`) is dropped rather than kept —
  * both documents talk about the mount point (`/sign-in`), never about
- * Clerk's own nested paths underneath it.
+ * a provider's own nested paths underneath it.
  */
 export function toRoutePattern(filePath: string): string {
   let segments = filePath

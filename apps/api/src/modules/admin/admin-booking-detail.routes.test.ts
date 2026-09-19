@@ -58,25 +58,25 @@ describe('admin booking detail and requests', () => {
     };
   }
 
-  function get(url: string, clerkUserId: string | null = ADMIN) {
+  function get(url: string, authUserId: string | null = ADMIN) {
     return harness.app.inject({
       method: 'GET',
       url,
-      headers: clerkUserId ? bearer(clerkUserId) : {},
+      headers: authUserId ? bearer(authUserId) : {},
     });
   }
 
   beforeAll(async () => {
     harness = await createTestHarness({ clock: () => NOW });
 
-    for (const [clerkUserId, role, firstName] of [
+    for (const [authUserId, role, firstName] of [
       [ADMIN, 'customer', 'Ops'],
       [VENDOR, 'vendor', 'Dana'],
       [CUSTOMER, 'customer', 'Rosa'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName,
         lastName: 'Rivera',
         roleHint: role,

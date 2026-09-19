@@ -1,10 +1,9 @@
-import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { REQUEST_PATH_HEADER } from '@/lib/return-path';
 
 /**
- * Attaches the Clerk session to every request. Route protection is deliberately
- * *not* done here: Clerk deprecated path-matcher guards because a matcher can
+ * Route protection is deliberately *not* done here: a path-matcher guard can
  * diverge from how Next.js actually routes a request and leave a protected
  * resource reachable.
  *
@@ -13,7 +12,7 @@ import { REQUEST_PATH_HEADER } from '@/lib/return-path';
  * before redirecting. Both read the local `users.role` column, which is the
  * only trustworthy source anyway.
  *
- * It also stamps the requested path onto the request headers, which is the only
+ * It stamps the requested path onto the request headers, which is the only
  * way a *layout* can send a signed-out visitor back where they were going: a
  * layout renders above the page and cannot be told the child's URL. Pages that
  * know their own destination exactly still pass it explicitly and win over this.
@@ -30,7 +29,7 @@ import { REQUEST_PATH_HEADER } from '@/lib/return-path';
  */
 const INTERNAL_QUERY_PARAMS = ['_rsc'] as const;
 
-export default clerkMiddleware((_auth, request) => {
+export default function middleware(request: NextRequest): NextResponse {
   const destination = new URL(request.nextUrl);
   for (const param of INTERNAL_QUERY_PARAMS) {
     destination.searchParams.delete(param);
@@ -40,12 +39,11 @@ export default clerkMiddleware((_auth, request) => {
   headers.set(REQUEST_PATH_HEADER, `${destination.pathname}${destination.search}`);
 
   return NextResponse.next({ request: { headers } });
-});
+}
 
 export const config = {
   matcher: [
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     '/(api|trpc)(.*)',
-    '/__clerk/:path*',
   ],
 };

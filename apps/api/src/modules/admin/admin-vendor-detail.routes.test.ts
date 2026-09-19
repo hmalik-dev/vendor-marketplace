@@ -78,25 +78,25 @@ describe('admin vendor detail', () => {
       .orderBy(asc(adminActions.createdAt), asc(adminActions.id));
   }
 
-  function readDetail(vendorId: string, clerkUserId: string | null = ADMIN) {
+  function readDetail(vendorId: string, authUserId: string | null = ADMIN) {
     return harness.app.inject({
       method: 'GET',
       url: `/admin/vendors/${vendorId}`,
-      headers: clerkUserId ? bearer(clerkUserId) : {},
+      headers: authUserId ? bearer(authUserId) : {},
     });
   }
 
   beforeAll(async () => {
     harness = await createTestHarness({ clock: () => NOW });
 
-    for (const [clerkUserId, role, firstName] of [
+    for (const [authUserId, role, firstName] of [
       [ADMIN, 'customer', 'Ops'],
       [VENDOR, 'vendor', 'Dana'],
       [CUSTOMER, 'customer', 'Rosa'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName,
         lastName: 'Rivera',
         roleHint: role,

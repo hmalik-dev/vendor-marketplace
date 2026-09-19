@@ -61,9 +61,9 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
     errors.length = 0;
     await harness.database.db.delete(users);
     await harness.database.db.insert(users).values([
-      { clerkUserId: HOLDER, email: CONTESTED, role: 'customer', firstName: 'Ada', lastName: 'R' },
+      { authUserId: HOLDER, email: CONTESTED, role: 'customer', firstName: 'Ada', lastName: 'R' },
       {
-        clerkUserId: CLAIMANT,
+        authUserId: CLAIMANT,
         email: 'z@example.com',
         role: 'customer',
         firstName: 'Bea',
@@ -82,11 +82,11 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
     return { ...base, log };
   }
 
-  async function rowFor(clerkUserId: string) {
+  async function rowFor(authUserId: string) {
     const [row] = await harness.database.db
       .select()
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId));
+      .where(eq(users.authUserId, authUserId));
 
     return row;
   }
@@ -135,7 +135,7 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
 
   it('follows one hop only when the holder’s corrected address is itself held', async () => {
     await harness.database.db.insert(users).values({
-      clerkUserId: 'user_cy',
+      authUserId: 'user_cy',
       email: 'w@example.com',
       role: 'customer',
       firstName: 'Cy',
@@ -181,8 +181,8 @@ describe('applyClerkUserEvent, when user.updated meets a stale holder', () => {
   it('never asks Clerk about, or retires, a seeded holder Clerk never issued', async () => {
     await harness.database.db
       .update(users)
-      .set({ clerkUserId: 'seed_mkt_ada' })
-      .where(eq(users.clerkUserId, HOLDER));
+      .set({ authUserId: 'seed_mkt_ada' })
+      .where(eq(users.authUserId, HOLDER));
     const clerk = clerkHolding();
 
     const outcome = await applyClerkUserEvent(context(), claimAddress(), NOW, clerk);

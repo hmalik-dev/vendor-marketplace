@@ -85,7 +85,7 @@ describe('POST /webhooks/clerk', () => {
     const rows = await harness.database.db
       .select()
       .from(users)
-      .where(eq(users.clerkUserId, CLERK_ID));
+      .where(eq(users.authUserId, CLERK_ID));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       email: 'katherine@example.com',
@@ -110,7 +110,7 @@ describe('POST /webhooks/clerk', () => {
    * The branch #442's untargeted `DO NOTHING` opened, pinned so it stays
    * deliberate — and stays **loud**.
    *
-   * `insertUserIfAbsent` stopped naming `users_clerk_user_id_key` as its
+   * `insertUserIfAbsent` stopped naming `users_auth_user_id_key` as its
    * conflict target, because one identity signing in twice at once collides on
    * `users_email_key` as well and a targeted `DO NOTHING` let that one through
    * as a 23505. The cost of dropping the target is this case: a **different**
@@ -131,7 +131,7 @@ describe('POST /webhooks/clerk', () => {
     const rows = await harness.database.db.select().from(users);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.clerkUserId).toBe(CLERK_ID);
+    expect(rows[0]?.authUserId).toBe(CLERK_ID);
   });
 
   /**
@@ -154,7 +154,7 @@ describe('POST /webhooks/clerk', () => {
   it('succeeds when user.updated carries an address another account holds', async () => {
     await post(harness, userCreated());
     await harness.database.db.insert(users).values({
-      clerkUserId: 'user_other',
+      authUserId: 'user_other',
       email: 'taken@example.com',
       role: 'customer',
       firstName: 'Dorothy',
@@ -165,7 +165,7 @@ describe('POST /webhooks/clerk', () => {
      * the handler can release (VEN-386) and the collision stands.
      */
     harness.clerkUsers.set('user_other', {
-      clerkUserId: 'user_other',
+      authUserId: 'user_other',
       email: 'taken@example.com',
       firstName: 'Dorothy',
       lastName: 'Vaughan',
@@ -198,7 +198,7 @@ describe('POST /webhooks/clerk', () => {
     const [row] = await harness.database.db
       .select()
       .from(users)
-      .where(eq(users.clerkUserId, CLERK_ID));
+      .where(eq(users.authUserId, CLERK_ID));
 
     expect(row?.email).toBe('katherine@example.com');
     expect(row?.pendingEmail).toBe('taken@example.com');
@@ -214,7 +214,7 @@ describe('POST /webhooks/clerk', () => {
   it('releases an address held by an account Clerk has deleted', async () => {
     await post(harness, userCreated());
     harness.clerkUsers.set(CLERK_ID, {
-      clerkUserId: CLERK_ID,
+      authUserId: CLERK_ID,
       email: 'taken@example.com',
       firstName: 'Katherine',
       lastName: 'Johnson',
@@ -222,7 +222,7 @@ describe('POST /webhooks/clerk', () => {
       avatarUrl: null,
     });
     await harness.database.db.insert(users).values({
-      clerkUserId: 'user_gone',
+      authUserId: 'user_gone',
       email: 'taken@example.com',
       role: 'customer',
       firstName: 'Dorothy',
@@ -246,11 +246,11 @@ describe('POST /webhooks/clerk', () => {
 
     const rows = await harness.database.db.select().from(users);
 
-    expect(rows.find((row) => row.clerkUserId === CLERK_ID)).toMatchObject({
+    expect(rows.find((row) => row.authUserId === CLERK_ID)).toMatchObject({
       email: 'taken@example.com',
       pendingEmail: null,
     });
-    expect(rows.find((row) => row.clerkUserId === 'user_gone')?.deletedAt).toBeInstanceOf(Date);
+    expect(rows.find((row) => row.authUserId === 'user_gone')?.deletedAt).toBeInstanceOf(Date);
   });
 
   it('does not let user.created escalate the role through unsafe metadata', async () => {
@@ -308,7 +308,7 @@ describe('POST /webhooks/clerk', () => {
   });
 
   /*
-   * And on update, which does not pass through `syncUserFromClerk`: a control
+   * And on update, which does not pass through `syncUserFromAuth`: a control
    * stripped at sign-up would otherwise come straight back the next time the
    * account holder edited their Clerk profile.
    */
@@ -352,7 +352,7 @@ describe('POST /webhooks/clerk', () => {
 
   it('stops resolving a session once the identity is deleted', async () => {
     harness.clerkUsers.set(CLERK_ID, {
-      clerkUserId: CLERK_ID,
+      authUserId: CLERK_ID,
       email: 'katherine@example.com',
       firstName: 'Katherine',
       lastName: 'Johnson',

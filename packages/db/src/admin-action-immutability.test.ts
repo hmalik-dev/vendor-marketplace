@@ -32,7 +32,7 @@ beforeAll(async () => {
   await testDb.runMigrations();
 
   await testDb.db.execute(
-    sql.raw(`INSERT INTO users (id, clerk_user_id, email, role, first_name, last_name)
+    sql.raw(`INSERT INTO users (id, auth_user_id, email, role, first_name, last_name)
              VALUES ('${ACTOR}', 'user_operator', 'operator@example.com', 'admin', 'Dana', 'Okafor')`),
   );
   await testDb.db.insert(adminActions).values({

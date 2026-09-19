@@ -63,8 +63,8 @@ describe('supportLink', () => {
 
 /**
  * The route is copied off `window.location`, and not every parameter in a URL
- * is the app's. Found by the security review of #372: Clerk puts a single-use
- * `__clerk_ticket` on the auth routes, and a crash on exactly that URL would
+ * is the app's. Found by the security review of #372: an identity provider can put a single-use
+ * `__auth_ticket` on the auth routes, and a crash on exactly that URL would
  * have carried it into a support email and stored it on the message.
  *
  * The query still travels, because `/search?category=x` is what says what
@@ -81,8 +81,8 @@ describe('scrubbedRoute', () => {
     );
   });
 
-  it('drops the Clerk sign-in ticket, which is the case this was written for', () => {
-    expect(scrubbedRoute('/sign-in', '?__clerk_ticket=abc.def.ghi&redirect_url=%2Fbookings')).toBe(
+  it('drops a provider sign-in ticket, which is the case this was written for', () => {
+    expect(scrubbedRoute('/sign-in', '?__auth_ticket=abc.def.ghi&redirect_url=%2Fbookings')).toBe(
       '/sign-in?redirect_url=%2Fbookings',
     );
   });
@@ -115,7 +115,7 @@ describe('scrubbedRoute', () => {
   });
 
   it('returns the bare path when every parameter was dropped', () => {
-    expect(scrubbedRoute('/sign-in', '?__clerk_ticket=abc')).toBe('/sign-in');
+    expect(scrubbedRoute('/sign-in', '?__auth_ticket=abc')).toBe('/sign-in');
   });
 
   /*
@@ -126,7 +126,7 @@ describe('scrubbedRoute', () => {
   it('produces a route the support page still accepts', () => {
     const parsed = supportErrorContextSchema.safeParse({
       digest: CONTEXT.digest,
-      route: scrubbedRoute('/search', '?category=photography&__clerk_ticket=abc'),
+      route: scrubbedRoute('/search', '?category=photography&__auth_ticket=abc'),
       occurredAt: CONTEXT.occurredAt,
     });
 

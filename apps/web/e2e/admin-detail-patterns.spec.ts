@@ -1,7 +1,7 @@
 import { test as base, type Browser, type Page } from '@playwright/test';
 
 import { resolveE2EApiUrl } from './base-url.js';
-import { expect, expectSignedIn, storageStatePath } from './fixtures.js';
+import { expect, expectSignedIn, pageToken, storageStatePath } from './fixtures.js';
 import { waitForHydration } from './hydration.js';
 
 /**
@@ -149,8 +149,7 @@ async function e2eCustomerId(browser: Browser): Promise<string> {
     const page = await context.newPage();
     await page.goto('/bookings');
     await expectSignedIn(page);
-    await page.waitForFunction(() => window.Clerk?.loaded === true);
-    const token = await page.evaluate(async () => (await window.Clerk?.session?.getToken()) ?? '');
+    const token = (await pageToken(page)) ?? '';
     const response = await page.request.get(`${API_URL}/users/me`, {
       headers: { authorization: `Bearer ${token}` },
     });

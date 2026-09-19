@@ -144,7 +144,7 @@ export function droppedKeys(
  * vendors" to "everything" without saying so.
  *
  * It lives here rather than in `admin-data.ts` because it is pure: that module
- * pulls in `@clerk/nextjs/server`, which a component must not import to build
+ * pulls in the server-only session reader, which a component must not import to build
  * a link.
  */
 export function adminQueryString(params: Record<string, string | number | undefined>): string {

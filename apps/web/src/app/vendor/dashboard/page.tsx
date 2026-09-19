@@ -75,7 +75,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
    * The person's name, not the business's — frame `08` greets "Maya", and a
    * dashboard that addresses a vendor by their trading name reads like a
    * mailshot. Falls back to the business when the account has no name, which
-   * Clerk's email sign-up genuinely allows.
+   * the email sign-up genuinely allows: it asks for no name.
    */
   const greeting = user.firstName.trim() || profile.businessName;
 

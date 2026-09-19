@@ -88,12 +88,12 @@ export function storageStatePath(role: Role): string {
 /**
  * The check that actually fires.
  *
- * A signed-out run does not look broken: Clerk redirects to `/sign-in`, that
+ * A signed-out run does not look broken: the app redirects to `/sign-in`, that
  * page renders cleanly, the console is empty and nothing overflows. A suite
  * that asserts only on content therefore reports a confident pass against a
  * page that is not the feature. **The resolved pathname is the assertion that
- * catches it, and it catches it first** — the Clerk client signal below can lag
- * behind hydration, but the URL cannot lie about where the server sent us.
+ * catches it, and it catches it first** — the token check below is a second
+ * opinion, but the URL cannot lie about where the server sent us.
  */
 export async function expectSignedIn(page: Page): Promise<void> {
   // A throttled run reaches an error page, not sign-in. Name that first, or the
@@ -106,18 +106,27 @@ export async function expectSignedIn(page: Page): Promise<void> {
   ).not.toHaveURL(/\/sign-(in|up)(\?|$|\/)/);
 
   /*
-   * 45s, for the same reason `playwright.config.ts` gives `navigationTimeout`
-   * 60: the first hit on a route compiles it. `domcontentloaded` returns as
-   * soon as the server's HTML lands, and the client chunks Clerk hydrates from
-   * are compiled *after* that — so on a cold route this wall clock starts
-   * where the navigation's generous one stopped. At 15s it timed out on a
-   * fully working inbox, which is the most expensive kind of wrong answer: it
-   * points the next reader at messaging instead of at the compile.
+   * The session cookie is httpOnly, so the page cannot read it; it asks the
+   * app's own token route instead, which answers 200 only for a session Neon
+   * Auth still recognises. A stored state whose cookie expired redirects at the
+   * assertion above, and one whose session was revoked fails here.
    */
-  await page.waitForFunction(() => window.Clerk?.loaded === true, undefined, { timeout: 45_000 });
+  const token = await pageToken(page);
+  expect(token, 'the app holds no session token despite the stored state').not.toBeNull();
+}
 
-  const userId = await page.evaluate(() => window.Clerk?.user?.id ?? null);
-  expect(userId, 'Clerk reports no signed-in user despite the stored state').not.toBeNull();
+/**
+ * The bearer token for the page's signed-in session, or `null`.
+ *
+ * Straight after a navigation the answer is the same as any later one — there
+ * is no client to wait on — so nothing here needs a load signal, unlike the
+ * provider globals this replaced.
+ */
+export async function pageToken(page: Page): Promise<string | null> {
+  return page.evaluate(async () => {
+    const response = await fetch('/api/session/token', { cache: 'no-store' });
+    return response.ok ? (((await response.json()) as { token?: string }).token ?? null) : null;
+  });
 }
 
 /**

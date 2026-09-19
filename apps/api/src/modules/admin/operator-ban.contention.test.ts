@@ -115,10 +115,10 @@ describe('banning an operator while the other operator leaves the live set', () 
     database = await createPostgresTestDatabase({ poolSize: 4 });
     harness = await createTestHarness({ database });
 
-    for (const clerkUserId of [ADMIN_ONE, ADMIN_TWO]) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+    for (const authUserId of [ADMIN_ONE, ADMIN_TWO]) {
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'Operator',
         roleHint: 'customer',

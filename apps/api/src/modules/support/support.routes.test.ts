@@ -50,7 +50,7 @@ describe('POST /support/messages', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
     harness.clerkUsers.set(CUSTOMER, {
-      clerkUserId: CUSTOMER,
+      authUserId: CUSTOMER,
       email: CUSTOMER_EMAIL,
       firstName: 'Alan',
       lastName: 'Turing',
@@ -165,7 +165,7 @@ describe('POST /support/messages', () => {
     await harness.database.db
       .update(users)
       .set({ pendingEmail: 'alan.new@example.com', emailSyncFailedAt: new Date() })
-      .where(eq(users.clerkUserId, CUSTOMER));
+      .where(eq(users.authUserId, CUSTOMER));
 
     try {
       const result = await harness.app.inject({
@@ -185,7 +185,7 @@ describe('POST /support/messages', () => {
       await harness.database.db
         .update(users)
         .set({ pendingEmail: null, emailSyncFailedAt: null })
-        .where(eq(users.clerkUserId, CUSTOMER));
+        .where(eq(users.authUserId, CUSTOMER));
     }
   });
 

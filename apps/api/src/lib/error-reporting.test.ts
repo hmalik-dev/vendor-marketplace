@@ -148,7 +148,7 @@ describe('the error handler reports what the client is not told', () => {
     const app = Fastify({ logger: false });
     app.decorateRequest('auth', null);
     app.addHook('onRequest', async (request) => {
-      request.auth = { id: 'row-id', clerkUserId: 'user_2abc', role: 'customer' };
+      request.auth = { id: 'row-id', authUserId: 'user_2abc', role: 'customer' };
     });
     await app.register(errorHandlerPlugin, {
       reporter,
@@ -218,7 +218,7 @@ describe('buildServer marks the money routes', () => {
   it('reports a failed Connect onboarding as a payment error for the signed-in vendor', async () => {
     harness = await createTestHarness({ errorReporter: reporter });
     harness.clerkUsers.set('vendor_err', {
-      clerkUserId: 'vendor_err',
+      authUserId: 'vendor_err',
       email: EMAIL,
       firstName: 'Test',
       lastName: 'Vendor',

@@ -1,6 +1,6 @@
 'use client';
 
-import { SignOutButton } from '@clerk/nextjs';
+import { SignOutButton } from '@/components/auth/sign-out-button';
 import { usePathname } from 'next/navigation';
 import { accountLinks, SIGN_OUT_REDIRECT } from '@/components/account-menu';
 import { MARKETING_LINKS } from '@/components/marketing-nav';

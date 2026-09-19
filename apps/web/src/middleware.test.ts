@@ -1,23 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
 import { REQUEST_PATH_HEADER } from '@/lib/return-path';
 
-/*
- * `clerkMiddleware` is the session attachment, which is not what is under test
- * here. Running the handler it is given directly keeps this a test of the one
- * thing this module adds: the request path a layout has no other way to learn.
- */
-vi.mock('@clerk/nextjs/server', () => ({
-  clerkMiddleware: (handler: unknown) => handler,
-}));
-
-const middleware = (await import('./middleware')).default as unknown as (
-  auth: unknown,
-  request: NextRequest,
-) => Response;
+import middleware from './middleware';
 
 function stampedPathFor(url: string, incoming: Record<string, string> = {}): string | null {
-  const response = middleware(null, new NextRequest(new URL(url), { headers: incoming }));
+  const response = middleware(new NextRequest(new URL(url), { headers: incoming }));
 
   return response.headers.get(`x-middleware-request-${REQUEST_PATH_HEADER}`);
 }

@@ -74,7 +74,7 @@ describe('launch switches', () => {
     const [row] = await harness.database.db
       .update(users)
       .set({ role: 'admin' })
-      .where(eq(users.clerkUserId, ADMIN))
+      .where(eq(users.authUserId, ADMIN))
       .returning({ id: users.id });
 
     return row!.id;
@@ -89,12 +89,12 @@ describe('launch switches', () => {
 
   /** A published, payout-ready vendor with one package at `priceCents`. */
   async function createVendor(
-    clerkUserId: string,
+    authUserId: string,
     account: string,
     priceCents = PRICE_CENTS,
   ): Promise<{ vendorId: string; packageId: string }> {
-    const profile = await inject('POST', '/vendor/profile', clerkUserId, {
-      businessName: clerkUserId === VENDOR ? 'Sunlit Studio' : 'Harbour Blooms',
+    const profile = await inject('POST', '/vendor/profile', authUserId, {
+      businessName: authUserId === VENDOR ? 'Sunlit Studio' : 'Harbour Blooms',
       categoryIds: [photographyId],
       city: 'Austin',
       state: 'TX',
@@ -102,7 +102,7 @@ describe('launch switches', () => {
     expect(profile.statusCode).toBe(201);
     const vendorId: string = profile.json().id;
 
-    const created = await inject('POST', '/vendor/packages', clerkUserId, {
+    const created = await inject('POST', '/vendor/packages', authUserId, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents,
@@ -117,7 +117,7 @@ describe('launch switches', () => {
       .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: account })
       .where(eq(vendorProfiles.id, vendorId));
 
-    const agreed = await inject('POST', '/vendor/agreement/accept', clerkUserId, {
+    const agreed = await inject('POST', '/vendor/agreement/accept', authUserId, {
       version: CURRENT_VENDOR_AGREEMENT_VERSION,
     });
     expect(agreed.statusCode).toBe(200);
@@ -156,14 +156,14 @@ describe('launch switches', () => {
 
   /** Checkout, the webhook, and a booking whose payout is owed. */
   async function paidBooking(
-    clerkUserId: string,
+    authUserId: string,
     vendor: { vendorId: string; packageId: string },
   ): Promise<string> {
     const request = await requestBooking(vendor);
     expect(request.statusCode).toBe(201);
     const requestId: string = request.json().id;
     expect(
-      (await inject('POST', `/booking-requests/${requestId}/accept`, clerkUserId)).statusCode,
+      (await inject('POST', `/booking-requests/${requestId}/accept`, authUserId)).statusCode,
     ).toBe(200);
 
     const opened = await checkout(requestId);
@@ -214,15 +214,15 @@ describe('launch switches', () => {
   beforeAll(async () => {
     harness = await createTestHarness({ clock: () => clockNow });
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [VENDOR_TWO, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Test',
         lastName: 'User',
         roleHint: role,

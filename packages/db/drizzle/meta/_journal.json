@@ -337,6 +337,13 @@
       "when": 1789465602613,
       "tag": "0047_clear_redwing",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1789789106036,
+      "tag": "0048_spicy_jack_power",
+      "breakpoints": true
     }
   ]
 }

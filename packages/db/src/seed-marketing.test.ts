@@ -366,7 +366,7 @@ describe('seedMarketingData', () => {
     const [existingUser] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: 'legacy_hand_seeded_user',
+        authUserId: 'legacy_hand_seeded_user',
         email: 'legacy@example.com',
         role: 'vendor',
         firstName: 'Legacy',
@@ -408,7 +408,7 @@ describe('clearMarketingData', () => {
     const [outsider] = await testDb.db
       .insert(users)
       .values({
-        clerkUserId: 'real_developer_account',
+        authUserId: 'real_developer_account',
         email: 'dev@example.com',
         role: 'customer',
         firstName: 'Real',
@@ -446,9 +446,9 @@ describe('the seed prefix', () => {
     await clearMarketingData(testDb.db);
     await seedMarketingData(testDb.db, NOW);
 
-    const rows = await testDb.db.select({ clerkUserId: users.clerkUserId }).from(users);
+    const rows = await testDb.db.select({ authUserId: users.authUserId }).from(users);
 
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((row) => row.clerkUserId.startsWith(MARKETING_SEED_PREFIX))).toBe(true);
+    expect(rows.every((row) => row.authUserId.startsWith(MARKETING_SEED_PREFIX))).toBe(true);
   }, 120_000);
 });

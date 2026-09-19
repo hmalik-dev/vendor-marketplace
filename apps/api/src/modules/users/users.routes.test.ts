@@ -13,7 +13,7 @@ describe('/users/me', () => {
     harness = await createTestHarness();
 
     harness.clerkUsers.set(CUSTOMER_CLERK_ID, {
-      clerkUserId: CUSTOMER_CLERK_ID,
+      authUserId: CUSTOMER_CLERK_ID,
       email: 'ada@example.com',
       firstName: 'Ada',
       lastName: 'Lovelace',
@@ -21,7 +21,7 @@ describe('/users/me', () => {
       avatarUrl: null,
     });
     harness.clerkUsers.set(VENDOR_CLERK_ID, {
-      clerkUserId: VENDOR_CLERK_ID,
+      authUserId: VENDOR_CLERK_ID,
       email: 'grace@example.com',
       firstName: 'Grace',
       lastName: 'Hopper',
@@ -66,7 +66,7 @@ describe('/users/me', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
-        clerkUserId: CUSTOMER_CLERK_ID,
+        authUserId: CUSTOMER_CLERK_ID,
         email: 'ada@example.com',
         firstName: 'Ada',
         lastName: 'Lovelace',
@@ -78,7 +78,7 @@ describe('/users/me', () => {
       const rows = await harness.database.db
         .select()
         .from(users)
-        .where(eq(users.clerkUserId, CUSTOMER_CLERK_ID));
+        .where(eq(users.authUserId, CUSTOMER_CLERK_ID));
       expect(rows).toHaveLength(1);
     });
 
@@ -99,13 +99,13 @@ describe('/users/me', () => {
       const rows = await harness.database.db
         .select()
         .from(users)
-        .where(eq(users.clerkUserId, CUSTOMER_CLERK_ID));
+        .where(eq(users.authUserId, CUSTOMER_CLERK_ID));
       expect(rows).toHaveLength(1);
     });
 
     it('never exposes an admin role chosen in client-writable Clerk metadata', async () => {
       harness.clerkUsers.set('user_escalate', {
-        clerkUserId: 'user_escalate',
+        authUserId: 'user_escalate',
         email: 'mallory@example.com',
         firstName: 'Mallory',
         lastName: 'Nguyen',
@@ -132,7 +132,7 @@ describe('/users/me', () => {
        * non-empty name and answered its own freshly created user with a 500.
        */
       harness.clerkUsers.set('user_nameless', {
-        clerkUserId: 'user_nameless',
+        authUserId: 'user_nameless',
         email: 'nameless@example.com',
         firstName: '',
         lastName: '',
@@ -157,7 +157,7 @@ describe('/users/me', () => {
 
     it('lets a nameless user fill their name in afterwards', async () => {
       harness.clerkUsers.set('user_nameless2', {
-        clerkUserId: 'user_nameless2',
+        authUserId: 'user_nameless2',
         email: 'nameless2@example.com',
         firstName: '',
         lastName: '',
@@ -190,7 +190,7 @@ describe('/users/me', () => {
       await harness.database.db
         .update(users)
         .set({ isBanned: true })
-        .where(eq(users.clerkUserId, VENDOR_CLERK_ID));
+        .where(eq(users.authUserId, VENDOR_CLERK_ID));
 
       const response = await harness.app.inject({
         method: 'GET',
@@ -204,21 +204,21 @@ describe('/users/me', () => {
   });
 
   describe('PUT', () => {
-    async function signIn(clerkUserId: string): Promise<void> {
+    async function signIn(authUserId: string): Promise<void> {
       const response = await harness.app.inject({
         method: 'GET',
         url: '/users/me',
-        headers: bearer(clerkUserId),
+        headers: bearer(authUserId),
       });
       expect(response.statusCode).toBe(200);
     }
 
     /** The `users.id` the upload route writes into the owner segment of a key. */
-    async function userIdOf(clerkUserId: string): Promise<string> {
+    async function userIdOf(authUserId: string): Promise<string> {
       const [row] = await harness.database.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.clerkUserId, clerkUserId));
+        .where(eq(users.authUserId, authUserId));
 
       return row!.id;
     }

@@ -60,7 +60,7 @@ describe('operator alerts on two real connections', () => {
     // One sign-up inside each morning's window, so no day is empty.
     await harness.database.db.insert(users).values(
       Array.from({ length: DAYS }, (_, day) => ({
-        clerkUserId: `user_contention_${day}`,
+        authUserId: `user_contention_${day}`,
         email: `contention-${day}@example.com`,
         role: 'customer' as const,
         firstName: 'Casey',

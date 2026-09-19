@@ -1,7 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-@import '@clerk/ui/themes/shadcn.css';
 @import '@vendor-marketplace/config/tailwind/theme.css';
 
 @custom-variant dark (&:is(.dark *));
@@ -9,7 +8,7 @@
 /*
  * shadcn/ui addresses colour through semantic slots (`--primary`, `--muted`,
  * ...). Those slots are bound to the shared palette below, so every shadcn
- * component — and Clerk's shadcn theme — renders in brand without per-component
+ * component renders in brand without per-component
  * overrides. Radii, fonts, and shadows come from the shared theme import above.
  *
  * `apps/web/src/app/theme-tokens.test.ts` asserts every binding, so a future
@@ -255,254 +254,15 @@ body:has([data-auth-screen]) > footer {
 }
 
 /*
- * Clerk's own chrome, corrected against the shared tokens rather than against
- * hand-written hexes.
- *
- * Clerk renders into `cl-*` class hooks; its `appearance.elements` className
- * overrides do not reach the `@clerk/ui` theme build, so the corrections live
- * here. Everything below resolves to a token, so the palette still has exactly
- * one source of truth.
- *
- * **These selectors are safe because the component build is pinned.** They name
- * Clerk's internal DOM, which unpinned is whatever its CDN serves today — a
- * component update on their side would quietly grow the auth card's frame back
- * with nothing failing and nothing to notice. `layout.tsx` passes `ui` from
- * `@clerk/ui` to `ClerkProvider`, so that structure now moves only when this
- * repository upgrades the dependency, which is a diff and is reviewable.
- *
- * They are kept rather than replaced by `appearance.elements` because several
- * of them do work that API cannot express — the `display: contents` flattening
- * below reorders Clerk's card and footer around our own hint, which is a
- * layout relationship between their DOM and ours, not a style on one element.
+ * The default sign-up state: no role chosen, so the submit reads as disabled
+ * while the fields stay live. The button stays clickable (`aria-disabled`, not
+ * `disabled`) so the click can announce why nothing happened — see
+ * design/design-plan/21-sign-up.md.
  */
-.cl-avatarBox {
-  background: var(--color-clay-400);
-  color: var(--color-stone-0);
-}
-
-/*
- * On the authentication screens the panel already draws the surface the form
- * sits on, so Clerk's card would be a second card inside the first — and its
- * header would repeat, in the body face, what the panel's Serif headline just
- * said.
- */
-[data-auth-screen] .cl-rootBox,
-[data-auth-screen] .cl-cardBox,
-[data-auth-screen] .cl-card,
-[data-auth-screen] .cl-main,
-[data-auth-screen] .cl-form,
-[data-auth-screen] .cl-footer {
-  width: 100%;
-  max-width: none;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-}
-
-/*
- * The card box draws no surface here, so its radius and its clip have nothing
- * left to do — but they still bite. `overflow: hidden` on a rounded box clips
- * along the arc, and with Clerk's header hidden the first field label sits
- * exactly in that top-left corner: "EMAIL" loses the stem of its E and renders
- * as ".MAIL", and the email input loses the left of its border.
- */
-[data-auth-screen] .cl-cardBox {
-  overflow: visible;
-  border-radius: 0;
-}
-
-/*
- * The panel already sets the gutter; Clerk's own would inset the form twice.
- *
- * `margin-inline` matters as much as the padding: Clerk offsets the card by
- * `-1px` to sit its 1px border over the card box's edge, and the rule above
- * removes that border. Left uncorrected, the whole form — labels, inputs,
- * button — sits 1px outside `.cl-cardBox`, which clips `overflow-x`. One pixel
- * is enough to eat the left stem of a 10.5px uppercase label: "EMAIL" renders
- * as ".MAIL", and every input loses the left edge of its border.
- */
-[data-auth-screen] .cl-card {
-  margin-inline: 0;
-  padding-inline: 0;
-}
-
-[data-auth-screen] .cl-header {
-  display: none;
-}
-
-/*
- * #195, #196. Clerk's auth form, corrected against the frames and the laws.
- *
- * **Unlayered on purpose, and it has to stay that way.** Clerk injects its own
- * styles into a later cascade layer, so the `@layer base :focus-visible` rule
- * above cannot reach these nodes. Nodes Clerk does *not* style itself (its footer
- * link, its logo link) already pick the product ring up correctly from that
- * base rule; only the ones it styles need this.
- *
- * Clerk draws a single 4px clay at 50% alpha with no offset layer, where
- * `04-laws.md:167` asks for 2px at 40% over a 2px stone-50 offset.
- */
-[data-auth-screen] .cl-formButtonPrimary.cl-formButtonPrimary:focus-visible,
-[data-auth-screen]
-  .cl-formFieldInputShowPasswordButton.cl-formFieldInputShowPasswordButton:focus-visible {
-  /*
-   * The class is repeated on purpose. Clerk's own rule for the submit is
-   * `.cl-internal-…[data-variant="solid"][data-color="primary"]` — specificity
-   * (0,3,0), exactly tying `[data-auth-screen] .cl-formButtonPrimary:focus-visible`.
-   * On a tie the later declaration wins, and Clerk injects its styles at
-   * runtime, so it was always later. Repeating the class takes this to (0,4,0)
-   * and settles it on specificity instead of on load order, which is not
-   * something we control. Measured, not guessed: with the single class the
-   * input and the show-password button took the product ring and the submit
-   * kept Clerk's.
-   *
-   * Do not reset the shadow property here, however tempting. Tailwind's
-   * `ring-*` utilities are themselves drawn with it, so clearing it after
-   * applying them removes the product's ring along with Clerk's and the
-   * control ends up with no focus affordance at all. Being unlayered is
-   * already enough to win: an unlayered declaration beats any layered one
-   * regardless of specificity, which is why this sits outside `@layer base`.
-   */
-  @apply ring-2 ring-clay-400/40 ring-offset-2 ring-offset-stone-50 outline-none;
-}
-
-/*
- * #383. The text fields are the *bordered field* treatment, not the unbordered
- * one the two buttons above take: `border-clay-400` plus a tight `ring-3` at
- * `/15` and **no offset band**. `03-components.md` § Inputs is explicit that a
- * field which already has an edge to darken does not also get a detached ring
- * — that reads as browser chrome — and these are the only text inputs in the
- * product that were still taking the offset ring.
- *
- * Doubled class and unlayered for the same reasons as the rule above.
- */
-[data-auth-screen] .cl-formFieldInput.cl-formFieldInput:focus-visible {
-  /*
-   * `ring-offset-0` is load-bearing, and it is the whole mechanism of #383 in
-   * one line. Clerk's nodes are not ours, so they cannot carry
-   * `data-focus-own` — the base rule still applies to them, and `ring-offset-*`
-   * is a different custom property from `ring-*`. Overriding the ring alone
-   * left the base rule's 2px `stone-50` band underneath it, and the field
-   * rendered the bordered treatment's tight ring pushed two pixels off the
-   * control: three concentric edges, which is the defect this ticket is about.
-   * Measured in Chromium — `box-shadow` read `stone-50 0 0 0 2px` then
-   * `clay/0.15 0 0 0 5px` before this was added.
-   */
-  @apply border-clay-400 ring-3 ring-clay-400/15 ring-offset-0 outline-none;
-}
-
-/*
- * #196. `Sign in` is clay as text, and the contrast table in
- * `01-foundations.md` is explicit about which clay that is: `clay-500` is the
- * token, `clay-400` is in the Never column. Clerk's default lands on clay-400
- * — 4.51:1 on stone-50, which scrapes past 4.5 by 0.01 and is still the banned
- * pair. `clay-500` gives 5.41:1. Frame `12` draws this span at `#A34A28` and
- * `font-weight:600`, and its sibling label a step darker than Clerk's default.
- */
-[data-auth-screen] .cl-footerActionLink {
-  color: var(--color-clay-500);
-  font-weight: 600;
-}
-
-[data-auth-screen] .cl-footerActionText {
-  color: var(--color-stone-700);
-}
-
-/*
- * On a cream panel the input fill goes stone-0, per the input spec in
- * design/design-plan/03-components.md and the `.inp` override on frame
- * `12 Sign up`.
- */
-[data-auth-screen] .cl-formFieldInput {
-  border-color: var(--color-stone-300);
-  background: var(--color-stone-0);
-}
-
-/*
- * Clerk's theme sizes its own controls; the frame sizes them like every other
- * control in the product. These bring the auth form back onto the component
- * vocabulary in `03-components.md` — 13.5px body text, 10px radius (from the
- * `borderRadius` variable), and the input/button padding frame `12` draws.
- */
-[data-auth-screen] .cl-formFieldInput,
-[data-auth-screen] .cl-formButtonPrimary {
-  padding: 0.625rem 0.8125rem;
-  font-size: var(--text-base);
-}
-
-[data-auth-screen] .cl-formButtonPrimary {
-  padding-inline: 1.25rem;
-  font-weight: 600;
-}
-
-/*
- * The default sign-up state: no role chosen, so the submit renders disabled
- * while the fields stay live. Clerk owns the button, so the treatment is
- * applied here rather than by swapping the control out — see
- * design/design-plan/21-sign-up.md. `pointer-events` stops the click; the
- * capture-phase guard in `SignUpForm` stops the Enter key.
- */
-/*
- * The "Pick one above to continue" hint explains the disabled Continue button,
- * so `21-sign-up.md` puts it directly underneath. Clerk renders its footer —
- * the "Already with us?" link, the divider and "Secured by Clerk" — after the
- * form and inside its own boxes, which stranded the hint ~133px below the
- * button.
- *
- * `.cl-rootBox` and `.cl-cardBox` are purely structural: transparent, no
- * border, no shadow, no padding, no radius. Flattening them with
- * `display: contents` lifts the card and the footer into the same flex column
- * as the hint, where the three can be ordered explicitly. Nothing visual is
- * lost because neither box draws anything.
- */
-[data-auth-screen] [data-role-pending] {
-  display: flex;
-  flex-direction: column;
-}
-
-[data-auth-screen] [data-role-pending] .cl-rootBox,
-[data-auth-screen] [data-role-pending] .cl-cardBox {
-  display: contents;
-}
-
-[data-auth-screen] [data-role-pending] .cl-card {
-  order: 1;
-}
-
-[data-auth-screen] [data-role-pending] [data-role-hint] {
-  order: 2;
-}
-
-[data-auth-screen] [data-role-pending] .cl-footer {
-  order: 3;
-}
-
-[data-auth-screen] [data-role-pending] .cl-formButtonPrimary {
-  pointer-events: none;
+[data-auth-screen] [data-role-pending] button[type='submit'] {
   border-color: transparent;
   background: var(--color-stone-200);
   color: var(--color-stone-500);
-}
-
-/*
- * The field label is a micro-label, not body text — `.lbl` on the frame:
- * 10.5px / 600 uppercase in `stone-600`, tracked out. Clerk ships it as 13px
- * ink sentence case, which reads as a second heading above every input.
- */
-[data-auth-screen] .cl-formFieldLabel {
-  font-size: var(--text-label);
-  font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--color-stone-600);
-}
-
-/*
- * Clerk's card keeps its block padding after its header is hidden, which
- * pushes the form away from the role cards it belongs with.
- */
-[data-auth-screen] .cl-card {
-  padding-block: 0;
 }
 
 /*

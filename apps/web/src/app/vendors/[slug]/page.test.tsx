@@ -22,15 +22,6 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-/*
- * `useApi` reads a Clerk token, and a page-level render mounts no provider. The
- * request never fires in this test — nothing is clicked — so the hook only has
- * to exist.
- */
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({ getToken: async () => null, isSignedIn: false, isLoaded: true }),
-}));
-
 const getPublicVendorProfile = vi.fn();
 const getPublicVendorAvailability = vi.fn();
 const getPublicVendorReviews = vi.fn();
@@ -47,7 +38,7 @@ vi.mock('@/lib/vendor-data', () => ({
 /*
  * The page reads *which role* is reading — a public read that degrades to
  * `null` — to decide whether the rail offers its two CTAs at all (#412).
- * Mocked so a role can be named; the real function needs Clerk and a running
+ * Mocked so a role can be named; the real function needs a session and a running
  * API.
  */
 const readRoleForChrome = vi.fn();

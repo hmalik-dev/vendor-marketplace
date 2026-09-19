@@ -95,37 +95,18 @@ describe('contentSecurityPolicy', () => {
 
   it('omits the image origin entirely when uploads share this one', () => {
     expect(contentSecurityPolicy({ apiOrigin: 'https://api.example.com' })).toContain(
-      `img-src 'self' data: blob: https://img.clerk.com`,
+      `img-src 'self' data: blob: https://*.stripe.com`,
     );
   });
 
   /*
-   * The avatar CDN is a separate host from the Frontend API, so `*.clerk.com`
-   * on `connect-src` does not cover it. Without this the header avatar was
-   * blocked for every signed-in user in production — invisible when the policy
-   * is only ever exercised signed-out, which is how it shipped.
+   * Authentication talks to this origin's own `/api/auth` proxy, so the policy
+   * names no identity provider anywhere: no script, frame, image or connection.
    */
-  it('allows the Clerk avatar CDN, which only a signed-in page requests', () => {
-    const imgSrc = contentSecurityPolicy(ORIGINS)
-      .split('; ')
-      .find((directive) => directive.startsWith('img-src'));
-
-    expect(imgSrc).toContain('https://img.clerk.com');
-  });
-
-  /*
-   * Clerk serves its script, its Frontend API and its Turnstile challenge from
-   * its own hosts. Verified in a browser with the policy enforced: sign-in
-   * renders and loads with no violations.
-   */
-  it('allows Clerk to load its script, open its frame and reach its API', () => {
+  it('names no identity provider in any directive', () => {
     const policy = contentSecurityPolicy(ORIGINS);
 
-    for (const directive of ['script-src', 'frame-src', 'connect-src']) {
-      expect(policy.split('; ').find((d) => d.startsWith(directive))).toContain(
-        'https://*.clerk.accounts.dev',
-      );
-    }
+    expect(policy).not.toMatch(/clerk|neon|challenges\.cloudflare/i);
   });
 
   /*

@@ -53,7 +53,8 @@ afterwards — none of which requires seeing the value.
 | --------------------------------------------- | -------------------------- | ------------------- | ----------------------- |
 | `DATABASE_URL` / `_UNPOOLED`                  | Neon (`production` branch) | Railway             | Yes                     |
 | `CLERK_SECRET_KEY`                            | Clerk                      | Railway, Vercel web | Yes                     |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`           | Clerk                      | Vercel web          | No (public)             |
+| `NEON_AUTH_BASE_URL`                          | Neon Auth (branch)         | Railway, Vercel web | No (an endpoint)        |
+| `NEON_AUTH_COOKIE_SECRET`                     | `openssl rand -base64 32`  | Vercel web          | Yes                     |
 | `CLERK_WEBHOOK_SECRET`                        | Clerk → Svix endpoint      | Railway             | Yes                     |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`   | Cloudflare R2 API token    | Railway             | Yes                     |
 | `S3_ENDPOINT` / `S3_BUCKET` / `S3_PUBLIC_URL` | Cloudflare R2              | Railway             | No                      |

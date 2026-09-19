@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { getServerSession } from './auth/server';
 import { redirect } from 'next/navigation';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
@@ -15,8 +15,7 @@ import { wireBookingRequestListSchema, type WireBookingRequest } from './wire-sc
 export async function getOwnBookingRequests(
   options: { onFailure?: 'empty' | 'throw' } = {},
 ): Promise<WireBookingRequest[]> {
-  const { getToken } = await auth();
-  const token = await getToken();
+  const token = (await getServerSession())?.token ?? null;
 
   if (!token) {
     redirect(await signInPathReturningHere());

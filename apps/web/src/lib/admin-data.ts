@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { getServerSession } from './auth/server';
 import {
   adminActivityActorListSchema,
   adminCategoryListSchema,
@@ -55,7 +55,7 @@ import {
 
 /**
  * Server-side reads for the operations console. Server Components only — each
- * one resolves the Clerk session on the server, so no token reaches the browser.
+ * one resolves the session on the server, so no token reaches the browser.
  *
  * **Nothing here degrades to an empty result.** Every other surface in the
  * product has a defensible reason to render less rather than fail; a console an
@@ -71,8 +71,7 @@ interface AdminSession {
 
 async function adminSession(): Promise<AdminSession> {
   const signInPath = await signInPathReturningHere();
-  const { getToken } = await auth();
-  const token = await getToken();
+  const token = (await getServerSession())?.token ?? null;
 
   if (!token) {
     redirect(signInPath);

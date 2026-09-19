@@ -7,8 +7,8 @@ import { assertSafeTarget } from './safe-target.js';
  * The disposable operator's row, as a command the Playwright suite shells out
  * to — specs cannot import this package (CJS versus `import.meta`).
  *
- *   pnpm --filter @vendor-marketplace/db e2e:operator mint <clerkUserId> <email>
- *   pnpm --filter @vendor-marketplace/db e2e:operator remove <clerkUserId> <email>
+ *   pnpm --filter @vendor-marketplace/db e2e:operator mint <authUserId> <email>
+ *   pnpm --filter @vendor-marketplace/db e2e:operator remove <authUserId> <email>
  *
  * Prints one JSON object on stdout and nothing else, so the caller can parse it.
  */
@@ -16,10 +16,10 @@ async function main(): Promise<void> {
   loadEnv();
   assertSafeTarget('e2e disposable operator');
 
-  const [command, clerkUserId, email] = process.argv.slice(2);
+  const [command, authUserId, email] = process.argv.slice(2);
 
-  if ((command !== 'mint' && command !== 'remove') || !clerkUserId || !email) {
-    throw new Error('Usage: e2e:operator mint|remove <clerkUserId> <email>');
+  if ((command !== 'mint' && command !== 'remove') || !authUserId || !email) {
+    throw new Error('Usage: e2e:operator mint|remove <authUserId> <email>');
   }
 
   const { db, client } = createDatabase({ max: 1 });
@@ -27,8 +27,8 @@ async function main(): Promise<void> {
   try {
     const result =
       command === 'mint'
-        ? await insertDisposableOperator(db, { clerkUserId, email })
-        : { removed: await removeDisposableOperator(db, { clerkUserId, email }) };
+        ? await insertDisposableOperator(db, { authUserId, email })
+        : { removed: await removeDisposableOperator(db, { authUserId, email }) };
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } finally {
     await client.end();

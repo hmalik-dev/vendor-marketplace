@@ -5,12 +5,12 @@ import { postSignInPath } from '@/lib/role-routes';
 import { signedInFailurePath } from '@/lib/terms-gate';
 
 /**
- * Neutral landing spot after sign-in and sign-up. Clerk redirects here without
+ * Neutral landing spot after sign-in and sign-up. Sign-in and sign-up redirect here without
  * knowing the user's role, so the role is resolved from the local record and
  * the request is forwarded to wherever that role starts — a vendor's own
  * dashboard, or the marketplace home for everyone else.
  *
- * A route handler rather than a page that calls `redirect()`: Clerk lands here
+ * A route handler rather than a page that calls `redirect()`: the sign-in form lands here
  * with a client-side navigation, and an RSC redirect that crosses into a
  * different layout segment leaves the App Router unable to reconcile the tree.
  * A route handler answers with a real HTTP redirect, which the router follows

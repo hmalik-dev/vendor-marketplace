@@ -9,7 +9,7 @@ const getToken = vi.fn(
     }),
 );
 
-vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken }) }));
+vi.mock('./auth/client', () => ({ getSessionToken: () => getToken() }));
 
 const { useImageUpload, UploadTransportError } = await import('./use-api');
 
@@ -102,7 +102,7 @@ describe('useImageUpload cancellation', () => {
 
   /*
    * The window the listener cannot cover. `getToken` is a network round trip
-   * whenever Clerk refreshes, and an abort during it dispatches before any
+   * whenever the cache refreshes, and an abort during it dispatches before any
    * listener exists — so without the second check the upload proceeds and the
    * vendor's cancelled photo is stored.
    */

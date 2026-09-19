@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Show, SignOutButton } from '@clerk/nextjs';
+import { Show } from '@/components/auth/show';
+import { SignOutButton } from '@/components/auth/sign-out-button';
 import { BRAND_NAME, BRAND_TAGLINE, LEGAL_PATHS, SUPPORT_PATH } from '@vendor-marketplace/shared';
 import type { Category, UserRole } from '@vendor-marketplace/shared';
 import { cn } from '@/lib/utils';
@@ -287,7 +288,7 @@ export async function SiteFooter(): Promise<React.ReactElement> {
               `min-h-11` and the negative margin that pays for it: the lockup
               is 27px tall, and `04-laws.md` puts a 44x44 floor under a control
               whose accessible name comes from an `aria-label` rather than from
-              text. It is grown the way Clerk's trigger is (`hit-area.test.ts`)
+              text. It is grown the way the account trigger is (`hit-area.test.ts`)
               — the target changes, the mark does not — and `-my-2` keeps the
               tagline where the frame draws it, 12px below.
 
@@ -332,7 +333,7 @@ export async function SiteFooter(): Promise<React.ReactElement> {
                 ))}
                 <li>
                   {/*
-                    Clerk's own control rather than a link to a route: signing
+                    The sign-out control rather than a link to a route: signing
                     out is a session mutation, and the header's `AccountMenu`
                     is a menu behind an avatar — this column is where a reader
                     who wants out actually looks. `className` rather than a

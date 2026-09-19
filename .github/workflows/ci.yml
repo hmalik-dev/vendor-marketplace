@@ -18,10 +18,12 @@ env:
   # below, each creating and dropping a database of its own on it. The db
   # package also validates that a URL is configured, which this satisfies.
   DATABASE_URL: postgresql://vendor_marketplace:vendor_marketplace_ci@localhost:5432/vendor_marketplace
-  # `next build` instantiates ClerkProvider, which refuses to load without a
-  # syntactically valid publishable key. These are placeholders, not secrets:
-  # CI never reaches Clerk's servers.
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2kuY2xlcmsuYWNjb3VudHMuZGV2JA
+  # The web build validates the `auth` capability, so both Neon Auth values must
+  # be well-formed. CI never reaches Neon's servers. The cookie key signs
+  # nothing real, so it is derived (the commit hash, twice)
+  # rather than written down: a literal here would read as a credential.
+  NEON_AUTH_BASE_URL: https://ep-ci.neonauth.example.invalid/neondb/auth
+  NEON_AUTH_COOKIE_SECRET: ${{ github.sha }}${{ github.sha }}
   CLERK_SECRET_KEY: sk_test_ci_placeholder
   CLERK_WEBHOOK_SECRET: whsec_ci_placeholder
   NEXT_PUBLIC_API_URL: http://localhost:4000
@@ -217,7 +219,8 @@ jobs:
       # as the generic 500 page (`apps/web/e2e/README.md`).
       RATE_LIMIT_MAX: '100000'
       # The secrets. GitHub masks each value in the log wherever it appears.
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.E2E_CLERK_PUBLISHABLE_KEY }}
+      NEON_AUTH_BASE_URL: ${{ secrets.E2E_NEON_AUTH_BASE_URL }}
+      NEON_AUTH_COOKIE_SECRET: ${{ secrets.E2E_NEON_AUTH_COOKIE_SECRET }}
       CLERK_SECRET_KEY: ${{ secrets.E2E_CLERK_SECRET_KEY }}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.E2E_STRIPE_PUBLISHABLE_KEY }}
       STRIPE_SECRET_KEY: ${{ secrets.E2E_STRIPE_SECRET_KEY }}

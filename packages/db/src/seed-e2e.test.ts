@@ -42,13 +42,13 @@ describe('seedE2eFixtures', () => {
 
   const INPUT: E2eSeedInput = {
     vendor: {
-      clerkUserId: 'user_e2e_vendor',
+      authUserId: 'user_e2e_vendor',
       email: 'vendor+clerk_test@example.com',
       firstName: 'Evie',
       lastName: 'Vendor',
     },
     customer: {
-      clerkUserId: 'user_e2e_customer',
+      authUserId: 'user_e2e_customer',
       email: 'customer+clerk_test@example.com',
       firstName: 'Cal',
       lastName: 'Customer',
@@ -155,7 +155,7 @@ describe('seedE2eFixtures', () => {
    * from inside the product: it is read from Clerk's `unsafeMetadata` at first
    * sign-in, falls back to `customer`, and is immutable afterwards. So no
    * sign-up flow produces an admin, `seed-demo.ts` gives its admin a synthetic
-   * `clerk_user_id` that cannot authenticate, and before this the only route to
+   * `auth_user_id` that cannot authenticate, and before this the only route to
    * the operations console was promoting a customer in the database by hand.
    */
   it('pre-invites the vendor account, once, so it signs in with the vendor gate on', async () => {
@@ -173,7 +173,7 @@ describe('seedE2eFixtures', () => {
     const result = await seedE2eFixtures(database.db, {
       ...INPUT,
       admin: {
-        clerkUserId: 'user_e2e_admin',
+        authUserId: 'user_e2e_admin',
         email: 'admin+clerk_test@example.com',
         firstName: 'Ada',
         lastName: 'Admin',
@@ -183,13 +183,13 @@ describe('seedE2eFixtures', () => {
     expect(result.adminUserId).toBeDefined();
 
     const [row] = await database.db
-      .select({ role: users.role, email: users.email, clerkUserId: users.clerkUserId })
+      .select({ role: users.role, email: users.email, authUserId: users.authUserId })
       .from(users)
       .where(eq(users.id, result.adminUserId as string));
 
     expect(row?.role).toBe('admin');
     expect(row?.email).toBe('admin+clerk_test@example.com');
-    expect(row?.clerkUserId).toBe('user_e2e_admin');
+    expect(row?.authUserId).toBe('user_e2e_admin');
   });
 
   /*
@@ -218,7 +218,7 @@ describe('seedE2eFixtures', () => {
    */
   it('promotes an account Clerk had already created as a customer to admin', async () => {
     await database.db.insert(users).values({
-      clerkUserId: 'user_e2e_admin',
+      authUserId: 'user_e2e_admin',
       email: 'admin+clerk_test@example.com',
       role: 'customer',
       firstName: 'Ada',
@@ -228,7 +228,7 @@ describe('seedE2eFixtures', () => {
     const result = await seedE2eFixtures(database.db, {
       ...INPUT,
       admin: {
-        clerkUserId: 'user_e2e_admin',
+        authUserId: 'user_e2e_admin',
         email: 'admin+clerk_test@example.com',
         firstName: 'Ada',
         lastName: 'Admin',
@@ -311,7 +311,7 @@ describe('seedE2eFixtures', () => {
    */
   it('promotes an account Clerk had already created as a customer', async () => {
     await database.db.insert(users).values({
-      clerkUserId: INPUT.vendor.clerkUserId,
+      authUserId: INPUT.vendor.authUserId,
       email: INPUT.vendor.email,
       role: 'customer',
       firstName: 'Evie',
@@ -716,13 +716,13 @@ describe('seedE2eFixtures', () => {
     const inserted = await database.db
       .insert(users)
       .values({
-        clerkUserId: INPUT.vendor.clerkUserId,
+        authUserId: INPUT.vendor.authUserId,
         email: INPUT.vendor.email,
         role: 'customer',
         firstName: 'Evie',
         lastName: 'Vendor',
       })
-      .onConflictDoNothing({ target: users.clerkUserId })
+      .onConflictDoNothing({ target: users.authUserId })
       .returning();
 
     expect(inserted).toHaveLength(0);
@@ -730,7 +730,7 @@ describe('seedE2eFixtures', () => {
     const [found] = await database.db
       .select()
       .from(users)
-      .where(eq(users.clerkUserId, INPUT.vendor.clerkUserId));
+      .where(eq(users.authUserId, INPUT.vendor.authUserId));
     expect(found?.id).toBe(result.vendorUserId);
     // The sign-in must not demote the fixture's role back to customer.
     expect(found?.role).toBe('vendor');
@@ -746,7 +746,7 @@ describe('seedE2eFixtures', () => {
     const [vendorUser] = await database.db
       .insert(users)
       .values({
-        clerkUserId: INPUT.vendor.clerkUserId,
+        authUserId: INPUT.vendor.authUserId,
         email: INPUT.vendor.email,
         role: 'vendor',
         firstName: 'Evie',

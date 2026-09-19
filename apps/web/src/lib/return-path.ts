@@ -2,11 +2,10 @@
  * The query parameter carrying "where the customer was going" through the
  * sign-in round trip.
  *
- * **Deliberately not `redirect_url`.** That is Clerk's own reserved key:
- * clerk-js reads it off `window.location` and prefers it over the
- * `fallbackRedirectUrl` prop (`@clerk/shared`, `RedirectUrls#getRedirectUrl`),
- * so a destination carried under that name is consumed by Clerk and
- * `/after-sign-in` is skipped — taking the role resolution, the suspended-account
+ * **Deliberately not `redirect_url` or `callbackURL`.** Those are the names
+ * identity providers and auth libraries reserve for their own post-sign-in
+ * redirect; a destination carried under one can be consumed by the provider and
+ * `/after-sign-in` skipped — taking the role resolution, the suspended-account
  * branch and this module's own re-validation with it. An app-owned key keeps
  * the destination on the app's own path through the flow.
  */

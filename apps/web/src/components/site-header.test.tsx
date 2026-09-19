@@ -12,11 +12,14 @@ vi.mock('next/navigation', () => ({
   usePathname: () => pathname,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
+vi.mock('@/components/auth/show', () => ({
   Show: ({ when, children }: { when: AuthState; children: ReactNode }) =>
     when === authState ? children : null,
+}));
+
+vi.mock('@/components/auth/sign-out-button', () => ({
   /*
-   * Clerk's sign-out control clones its one child with a click handler that
+   * The sign-out control clones its one child with a click handler that
    * signs out to `redirectUrl`; the mock does the same against a spy. The
    * account menu itself is the app's own and renders for real (VEN-403).
    */
@@ -56,7 +59,7 @@ vi.mock('@/components/messaging/notification-bell', () => ({
 
 /*
  * The role decides whether the header carries the vendor chip. It comes from
- * the local account record rather than Clerk, so it is mocked separately from
+ * the local account record rather than the session, so it is mocked separately from
  * the signed-in/signed-out state above — the two can disagree, and the chip
  * must follow the record.
  */
@@ -311,8 +314,8 @@ describe('SiteHeader', () => {
   });
 
   /*
-   * VEN-403: users never access Clerk. The avatar opens the app's own menu,
-   * and it holds exactly three rows — nothing that leads to Clerk's profile.
+   * VEN-403: users never reach a provider-hosted panel. The avatar opens the app's own menu,
+   * and it holds exactly three rows — nothing that leads to a provider's profile.
    */
   it.each([
     ['customer' as const, 'Bookings'],
@@ -364,7 +367,7 @@ describe('SiteHeader', () => {
   });
 
   /*
-   * Our record names the avatar, never Clerk's claims. Frame `02` draws one
+   * Our record names the avatar, never the session's claims. Frame `02` draws one
    * initial on the clay or sage fill; a fresh account with no name falls back
    * to its email address.
    */

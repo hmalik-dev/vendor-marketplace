@@ -29,9 +29,10 @@ import { pathToFileURL } from 'node:url';
  * nothing that loads it is installed yet when this runs.
  */
 export const REQUIRED_KEYS = {
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'Clerk, the sign-in service',
-  CLERK_SECRET_KEY: 'Clerk, the sign-in service',
-  CLERK_WEBHOOK_SECRET: 'Clerk, the sign-in service',
+  NEON_AUTH_BASE_URL: 'Neon Auth, the sign-in service',
+  NEON_AUTH_COOKIE_SECRET: 'Neon Auth, the sign-in service',
+  CLERK_SECRET_KEY: 'Clerk, the operator sign-in service',
+  CLERK_WEBHOOK_SECRET: 'Clerk, the operator sign-in service',
   STRIPE_SECRET_KEY: 'Stripe, test-mode payments',
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'Stripe, test-mode payments',
   STRIPE_WEBHOOK_SECRET: 'Stripe, test-mode payments',

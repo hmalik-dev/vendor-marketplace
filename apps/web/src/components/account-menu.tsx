@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { SignOutButton } from '@clerk/nextjs';
+import { SignOutButton } from '@/components/auth/sign-out-button';
 import { DropdownMenu } from 'radix-ui';
 import { useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
@@ -10,20 +10,20 @@ import { Avatar } from '@/components/ui/avatar';
  * The signed-in account control: the reader's avatar, opening a menu of the
  * three things an account holder does from the header (VEN-403).
  *
- * **It replaces Clerk's `UserButton`, and it must never grow a way back into
- * Clerk.** Users never access Clerk; the owner does. Clerk's menu opened its
- * hosted profile, where a person could change their email address or delete
+ * **It replaces the identity provider's account menu, and it must never grow a
+ * way back into one.** Users never reach a hosted panel; the owner does. That
+ * menu opened a hosted profile, where a person could change their email address or delete
  * their account with no request through our API — so D39's refusal to close an
  * account holding a future confirmed booking could not answer it, and an email
  * change there was the only way to cause the mirror race VEN-386 repairs. A
  * person who needs either now goes through `Contact support`, and the owner
- * acts. `app/clerk-account-surfaces.test.ts` fails the tree if a Clerk account
+ * acts. `app/auth-account-surfaces.test.ts` fails the tree if a provider account
  * surface is imported anywhere.
  *
  * There is no settings row because there is no settings screen to link to.
  */
 
-/** Where signing out lands, stated rather than inherited from Clerk's config. */
+/** Where signing out lands, stated rather than inherited from a provider's config. */
 export const SIGN_OUT_REDIRECT = '/';
 
 export interface AccountLink {
@@ -43,7 +43,7 @@ export function accountLinks(dashboardLabel: string): readonly [AccountLink, Acc
 }
 
 export interface AccountMenuProps {
-  /** The reader's name from our own record, never Clerk's session claims. */
+  /** The reader's name from our own record, never the session's claims. */
   name: string;
   avatarUrl: string | null;
   /** `DASHBOARD_LABEL_BY_ROLE` for this reader, resolved once by the header. */

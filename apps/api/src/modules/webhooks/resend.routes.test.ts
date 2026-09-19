@@ -4,7 +4,7 @@ import { DELIVERY_EVENT_RETRY_WINDOW_MS } from '../notifications/email-delivery.
 import { emailDeliveries, users, type EmailDeliveryRow } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { SVIX_HEADERS, createTestHarness, type TestHarness } from '../../testing/test-server.js';
-import { syncUserFromClerk } from '../users/users.service.js';
+import { syncUserFromAuth } from '../users/users.service.js';
 import {
   sendNotificationEmail,
   type NotificationEmailRow,
@@ -130,8 +130,8 @@ describe('POST /webhooks/resend', () => {
      */
     harness = await createTestHarness({ clock: () => new Date(EVENT_AT) });
 
-    const user = await syncUserFromClerk(harness.database.db, {
-      clerkUserId: CLERK_ID,
+    const user = await syncUserFromAuth(harness.database.db, {
+      authUserId: CLERK_ID,
       email: 'reader@example.test',
       firstName: 'Katherine',
       lastName: 'Johnson',
@@ -613,8 +613,8 @@ describe('POST /webhooks/resend, with no signing secret configured', () => {
   });
 
   it('still sends and still records the attempt', async () => {
-    const user = await syncUserFromClerk(harness.database.db, {
-      clerkUserId: 'user_unconfigured',
+    const user = await syncUserFromAuth(harness.database.db, {
+      authUserId: 'user_unconfigured',
       email: 'unconfigured@example.test',
       firstName: 'Katherine',
       lastName: 'Johnson',

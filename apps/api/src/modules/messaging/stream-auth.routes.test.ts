@@ -13,7 +13,7 @@ const JWT_SHAPED = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/;
 /** The harness resolves Clerk identities from this map rather than the network. */
 function registerCustomer(harness: TestHarness): void {
   harness.clerkUsers.set(CUSTOMER, {
-    clerkUserId: CUSTOMER,
+    authUserId: CUSTOMER,
     email: 'stream@example.com',
     firstName: 'Stream',
     lastName: 'Reader',
@@ -183,7 +183,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
     const [row] = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, CUSTOMER));
+      .where(eq(users.authUserId, CUSTOMER));
 
     expect(subscribedId).toBe(row?.id);
     subscribe.mockRestore();
@@ -202,7 +202,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
     await harness.database.db
       .update(users)
       .set({ isBanned: true })
-      .where(eq(users.clerkUserId, CUSTOMER));
+      .where(eq(users.authUserId, CUSTOMER));
 
     const response = await harness.app.inject({
       method: 'GET',
@@ -218,7 +218,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
       await harness.database.db
         .update(users)
         .set({ isBanned: false })
-        .where(eq(users.clerkUserId, CUSTOMER));
+        .where(eq(users.authUserId, CUSTOMER));
     }
   });
 });

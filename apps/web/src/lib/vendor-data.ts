@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { auth } from '@clerk/nextjs/server';
+import { getServerSession } from './auth/server';
 import { redirect } from 'next/navigation';
 import {
   slugSchema,
@@ -41,12 +41,12 @@ import {
 
 /**
  * Server-side reads for the vendor profile surfaces. Server Components only —
- * each one resolves the Clerk session on the server, so no token ever reaches
+ * each one resolves the session on the server, so no token ever reaches
  * the browser.
  */
 
 interface VendorSession {
-  /** The Clerk session token for a vendor read. */
+  /** The session token for a vendor read. */
   token: string;
   /** Where to send this reader if the session turns out not to work. */
   signInPath: string;
@@ -63,8 +63,7 @@ interface VendorSession {
  */
 async function vendorSession(): Promise<VendorSession> {
   const signInPath = await signInPathReturningHere();
-  const { getToken } = await auth();
-  const token = await getToken();
+  const token = (await getServerSession())?.token ?? null;
 
   if (!token) {
     redirect(signInPath);
@@ -143,8 +142,7 @@ export async function getOwnVendorProfile(): Promise<WireVendorProfile | null> {
 export const readOwnVendorProfileIdForChrome = cache(
   async function readOwnVendorProfileIdForChrome(): Promise<string | null> {
     try {
-      const { getToken } = await auth();
-      const token = await getToken();
+      const token = (await getServerSession())?.token ?? null;
 
       if (!token) {
         return null;
@@ -493,8 +491,7 @@ export const getPublicVendorReviews = cache(
       return null;
     }
 
-    const { getToken } = await auth();
-    const token = await getToken();
+    const token = (await getServerSession())?.token ?? null;
 
     const read = async (bearer: string | null): Promise<WireVendorReviewsPage> =>
       apiRequest(`/vendors/${encodeURIComponent(slug)}/reviews`, {

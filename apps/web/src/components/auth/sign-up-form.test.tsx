@@ -1,56 +1,28 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  CHALLENGE_STALL_BODY,
-  CHALLENGE_STALL_RETRY,
-  CHALLENGE_STALL_TITLE,
-  SIGN_UP_CHALLENGE_RECHECK_MS,
-  SIGN_UP_CHALLENGE_TIMEOUT_MS,
-} from './challenge-stall';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readSignUpRole } from '@/lib/auth/signup-role';
 
-const signUpProps = vi.fn<(props: Record<string, unknown>) => void>();
+const replace = vi.fn();
+const refresh = vi.fn();
+const signUpWithEmail = vi.fn();
+const signInWithEmail = vi.fn();
+const verifyEmailCode = vi.fn();
+const resendVerificationCode = vi.fn();
 
-/**
- * Clerk's in-flight sign-up attempt, as `useSignUp` reports it.
- *
- * `null` is the ordinary first render — no attempt started. A populated object
- * is what the component sees **after** Clerk's email-verification step, which
- * is a path navigation that remounts this component with its local state gone.
- */
-let attempt: { id?: string; status: string; unsafeMetadata: Record<string, unknown> } | null = null;
-
-/**
- * Whether Clerk's card has locked itself, which is what it does while it waits
- * on the bot challenge — and, when the challenge never answers, for ever.
- *
- * The stub renders the real card's shape rather than a marker div, because the
- * bounded wait in #464 reads the DOM: it asks whether the person can still act
- * on the form. A stub with no fields would answer that question by accident.
- */
-let clerkCardLocked = false;
-
-vi.mock('@clerk/nextjs', () => ({
-  SignUp: (props: Record<string, unknown>) => {
-    signUpProps(props);
-    return (
-      <div data-testid="clerk-sign-up">
-        <form onSubmit={(event) => event.preventDefault()}>
-          <input name="emailAddress" aria-label="Email" disabled={clerkCardLocked} />
-          <button type="submit" disabled={clerkCardLocked}>
-            Create my account
-          </button>
-        </form>
-      </div>
-    );
-  },
-  useSignUp: () => ({ isLoaded: true, signUp: attempt }),
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, refresh }) }));
+vi.mock('@/lib/auth/auth-requests', () => ({
+  signUpWithEmail: (input: unknown) => signUpWithEmail(input),
+  signInWithEmail: (input: unknown) => signInWithEmail(input),
+  verifyEmailCode: (input: unknown) => verifyEmailCode(input),
+  resendVerificationCode: (email: unknown) => resendVerificationCode(email),
 }));
 
 const { SignUpForm } = await import('./sign-up-form');
 
 const CUSTOMER = "I'm planning an event";
 const VENDOR = "I'm a vendor";
+const CREATE = 'Create my account';
 
 /** The proof headline is the one `<p>` that opens with the panel's first line. */
 function headlineStartingWith(container: HTMLElement, start: string): HTMLParagraphElement {
@@ -63,12 +35,24 @@ function headlineStartingWith(container: HTMLElement, start: string): HTMLParagr
   return found;
 }
 
+async function fillCredentials(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.type(screen.getByLabelText('Email'), 'sam@example.com');
+  await user.type(screen.getByLabelText('Password'), 'correct-horse-battery');
+}
+
 describe('SignUpForm', () => {
+  beforeEach(() => {
+    signUpWithEmail.mockReset().mockResolvedValue('ok');
+    signInWithEmail.mockReset().mockResolvedValue('ok');
+    verifyEmailCode.mockReset().mockResolvedValue('ok');
+    resendVerificationCode.mockReset().mockResolvedValue('ok');
+    replace.mockReset();
+    refresh.mockReset();
+    window.localStorage.clear();
+  });
+
   afterEach(() => {
     cleanup();
-    signUpProps.mockClear();
-    attempt = null;
-    clerkCardLocked = false;
   });
 
   /*
@@ -79,7 +63,9 @@ describe('SignUpForm', () => {
   it('shows the form with no role chosen, and marks the submit pending', () => {
     const { container } = render(<SignUpForm initialRole={null} />);
 
-    expect(screen.getByTestId('clerk-sign-up')).toBeDefined();
+    expect(screen.getByLabelText('Email')).toHaveProperty('disabled', false);
+    expect(screen.getByLabelText('Password')).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: CREATE })).toBeDefined();
     expect(screen.getByRole('radio', { name: new RegExp(CUSTOMER) })).toHaveProperty(
       'checked',
       false,
@@ -90,8 +76,6 @@ describe('SignUpForm', () => {
     );
     expect(container.querySelector('[data-role-pending]')).not.toBeNull();
     expect(screen.getByText('Pick one above to continue')).toBeDefined();
-    // No role means no role claim travels to Clerk.
-    expect(signUpProps).toHaveBeenLastCalledWith(expect.objectContaining({ unsafeMetadata: {} }));
   });
 
   /*
@@ -103,20 +87,27 @@ describe('SignUpForm', () => {
     const user = userEvent.setup();
     const { container } = render(<SignUpForm initialRole={null} />);
 
-    const gate = container.querySelector('[data-role-pending]');
-    const submitted = vi.fn();
-    gate?.addEventListener('submit', submitted);
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
 
-    const form = document.createElement('form');
-    gate?.appendChild(form);
-    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    expect(submitted).not.toHaveBeenCalled();
+    expect(signUpWithEmail).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe('Pick one above to continue');
 
     await user.click(screen.getByRole('radio', { name: new RegExp(VENDOR) }));
     expect(container.querySelector('[data-role-pending]')).toBeNull();
 
-    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    expect(submitted).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await waitFor(() => expect(signUpWithEmail).toHaveBeenCalledTimes(1));
+  });
+
+  it('blocks the Enter key the same way as the button', async () => {
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole={null} />);
+
+    await fillCredentials(user);
+    fireEvent.submit(screen.getByLabelText('Email').closest('form') as HTMLFormElement);
+
+    expect(signUpWithEmail).not.toHaveBeenCalled();
   });
 
   it('drops the pending hint once a role is chosen', async () => {
@@ -150,43 +141,104 @@ describe('SignUpForm', () => {
       'checked',
       true,
     );
-    expect(signUpProps).toHaveBeenLastCalledWith(
-      expect.objectContaining({ unsafeMetadata: { role: 'customer' } }),
-    );
   });
 
-  it('carries the vendor role into Clerk as unsafe metadata', async () => {
+  it('creates the account with the address, the password and a name from the address', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole="vendor" />);
 
-    await user.click(screen.getByRole('radio', { name: new RegExp(VENDOR) }));
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
 
-    expect(screen.getByTestId('clerk-sign-up')).toBeDefined();
-    expect(signUpProps).toHaveBeenCalledWith(
-      expect.objectContaining({ unsafeMetadata: { role: 'vendor' } }),
-    );
+    await waitFor(() => expect(signUpWithEmail).toHaveBeenCalledTimes(1));
+    expect(signUpWithEmail).toHaveBeenCalledWith({
+      email: 'sam@example.com',
+      password: 'correct-horse-battery',
+      name: 'sam',
+    });
   });
 
-  it('carries the customer role into Clerk as unsafe metadata', async () => {
+  it('asks for the emailed code once the account exists, and hides the role question', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole="customer" />);
 
-    await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
 
-    expect(signUpProps).toHaveBeenCalledWith(
-      expect.objectContaining({ unsafeMetadata: { role: 'customer' } }),
-    );
+    expect(await screen.findByLabelText('Verification code')).toBeDefined();
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(replace).not.toHaveBeenCalled();
   });
 
-  it('sends the new account to the role-resolving dashboard route', async () => {
+  it('remembers the chosen role for the accept-terms screen once the account exists', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole="vendor" />);
 
-    await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await screen.findByLabelText('Verification code');
 
-    expect(signUpProps).toHaveBeenCalledWith(
-      expect.objectContaining({ fallbackRedirectUrl: '/after-sign-in' }),
-    );
+    expect(readSignUpRole()).toBe('vendor');
+  });
+
+  it('does not remember a role, or leave the form, when the sign-up is refused', async () => {
+    signUpWithEmail.mockResolvedValue('rejected');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="vendor" />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+
+    expect(await screen.findByText(/could not create that account/)).toBeDefined();
+    expect(readSignUpRole()).toBeNull();
+    expect(screen.queryByLabelText('Verification code')).toBeNull();
+  });
+
+  it('signs in and lands on /after-sign-in after a good code', async () => {
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.type(await screen.findByLabelText('Verification code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Verify email' }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/after-sign-in'));
+    expect(verifyEmailCode).toHaveBeenCalledWith({ email: 'sam@example.com', otp: '123456' });
+    expect(signInWithEmail).toHaveBeenCalledWith({
+      email: 'sam@example.com',
+      password: 'correct-horse-battery',
+    });
+  });
+
+  it('shows the error and stays on the code step after a wrong code', async () => {
+    verifyEmailCode.mockResolvedValue('rejected');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.type(await screen.findByLabelText('Verification code'), '000000');
+    await user.click(screen.getByRole('button', { name: 'Verify email' }));
+
+    expect(
+      await screen.findByText('That code did not work. Check it and try again.'),
+    ).toBeDefined();
+    expect(screen.getByLabelText('Verification code')).toBeDefined();
+    expect(signInWithEmail).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('asks for a fresh code on request', async () => {
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.click(await screen.findByRole('button', { name: 'Send a new code' }));
+
+    expect(resendVerificationCode).toHaveBeenCalledWith('sam@example.com');
+    expect(await screen.findByText('A new code is on its way.')).toBeDefined();
   });
 
   it('groups the two roles under one labelled choice', () => {
@@ -198,10 +250,10 @@ describe('SignUpForm', () => {
 
   /*
    * `?role=vendor` is a pre-selection, not a decision made for the visitor: the
-   * vendor card starts checked and the Clerk form is already up, but the
-   * customer card is still one click away.
+   * vendor card starts checked and the form is already up, but the customer
+   * card is still one click away.
    */
-  it('pre-selects the role it was given and shows the Clerk form straight away', () => {
+  it('pre-selects the role it was given and shows the form straight away', () => {
     render(<SignUpForm initialRole="vendor" />);
 
     expect(screen.getByRole('radio', { name: new RegExp(VENDOR) })).toHaveProperty('checked', true);
@@ -209,10 +261,7 @@ describe('SignUpForm', () => {
       'checked',
       false,
     );
-    expect(screen.getByTestId('clerk-sign-up')).toBeDefined();
-    expect(signUpProps).toHaveBeenCalledWith(
-      expect.objectContaining({ unsafeMetadata: { role: 'vendor' } }),
-    );
+    expect(screen.getByLabelText('Email')).toBeDefined();
   });
 
   /*
@@ -355,232 +404,5 @@ describe('SignUpForm', () => {
     expect(cardOf(VENDOR).className).toContain('bg-sage-50');
     // The unselected card drops back to the plain stone treatment.
     expect(cardOf(CUSTOMER).className).toContain('border-stone-300');
-  });
-
-  /*
-   * D16, `21-sign-up.md`: the role survives email verification and the picker
-   * is never shown twice.
-   *
-   * Clerk's verification step is a path navigation that remounts this
-   * component, so `role` — seeded from `?role=` — comes back `null`. The choice
-   * is not lost: it went to Clerk as `unsafeMetadata` before verification. It is
-   * read back from the in-flight attempt rather than asked again.
-   *
-   * **Re-asking is not a confirmation step.** The subhead promises the choice
-   * cannot be changed later, so asking again contradicts the screen's own copy.
-   */
-  describe('after email verification remounts the page', () => {
-    const verifying = (role: string) => ({
-      status: 'missing_requirements',
-      unsafeMetadata: { role },
-    });
-
-    it('reads the role back from the in-flight attempt instead of asking again', () => {
-      attempt = verifying('vendor');
-
-      const { container } = render(<SignUpForm initialRole={null} />);
-
-      expect(screen.queryByRole('radio', { name: new RegExp(CUSTOMER) })).toBeNull();
-      expect(screen.queryByRole('radio', { name: new RegExp(VENDOR) })).toBeNull();
-      expect(container.querySelector('fieldset')).toBeNull();
-    });
-
-    it('keeps the panel on the side the visitor already chose', () => {
-      attempt = verifying('vendor');
-
-      const { container } = render(<SignUpForm initialRole={null} />);
-
-      // The vendor panel's proof headline, per `21-sign-up.md`'s three states.
-      expect(headlineStartingWith(container, 'Set your prices.')).toBeDefined();
-    });
-
-    it('lifts the submit gate, because the role is known', () => {
-      attempt = verifying('customer');
-
-      const { container } = render(<SignUpForm initialRole={null} />);
-
-      expect(container.querySelector('[data-role-pending]')).toBeNull();
-      expect(screen.queryByText('Pick one above to continue')).toBeNull();
-    });
-
-    /*
-     * A started attempt that carries no role is not a verification remount —
-     * it is someone who got further than they should have. The picker has to
-     * come back, or they finish with no role at all and the API narrows them
-     * to `customer`.
-     */
-    it('still asks when the attempt carries no role', () => {
-      attempt = { status: 'missing_requirements', unsafeMetadata: {} };
-
-      render(<SignUpForm initialRole={null} />);
-
-      expect(screen.queryByRole('radio', { name: new RegExp(CUSTOMER) })).not.toBeNull();
-    });
-
-    it('ignores a role the product does not have', () => {
-      attempt = verifying('admin');
-
-      render(<SignUpForm initialRole={null} />);
-
-      expect(screen.queryByRole('radio', { name: new RegExp(CUSTOMER) })).not.toBeNull();
-    });
-  });
-
-  /*
-   * #464. The bot challenge can hang for ever, and while it does Clerk's card
-   * disables every control and says nothing. These cover the bounded wait and
-   * the recovery; the network condition that causes it is reproduced for real
-   * in `e2e/sign-up-challenge.spec.ts`, because a mock that rejects has already
-   * done the thing the product fails to do.
-   *
-   * `fireEvent` rather than `userEvent` throughout, because the wait is a timer
-   * and these tests own the clock. `userEvent` schedules its own work on the
-   * timers it is asked to advance, and pairing the two deadlocked all five of
-   * these at 60s apiece before they asserted anything.
-   */
-  describe('when the bot challenge never answers', () => {
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    function submitButton(): HTMLButtonElement {
-      return screen.getByRole('button', { name: 'Create my account' }) as HTMLButtonElement;
-    }
-
-    function emailField(): HTMLInputElement {
-      return screen.getByLabelText('Email') as HTMLInputElement;
-    }
-
-    /** Press submit, then leave the card locked exactly as clerk-js leaves it. */
-    function pressSubmitAndHang(): { rerender: (ui: React.ReactElement) => void } {
-      vi.useFakeTimers();
-      const { rerender } = render(<SignUpForm initialRole="customer" />);
-
-      fireEvent.change(emailField(), { target: { value: 'someone@example.com' } });
-      fireEvent.submit(submitButton().closest('form') as HTMLFormElement);
-
-      clerkCardLocked = true;
-      rerender(<SignUpForm initialRole="customer" />);
-
-      return { rerender };
-    }
-
-    function waitOut(ms: number): void {
-      act(() => {
-        vi.advanceTimersByTime(ms);
-      });
-    }
-
-    it('says nothing until the wait is actually up', () => {
-      pressSubmitAndHang();
-
-      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS - 1);
-
-      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
-    });
-
-    it('states the failure and what to do about it once the wait is up', () => {
-      pressSubmitAndHang();
-
-      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS);
-
-      expect(screen.getByText(CHALLENGE_STALL_TITLE)).toBeDefined();
-      expect(screen.getByText(CHALLENGE_STALL_BODY)).toBeDefined();
-      /* `40-states.md`: it failed, so it is red. `Banner` derives the colour
-         from the meaning, so asserting the meaning is asserting the colour. */
-      expect(screen.getByRole('status').getAttribute('data-status')).toBe('failed');
-    });
-
-    /*
-     * Acceptance 2. The retry is a control, not a reload — and it has to give
-     * back a card that works, which means remounting Clerk's rather than
-     * re-rendering the disabled one.
-     */
-    it('gives back a working form when the retry is pressed', () => {
-      pressSubmitAndHang();
-
-      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS);
-
-      clerkCardLocked = false;
-      fireEvent.click(screen.getByRole('button', { name: CHALLENGE_STALL_RETRY }));
-
-      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
-      expect(submitButton().disabled).toBe(false);
-      expect(emailField().disabled).toBe(false);
-      // A remount, not a re-render: the field the person typed into is gone.
-      expect(emailField().value).toBe('');
-    });
-
-    /*
-     * The banner is a live reading, not a verdict. Clerk can report something
-     * of its own after the bound has passed — a taken email address renders in
-     * the same card with no navigation, so this component never remounts — and
-     * two errors about one press is exactly what the refused-host case exists
-     * to prevent. Latching the first true would walk around that.
-     */
-    it('takes the banner back when Clerk gives the card back', () => {
-      const { rerender } = pressSubmitAndHang();
-
-      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS);
-      expect(screen.getByText(CHALLENGE_STALL_TITLE)).toBeDefined();
-
-      clerkCardLocked = false;
-      rerender(<SignUpForm initialRole="customer" />);
-      waitOut(SIGN_UP_CHALLENGE_RECHECK_MS);
-
-      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
-    });
-
-    /* And when the create lands late, which is the other way the screen moves
-       on underneath a banner that was true when it was drawn. */
-    it('takes the banner back when the attempt lands late', () => {
-      const { rerender } = pressSubmitAndHang();
-
-      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS);
-      expect(screen.getByText(CHALLENGE_STALL_TITLE)).toBeDefined();
-
-      attempt = { id: 'sua_464_late', status: 'missing_requirements', unsafeMetadata: {} };
-      rerender(<SignUpForm initialRole="customer" />);
-      waitOut(SIGN_UP_CHALLENGE_RECHECK_MS);
-
-      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
-    });
-
-    /*
-     * When the challenge host refuses rather than drops, Clerk gives up on its
-     * own, attempts the create and reports the failure in the card with the
-     * fields still live. A second error on top of that is the product talking
-     * over itself.
-     */
-    it('stays quiet when the form is still usable', () => {
-      vi.useFakeTimers();
-      render(<SignUpForm initialRole="customer" />);
-
-      fireEvent.submit(submitButton().closest('form') as HTMLFormElement);
-
-      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS * 2);
-
-      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
-    });
-
-    /*
-     * Past the create, submit belongs to the verification step. That fails for
-     * its own reasons, and none of them is a challenge that never came.
-     */
-    it('does not watch the verification step', () => {
-      attempt = { id: 'sua_464', status: 'missing_requirements', unsafeMetadata: {} };
-
-      vi.useFakeTimers();
-      const { rerender } = render(<SignUpForm initialRole="customer" />);
-
-      fireEvent.submit(submitButton().closest('form') as HTMLFormElement);
-
-      clerkCardLocked = true;
-      rerender(<SignUpForm initialRole="customer" />);
-
-      waitOut(SIGN_UP_CHALLENGE_TIMEOUT_MS * 2);
-
-      expect(screen.queryByText(CHALLENGE_STALL_TITLE)).toBeNull();
-    });
   });
 });

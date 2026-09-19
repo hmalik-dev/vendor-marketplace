@@ -48,14 +48,14 @@ describe('two accepts on one vendor date, on two real connections', () => {
   let secondRequestId: string;
 
   async function post(
-    clerkUserId: string,
+    authUserId: string,
     url: string,
     payload?: Record<string, unknown>,
   ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
     return harness!.app.inject({
       method: 'POST',
       url,
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
       ...(payload ? { payload } : {}),
     });
   }
@@ -68,13 +68,13 @@ describe('two accepts on one vendor date, on two real connections', () => {
     database = await createPostgresTestDatabase({ poolSize: 4 });
     harness = await createTestHarness({ database });
 
-    for (const [clerkUserId, role, email] of [
+    for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
       [OTHER_CUSTOMER, 'customer', 'edsger@example.com'],
     ] as const) {
-      harness!.clerkUsers.set(clerkUserId, {
-        clerkUserId,
+      harness!.clerkUsers.set(authUserId, {
+        authUserId,
         email,
         firstName: 'Test',
         lastName: 'User',

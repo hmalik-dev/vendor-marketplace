@@ -13,10 +13,10 @@
 // Output: .auth/<role>.json — gitignored. Load it with
 //   browser.newContext({ storageState: '.auth/vendor.json' })
 //
-// The accounts are Clerk `+clerk_test` addresses on a development instance, so
-// no real email is sent and the verification code is always 424242. That is
-// Clerk's documented test mode, not a workaround:
-// https://clerk.com/docs/testing/test-emails-and-phones
+// The accounts are Neon Auth identities on the dev branch (VEN-447), created
+// once with a verified address, so signing in needs no inbox and no code. The
+// operator account is still a Clerk identity until VEN-448 moves it, so `admin`
+// is skipped here unless it is named on argv.
 import { chromium } from 'playwright';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -26,7 +26,6 @@ import { resolveRoles } from './e2e-roles.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = resolveBaseUrl();
-const CLERK_TEST_CODE = '424242';
 const AUTH_DIR = resolve(ROOT, '.auth');
 
 function readEnvFile(name) {
@@ -54,48 +53,19 @@ async function signIn(browser, role, email, password) {
 
     await page.getByLabel(/email/i).first().fill(email);
     await page
-      .getByRole('button', { name: /continue|sign in/i })
-      .first()
-      .click();
-
-    await page
       .getByLabel(/password/i)
       .first()
       .fill(password);
     await page
-      .getByRole('button', { name: /continue|sign in/i })
+      .getByRole('button', { name: /^(sign in|continue)$/i })
       .first()
       .click();
 
-    // Clerk challenges every new device: "You're signing in from a new device."
-    // It lands on /sign-in/client-trust with a single OTP field. `+clerk_test`
-    // addresses always take 424242, so this needs no inbox and no real device.
-    const signedIn = (url) => !url.pathname.startsWith('/sign-in');
-    await page
-      .waitForURL((url) => signedIn(url) || url.pathname.includes('client-trust'), {
-        timeout: 20000,
-      })
-      .catch(() => {});
-
-    if (!signedIn(new URL(page.url()))) {
-      const codeField = page.getByLabel(/verification code/i).first();
-      await codeField.waitFor({ state: 'visible', timeout: 10000 });
-      // Clerk's OTP is a segmented input: `fill()` does not register and
-      // `inputValue()` reports nothing, so type it digit by digit. It submits
-      // itself on the sixth digit — there is no button to press.
-      await codeField.click();
-      await codeField.pressSequentially(CLERK_TEST_CODE, { delay: 80 });
-      await page.waitForURL(signedIn, { timeout: 20000 }).catch(async () => {
-        // Fallback for a build where auto-submit is off.
-        const submit = page.getByRole('button', { name: /^continue$/i }).first();
-        if (await submit.isEnabled().catch(() => false)) await submit.click();
-        await page.waitForURL(signedIn, { timeout: 15000 });
-      });
-    }
+    await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), { timeout: 30000 });
 
     const cookies = await context.cookies();
-    if (!cookies.some((c) => c.name.startsWith('__session'))) {
-      throw new Error('signed in but no Clerk __session cookie was set');
+    if (!cookies.some((c) => c.name.includes('neon-auth'))) {
+      throw new Error('signed in but no Neon Auth session cookie was set');
     }
 
     mkdirSync(AUTH_DIR, { recursive: true });
@@ -124,6 +94,10 @@ try {
   for (const role of wanted) {
     const email = env[`E2E_${role.toUpperCase()}_EMAIL`];
     const password = env[`E2E_${role.toUpperCase()}_PASSWORD`];
+    if (role === 'admin' && !explicit) {
+      console.log('  admin: skipped — the operator account is still a Clerk identity (VEN-448)');
+      continue;
+    }
     if (!email || !password) {
       /*
        * A role nobody asked for individually is skipped, not failed. `admin` is
@@ -144,11 +118,6 @@ try {
     }
     try {
       await signIn(browser, role, email, password);
-      // Clerk rate-limits verification-code requests, so give the next role a
-      // moment rather than racing it into a cooldown.
-      if (wanted.indexOf(role) < wanted.length - 1) {
-        await new Promise((r) => setTimeout(r, 4000));
-      }
     } catch (error) {
       // Never echo the credential, only the failure.
       console.error(`  ${role}: FAILED — ${error.message}`);

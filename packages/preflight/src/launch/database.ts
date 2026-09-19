@@ -13,9 +13,9 @@ const CONNECT_TIMEOUT_SECONDS = 10;
 const PRODUCTION_BRANCH = 'production';
 
 export interface SeedMarkers {
-  /** `clerk_user_id` prefix of every marketing-seed user. */
+  /** `auth_user_id` prefix of every marketing-seed user. */
   readonly marketingPrefix: string;
-  /** `clerk_user_id` prefix of every demo-seed user. */
+  /** `auth_user_id` prefix of every demo-seed user. */
   readonly demoPrefix: string;
   /** Slug of the E2E seed's vendor storefront. */
   readonly e2eVendorSlug: string;
@@ -60,8 +60,8 @@ export function postgresLaunchDatabase(
     async seedRowCounts() {
       const [row] = await sql<SeedRowCounts[]>`
         select
-          (select count(*)::int from users where starts_with(clerk_user_id, ${marketingPrefix})) as marketing,
-          (select count(*)::int from users where starts_with(clerk_user_id, ${demoPrefix})) as demo,
+          (select count(*)::int from users where starts_with(auth_user_id, ${marketingPrefix})) as marketing,
+          (select count(*)::int from users where starts_with(auth_user_id, ${demoPrefix})) as demo,
           (select count(*)::int from vendor_profiles where slug = ${e2eVendorSlug}) as e2e
       `;
       if (!row) {

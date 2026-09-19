@@ -21,13 +21,14 @@ const redirect = vi.hoisted(() =>
 vi.mock('@/lib/current-user', () => ({
   readIdentityForSupport: async () => identity.user,
 }));
-vi.mock('@clerk/nextjs/server', () => ({
-  currentUser: async () =>
-    identity.email === null
-      ? null
-      : { primaryEmailAddress: { emailAddress: identity.email }, emailAddresses: [] },
+vi.mock('@/lib/auth/server', () => ({
+  neonAuth: () => ({
+    getSession: async () => ({
+      data: identity.email === null ? null : { user: { id: 'u1', email: identity.email } },
+    }),
+  }),
 }));
-vi.mock('@clerk/nextjs', () => ({
+vi.mock('@/components/auth/sign-out-button', () => ({
   SignOutButton: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock('next/navigation', () => ({ redirect }));

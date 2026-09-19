@@ -1,38 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { SignUp, useSignUp } from '@clerk/nextjs';
-import type { UserRole } from '@vendor-marketplace/shared';
+import { useState } from 'react';
+import Link from 'next/link';
+import { AUTH_COPY } from '@/app/auth-copy';
+import { AuthField } from '@/components/auth/auth-field';
 import { AuthScreen } from '@/components/auth/auth-screen';
-import {
-  CHALLENGE_STALL_BODY,
-  CHALLENGE_STALL_RETRY,
-  CHALLENGE_STALL_TITLE,
-  observeChallengeHost,
-  SIGN_UP_CHALLENGE_RECHECK_MS,
-  SIGN_UP_CHALLENGE_TIMEOUT_MS,
-  signUpStalled,
-} from '@/components/auth/challenge-stall';
+import { VerifyEmailStep } from '@/components/auth/verify-email-step';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
+import { signUpWithEmail } from '@/lib/auth/auth-requests';
+import { rememberSignUpRole, type SignUpRole } from '@/lib/auth/signup-role';
 import { cn } from '@/lib/utils';
 
-export type SignUpRole = Extract<UserRole, 'customer' | 'vendor'>;
-
-const SIGN_UP_ROLES: readonly SignUpRole[] = ['customer', 'vendor'];
-
-/**
- * Narrows whatever Clerk hands back out of `unsafeMetadata`, which is typed as
- * open JSON and is client-writable.
- *
- * Anything that is not one of the two sign-up roles is treated as absent rather
- * than trusted — `admin` is a real `UserRole` that this screen must never
- * confer, and the API narrows a missing role to `customer` regardless, so a
- * wrong value here is worse than no value.
- */
-function asSignUpRole(value: unknown): SignUpRole | null {
-  return SIGN_UP_ROLES.find((role) => role === value) ?? null;
-}
+export type { SignUpRole };
 
 interface RoleChoice {
   role: SignUpRole;
@@ -83,9 +63,10 @@ export interface SignUpFormProps {
 }
 
 /**
- * Role is chosen before the Clerk form renders and travels with the sign-up as
- * `unsafeMetadata.role`. The API narrows and persists it on the local user row;
- * nothing downstream trusts this value on its own.
+ * Role is chosen before the form is submitted and is remembered in a
+ * short-lived local-storage entry (`signup-role.ts`) that the accept-terms screen sends to
+ * the API, which narrows it and persists it on the local user row; nothing
+ * downstream trusts this value on its own.
  *
  * The choice is irreversible, so it is made visibly: the cards stay on screen
  * after selection rather than collapsing to a line of text, and they sit side
@@ -101,75 +82,54 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
   /* Set only when a submit was actually blocked, so the hint announces itself
      to a screen reader at the moment it becomes the reason nothing happened. */
   const [roleMissing, setRoleMissing] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  /* The code step replaces the form. The role question is not asked again: the
+     subhead promises the choice cannot be changed later. */
+  const [verifying, setVerifying] = useState(false);
 
-  /*
-    Clerk's email-verification step is a path navigation, so it remounts this
-    component and `role` — local state seeded from `?role=` — comes back null.
-    The choice is not lost: it went to Clerk as `unsafeMetadata` before
-    verification, so it is read back from the in-flight attempt.
+  async function submit(event: React.FormEvent): Promise<void> {
+    event.preventDefault();
 
-    Re-asking is not a confirmation step. The subhead promises the choice
-    cannot be changed later, so showing the picker again contradicts the
-    screen's own copy. D16, `21-sign-up.md`.
-  */
-  const { signUp } = useSignUp();
-  const attemptedRole = asSignUpRole(signUp?.unsafeMetadata?.role);
-  const chosenRole = role ?? attemptedRole;
-  /* Only the read-back case hides the question. A fresh render with no attempt
-     still asks, and so does an attempt that carries no usable role — otherwise
-     someone finishes with none and the API narrows them to `customer`. */
-  const pickerSuppressed = role === null && attemptedRole !== null;
-
-  /*
-    #464. Clerk's bot challenge can hang for ever, and while it does the card
-    disables every field and says nothing — a button that eats the click. The
-    wait is bounded here rather than inside clerk-js, which is not ours to
-    change: submit arms a timer, and if the create request still has not left
-    the browser when it fires, the failure is stated and the form is offered
-    back. `challenge-stall.ts` holds the check and the copy.
-  */
-  const formRef = useRef<HTMLDivElement>(null);
-  const stallWatch = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [challengeStalled, setChallengeStalled] = useState(false);
-  /* Latched for the life of the page: once the host has answered anything, it
-     is not the host that is unreachable, whatever happens after. */
-  const challengeHostAnswered = useRef(false);
-
-  useEffect(() => observeChallengeHost(() => (challengeHostAnswered.current = true)), []);
-  /* Bumping this remounts Clerk's card, which is the only way to clear the
-     internal state that left it disabled — the alternative is asking someone
-     to reload the page, which is the thing the ticket calls a dead end. */
-  const [formGeneration, setFormGeneration] = useState(0);
-
-  /* Read inside the timer callback, which closes over the render that armed it
-     and would otherwise never see the attempt Clerk started meanwhile. */
-  const attemptId = signUp?.id;
-  const attemptIdRef = useRef<string | undefined>(undefined);
-
-  useEffect(() => {
-    attemptIdRef.current = attemptId;
-  }, [attemptId]);
-
-  const clearStallWatch = useCallback((): void => {
-    if (stallWatch.current !== null) {
-      clearInterval(stallWatch.current);
-      stallWatch.current = null;
+    /* A sign-up with no role would be narrowed to `customer` by the API, which
+       would put a vendor on the wrong side with no way back. */
+    if (role === null) {
+      setRoleMissing(true);
+      return;
     }
-  }, []);
+    if (busy) {
+      return;
+    }
 
-  useEffect(() => clearStallWatch, [clearStallWatch]);
+    setBusy(true);
+    setFailure(null);
 
-  const retryAfterStall = useCallback((): void => {
-    clearStallWatch();
-    setChallengeStalled(false);
-    setFormGeneration((generation) => generation + 1);
-  }, [clearStallWatch]);
+    /* Neon requires a display name; the form asks for none (frame `12` has
+       email and password only), so the address's local part stands in. */
+    const outcome = await signUpWithEmail({
+      email: email.trim(),
+      password,
+      name: email.trim().split('@')[0] || 'member',
+    });
+
+    setBusy(false);
+
+    if (outcome === 'ok') {
+      rememberSignUpRole(role);
+      setVerifying(true);
+      return;
+    }
+
+    setFailure(outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.signUpFailed);
+  }
 
   return (
     <AuthScreen
       headline="Let's get you set up"
       subhead="First — which one are you? This can't be changed later."
-      panel={chosenRole ?? 'both'}
+      panel={role ?? 'both'}
     >
       {/*
         Not rendered at all once the role has been read back off the in-flight
@@ -179,7 +139,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
         submittable by anything that walks it. The panel beside the form still
         reflects the choice, so the screen does not go neutral either.
       */}
-      {pickerSuppressed ? null : (
+      {verifying ? null : (
         <fieldset className="mb-5.5">
           <legend className="sr-only">Which one are you?</legend>
 
@@ -248,111 +208,78 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
         </fieldset>
       )}
 
-      {/*
-        Clerk's fields stay mounted and editable with no role chosen — typing
-        first and choosing second is a normal order, and disabling the inputs
-        would punish it. Only the submit is gated.
+      {verifying ? (
+        <VerifyEmailStep email={email.trim()} password={password} destination="/after-sign-in" />
+      ) : (
+        /*
+          The fields stay live with no role chosen — typing first and choosing
+          second is a normal order — and only the submit is gated.
+          `data-role-pending` is what globals.css keys the disabled treatment
+          off. See design/design-plan/21-sign-up.md.
+        */
+        <form
+          onSubmit={submit}
+          noValidate
+          className="flex flex-col"
+          data-role-pending={role === null ? '' : undefined}
+        >
+          {failure ? (
+            <Banner status="failed" className="mb-4">
+              {failure}
+            </Banner>
+          ) : null}
 
-        The gate is a capture-phase guard rather than a disabled button alone,
-        because Clerk's form submits on Enter as well as on click and the button
-        is Clerk's to render. A sign-up that got through with no role would
-        carry no `role` in `unsafeMetadata`, and the API narrows a missing role
-        to `customer` — putting a vendor on the wrong side of the product with
-        no way back, which is the exact thing the subhead promises can't be
-        changed later. `data-role-pending` is what globals.css keys the
-        disabled treatment off. See design/design-plan/21-sign-up.md.
-      */}
-      <div
-        ref={formRef}
-        className="flex flex-col"
-        data-role-pending={chosenRole === null ? '' : undefined}
-        onSubmitCapture={(event) => {
-          if (chosenRole === null) {
-            event.preventDefault();
-            event.stopPropagation();
-            setRoleMissing(true);
-            return;
-          }
+          <AuthField
+            label={AUTH_COPY.emailLabel}
+            type="email"
+            placeholder="you@example.com"
+            name="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+          <AuthField
+            label={AUTH_COPY.passwordLabel}
+            helper={AUTH_COPY.passwordHelper}
+            type="password"
+            placeholder="••••••••••"
+            name="password"
+            autoComplete="new-password"
+            minLength={10}
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
 
-          /* Only the create submit is watched. The verification step submits
-             the same way, and by then the attempt exists — a stall there is a
-             different failure with a different cause. */
-          if (attemptIdRef.current !== undefined) {
-            return;
-          }
-
-          const submittedAt = performance.now();
-
-          clearStallWatch();
-          /* Retaken every second rather than answered once. The reading at the
-             bound is not a verdict — Clerk can report something of its own at
-             sixteen seconds, or the create can land — and the banner has to go
-             away again when it does, or it stands over a screen that has moved
-             on. Two errors about one press is the failure mode the refused-host
-             case exists to prevent, and latching would reintroduce it. */
-          stallWatch.current = setInterval(() => {
-            const created = attemptIdRef.current !== undefined;
-
-            setChallengeStalled(
-              performance.now() - submittedAt >= SIGN_UP_CHALLENGE_TIMEOUT_MS &&
-                signUpStalled(formRef.current, {
-                  created,
-                  challengeHostAnswered: challengeHostAnswered.current,
-                }),
-            );
-
-            /* Past the create there is nothing left for this watch to see. */
-            if (created) {
-              clearStallWatch();
-            }
-          }, SIGN_UP_CHALLENGE_RECHECK_MS);
-        }}
-      >
-        {/*
-          Above the card, because it explains why the card below it stopped
-          responding. `40-states.md`: one banner, one action — the retry is the
-          only thing to do, and it is held right of the sentence.
-        */}
-        {challengeStalled ? (
-          <Banner
-            status="failed"
-            title={CHALLENGE_STALL_TITLE}
-            className="mb-4"
-            action={
-              <Button variant="secondary" size="sm" onClick={retryAfterStall}>
-                {CHALLENGE_STALL_RETRY}
-              </Button>
-            }
+          <Button
+            type="submit"
+            loading={busy}
+            aria-disabled={role === null ? true : undefined}
+            disabled={email.trim() === '' || password.length < 10}
           >
-            {CHALLENGE_STALL_BODY}
-          </Banner>
-        ) : null}
+            {AUTH_COPY.signUpSubmit}
+          </Button>
 
-        <SignUp
-          key={formGeneration}
-          unsafeMetadata={chosenRole ? { role: chosenRole } : {}}
-          fallbackRedirectUrl="/after-sign-in"
-        />
+          {/* The hint explains the disabled button, so it sits directly beneath it. */}
+          {role === null ? (
+            <p
+              data-role-hint=""
+              className="mt-1.5 text-center text-helper text-stone-600"
+              role={roleMissing ? 'alert' : undefined}
+            >
+              {AUTH_COPY.roleHint}
+            </p>
+          ) : null}
 
-        {/*
-          The hint explains the disabled `Create my account` button, so it
-          belongs directly beneath it — `21-sign-up.md`. Clerk owns the card,
-          and its footer
-          ("Already with us?", "Secured by Clerk") renders after the form, which
-          left this 133px below the button it describes. `globals.css` flattens
-          Clerk's two structural boxes and orders these three by hand: form,
-          hint, footer.
-        */}
-        {chosenRole === null ? (
-          <p
-            data-role-hint=""
-            className="mt-1.5 text-center text-helper text-stone-600"
-            role={roleMissing ? 'alert' : undefined}
-          >
-            Pick one above to continue
+          <p className="mt-5 text-center text-cta text-stone-700">
+            {AUTH_COPY.signUpAlt}{' '}
+            <Link href="/sign-in" className="font-semibold text-clay-500 hover:underline">
+              Sign in
+            </Link>
           </p>
-        ) : null}
-      </div>
+        </form>
+      )}
     </AuthScreen>
   );
 }

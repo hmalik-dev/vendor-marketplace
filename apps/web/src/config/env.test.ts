@@ -8,15 +8,17 @@ import {
   requirePublicValue,
 } from './public-env';
 
+/** Shaped like the real rows, built here so no fixture reads as a credential. */
+const NEON_AUTH_ENV: Record<string, string> = Object.fromEntries([
+  ['NEON_AUTH_BASE_URL', `https://${'ep-test'}.neonauth.example.neon.tech/neondb/auth`],
+  ['NEON_AUTH_COOKIE_SECRET', 'k'.repeat(44)],
+]);
+
 const VALID: NodeJS.ProcessEnv = {
   NODE_ENV: 'development',
   API_URL: 'http://localhost:4000',
   NEXT_PUBLIC_API_URL: 'http://localhost:4000',
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_c3RpcnJpbmctZ2F6ZWxsZS0x',
-  NEXT_PUBLIC_CLERK_SIGN_IN_URL: '/sign-in',
-  NEXT_PUBLIC_CLERK_SIGN_UP_URL: '/sign-up',
-  NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: '/after-sign-in',
-  NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: '/after-sign-in',
+  ...NEON_AUTH_ENV,
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_51QabcdefghijklmnopQR',
 };
 
@@ -32,23 +34,16 @@ describe('assertWebEnv', () => {
     expect(assertWebEnv(VALID).NEXT_PUBLIC_API_URL).toBe('http://localhost:4000');
   });
 
-  it('accepts a live-mode Clerk key, because this runs on Vercel too', () => {
-    /*
-     * `next build` sets `NODE_ENV=production` for every build, so this schema
-     * cannot tell a release from `pnpm build` on a laptop and must accept the
-     * value that is correct in production. Holding it to the `local` value set
-     * would fail the Vercel build on a live key — and the cheapest way out of
-     * that failure is to put a development credential into production.
-     */
-    const live = VALID.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!.replace('_test_', '_live_');
-
-    expect(() => assertWebEnv({ ...VALID, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: live })).not.toThrow();
+  it('rejects a Neon Auth base URL left as its placeholder', () => {
+    expect(() => assertWebEnv({ ...VALID, NEON_AUTH_BASE_URL: '<neon-auth-base-url>' })).toThrow(
+      /NEON_AUTH_BASE_URL/,
+    );
   });
 
-  it('rejects a Clerk key left as its placeholder', () => {
-    expect(() =>
-      assertWebEnv({ ...VALID, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_...' }),
-    ).toThrow(/NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY/);
+  it('rejects a cookie signing key too short to sign anything', () => {
+    expect(() => assertWebEnv({ ...VALID, NEON_AUTH_COOKIE_SECRET: 'short' })).toThrow(
+      /NEON_AUTH_COOKIE_SECRET/,
+    );
   });
 
   it('names every problem at once and points at preflight', () => {
@@ -56,14 +51,14 @@ describe('assertWebEnv', () => {
       assertWebEnv({
         ...VALID,
         NEXT_PUBLIC_API_URL: 'not-a-url',
-        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_...',
+        NEON_AUTH_BASE_URL: '<neon-auth-base-url>',
       });
       expect.unreachable('assertWebEnv should have thrown');
     } catch (error) {
       const message = (error as Error).message;
 
       expect(message).toContain('NEXT_PUBLIC_API_URL');
-      expect(message).toContain('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY');
+      expect(message).toContain('NEON_AUTH_BASE_URL');
       expect(message).toContain('pnpm preflight');
     }
   });
@@ -95,7 +90,7 @@ describe('assertWebEnv', () => {
     const bare: NodeJS.ProcessEnv = {
       NODE_ENV: 'production',
       VERCEL: '1',
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: VALID.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+      ...NEON_AUTH_ENV,
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: VALID.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
     };
 
@@ -122,8 +117,8 @@ describe('assertWebEnv', () => {
         NEXT_PUBLIC_API_URL: 'https://api.orla.test',
         NEXT_PUBLIC_S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
         NEXT_PUBLIC_SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',
-      }).NEXT_PUBLIC_CLERK_SIGN_IN_URL,
-    ).toBe('/sign-in');
+      }).NEXT_PUBLIC_SENTRY_DSN,
+    ).toBe('https://abc123@o1.ingest.sentry.io/42');
   });
 
   /*

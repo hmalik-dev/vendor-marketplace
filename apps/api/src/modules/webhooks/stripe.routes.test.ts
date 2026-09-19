@@ -82,7 +82,7 @@ describe('POST /webhooks/stripe', () => {
     harness = await createTestHarness();
 
     harness.clerkUsers.set('vendor_a', {
-      clerkUserId: 'vendor_a',
+      authUserId: 'vendor_a',
       email: 'vendor_a@example.com',
       firstName: 'Test',
       lastName: 'Vendor',

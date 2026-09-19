@@ -8,7 +8,7 @@ import { sourceFiles, TS_AND_TSX, WEB_SOURCE } from '@/testing/source-scan';
  * The cookie notice states, as a fact about this codebase, that there is no
  * banner because there is nothing to consent to: the tree sets no cookies of
  * its own and loads no analytics, advertising or session-recording script, so
- * the only cookie is Clerk's strictly-necessary `__session`. That claim stops
+ * the only cookie is the identity provider's strictly-necessary session cookie. That claim stops
  * being true the moment somebody adds a tracker, and the page would go on
  * saying it. This is the guard that fails first.
  *
@@ -84,7 +84,7 @@ describe('there is no cookie consent mechanism, because there is nothing to cons
   /**
    * The other half of the claim: the product writes no cookie of its own.
    *
-   * Clerk sets `__session` from its own package inside `node_modules`, which
+   * The identity provider sets its session cookie from its own package inside `node_modules`, which
    * this scan does not read — so a cookie written in *this* tree is, by
    * construction, one the notice does not name.
    *

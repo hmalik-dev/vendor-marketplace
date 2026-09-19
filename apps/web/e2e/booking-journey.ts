@@ -5,7 +5,7 @@ import { expect, type Page } from '@playwright/test';
 import { parse } from 'dotenv';
 
 import { resolveE2EApiUrl } from './base-url.js';
-import { AUTH_DIR } from './fixtures.js';
+import { AUTH_DIR, pageToken } from './fixtures.js';
 import { E2E_VENDOR_SLUG } from './fixtures-data.js';
 import { waitForHydration } from './hydration.js';
 
@@ -65,12 +65,10 @@ export function uniqueVenue(scenario: string): string {
 }
 
 async function sessionToken(page: Page): Promise<string> {
-  // Straight after a navigation Clerk is still loading and holds no session yet.
-  await page.waitForFunction(() => window.Clerk?.loaded === true);
-  const token = await page.evaluate(async () => (await window.Clerk?.session?.getToken()) ?? null);
+  const token = await pageToken(page);
 
   if (!token) {
-    throw new Error(`No Clerk session token on ${page.url()} — the role fixture did not sign in`);
+    throw new Error(`No session token on ${page.url()} — the role fixture did not sign in`);
   }
 
   return token;

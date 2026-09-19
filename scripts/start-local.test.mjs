@@ -155,7 +155,8 @@ test('an existing, complete .env is never modified and lets the start continue',
   const dir = cloneRoot();
   const complete = envText([
     ['DATABASE_URL', localDatabaseUrl(COMPOSE)],
-    ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', `pk_test_${FILLER}`],
+    ['NEON_AUTH_BASE_URL', 'https://ep-x.neonauth.example.invalid/neondb/auth'],
+    ['NEON_AUTH_COOKIE_SECRET', `${FILLER}${FILLER}`],
     ['CLERK_SECRET_KEY', `sk_test_${FILLER}`],
     ['CLERK_WEBHOOK_SECRET', `whsec_${FILLER}`],
     ['STRIPE_SECRET_KEY', `sk_test_${FILLER}`],

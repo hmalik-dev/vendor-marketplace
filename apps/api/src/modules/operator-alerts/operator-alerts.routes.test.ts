@@ -54,18 +54,18 @@ describe('operator alerts', () => {
     return `${message.subject}\n${message.text}\n${message.html}`;
   }
 
-  async function signIn(clerkUserId: string): Promise<string> {
+  async function signIn(authUserId: string): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
       url: '/users/me',
-      headers: bearer(clerkUserId),
+      headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
 
     const rows = await harness.database.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.clerkUserId, clerkUserId))
+      .where(eq(users.authUserId, authUserId))
       .limit(1);
 
     return rows[0]!.id;
@@ -162,14 +162,14 @@ describe('operator alerts', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    for (const [clerkUserId, role] of [
+    for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(clerkUserId, {
-        clerkUserId,
-        email: `${clerkUserId}@example.com`,
+      harness.clerkUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
         firstName: 'Casey',
         lastName: 'Rivera',
         roleHint: role,
@@ -339,7 +339,7 @@ describe('operator alerts', () => {
       await harness.database.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.clerkUserId, VENDOR))
+        .where(eq(users.authUserId, VENDOR))
     )[0]!.id;
     await harness.database.db
       .update(vendorProfiles)
@@ -423,12 +423,12 @@ describe('operator alerts', () => {
     await harness.database.db
       .update(users)
       .set({ role: 'admin' })
-      .where(eq(users.clerkUserId, ADMIN));
+      .where(eq(users.authUserId, ADMIN));
     const vendorUserId = (
       await harness.database.db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.clerkUserId, VENDOR))
+        .where(eq(users.authUserId, VENDOR))
     )[0]!.id;
     harness.stripe.refundsToRefuse.add(fixture.paymentIntentId);
 

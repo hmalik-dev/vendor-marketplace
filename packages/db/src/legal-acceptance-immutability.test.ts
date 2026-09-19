@@ -48,7 +48,7 @@ beforeAll(async () => {
   await testDb.runMigrations();
 
   await testDb.db.execute(
-    sql.raw(`INSERT INTO users (id, clerk_user_id, email, role, first_name, last_name)
+    sql.raw(`INSERT INTO users (id, auth_user_id, email, role, first_name, last_name)
              VALUES ('${VENDOR_USER}', 'user_agreement', 'agreement@example.com', 'vendor', 'June', 'Harlow'),
                     ('${CUSTOMER_USER}', 'user_terms', 'terms@example.com', 'customer', 'Ada', 'Reyes')`),
   );

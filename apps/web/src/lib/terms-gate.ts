@@ -12,8 +12,8 @@ import { isGateExemptPath, isTermsRequired, termsAcceptancePath } from './terms-
  * directly. What this does is turn that refusal into the screen the reader is
  * owed, in the places a protected read is performed.
  *
- * **It is deliberately not middleware.** `middleware.ts` says why: Clerk
- * deprecated path-matcher guards because a matcher can diverge from how Next
+ * **It is deliberately not middleware.** `middleware.ts` says why: path-matcher
+ * guards are unsafe because a matcher can diverge from how Next
  * actually routes a request and leave a protected resource reachable. A gate
  * that lives in the API and surfaces here through the reads every protected
  * screen already performs cannot diverge from anything.

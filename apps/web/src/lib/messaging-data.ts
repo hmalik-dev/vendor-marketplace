@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { getServerSession } from './auth/server';
 import { redirect } from 'next/navigation';
 import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
@@ -13,8 +13,7 @@ import {
 } from './wire-schemas';
 
 async function sessionToken(): Promise<string> {
-  const { getToken } = await auth();
-  const token = await getToken();
+  const token = (await getServerSession())?.token ?? null;
 
   if (!token) {
     redirect(await signInPathReturningHere());

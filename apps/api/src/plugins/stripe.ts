@@ -22,7 +22,7 @@ export interface StripePluginOptions {
  * vendor's onboarding routes and the webhook — and threading one adapter
  * through two registration sites is how the two quietly end up holding
  * different clients. The real gateway is built here from the secret rather than
- * by the server factory, the way `clerkAuthPlugin` builds its client: only the
+ * by the server factory, the way `neonAuthPlugin` builds its client: only the
  * suites supply their own.
  */
 export const stripePlugin = fp<StripePluginOptions>(

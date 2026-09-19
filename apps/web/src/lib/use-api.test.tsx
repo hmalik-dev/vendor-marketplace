@@ -7,7 +7,7 @@ import { ApiClientError } from './api-client';
 const push = vi.fn();
 const apiRequest = vi.fn();
 
-vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: async () => 'token' }) }));
+vi.mock('./auth/client', () => ({ getSessionToken: async () => 'token' }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 vi.mock('./api-client', async () => {
   const actual = await vi.importActual<typeof import('./api-client')>('./api-client');

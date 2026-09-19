@@ -11,7 +11,7 @@ import { signedInFailurePath } from '@/lib/terms-gate';
  * Where a user *starts* after authenticating is a different question, answered
  * by `/after-sign-in`.
  *
- * This is a route handler rather than a page that calls `redirect()`. Clerk
+ * This is a route handler rather than a page that calls `redirect()`. The sign-in form
  * lands here with a client-side navigation, and an RSC redirect that crosses
  * into a different layout segment leaves the App Router unable to reconcile
  * the tree — the user is left on a blank `/dashboard`. A route handler answers

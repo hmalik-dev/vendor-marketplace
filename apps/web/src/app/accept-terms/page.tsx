@@ -14,10 +14,11 @@ export const metadata: Metadata = { title: pageTitle('Accept the Terms') };
  * The first-sign-in acceptance gate.
  *
  * Every account traverses this exactly once, however it was created — which is
- * why it is here rather than inside the sign-up form. `sign-up-form.tsx`
- * renders Clerk's prebuilt `<SignUp>`, so there is no seam in that form to put
- * a checkbox in, and a box on the role step before it is bypassed by every
- * social sign-up that enters Clerk directly.
+ * why it is here rather than inside the sign-up form: no account row exists in
+ * our database until this is accepted, and a person who verifies their email
+ * one day and signs in the next still has to pass it. It is also where the role
+ * chosen at sign-up reaches the API, because the identity provider has no field
+ * to carry it.
  *
  * `force-dynamic`, because what it renders depends on the caller's own
  * acceptance and changes the moment they tick the box.

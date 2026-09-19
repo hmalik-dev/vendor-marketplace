@@ -9,13 +9,13 @@ vi.mock('next/navigation', () => ({
 }));
 
 /*
- * Clerk's sign-out control clones its one child with a click handler that signs
+ * The sign-out control clones its one child with a click handler that signs
  * out to `redirectUrl`. The mock does the same against a spy, so removing the
  * wrapper or changing where it lands fails a test.
  */
 const signOut = vi.fn();
 
-vi.mock('@clerk/nextjs', async () => {
+vi.mock('@/components/auth/sign-out-button', async () => {
   const { cloneElement } = await import('react');
 
   return {

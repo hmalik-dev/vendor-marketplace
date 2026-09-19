@@ -48,7 +48,7 @@ describe('the vendor gate', () => {
     const id = `user_gate_${role}_${identities}`;
 
     harness.clerkUsers.set(id, {
-      clerkUserId: id,
+      authUserId: id,
       email: email ?? `${id}@example.com`,
       firstName: 'Grace',
       lastName: 'Hopper',
@@ -117,7 +117,7 @@ describe('the vendor gate', () => {
     harness = await createTestHarness({ acceptTerms: false });
 
     harness.clerkUsers.set(ADMIN, {
-      clerkUserId: ADMIN,
+      authUserId: ADMIN,
       email: 'gate-admin@example.com',
       firstName: 'Ada',
       lastName: 'Operator',
@@ -128,7 +128,7 @@ describe('the vendor gate', () => {
     await harness.database.db
       .update(users)
       .set({ role: 'admin' })
-      .where(eq(users.clerkUserId, ADMIN));
+      .where(eq(users.authUserId, ADMIN));
   });
 
   afterEach(async () => {
@@ -168,7 +168,7 @@ describe('the vendor gate', () => {
       const [row] = await harness.database.db
         .select({ role: users.role })
         .from(users)
-        .where(eq(users.clerkUserId, customer));
+        .where(eq(users.authUserId, customer));
       expect(row).toEqual({ role: 'customer' });
       expect((await inject('GET', '/users/me', customer)).statusCode).toBe(200);
     });
@@ -184,7 +184,7 @@ describe('the vendor gate', () => {
       const [row] = await harness.database.db
         .select({ role: users.role })
         .from(users)
-        .where(eq(users.clerkUserId, vendor));
+        .where(eq(users.authUserId, vendor));
       expect(row).toEqual({ role: 'vendor' });
       const [stamped] = await harness.database.db.select().from(vendorInvites);
       expect(stamped!.acceptedAt).toBeInstanceOf(Date);
@@ -224,7 +224,7 @@ describe('the vendor gate', () => {
           landed = harness.database.db
             .insert(users)
             .values({
-              clerkUserId: identity,
+              authUserId: identity,
               email: snapshot.email,
               role: 'vendor',
               firstName: 'Grace',
@@ -248,7 +248,7 @@ describe('the vendor gate', () => {
       const [row] = await harness.database.db
         .select({ id: users.id, role: users.role })
         .from(users)
-        .where(eq(users.clerkUserId, identity));
+        .where(eq(users.authUserId, identity));
       expect(row?.role).toBe('vendor');
       const held = await harness.database.db
         .select()
@@ -287,7 +287,7 @@ describe('the vendor gate', () => {
       const [row] = await harness.database.db
         .select({ id: users.id, role: users.role })
         .from(users)
-        .where(eq(users.clerkUserId, vendor));
+        .where(eq(users.authUserId, vendor));
       expect(row?.role).toBe('vendor');
 
       const refused = await accept(vendor);

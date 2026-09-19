@@ -37,7 +37,7 @@ describe('the counted filtered-empty routes on /admin/cases', () => {
     harness = await createTestHarness();
 
     harness.clerkUsers.set(ADMIN, {
-      clerkUserId: ADMIN,
+      authUserId: ADMIN,
       email: `${ADMIN}@example.com`,
       firstName: 'Ops',
       lastName: 'Operator',
@@ -49,7 +49,7 @@ describe('the counted filtered-empty routes on /admin/cases', () => {
     await harness.database.db
       .update(users)
       .set({ role: 'admin' })
-      .where(eq(users.clerkUserId, ADMIN));
+      .where(eq(users.authUserId, ADMIN));
   });
 
   afterAll(async () => {

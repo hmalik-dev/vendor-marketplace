@@ -71,7 +71,7 @@ export const vendorApplicationRoutes: FastifyPluginAsyncZod = async (app) => {
       submitVendorApplication(
         app.db,
         request.body,
-        request.clerkIdentity ? (await request.clerkIdentity.loadSnapshot()).email : null,
+        request.authIdentity ? (await request.authIdentity.loadSnapshot()).email : null,
       ),
   );
 };

@@ -21,10 +21,10 @@ import { assertLoopbackOrigin, clerk } from './no-row-account';
 const ADMIN_STATE = storageStatePath('admin');
 const run = promisify(execFile);
 
-async function e2eOperator(command: 'mint' | 'remove', clerkUserId: string, email: string) {
+async function e2eOperator(command: 'mint' | 'remove', authUserId: string, email: string) {
   const { stdout } = await run(
     'pnpm',
-    ['--silent', '--filter', '@vendor-marketplace/db', 'e2e:operator', command, clerkUserId, email],
+    ['--silent', '--filter', '@vendor-marketplace/db', 'e2e:operator', command, authUserId, email],
     { cwd: dirname(AUTH_DIR) },
   );
 
@@ -54,11 +54,11 @@ test('an operator closes another operator only after typing their address exactl
     },
   });
   expect(minted.ok, `Clerk refused to mint the disposable operator: ${minted.status}`).toBe(true);
-  const { id: clerkUserId } = (await minted.json()) as { id: string };
+  const { id: authUserId } = (await minted.json()) as { id: string };
   const context = await browser.newContext({ storageState: ADMIN_STATE });
 
   try {
-    const { userId } = await e2eOperator('mint', clerkUserId, email);
+    const { userId } = await e2eOperator('mint', authUserId, email);
     const page = await context.newPage();
 
     await page.goto(`/admin/users/${userId}`);
@@ -91,12 +91,12 @@ test('an operator closes another operator only after typing their address exactl
     await expect(page.getByText(/This needs a person/)).toHaveCount(0);
 
     // The closure deleted the sign-in itself, not just the row.
-    expect((await clerk(`/users/${clerkUserId}`, { method: 'GET' })).status).toBe(404);
+    expect((await clerk(`/users/${authUserId}`, { method: 'GET' })).status).toBe(404);
   } finally {
     await context.close();
     // The row first, so a Clerk failure below cannot leave it behind.
-    await e2eOperator('remove', clerkUserId, email);
-    const deleted = await clerk(`/users/${clerkUserId}`, { method: 'DELETE' });
+    await e2eOperator('remove', authUserId, email);
+    const deleted = await clerk(`/users/${authUserId}`, { method: 'DELETE' });
     expect([200, 404]).toContain(deleted.status);
   }
 });

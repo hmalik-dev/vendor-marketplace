@@ -11,16 +11,17 @@ import { forbidden, notFound, unauthorized } from '../../lib/errors.js';
 import { assertOwnedImageRefs } from '../../lib/storage.js';
 import { findUserById, insertUserIfAbsent, updateUserById } from './users.dao.js';
 
-/** The subset of a Clerk identity the local `users` row mirrors. */
-export interface ClerkUserSnapshot {
-  clerkUserId: string;
+/** The subset of an auth identity the local `users` row mirrors. */
+export interface AuthUserSnapshot {
+  authUserId: string;
   email: string;
   firstName: string;
   lastName: string;
   /**
-   * Raw `unsafeMetadata.role` as Clerk reports it. Left unnarrowed on purpose:
-   * the account holder can write this field, so it is normalized at the single
-   * point where it is persisted rather than trusted by each caller.
+   * The role the person chose at sign-up, as the acceptance request carried it.
+   * Left unnarrowed on purpose: the caller writes this field, so it is
+   * normalized at the single point where it is persisted rather than trusted by
+   * each caller.
    */
   roleHint: unknown;
   avatarUrl: string | null;
@@ -37,7 +38,7 @@ export function toUser(row: UserRow): User {
 }
 
 /**
- * Role is chosen at sign-up and lives in Clerk's `unsafeMetadata`, which the
+ * Role is chosen at sign-up and travels on the acceptance request, which the
  * user can technically write. It is trusted only for the initial row creation
  * and is immutable afterwards; every later authorization decision reads the
  * local column. Anything unrecognised falls back to the least-privileged role.
@@ -62,21 +63,21 @@ export function normalizeRole(value: unknown): UserRole {
  * persisted through this module, and doing it at the point of persistence
  * cannot be forgotten by a caller the way doing it per read can.
  */
-export function mirroredClerkName(value: string): string {
+export function mirroredAuthName(value: string): string {
   return stripBidiControls(value).trim();
 }
 
 /**
  * A Clerk identity as the local row records it — normalised, and stated once,
- * so `normalizeRole` and `mirroredClerkName` cannot be forgotten by a caller.
+ * so `normalizeRole` and `mirroredAuthName` cannot be forgotten by a caller.
  */
-function toNewUserRow(snapshot: ClerkUserSnapshot): NewUserRow {
+function toNewUserRow(snapshot: AuthUserSnapshot): NewUserRow {
   return {
-    clerkUserId: snapshot.clerkUserId,
+    authUserId: snapshot.authUserId,
     email: snapshot.email,
     role: normalizeRole(snapshot.roleHint),
-    firstName: mirroredClerkName(snapshot.firstName),
-    lastName: mirroredClerkName(snapshot.lastName),
+    firstName: mirroredAuthName(snapshot.firstName),
+    lastName: mirroredAuthName(snapshot.lastName),
     avatarUrl: snapshot.avatarUrl,
   };
 }
@@ -105,9 +106,9 @@ export function displayName(user: Pick<UserRow, 'firstName' | 'lastName' | 'emai
  * `legal_acceptances`, not this table, so a webhook-created row with no
  * acceptance is held at the interstitial exactly like an account that has none.
  */
-export async function syncUserFromClerk(
+export async function syncUserFromAuth(
   db: AppDatabase,
-  snapshot: ClerkUserSnapshot,
+  snapshot: AuthUserSnapshot,
 ): Promise<UserRow | null> {
   return insertUserIfAbsent(db, toNewUserRow(snapshot));
 }

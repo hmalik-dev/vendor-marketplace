@@ -240,9 +240,9 @@ export const LEGAL_ACCEPTANCE_CONTENT: Record<LegalAcceptanceDocument, LegalCont
  * accepted the current Terms can reach.
  *
  * It is on `/after-sign-in`'s path rather than inside the sign-up form because
- * `sign-up-form.tsx` renders Clerk's prebuilt `<SignUp>`: there is no seam in
+ * `sign-up-form.tsx` is the sign-up screen: there is no seam in
  * that form to put a checkbox in, and a box on the role step before it is
- * bypassed by every social sign-up that enters Clerk directly. Every account
+ * bypassed by every social sign-up that enters the provider directly. Every account
  * traverses this, however it was created.
  */
 export const TERMS_ACCEPTANCE_PATH = '/accept-terms';
