@@ -1,0 +1,1 @@
+CREATE INDEX "users_banned_idx" ON "users" USING btree ("id") WHERE "users"."is_banned" = true;

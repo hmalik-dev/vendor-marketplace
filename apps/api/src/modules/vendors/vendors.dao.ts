@@ -10,6 +10,7 @@ import {
   type VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import { OWNER_NOT_BANNED } from './vendor-visibility.js';
 
 /** A soft-deleted profile is invisible to every read path. */
 const live = eq(vendorProfiles.isDeleted, false);
@@ -84,6 +85,10 @@ export async function updateVendorProfileById(
    * republish answering 409. Checking the column in the statement that writes
    * it is what makes that unrepresentable rather than unlikely.
    *
+   * It also carries the owner's suspension (VEN-431): a publish that passed the
+   * auth hook before a ban committed must not set `is_published` after the
+   * ban's unpublish. Same statement, same reason.
+   *
    * Off by default because the console's own writer must be able to set
    * `is_published` on a row it is holding.
    */
@@ -100,7 +105,9 @@ export async function updateVendorProfileById(
       and(
         eq(vendorProfiles.id, id),
         live,
-        options.requireUnheld === true ? eq(vendorProfiles.moderationHold, false) : undefined,
+        options.requireUnheld === true
+          ? and(eq(vendorProfiles.moderationHold, false), OWNER_NOT_BANNED)
+          : undefined,
       ),
     )
     .returning();

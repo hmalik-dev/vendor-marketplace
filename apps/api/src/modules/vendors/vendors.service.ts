@@ -36,6 +36,8 @@ import {
   updateVendorProfileById,
 } from './vendors.dao.js';
 
+const SUSPENDED_ACCOUNT_MESSAGE = 'This account has been suspended';
+
 const PROFILE_USER_UNIQUE = 'vendor_profiles_user_id_key';
 const PROFILE_SLUG_UNIQUE = 'vendor_profiles_slug_key';
 
@@ -580,6 +582,11 @@ export async function updateVendorProfile(
 
         if (current?.moderationHold) {
           throw forbidden(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
+        }
+
+        // Neither a hold nor a missing profile: the owner was suspended meanwhile.
+        if (current) {
+          throw forbidden(SUSPENDED_ACCOUNT_MESSAGE);
         }
       }
 
