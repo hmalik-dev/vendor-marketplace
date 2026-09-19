@@ -66,3 +66,4 @@
 - [TaskStop cannot stop a peer session](taskstop-cannot-stop-peer-sessions.md) — kill the `bg-spare` child, scoped by its cwd; name matching hits every repo
 - [Users never access Clerk](users-never-access-clerk.md) — no Clerk account menu, portal or self-serve delete; account changes go through the app, the owner runs Clerk (VEN-403)
 - [Linear has an archived sibling project](linear-has-an-archived-sibling-project.md) — lowercase `vendor-marketplace`, ~200 archived layer-split rows from the Prisma era; filter to the project in project.json, never clean it up
+- [Check a lane's outcome, not its liveness](orchestrate-check-lane-outcome-not-liveness.md) — read the ticket state and comments, raise blockers first; `working` in `claude agents` proves nothing
