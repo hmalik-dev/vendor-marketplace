@@ -230,7 +230,7 @@ export default async function AdminCasesPage({
               action={
                 <Link
                   href={`${PATH}${adminQueryString({ ...params, page: undefined })}`}
-                  className="text-sm font-semibold text-clay-700 hover:underline"
+                  className="text-sm font-semibold text-clay-600 hover:underline"
                 >
                   Back to the first page
                 </Link>
