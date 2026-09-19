@@ -279,6 +279,60 @@ describe('admin payout health', () => {
     });
   });
 
+  /* VEN-445: an owed payout the sweep will never send is surfaced, not "Awaiting release". */
+  describe('a payout stranded by a banned or closed vendor (VEN-445)', () => {
+    it.each([
+      ['banned', { isBanned: true }],
+      ['closed', { deletedAt: new Date('2026-06-20T00:00:00Z') }],
+    ])('flags a completed past booking owed to a %s vendor as stranded', async (_name, change) => {
+      const bookingId = await paidBooking({ status: 'completed' });
+
+      /* The control: the same row on a live vendor is owed and not stranded. */
+      expect((await payments()).json().items[0]).toMatchObject({
+        payoutStatus: 'pending',
+        payoutStranded: false,
+      });
+
+      const [profile] = await harness.database.db
+        .select({ userId: vendorProfiles.userId })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendorProfileId));
+      await harness.database.db.update(users).set(change).where(eq(users.id, profile!.userId));
+
+      /* The sweep skips it, and the console says so on both surfaces. */
+      expect(await findDuePayoutBookingIds(harness.database.db, '2026-06-30', 10)).toEqual([]);
+      expect((await payments()).json().items[0]).toMatchObject({
+        bookingId,
+        payoutStranded: true,
+        payoutFailing: false,
+      });
+      const detail = await harness.app.inject({
+        method: 'GET',
+        url: `/admin/bookings/${bookingId}`,
+        headers: bearer(ADMIN),
+      });
+      expect(detail.json()).toMatchObject({ payoutStranded: true });
+    });
+
+    it('does not flag a released payout on a banned vendor', async () => {
+      await paidBooking({
+        status: 'completed',
+        payoutReleasedAt: new Date('2026-06-05T00:00:00Z'),
+        stripeTransferId: 'tr_1',
+      });
+      const [profile] = await harness.database.db
+        .select({ userId: vendorProfiles.userId })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendorProfileId));
+      await harness.database.db
+        .update(users)
+        .set({ isBanned: true })
+        .where(eq(users.id, profile!.userId));
+
+      expect((await payments()).json().items[0]).toMatchObject({ payoutStranded: false });
+    });
+  });
+
   /* Acceptance 1 and 2. */
   describe('the payments row', () => {
     it('reads a fully refunded cancelled booking as not owed (VEN-423)', async () => {

@@ -948,7 +948,7 @@ export async function countAdminCustomers(
  * The vendor's own `users` row, aliased because the customer already holds the
  * unaliased one on every bookings query.
  */
-const vendorOwner = alias(users, 'vendor_owner');
+export const vendorOwner = alias(users, 'vendor_owner');
 
 /**
  * A booking a ban could not unwind (#415).
@@ -1026,6 +1026,7 @@ function bookingSelection() {
     payoutReleasedAt: bookings.payoutReleasedAt,
     payoutAttempts: bookings.payoutAttempts,
     payoutFailureReason: bookings.payoutFailureReason,
+    vendorUnpayable: sql<boolean>`(${vendorOwner.isBanned} or ${vendorOwner.deletedAt} is not null)`,
     paidAt: bookings.paidAt,
     customerFirstName: users.firstName,
     customerLastName: users.lastName,
@@ -1049,6 +1050,7 @@ export interface AdminBookingProjection {
   payoutReleasedAt: Date | null;
   payoutAttempts: number;
   payoutFailureReason: string | null;
+  vendorUnpayable: boolean;
   paidAt: Date | null;
   customerFirstName: string;
   customerLastName: string;
@@ -1216,6 +1218,7 @@ export async function findAdminPayments(
     .from(bookings)
     .innerJoin(users, eq(users.id, bookings.customerId))
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
+    .innerJoin(vendorOwner, eq(vendorOwner.id, vendorProfiles.userId))
     .where(paymentFilterCondition(flag))
     .orderBy(desc(bookings.paidAt))
     .limit(limit)

@@ -42,7 +42,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { readsAs } from '../booking-requests/booking-requests.dao.js';
-import { adminVendorSelection, type AdminVendorProjection } from './admin.dao.js';
+import { adminVendorSelection, vendorOwner, type AdminVendorProjection } from './admin.dao.js';
 import { countWidenings } from './widenings.js';
 
 /**
@@ -339,6 +339,7 @@ export interface AdminBookingDetailRow {
   vendorName: string;
   vendorPayoutHold: boolean;
   vendorUserId: string;
+  vendorUnpayable: boolean;
   customerId: string;
   customerFirstName: string;
   customerLastName: string;
@@ -378,6 +379,7 @@ export async function findAdminBookingDetail(
       vendorName: vendorProfiles.businessName,
       vendorPayoutHold: vendorProfiles.payoutHold,
       vendorUserId: vendorProfiles.userId,
+      vendorUnpayable: sql<boolean>`(${vendorOwner.isBanned} or ${vendorOwner.deletedAt} is not null)`,
       customerId: users.id,
       customerFirstName: users.firstName,
       customerLastName: users.lastName,
@@ -386,6 +388,7 @@ export async function findAdminBookingDetail(
     .from(bookings)
     .innerJoin(users, eq(users.id, bookings.customerId))
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
+    .innerJoin(vendorOwner, eq(vendorOwner.id, vendorProfiles.userId))
     .where(eq(bookings.id, bookingId))
     .limit(1);
 

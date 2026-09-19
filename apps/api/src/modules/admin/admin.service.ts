@@ -3,6 +3,7 @@ import {
   addDays,
   generateSlug,
   isPayoutFailing,
+  isPayoutStranded,
   payoutStatusOf,
   toDateString,
   unwindFloorDate,
@@ -790,6 +791,7 @@ export async function listPayments(
        * filter and the rows it returns cannot answer differently.
        */
       payoutFailing: isPayoutFailing(row),
+      payoutStranded: isPayoutStranded(row),
     })),
     total,
     page: query.page,

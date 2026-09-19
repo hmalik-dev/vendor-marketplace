@@ -269,6 +269,7 @@ const RELEASED_PAYMENT = {
   payoutFailureReason: null,
   stripeTransferId: 'tr_test_1',
   payoutFailing: false,
+  payoutStranded: false,
 };
 
 describe('the admin payments row at the wire boundary', () => {

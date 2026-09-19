@@ -23,6 +23,7 @@ import {
   payoutDueThroughDate,
   payoutReleaseAt,
   isPayoutFailing,
+  isPayoutStranded,
   payoutStatusOf,
   unwindFloorDate,
   replyDeadline,
@@ -626,6 +627,28 @@ describe('payoutStatusOf', () => {
         payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
       }),
     ).toBe('released');
+  });
+});
+
+describe('isPayoutStranded', () => {
+  const STRANDED = {
+    status: 'completed',
+    payoutReleasedAt: null,
+    payoutModel: 'separate',
+    vendorPayoutCents: 127_600,
+    vendorUnpayable: true,
+  } as const;
+
+  it('is true for an owed payout whose vendor is banned or closed', () => {
+    expect(isPayoutStranded(STRANDED)).toBe(true);
+    expect(isPayoutStranded({ ...STRANDED, vendorUnpayable: false })).toBe(false);
+  });
+
+  it('is false once released, held, refunded to zero, or a destination charge', () => {
+    expect(isPayoutStranded({ ...STRANDED, payoutReleasedAt: new Date('2026-06-18') })).toBe(false);
+    expect(isPayoutStranded({ ...STRANDED, status: 'disputed' })).toBe(false);
+    expect(isPayoutStranded({ ...STRANDED, vendorPayoutCents: 0 })).toBe(false);
+    expect(isPayoutStranded({ ...STRANDED, payoutModel: 'destination' })).toBe(false);
   });
 });
 

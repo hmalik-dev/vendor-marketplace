@@ -3,6 +3,7 @@ import {
   ADMIN_CUSTOMER_DETAIL_LIST_LIMIT,
   ADMIN_DETAIL_NOTIFICATION_LIMIT,
   isPayoutFailing,
+  isPayoutStranded,
   LIVE_BOOKING_REQUEST_STATUSES,
   pageWindow,
   payoutStatusOf,
@@ -229,6 +230,7 @@ export async function readBookingDetail(
     vendorName,
     vendorPayoutHold,
     vendorUserId,
+    vendorUnpayable,
     customerId,
     customerFirstName,
     customerLastName,
@@ -249,6 +251,7 @@ export async function readBookingDetail(
     ...booking,
     payoutStatus: payoutStatusOf(booking),
     payoutFailing: isPayoutFailing(booking),
+    payoutStranded: isPayoutStranded({ ...booking, vendorUnpayable }),
     vendor: { id: vendorId, businessName: vendorName, payoutHold: vendorPayoutHold },
     customer: {
       id: customerId,
