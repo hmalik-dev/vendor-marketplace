@@ -31,8 +31,6 @@ import { pathToFileURL } from 'node:url';
 export const REQUIRED_KEYS = {
   NEON_AUTH_BASE_URL: 'Neon Auth, the sign-in service',
   NEON_AUTH_COOKIE_SECRET: 'Neon Auth, the sign-in service',
-  CLERK_SECRET_KEY: 'Clerk, the operator sign-in service',
-  CLERK_WEBHOOK_SECRET: 'Clerk, the operator sign-in service',
   STRIPE_SECRET_KEY: 'Stripe, test-mode payments',
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'Stripe, test-mode payments',
   STRIPE_WEBHOOK_SECRET: 'Stripe, test-mode payments',
@@ -57,6 +55,8 @@ export const OPTIONAL_KEYS = {};
  */
 export const OPTIONAL_PLACEHOLDER_KEYS = [
   'DATABASE_URL_UNPOOLED',
+  // Neon only: a lane's identities live on a Neon branch while its app database is local Docker.
+  'NEON_AUTH_DATABASE_URL',
   'NEON_BRANCH',
   'RESEND_WEBHOOK_SECRET',
   // The second Stripe endpoint's key: locally one listener secret covers both streams.
