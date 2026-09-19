@@ -5,6 +5,7 @@ import {
   FULL_REFUND_CUTOFF_HOURS,
   calculateRefund,
   formatPrice,
+  isUniversallyFutureDate,
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -51,6 +52,16 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
    * late.
    */
   const quote = booking ? calculateRefund(booking.totalAmountCents, booking.eventDate) : null;
+
+  /*
+   * The API refuses a cancellation once the event has started anywhere or the
+   * vendor has been paid — the same two refusals as `placeDisputeHold` — so the
+   * control is not offered past that point. The refund line goes with it: past
+   * the event `calculateRefund` floors at the half tier, a figure nobody is
+   * owed. `ReportProblem`, beside this card, is the way forward.
+   */
+  const cancellable =
+    booking !== null && isUniversallyFutureDate(booking.eventDate) && !booking.payoutReleasedAt;
 
   async function cancel(): Promise<void> {
     if (!booking) {
@@ -112,7 +123,12 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
           </span>
         </div>
 
-        {booking ? (
+        {booking && !cancellable ? (
+          <p className="text-[12.5px] leading-[1.55] text-stone-600">
+            This booking can no longer be cancelled here. If something went wrong, report a problem
+            below.
+          </p>
+        ) : booking ? (
           <p className="text-[12.5px] leading-[1.55] text-stone-600">
             {quote?.isFullRefund
               ? `Cancel more than ${FULL_REFUND_CUTOFF_HOURS} hours before the event and you're refunded in full — ${formatPrice(quote.refundCents)}.`
@@ -137,7 +153,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
               <Button asChild variant="primary">
                 <Link href={`/bookings/${request.id}/confirmed`}>View confirmation</Link>
               </Button>
-              {confirming ? (
+              {!cancellable ? null : confirming ? (
                 <>
                   {/*
                     A destructive action gets a second step rather than a

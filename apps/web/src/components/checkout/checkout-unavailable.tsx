@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
  * replaced, moved one bucket over.
  */
 export type CheckoutUnavailableReason =
-  'failed' | 'not-accepted' | 'closed' | 'paused' | 'over-cap';
+  'failed' | 'not-accepted' | 'closed' | 'paused' | 'over-cap' | 'vendor-unavailable';
 
 export interface CheckoutUnavailableProps {
   reason: CheckoutUnavailableReason;
@@ -97,6 +97,23 @@ function copyFor(
       body: "During the beta we can only take payment up to a set price, and this booking is above it. Contact support and we'll sort it out with you.",
       money: 'No payment was taken and your booking is still accepted.',
       action: { label: 'Contact support', href: '/support' },
+      secondary: { label: 'Back to this booking', href: booking },
+    };
+  }
+
+  /*
+   * The API's 402, which covers two things a customer cannot tell apart and
+   * cannot act on: the vendor's payout account, or their agreement. Both are
+   * the vendor's to fix, both are temporary, and neither is the customer's
+   * account — so one message, and the retry is the same link as `failed`'s.
+   */
+  if (reason === 'vendor-unavailable') {
+    return {
+      eyebrow: 'Payment unavailable',
+      heading: `${vendor} can't take payment right now`,
+      body: `${vendor} needs to finish a step on their side before they can accept payment. This is temporary and nothing is wrong with your account. Try again a little later.`,
+      money: 'No payment was taken and your booking is still accepted.',
+      action: { label: 'Try this payment again', href: `${booking}/checkout` },
       secondary: { label: 'Back to this booking', href: booking },
     };
   }

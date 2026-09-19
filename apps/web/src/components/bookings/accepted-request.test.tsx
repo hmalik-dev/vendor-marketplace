@@ -103,7 +103,7 @@ describe('AcceptedRequest', () => {
   });
 
   it('names the halved refund once the event is inside the cutoff', () => {
-    const soon = '2027-01-02';
+    const soon = '2027-01-03';
     render(
       <AcceptedRequest
         request={acceptedRequest({ eventDate: soon })}
@@ -112,6 +112,27 @@ describe('AcceptedRequest', () => {
     );
 
     expect(screen.getByText(/refunds \$725 of \$1,450\./)).toBeDefined();
+  });
+
+  /*
+   * The API refuses a cancellation once the event has started or the vendor has
+   * been paid, so the control must not be offered to be refused.
+   */
+  it.each([
+    ['the event is too close', { eventDate: '2027-01-02' }],
+    ['the payout has been released', { payoutReleasedAt: new Date('2027-01-01T00:00:00Z') }],
+  ])('offers no cancel control once %s', (_case, overrides) => {
+    render(
+      <AcceptedRequest
+        request={acceptedRequest({ eventDate: '2027-01-01' })}
+        booking={booking({ payoutReleasedAt: null, ...overrides })}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Cancel booking' })).toBeNull();
+    expect(screen.queryByText(/refunded in full|refunds \$/)).toBeNull();
+    expect(screen.getByText(/can no longer be cancelled here/)).toBeDefined();
+    expect(screen.getByRole('link', { name: 'View confirmation' })).toBeDefined();
   });
 
   /* A destructive action takes two deliberate presses, and names the amount. */
