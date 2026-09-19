@@ -35,6 +35,28 @@ export function isTermsRequired(error: unknown): boolean {
 }
 
 /**
+ * A refusal no retry can clear, as the place it sends the person: a suspension
+ * (403 that is not the gate or the vendor gate) to `/suspended`, and a session
+ * the API no longer honours (401) to sign-out. `null` for everything a retry
+ * might clear. The gate itself and the vendor gate are 403s too, and are
+ * excluded by code (unlike `signedInFailurePath`, whose callers never see the
+ * vendor gate).
+ */
+export function terminalRefusal(error: unknown): 'suspended' | 'signed-out' | null {
+  if (!(error instanceof ApiClientError) || isTermsRequired(error)) {
+    return null;
+  }
+
+  if (error.statusCode === 401) {
+    return 'signed-out';
+  }
+
+  return error.statusCode === 403 && error.code !== ERROR_CODES.VENDOR_NOT_INVITED
+    ? 'suspended'
+    : null;
+}
+
+/**
  * The pages a gated account may sit on — and the gate must not take away.
  *
  * Everything else is refused anyway, so bouncing a gated reader off it is the

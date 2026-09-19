@@ -36,7 +36,7 @@ the localStorage `signup_role` value as trusted input.
   Clerk-era rows: absent at Neon Auth otherwise means **retired and refunded**.
   The column defaults to `neon_auth`, so **the dangerous value is the default** —
   a new writer of an unbacked row (seed, fixture, import) that omits it arms a
-  mass retirement, and no CHECK ties `'seed'` to a `seed_` id. Migration 0055 is
+  mass retirement, and no CHECK ties `'seed'` to a `seed_` id. Migration 0056 is
   the last place an id shape decides anything. Audit any pass that treats
   "absent at the provider" as "deleted by the user"; the only backstop is
   `remote.size === 0 && local.length > 1`.

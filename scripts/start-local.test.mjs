@@ -157,8 +157,6 @@ test('an existing, complete .env is never modified and lets the start continue',
     ['DATABASE_URL', localDatabaseUrl(COMPOSE)],
     ['NEON_AUTH_BASE_URL', 'https://ep-x.neonauth.example.invalid/neondb/auth'],
     ['NEON_AUTH_COOKIE_SECRET', `${FILLER}${FILLER}`],
-    ['CLERK_SECRET_KEY', `sk_test_${FILLER}`],
-    ['CLERK_WEBHOOK_SECRET', `whsec_${FILLER}`],
     ['STRIPE_SECRET_KEY', `sk_test_${FILLER}`],
     ['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', `pk_test_${FILLER}`],
     ['STRIPE_WEBHOOK_SECRET', `whsec_${FILLER}`],
@@ -177,7 +175,7 @@ test('an existing .env with a placeholder or missing key is reported and left by
   const dir = cloneRoot();
   const partial = envText([
     ['DATABASE_URL', localDatabaseUrl(COMPOSE)],
-    ['CLERK_SECRET_KEY', 'sk_test_...'],
+    ['STRIPE_SECRET_KEY', 'sk_test_...'],
     ['RESEND_API_KEY', ''],
   ]);
   writeFileSync(path.join(dir, '.env'), partial);
@@ -185,9 +183,9 @@ test('an existing .env with a placeholder or missing key is reported and left by
   const { code, output } = run(dir);
 
   assert.equal(code, 1);
-  assert.match(output, /^  - CLERK_SECRET_KEY /m);
-  assert.match(output, /^  - RESEND_API_KEY /m);
   assert.match(output, /^  - STRIPE_SECRET_KEY /m);
+  assert.match(output, /^  - RESEND_API_KEY /m);
+  assert.match(output, /^  - STRIPE_WEBHOOK_SECRET /m);
   assert.doesNotMatch(output, /Created \.env/);
   assert.equal(readFileSync(path.join(dir, '.env'), 'utf8'), partial);
 });
@@ -209,12 +207,12 @@ test('a key assigned twice is judged by its last value, as the apps read it', ()
     path.join(earlier, '.env'),
     envText([
       ...Object.keys(REQUIRED_KEYS).map((key) => [key, `real_${FILLER}`]),
-      ['CLERK_SECRET_KEY', ''],
+      ['STRIPE_SECRET_KEY', ''],
     ]),
   );
   const { code, output } = run(earlier);
   assert.equal(code, 1);
-  assert.match(output, /^  - CLERK_SECRET_KEY /m);
+  assert.match(output, /^  - STRIPE_SECRET_KEY /m);
 });
 
 test('Docker not running stops with a plain Docker Desktop message and no stack', () => {

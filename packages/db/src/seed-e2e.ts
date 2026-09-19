@@ -11,7 +11,7 @@ import {
   parseDurationHours,
   toDateString,
 } from '@vendor-marketplace/shared';
-import { and, eq, gte, inArray, lte, notExists, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, ne, notExists, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import {
@@ -329,6 +329,38 @@ export async function seedE2eFixtures<
 }
 
 /**
+ * A `users` row no Neon Auth identity backs: the previous provider's (`legacy_clerk`)
+ * or a seeded one (`seed`), read from the recorded `auth_provider`, never the id's shape.
+ */
+const UNBACKED_ROW = ne(users.authProvider, 'neon_auth');
+
+/**
+ * Re-keys a pre-swap row to the identity Neon Auth actually holds.
+ *
+ * A database that predates the Clerk to Neon Auth swap already has the fixture's
+ * row under a Clerk id. The upsert below is keyed on `auth_user_id`, so without
+ * this it would insert a second row and die on the unique email. Only a row no
+ * identity backs is touched, and only when the Neon id has no row yet: a
+ * Neon-keyed row is never re-keyed, and its email and role are left to the
+ * upsert exactly as before. Re-running finds nothing to adopt.
+ */
+async function adoptUnbackedRow(tx: Tx, account: E2eAccount): Promise<void> {
+  const [existing] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.authUserId, account.authUserId));
+
+  if (existing) {
+    return;
+  }
+
+  await tx
+    .update(users)
+    .set({ authUserId: account.authUserId, authProvider: 'neon_auth', updatedAt: sql`now()` })
+    .where(and(sql`lower(${users.email}) = lower(${account.email})`, UNBACKED_ROW));
+}
+
+/**
  * Ensures the local row for a Neon Auth identity, and that it holds the role the
  * fixture needs.
  *
@@ -343,6 +375,8 @@ async function upsertAccount(
   account: E2eAccount,
   role: 'vendor' | 'customer' | 'admin',
 ): Promise<string> {
+  await adoptUnbackedRow(tx, account);
+
   const [row] = await tx
     .insert(users)
     .values({

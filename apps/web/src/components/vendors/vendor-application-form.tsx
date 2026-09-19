@@ -90,8 +90,8 @@ export function VendorApplicationForm({
   if (sentTo !== null) {
     return (
       <Banner status="settled" title="Application received">
-        We will email {sentTo} if we invite you. Then sign up again with that same email and choose
-        vendor.
+        We will email {sentTo} if we invite you. Then sign in with that same email, or sign up with
+        it and choose vendor if you have no account yet.
       </Banner>
     );
   }
