@@ -6,7 +6,12 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { AVAILABILITY_MONTHS_AHEAD, addDays, toDateString } from '@vendor-marketplace/shared';
+import {
+  AVAILABILITY_MONTHS_AHEAD,
+  CURRENT_VENDOR_AGREEMENT_VERSION,
+  addDays,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -220,6 +225,15 @@ describe('/vendor/availability', () => {
         .update(vendorProfiles)
         .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
         .where(eq(vendorProfiles.id, vendorId));
+
+      // Accepting a request needs the agreement in force (VEN-428), as checkout does.
+      const agreed = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/agreement/accept',
+        headers: bearer(VENDOR),
+        payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
+      });
+      expect(agreed.statusCode).toBe(200);
 
       const request = await harness.app.inject({
         method: 'POST',
