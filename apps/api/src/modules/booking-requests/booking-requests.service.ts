@@ -541,7 +541,7 @@ export async function createBookingRequest(
    * to read `isDeleted` and `isPublished` off a row fetched regardless of
    * either, which meant it agreed with the public profile page on two columns
    * and knew nothing of the third — a vendor whose owner had deleted their
-   * Auth identity was unreachable everywhere and still bookable here.
+   * auth identity was unreachable everywhere and still bookable here.
    */
   const vendor = await findBookableVendorById(db, input.vendorId);
 

@@ -178,7 +178,7 @@ describe('data rights', () => {
   /**
    * Re-registers the four fixture identities before every test, not once.
    *
-   * Closure now **deletes** The auth identity (#451), and the harness's fake
+   * Closure now **deletes** the auth identity (#451), and the harness's fake
    * deletes it from `authUsers` rather than only counting the call — so an
    * identity a closure ended stops resolving, and a `beforeAll` registration
    * would leave every later test in the file signing in as somebody who no

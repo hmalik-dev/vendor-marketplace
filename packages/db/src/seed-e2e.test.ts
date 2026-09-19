@@ -245,7 +245,7 @@ describe('seedE2eFixtures', () => {
 
   /**
    * A database that predates the swap to Neon Auth holds the operator under
-   * An auth id. The identity Neon Auth now resolves has the same address, so an
+   * an auth id. The identity Neon Auth now resolves has the same address, so an
    * upsert keyed on `auth_user_id` alone inserts a second row and dies on the
    * unique email — leaving `/admin` unreachable.
    */

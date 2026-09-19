@@ -71,7 +71,7 @@ import { payoutFailingClauses } from '../payments/payouts.dao.js';
  * ## Where a closed account shows, and where it does not (VEN-382)
  *
  * Every `users.deleted_at` read here predates account closure (#438), when only
- * An auth webhook set the column. Each is now a decision, ruled at its site:
+ * an auth webhook set the column. Each is now a decision, ruled at its site:
  *
  * | Read | Closed accounts | Why |
  * | --- | --- | --- |

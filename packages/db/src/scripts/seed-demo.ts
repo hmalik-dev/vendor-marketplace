@@ -7,7 +7,7 @@ import { assertSafeTarget } from './safe-target.js';
  * Populates the fully-featured demo marketplace. Idempotent, and deterministic
  * for a fixed clock. Pass `--clear` to remove everything the seed owns and stop.
  *
- * Needs no the auth provider or Stripe credentials: every identity is a local row under the
+ * Needs no auth or Stripe credentials: every identity is a local row under the
  * `seed_demo_` prefix, and the Stripe ids are demo strings that no API is asked
  * about. That is deliberate — the seed has to work on a laptop with no external
  * keys configured at all.

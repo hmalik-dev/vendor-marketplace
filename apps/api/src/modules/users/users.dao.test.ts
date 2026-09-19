@@ -44,7 +44,7 @@ afterAll(async () => {
  * suite green about three runs in four, and the one red run reads as flake.
  * A probabilistic guard is not a guard.
  *
- * The webhook case in `auth.routes.test.ts` does not close the gap either: a
+ * The webhook case in `auth-sync.service.test.ts` does not close the gap either: a
  * *different* identity arriving with a taken address answers 500 under both
  * shapes — the old one because the speculative insert raised 23505 during index
  * insertion, the new one because this function throws. It pins the outcome, not

@@ -16,7 +16,7 @@
  * admin account (D27) — so `pnpm e2e:auth` with no argument refreshed two of
  * three sessions and every lane inherited the main checkout's expired
  * `.auth/admin.json`. The failure looks nothing like its cause: `/admin` enters
- * The auth provider's handshake loop and reads as the console being broken rather than as
+ * the auth provider's handshake loop and reads as the console being broken rather than as
  * the one role the refresh skipped.
  */
 export const DEFAULT_ROLES = ['customer', 'vendor', 'admin'];

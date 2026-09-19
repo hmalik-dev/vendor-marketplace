@@ -102,7 +102,7 @@ Three layers keep a credential out of the repository, in the order they fire:
 3. **CI** runs `pnpm secrets:scan:all` over every tracked file, before anything
    else. A hook skipped with `--no-verify` still fails the pull request.
 
-The scan looks for provider token shapes (Stripe, Neon, AWS,
+The scan looks for provider token shapes (Stripe, a retired auth provider, Resend webhook signing, Neon, AWS,
 GitHub, Slack, Google), private key blocks, npm auth tokens, database URLs
 carrying a password to a non-local host, and high-entropy values assigned to
 secret-named keys. It also refuses any `.env*` other than `.env.example`, plus

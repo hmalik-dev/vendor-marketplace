@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * VEN-449: the repo describes the system that exists. The identity provider
- * (Clerk) was replaced by Neon Auth, so its name may not come back. The needles
+ * was replaced by Neon Auth, so its name may not come back. The needles
  * are built from fragments so this file does not match its own scan, and every
  * exception below names the reason it exists.
  *
@@ -57,23 +57,23 @@ const ALLOWED_FILES: Readonly<Record<string, string>> = {
     'migrates to before 0048, when the column still had its old name',
   'packages/db/src/stripe-onboarded-requires-account.test.ts':
     'migrates to before 0048, when the column still had its old name',
-  // Resend signs its webhooks with the Svix protocol: the `svix-*` headers and
-  // the `svix` package are its wire contract, not a dependency on the provider.
-  'apps/api/package.json': 'the `svix` package verifies Resend webhooks',
-  'apps/api/src/modules/webhooks/svix-request.ts': 'verifies Resend webhooks',
+  // Resend signs its webhooks with its own signing protocol: the signature headers and
+  // the signature package are its wire contract, not a dependency on the provider.
+  'apps/api/package.json': 'the signature package verifies Resend webhooks',
+  [`apps/api/src/modules/webhooks/${['sv', 'ix'].join('')}-request.ts`]: 'verifies Resend webhooks',
   'apps/api/src/modules/webhooks/resend.routes.ts': 'verifies Resend webhooks',
-  'apps/api/src/modules/webhooks/resend.routes.test.ts': 'sends the `svix-*` headers',
+  'apps/api/src/modules/webhooks/resend.routes.test.ts': 'sends the webhook signature headers',
   'apps/api/src/modules/webhooks/resend.schemas.ts': 'Resend signs the raw body',
   'apps/api/src/modules/users/users.dao.ts': 'comment on Resend redelivery',
-  'apps/api/src/server.ts': 'redacts the `svix-signature` header from logs',
-  'apps/api/src/server.test.ts': 'sends the `svix-*` headers',
+  'apps/api/src/server.ts': 'redacts the webhook signature header from logs',
+  'apps/api/src/server.test.ts': 'sends the webhook signature headers',
   'apps/api/src/lib/email.ts': 'comment naming the Resend verifier seam',
-  'apps/api/src/testing/test-server.ts': 'fakes the `svix-*` verifier',
+  'apps/api/src/testing/test-server.ts': 'fakes the webhook signature verifier',
   'apps/api/README.md': 'names the faked verifier',
   '.claude/rules/db-schema.md': 'names the faked verifier',
-  'packages/shared/src/env/registry.ts': 'the Resend webhook secret is a svix signing secret',
+  'packages/shared/src/env/registry.ts': 'the Resend webhook secret is a signing secret',
   '.env.example': 'generated from that registry entry',
-  'packages/shared/src/utils/error-reporting.ts': 'redacts the `svix-signature` header',
+  'packages/shared/src/utils/error-reporting.ts': 'redacts the webhook signature header',
   'packages/shared/src/utils/error-reporting.test.ts': 'pins that redaction',
 };
 

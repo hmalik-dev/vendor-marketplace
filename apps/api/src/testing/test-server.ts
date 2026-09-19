@@ -950,7 +950,7 @@ export async function createTestHarness(
          * Without this the fake could not tell #451's change from the state it
          * replaced: the local row is retired either way, so the gate 401s on
          * `deletedAt` and a suite asserting only the status code passes with
-         * The auth deletion removed. The auth provider answers a token for a deleted user
+         * the auth deletion removed. The auth provider answers a token for a deleted user
          * by refusing to verify it, so that is what this does — and the two
          * refusals carry different messages, which is what lets a suite say
          * which one it got.

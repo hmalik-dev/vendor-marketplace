@@ -4,7 +4,7 @@
 #
 # It exists so the Orla web app can be shown to someone over a link instead of
 # over a screen share. It runs on Render's free instance type, reads the Neon
-# `staging` branch, and is wired to development-instance the auth provider and test-mode
+# `staging` branch, and is wired to a development Neon Auth branch and test-mode
 # Stripe — so no real money can move and no real account is reachable through
 # it. `docs/demo.md` is the runbook; `docs/pre-launch.md` is what a real
 # production deployment would have to satisfy instead, and this file satisfies

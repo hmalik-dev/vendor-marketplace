@@ -37,7 +37,7 @@ export async function findUserEmail(
  * so `email` is an address the person has moved off, and a notification
  * carries counterparty detail: names, event dates, booking specifics. The
  * collision means another row is stale, the auth webhook repairs it
- * (`auth.service.ts`), and the window is one webhook hop; the in-app row is
+ * (`auth-sync.service.ts`), and the window is one webhook hop; the in-app row is
  * already durable and carries the content, so nothing is queued for later.
  *
  * `null` for an account that is gone, as `findUserEmail`.

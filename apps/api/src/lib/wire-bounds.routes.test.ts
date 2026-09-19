@@ -117,7 +117,7 @@ describe('wire bounds agree with their columns', () => {
 
   /**
    * `role = 'admin'` is not reachable from a sign-in: the lazy sync reads
-   * The auth provider's hint and falls back to `customer`, and the column is immutable
+   * the auth provider's hint and falls back to `customer`, and the column is immutable
    * afterwards. The console suite promotes in the database for the same reason.
    */
   async function signInAsAdmin(): Promise<void> {

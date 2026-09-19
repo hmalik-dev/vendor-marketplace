@@ -203,7 +203,7 @@ jobs:
           --health-retries 5
 
     # Everything not set here is inherited from the workflow's `env:` above,
-    # The auth webhook placeholder included: no journey signs an auth webhook.
+    # No journey signs a webhook.
     env:
       E2E_GATE: ${{ vars.E2E_GATE }}
       # The stack's own origins, which the E2E harness refuses to guess.

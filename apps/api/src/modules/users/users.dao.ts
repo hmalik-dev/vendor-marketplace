@@ -319,7 +319,7 @@ type EmailDivergenceWrite =
  * means *currently* diverged. And when a write moves a row **off** an address,
  * the row waiting on that address takes it in the same call
  * (`handAddressToWaiter`, VEN-386), so the ordering race repairs itself on the
- * event that ends it. A holder the auth provider no longer backs is `auth.service.ts`'s to
+ * event that ends it. A holder the auth provider no longer backs is `auth-sync.service.ts`'s to
  * resolve.
  *
  * **Rows that diverged before this landed carry neither column**, and no
