@@ -99,4 +99,17 @@ describe('NotFoundScreen — the frame type scale', () => {
     expect(classes).toContain('leading-[1.65]');
     expect(classes).not.toContain('text-sm');
   });
+
+  /*
+   * Frame `15` centres the block in the space under the header (centre y 482 at
+   * 1440x900). `min-h` alone let it hug the top of a taller segment; `flex-1`
+   * is what makes it fill one. jsdom performs no layout, so this pins the
+   * class-level fact and the rendered centre is verified in the browser pass.
+   */
+  it('fills the segment it sits in so the block centres', async () => {
+    getCategories.mockResolvedValue(taxonomy());
+    const { container } = render(await NotFoundScreen());
+
+    expect((container.firstElementChild as HTMLElement).className.split(/\s+/)).toContain('flex-1');
+  });
 });
