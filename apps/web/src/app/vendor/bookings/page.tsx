@@ -45,7 +45,7 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
    * subject, so a failed read must not render as "nothing booked" at a vendor
    * who has four weddings.
    */
-  const requests = await getOwnBookingRequests({ onFailure: 'throw' });
+  const requests = await getOwnBookingRequests({ onFailure: 'throw', allPages: true });
   /*
    * `/bookings` is scoped by the caller's role, so this is the vendor's own
    * side of the same endpoint the customer hub reads. Degrading to `[]` is
@@ -68,8 +68,7 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
   const serverToday = toDateString(new Date());
 
   /*
-   * `accepted` is terminal, so a booking stays accepted after the event has
-   * happened. Split on the date rather than listing all of them: what the
+   * A paid booking stays `accepted` after the event has happened. Split on the date rather than listing all of them: what the
    * vendor opens this page for is the next thing they have to turn up to, and
    * a year in, an undivided list leads with last spring.
    */

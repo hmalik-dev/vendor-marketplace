@@ -32,7 +32,7 @@
 - [JSON-LD is the only raw-HTML sink in web](json-ld-is-the-only-raw-html-sink.md) — `serialiseJsonLd` is mandatory; the source-scan guard misses `next/script` + a non-literal type
 - [`'use client'` publishes a pane's props](client-component-props-are-public-html.md) — the RSC-payload lesson stands; the availability `note` endpoint half is FIXED in #407
 - [Availability floors are one day wider than UTC](availability-date-floors-are-universally-past.md) — since #409; the `booked` predicates in the DAO, not the floor, are what protect history
-- [The reply-window cap lives in four places](reply-deadline-cap-must-match-accept-guard.md) — `event_date + 2` UTC days is in a predicate, a helper, an expiry compare and raw SQL; drift makes rows live-but-unacceptable
+- [The reply-window cap lives in five places](reply-deadline-cap-must-match-accept-guard.md) — `event_date + 2` UTC days in a predicate, two helpers, an expiry compare and raw SQL; VEN-433 gave `expires_at` a second meaning and no backfill
 - [Refund idempotency keys are narrower than their params](refund-idempotency-key-is-parameter-sensitive.md) — the key is the booking id, the amount drifts by tier and the unwind flags changed; Stripe refuses the retry
 - [A refund with no durable record can happen twice](refund-before-row-move-can-double-refund.md) — refund precedes the row move, no refund column, and past 24h a retry debits the vendor a second time
 - [Messaging tenancy is two statements](messaging-tenancy-is-two-statements.md) — the vendor arm is an `inArray` of separately-fetched ids, and the preview subquery correlates only while the outer table stays unaliased

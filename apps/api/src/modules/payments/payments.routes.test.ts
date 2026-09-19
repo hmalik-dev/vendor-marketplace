@@ -242,6 +242,54 @@ describe('payments', () => {
     await harness.close();
   });
 
+  describe('opening checkout on a date that has passed (VEN-433)', () => {
+    it('refuses with 409 and mints no PaymentIntent', async () => {
+      const requestId = await acceptedRequest();
+      clockNow = addDays(START, 33);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe(
+        'That date has passed, so this booking can no longer be paid for',
+      );
+      expect(harness.stripe.paymentIntents.size).toBe(0);
+    });
+
+    it('still opens on the day of the event, which has not passed everywhere', async () => {
+      const requestId = await acceptedRequest();
+      clockNow = new Date(`${EVENT_DATE}T12:00:00Z`);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(harness.stripe.paymentIntents.size).toBe(1);
+    });
+
+    it('keeps answering succeeded for a request that was paid before its date passed', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      clockNow = addDays(START, 33);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('succeeded');
+    });
+  });
+
   describe('opening checkout', () => {
     it('returns the intent and the numbers the summary rail renders', async () => {
       const requestId = await acceptedRequest();

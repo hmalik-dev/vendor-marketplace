@@ -48,10 +48,15 @@ describe('requestStatusAsRead', () => {
     expect(requestStatusAsRead({ status: 'pending', expiresAt: NOW }, NOW)).toBe('expired');
   });
 
+  it('reads an accepted request past its payment deadline as expired', () => {
+    expect(requestStatusAsRead({ status: 'accepted', expiresAt: BEFORE }, NOW)).toBe('expired');
+    expect(requestStatusAsRead({ status: 'accepted', expiresAt: null }, NOW)).toBe('accepted');
+  });
+
   it('leaves an open window, a missing deadline and every settled status alone', () => {
     expect(requestStatusAsRead({ status: 'quoted', expiresAt: AFTER }, NOW)).toBe('quoted');
     expect(requestStatusAsRead({ status: 'pending', expiresAt: null }, NOW)).toBe('pending');
-    for (const status of ['accepted', 'declined', 'cancelled', 'expired'] as const) {
+    for (const status of ['declined', 'cancelled', 'expired'] as const) {
       expect(requestStatusAsRead({ status, expiresAt: BEFORE }, NOW)).toBe(status);
     }
   });
