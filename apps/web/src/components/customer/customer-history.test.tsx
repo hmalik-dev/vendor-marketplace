@@ -134,6 +134,20 @@ describe('CustomerHistory', () => {
   });
 
   /* `quoted` is the customer's move, and reads differently from waiting. */
+  it('links a request row to the request page, not the storefront', () => {
+    render(
+      <CustomerHistory
+        requests={[request({ id: 'req-9', status: 'quoted' })]}
+        bookings={[]}
+        scope="active"
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: /June Harlow/ }).getAttribute('href')).toBe(
+      '/bookings/req-9',
+    );
+  });
+
   it('distinguishes a quote to review from waiting on the vendor', () => {
     render(
       <CustomerHistory requests={[request({ status: 'quoted' })]} bookings={[]} scope="active" />,

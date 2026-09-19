@@ -11,12 +11,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const requestMock = vi.fn();
 const pushMock = vi.fn();
+const refreshMock = vi.fn();
+const { IMAGE_BASE } = vi.hoisted(() => {
+  process.env.NEXT_PUBLIC_S3_PUBLIC_URL = 'https://images.example.test';
+  return { IMAGE_BASE: 'https://images.example.test' };
+});
 
 vi.mock('@/lib/use-api', () => ({
   useApi: () => requestMock,
   useImageUpload: () => ({ upload: vi.fn(), uploading: false }),
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
 
 const { CustomerProfileForm } = await import('./customer-profile-form');
 
@@ -24,6 +29,7 @@ beforeEach(() => {
   requestMock.mockReset();
   requestMock.mockResolvedValue({});
   pushMock.mockReset();
+  refreshMock.mockReset();
 });
 
 afterEach(cleanup);
@@ -252,5 +258,27 @@ describe('the profile photo hint', () => {
   it('states the same constraint the refusal states', () => {
     // The two used to be retyped separately and disagreed by a batch clause.
     expect(SINGLE_UPLOAD_CONSTRAINT_LINE).toBe('JPG or PNG · under 12 MB · at least 1200px wide');
+  });
+});
+
+describe('saving with the photo untouched', () => {
+  it('sends the stored key, not the resolved URL', async () => {
+    const user = { ...USER, avatarUrl: `${IMAGE_BASE}/customer-profile/u1/x.webp` };
+    render(<CustomerProfileForm user={user as never} />);
+
+    await userEvent.type(screen.getByLabelText('City'), 'Austin');
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(requestMock).toHaveBeenCalled());
+
+    expect(requestMock.mock.calls[0]?.[1].body.avatarUrl).toBe('customer-profile/u1/x.webp');
+  });
+
+  it('refreshes the route so the new photo shows', async () => {
+    render(<CustomerProfileForm user={USER as never} />);
+
+    await userEvent.type(screen.getByLabelText('City'), 'Austin');
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
   });
 });
