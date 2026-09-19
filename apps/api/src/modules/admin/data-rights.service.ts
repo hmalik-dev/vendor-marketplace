@@ -645,13 +645,13 @@ export async function closeAccount(
    * nothing happened. It comes back as `identityDeleted: false`, and the
    * console asks for a person, the shape a refused refund already takes.
    *
-   * A seeded marketplace account (`seed_…`) has no identity anywhere, so
+   * A seeded marketplace account (`auth_provider = 'seed'`) has no identity anywhere, so
    * nothing is owed. A deployment with no connection to the identity store
    * (`deleteIdentity` is `null`) cannot end one, and says so the same way.
    */
-  const identityDeleted = isSeededIdentity(user.authUserId)
+  const identityDeleted = isSeededIdentity(user.authProvider)
     ? true
-    : deleteIdentity === null || isLegacyIdentity(user.authUserId)
+    : deleteIdentity === null || isLegacyIdentity(user.authProvider)
       ? false
       : await deleteAndConfirm(context, userId, user.authUserId, deleteIdentity);
 

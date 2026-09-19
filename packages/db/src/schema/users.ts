@@ -11,7 +11,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { MAX_CUSTOMER_BIO_LENGTH } from '@vendor-marketplace/shared';
-import { budgetTierEnum, userRoleEnum } from './enums.js';
+import { authProviderEnum, budgetTierEnum, userRoleEnum } from './enums.js';
 
 /**
  * The unique index behind `users.email`, named once (#462).
@@ -32,6 +32,8 @@ export const users = pgTable(
       .default(sql`gen_random_uuid()`),
     /** Clerk identity link — the join key for token verification. */
     authUserId: varchar('auth_user_id', { length: 255 }).notNull(),
+    /** Who issued `authUserId`; set at insert, so no reader has to guess from its shape. */
+    authProvider: authProviderEnum('auth_provider').notNull().default('neon_auth'),
     email: varchar('email', { length: 255 }).notNull(),
     role: userRoleEnum('role').notNull(),
     firstName: varchar('first_name', { length: 100 }).notNull(),

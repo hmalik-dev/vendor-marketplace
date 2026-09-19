@@ -379,6 +379,20 @@
       "when": 1789817059474,
       "tag": "0053_brown_swarm",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1789825966531,
+      "tag": "0054_organic_elektra",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1789825966992,
+      "tag": "0055_backfill_auth_provider",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { bookingRequests, bookings, users, vendorProfiles } from './schema/index.js';
+import { bookingRequests, bookings, vendorProfiles } from './schema/index.js';
 import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './testing/test-db.js';
 
 /**
@@ -61,26 +61,15 @@ afterAll(async () => {
 
 describe('0052 against accepted requests written before it', () => {
   it('clears the deadline on a paid one and gives an unpaid one a fresh, capped window', async () => {
-    const [customer] = await testDb.db
-      .insert(users)
-      .values({
-        authUserId: 'user_backfill_customer',
-        email: 'backfill-customer@example.com',
-        role: 'customer',
-        firstName: 'Back',
-        lastName: 'Fill',
-      })
-      .returning({ id: users.id });
-    const [vendorUser] = await testDb.db
-      .insert(users)
-      .values({
-        authUserId: 'user_backfill_vendor',
-        email: 'backfill-vendor@example.com',
-        role: 'vendor',
-        firstName: 'Back',
-        lastName: 'Vendor',
-      })
-      .returning({ id: users.id });
+    // Raw SQL: the ORM's `users` insert names every column of today's schema,
+    // and this database is only migrated as far as 0052.
+    const inserted = await testDb.db.execute<{ id: string }>(
+      sql`INSERT INTO users (auth_user_id, email, role, first_name, last_name) VALUES
+        ('user_backfill_customer', 'backfill-customer@example.com', 'customer', 'Back', 'Fill'),
+        ('user_backfill_vendor', 'backfill-vendor@example.com', 'vendor', 'Back', 'Vendor')
+        RETURNING id`,
+    );
+    const [customer, vendorUser] = inserted.rows;
     const [vendor] = await testDb.db
       .insert(vendorProfiles)
       .values({

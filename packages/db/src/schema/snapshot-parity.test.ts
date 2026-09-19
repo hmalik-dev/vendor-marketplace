@@ -26,6 +26,7 @@ import {
   SUPPORT_TOPICS,
   TAG_CATEGORIES,
   TAG_SUGGESTION_STATUSES,
+  AUTH_PROVIDERS,
   US_STATE_CODES,
   USER_ROLES,
 } from '@vendor-marketplace/shared';
@@ -83,6 +84,7 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'payout_model', values: PAYOUT_MODELS },
     { enumName: 'legal_document', values: LEGAL_ACCEPTANCE_DOCUMENTS },
     { enumName: 'admin_action', values: ADMIN_ACTIONS },
+    { enumName: 'auth_provider', values: AUTH_PROVIDERS },
     { enumName: 'admin_action_subject', values: ADMIN_ACTION_SUBJECTS },
     { enumName: 'legal_acceptance_method', values: LEGAL_ACCEPTANCE_METHODS },
     { enumName: 'email_delivery_outcome', values: EMAIL_DELIVERY_OUTCOMES },

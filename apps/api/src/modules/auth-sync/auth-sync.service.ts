@@ -14,7 +14,7 @@ import {
 import { mirroredAuthName } from '../users/users.service.js';
 import {
   isProviderAvatar,
-  isSeededIdentity,
+  isUnbackedIdentity,
   mirroredIdentity,
   type AuthIdentitySource,
   type MirroredIdentity,
@@ -169,7 +169,7 @@ async function releaseStaleHolder(
     return true;
   }
 
-  if (holder.id === claimantId || isSeededIdentity(holder.authUserId)) {
+  if (holder.id === claimantId || isUnbackedIdentity(holder.authProvider)) {
     return false;
   }
 
