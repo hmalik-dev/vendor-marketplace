@@ -147,7 +147,8 @@ describe('AcceptedRequest', () => {
     await waitFor(() => {
       expect(requestMock).toHaveBeenCalledWith('/customer/bookings/bkg-1/cancel', {
         method: 'PUT',
-        body: {},
+        // The amount on the button is the amount the server is asked to honour (VEN-425).
+        body: { expectedRefundCents: 145_000 },
         schema: expect.anything(),
       });
     });

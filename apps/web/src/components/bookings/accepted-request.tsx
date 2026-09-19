@@ -74,7 +74,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
     try {
       await call(`/customer/bookings/${booking.id}/cancel`, {
         method: 'PUT',
-        body: {},
+        body: { expectedRefundCents: quote?.refundCents },
         schema: cancelledBookingWireSchema,
       });
     } catch (failure) {
