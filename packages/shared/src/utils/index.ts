@@ -709,6 +709,33 @@ export function isPayoutFailing(booking: PayoutFailureSubject): boolean {
   );
 }
 
+/** What `isPayoutStranded` needs: the payout facts plus whether the owner can still be paid. */
+export type PayoutStrandedSubject = PayoutStatusSubject & {
+  payoutModel: PayoutModel;
+  vendorPayoutCents: number;
+  /** The vendor's owner is banned, or their account is closed (`deleted_at` set). */
+  vendorUnpayable: boolean;
+};
+
+/**
+ * A payout that is still owed and that the sweep will never send, because the
+ * vendor's owner is banned or closed (VEN-445).
+ *
+ * The sweep leaves such rows out without touching `payout_attempts`, so neither
+ * `isPayoutFailing` nor `payoutStatusOf` can see them and the console printed
+ * `Awaiting release` for money nothing was going to release. It is a flag beside
+ * the shared status for the same reason `isPayoutFailing` is: an operator's fact,
+ * not a fourth state a vendor or customer surface should have to draw.
+ */
+export function isPayoutStranded(booking: PayoutStrandedSubject): boolean {
+  return (
+    booking.vendorUnpayable &&
+    payoutStatusOf(booking) === 'pending' &&
+    booking.payoutModel === 'separate' &&
+    booking.vendorPayoutCents > 0
+  );
+}
+
 /**
  * True for a booking paid by the **destination charge** this product used
  * before #423 — released, with no transfer object to show for it.

@@ -39,6 +39,7 @@ function detail(overrides: Record<string, unknown> = {}): WireAdminBookingDetail
     payoutModel: 'separate',
     payoutStatus: 'pending',
     payoutFailing: false,
+    payoutStranded: false,
     payoutAttempts: 0,
     payoutFailureReason: null,
     payoutReleasedAt: null,
@@ -87,6 +88,15 @@ describe('AdminBookingDetailPage', () => {
     getAdminBookingDetail.mockResolvedValue(null);
     await expect(renderPage()).rejects.toThrow('notFound');
     expect(getAdminBookingDetail).toHaveBeenCalledWith(BOOKING_ID);
+  });
+
+  it('does not promise a release for a payout stranded by a banned or closed vendor', async () => {
+    getAdminBookingDetail.mockResolvedValue(detail({ payoutStranded: true }));
+
+    await renderPage();
+
+    expect(moneyRows()).toContainEqual(['Payout', 'Stranded — vendor banned or closed']);
+    expect(screen.queryByText('Awaiting release')).toBeNull();
   });
 
   it('omits the rows that do not apply to a booking still waiting on its date', async () => {

@@ -29,6 +29,7 @@ const BASE: WireAdminPaymentRow = {
   payoutFailureReason: null,
   stripeTransferId: null,
   payoutFailing: false,
+  payoutStranded: false,
 };
 
 const row = (overrides: Partial<WireAdminPaymentRow>): WireAdminPaymentRow => ({
@@ -93,6 +94,16 @@ describe('the payments table', () => {
       0,
     );
     expect(screen.queryByText('Awaiting release')).toBeNull();
+  });
+
+  it('says stranded, never Awaiting release, for a payout owed to a banned or closed vendor', () => {
+    const stranded = row({ payoutStatus: 'pending', payoutFailing: true, payoutStranded: true });
+    render(<PaymentTable empty={EMPTY} rows={[stranded]} />);
+
+    expect(screen.getAllByText('Stranded — vendor banned or closed').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Awaiting release')).toBeNull();
+    expect(screen.queryByText('Retry payout')).toBeNull();
+    expect(canRetryPayout(stranded)).toBe(false);
   });
 
   it('says attempt in the singular for the first failure', () => {
