@@ -80,7 +80,7 @@ describe('SignUpForm', () => {
 
   /* VEN-451: frame `12` draws the card description at 12px and the fields on stone-0. */
   it('draws the role descriptions at 12px and the fields on stone-0', () => {
-    render(<SignUpForm />);
+    render(<SignUpForm initialRole={null} />);
 
     const description = screen.getByText('Find and book vendors near you.');
     expect(description.className.split(' ')).toContain('text-[12px]');
