@@ -915,6 +915,12 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
       /** What the customer paid, which under D1 is the quoted price. */
       totalAmountCents: z.int(),
       paidAt: z.date().nullable(),
+      /**
+       * When the vendor's payout was transferred, `null` while the platform still
+       * holds it — the one fact that decides whether a cancellation took money
+       * back out of the vendor's balance.
+       */
+      paidOutAt: z.date().nullable(),
       cancelledAt: z.date().nullable(),
       cancelledBy: bookingCancelledBySchema.nullable(),
       refundAmountCents: z.int().nullable(),

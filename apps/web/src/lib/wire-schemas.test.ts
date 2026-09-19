@@ -236,3 +236,28 @@ describe('wireBookingViewSchema carries the payout release back as a Date', () =
     expect(wireBookingViewSchema.parse(BOOKING).payoutReleasedAt).toBeNull();
   });
 });
+
+describe('wireBookingRequestSchema settlement carries the payout release as a Date', () => {
+  const settlement = wireBookingRequestSchema.shape.settlement.unwrap();
+  const SETTLEMENT = {
+    bookingId: '6f1c1f0e-5a51-4d0e-9a3c-0f4b1d6d2a11',
+    status: 'cancelled',
+    totalAmountCents: 145_000,
+    paidAt: '2026-05-02T00:00:00.000Z',
+    paidOutAt: '2026-06-18T00:00:00.000Z',
+    cancelledAt: '2026-06-01T12:00:00.000Z',
+    cancelledBy: 'customer',
+    refundAmountCents: 145_000,
+  };
+
+  it('coerces the timestamp a released payout really sends', () => {
+    const parsed = settlement.parse(SETTLEMENT);
+
+    expect(parsed.paidOutAt).toBeInstanceOf(Date);
+    expect(parsed.paidOutAt?.toISOString()).toBe('2026-06-18T00:00:00.000Z');
+  });
+
+  it('keeps null for a payout the platform still holds', () => {
+    expect(settlement.parse({ ...SETTLEMENT, paidOutAt: null }).paidOutAt).toBeNull();
+  });
+});

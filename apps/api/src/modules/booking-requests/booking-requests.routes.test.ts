@@ -947,6 +947,8 @@ describe('/booking-requests', () => {
           'cancelledAt',
           'cancelledBy',
           'paidAt',
+          /* A timestamp only, no amount: the customer's own screen never reads it. */
+          'paidOutAt',
           'refundAmountCents',
           'status',
           'totalAmountCents',

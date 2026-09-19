@@ -1,4 +1,4 @@
-import { CURRENT_VENDOR_AGREEMENT_VERSION } from '@vendor-marketplace/shared';
+import { CURRENT_VENDOR_AGREEMENT_VERSION, PAYOUT_RELEASE_HOURS } from '@vendor-marketplace/shared';
 import type { WireVendorAgreementStatus, WireVendorPayoutStatus } from '@/lib/wire-schemas';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -131,6 +131,10 @@ describe('VendorPaymentsPage', () => {
     expect(screen.queryByText(/You can't take payment/)).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.getByRole('status').className).toContain('sage');
+    expect(screen.getByRole('status').textContent).toContain(
+      `pays it out to you ${PAYOUT_RELEASE_HOURS} hours after the event date.`,
+    );
+    expect(document.body.textContent).not.toContain('until the event is complete');
   });
 
   /** MVP takes no vendor fee, so no rate may appear anywhere in this flow. */

@@ -700,6 +700,7 @@ export async function findSettlements(
       status: bookings.status,
       totalAmountCents: bookings.totalAmountCents,
       paidAt: bookings.paidAt,
+      paidOutAt: bookings.payoutReleasedAt,
       cancelledAt: bookings.cancelledAt,
       cancelledBy: bookings.cancelledBy,
       refundAmountCents: bookings.refundAmountCents,

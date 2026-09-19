@@ -1,3 +1,4 @@
+import { PAYOUT_RELEASE_HOURS } from '@vendor-marketplace/shared';
 import type { WireVendorPayoutStatus } from '@/lib/wire-schemas';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,6 +47,10 @@ describe('VendorPaymentsReturnPage', () => {
 
     const banner = screen.getByRole('status');
     expect(banner.textContent).toContain('Nothing else to do here.');
+    expect(document.body.textContent).toContain(
+      `pays it out to you ${PAYOUT_RELEASE_HOURS} hours after the event date.`,
+    );
+    expect(document.body.textContent).not.toContain('until the event is complete');
     // Sage: settled.
     expect(banner.className).toContain('sage');
   });

@@ -700,6 +700,84 @@ describe('payouts', () => {
       expect((await currentBooking()).stripeTransferId).toBe(orphan.transferId);
     });
 
+    /*
+     * VEN-424 finding 2. The transfer landed but the sweep recorded a failure,
+     * so the row carries no transfer id. Every unwind used to read the row.
+     */
+    async function orphanedTransfer(requestId: string): Promise<{ transferId: string }> {
+      return harness.stripe.createTransfer({
+        bookingId: 'a-run-whose-commit-was-lost',
+        attempt: 0,
+        amountCents: EXPECTED_PAYOUT_CENTS,
+        destinationAccountId: VENDOR_ACCOUNT,
+        transferGroup: `booking_${requestId}`,
+      });
+    }
+
+    it('reverses a transfer the row never recorded when a dispute is upheld', async () => {
+      const paid = await paidBooking();
+      const orphan = await orphanedTransfer(paid.requestId);
+      clockNow = JUST_AFTER_EVENT;
+      await report(paid.id, CUSTOMER);
+      await signInAsAdmin();
+
+      const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+        outcome: 'customer',
+      });
+
+      expect(resolved.statusCode).toBe(200);
+      expect(harness.stripe.reversals).toHaveLength(1);
+      expect(harness.stripe.reversals[0]).toMatchObject({
+        transferId: orphan.transferId,
+        amountCents: EXPECTED_PAYOUT_CENTS,
+      });
+      expect((await currentBooking()).vendorPayoutCents).toBe(0);
+    });
+
+    it('reverses the refunded half of an unrecorded transfer at the 50% tier, leaving the vendor the retained half', async () => {
+      const paid = await paidBooking();
+      const orphan = await orphanedTransfer(paid.requestId);
+      clockNow = addDays(START, 28);
+
+      const cancelled = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      expect(cancelled.statusCode).toBe(200);
+      clockNow = AFTER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      const retained = EXPECTED_PAYOUT_CENTS / 2;
+      expect((await currentBooking()).vendorPayoutCents).toBe(retained);
+      expect(harness.stripe.transfers).toHaveLength(1);
+      expect(harness.stripe.transfers[0]).toMatchObject({
+        transferId: orphan.transferId,
+        amountCents: EXPECTED_PAYOUT_CENTS,
+        reversedCents: retained,
+      });
+      expect((await currentBooking()).stripeTransferId).toBe(orphan.transferId);
+    });
+
+    it('reverses the surplus when the sweep finds a full-share transfer for a half-share obligation', async () => {
+      const paid = await paidBooking();
+      const orphan = await orphanedTransfer(paid.requestId);
+      const retained = EXPECTED_PAYOUT_CENTS / 2;
+      await harness.database.db
+        .update(bookings)
+        .set({ status: 'cancelled', vendorPayoutCents: retained })
+        .where(eq(bookings.id, paid.id));
+      clockNow = AFTER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      expect(harness.stripe.reversals).toHaveLength(1);
+      expect(harness.stripe.reversals[0]).toMatchObject({
+        transferId: orphan.transferId,
+        amountCents: retained,
+      });
+      const [transfer] = harness.stripe.transfers;
+      expect(transfer!.amountCents - transfer!.reversedCents).toBe(retained);
+      expect((await currentBooking()).stripeTransferId).toBe(orphan.transferId);
+    });
+
     /**
      * The deploy window, and the demo seed, in one predicate.
      *

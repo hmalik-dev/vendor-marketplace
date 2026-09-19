@@ -1,4 +1,9 @@
-import { BRAND_NAME, pageTitle, VENDOR_AGREEMENT_PATH } from '@vendor-marketplace/shared';
+import {
+  BRAND_NAME,
+  PAYOUT_RELEASE_HOURS,
+  pageTitle,
+  VENDOR_AGREEMENT_PATH,
+} from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Banner } from '@/components/ui/banner';
@@ -71,8 +76,8 @@ export default async function VendorPaymentsPage({
       <div className="max-w-[620px]">
         {status.stripeOnboarded ? (
           <Banner status="settled" title="Payouts connected">
-            Stripe holds each payment until the event is complete, then pays it out to you. There is
-            nothing else to do here.
+            {BRAND_NAME} holds each payment and pays it out to you {PAYOUT_RELEASE_HOURS} hours
+            after the event date. There is nothing else to do here.
           </Banner>
         ) : (
           <>
