@@ -68,7 +68,18 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
   const retired = vendor.status === 'retired';
   const flagged = vendor.status === 'flagged';
   const subject = `${vendor.businessName}'s storefront`;
-  const publishing = !vendor.isPublished;
+  /*
+   * Both directions where both are meaningful (VEN-423). Unpublishing is what
+   * sets the moderation hold, so a storefront its vendor already took down
+   * (`paused`, `review`) still needs the Unpublish item — otherwise the hold
+   * cannot be placed and the vendor can republish at will. `held` already has
+   * the hold, so it offers only Publish. The Vendors table menu draws the same
+   * two.
+   */
+  const directions = [
+    ...(vendor.isPublished ? [] : [true]),
+    ...(vendor.status === 'held' ? [] : [false]),
+  ];
 
   return (
     <div className="flex flex-col gap-2 px-4 py-3.5">
@@ -93,40 +104,44 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
             <>
               <Hairline />
               <Tier>
-                <ConfirmAction
-                  trigger={
-                    <Button type="button" variant="secondary" size="sm" className="w-full">
-                      {publishing ? 'Publish profile' : 'Unpublish profile'}
-                    </Button>
-                  }
-                  title={publishing ? `Publish ${subject}?` : `Unpublish ${subject}?`}
-                  description={
-                    publishing ? (
-                      <RepublishConsequence subject="Their storefront" />
-                    ) : (
-                      <UnpublishConsequence subject="Their storefront" />
-                    )
-                  }
-                  confirmLabel={publishing ? 'Publish profile' : 'Unpublish profile'}
-                  onConfirm={async () => {
-                    await call(`/admin/vendors/${vendor.id}/publish`, {
-                      method: 'PUT',
-                      body: { isPublished: publishing },
-                      schema: adminVendorPublishResultSchema,
-                    });
-                    toast.success(
-                      publishing
-                        ? `${vendor.businessName}'s profile is live.`
-                        : `${vendor.businessName}'s profile is hidden.`,
-                    );
-                    router.refresh();
-                  }}
-                />
-                <p className={CONSEQUENCE}>
-                  {publishing
-                    ? 'Puts it back on search once the profile is complete. Confirms first.'
-                    : 'Removes it from search and browse. Existing bookings stand; the vendor keeps their dashboard.'}
-                </p>
+                {directions.map((publishing) => (
+                  <div key={publishing ? 'publish' : 'unpublish'} className="flex flex-col gap-2">
+                    <ConfirmAction
+                      trigger={
+                        <Button type="button" variant="secondary" size="sm" className="w-full">
+                          {publishing ? 'Publish profile' : 'Unpublish profile'}
+                        </Button>
+                      }
+                      title={publishing ? `Publish ${subject}?` : `Unpublish ${subject}?`}
+                      description={
+                        publishing ? (
+                          <RepublishConsequence subject="Their storefront" />
+                        ) : (
+                          <UnpublishConsequence subject="Their storefront" />
+                        )
+                      }
+                      confirmLabel={publishing ? 'Publish profile' : 'Unpublish profile'}
+                      onConfirm={async () => {
+                        await call(`/admin/vendors/${vendor.id}/publish`, {
+                          method: 'PUT',
+                          body: { isPublished: publishing },
+                          schema: adminVendorPublishResultSchema,
+                        });
+                        toast.success(
+                          publishing
+                            ? `${vendor.businessName}'s profile is live.`
+                            : `${vendor.businessName}'s profile is hidden.`,
+                        );
+                        router.refresh();
+                      }}
+                    />
+                    <p className={CONSEQUENCE}>
+                      {publishing
+                        ? 'Puts it back on search once the profile is complete. Confirms first.'
+                        : 'Removes it from search and browse. Existing bookings stand; the vendor keeps their dashboard.'}
+                    </p>
+                  </div>
+                ))}
               </Tier>
             </>
           )}
@@ -214,7 +229,7 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
             <p className={CONSEQUENCE}>
               {flagged
                 ? 'Lets them sign in again. Cancelled bookings are not restored.'
-                : "Declines every open request and cancels every future confirmed booking, refunded in full — the vendor's share reverses out of their Stripe balance. Confirms first."}
+                : 'Declines every open request and cancels every future confirmed booking, refunded in full from the platform balance, with no payout to the vendor. Confirms first.'}
             </p>
           </Tier>
         </>

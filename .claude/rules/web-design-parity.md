@@ -148,13 +148,13 @@ missing clause is looking at this ruling.
 keystroke; `04-laws.md` requires a label that stays. The word sits before the
 field and shifts the controls right within the bar's slack.
 
-**A retired vendor's row draws no `···` control (#433, ruled 2026-09-07).**
-Frame `13` draws the row-actions control in all fifteen rows. A retired account
-correctly has none: `setUserBanned` answers 404 on a soft-deleted user, so the
-control would open a destructive confirmation dialog for an action that cannot
-succeed. The frame cannot arbitrate this — the retired state postdates it. A
-parity pass reporting the missing control on that row is reading the record of a
-decision, not drift.
+**A retired vendor's row draws the `···` control with `View` only (#433, VEN-423).**
+Frame `13` draws the full lever menu in all fifteen rows. A retired account
+correctly offers no lever: `setUserBanned` answers 404 on a soft-deleted user, so
+every destructive item would fail. `View` is read-only and the detail page reads
+retired vendors on purpose. The frame cannot arbitrate this — the retired state
+postdates it. A parity pass reporting the missing levers on that row is reading
+the record of a decision, not drift.
 
 **Three from the site footer (#441, ruled 2026-09-07).** The footer's only
 frame is the closing-band bundle under `design/delta-band/`, which draws it

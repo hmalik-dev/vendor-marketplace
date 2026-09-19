@@ -4,6 +4,7 @@ import {
   isPayoutFailing,
   payoutStatusOf,
   toDateString,
+  unwindFloorDate,
 } from '@vendor-marketplace/shared';
 import type {
   AdminActivityActorList,
@@ -497,16 +498,39 @@ export async function setUserBanned(
     operatorBan = banned;
   }
 
-  const unwound = await unwindAccountBookings(
-    context,
-    targetId,
-    profile?.id ?? null,
-    now,
-    SUSPENSION_UNWIND,
-  );
-
+  /*
+   * The flag goes before the unwind for every role (VEN-423), as it does for an
+   * operator above: the unwind is one Stripe round trip per booking, and a
+   * still-signed-in customer could otherwise pay for an accepted request in
+   * the middle of it — after the snapshot, so nothing would ever refund it.
+   */
   const { profileUnpublished } =
     operatorBan ?? (await setBanned(context.db, targetId, profile?.id ?? null, true, now));
+
+  /*
+   * A refund Stripe refuses is counted, not thrown; anything else the unwind
+   * throws (a database error mid-loop) would leave the flag committed, and the
+   * operator's retry would then 409 on "already banned" with bookings still
+   * confirmed. So a non-operator ban is taken back before the error surfaces —
+   * refund idempotency keys make the retry safe. An operator's ban stands: it
+   * obeys the last-operator lock and its unwind has no such failure to undo.
+   */
+  let unwound: Awaited<ReturnType<typeof unwindAccountBookings>>;
+  try {
+    unwound = await unwindAccountBookings(
+      context,
+      targetId,
+      profile?.id ?? null,
+      now,
+      SUSPENSION_UNWIND,
+    );
+  } catch (error) {
+    if (!operatorBan) {
+      await setBanned(context.db, targetId, profile?.id ?? null, false, now);
+    }
+
+    throw error;
+  }
 
   /*
    * Last, and best-effort. Everything above has already happened — cards
@@ -678,7 +702,7 @@ export async function listBookings(
    * bound (#415). Passed from the clock rather than read as `current_date` so
    * the filter answers the same question a test's fake clock asks.
    */
-  const filters = { status: query.status, flag: query.flag, today: toDateString(now) };
+  const filters = { status: query.status, flag: query.flag, floorDate: unwindFloorDate(now) };
   const [rows, total] = await Promise.all([
     findAdminBookings(db, filters, query.pageSize, offset),
     countAdminBookings(db, filters),

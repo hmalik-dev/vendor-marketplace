@@ -1133,7 +1133,7 @@ export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
  * hold — distinguishable from `pending` here rather than by inferring it from
  * `status = 'disputed'`, which is what #423 acceptance 16 asks for.
  */
-export const PAYOUT_STATUSES = ['pending', 'held', 'released'] as const;
+export const PAYOUT_STATUSES = ['pending', 'held', 'released', 'not-owed'] as const;
 export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
 
 /**

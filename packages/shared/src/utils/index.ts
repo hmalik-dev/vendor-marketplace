@@ -358,6 +358,22 @@ export function toDateString(date: Date): string {
   return isoDate;
 }
 
+/** The UTC hour from which no timezone is still on the previous UTC date. */
+const UNWIND_WEST_OF_UTC_CUTOFF_HOUR = 12;
+
+/**
+ * The event date an account unwind counts as "still ahead" is strictly later
+ * than this. Before 12:00 UTC it is **yesterday**, because a viewer west of UTC
+ * is still on the previous date and their tomorrow is already this process's
+ * today. From 12:00 UTC no timezone is behind, so today's event is today-or-past
+ * everywhere and stays out of the refund loop: `completed` is written only when
+ * the vendor presses Mark complete, so an event delivered this morning is still
+ * `confirmed` and must not be refunded in full.
+ */
+export function unwindFloorDate(now: Date): string {
+  return toDateString(now.getUTCHours() < UNWIND_WEST_OF_UTC_CUTOFF_HOUR ? addDays(now, -1) : now);
+}
+
 /**
  * Parses a `YYYY-MM-DD` calendar date into a UTC-midnight Date. Returns null
  * for malformed input and for impossible dates such as `2026-02-30`, which
@@ -606,7 +622,16 @@ export interface PayoutSubject {
  * as written; it is simply not required.
  */
 export type PayoutStatusSubject = Pick<PayoutSubject, 'status' | 'payoutReleasedAt'> &
-  Partial<PayoutSubject>;
+  Partial<PayoutSubject> & {
+    /**
+     * When both are supplied, a payout the sweep will never send reads as
+     * `not-owed` — the same two facts `payoutOwedClauses` selects on. Left out,
+     * the caller is asking the status question only, as the dashboard does
+     * after it has already selected owed rows.
+     */
+    payoutModel?: PayoutModel;
+    vendorPayoutCents?: number;
+  };
 
 export function payoutStatusOf(booking: PayoutStatusSubject): PayoutStatus {
   if (booking.payoutReleasedAt) {
@@ -618,7 +643,19 @@ export function payoutStatusOf(booking: PayoutStatusSubject): PayoutStatus {
    * what the vendor dashboard selects on too, so a hold status added to one and
    * not the other cannot happen.
    */
-  return HELD_PAYOUT_STATUSES.some((held) => held === booking.status) ? 'held' : 'pending';
+  if (HELD_PAYOUT_STATUSES.some((held) => held === booking.status)) {
+    return 'held';
+  }
+
+  if (
+    booking.payoutModel !== undefined &&
+    booking.vendorPayoutCents !== undefined &&
+    (booking.payoutModel !== 'separate' || booking.vendorPayoutCents <= 0)
+  ) {
+    return 'not-owed';
+  }
+
+  return 'pending';
 }
 
 /** What `isPayoutFailing` needs, and nothing else. */

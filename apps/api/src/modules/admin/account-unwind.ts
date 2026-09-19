@@ -1,4 +1,4 @@
-import { isLegacyDestinationPayout, toDateString } from '@vendor-marketplace/shared';
+import { isLegacyDestinationPayout, unwindFloorDate } from '@vendor-marketplace/shared';
 import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { refundFailedAlert } from '../operator-alerts/operator-alerts.service.js';
@@ -133,7 +133,7 @@ function unwindCopy(
     cancellationReason: `The other party's account was ${state}`,
     customerRefunded: `The other party's account was ${state}. Your payment has been refunded in full.`,
     customerUnpaid: `The other party's account was ${state}. Nothing was charged for this booking.`,
-    vendorRefunded: `The customer's account was ${state} and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance.`,
+    vendorRefunded: `The customer's account was ${state} and the booking was cancelled. Their payment has been refunded in full from the platform balance, and no payout will be made to you for this booking.`,
     vendorUnpaid: `The customer's account was ${state} and the booking was cancelled. Nothing had been charged for it.`,
   };
 }
@@ -182,12 +182,12 @@ export async function unwindAccountBookings(
   now: Date,
   copy: AccountUnwindCopy,
 ): Promise<AccountUnwindResult> {
-  const today = toDateString(now);
+  const floorDate = unwindFloorDate(now);
   const affected = await findConfirmedBookingsToUnwind(
     context.db,
     targetId,
     vendorProfileId,
-    today,
+    floorDate,
   );
 
   let refundsIssued = 0;
@@ -224,8 +224,8 @@ export async function unwindAccountBookings(
      * **Which side of the payout release this sits on, stated rather than
      * assumed.** Entirely before it, and structurally so rather than by
      * arrangement: `findConfirmedBookingsToUnwind` bounds on
-     * `event_date > today`, and D35 releases a payout 72 hours *after* the
-     * event, so every row this loop can see has `payout_released_at` null, no
+     * `event_date` after `unwindFloorDate`, and D35 releases a payout 72 hours
+     * *after* the event, so every row this loop can see has `payout_released_at` null, no
      * transfer, and nothing for D31's `reverse_transfer` to claw back. A
      * released booking is unreachable here.
      *
@@ -306,7 +306,7 @@ export async function unwindAccountBookings(
              *
              * There is deliberately no transfer reversal on this path. It only
              * ever unwinds bookings whose event date is still ahead
-             * (`findConfirmedBookingsToUnwind`), and a payout is not released
+             * (`findConfirmedBookingsToUnwind`, from `unwindFloorDate`), and a payout is not released
              * until well after the event — so this loop cannot reach a booking
              * that has been transferred, and the money is all still Orla's to
              * give back.
@@ -398,9 +398,9 @@ export async function unwindAccountBookings(
      * an unpaid booking, where no refund happened at all. Both are the product
      * telling somebody something untrue about their money.
      *
-     * The vendor's line says *reversed*, not "no payout will follow" (D31). A
-     * transfer already paid out is clawed back rather than withheld, and a
-     * vendor whose balance is about to go negative learns it here.
+     * The vendor's line says the customer was refunded from the platform balance
+     * and that no payout will follow (VEN-423). Nothing is reversed out of their
+     * Stripe balance on this path, and the line must not say so.
      */
     const refunded = booking.stripePaymentIntentId !== null;
 

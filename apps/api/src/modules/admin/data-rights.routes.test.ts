@@ -198,8 +198,11 @@ describe('data rights', () => {
     }
   }
 
+  /** Pinned by the one test that needs a date; `null` is the wall clock. */
+  let clockNow: Date | null = null;
+
   beforeAll(async () => {
-    harness = await createTestHarness();
+    harness = await createTestHarness({ clock: () => clockNow ?? new Date() });
 
     const rows = await harness.database.db
       .select({ id: categories.id })
@@ -216,6 +219,7 @@ describe('data rights', () => {
   });
 
   afterEach(async () => {
+    clockNow = null;
     await harness.database.db.delete(messages);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(reviews);
@@ -464,6 +468,34 @@ describe('data rights', () => {
       expect(booking).toMatchObject({ status: 'confirmed', refundAmountCents: null });
 
       expect(await actionRows()).toHaveLength(0);
+    });
+
+    /*
+     * VEN-423. At 01:00Z on Oct 8 an operator in US Eastern is still on Oct 7,
+     * so the booking dated Oct 8 is ahead of them. The blocker check used the
+     * UTC date and read it as today, so the closure went through over a
+     * confirmed booking. The Oct 6 booking is a day gone and must not count.
+     */
+    it("counts the booking on the operator's next local day as a close blocker", async () => {
+      clockNow = new Date('2026-10-08T01:00:00Z');
+      await signIn(ADMIN, true);
+      await signIn(VENDOR);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile();
+
+      const ahead = await createBooking(customerId, vendor.profileId, '2026-10-08', 'confirmed');
+      await createBooking(customerId, vendor.profileId, '2026-10-06', 'confirmed');
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${customerId}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().details.bookings).toEqual([
+        { bookingId: ahead, eventDate: '2026-10-08', counterpartyName: 'Sunlit Studio' },
+      ]);
     });
 
     it("runs #433's unwind and soft-deletes the account when nothing blocks it", async () => {

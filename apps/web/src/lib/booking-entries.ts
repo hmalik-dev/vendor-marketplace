@@ -108,6 +108,7 @@ export const PAYOUT_PRESENTATION: Record<PayoutStatus, { label: string; tone: St
   pending: { label: 'Awaiting release', tone: 'pending' },
   held: { label: 'Held', tone: 'needsYou' },
   released: { label: 'Released', tone: 'confirmed' },
+  'not-owed': { label: 'Not owed', tone: 'inert' },
 };
 
 /**

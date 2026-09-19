@@ -159,6 +159,8 @@ describe('the operations case queue (#431)', () => {
         totalAmountCents: TOTAL_CENTS,
         platformFeeCents: 14_400,
         vendorPayoutCents: 105_600,
+        /* A payout the sweep still owes, as every real booking is (D37). */
+        payoutModel: 'separate',
         status: 'confirmed',
         paidAt: new Date('2020-05-01T00:00:00Z'),
         stripePaymentIntentId: paymentIntentId,
@@ -963,6 +965,8 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
         totalAmountCents: TOTAL_CENTS,
         platformFeeCents: 14_400,
         vendorPayoutCents: 105_600,
+        /* A payout the sweep still owes, as every real booking is (D37). */
+        payoutModel: 'separate',
         status: 'confirmed',
         paidAt: new Date('2020-05-01T00:00:00Z'),
         stripePaymentIntentId: 'pi_case_failing_send',

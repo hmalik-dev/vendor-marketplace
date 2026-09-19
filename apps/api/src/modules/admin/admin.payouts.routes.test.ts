@@ -10,6 +10,7 @@ import {
 import type { AdminActionRow } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { findDuePayoutBookingIds } from '../payments/payouts.dao.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
 /**
@@ -249,8 +250,56 @@ describe('admin payout health', () => {
     await harness.close();
   });
 
+  /* VEN-423: the sweep's claim query leaves out banned and retired vendors. */
+  describe('the sweep claim', () => {
+    it('does not claim a booking whose vendor is banned or retired', async () => {
+      const due = await paidBooking({ status: 'completed' });
+      const dueThrough = '2026-06-30';
+
+      /* The control: an ordinary vendor with no hold is claimed. */
+      expect(await findDuePayoutBookingIds(harness.database.db, dueThrough, 10)).toEqual([due]);
+
+      const [profile] = await harness.database.db
+        .select({ userId: vendorProfiles.userId, payoutHold: vendorProfiles.payoutHold })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendorProfileId));
+      expect(profile!.payoutHold).toBe(false);
+
+      await harness.database.db
+        .update(users)
+        .set({ isBanned: true })
+        .where(eq(users.id, profile!.userId));
+      expect(await findDuePayoutBookingIds(harness.database.db, dueThrough, 10)).toEqual([]);
+
+      await harness.database.db
+        .update(users)
+        .set({ isBanned: false, deletedAt: new Date('2026-06-20T00:00:00Z') })
+        .where(eq(users.id, profile!.userId));
+      expect(await findDuePayoutBookingIds(harness.database.db, dueThrough, 10)).toEqual([]);
+    });
+  });
+
   /* Acceptance 1 and 2. */
   describe('the payments row', () => {
+    it('reads a fully refunded cancelled booking as not owed (VEN-423)', async () => {
+      const owed = await paidBooking({ status: 'confirmed' });
+      const refunded = await paidBooking({ status: 'cancelled', vendorPayoutCents: 0 });
+
+      const response = await payments();
+
+      expect(response.statusCode).toBe(200);
+      const byId = new Map(
+        response
+          .json()
+          .items.map((item: { bookingId: string; payoutStatus: string }) => [
+            item.bookingId,
+            item.payoutStatus,
+          ]),
+      );
+      expect(byId.get(refunded)).toBe('not-owed');
+      expect(byId.get(owed)).toBe('pending');
+    });
+
     it('derives the payout state with the shared derivation', async () => {
       await paidBooking({
         payoutReleasedAt: new Date('2026-06-05T00:00:00Z'),
