@@ -15,21 +15,21 @@ import {
 const STRIPE_API = 'https://api.stripe.com/v1';
 const RESEND_API = 'https://api.resend.com';
 const LIVE_SECRET_PREFIX = 'sk_live_';
+const LIVE_PUBLISHABLE_PREFIX = 'pk_live_';
 /** Stripe's own minimum for a statement descriptor. */
 const MIN_DESCRIPTOR_LENGTH = 5;
 const PLACEHOLDER_DESCRIPTOR = /\b(test|example|placeholder|todo|x{3,})\b/i;
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
 
-function liveKey(group: LaunchGroup, name: string, key: string | undefined): LaunchResult {
+function liveKey(
+  group: LaunchGroup,
+  name: string,
+  key: string | undefined,
+  prefix = LIVE_SECRET_PREFIX,
+): LaunchResult {
   const found = key ? mask(key) : 'unset';
-  return judge(
-    group,
-    name,
-    found,
-    key?.startsWith(LIVE_SECRET_PREFIX) === true,
-    LIVE_SECRET_PREFIX,
-  );
+  return judge(group, name, found, key?.startsWith(prefix) === true, prefix);
 }
 
 /** A connection string's host, with Neon's pooler suffix dropped so a pooled and a direct URL compare equal. */
@@ -184,6 +184,21 @@ function stripeProbes({ env, get, handledStripeEvents }: LaunchOptions): Probe[]
       group: 'stripe',
       name: 'stripe key',
       run: async () => [liveKey('stripe', 'stripe key', env.STRIPE_SECRET_KEY)],
+    },
+    {
+      // The browser confirms a payment with this key against an intent the
+      // server made with the secret key; in different modes checkout fails with
+      // "No such payment_intent".
+      group: 'stripe',
+      name: 'stripe publishable key',
+      run: async () => [
+        liveKey(
+          'stripe',
+          'stripe publishable key',
+          env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+          LIVE_PUBLISHABLE_PREFIX,
+        ),
+      ],
     },
     {
       group: 'stripe',
