@@ -47,6 +47,7 @@ import {
   findSettlements,
   findLiveRequest,
   findPackagesByIds,
+  findLapsedRequests,
   findRequestById,
   findRequests,
   findBookableVendorById,
@@ -293,6 +294,31 @@ async function ageIfExpired(
   );
 
   return expired;
+}
+
+/** How many lapsed requests one sweep tick works; the next tick takes the rest. */
+const EXPIRY_SWEEP_BATCH = 100;
+
+/**
+ * Ages every request whose window has run out, without waiting for a read.
+ *
+ * The same `ageIfExpired` a read runs, so the guarded UPDATE that makes the
+ * status change and the `request_expired` email happen once per request holds
+ * here too: two instances sweeping at once, or a sweep racing a read, cannot
+ * send it twice. Returns how many rows this call moved to `expired`.
+ */
+export async function expireLapsedRequests(
+  db: AppDatabase,
+  now: Date,
+  mail: NotificationEmailDeps,
+): Promise<number> {
+  const lapsed = await findLapsedRequests(db, now, EXPIRY_SWEEP_BATCH);
+  const aged = await mapWithConcurrency(lapsed, EXPIRY_CONCURRENCY, async (row) => {
+    const after = await ageIfExpired(db, row, now, mail);
+    return after.status === 'expired' && row.status !== 'expired';
+  });
+
+  return aged.filter(Boolean).length;
 }
 
 interface NotificationCopy {

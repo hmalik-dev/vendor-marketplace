@@ -120,6 +120,20 @@ describe('sendNotificationEmail', () => {
     expect((sent[0]?.html.match(/<a /g) ?? []).length).toBe(1);
   });
 
+  it('labels a declined quote for the vendor by where the button goes, not as a search', async () => {
+    const { deps: d, sent } = deps();
+    const declined = { ...ROW, type: 'request_declined', title: 'Quote declined' };
+
+    await sendNotificationEmail(d, declined, 'customer');
+    await sendNotificationEmail(d, { ...declined, id: 'other' }, 'vendor');
+
+    expect(sent[0]?.text).toContain('Find another vendor');
+    expect(sent[1]?.text).toContain('Open your bookings');
+    expect(sent[1]?.html).toContain('Open your bookings');
+    expect(sent[1]?.text).not.toContain('Find another vendor');
+    expect(sent[1]?.text).toContain('https://web.test/vendor/bookings');
+  });
+
   /*
    * `new_message` is the one event the ticket rules out by name: per-message
    * email is how a product teaches people to mute it.

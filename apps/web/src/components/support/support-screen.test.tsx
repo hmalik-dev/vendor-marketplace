@@ -19,6 +19,8 @@ const ERROR_CONTEXT = {
   occurredAt: '2026-06-12T14:41:00.000Z',
 } as const;
 
+const RECEIPT_ADDRESS = 'ana@nandakumar.co';
+
 const MESSAGE = 'The checkout page broke twice, right after I hit Confirm and pay.';
 
 /** Fills the form for a signed-out visitor and presses the button. */
@@ -140,7 +142,7 @@ describe('SupportScreen', () => {
   });
 
   it('sends the topic, message and attached context the screen is holding', async () => {
-    request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
+    request.mockResolvedValue({ reference: 'ORL-4K7Q-P2', replyTo: RECEIPT_ADDRESS });
     render(
       <SupportScreen
         accountEmail="ana@nandakumar.co"
@@ -166,6 +168,20 @@ describe('SupportScreen', () => {
     // Identity comes from the session; the screen never sends an address for
     // an account that has one.
     expect(request.mock.calls[0]?.[1].body.email).toBeUndefined();
+  });
+
+  it('confirms the address the receipt names, not the one typed, when the account read failed', async () => {
+    // `GET /users/me` failed, so the screen believes nobody is signed in and
+    // asks for an address, but the session is real: the server answers at the
+    // account's own address and ignores the typed one.
+    request.mockResolvedValue({ reference: 'ORL-4K7Q-P2', replyTo: 'account@example.com' });
+    render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
+
+    await sendAsVisitor();
+
+    const confirmation = await screen.findByText(/We'll reply to/);
+    expect(confirmation.textContent).toContain('account@example.com');
+    expect(confirmation.textContent).not.toContain('visitor@example.com');
   });
 
   // --- State 4: submitting --------------------------------------------------
@@ -196,7 +212,7 @@ describe('SupportScreen', () => {
   // --- State 5: sent --------------------------------------------------------
 
   it('hands back the message id, and says there is nothing to check back on', async () => {
-    request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
+    request.mockResolvedValue({ reference: 'ORL-4K7Q-P2', replyTo: RECEIPT_ADDRESS });
     render(
       <SupportScreen accountEmail={null} errorContext={ERROR_CONTEXT} bookingContext={null} />,
     );
@@ -227,7 +243,7 @@ describe('SupportScreen', () => {
   });
 
   it('copies the reference, and says so when the browser will not', async () => {
-    request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
+    request.mockResolvedValue({ reference: 'ORL-4K7Q-P2', replyTo: RECEIPT_ADDRESS });
 
     render(
       <SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} bookingContext={null} />,
@@ -268,7 +284,7 @@ describe('SupportScreen', () => {
   });
 
   it('reports a successful copy', async () => {
-    request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
+    request.mockResolvedValue({ reference: 'ORL-4K7Q-P2', replyTo: RECEIPT_ADDRESS });
 
     render(
       <SupportScreen accountEmail="ana@nandakumar.co" errorContext={null} bookingContext={null} />,
@@ -350,7 +366,7 @@ describe('SupportScreen', () => {
   it('sends again on Try again, and reaches the sent state', async () => {
     request
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
-      .mockResolvedValueOnce({ reference: 'ORL-8M2X-QD' });
+      .mockResolvedValueOnce({ reference: 'ORL-8M2X-QD', replyTo: RECEIPT_ADDRESS });
     render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
     await sendAsVisitor();
@@ -508,7 +524,7 @@ describe('SupportScreen', () => {
     });
 
     it('sends the booking id, which is what places the hold', async () => {
-      request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
+      request.mockResolvedValue({ reference: 'ORL-4K7Q-P2', replyTo: RECEIPT_ADDRESS });
       renderReport();
 
       const user = userEvent.setup();
@@ -524,7 +540,7 @@ describe('SupportScreen', () => {
     });
 
     it('tells the customer the payment is held once it has sent', async () => {
-      request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
+      request.mockResolvedValue({ reference: 'ORL-4K7Q-P2', replyTo: RECEIPT_ADDRESS });
       renderReport();
 
       const user = userEvent.setup();
@@ -537,7 +553,7 @@ describe('SupportScreen', () => {
 
     /* An ordinary send carries no booking, so it holds nothing. */
     it('sends no booking id when there is no booking attached', async () => {
-      request.mockResolvedValue({ reference: 'ORL-4K7Q-P2' });
+      request.mockResolvedValue({ reference: 'ORL-4K7Q-P2', replyTo: RECEIPT_ADDRESS });
       render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
       await sendAsVisitor();

@@ -18,6 +18,7 @@ import {
   universallyPastFrom,
 } from '@vendor-marketplace/shared';
 import { eq, sql } from 'drizzle-orm';
+import { expireLapsedRequests } from './booking-requests.service.js';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
@@ -986,6 +987,41 @@ describe('/booking-requests', () => {
         .select({ type: notifications.type })
         .from(notifications);
       expect(types.map((row) => row.type)).toContain('request_expired');
+    });
+
+    it('ages a lapsed request and emails the customer once with no read, however often it sweeps', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const requestId: string = created.json().id;
+
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: addDays(new Date(), -1) })
+        .where(eq(bookingRequests.id, requestId));
+      await harness.flushEmail();
+      harness.email.sent.length = 0;
+
+      const mail = {
+        db: harness.app.db,
+        email: harness.app.email,
+        log: harness.app.log,
+        webOrigin: 'https://web.test',
+        background: harness.app.background,
+      };
+
+      // Nobody opens the request: only the sweep runs.
+      expect(await expireLapsedRequests(harness.app.db, new Date(), mail)).toBe(1);
+      expect(await expireLapsedRequests(harness.app.db, new Date(), mail)).toBe(0);
+      await harness.flushEmail();
+
+      const [row] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+      expect(row?.status).toBe('expired');
+
+      expect(harness.email.sent).toHaveLength(1);
+      expect(harness.email.sent[0]?.subject).toBe('Your request expired');
     });
 
     it('refuses to accept a request that has already expired', async () => {
