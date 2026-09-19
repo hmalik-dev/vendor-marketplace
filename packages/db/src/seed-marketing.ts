@@ -195,6 +195,7 @@ export async function seedMarketingData<
     .values(
       MARKETING_CUSTOMERS.map((customer, index) => ({
         authUserId: `${MARKETING_SEED_PREFIX}customer_${index}`,
+        authProvider: 'seed' as const,
         email: `${customer.first.toLowerCase()}.${customer.last.toLowerCase()}@orla-demo.example`,
         role: 'customer' as const,
         firstName: customer.first,
@@ -229,6 +230,7 @@ export async function seedMarketingData<
       .insert(users)
       .values({
         authUserId: `${MARKETING_SEED_PREFIX}vendor_${vendor.slug}`,
+        authProvider: 'seed' as const,
         email: `${vendor.slug}@orla-demo.example`,
         role: 'vendor' as const,
         firstName: vendor.firstName,

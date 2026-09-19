@@ -68,7 +68,7 @@ import {
   vendorReviewsPageSchema,
   vendorSearchResultSchema,
 } from '@vendor-marketplace/shared';
-import { resolveImageUrl } from '@vendor-marketplace/shared';
+import { resolveImageUrl, toObjectKey } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 
 /**
@@ -103,6 +103,15 @@ const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_S3_PUBLIC_URL;
  */
 export function toImageSrc(stored: string | null): string | null {
   return resolveImageUrl(IMAGE_BASE_URL, stored);
+}
+
+/**
+ * The inverse of `toImageSrc`: the stored key for a value that came off the
+ * wire resolved. Send this, not the resolved URL, when a form writes an image
+ * back it did not change, or the row stops holding a key.
+ */
+export function toStoredImage(resolved: string | null): string | null {
+  return resolved === null || !IMAGE_BASE_URL ? resolved : toObjectKey(IMAGE_BASE_URL, resolved);
 }
 
 const imageUrl = () =>

@@ -11,7 +11,7 @@ import {
   parseDurationHours,
   toDateString,
 } from '@vendor-marketplace/shared';
-import { and, eq, gte, inArray, lte, notExists, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, ne, notExists, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import {
@@ -329,11 +329,10 @@ export async function seedE2eFixtures<
 }
 
 /**
- * A `users` row the previous identity provider issued (a Clerk id, `user_` plus
- * 24 or more alphanumerics) or a seeded one (`seed_…`), as SQL. Mirrors
- * `isUnbackedIdentity` in the API, which this package cannot import.
+ * A `users` row no Neon Auth identity backs: the previous provider's (`legacy_clerk`)
+ * or a seeded one (`seed`), read from the recorded `auth_provider`, never the id's shape.
  */
-const UNBACKED_AUTH_ID = sql`(${users.authUserId} ~ '^user_[A-Za-z0-9]{24,}$' or ${users.authUserId} like 'seed\\_%')`;
+const UNBACKED_ROW = ne(users.authProvider, 'neon_auth');
 
 /**
  * Re-keys a pre-swap row to the identity Neon Auth actually holds.
@@ -357,8 +356,8 @@ async function adoptUnbackedRow(tx: Tx, account: E2eAccount): Promise<void> {
 
   await tx
     .update(users)
-    .set({ authUserId: account.authUserId, updatedAt: sql`now()` })
-    .where(and(sql`lower(${users.email}) = lower(${account.email})`, UNBACKED_AUTH_ID));
+    .set({ authUserId: account.authUserId, authProvider: 'neon_auth', updatedAt: sql`now()` })
+    .where(and(sql`lower(${users.email}) = lower(${account.email})`, UNBACKED_ROW));
 }
 
 /**

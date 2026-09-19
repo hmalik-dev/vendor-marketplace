@@ -1063,6 +1063,7 @@ describe('data rights', () => {
         .insert(users)
         .values({
           authUserId: 'seed_mkt_customer_0',
+          authProvider: 'seed',
           email: 'seed_mkt_customer_0@example.com',
           role: 'customer',
           firstName: 'Seeded',
@@ -1132,6 +1133,7 @@ describe('data rights', () => {
         .insert(users)
         .values({
           authUserId: 'user_2abcdefghijklmnopqrstuvwxyz',
+          authProvider: 'legacy_clerk',
           email: 'legacy-closure@example.com',
           role: 'customer',
           firstName: 'Legacy',
@@ -1147,6 +1149,43 @@ describe('data rights', () => {
 
       expect(response.json()).toMatchObject({ identityDeleted: false });
       expect(harness.deletedAuthUsers).toEqual([]);
+    });
+
+    /*
+     * VEN-450: a Neon Auth id that starts `user_` is still a Neon identity. The
+     * provider is recorded on the row, so closure deletes it rather than
+     * mistaking it for a Clerk one and reporting nothing owed.
+     */
+    it('deletes the Neon identity of an id that looks like a Clerk one', async () => {
+      await signIn(ADMIN, true);
+      const lookalike = 'user_2abcdefghijklmnopqrstuvwxyz';
+      harness.authUsers.set(lookalike, {
+        authUserId: lookalike,
+        email: 'lookalike@example.com',
+        firstName: 'Look',
+        lastName: 'Alike',
+        roleHint: 'customer',
+        avatarUrl: null,
+      });
+      const row = await harness.database.db
+        .insert(users)
+        .values({
+          authUserId: lookalike,
+          email: 'lookalike@example.com',
+          role: 'customer',
+          firstName: 'Look',
+          lastName: 'Alike',
+        })
+        .returning({ id: users.id });
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${row[0]!.id}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.json()).toMatchObject({ identityDeleted: true });
+      expect(harness.deletedAuthUsers).toEqual([lookalike]);
     });
 
     /*

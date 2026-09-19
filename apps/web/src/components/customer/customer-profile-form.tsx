@@ -25,7 +25,7 @@ import { guestCountFromInput } from '@/lib/guest-count';
 import { useApi } from '@/lib/use-api';
 import type { FieldIssue } from '@/lib/use-submit-validation';
 import { useUnsavedChangesGuard } from '@/lib/use-unsaved-changes-guard';
-import { wireUserSchema, type WireUser } from '@/lib/wire-schemas';
+import { toStoredImage, wireUserSchema, type WireUser } from '@/lib/wire-schemas';
 import { FIELD_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 
@@ -257,7 +257,7 @@ export function CustomerProfileForm({ user }: CustomerProfileFormProps): React.R
        */
       typicalGuestCountMin: guestMin === '' ? null : Number(guestMin),
       typicalGuestCountMax: guestMax === '' ? null : Number(guestMax),
-      avatarUrl,
+      avatarUrl: toStoredImage(avatarUrl),
     };
 
     const parsed = updateUserSchema.safeParse(payload);
@@ -293,6 +293,7 @@ export function CustomerProfileForm({ user }: CustomerProfileFormProps): React.R
       await request('/users/me', { schema: wireUserSchema, method: 'PUT', body: parsed.data });
       setSaved(current);
       toast.success('Profile saved');
+      router.refresh();
     } catch (failure) {
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {

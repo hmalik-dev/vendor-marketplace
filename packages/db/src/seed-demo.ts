@@ -404,6 +404,7 @@ export async function seedDemoData<
     {
       id: adminId,
       authUserId: `${DEMO_SEED_PREFIX}admin_${DEMO_ADMIN.key}`,
+      authProvider: 'seed' as const,
       email: `admin@${DEMO_EMAIL_DOMAIN}`,
       role: 'admin' as const,
       firstName: DEMO_ADMIN.firstName,
@@ -417,6 +418,7 @@ export async function seedDemoData<
     ...DEMO_CUSTOMERS.map((customer, index) => ({
       id: customerIds[index] as string,
       authUserId: `${DEMO_SEED_PREFIX}customer_${customer.key}`,
+      authProvider: 'seed' as const,
       email: `${customer.key}@${DEMO_EMAIL_DOMAIN}`,
       role: 'customer' as const,
       firstName: customer.firstName,
@@ -430,6 +432,7 @@ export async function seedDemoData<
     ...DEMO_VENDORS.map((vendor, index) => ({
       id: vendorUserIds[index] as string,
       authUserId: `${DEMO_SEED_PREFIX}vendor_${vendor.key}`,
+      authProvider: 'seed' as const,
       email: `${vendor.key}@${DEMO_EMAIL_DOMAIN}`,
       role: 'vendor' as const,
       firstName: vendor.firstName,

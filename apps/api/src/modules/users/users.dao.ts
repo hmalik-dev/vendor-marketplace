@@ -8,7 +8,7 @@ import {
   type NewUserRow,
   type UserRow,
 } from '@vendor-marketplace/db/schema';
-import type { LegalAcceptanceDocument } from '@vendor-marketplace/shared';
+import type { AuthProvider, LegalAcceptanceDocument } from '@vendor-marketplace/shared';
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import type { AppDatabase } from '../../lib/database.js';
 
@@ -756,6 +756,7 @@ async function retireUserInTransaction(
 export async function listLiveAuthIdentities(db: AppDatabase): Promise<
   {
     authUserId: string;
+    authProvider: AuthProvider;
     email: string;
     firstName: string;
     lastName: string;
@@ -766,6 +767,7 @@ export async function listLiveAuthIdentities(db: AppDatabase): Promise<
   return db
     .select({
       authUserId: users.authUserId,
+      authProvider: users.authProvider,
       email: users.email,
       firstName: users.firstName,
       lastName: users.lastName,

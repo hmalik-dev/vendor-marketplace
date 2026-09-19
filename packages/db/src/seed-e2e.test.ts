@@ -264,6 +264,7 @@ describe('seedE2eFixtures', () => {
         .insert(users)
         .values({
           authUserId: CLERK_ID,
+          authProvider: 'legacy_clerk',
           email: ADMIN.email,
           role: 'admin',
           firstName: 'Old',
@@ -275,13 +276,20 @@ describe('seedE2eFixtures', () => {
       const second = await seedE2eFixtures(database.db, { ...INPUT, admin: ADMIN });
 
       const rows = await database.db
-        .select({ id: users.id, authUserId: users.authUserId, role: users.role })
+        .select({
+          id: users.id,
+          authUserId: users.authUserId,
+          authProvider: users.authProvider,
+          role: users.role,
+        })
         .from(users)
         .where(eq(users.email, ADMIN.email));
 
       expect(first.adminUserId).toBe(legacy?.id);
       expect(second.adminUserId).toBe(legacy?.id);
-      expect(rows).toEqual([{ id: legacy?.id, authUserId: NEON_ID, role: 'admin' }]);
+      expect(rows).toEqual([
+        { id: legacy?.id, authUserId: NEON_ID, authProvider: 'neon_auth', role: 'admin' },
+      ]);
     });
 
     it('is left alone when the Neon id already has its own row', async () => {
@@ -294,6 +302,7 @@ describe('seedE2eFixtures', () => {
       });
       await database.db.insert(users).values({
         authUserId: CLERK_ID,
+        authProvider: 'legacy_clerk',
         email: ADMIN.email,
         role: 'customer',
         firstName: 'Old',

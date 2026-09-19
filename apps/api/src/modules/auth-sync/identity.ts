@@ -1,3 +1,4 @@
+import type { AuthProvider } from '@vendor-marketplace/shared';
 import type { NeonAuthDirectory, NeonAuthIdentity } from '@vendor-marketplace/db';
 import { mirroredAuthName, splitAuthName } from '../users/users.service.js';
 
@@ -41,34 +42,28 @@ export function mirroredIdentity(identity: NeonAuthIdentity): MirroredIdentity {
 }
 
 /**
- * Seeded marketplace accounts (`seed_mkt_…`) have no identity anywhere.
+ * Rows Neon Auth never issued: seeded marketplace accounts (`seed`) and ones the
+ * previous identity provider issued (`legacy_clerk`).
  *
- * The distinction matters more than it looks: without it every seeded vendor
- * reads as "deleted in Neon Auth" and a caller retires the entire public
- * marketplace. A row Neon Auth never issued is not a row it deleted, and is
- * outside its jurisdiction.
+ * Read from `users.auth_provider`, recorded at insert (VEN-450), never guessed
+ * from the shape of the id: a Neon Auth id that happened to start `user_` would
+ * otherwise be taken for a Clerk one and skipped for ever. The distinction
+ * matters more than it looks: without it every seeded vendor reads as "deleted
+ * in Neon Auth" and a caller retires the entire public marketplace, and a
+ * legacy live account would be retired and refunded. Such a row is outside this
+ * pass's jurisdiction until someone migrates it deliberately.
  */
-const SEEDED_PREFIX = 'seed_';
-
-export function isSeededIdentity(authUserId: string): boolean {
-  return authUserId.startsWith(SEEDED_PREFIX);
+export function isSeededIdentity(authProvider: AuthProvider): boolean {
+  return authProvider === 'seed';
 }
 
-/**
- * A row the previous identity provider issued (Clerk ids are `user_` plus 27
- * alphanumerics). Neon Auth does not know it, so reading its absence as a
- * deletion would retire and refund a live account: it is outside this pass's
- * jurisdiction until someone migrates it deliberately, exactly as a seeded row is.
- */
-const LEGACY_ID = /^user_[A-Za-z0-9]{24,}$/;
-
-export function isLegacyIdentity(authUserId: string): boolean {
-  return LEGACY_ID.test(authUserId);
+export function isLegacyIdentity(authProvider: AuthProvider): boolean {
+  return authProvider === 'legacy_clerk';
 }
 
-/** Rows no Neon Auth identity backs: seeded accounts and legacy-provider ones. */
-export function isUnbackedIdentity(authUserId: string): boolean {
-  return isSeededIdentity(authUserId) || isLegacyIdentity(authUserId);
+/** Rows no Neon Auth identity backs. */
+export function isUnbackedIdentity(authProvider: AuthProvider): boolean {
+  return authProvider !== 'neon_auth';
 }
 
 /**
