@@ -438,7 +438,7 @@ export async function openChargebackCase(
     deps.bookings,
     {
       id: target.customerId,
-      authUserId: target.customerClerkUserId,
+      authUserId: target.customerAuthUserId,
       role: target.customerRole,
     },
     target.bookingId,

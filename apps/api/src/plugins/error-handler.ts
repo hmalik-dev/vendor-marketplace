@@ -39,7 +39,7 @@ function isFastifyError(error: unknown): boolean {
  * **Only Fastify's own errors get to speak.** A third-party SDK error is not
  * copy anyone wrote for a reader, and several of them carry a numeric
  * `statusCode` that lands in the same branch: `stripe-node` sets one and a
- * message naming the API key and its mode, Clerk sets `status`, the AWS SDK
+ * message naming the API key and its mode, auth sets `status`, the AWS SDK
  * sets `$metadata.httpStatusCode`. Passing those through turned an upstream
  * misconfiguration into a client-visible disclosure. The status still passes
  * through, because it is the right answer; the sentence does not.

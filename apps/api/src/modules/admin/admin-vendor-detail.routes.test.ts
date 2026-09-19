@@ -94,7 +94,7 @@ describe('admin vendor detail', () => {
       [VENDOR, 'vendor', 'Dana'],
       [CUSTOMER, 'customer', 'Rosa'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName,

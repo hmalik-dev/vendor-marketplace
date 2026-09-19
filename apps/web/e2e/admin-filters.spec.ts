@@ -53,7 +53,7 @@ const test = base.extend<{ adminPage: Page; scriptlessAdminPage: Page }>({
   },
 
   /*
-   * JavaScript off. Clerk's short-lived `__session` is refreshed by Clerk's own
+   * JavaScript off. The auth provider's short-lived `__session` is refreshed by the auth provider's own
    * script, so a stored state loaded straight into a scriptless context arrives
    * expired and lands on a handshake nothing can complete. The session is
    * warmed in a scripted context and its refreshed cookies handed over.

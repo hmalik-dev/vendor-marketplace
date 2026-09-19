@@ -39,7 +39,7 @@ describe('admin routes', () => {
   let seededTagIds: string[];
 
   /**
-   * Sign in, then promote — `normalizeRole` refuses `admin` from Clerk metadata
+   * Sign in, then promote — `normalizeRole` refuses `admin` from auth metadata
    * on purpose, so an admin cannot be minted through sync.
    *
    * The recipe moved to `test-server.ts` when #435 added the third suite that
@@ -142,7 +142,7 @@ describe('admin routes', () => {
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',
@@ -439,7 +439,7 @@ describe('admin routes', () => {
       /*
        * Retirement outranks the ban (#433). This row is *both* banned and
        * retired, which is the case that decides the precedence: an account
-       * whose owner deleted their Clerk identity cannot be reinstated, so
+       * whose owner deleted their auth identity cannot be reinstated, so
        * `flagged` would offer the operator a lever that does nothing.
        */
       await harness.database.db

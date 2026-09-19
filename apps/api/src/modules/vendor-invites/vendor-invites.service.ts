@@ -127,7 +127,7 @@ export async function readVendorSignUpGate(db: AppDatabase): Promise<VendorSignU
  * `POST /vendor-applications`. The same receipt whether the address was new or
  * already waiting, so the form answers nothing about who else has applied.
  *
- * `sessionEmail` is the caller's Clerk address when they hold a session — the
+ * `sessionEmail` is the caller's auth address when they hold a session — the
  * refused vendor the gate sends here — and it replaces whatever the body says.
  */
 export async function submitVendorApplication(

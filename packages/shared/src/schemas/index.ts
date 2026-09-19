@@ -139,7 +139,7 @@ const FORBIDDEN_IN_IMAGE_REF =
  *
  * Since #47 an upload stores an **object key** — `portfolio/abc.webp` — so the
  * CDN can move without a migration. Seeded marketing art is a **site-relative
- * path**, served by the web app itself. An avatar from Clerk is an **absolute
+ * path**, served by the web app itself. An avatar from the auth provider is an **absolute
  * URL** on a host that is not ours. `resolveImageUrl` already resolves all
  * three at the render boundary; this is the same contract, stated on the way
  * in.
@@ -180,7 +180,7 @@ export const imageRefSchema = z
         }
 
         /*
-         * The host may be one that is not ours — a Clerk avatar is exactly
+         * The host may be one that is not ours — an auth avatar is exactly
          * that — but it may not be *disguised* as one. `https://cdn.ours@evil`
          * reads as our CDN and is fetched from `evil`, which is the same
          * stepping-around this ticket is about. Nothing legitimate puts
@@ -215,7 +215,7 @@ export const imageRefSchema = z
     { message: 'Must be an image URL, a site path, or a stored key' },
   );
 
-/** E.164-ish; permissive because Clerk owns phone verification. */
+/** E.164-ish; permissive because the auth provider owns phone verification. */
 export const phoneSchema = z
   .string()
   .trim()
@@ -245,7 +245,7 @@ export const phoneSchema = z
  * `apps/api/src/request-body-free-text.test.ts` parses a bidi control through
  * every string field of every schema a route attaches as a request body, so a
  * field that goes back to a bare `z.string()` fails on the day it is written.
- * Write paths that are **not** request bodies — names mirrored from Clerk —
+ * Write paths that are **not** request bodies — names mirrored from auth —
  * cannot be seen from there and go through `mirroredAuthName` instead.
  */
 const freeText = () => z.string().overwrite(stripBidiControls).trim();
@@ -309,7 +309,7 @@ export const userSchema = z.object({
   email: storedEmailSchema,
   role: userRoleSchema,
   /*
-   * Empty until the user provides one. Clerk's email-and-password sign-up does
+   * Empty until the user provides one. The auth provider's email-and-password sign-up does
    * not collect a name, so a freshly synced row genuinely has none — the read
    * model has to be able to represent that. `updateUserSchema` still requires a
    * non-empty name, so a name that has been set cannot be blanked out again.
@@ -339,7 +339,7 @@ export const userSchema = z.object({
   cancelledBookingsCount: z.int().min(0),
   isBanned: z.boolean(),
   bannedAt: z.date().nullable(),
-  /** Set when Clerk reports the identity was deleted; the row is retired, not removed. */
+  /** Set when the auth provider reports the identity was deleted; the row is retired, not removed. */
   deletedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
@@ -477,10 +477,10 @@ const limitedCustomerProfileShape = {
   typicalGuestCountMin: z.int().nullable(),
   typicalGuestCountMax: z.int().nullable(),
   /*
-   * There is deliberately no `emailVerified` here. Clerk holds that signal and
+   * There is deliberately no `emailVerified` here. The auth provider holds that signal and
    * the local row does not mirror it, so the badge #16 asks for could only be
    * rendered as always-true — which is decoration, not a signal. It returns
-   * when the Clerk sync carries the field.
+   * when the auth sync carries the field.
    */
   totalBookingsCount: z.int().min(0),
   completedBookingsCount: z.int().min(0),
@@ -2377,7 +2377,7 @@ export const adminPaginationShape = {
  * The others are all states a row can move between: a paused storefront
  * publishes again, a flagged one is reinstated, a held one is republished by
  * the operator who held it. `retired` is none of those — the
- * owner deleted their Clerk identity, nothing in the product can undo it, and
+ * owner deleted their auth identity, nothing in the product can undo it, and
  * the operator's only useful question about the row is which of their bookings
  * it unwound. Without it a deleted account read as `review`, which is the label
  * for a vendor still waiting to be let in.
@@ -2486,7 +2486,7 @@ export type AdminVendorPage = z.infer<typeof adminVendorPageSchema>;
  * has already moved off, and every notification for that account goes there.
  *
  * Unlike `refund-stuck` this is **stored** rather than derived: nothing else in
- * the database knows what Clerk currently believes, so `pending_email` is the
+ * the database knows what the auth provider currently believes, so `pending_email` is the
  * only record that the two disagree.
  */
 export const ADMIN_CUSTOMER_FLAGS = ['email-stale'] as const;
@@ -3369,7 +3369,7 @@ export const adminCustomerDetailProfileSchema = z.object({
   isBanned: z.boolean(),
   bannedAt: z.date().nullable(),
   deletedAt: z.date().nullable(),
-  /** As on the customer row (#462): the address Clerk holds that this row could not take. */
+  /** As on the customer row (#462): the address the auth provider holds that this row could not take. */
   pendingEmail: z.string().nullable(),
   createdAt: z.date(),
 });
@@ -3849,11 +3849,11 @@ export const adminCloseAccountResultSchema = z.object({
   refundsFailed: z.int(),
   profileRetired: z.boolean(),
   /**
-   * Whether the Clerk identity behind the account was actually deleted (#451).
+   * Whether the auth identity behind the account was actually deleted (#451).
    *
    * Closure ends the identity, not just its sessions, because the local row's
    * address is released on closure and the two systems must not disagree about
-   * who holds it. Clerk is a network call the retirement cannot roll back, so
+   * who holds it. The auth provider is a network call the retirement cannot roll back, so
    * a failure there leaves an account that is closed here and still signed in
    * there — reported rather than swallowed, exactly like `refundsFailed`, so
    * the console can tell an operator the one thing still owed.

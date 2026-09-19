@@ -74,7 +74,7 @@ describe('two operators closing each other at once', () => {
     harness = await createTestHarness({ database });
 
     for (const authUserId of [ADMIN_ONE, ADMIN_TWO]) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',

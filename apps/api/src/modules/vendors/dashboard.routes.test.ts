@@ -157,7 +157,7 @@ describe('/vendor/dashboard', () => {
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Test',

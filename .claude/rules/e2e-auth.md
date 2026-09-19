@@ -83,7 +83,7 @@ disposable `seed_e2e_…` operator row instead.
 
 The header's signed-in cluster is rendered on the server from the session
 cookie, so a restored `storageState` is right on the very first navigation and
-needs no warm-up. (Under Clerk it did — a handshake made the first render read
+needs no warm-up. (Under the auth provider it did — a handshake made the first render read
 signed-out, #321; that class is gone with the provider.) If a header reads
 signed-out for a stored state, the cookie is expired or on the wrong port:
 regenerate it with `pnpm e2e:auth <role>`.

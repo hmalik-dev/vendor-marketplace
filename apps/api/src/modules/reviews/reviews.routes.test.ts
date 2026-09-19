@@ -238,7 +238,7 @@ describe('reviews', () => {
       [CUSTOMER, 'customer', 'alan@example.com'],
       [OTHER_CUSTOMER, 'customer', 'lin@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Test',
@@ -746,8 +746,8 @@ describe('reviews', () => {
      */
     it('serialises a reviewer whose first name fills the column', async () => {
       const longFirstName = 'A'.repeat(MAX_NAME_LENGTH);
-      const stored = harness.clerkUsers.get(CUSTOMER)!;
-      harness.clerkUsers.set(CUSTOMER, { ...stored, firstName: longFirstName });
+      const stored = harness.authUsers.get(CUSTOMER)!;
+      harness.authUsers.set(CUSTOMER, { ...stored, firstName: longFirstName });
 
       try {
         const { vendorId, packageId, slug } = await createVendor(VENDOR, 'Kessler & Co.');
@@ -774,7 +774,7 @@ describe('reviews', () => {
         expect(listed.statusCode).toBe(200);
         expect((listed.json() as ReviewsBody).items[0]!.reviewerName).toBe(`${longFirstName} U.`);
       } finally {
-        harness.clerkUsers.set(CUSTOMER, stored);
+        harness.authUsers.set(CUSTOMER, stored);
       }
     });
 

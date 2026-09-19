@@ -99,7 +99,7 @@ describe('a notification that cannot be written', () => {
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',

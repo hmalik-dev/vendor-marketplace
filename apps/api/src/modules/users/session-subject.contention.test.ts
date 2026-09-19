@@ -38,7 +38,7 @@ describe('the acceptance gate’s folded read, on the real driver', () => {
     await database.db.insert(users).values([
       {
         id: ACCEPTED,
-        authUserId: 'clerk_accepted',
+        authUserId: 'auth_accepted',
         email: 'accepted@example.com',
         role: 'customer',
         firstName: 'Ada',
@@ -46,7 +46,7 @@ describe('the acceptance gate’s folded read, on the real driver', () => {
       },
       {
         id: GATED,
-        authUserId: 'clerk_gated',
+        authUserId: 'auth_gated',
         email: 'gated@example.com',
         role: 'customer',
         firstName: 'Bo',
@@ -79,7 +79,7 @@ describe('the acceptance gate’s folded read, on the real driver', () => {
   it('answers a real boolean, not a string, for an account that holds the Terms', async () => {
     const subject = await findSessionSubject(
       database.db,
-      'clerk_accepted',
+      'auth_accepted',
       'terms_of_service',
       CURRENT_TERMS_VERSION,
     );
@@ -91,7 +91,7 @@ describe('the acceptance gate’s folded read, on the real driver', () => {
   it('answers false — and a boolean — for an account that holds nothing', async () => {
     const subject = await findSessionSubject(
       database.db,
-      'clerk_gated',
+      'auth_gated',
       'terms_of_service',
       CURRENT_TERMS_VERSION,
     );
@@ -109,7 +109,7 @@ describe('the acceptance gate’s folded read, on the real driver', () => {
   it('correlates to the account it was asked about', async () => {
     const gated = await findSessionSubject(
       database.db,
-      'clerk_gated',
+      'auth_gated',
       'terms_of_service',
       CURRENT_TERMS_VERSION,
     );
@@ -121,7 +121,7 @@ describe('the acceptance gate’s folded read, on the real driver', () => {
   it('answers false for a version this account has never accepted', async () => {
     const subject = await findSessionSubject(
       database.db,
-      'clerk_accepted',
+      'auth_accepted',
       'terms_of_service',
       'v9.9',
     );

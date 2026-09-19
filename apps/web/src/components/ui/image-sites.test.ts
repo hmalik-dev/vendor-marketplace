@@ -19,7 +19,7 @@ import { sourceFiles, TS_AND_TSX, withoutComments } from '@/testing/source-scan'
  * version of this file grew its own tree walk and its own comment stripper, and
  * that stripper reopened the exact hole the helper's docblock records from
  * #395: a naive block-comment rule reads the slash-star inside
- * `'https://*.clerk.accounts.dev'` as a comment opener and deletes everything
+ * `'https://*.auth.accounts.dev'` as a comment opener and deletes everything
  * down to the next closing pair. On `security-headers.ts` that was 138 of 250
  * lines — so an image site written under a wildcard URL would have passed this
  * guard silently. Caught in review, before it shipped.
@@ -108,7 +108,7 @@ describe('image render sites', () => {
     expect(NEXT_IMAGE.test(withoutComments("import Image from 'next/image';"))).toBe(true);
     expect(
       RAW_IMG.test(
-        withoutComments("const csp = 'https://*.clerk.accounts.dev';\n<img src='/leaked.jpg' />"),
+        withoutComments("const csp = 'https://*.auth.accounts.dev';\n<img src='/leaked.jpg' />"),
       ),
       'a wildcard URL swallowed the markup below it — the #395 hole',
     ).toBe(true);

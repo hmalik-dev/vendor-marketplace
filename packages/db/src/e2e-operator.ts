@@ -20,7 +20,7 @@ type Database = PgDatabase<PgQueryResultHKT, Record<string, unknown>, TablesRela
  * or writes a row whose email is not one this helper's caller minted, so no
  * argument can promote or remove a seeded account.
  */
-export const DISPOSABLE_OPERATOR_EMAIL = /^e2e-operator-[a-z0-9-]+\+clerk_test@example\.com$/;
+export const DISPOSABLE_OPERATOR_EMAIL = /^e2e-operator-[a-z0-9-]+\+auth_test@example\.com$/;
 
 function assertDisposable(email: string): void {
   if (!DISPOSABLE_OPERATOR_EMAIL.test(email)) {

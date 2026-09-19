@@ -845,7 +845,7 @@ export function isBeyondBookingHorizon(value: string, now: Date = new Date()): b
  * Two kinds of value are deliberately passed through rather than prefixed,
  * because neither is ours to host:
  *
- * - an **absolute URL** — a Clerk avatar, or a row written before this change;
+ * - an **absolute URL** — an auth avatar, or a row written before this change;
  * - a **site-relative path** — the seeded marketing imagery under `/marketing`,
  *   which the web app serves itself.
  *

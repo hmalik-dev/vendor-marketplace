@@ -224,7 +224,7 @@ describe('payments', () => {
       [CUSTOMER, 'customer', 'alan@example.com'],
       [OUTSIDER, 'customer', 'edsger@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Test',

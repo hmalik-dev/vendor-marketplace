@@ -70,7 +70,7 @@ describe('the vendor dashboard month window, at a boundary west of UTC', () => {
       [VENDOR, 'vendor', 'tz-vendor@example.com'],
       [CUSTOMER, 'customer', 'tz-customer@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Test',

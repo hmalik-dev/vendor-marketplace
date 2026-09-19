@@ -94,7 +94,7 @@ describe('withdrawing a dispute hold, against a real Postgres', () => {
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Test',

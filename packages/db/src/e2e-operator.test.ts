@@ -6,7 +6,7 @@ import { createTestDatabase, type TestDatabase } from './testing/test-db.js';
 
 const OPERATOR = {
   authUserId: 'user_disposable_operator',
-  email: 'e2e-operator-1757000000000-42+clerk_test@example.com',
+  email: 'e2e-operator-1757000000000-42+auth_test@example.com',
 };
 
 describe('the disposable E2E operator', () => {
@@ -35,9 +35,9 @@ describe('the disposable E2E operator', () => {
   });
 
   it.each([
-    'admin+clerk_test@example.com',
-    'e2e-operator-1+clerk_test@example.com.evil',
-    'E2E-OPERATOR-1+clerk_test@example.com',
+    'admin+auth_test@example.com',
+    'e2e-operator-1+auth_test@example.com.evil',
+    'E2E-OPERATOR-1+auth_test@example.com',
   ])('refuses to touch %s, which it did not mint', async (email) => {
     await expect(insertDisposableOperator(database.db, { ...OPERATOR, email })).rejects.toThrow(
       'is not a disposable operator address',

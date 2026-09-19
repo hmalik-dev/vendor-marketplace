@@ -191,7 +191,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',
@@ -340,7 +340,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
         [vendorActor, 'vendor'],
         [customerActor, 'customer'],
       ] as const) {
-        harness.clerkUsers.set(authUserId, {
+        harness.authUsers.set(authUserId, {
           authUserId,
           email: `${authUserId}@example.com`,
           firstName: 'Test',

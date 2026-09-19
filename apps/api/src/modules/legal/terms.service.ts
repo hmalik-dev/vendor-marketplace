@@ -22,9 +22,9 @@ import type { NewAcceptance } from './legal-acceptance.dao.js';
  * makes, and the one nothing recorded until #429.
  *
  * It is captured **after** authentication rather than inside the sign-up form.
- * `sign-up-form.tsx` renders Clerk's prebuilt `<SignUp>`, so there is no seam
+ * `sign-up-form.tsx` renders the auth provider's prebuilt `<SignUp>`, so there is no seam
  * in that form to put a checkbox in, and a box on the role step before it is
- * bypassed by every social sign-up that enters Clerk directly. The gate is
+ * bypassed by every social sign-up that enters the auth provider directly. The gate is
  * therefore a first-sign-in interstitial that every account traverses however
  * it was created, and this module is what it posts to.
  */

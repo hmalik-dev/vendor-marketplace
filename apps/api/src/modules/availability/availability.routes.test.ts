@@ -85,7 +85,7 @@ describe('/vendor/availability', () => {
       [OTHER_VENDOR, 'vendor', 'ada@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Test',
@@ -427,7 +427,7 @@ describe('/vendor/availability', () => {
 
     beforeAll(async () => {
       derived = await createTestHarness({ clock: () => PINNED });
-      derived.clerkUsers.set(VENDOR, {
+      derived.authUsers.set(VENDOR, {
         authUserId: VENDOR,
         email: 'grace@example.com',
         firstName: 'Test',

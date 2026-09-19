@@ -4,7 +4,7 @@
  * The law in `CLAUDE.md` is that *a development default must never be able to
  * reach production*. Enforcing it needs one thing the registry cannot supply:
  * an answer to "am I deployed?". Every consumer used to answer it privately —
- * the Clerk webhook guard read `RAILWAY_PUBLIC_DOMAIN` and so ran on no
+ * The webhook guard read `RAILWAY_PUBLIC_DOMAIN` and so ran on no
  * platform this repository deploys to, while `siteOrigin` read Vercel's
  * variables and so covered only the web app. One module, so a platform is
  * taught once.

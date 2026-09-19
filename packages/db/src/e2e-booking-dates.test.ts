@@ -11,13 +11,13 @@ const NOW = new Date('2026-09-14T15:00:00.000Z');
 const INPUT = {
   vendor: {
     authUserId: 'user_e2e_vendor',
-    email: 'vendor+clerk_test@example.com',
+    email: 'vendor+auth_test@example.com',
     firstName: 'Evie',
     lastName: 'Vendor',
   },
   customer: {
     authUserId: 'user_e2e_customer',
-    email: 'customer+clerk_test@example.com',
+    email: 'customer+auth_test@example.com',
     firstName: 'Cal',
     lastName: 'Customer',
   },

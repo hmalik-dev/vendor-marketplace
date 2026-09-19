@@ -108,7 +108,7 @@ describe('the case queue under contention, against a real Postgres', () => {
       [ADMIN, 'customer'],
       [OTHER_ADMIN, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',

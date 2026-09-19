@@ -11,7 +11,7 @@ const RESTRICTED: E2eAccountStatus = { transfersActive: false, payoutsActive: fa
 
 const INPUT = {
   existingAccountId: null,
-  contactEmail: 'vendor+clerk_test@example.com',
+  contactEmail: 'vendor+auth_test@example.com',
   displayName: 'E2E Test Studio',
   businessUrl: 'https://web-gules-eta-41.vercel.app',
 };

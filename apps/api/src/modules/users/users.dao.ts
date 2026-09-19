@@ -12,17 +12,17 @@ import type { AuthProvider, LegalAcceptanceDocument } from '@vendor-marketplace/
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import type { AppDatabase } from '../../lib/database.js';
 
-/** Live users only — a Clerk-deleted identity must not resolve to a session. */
+/** Live users only — an auth-deleted identity must not resolve to a session. */
 const notDeleted = isNull(users.deletedAt);
 
 /**
- * The row for a Clerk subject **including a retired one**.
+ * The row for an auth subject **including a retired one**.
  *
  * Almost nothing wants this — `findUserByAuthId` below hides a retired row on
  * purpose, and is what every caller should reach for. The two exceptions are
  * the acceptance gate and the acceptance itself, which have to tell "no account
  * yet" from "account erased": since #429 the absence of a row means "has not
- * accepted, send them to the interstitial", and a Clerk-deleted identity
+ * accepted, send them to the interstitial", and an auth-deleted identity
  * offered that interstitial would try to bring its erased account back, where
  * `insertUserIfAbsent` finds the retired row under the same `auth_user_id` and
  * answers `null` rather than reviving it. A retired identity keeps getting the
@@ -42,7 +42,7 @@ export async function findUserByAuthIdIncludingRetired(
 }
 
 /**
- * The live row for a Clerk subject.
+ * The live row for an auth subject.
  *
  * Derived from the wide read rather than repeating it with one extra `where`
  * clause: two query builders differing only by `notDeleted` are two places for
@@ -60,7 +60,7 @@ export async function findUserByAuthId(
 
 /**
  * Everything the session gate needs, in **one** round trip: the row behind a
- * Clerk subject, and whether that account holds `version` of `document`.
+ * Auth subject, and whether that account holds `version` of `document`.
  *
  * The acceptance check used to be a second query, and it ran on every
  * authenticated request — so against a hosted Postgres it was a whole extra
@@ -119,13 +119,13 @@ export async function findUserById(db: AppDatabase, id: string): Promise<UserRow
 }
 
 /**
- * Inserts a user, tolerating the race between the Clerk webhook and the user's
+ * Inserts a user, tolerating the race between the auth webhook and the user's
  * own first API call. Returns the winning row either way.
  *
  * **The `DO NOTHING` names no target, and that is the whole point** (#442).
  * `users` carries two unique indexes — `users_auth_user_id_key` and
  * `users_email_key` — and one identity signing in twice at once collides on
- * *both*, because the two inserts carry the same Clerk id and the same address.
+ * *both*, because the two inserts carry the same auth id and the same address.
  * A targeted `DO NOTHING` arbitrates only the index it names, so whenever
  * Postgres reached the email index first the loser raised a 23505 that the
  * acceptance endpoint answered as an opaque 500. Reproduced at roughly one run
@@ -142,7 +142,7 @@ export async function findUserById(db: AppDatabase, id: string): Promise<UserRow
  *
  * **Widening what is swallowed is not the same as swallowing it silently, and
  * the difference is the last read below.** A declined insert has exactly two
- * causes and they are not alike. If this Clerk id is already in the table the
+ * causes and they are not alike. If this auth id is already in the table the
  * conflict was this identity meeting itself — the race, or a retired row — and
  * `null` is the answer every caller already expects. If it is *not* in the
  * table, the arbiter was some other unique index, which means an address that
@@ -150,7 +150,7 @@ export async function findUserById(db: AppDatabase, id: string): Promise<UserRow
  * operator-actionable data problem as the ordinary "this identity has no
  * account yet". So it throws instead.
  *
- * **The message carries the Clerk id because the 23505 it replaces carried
+ * **The message carries the auth id because the 23505 it replaces carried
  * more than a sentence.** `log-error-serializer.ts` strips a pg error's
  * value-bearing `detail` and deliberately keeps `code`, `constraint` and
  * `table` — what says *what to fix* — so the old failure named
@@ -162,15 +162,15 @@ export async function findUserById(db: AppDatabase, id: string): Promise<UserRow
  * and the identifier goes only to the log.
  *
  * **Two ways to reach it, and the second is not a fixture problem.** A *live*
- * account holding the address needs two Clerk identities sharing one address,
- * which Clerk refuses within an instance — so through the product that half is
+ * account holding the address needs two auth identities sharing one address,
+ * which the auth provider refuses within an instance — so through the product that half is
  * unreachable, and the seeds are where it happens, which is why all three say
- * so where they explain that a fixture may not invent a Clerk id.
+ * so where they explain that a fixture may not invent an auth id.
  *
  * A **retired** account holding it *was* the ordinary case and is no longer
  * reachable at all. #442 wrote that `retireUserWhere` writes only `deleted_at`
  * while `users_email_key` carried no predicate, so a closed account kept its
- * address in the index while Clerk freed it, and the same person signing up
+ * address in the index while the auth provider freed it, and the same person signing up
  * again collided on that retained address and landed here — a 500 that had been
  * true since the row could first be retired. #442 named the repair as #451's
  * and outstanding; **#451 has since landed it.** `users_email_key` is now
@@ -193,7 +193,7 @@ export async function insertUserIfAbsent(
   }
 
   /*
-   * Retired rows included, deliberately: a Clerk-deleted identity signing in
+   * Retired rows included, deliberately: an auth-deleted identity signing in
    * again is the one case that must read as "no account" rather than as a
    * collision, and it is the reason this is not simply `findUserByAuthId`.
    */
@@ -212,7 +212,7 @@ export async function insertUserIfAbsent(
    * The address itself is not interpolated. It is the one value here that is
    * personal data rather than a pseudonymous identifier, the log is the wrong
    * place to copy it to, and it is already known to whoever is reading — they
-   * arrived holding it. The holder's Clerk id and whether that account is
+   * arrived holding it. The holder's auth id and whether that account is
    * retired are what they do not have, and `retired` is the answer that says
    * this is closure-then-return rather than a genuine clash.
    */
@@ -269,7 +269,7 @@ export async function updateUserById(
  * What a mirrored `user.updated` did to the row.
  *
  * `emailDiverged` is the half the caller cannot infer from the row: it says the
- * address Clerk sent could not be written, so `email` below is the **old** one
+ * address the auth provider sent could not be written, so `email` below is the **old** one
  * and `pendingEmail` is what it should have been.
  */
 export interface AuthMirrorResult {
@@ -291,7 +291,7 @@ type EmailDivergenceWrite =
   | Record<string, never>;
 
 /**
- * Mirrors a Clerk `user.updated` event onto the local row, if one exists.
+ * Mirrors an auth `user.updated` event onto the local row, if one exists.
  *
  * **The email write can be declined, and abandoning it silently is the defect
  * this shape exists to prevent** (#462). `users_email_key` covers `email`, so a
@@ -319,14 +319,14 @@ type EmailDivergenceWrite =
  * means *currently* diverged. And when a write moves a row **off** an address,
  * the row waiting on that address takes it in the same call
  * (`handAddressToWaiter`, VEN-386), so the ordering race repairs itself on the
- * event that ends it. A holder Clerk no longer backs is `clerk.service.ts`'s to
+ * event that ends it. A holder the auth provider no longer backs is `auth-sync.service.ts`'s to
  * resolve.
  *
  * **Rows that diverged before this landed carry neither column**, and no
  * migration backfills them: the old code never learnt which address it failed
  * to write, so there is nothing in the database to backfill *from*. The repair
  * is `pnpm reconcile:auth`, which reads every live row's current address out
- * of Clerk and hands it to this function — a diverged row records its pending
+ * of the auth provider and hands it to this function — a diverged row records its pending
  * address on that pass, and an agreeing one is left alone.
  */
 export async function updateUserByAuthId(
@@ -344,7 +344,7 @@ export async function updateUserByAuthId(
    * An event carrying **no** address leaves the divergence columns alone, and
    * that distinction is load-bearing rather than incidental: clearing them on
    * a name or avatar change would be a repair nothing performed — the address
-   * would still disagree with Clerk and the console would have stopped saying
+   * would still disagree with the auth provider and the console would have stopped saying
    * so. Only a write that actually lands the address resolves the divergence.
    *
    * Nothing else differs between the two, and a patch with no `email` cannot
@@ -411,12 +411,12 @@ export async function updateUserByAuthId(
  * is the last that will ever arrive for either account. Without this the waiter
  * stayed diverged until its holder edited their profile again.
  *
- * **Only a sole waiter is handed the address.** Clerk gives an address to one
+ * **Only a sole waiter is handed the address.** Auth gives an address to one
  * identity, so of two rows waiting on it at most one is genuine, and nothing
  * in the database says which — `email_sync_failed_at` is the first failure on
  * *any* address, not when this one was claimed. Guessing would send one
  * account's notifications to another's inbox. With several waiters, each
- * stays diverged (and mail-silent) until its own next event, which asks Clerk.
+ * stays diverged (and mail-silent) until its own next event, which asks auth.
  *
  * A waiter that collides anyway (the address was taken in between) keeps its
  * record, the state it was already in. One level only — the waiter's own old
@@ -448,7 +448,7 @@ async function handAddressToWaiter(db: AppDatabase, address: string): Promise<vo
 }
 
 /**
- * The live row holding an address, for a collision's caller to ask Clerk
+ * The live row holding an address, for a collision's caller to ask auth
  * about (VEN-386). Live only: `users_email_key` ignores retired rows, so only a
  * live one can be what refused the write.
  */
@@ -483,14 +483,14 @@ async function writeAuthPatch(
 }
 
 /**
- * Retires the local row for a deleted Clerk identity, **and the storefront it
+ * Retires the local row for a deleted auth identity, **and the storefront it
  * owns** (#433). Bookings, reviews, and messages reference this user, so the row
  * stays for referential integrity.
  *
  * One transaction, because the two halves are one fact. This used to set
  * `deleted_at` and stop: `vendor_profiles.is_deleted` is the tombstone four
  * public reads check, nothing outside the seed scripts ever wrote it, and no
- * visibility predicate joined `users` — so a vendor who deleted their Clerk
+ * visibility predicate joined `users` — so a vendor who deleted their auth
  * identity kept a published, searchable, bookable profile, and a customer could
  * pay for a booking against an account that could never sign in to answer it.
  *
@@ -530,13 +530,13 @@ export async function retireUserByAuthId(
  * The same retirement, addressed by the **local** id (#438).
  *
  * An operator closing an account on its holder's request has a `users.id` and
- * not necessarily a usable Clerk identity, so it needs this door — but it must
+ * not necessarily a usable auth identity, so it needs this door — but it must
  * not be a second implementation of the retirement. A closure requested through
  * the product and one that arrives as `user.deleted` have to leave the database
  * in the same state, or the product's own route becomes the lenient one and the
- * Clerk backstop the strict one, which is exactly backwards.
+ * The auth provider backstop the strict one, which is exactly backwards.
  *
- * It reports whether a storefront actually came down, which the Clerk path has
+ * It reports whether a storefront actually came down, which the auth path has
  * no response to put anywhere and the console's does.
  */
 export async function retireUserById(

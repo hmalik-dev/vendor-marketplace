@@ -1,7 +1,7 @@
 # @vendor-marketplace/api
 
 The Vendor Marketplace backend: Fastify 5 with the Zod type provider, Drizzle ORM, and
-Clerk session verification.
+Auth session verification.
 
 ## Running it
 
@@ -21,7 +21,7 @@ malformed variable fails the process before it binds a port. Copy
 ```
 src/config/    Environment parsing.
 src/plugins/   Cross-cutting concerns: error handler, database handle,
-               Clerk session resolution.
+               auth session resolution.
 src/lib/       AppError and the role guards routes compose.
 src/modules/   One folder per aggregate: routes -> service -> DAO.
 src/testing/   Boots the real server against in-process Postgres.
@@ -36,5 +36,5 @@ client-visible message; anything else is logged and answered with an opaque
 
 `pnpm --filter @vendor-marketplace/api test` boots an in-process Postgres (PGlite),
 applies the real migrations, and drives the real Fastify instance. Only two
-network boundaries are faked: Clerk token verification and svix webhook
+network boundaries are faked: auth token verification and svix webhook
 signature verification.

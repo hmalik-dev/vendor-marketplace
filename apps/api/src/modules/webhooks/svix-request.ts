@@ -29,7 +29,7 @@ export function svixVerifier(signingSecret: string, override?: WebhookVerifier):
  * The body of a svix-signed webhook, verified and parsed — **the one place
  * either provider's signature is checked**.
  *
- * Clerk and Resend both sign with svix, and this was written out twice before
+ * The auth provider and Resend both sign with svix, and this was written out twice before
  * #439: the same three headers, the same verify, the same JSON parse, the same
  * two `AppError`s, differing only in a log word. That is the shape `raw-body.ts`
  * beside it already warns about — the rule is one rule, and stating it twice is

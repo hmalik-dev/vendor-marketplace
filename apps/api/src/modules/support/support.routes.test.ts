@@ -49,7 +49,7 @@ describe('POST /support/messages', () => {
 
   beforeAll(async () => {
     harness = await createTestHarness();
-    harness.clerkUsers.set(CUSTOMER, {
+    harness.authUsers.set(CUSTOMER, {
       authUserId: CUSTOMER,
       email: CUSTOMER_EMAIL,
       firstName: 'Alan',
@@ -157,7 +157,7 @@ describe('POST /support/messages', () => {
 
   /*
    * VEN-386 skips notification email for an account whose address disagrees
-   * with Clerk. An acknowledgement is about the sender's own message, so it
+   * with auth. An acknowledgement is about the sender's own message, so it
    * keeps answering at the stored address.
    */
   it('still answers a signed-in sender whose address is diverged at the stored address', async () => {

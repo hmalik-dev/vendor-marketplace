@@ -12,7 +12,7 @@
  * Adding `admin` then made the *default* able to reach production, which is a
  * repo law. `resolveBaseUrl` puts `E2E_BASE_URL` at the top of its chain so a
  * run can be aimed at a deployed origin, and `docs/pre-launch.md` records that
- * production still authenticates against the same Clerk development instance —
+ * production still authenticates against the same auth development instance —
  * so the E2E passwords work there, and admin carries authority over the real
  * console. Off localhost the roles must therefore be named by a human.
  *
@@ -80,7 +80,7 @@ test('naming roles explicitly still works against any origin, and is marked expl
 test('“localhost” appearing in a hostname is not a loopback origin', () => {
   /*
    * A substring test would pass all four of these. That exact bypass is already
-   * recorded against the Clerk webhook guard, which is why `isLocalOrigin`
+   * recorded against the auth webhook guard, which is why `isLocalOrigin`
    * parses the URL and compares the hostname whole.
    */
   for (const base of [

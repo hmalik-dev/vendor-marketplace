@@ -4,7 +4,7 @@ import { AdminHeader } from './admin-header';
 
 afterEach(cleanup);
 
-const EMAIL = 'admin+clerk_test@example.com';
+const EMAIL = 'admin+auth_test@example.com';
 
 /*
  * jsdom performs no layout, so none of this measures a width — the 390px

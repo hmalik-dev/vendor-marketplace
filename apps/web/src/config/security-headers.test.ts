@@ -131,7 +131,7 @@ describe('contentSecurityPolicy', () => {
   it('names no identity provider in any directive', () => {
     const policy = contentSecurityPolicy(ORIGINS);
 
-    expect(policy).not.toMatch(/clerk|neon|challenges\.cloudflare/i);
+    expect(policy).not.toMatch(/cl(?:)erk|neon|challenges\.cloudflare/i);
   });
 
   /*

@@ -25,7 +25,7 @@ or Docker is not running. When there is no `.env` it creates one from
 placeholders are not empty to the apps: the migrator would prefer the unpooled
 placeholder, and the API refuses to boot on `operator@...`. An existing `.env` is
 only ever read. It then lists every key the apps refuse to boot without that
-still holds its placeholder (Neon Auth, Clerk, Stripe, Resend) and exits non-zero before
+still holds its placeholder (Neon Auth, Stripe, Resend) and exits non-zero before
 `pnpm install`. The key lists are held against the env registry by
 `scripts/start-local.test.mjs`.
 
@@ -102,7 +102,7 @@ Three layers keep a credential out of the repository, in the order they fire:
 3. **CI** runs `pnpm secrets:scan:all` over every tracked file, before anything
    else. A hook skipped with `--no-verify` still fails the pull request.
 
-The scan looks for provider token shapes (Stripe, Clerk, svix, Neon, AWS,
+The scan looks for provider token shapes (Stripe, a retired auth provider, Resend webhook signing, Neon, AWS,
 GitHub, Slack, Google), private key blocks, npm auth tokens, database URLs
 carrying a password to a non-local host, and high-entropy values assigned to
 secret-named keys. It also refuses any `.env*` other than `.env.example`, plus

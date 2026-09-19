@@ -23,8 +23,8 @@ describe('convertUrlsToKeys', () => {
         firstName: 'Grace',
         lastName: 'Hopper',
         role: 'vendor',
-        // A Clerk avatar: not ours to host, and must survive untouched.
-        avatarUrl: 'https://img.clerk.com/abc',
+        // An auth avatar: not ours to host, and must survive untouched.
+        avatarUrl: 'https://img.auth.com/abc',
       })
       .returning();
     userId = person!.id;
@@ -89,10 +89,10 @@ describe('convertUrlsToKeys', () => {
   });
 
   /* Not ours to host, so not ours to rewrite. */
-  it('leaves a Clerk avatar exactly as it was', async () => {
+  it('leaves an auth avatar exactly as it was', async () => {
     const [person] = await database.db.select().from(users).where(eq(users.id, userId));
 
-    expect(person?.avatarUrl).toBe('https://img.clerk.com/abc');
+    expect(person?.avatarUrl).toBe('https://img.auth.com/abc');
   });
 
   it('changes nothing on a second run', async () => {

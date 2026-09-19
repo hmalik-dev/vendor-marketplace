@@ -201,8 +201,8 @@ describe('sendNotificationEmail', () => {
   });
 
   /*
-   * VEN-386. A row whose address disagrees with Clerk is mid-repair, and the
-   * address it still holds is one Clerk has moved off — so the notification
+   * VEN-386. A row whose address disagrees with the auth provider is mid-repair, and the
+   * address it still holds is one the auth provider has moved off — so the notification
    * stays in-app only, and the skip is logged without either address.
    */
   it('sends nothing to an account whose address is diverged, and says why without the address', async () => {

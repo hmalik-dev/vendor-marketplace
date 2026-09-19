@@ -8,7 +8,7 @@ const CUSTOMER = 'user_customer';
 describe('shutdown with an open event stream', () => {
   it('ends the stream, drains background work and resolves', async () => {
     const harness = await createTestHarness();
-    harness.clerkUsers.set(CUSTOMER, {
+    harness.authUsers.set(CUSTOMER, {
       authUserId: CUSTOMER,
       email: 'stream@example.com',
       firstName: 'Stream',

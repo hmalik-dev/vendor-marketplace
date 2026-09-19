@@ -287,7 +287,7 @@ describe('log redaction', () => {
       env: { LOG_LEVEL: 'trace' },
       loggerStream: collector,
     });
-    harness.clerkUsers.set('user_logged', {
+    harness.authUsers.set('user_logged', {
       authUserId: 'user_logged',
       email: 'logged@example.com',
       firstName: 'Log',

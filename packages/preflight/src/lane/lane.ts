@@ -318,7 +318,7 @@ export async function seedLane(
     await run(worktreePath, [script]);
   }
   /*
-   * The end-to-end fixtures need Clerk to resolve the accounts' real ids, so
+   * The end-to-end fixtures need the auth provider to resolve the accounts' real ids, so
    * they are best-effort: a lane whose ticket needs no browser pass should
    * still come up. `pnpm preflight` fails loudly for the lanes that do need
    * it, which is where the demand belongs.

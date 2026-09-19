@@ -16,7 +16,7 @@
  * admin account (D27) — so `pnpm e2e:auth` with no argument refreshed two of
  * three sessions and every lane inherited the main checkout's expired
  * `.auth/admin.json`. The failure looks nothing like its cause: `/admin` enters
- * Clerk's handshake loop and reads as the console being broken rather than as
+ * the auth provider's handshake loop and reads as the console being broken rather than as
  * the one role the refresh skipped.
  */
 export const DEFAULT_ROLES = ['customer', 'vendor', 'admin'];
@@ -26,7 +26,7 @@ export const DEFAULT_ROLES = ['customer', 'vendor', 'admin'];
  *
  * Never a substring test: `localhost.example.com` and
  * `https://evil/?x=localhost` both contain the word, and that exact bypass is
- * already recorded against the Clerk webhook guard.
+ * already recorded against the auth webhook guard.
  */
 export function isLocalOrigin(base) {
   let hostname;
@@ -46,7 +46,7 @@ export function isLocalOrigin(base) {
  * **A deployed origin never gets a default.** `resolveBaseUrl` puts
  * `E2E_BASE_URL` at the top of its chain precisely so a run can be aimed at a
  * deployed origin, and `docs/pre-launch.md` records that production still
- * authenticates against the *same* Clerk development instance as localhost — so
+ * authenticates against the *same* Auth development instance as localhost — so
  * the E2E passwords work there and `admin` carries authority over the
  * production console. Minting that by default, into a file `.worktreeinclude`
  * copies into every lane and every browser agent loads by filename without
@@ -68,7 +68,7 @@ export function resolveRoles(argvRoles, base) {
       explicit: false,
       refusal:
         `Refusing to pick roles for ${base}, which is not a loopback origin.\n` +
-        `  That origin shares its Clerk instance with production, so a default here would\n` +
+        `  That origin shares its auth instance with production, so a default here would\n` +
         `  mint a session with real authority and persist it to .auth/ for every lane.\n` +
         `  Name the roles explicitly if that is what you mean: pnpm e2e:auth customer vendor`,
     };

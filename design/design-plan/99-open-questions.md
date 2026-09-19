@@ -155,7 +155,7 @@ the editor, where the vendor is, not on the page their customers read. Ruled
 **"Browse vendors", going to `/search`, and frame `16` is corrected.** It drew
 `Go to my bookings`, which offers a visitor who has never signed in a link to
 bookings they cannot have. Rejected: an auth-aware pair of strings, because
-`global-error.tsx` renders outside the Clerk provider and cannot know who is
+`global-error.tsx` renders outside the auth provider and cannot know who is
 reading — it would need a signed-out default anyway, and two strings on one
 screen drift. Also rejected: accepting the inaccuracy, since the click is a dead
 end on a page that is already a failure. Ruled 2026-08-30 (D17).
@@ -228,11 +228,11 @@ Raised by #464, deferred to the account holder 2026-09-08, and **not blocking
 anything that shipped** — the bounded wait, the stated error and the retry
 landed without it.
 
-Clerk runs a Cloudflare bot challenge before it will create an account. When the
-challenge host is dropped rather than refused, clerk-js waits for a token that
+Auth runs a Cloudflare bot challenge before it will create an account. When the
+challenge host is dropped rather than refused, auth-js waits for a token that
 never comes; #464 bounds that wait and gives the person a message and a retry.
 What it does not do is give them a way through, because there may not be one
-worth having: **Clerk supports email-code sign-up without a password**, which
+worth having: **Auth supports email-code sign-up without a password**, which
 routes around the challenge entirely, and that is exactly what bot protection
 exists to stop.
 

@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 /**
  * Stripe, reduced to the things this codebase actually does with it. The narrow
  * port is what lets the route suites run the real handler, the real service and
- * real SQL without reaching the network — the same seam the Clerk token
+ * real SQL without reaching the network — the same seam the auth token
  * verifier and the object store already use.
  *
  * The name covers the payment path too, and under #423 it earns it literally:

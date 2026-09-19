@@ -38,7 +38,7 @@ export function authenticated(auth: AuthenticatedUser | null): AuthenticatedUser
 }
 
 /**
- * Authorization always reads the local `users.role` column rather than Clerk
+ * Authorization always reads the local `users.role` column rather than auth
  * metadata, which the account holder can write.
  *
  * The refusal deliberately does **not** name the role it wanted. That sentence
@@ -62,7 +62,7 @@ export function assertRole(
 }
 
 /**
- * Route guard: a verified Clerk session, whether or not it has a local account.
+ * Route guard: a verified auth session, whether or not it has a local account.
  *
  * **Only the acceptance gate's own routes use this.** Every other guarded route
  * requires an account that has accepted the current Terms, and an account is

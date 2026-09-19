@@ -112,7 +112,7 @@ describe('GET /vendors/availability/nearby', () => {
     harness = await createTestHarness({ clock: () => FIXED_NOW });
 
     for (const authUserId of VENDOR_USERS) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',

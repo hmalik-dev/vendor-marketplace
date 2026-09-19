@@ -214,7 +214,7 @@ export async function evaluateE2eReach(
 
   try {
     /*
-     * Matched case-insensitively, because the fixture writes Clerk's canonical
+     * Matched case-insensitively, because the fixture writes the auth provider's canonical
      * address while `.env.e2e.local` holds whatever a human typed.
      */
     const [row] = await sql<

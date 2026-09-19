@@ -50,9 +50,9 @@ export function normalizeRole(value: unknown): UserRole {
 }
 
 /**
- * A name as Clerk holds it, made safe to render.
+ * A name as the auth provider holds it, made safe to render.
  *
- * Clerk owns this field and the account holder types it, so it is untrusted
+ * The auth provider owns this field and the account holder types it, so it is untrusted
  * free text arriving on a path that never sees a request-body schema — which is
  * how it escaped #398's first pass. It reaches the **public** vendor page
  * through `reviewerName`, and both parties' inboxes through `otherPartyName`,
@@ -74,7 +74,7 @@ export function splitAuthName(name: string): { firstName: string; lastName: stri
 }
 
 /**
- * A Clerk identity as the local row records it — normalised, and stated once,
+ * An auth identity as the local row records it — normalised, and stated once,
  * so `normalizeRole` and `mirroredAuthName` cannot be forgotten by a caller.
  */
 function toNewUserRow(snapshot: AuthUserSnapshot): NewUserRow {
@@ -91,7 +91,7 @@ function toNewUserRow(snapshot: AuthUserSnapshot): NewUserRow {
 /**
  * How a person's name is frozen onto a record that can never be edited.
  *
- * The email is the fallback because a Clerk account can genuinely have no name,
+ * The email is the fallback because an auth account can genuinely have no name,
  * and a blank in `legal_acceptances.accepted_by_name` would say nobody
  * accepted. Stated once because three writers freeze it — the Terms gate, the
  * vendor agreement and the E2E fixture — onto rows the database refuses to
@@ -103,7 +103,7 @@ export function displayName(user: Pick<UserRow, 'firstName' | 'lastName' | 'emai
 }
 
 /**
- * Creates the local row for a Clerk identity if it is not there yet. Both the
+ * Creates the local row for an auth identity if it is not there yet. Both the
  * `user.created` webhook and the acceptance gate land here, so the insert
  * tolerates the loser of that race — and it accepts a transaction, which is how
  * the gate writes the account and its acceptance as one act.

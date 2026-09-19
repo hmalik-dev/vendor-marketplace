@@ -1,7 +1,7 @@
 # @vendor-marketplace/web
 
 The Orla frontend: Next.js 15 (App Router, React Server Components),
-Tailwind CSS 4, shadcn/ui, and Clerk for authentication.
+Tailwind CSS 4, shadcn/ui, and Neon Auth for authentication.
 
 ## Running it
 
@@ -14,7 +14,7 @@ pnpm --filter @vendor-marketplace/web dev   # just this one
 
 The app reads `NEXT_PUBLIC_API_URL` (browser) and `API_URL` (server) to reach
 the Fastify API in `apps/api`. Copy `.env.example` at the repository root and
-put the Clerk keys in `apps/web/.env.local`.
+put the auth keys in `apps/web/.env.local`.
 
 ## Layout
 
@@ -28,7 +28,7 @@ src/lib/         `api-client.ts` (the single fetch path to the API),
                  `wire-schemas.ts` (JSON <-> domain schema coercion).
 ```
 
-Route protection is two-layered: `src/middleware.ts` requires a Clerk session
+Route protection is two-layered: `src/middleware.ts` requires an auth session
 for `/dashboard`, `/customer/*`, and `/vendor/*`, then each role layout checks
-the local `users.role` column — never Clerk metadata, which the account holder
+the local `users.role` column — never auth metadata, which the account holder
 can write.

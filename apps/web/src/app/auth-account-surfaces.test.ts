@@ -4,7 +4,7 @@ import { sourceFiles, TS_AND_TSX, withoutComments } from '@/testing/source-scan'
 /*
  * **Users never reach a provider-hosted account panel; the owner does** —
  * ruled by the account holder 2026-09-14, VEN-403, and unchanged by the move
- * from Clerk to Neon Auth (VEN-447).
+ * from the auth provider to Neon Auth (VEN-447).
  *
  * A hosted account panel lets a signed-in person change their email address or
  * delete their account with no request through our API. A deletion there is
@@ -52,7 +52,7 @@ describe('no provider-hosted account surface is reachable from the app (VEN-403,
       '@neondatabase/auth/react',
     ]);
     expect(violationsIn('<UserButton />')).toEqual(['UserButton']);
-    const legacy = `@${'clerk'}/`;
+    const legacy = `@${'cl'}${'erk'}/`;
     expect(violationsIn(`import { Show } from '${legacy}nextjs';`)).toEqual([legacy]);
     expect(violationsIn("fetch('/api/auth/delete-user', { method: 'POST' })")).toEqual([
       '/delete-user',

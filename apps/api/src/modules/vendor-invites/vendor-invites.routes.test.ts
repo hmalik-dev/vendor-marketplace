@@ -42,12 +42,12 @@ function fromANewVisitor(): { remoteAddress: string } {
 describe('the vendor gate', () => {
   let harness: TestHarness;
 
-  /** A Clerk identity nobody has seen, signing up as `role`. */
+  /** An auth identity nobody has seen, signing up as `role`. */
   function freshIdentity(role: 'vendor' | 'customer', email?: string): string {
     identities += 1;
     const id = `user_gate_${role}_${identities}`;
 
-    harness.clerkUsers.set(id, {
+    harness.authUsers.set(id, {
       authUserId: id,
       email: email ?? `${id}@example.com`,
       firstName: 'Grace',
@@ -116,7 +116,7 @@ describe('the vendor gate', () => {
   beforeAll(async () => {
     harness = await createTestHarness({ acceptTerms: false });
 
-    harness.clerkUsers.set(ADMIN, {
+    harness.authUsers.set(ADMIN, {
       authUserId: ADMIN,
       email: 'gate-admin@example.com',
       firstName: 'Ada',
@@ -194,8 +194,8 @@ describe('the vendor gate', () => {
       await setGate(true);
       await invite('signed-in-later@example.com');
       const later = freshIdentity('customer', 'signed-in-later@example.com');
-      const snapshot = harness.clerkUsers.get(later)!;
-      harness.clerkUsers.set(later, { ...snapshot, roleHint: undefined });
+      const snapshot = harness.authUsers.get(later)!;
+      harness.authUsers.set(later, { ...snapshot, roleHint: undefined });
 
       expect((await accept(later)).statusCode).toBe(200);
 
@@ -226,8 +226,8 @@ describe('the vendor gate', () => {
     it('gates the row as saved when a vendor webhook row lands after the snapshot said customer', async () => {
       await setGate(true);
       const identity = freshIdentity('customer');
-      const snapshot = harness.clerkUsers.get(identity)!;
-      const get = harness.clerkUsers.get.bind(harness.clerkUsers);
+      const snapshot = harness.authUsers.get(identity)!;
+      const get = harness.authUsers.get.bind(harness.authUsers);
       let landed: Promise<unknown> | null = null;
 
       /*
@@ -236,7 +236,7 @@ describe('the vendor gate', () => {
        * while the acceptance reads the snapshot — queued ahead of the
        * acceptance's own transaction on the one PGlite connection.
        */
-      harness.clerkUsers.get = (id: string) => {
+      harness.authUsers.get = (id: string) => {
         if (id === identity && landed === null) {
           // `.execute()` starts it now; a Drizzle builder otherwise runs only when awaited.
           landed = harness.database.db
@@ -259,7 +259,7 @@ describe('the vendor gate', () => {
         expect(response.statusCode).toBe(403);
         expect(response.json()).toMatchObject({ error: 'vendor_not_invited' });
       } finally {
-        harness.clerkUsers.get = get;
+        harness.authUsers.get = get;
       }
 
       await landed;
@@ -278,7 +278,7 @@ describe('the vendor gate', () => {
     it('never makes a vendor row that exists without an invite usable', async () => {
       await setGate(true);
       const vendor = freshIdentity('vendor');
-      const snapshot = harness.clerkUsers.get(vendor)!;
+      const snapshot = harness.authUsers.get(vendor)!;
 
       /*
        * The row a writer other than the acceptance gate would leave: a `vendor`

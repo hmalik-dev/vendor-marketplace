@@ -74,7 +74,7 @@ describe('the vendor agreement', () => {
       ['customer_a', 'customer'],
       ['admin_a', 'admin'],
     ] as const) {
-      harness.clerkUsers.set(id, {
+      harness.authUsers.set(id, {
         authUserId: id,
         email: `${id}@example.com`,
         firstName: 'June',

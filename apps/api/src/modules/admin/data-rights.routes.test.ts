@@ -165,7 +165,7 @@ describe('data rights', () => {
   }
 
   function registerIdentity(authUserId: string, role: 'customer' | 'vendor', email: string): void {
-    harness.clerkUsers.set(authUserId, {
+    harness.authUsers.set(authUserId, {
       authUserId,
       email,
       firstName: 'Test',
@@ -178,8 +178,8 @@ describe('data rights', () => {
   /**
    * Re-registers the four fixture identities before every test, not once.
    *
-   * Closure now **deletes** the Clerk identity (#451), and the harness's fake
-   * deletes it from `clerkUsers` rather than only counting the call — so an
+   * Closure now **deletes** the auth identity (#451), and the harness's fake
+   * deletes it from `authUsers` rather than only counting the call — so an
    * identity a closure ended stops resolving, and a `beforeAll` registration
    * would leave every later test in the file signing in as somebody who no
    * longer exists.
@@ -211,8 +211,8 @@ describe('data rights', () => {
 
   beforeEach(() => {
     registerFixtureIdentities();
-    harness.deletedClerkUsers.length = 0;
-    harness.setClerkDeletionFails(false);
+    harness.deletedAuthUsers.length = 0;
+    harness.setAuthDeletionFails(false);
   });
 
   afterEach(async () => {
@@ -839,14 +839,14 @@ describe('data rights', () => {
     /**
      * Acceptance 1 — #451.
      *
-     * The retirement used to stop at `deleted_at`, which left the Clerk session
+     * The retirement used to stop at `deleted_at`, which left the auth session
      * alive: every read 401'd while the browser kept rendering signed-in
      * chrome, indefinitely, with nothing to prompt a sign-out. Ending the
      * identity is what makes the two halves agree, and the fake really removes
      * it, so presenting that person's token afterwards fails the way a deleted
-     * Clerk session does rather than merely being counted.
+     * Auth session does rather than merely being counted.
      */
-    it('deletes the Clerk identity behind the account, ending its session', async () => {
+    it('deletes the auth identity behind the account, ending its session', async () => {
       await signIn(ADMIN, true);
       const customerId = await signIn(CUSTOMER);
 
@@ -858,8 +858,8 @@ describe('data rights', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({ identityDeleted: true });
-      expect(harness.deletedClerkUsers).toEqual([CUSTOMER]);
-      expect(harness.clerkUsers.has(CUSTOMER)).toBe(false);
+      expect(harness.deletedAuthUsers).toEqual([CUSTOMER]);
+      expect(harness.authUsers.has(CUSTOMER)).toBe(false);
 
       /*
        * The refusal has to come from the **identity being gone**, not from the
@@ -867,10 +867,10 @@ describe('data rights', () => {
        * ticket's. `neon-auth.ts` answers the retired row with "No account is
        * linked to this session", which is the behaviour that already existed
        * and which the ticket names as the bug: every read 401s while the
-       * browser keeps rendering signed-in chrome. A token Clerk will no longer
+       * browser keeps rendering signed-in chrome. A token the auth provider will no longer
        * verify answers "Session token is invalid or expired" instead, and that
        * is the one that ends the session. Asserting the status code alone
-       * cannot tell them apart, and would pass with the Clerk deletion removed.
+       * cannot tell them apart, and would pass with the auth deletion removed.
        */
       const after = await harness.app.inject({
         method: 'GET',
@@ -887,7 +887,7 @@ describe('data rights', () => {
     /**
      * Acceptance 2 — #451, asserted rather than assumed.
      *
-     * Deleting the Clerk user fires `user.deleted` straight back at our own
+     * Deleting the auth user fires `user.deleted` straight back at our own
      * webhook, so closure now provokes the redelivery it has to survive. #433's
      * guard is what survives it: `applyUserDeleted` reads a **live** row, finds
      * the one it just retired, and answers `ignored` — so the money moves once.
@@ -958,7 +958,7 @@ describe('data rights', () => {
       });
       expect(closed.statusCode).toBe(200);
 
-      /* The same person, back with a new Clerk identity and the same address. */
+      /* The same person, back with a new auth identity and the same address. */
       registerIdentity(RETURNING, 'customer', address);
       const returningId = await signIn(RETURNING);
 
@@ -1015,15 +1015,15 @@ describe('data rights', () => {
     /**
      * The identity half of #400's shape, for #451.
      *
-     * Clerk is a network call the committed retirement cannot roll back, so a
+     * The auth provider is a network call the committed retirement cannot roll back, so a
      * refusal there leaves an account closed here and signed in there. That is
      * reported rather than thrown: a 500 would tell an operator nothing had
      * happened, when in fact everything except the identity had.
      */
-    it('reports a Clerk deletion it could not make, and closes the account anyway', async () => {
+    it('reports an auth deletion it could not make, and closes the account anyway', async () => {
       await signIn(ADMIN, true);
       const customerId = await signIn(CUSTOMER);
-      harness.setClerkDeletionFails(true);
+      harness.setAuthDeletionFails(true);
 
       const response = await harness.app.inject({
         method: 'POST',
@@ -1033,7 +1033,7 @@ describe('data rights', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({ identityDeleted: false });
-      expect(harness.deletedClerkUsers).toEqual([]);
+      expect(harness.deletedAuthUsers).toEqual([]);
 
       const [account] = await harness.database.db
         .select({ deletedAt: users.deletedAt })
@@ -1046,14 +1046,14 @@ describe('data rights', () => {
     });
 
     /**
-     * A row Clerk never issued has no identity to end (#451).
+     * A row the auth provider never issued has no identity to end (#451).
      *
      * The seeded marketplace accounts carry `seed_mkt_…` ids, are live, and are
-     * listed and closable on `/admin/customers`. Handing one to Clerk asks it
+     * listed and closable on `/admin/customers`. Handing one to the auth provider asks it
      * about a user it has never heard of, and then reports its answer as fact:
      * a 404 reads as "deleted" and a 400 reads as "still signed in", and both
      * are written into `admin_actions`, which cannot be corrected afterwards.
-     * `isClerkIdentity` is the predicate the reconcile pass already owns for
+     * `isAuthIdentity` is the predicate the reconcile pass already owns for
      * exactly this distinction.
      */
     it('does not ask Neon Auth about a row it never issued', async () => {
@@ -1080,7 +1080,7 @@ describe('data rights', () => {
       expect(response.statusCode).toBe(200);
       /* Nothing is owed, because there was never a sign-in to delete. */
       expect(response.json()).toMatchObject({ identityDeleted: true });
-      expect(harness.deletedClerkUsers).toEqual([]);
+      expect(harness.deletedAuthUsers).toEqual([]);
     });
 
     /*
@@ -1124,7 +1124,7 @@ describe('data rights', () => {
     });
 
     /*
-     * A Clerk-era row has no Neon Auth identity to end, and claiming it was
+     * An auth-era row has no Neon Auth identity to end, and claiming it was
      * ended would write a false, permanent `admin_actions` record.
      */
     it('reports a legacy-provider row as not deleted, and asks nothing', async () => {
@@ -1154,9 +1154,9 @@ describe('data rights', () => {
     /*
      * VEN-450: a Neon Auth id that starts `user_` is still a Neon identity. The
      * provider is recorded on the row, so closure deletes it rather than
-     * mistaking it for a Clerk one and reporting nothing owed.
+     * mistaking it for an auth one and reporting nothing owed.
      */
-    it('deletes the Neon identity of an id that looks like a Clerk one', async () => {
+    it('deletes the Neon identity of an id that looks like an auth one', async () => {
       await signIn(ADMIN, true);
       const lookalike = 'user_2abcdefghijklmnopqrstuvwxyz';
       harness.authUsers.set(lookalike, {
@@ -1393,7 +1393,7 @@ describe('data rights', () => {
 
         expect(response.statusCode).toBe(200);
         expect(response.json()).toMatchObject({ userId: peerId, identityDeleted: true });
-        expect(harness.deletedClerkUsers).toEqual([OUTSIDER]);
+        expect(harness.deletedAuthUsers).toEqual([OUTSIDER]);
 
         const rows = await harness.database.db
           .select({
@@ -1527,7 +1527,7 @@ describe('data rights', () => {
 
   describe('the unwind copies', () => {
     /**
-     * The closure and the Clerk backstop are the **same decision** about the
+     * The closure and the auth provider backstop are the **same decision** about the
      * account holder's own bookings, so they must select the same branch.
      *
      * `account-holder` on a closure an operator typed is deliberate: the word

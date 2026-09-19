@@ -71,7 +71,7 @@ import { payoutFailingClauses } from '../payments/payouts.dao.js';
  * ## Where a closed account shows, and where it does not (VEN-382)
  *
  * Every `users.deleted_at` read here predates account closure (#438), when only
- * a Clerk webhook set the column. Each is now a decision, ruled at its site:
+ * an auth webhook set the column. Each is now a decision, ruled at its site:
  *
  * | Read | Closed accounts | Why |
  * | --- | --- | --- |
@@ -207,7 +207,7 @@ function statusCondition(status: AdminVendorStatus) {
  *
  * This began `[eq(vendorProfiles.isDeleted, false)]`, which was right while
  * nothing but a seed script could ever set the column: the only rows it
- * excluded were fixtures. Now that deleting a Clerk identity retires the
+ * excluded were fixtures. Now that deleting an auth identity retires the
  * storefront, that same line would make every deleted vendor vanish from the
  * one screen that has to answer "what happened to this account" — and it is
  * `admin_actions` and the bookings they unwound that the operator is looking
@@ -854,7 +854,7 @@ function customerCondition(filters: AdminCustomerFilters) {
    * on from (#462).
    *
    * Stored rather than derived, unlike `refundStuck`: nothing else in the
-   * database knows what Clerk currently believes, so `pending_email` — written
+   * database knows what the auth provider currently believes, so `pending_email` — written
    * by `updateUserByAuthId` when `users_email_key` refuses the new address —
    * is the only record that the two disagree. Keyed on it rather than on
    * `email_sync_failed_at` because it is the column the console prints, and a
@@ -984,7 +984,7 @@ function refundStuck(floorDate: string): SQL<boolean> {
   /*
    * **Retired accounts as well as banned ones (#433).** This flag was written
    * for #415, when a ban was the only thing that unwound an account, so
-   * `is_banned` was the whole condition. Deleting a Clerk identity now runs the
+   * `is_banned` was the whole condition. Deleting an auth identity now runs the
    * same unwind — and can strand a booking the same two ways, a refund Stripe
    * refused or one this platform deliberately declines to price — but writes
    * `deleted_at` and `is_deleted`, never `is_banned`. Keyed on the ban alone,

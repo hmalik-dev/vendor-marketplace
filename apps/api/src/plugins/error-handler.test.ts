@@ -9,7 +9,7 @@ import { errorHandlerPlugin } from './error-handler.js';
  *
  * The danger is that several third-party SDKs also set a numeric `statusCode`,
  * and their messages are written for a developer reading a stack trace rather
- * than for a customer: `stripe-node` names the API key and its mode, Clerk names
+ * than for a customer: `stripe-node` names the API key and its mode, auth names
  * the instance, the AWS SDK names the bucket. Those must not fall into the same
  * branch and be echoed back to a browser.
  */

@@ -106,7 +106,7 @@ export function evaluateVariable(variable: EnvVariable, context: CheckContext): 
     );
   }
 
-  // Never echo the value: a passing line for CLERK_SECRET_KEY must not print
+  // Never echo the value: a passing line for NEON_AUTH_BASE_URL must not print
   // the secret it just validated.
   return pass(variable.capability, variable.key, shape ? 'set, shape ok' : 'set');
 }

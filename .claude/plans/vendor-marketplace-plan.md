@@ -1,5 +1,7 @@
 # Vendor Marketplace — Project Plan
 
+> **Superseded 2026-09-19 (VEN-444/447/448):** the identity provider, webhook signing and auth env vars named below describe the original design. The system now runs on Neon Auth; `.claude/plans/vendor-marketplace-decisions.md` keeps the history. This plan is not rewritten, so the repo guard allow-lists it.
+
 ## 1. Product Brief
 
 **VenMatch** is a two-sided web marketplace connecting customers with event service vendors (photographers, DJs, makeup artists, decorators, caterers, florists, etc.). Think "Airbnb for event vendors."

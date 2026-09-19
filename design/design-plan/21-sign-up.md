@@ -60,7 +60,7 @@ The whole panel — role choice and form — must fit inside 836px without scrol
 
 **`Create my account` is the approved primary action, and the plan was already
 right.** Ruled 2026-08-30 (D16): frame `12 Sign up` draws it, this file has
-specified it since it was written, and the live button reads Clerk's default
+specified it since it was written, and the live button reads the auth provider's default
 `Continue` (`sign-up-form.tsx`). That is a code defect, not a plan gap — the
 string is what the button does at the moment of commitment, and it now also sits
 in `31-content-voice.md`.
@@ -90,7 +90,7 @@ panel height re-derives the stop.
 
 **The role survives email verification; the picker is never shown twice.** Ruled
 2026-08-30 (D16) as a defect. The role is read from `?role=` server-side and
-handed to Clerk as `unsafeMetadata` before verification, but Clerk's verification
+handed to the auth provider as `unsafeMetadata` before verification, but the auth provider's verification
 step is a path navigation that remounts the page, and the picker — local state
 seeded from the query string — resets to unselected. Since the role is already in
 `unsafeMetadata`, it is read back from there (or the picker is suppressed once
@@ -185,16 +185,16 @@ those honestly, and a placeholder number here — the last thing a hesitant
 sign-up reads — is the worst possible place for one. Each of these three claims
 is true on day one and is a stronger promise than a small number.
 
-## Clerk
+## Auth provider
 
-`<ClerkProvider appearance={{ theme: shadcn }}>` inherits the slots already bound
-in `globals.css`. Override only where Clerk's defaults fight the layout:
+The auth provider's root component, given `appearance={{ theme: shadcn }}`, inherits the slots already bound
+in `globals.css`. Override only where the auth provider's defaults fight the layout:
 
 ```ts
 appearance: { theme: shadcn, elements: { card: { boxShadow: 'none', border: 'none' } } }
 ```
 
-Never hand-write brand hexes into a Clerk appearance object — that's a second
+Never hand-write brand hexes into an auth appearance object — that's a second
 source of truth and it drifts.
 
 ## Acceptance

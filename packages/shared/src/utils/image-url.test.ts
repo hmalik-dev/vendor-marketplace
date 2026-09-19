@@ -31,7 +31,7 @@ describe('resolveImageUrl', () => {
 
   /* Neither of these is ours to host, so neither gets a base prepended. */
   it('passes an absolute URL through untouched', () => {
-    expect(resolveImageUrl(CDN, 'https://img.clerk.com/abc')).toBe('https://img.clerk.com/abc');
+    expect(resolveImageUrl(CDN, 'https://img.auth.com/abc')).toBe('https://img.auth.com/abc');
     expect(resolveImageUrl(CDN, 'https://pub-f0933b41.r2.dev/portfolio/a.webp')).toBe(
       'https://pub-f0933b41.r2.dev/portfolio/a.webp',
     );
@@ -54,9 +54,7 @@ describe('resolveImageUrl', () => {
   });
 
   it('still resolves an absolute URL when no base is configured', () => {
-    expect(resolveImageUrl(undefined, 'https://img.clerk.com/abc')).toBe(
-      'https://img.clerk.com/abc',
-    );
+    expect(resolveImageUrl(undefined, 'https://img.auth.com/abc')).toBe('https://img.auth.com/abc');
   });
 });
 
@@ -73,9 +71,9 @@ describe('toObjectKey', () => {
     );
   });
 
-  /* A Clerk avatar is not under our base and must survive the migration. */
+  /* An auth avatar is not under our base and must survive the migration. */
   it('leaves a value from another host exactly as it is', () => {
-    expect(toObjectKey(CDN, 'https://img.clerk.com/abc')).toBe('https://img.clerk.com/abc');
+    expect(toObjectKey(CDN, 'https://img.auth.com/abc')).toBe('https://img.auth.com/abc');
     expect(toObjectKey(CDN, '/marketing/vendors/a.jpg')).toBe('/marketing/vendors/a.jpg');
   });
 

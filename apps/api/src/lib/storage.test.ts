@@ -67,7 +67,7 @@ describe('ownsObjectKey', () => {
  *
  * An image reference is legitimately one of three shapes and only one of them
  * carries an owner, so only one of them can be refused. Asking "is this mine"
- * on the way in would reject every seeded site-relative path and every Clerk
+ * on the way in would reject every seeded site-relative path and every auth
  * avatar, which is why the guard asks "is this someone else's" instead.
  */
 describe('assertOwnedImageRefs', () => {
@@ -201,7 +201,7 @@ describe('assertOwnedImageRefs', () => {
     ['the caller’s own key', MINE],
     ['a legacy key with no owner segment', 'portfolio/abc.webp'],
     ['seeded site-relative art', '/images/marketing/hero.webp'],
-    ['a Clerk avatar on a host that is not ours', 'https://img.clerk.com/a.png'],
+    ['an auth avatar on a host that is not ours', 'https://img.auth.com/a.png'],
     ['a path under a prefix this API never writes', 'not-a-prefix/owner-2/abc.webp'],
   ])('accepts %s', (_label, ref) => {
     expect(() => assertOwnedImageRefs([ref], 'owner-1')).not.toThrow();
@@ -216,7 +216,7 @@ describe('assertOwnedImageRefs', () => {
     ['a prefix segment too deep in the path', 'https://img.example/portfolio/a/b/c.webp'],
     ['a prefix segment with nothing after it', 'https://img.example/gallery/portfolio'],
     ['a prefix as a filename', 'https://img.example/albums/portfolio.webp'],
-    ['a Clerk avatar with a multi-segment path', 'https://img.clerk.com/eyJ0eXAi/user/abc.png'],
+    ['an auth avatar with a multi-segment path', 'https://img.auth.com/eyJ0eXAi/user/abc.png'],
     ['a Gravatar carrying a query', 'https://www.gravatar.com/avatar/abc?d=mp'],
   ])('reads no owner from %s', (_label, ref) => {
     expect(() => assertOwnedImageRefs([ref], 'owner-1')).not.toThrow();

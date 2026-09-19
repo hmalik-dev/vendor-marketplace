@@ -3,14 +3,14 @@
  *
  * The narrow port is what lets the route suites run the real handler, the real
  * service and real SQL while asserting on what *would* have been sent — the
- * same seam the Clerk token verifier, the svix verifier and the Stripe gateway
+ * same seam the auth token verifier, the svix verifier and the Stripe gateway
  * already use. Nothing here knows what an email says; that is
  * `notification-email.ts`'s job.
  *
  * Called with `fetch` rather than through the `resend` SDK. This is one POST,
  * and the SDK would put a dependency in the import graph of every API test for
  * the sake of a URL and a bearer token — the same reasoning
- * `packages/db/src/scripts/seed-e2e.ts` gives for calling Clerk's REST API
+ * `packages/db/src/scripts/seed-e2e.ts` gives for calling the auth provider's REST API
  * directly.
  */
 

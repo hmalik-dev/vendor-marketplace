@@ -10,7 +10,7 @@ import { redactErrorValues } from './log-error-serializer.js';
 
 /** What the API knows about a failure beyond the error itself. */
 export interface ErrorContext {
-  /** The signed-in caller's Clerk user id — the id the web app reports too, so one person reads as one user across both projects. */
+  /** The signed-in caller's auth user id — the id the web app reports too, so one person reads as one user across both projects. */
   userId?: string | null | undefined;
   /** A failure in money movement: checkout, a refund, a Connect account, a Stripe webhook, the payout sweep. */
   payment?: boolean;

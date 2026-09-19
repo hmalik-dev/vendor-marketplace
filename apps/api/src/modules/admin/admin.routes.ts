@@ -110,7 +110,7 @@ const adminConversationParamsSchema = z.object({ conversationId: z.uuid() });
  * read and write other people's accounts by design.
  *
  * The role is read from the local `users.role` column by `requireRole`, never
- * from Clerk metadata: the account holder can write that field, and `admin` is
+ * from auth metadata: the account holder can write that field, and `admin` is
  * refused at sync (`normalizeRole`) precisely so it can only be granted here.
  */
 export interface AdminRoutesOptions {

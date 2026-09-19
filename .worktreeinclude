@@ -2,7 +2,7 @@
 #
 # A worktree is a fresh checkout, so nothing gitignored comes along by default.
 # Without this file a parallel lane starts with no environment at all: the API
-# cannot reach Neon, the web app has no Clerk keys, and Playwright has no test
+# cannot reach Neon, the web app has no auth keys, and Playwright has no test
 # accounts to sign in with. Uses .gitignore syntax; only files that match AND
 # are gitignored are copied, so tracked files are never duplicated.
 
@@ -14,7 +14,7 @@
 # password (`.claude/rules/e2e-auth.md`); they load these as `storageState`.
 # Without them a lane's browser verification starts signed out and every
 # authenticated flow fails, which is indistinguishable from the ticket's own
-# change breaking. Shared across lanes on purpose: the file is a Clerk session
+# change breaking. Shared across lanes on purpose: the file is an auth session
 # for a role, while the data each lane sees lives in that lane's own database.
 .auth/
 

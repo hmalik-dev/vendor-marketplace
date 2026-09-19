@@ -307,7 +307,7 @@ describe('reconcileAuthUsers', () => {
   });
 
   /*
-   * A Clerk-era row has no Neon Auth identity by construction. Reading that as a
+   * An auth-era row has no Neon Auth identity by construction. Reading that as a
    * deletion would retire the account and refund its bookings.
    */
   it('leaves rows the previous provider issued alone', async () => {
@@ -322,10 +322,10 @@ describe('reconcileAuthUsers', () => {
 
   /*
    * VEN-450: the provider is recorded, not read off the id. A Neon Auth id that
-   * happens to look like a Clerk one is a live Neon account, and its deletion at
+   * happens to look like an auth one is a live Neon account, and its deletion at
    * Neon Auth must still retire it.
    */
-  it('retires a Neon-issued row whose id merely looks like a Clerk one', async () => {
+  it('retires a Neon-issued row whose id merely looks like an auth one', async () => {
     const lookalike = 'user_2abcdefghijklmnopqrstuvwxyz';
     await seed(lookalike);
     await seed('user_a', { email: 'katherine@example.com' });

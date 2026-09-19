@@ -29,7 +29,7 @@ describe('a stream client that leaves while its account is being checked', () =>
 
   beforeAll(async () => {
     harness = await createTestHarness();
-    harness.clerkUsers.set(CUSTOMER, {
+    harness.authUsers.set(CUSTOMER, {
       authUserId: CUSTOMER,
       email: 'abort@example.com',
       firstName: 'Abort',
