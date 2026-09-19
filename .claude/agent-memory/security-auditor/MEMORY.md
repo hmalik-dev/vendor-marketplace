@@ -93,3 +93,5 @@
 - [Admin category writes](admin-category-writes.md) — VEN-401 PASS; toggle can double-write its audit row under a concurrent repeat
 - [Vendor invite gate checks before the row it creates](vendor-invite-gate-checks-before-the-row-it-creates.md) — VEN-406: snapshot role judged, webhook row committed; waitlist email squattable
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — public repo: traces carry Clerk cookies, stripe-listen.log carries whsec; masking never reaches artifacts
+- [Sentry is a second log sink](sentry-is-a-second-log-sink.md) — VEN-397: `captureException` bypasses `log-error-serializer`'s bound-param strip, and `scrubErrorEvent` keeps `request.url` with its query
+- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — VEN-397: child output is redacted and `workflow_run` is gated; only `PhaseError`s built from argv are not

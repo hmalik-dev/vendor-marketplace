@@ -133,7 +133,21 @@ test('a clone with no .env gets one with the local database and storage filled i
     assert.match(output, new RegExp(`^  - ${key} `, 'm'));
   }
   assert.match(output, /ask the project owner/i);
-  assert.match(output, /^  - SENTRY_DSN /m);
+  /*
+   * Derived from `OPTIONAL_KEYS`, not spelled out. This read `SENTRY_DSN`
+   * literally until VEN-397 made the registry mark it absent-able locally,
+   * which moved it to `OPTIONAL_PLACEHOLDER_KEYS` — and a hard-coded key is
+   * then a test pinning a categorisation the registry no longer makes.
+   */
+  for (const key of Object.keys(OPTIONAL_KEYS)) {
+    assert.match(output, new RegExp(`^  - ${key} `, 'm'));
+  }
+  assert.equal(/These are optional/.test(output), Object.keys(OPTIONAL_KEYS).length > 0);
+  // The point of the placeholder list: absent-able keys are emptied in `.env`
+  // and never named among the ones that must be filled before the app starts.
+  for (const key of OPTIONAL_PLACEHOLDER_KEYS) {
+    assert.doesNotMatch(output, new RegExp(`^  - ${key} `, 'm'), key);
+  }
   assert.doesNotMatch(output, /DATABASE_URL|S3_/);
 });
 

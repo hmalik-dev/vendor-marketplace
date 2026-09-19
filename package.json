@@ -47,11 +47,17 @@
     "prettier": "3.9.6",
     "tsx": "4.23.12",
     "turbo": "2.10.12",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "yaml": "2.9.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "next>postcss": "8.5.28",
+      "cosmiconfig>js-yaml": "4.3.2",
+      "metro>image-size": "2.0.4"
+    }
   }
 }

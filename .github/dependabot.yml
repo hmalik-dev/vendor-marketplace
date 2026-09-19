@@ -1,0 +1,19 @@
+# Dependency updates (VEN-397). CI's `pnpm audit --audit-level high --prod`
+# catches a vulnerable dependency; this is what brings the fix.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # One pull request a week for everything semver says is compatible; a major
+    # arrives on its own, because it is a migration rather than a bump.
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

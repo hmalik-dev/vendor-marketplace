@@ -1,3 +1,4 @@
+import type { FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { ERROR_CODES, type ApiError } from '@vendor-marketplace/shared';
 import {
@@ -5,6 +6,7 @@ import {
   isResponseSerializationError,
 } from 'fastify-type-provider-zod';
 import { AppError } from '../lib/errors.js';
+import { type ErrorReporter, silentErrorReporter } from '../lib/error-reporting.js';
 
 /** Fastify types the error handler's argument as `unknown` under strict mode. */
 function statusCodeOf(error: unknown): number | null {
@@ -50,14 +52,42 @@ function messageOf(error: unknown, statusCode: number): string {
   return statusCode === 404 ? 'Resource not found' : 'Request failed';
 }
 
+export interface ErrorHandlerOptions {
+  /** Where a failure the client cannot be told about is reported. Silent when absent. */
+  reporter?: ErrorReporter;
+  /**
+   * Route patterns that move money. A failure on one is reported as a payment
+   * error, which is what the operator's alert rule pages on.
+   */
+  paymentRoutes?: ReadonlySet<string>;
+}
+
 /**
  * Single exit point for every failed request. Known failures map to their
  * `apiErrorSchema` shape; everything else is logged with full context and
  * answered with an opaque 500 so stack traces, SQL, and paths never leave
  * the process.
  */
-export const errorHandlerPlugin = fp(
-  async (app) => {
+export const errorHandlerPlugin = fp<ErrorHandlerOptions>(
+  async (app, options) => {
+    const reporter = options.reporter ?? silentErrorReporter;
+    const paymentRoutes = options.paymentRoutes ?? new Set<string>();
+
+    /*
+     * Everything logged at error level below is also reported: those are the
+     * failures the client is answered opaquely about, so the tracker is the
+     * only place anyone learns of them. A 4xx the caller caused is not.
+     */
+    const report = (error: unknown, request: FastifyRequest): void => {
+      const route = request.routeOptions.url;
+
+      reporter.capture(error, {
+        userId: request.auth?.clerkUserId ?? null,
+        route,
+        payment: route !== undefined && paymentRoutes.has(route),
+      });
+    };
+
     app.setErrorHandler((error, request, reply) => {
       if (hasZodFastifySchemaValidationErrors(error)) {
         const body: ApiError = {
@@ -74,6 +104,7 @@ export const errorHandlerPlugin = fp(
           { err: error, route: request.routeOptions.url },
           'Response failed its schema',
         );
+        report(error, request);
         const body: ApiError = {
           statusCode: 500,
           error: ERROR_CODES.INTERNAL_ERROR,
@@ -91,6 +122,7 @@ export const errorHandlerPlugin = fp(
         };
         if (error.statusCode >= 500) {
           request.log.error({ err: error }, 'Application error');
+          report(error, request);
         }
         return reply.status(error.statusCode).send(body);
       }
@@ -116,6 +148,7 @@ export const errorHandlerPlugin = fp(
             { err: error, method: request.method, route: request.routeOptions.url },
             'Upstream dependency answered 4xx',
           );
+          report(error, request);
         }
 
         const body: ApiError = {
@@ -130,6 +163,7 @@ export const errorHandlerPlugin = fp(
         { err: error, method: request.method, route: request.routeOptions.url },
         'Unhandled error',
       );
+      report(error, request);
       const body: ApiError = {
         statusCode: 500,
         error: ERROR_CODES.INTERNAL_ERROR,

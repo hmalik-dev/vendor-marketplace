@@ -28,6 +28,8 @@ export interface CspOrigins {
   apiOrigin: string;
   /** The bucket public URLs are served from, if it is a distinct origin. */
   imageOrigin?: string;
+  /** The Sentry ingest host the browser SDK posts to, read from the DSN. Absent when reporting is off. */
+  errorIngestOrigin?: string | undefined;
   /**
    * Whether this origin is served over TLS. Off HTTPS the policy must not ask
    * the browser to upgrade its subresources: on localhost that rewrites the
@@ -121,10 +123,17 @@ const PAYMENT_ALLOWLIST = ['self', ...STRIPE_HOSTS.script.map((host) => `"${host
 export function contentSecurityPolicy({
   apiOrigin,
   imageOrigin,
+  errorIngestOrigin,
   https,
   allowEval,
 }: CspOrigins): string {
-  const connect = ["'self'", apiOrigin, ...CLERK_HOSTS, ...STRIPE_HOSTS.connect];
+  const connect = [
+    "'self'",
+    apiOrigin,
+    ...CLERK_HOSTS,
+    ...STRIPE_HOSTS.connect,
+    ...(errorIngestOrigin ? [errorIngestOrigin] : []),
+  ];
   /*
    * `img.clerk.com` is Clerk's avatar CDN, and it is not covered by
    * `*.clerk.com` on `connect-src` because avatars are images. Leaving it out

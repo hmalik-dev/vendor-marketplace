@@ -91,6 +91,12 @@ jobs:
       - name: Scan for committed credentials
         run: pnpm secrets:scan:all
 
+      # Production dependencies only, and only what is high or worse (VEN-397).
+      # A finding with no upstream fix is pinned past in `pnpm.overrides`, never
+      # ignored, so this step cannot go quiet about a new advisory.
+      - name: Audit production dependencies
+        run: pnpm audit --audit-level high --prod
+
       - run: pnpm format:check
 
       - run: pnpm typecheck
@@ -112,6 +118,48 @@ jobs:
       # them. Without this step a regression in a hook or a workflow ships green.
       - name: Test agent workflows and hooks
         run: pnpm test:agents
+
+  # gitleaks over every commit in the history, on every push and pull request
+  # this workflow sees (VEN-397). `pnpm secrets:scan:all` above reads the tree
+  # as it stands; a credential committed and then deleted is still in a pushed
+  # history, and that is the one failure no local fix repairs — it is rotated.
+  # A job of its own, so it reports in seconds and needs no install.
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # Pinned and checksummed rather than a marketplace action: the action
+      # needs a licence key for an organisation and runs whatever version it
+      # resolves, where this runs exactly the binary whose digest is below.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl -fsSL -o "$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      # Before the real scan, so a config that allowlists too much — or a binary
+      # that scans nothing — cannot pass it for the wrong reason.
+      - name: Prove the scan flags a planted credential
+        run: node --test scripts/gitleaks/planted.test.mjs
+
+      - name: Scan every commit
+        run: gitleaks git . --config .gitleaks.toml --redact --no-banner --verbose
 
   # The committed Playwright journeys against the whole stack — built, served
   # with `next start`, real Clerk test instance, Stripe test mode with webhooks
@@ -317,8 +365,9 @@ jobs:
             ${{ runner.temp }}/web.log
           retention-days: 14
 
-# Migrations are Railway's job, not CI's. `railway.json` carries
-# `preDeployCommand`, which runs the compiled migrator before a new container
-# takes traffic — atomic with the deploy that needs the schema, and impossible
-# to skip. The migrate-staging and migrate-production jobs that used to live
-# here were a second path to the same DDL and were deleted; see ticket #204.
+# Migrations are not CI's job. `deploy.yml` runs them after this workflow
+# succeeds on main, over DATABASE_URL_UNPOOLED, before either service deploys
+# (VEN-397). Before that they ran in Railway's `preDeployCommand`, over the
+# runtime's pooled URL; that path was removed with it, so there is one route to
+# production DDL. The migrate-staging and migrate-production jobs that once
+# lived here were deleted for the same reason; see ticket #204.

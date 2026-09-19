@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
 import type { AppDatabase } from '../lib/database.js';
 import type { EmailGateway, EmailMessage } from '../lib/email.js';
+import type { ErrorReporter } from '../lib/error-reporting.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
 import {
   paymentIntentParams,
@@ -159,6 +160,8 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
    * routes, and any suite asserting what an un-accepted session may reach.
    */
   acceptTerms?: boolean;
+  /** Records what would reach the error tracker; silent when absent, as `TEST_ENV` has no DSN. */
+  errorReporter?: ErrorReporter;
 }
 
 /**
@@ -866,6 +869,7 @@ export async function createTestHarness(
     operatorAlertWait: async () => undefined,
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.errorReporter ? { errorReporter: options.errorReporter } : {}),
     auth: {
       // Tokens in the suites are literally the Clerk user id they stand for.
       verifySessionToken: async (token) => {

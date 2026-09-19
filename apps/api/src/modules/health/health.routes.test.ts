@@ -124,6 +124,17 @@ describe('deployedCommit', () => {
     expect(deployedCommit({ RAILWAY_GIT_COMMIT_SHA: 'abc123' })).toBe('abc123');
   });
 
+  /*
+   * The deploy workflow sets `SENTRY_RELEASE`, and the post-deploy poll waits
+   * for `/ready` to name it. The error tracker reads the same variable, so the
+   * commit the poll accepted is the release an error is filed under (VEN-397).
+   */
+  it('names the release the deploy workflow set, ahead of the platform SHA', () => {
+    expect(deployedCommit({ SENTRY_RELEASE: 'wf-sha', RAILWAY_GIT_COMMIT_SHA: 'abc123' })).toBe(
+      'wf-sha',
+    );
+  });
+
   /* A blank or absent value must not become an empty-string "commit". */
   it.each([{}, { RAILWAY_GIT_COMMIT_SHA: '' }, { RAILWAY_GIT_COMMIT_SHA: '   ' }])(
     'has no commit for %p',

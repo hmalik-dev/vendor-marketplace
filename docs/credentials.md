@@ -60,7 +60,11 @@ afterwards — none of which requires seeing the value.
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe                     | Railway             | Yes                     |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`          | Stripe                     | Vercel web          | No (public)             |
 | `RESEND_API_KEY`                              | Resend                     | Railway             | Yes                     |
-| `SENTRY_DSN`                                  | Sentry                     | Railway, Vercel web | Low — write-only ingest |
+| `SENTRY_DSN`                                  | Sentry (API project)       | API host            | Low — write-only ingest |
+| `NEXT_PUBLIC_SENTRY_DSN`                      | Sentry (web project)       | Vercel web          | No (public)             |
+| `SENTRY_AUTH_TOKEN`                           | Sentry organization token  | GitHub secret       | Yes                     |
+| `DATABASE_URL_UNPOOLED`                       | Neon (direct endpoint)     | GitHub secret       | Yes                     |
+| `API_HOST_TOKEN` / `VERCEL_TOKEN`             | API host / Vercel          | GitHub secrets      | Yes                     |
 
 The canonical list of variables is `packages/shared/src/env/registry.ts`.
 `.env.example` and `turbo.json` are generated from it by `pnpm env:example` —

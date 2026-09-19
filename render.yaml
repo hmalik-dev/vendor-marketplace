@@ -94,3 +94,9 @@ services:
       # derived from `BRAND_DOMAIN` and resolves without being set.
       - key: RESEND_API_KEY
         sync: false
+      # Required on any deployment since VEN-397: a process with
+      # `NODE_ENV=production` refuses to boot without a DSN. Use a Sentry
+      # project of the demo's own, never production's — demo noise in the
+      # production project's error budget is what the requirement guards.
+      - key: SENTRY_DSN
+        sync: false

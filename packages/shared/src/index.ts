@@ -8,3 +8,4 @@ export * from './constants/vendor-invites.js';
 export * from './schemas/index.js';
 export * from './schemas/admin-categories.js';
 export * from './utils/index.js';
+export * from './utils/error-reporting.js';
