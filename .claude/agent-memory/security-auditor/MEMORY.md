@@ -48,7 +48,7 @@
 - [ClerkProvider carries no auth guarantee](clerk-provider-carries-no-auth-guarantee.md) — its server variant only adds `initialState` (needs `dynamic`) and dev keyless; `assertWebEnv` is now the sole gate on the inlined key
 - [`/places` replaced an inventory oracle](places-endpoint-replaced-an-inventory-oracle.md) — `/vendors/cities` leaked per-city vendor counts into every page's RSC payload; the missing `ESCAPE` clause is correct on Postgres
 - [A public endpoint mails the caller's own text anywhere](public-mail-endpoint-echoes-to-any-address.md) — `/support/messages`; the echo to an unverified address was gated on `signedIn` in #421, and the signed-in half is settled
-- [Rate-limit keys are the proxy, not the caller](rate-limit-key-is-the-proxy-not-the-caller.md) — `keyGenerator` does see `request.auth` (verified); the missing `trustProxy` that gave every deployment one shared bucket was fixed in #421
+- [Rate limiting: hop-0 proxy, a pre-auth hook, five skipped routes](rate-limit-key-is-the-proxy-not-the-caller.md) — one `rateLimitRan` symbol means running the global limiter on a config route silently disables that route's own limit
 - [Vendor selection writes are transaction-only](vendor-selection-writes-are-transaction-only.md) — `replaceVendorTags`/`replaceVendorCategories` stopped self-transacting in #405; `PUT /vendor/tags` is gone on purpose
 - [The `/search` retired-category 308 rests on three invariants](search-retired-category-redirect.md) — literal prefix, `Object.hasOwn`, and no successor value that is also a key
 - [The categories cascade is single-edged, for now](categories-cascade-is-single-edged.md) — the seed fold hard-deletes the row; a second cascading FK onto `categories.id` makes that silent data loss

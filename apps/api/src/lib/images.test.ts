@@ -106,6 +106,29 @@ describe('processUploadedImage', () => {
     });
   });
 
+  it.each([
+    ['PNG', 'image/png'],
+    ['JPEG', 'image/jpeg'],
+  ] as const)('refuses a truncated %s without echoing the decoder', async (format, mimeType) => {
+    const whole = await sharp({
+      create: { width: 1400, height: 1400, channels: 3, background: '#d94f70' },
+    })
+      [format === 'PNG' ? 'png' : 'jpeg']()
+      .toBuffer();
+    const error: unknown = await processUploadedImage(
+      whole.subarray(0, Math.floor(whole.length / 2)),
+      mimeType,
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({
+      statusCode: 400,
+      message: 'That file could not be read as an image.',
+    });
+    expect(JSON.stringify(error, Object.getOwnPropertyNames(error))).not.toMatch(
+      /vips|jpeg.*(load|premature)|png.*load/i,
+    );
+  });
+
   it('rejects bytes that are not a decodable image', async () => {
     await expect(
       processUploadedImage(Buffer.from('this is not an image'), 'image/png'),

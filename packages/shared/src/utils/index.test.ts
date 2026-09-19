@@ -6,6 +6,7 @@ import {
   calculateRefund,
   centsToDollars,
   dollarsToCents,
+  expiryCountdown,
   formatDurationHours,
   formatPrice,
   generateSlug,
@@ -749,5 +750,38 @@ describe('unwindFloorDate', () => {
   it('is today from noon UTC, so an event already delivered today is not refunded', () => {
     expect(unwindFloorDate(new Date('2026-10-08T12:00:00Z'))).toBe('2026-10-08');
     expect(unwindFloorDate(new Date('2026-10-08T22:00:00Z'))).toBe('2026-10-08');
+  });
+});
+
+describe('expiryCountdown', () => {
+  /** Built from local parts so the assertions hold under every `TZ`. */
+  function local(day: number, hour: number): Date {
+    return new Date(2026, 8, day, hour, 0);
+  }
+
+  it('says nothing when there is no deadline', () => {
+    expect(expiryCountdown(null, local(10, 9))).toBeNull();
+  });
+
+  it('says expired at and after the deadline', () => {
+    expect(expiryCountdown(local(10, 9), local(10, 9))).toBe('expired');
+    expect(expiryCountdown(local(10, 8), local(10, 9))).toBe('expired');
+  });
+
+  it('says today for a deadline later on the same calendar day', () => {
+    expect(expiryCountdown(local(10, 23), local(10, 9))).toBe('expires today');
+  });
+
+  /*
+   * 20 hours away is under one 24-hour block, but past the reader's midnight —
+   * so it is tomorrow's deadline, not today's.
+   */
+  it('counts a deadline 20 hours away across midnight as a day away', () => {
+    expect(expiryCountdown(local(11, 18), local(10, 22))).toBe('expires in 1d');
+  });
+
+  it('counts calendar days rather than elapsed 24-hour blocks', () => {
+    expect(expiryCountdown(local(12, 1), local(10, 23))).toBe('expires in 2d');
+    expect(expiryCountdown(local(17, 9), local(10, 9))).toBe('expires in 7d');
   });
 });

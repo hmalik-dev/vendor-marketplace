@@ -194,6 +194,8 @@ export const HANDLED_STRIPE_EVENT_TYPES: readonly string[] = [
 ];
 
 export interface StripeWebhookRoutesOptions {
+  /** Deliveries per minute per caller; a generous ceiling of its own, not the API-wide one. */
+  rateLimitMax: number;
   /** `STRIPE_PLATFORM_FEE_RATE`, resolved and coerced at boot. */
   platformFeeRate: number;
   /** `canonicalWebOrigin(env)` — the origin every emailed link is built from. */
@@ -271,7 +273,10 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
 
   app.post(
     '/webhooks/stripe',
-    { schema: { response: { 200: webhookResponseSchema } } },
+    {
+      config: { rateLimit: { max: options.rateLimitMax } },
+      schema: { response: { 200: webhookResponseSchema } },
+    },
     async (request, reply) => {
       const signature = request.headers['stripe-signature'];
 
