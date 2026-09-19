@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { MAX_ADMIN_NOTE_LENGTH } from '@vendor-marketplace/shared';
+import { MAX_ADMIN_NOTE_LENGTH, MAX_TAGS_PER_CATEGORY } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { TAG_CATEGORY_LABELS } from '@/components/tags/tag-display';
@@ -13,6 +13,7 @@ import { useApi } from '@/lib/use-api';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import {
   wireAdminTagSuggestionResultSchema,
+  type WireAdminTagSuggestionResult,
   type WireAdminTagRow,
   type WireAdminTagSuggestionRow,
 } from '@/lib/wire-schemas';
@@ -38,6 +39,25 @@ export interface TagQueueProps {
 }
 
 /**
+ * What the operator is told when the tag was approved but the vendor was not
+ * given it. Read from the answer because the card is gone from the pending list
+ * by the time the page refreshes; `null` when the vendor holds the tag.
+ */
+export function assignmentNotice(
+  suggestion: { suggestedName: string },
+  assignment: WireAdminTagSuggestionResult['assignment'],
+): string | null {
+  switch (assignment) {
+    case 'category-full':
+      return `“${suggestion.suggestedName}” was approved, but the vendor already has ${MAX_TAGS_PER_CATEGORY} tags in that category, so it was not added to their profile. They were told.`;
+    case 'no-profile':
+      return `“${suggestion.suggestedName}” was approved, but the vendor has no storefront yet, so it was not added to a profile. They were told.`;
+    default:
+      return null;
+  }
+}
+
+/**
  * The suggestion queue: approve, reject with a note, or merge into an existing
  * tag.
  *
@@ -46,27 +66,36 @@ export interface TagQueueProps {
  * table row is not where a form goes.
  */
 export function TagQueue({ suggestions, tags, showActions }: TagQueueProps): React.ReactElement {
-  if (suggestions.length === 0) {
-    return (
-      <EmptyState
-        panel
-        headline="Nothing waiting"
-        description="Vendors suggest a tag when the list does not describe them. Approved tags become search filters, so the queue is worth keeping short."
-      />
-    );
-  }
+  // Held here, not on the card: resolving removes the card from the pending list.
+  const [notice, setNotice] = useState<string | null>(null);
 
   return (
-    <ul className="flex flex-col gap-2.5">
-      {suggestions.map((suggestion) => (
-        <SuggestionCard
-          key={suggestion.id}
-          suggestion={suggestion}
-          tags={tags}
-          showActions={showActions}
+    <>
+      {notice ? (
+        <p role="status" className="mb-2.5 text-sm text-stone-700">
+          {notice}
+        </p>
+      ) : null}
+      {suggestions.length === 0 ? (
+        <EmptyState
+          panel
+          headline="Nothing waiting"
+          description="Vendors suggest a tag when the list does not describe them. Approved tags become search filters, so the queue is worth keeping short."
         />
-      ))}
-    </ul>
+      ) : (
+        <ul className="flex flex-col gap-2.5">
+          {suggestions.map((suggestion) => (
+            <SuggestionCard
+              key={suggestion.id}
+              suggestion={suggestion}
+              tags={tags}
+              showActions={showActions}
+              onNotice={setNotice}
+            />
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 
@@ -74,10 +103,12 @@ function SuggestionCard({
   suggestion,
   tags,
   showActions,
+  onNotice,
 }: {
   suggestion: WireAdminTagSuggestionRow;
   tags: readonly WireAdminTagRow[];
   showActions: boolean;
+  onNotice: (notice: string | null) => void;
 }): React.ReactElement {
   const router = useRouter();
   const call = useApi();
@@ -100,13 +131,15 @@ function SuggestionCard({
   async function resolve(body: Record<string, unknown>): Promise<void> {
     setBusy(true);
     setError(null);
+    onNotice(null);
 
     try {
-      await call(`/admin/tag-suggestions/${suggestion.id}`, {
+      const result = await call(`/admin/tag-suggestions/${suggestion.id}`, {
         method: 'PUT',
         body,
         schema: wireAdminTagSuggestionResultSchema,
       });
+      onNotice(assignmentNotice(suggestion, result.assignment));
       router.refresh();
     } catch (failure) {
       // `userFacingError`, not `failure.message` — the same reason

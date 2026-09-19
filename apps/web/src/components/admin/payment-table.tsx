@@ -175,7 +175,7 @@ export function PaymentTable({
             header: 'Vendor',
             className: 'font-semibold text-stone-900',
             cell: (row) => (
-              <Link href={`/vendors/${row.vendorSlug}`} className="hover:underline">
+              <Link href={`/admin/vendors/${row.vendorId}`} className="hover:underline">
                 {row.vendorName}
               </Link>
             ),

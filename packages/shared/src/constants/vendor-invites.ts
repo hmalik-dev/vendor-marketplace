@@ -26,9 +26,3 @@ export type VendorApplicationDecision = (typeof VENDOR_APPLICATION_DECISIONS)[nu
 
 /** Upper bound on the free-text note an applicant leaves. */
 export const MAX_VENDOR_APPLICATION_MESSAGE_LENGTH = 2_000;
-
-/**
- * The most applications or invites one console read returns, newest first.
- * The waitlist is a closed beta's, so a bound rather than pagination.
- */
-export const MAX_VENDOR_INVITE_LIST_ROWS = 200;

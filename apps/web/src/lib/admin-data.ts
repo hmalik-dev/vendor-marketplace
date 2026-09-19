@@ -268,13 +268,15 @@ export async function getAdminPlatformSettings(): Promise<WireAdminPlatformSetti
 }
 
 /** The vendor waitlist, newest first (VEN-406). */
-export async function getAdminVendorApplications(): Promise<WireAdminVendorApplicationList> {
-  return adminRead('/admin/vendor-applications', wireAdminVendorApplicationListSchema);
+export async function getAdminVendorApplications(
+  query: string,
+): Promise<WireAdminVendorApplicationList> {
+  return adminRead(`/admin/vendor-applications${query}`, wireAdminVendorApplicationListSchema);
 }
 
 /** Every vendor invite, newest first (VEN-406). */
-export async function getAdminVendorInvites(): Promise<WireAdminVendorInviteList> {
-  return adminRead('/admin/vendor-invites', wireAdminVendorInviteListSchema);
+export async function getAdminVendorInvites(query: string): Promise<WireAdminVendorInviteList> {
+  return adminRead(`/admin/vendor-invites${query}`, wireAdminVendorInviteListSchema);
 }
 
 export async function getAdminTags(): Promise<WireAdminTagList> {

@@ -1,4 +1,4 @@
-import { desc, eq, isNull, and, sql } from 'drizzle-orm';
+import { count, desc, eq, isNull, and, sql } from 'drizzle-orm';
 import {
   users,
   vendorApplications,
@@ -7,7 +7,6 @@ import {
   type VendorInviteRow,
 } from '@vendor-marketplace/db/schema';
 import {
-  MAX_VENDOR_INVITE_LIST_ROWS,
   type AdminVendorApplicationRow,
   type AdminVendorInviteRow,
   type VendorApplicationInput,
@@ -94,7 +93,11 @@ export async function deleteUnusedInvite(tx: AppDatabase, inviteId: string): Pro
   return rows.length > 0;
 }
 
-export async function findAdminInvites(db: AppDatabase): Promise<AdminVendorInviteRow[]> {
+export async function findAdminInvites(
+  db: AppDatabase,
+  limit: number,
+  offset: number,
+): Promise<AdminVendorInviteRow[]> {
   const rows = await db
     .select({
       id: vendorInvites.id,
@@ -107,7 +110,8 @@ export async function findAdminInvites(db: AppDatabase): Promise<AdminVendorInvi
     .from(vendorInvites)
     .leftJoin(users, eq(vendorInvites.invitedBy, users.id))
     .orderBy(desc(vendorInvites.createdAt), desc(vendorInvites.id))
-    .limit(MAX_VENDOR_INVITE_LIST_ROWS);
+    .limit(limit)
+    .offset(offset);
 
   return rows.map(({ firstName, lastName, ...row }) => ({
     ...row,
@@ -151,7 +155,33 @@ export async function upsertApplication(
   });
 }
 
-export async function findAdminApplications(db: AppDatabase): Promise<AdminVendorApplicationRow[]> {
+export async function countAdminInvites(db: AppDatabase): Promise<number> {
+  const rows = await db.select({ total: count() }).from(vendorInvites);
+
+  return rows[0]?.total ?? 0;
+}
+
+/** Every application, and how many of them are still waiting on a decision. */
+export async function countAdminApplications(
+  db: AppDatabase,
+): Promise<{ total: number; waiting: number }> {
+  const rows = await db
+    .select({
+      total: count(),
+      waiting: sql<number>`count(*) filter (where ${vendorApplications.status} = 'new')`.mapWith(
+        Number,
+      ),
+    })
+    .from(vendorApplications);
+
+  return { total: rows[0]?.total ?? 0, waiting: rows[0]?.waiting ?? 0 };
+}
+
+export async function findAdminApplications(
+  db: AppDatabase,
+  limit: number,
+  offset: number,
+): Promise<AdminVendorApplicationRow[]> {
   return db
     .select({
       id: vendorApplications.id,
@@ -165,7 +195,8 @@ export async function findAdminApplications(db: AppDatabase): Promise<AdminVendo
     })
     .from(vendorApplications)
     .orderBy(desc(vendorApplications.createdAt), desc(vendorApplications.id))
-    .limit(MAX_VENDOR_INVITE_LIST_ROWS);
+    .limit(limit)
+    .offset(offset);
 }
 
 /** The application, locked for the caller's transaction. */

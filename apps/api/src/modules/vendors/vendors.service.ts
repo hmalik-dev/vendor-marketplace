@@ -482,7 +482,15 @@ export async function updateVendorProfile(
       : findVendorCategoryIds(db, existing.id).then((held) =>
           assertCategoriesSelectable(db, requestedCategoryIds, held),
         ),
-    input.tagIds === undefined ? undefined : resolveVendorTagSelection(db, input.tagIds),
+    input.tagIds === undefined
+      ? undefined
+      : findVendorTags(db, existing.id).then((held) =>
+          resolveVendorTagSelection(
+            db,
+            input.tagIds ?? [],
+            held.map((tag) => tag.id),
+          ),
+        ),
   ] as const);
 
   if (input.isPublished !== undefined) {

@@ -1031,6 +1031,7 @@ function bookingSelection() {
     customerLastName: users.lastName,
     vendorName: vendorProfiles.businessName,
     vendorSlug: vendorProfiles.slug,
+    vendorId: bookings.vendorId,
     createdAt: bookings.createdAt,
   };
 }
@@ -1053,6 +1054,7 @@ export interface AdminBookingProjection {
   customerLastName: string;
   vendorName: string;
   vendorSlug: string;
+  vendorId: string;
   createdAt: Date;
 }
 
@@ -1536,13 +1538,44 @@ export async function insertTag(
   return row;
 }
 
-/** Idempotent: an operator approving a tag the vendor already holds is not an error. */
-export async function assignTagToVendor(
+/**
+ * Gives a vendor a tag unless they are already at the per-category ceiling.
+ * Idempotent: a vendor who already holds the tag has it, so that is `assigned`
+ * even when the category is full.
+ */
+export async function assignTagToVendorWithinLimit(
   tx: AppDatabase,
   vendorProfileId: string,
-  tagId: string,
-): Promise<void> {
-  await tx.insert(vendorTags).values({ vendorId: vendorProfileId, tagId }).onConflictDoNothing();
+  tag: Pick<TagRow, 'id' | 'category'>,
+  limit: number,
+): Promise<'assigned' | 'category-full'> {
+  // Locks the profile row so two approvals for one vendor count in turn, not both at four.
+  await tx
+    .select({ id: vendorProfiles.id })
+    .from(vendorProfiles)
+    .where(eq(vendorProfiles.id, vendorProfileId))
+    .for('update');
+
+  const held = await tx
+    .select({ tagId: vendorTags.tagId })
+    .from(vendorTags)
+    .innerJoin(tags, eq(tags.id, vendorTags.tagId))
+    .where(and(eq(vendorTags.vendorId, vendorProfileId), eq(tags.category, tag.category)));
+
+  if (held.some((row) => row.tagId === tag.id)) {
+    return 'assigned';
+  }
+
+  if (held.length >= limit) {
+    return 'category-full';
+  }
+
+  await tx
+    .insert(vendorTags)
+    .values({ vendorId: vendorProfileId, tagId: tag.id })
+    .onConflictDoNothing();
+
+  return 'assigned';
 }
 
 export async function findTagBySlug(db: AppDatabase, slug: string): Promise<TagRow | null> {
@@ -1555,9 +1588,9 @@ export async function findTagBySlug(db: AppDatabase, slug: string): Promise<TagR
  * Case-insensitive name lookup within a category, **regardless of `is_active`**.
  *
  * Deliberately not `findActiveTagByCategoryAndName`: approving a suggestion whose
- * name matches a *deactivated* tag must resurface that tag rather than insert a
- * second row, which the `(category, name)` unique index would reject anyway —
- * as a 500 rather than the note the operator is owed.
+ * name matches a *deactivated* tag must find that tag, because inserting a
+ * second row would trip the `(category, name)` unique index as a 500. The caller
+ * then refuses with a note naming the hidden tag rather than merging into it.
  */
 export async function findTagByCategoryAndName(
   db: AppDatabase,

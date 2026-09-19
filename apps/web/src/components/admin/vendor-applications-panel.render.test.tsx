@@ -37,6 +37,14 @@ const APPLICATIONS: WireAdminVendorApplicationRow[] = [
   },
 ];
 
+const INVITES_PAGER = {
+  path: '/admin/vendor-applications',
+  params: {},
+  page: 1,
+  pageSize: 15,
+  total: 2,
+};
+
 const INVITES: WireAdminVendorInviteRow[] = [
   {
     id: '33333333-3333-4333-8333-333333333333',
@@ -61,7 +69,13 @@ afterEach(() => {
 
 describe('VendorApplicationsPanel', () => {
   it('offers invite and decline on a new application, and nothing on an invited one', () => {
-    render(<VendorApplicationsPanel applications={APPLICATIONS} invites={INVITES} />);
+    render(
+      <VendorApplicationsPanel
+        applications={APPLICATIONS}
+        invites={INVITES}
+        invitesPager={INVITES_PAGER}
+      />,
+    );
 
     expect(screen.getByRole('button', { name: 'Invite Fern & Gather' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Decline Fern & Gather' })).toBeDefined();
@@ -70,7 +84,13 @@ describe('VendorApplicationsPanel', () => {
   });
 
   it('sends the decision for the row that was pressed', async () => {
-    render(<VendorApplicationsPanel applications={APPLICATIONS} invites={INVITES} />);
+    render(
+      <VendorApplicationsPanel
+        applications={APPLICATIONS}
+        invites={INVITES}
+        invitesPager={INVITES_PAGER}
+      />,
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Invite Fern & Gather' }));
@@ -86,7 +106,9 @@ describe('VendorApplicationsPanel', () => {
   });
 
   it('invites by a trimmed email, and revokes only an invite nobody has used', async () => {
-    render(<VendorApplicationsPanel applications={[]} invites={INVITES} />);
+    render(
+      <VendorApplicationsPanel applications={[]} invites={INVITES} invitesPager={INVITES_PAGER} />,
+    );
 
     const send = screen.getByRole('button', { name: 'Send invite' }) as HTMLButtonElement;
     expect(send.disabled).toBe(true);

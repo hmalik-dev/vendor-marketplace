@@ -9,6 +9,7 @@ import {
   tagSuggestions,
   tags,
   users,
+  vendorApplications,
   vendorCategories,
   vendorProfiles,
   vendorTags,
@@ -562,6 +563,65 @@ describe('the admin action log', () => {
       expect(serialised).not.toContain('swore');
       expect(serialised).not.toContain(ADMIN_NOTE);
       expect(serialised).not.toContain('@example.com');
+    });
+  });
+
+  describe('the vendor-invite paths', () => {
+    const EMAIL_PATTERN = /[^\s"@]+@[^\s"@]+\.[^\s"@]+/;
+
+    it('write no email address into any row: invite, revoke and decline', async () => {
+      await signIn(ADMIN, true);
+
+      const invited = await harness.app.inject({
+        method: 'POST',
+        url: '/admin/vendor-invites',
+        headers: bearer(ADMIN),
+        payload: { email: 'invitee@example.com' },
+      });
+      expect(invited.statusCode).toBe(201);
+
+      const revoked = await harness.app.inject({
+        method: 'DELETE',
+        url: `/admin/vendor-invites/${invited.json().id}`,
+        headers: bearer(ADMIN),
+      });
+      expect(revoked.statusCode).toBe(204);
+
+      const applications = await harness.database.db
+        .insert(vendorApplications)
+        .values({
+          email: 'applicant@example.com',
+          businessName: 'Lumen Events',
+          category: 'photography',
+          city: 'Austin',
+          message: 'We photograph weddings.',
+        })
+        .returning({ id: vendorApplications.id });
+      const declined = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/vendor-applications/${applications[0]!.id}`,
+        headers: bearer(ADMIN),
+        payload: { decision: 'decline' },
+      });
+      expect(declined.statusCode).toBe(200);
+
+      const rows = (await actionRows()).filter((row) =>
+        ['vendor_invited', 'vendor_invite_revoked', 'vendor_application_declined'].includes(
+          row.action,
+        ),
+      );
+      expect(rows.map((row) => row.action).sort()).toEqual([
+        'vendor_application_declined',
+        'vendor_invite_revoked',
+        'vendor_invited',
+      ]);
+
+      for (const row of rows) {
+        for (const value of Object.values(row.detail)) {
+          expect(String(value)).not.toMatch(EMAIL_PATTERN);
+        }
+      }
+      expect(JSON.stringify(rows)).not.toContain('@example.com');
     });
   });
 

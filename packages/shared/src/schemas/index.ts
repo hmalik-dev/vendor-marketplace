@@ -2571,6 +2571,12 @@ export const adminBookingRowSchema = z.object({
   vendorName: z.string(),
   vendorSlug: z.string(),
   /**
+   * The vendor profile the console opens. The storefront link cannot serve this:
+   * a banned or retired vendor's page is not public, and those are exactly the
+   * vendors the flagged rows are about.
+   */
+  vendorId: uuidSchema,
+  /**
    * Whether this row is the state above. Carried on every row rather than only
    * on the filtered list, so an operator scanning the unfiltered table sees it
    * without having to know the filter exists.
@@ -2597,6 +2603,8 @@ export const adminPaymentRowSchema = z.object({
   stripePaymentIntentId: z.string().nullable(),
   vendorName: z.string(),
   vendorSlug: z.string(),
+  /** The vendor profile the console opens; the storefront may not be public. */
+  vendorId: uuidSchema,
   customerName: z.string(),
   paidAt: z.date().nullable(),
   /**
@@ -2952,6 +2960,13 @@ export const adminTagSuggestionResultSchema = z.object({
   suggestion: adminTagSuggestionRowSchema,
   /** The tag the suggestion now points at — created by `approve`, chosen by `merge`. */
   tag: tagSchema.nullable(),
+  /**
+   * What happened to the suggester's own selection. `assigned` — they now hold
+   * the tag; `no-profile` — they have no storefront to add it to; `category-full`
+   * — they were already at the per-category ceiling. `null` for a rejection,
+   * which assigns nothing by design.
+   */
+  assignment: z.enum(['assigned', 'no-profile', 'category-full']).nullable(),
 });
 export type AdminTagSuggestionResult = z.infer<typeof adminTagSuggestionResultSchema>;
 
@@ -3121,8 +3136,15 @@ export const adminVendorApplicationRowSchema = z.object({
 });
 export type AdminVendorApplicationRow = z.infer<typeof adminVendorApplicationRowSchema>;
 
-export const adminVendorApplicationListSchema = z.object({
-  items: z.array(adminVendorApplicationRowSchema),
+/** One page of either waitlist table, walked with `page` like every other console list. */
+export const adminVendorInviteQuerySchema = z.object({ ...adminPaginationShape });
+export type AdminVendorInviteQuery = z.infer<typeof adminVendorInviteQuerySchema>;
+
+export const adminVendorApplicationListSchema = paginatedSchema(
+  adminVendorApplicationRowSchema,
+).extend({
+  /** Applications still awaiting a decision, across every page — the headline count. */
+  waiting: z.int().min(0),
 });
 export type AdminVendorApplicationList = z.infer<typeof adminVendorApplicationListSchema>;
 
@@ -3142,7 +3164,7 @@ export const adminVendorInviteRowSchema = z.object({
 });
 export type AdminVendorInviteRow = z.infer<typeof adminVendorInviteRowSchema>;
 
-export const adminVendorInviteListSchema = z.object({ items: z.array(adminVendorInviteRowSchema) });
+export const adminVendorInviteListSchema = paginatedSchema(adminVendorInviteRowSchema);
 export type AdminVendorInviteList = z.infer<typeof adminVendorInviteListSchema>;
 
 /** `POST /admin/vendor-invites`. */
