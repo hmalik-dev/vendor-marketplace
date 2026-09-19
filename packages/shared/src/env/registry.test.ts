@@ -440,7 +440,7 @@ describe('registrySchemaShape', () => {
     ];
 
     it('requires exactly the per-environment rows, and every one of them', () => {
-      for (const variable of ENV_REGISTRY) {
+      for (const variable of ENV_REGISTRY as readonly EnvVariable[]) {
         const expected =
           !EXCUSED_ON_DEPLOYED.includes(variable.key) &&
           (variable.environments === 'per-environment' || variable.defaultValue === undefined);
