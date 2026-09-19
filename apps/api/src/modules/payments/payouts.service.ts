@@ -360,6 +360,28 @@ async function releaseOnePayout(
           transferGroup,
         }));
 
+      /*
+       * A transfer found under the group was made for the obligation as it
+       * stood then. If the booking was cancelled since (the 50% tier), what the
+       * vendor holds net of reversals exceeds what is owed now, so the surplus
+       * is clawed back before the release is recorded — otherwise the full
+       * share is booked as the release of a half-share.
+       */
+      const surplusCents =
+        transfer.amountCents - (existing?.reversedCents ?? 0) - booking.vendorPayoutCents;
+
+      if (existing && surplusCents > 0) {
+        context.log.warn(
+          { bookingId, transferId: transfer.transferId, surplusCents },
+          'Found a transfer larger than what is owed; reversing the surplus',
+        );
+        await context.stripe.reverseTransfer({
+          transferId: transfer.transferId,
+          amountCents: surplusCents,
+          idempotencyKey: `release_${bookingId}_surplus_${booking.payoutAttempts}`,
+        });
+      }
+
       await recordPayoutRelease(tx, bookingId, {
         stripeTransferId: transfer.transferId,
         releasedAt: now,

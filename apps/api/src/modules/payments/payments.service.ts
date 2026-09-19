@@ -763,8 +763,12 @@ const NOT_DISPUTABLE: Record<Exclude<BookingStatus, 'confirmed' | 'completed'>, 
  * is carried negative by it. Under #423 that can only happen after the event,
  * which is the whole reason the release moved.
  */
-function unwindSentence(booking: BookingRow): string {
-  return booking.stripeTransferId
+/*
+ * `paidOut` is what Stripe said, not the row: a transfer that landed under a
+ * failed release leaves the row unrecorded and is still clawed back.
+ */
+function unwindSentence(paidOut: boolean): string {
+  return paidOut
     ? 'Their refund takes back the same share of your payout, out of your Stripe balance — ' +
         'which can leave it negative, because this booking had already been paid out.'
     : 'This booking had not been paid out yet, so nothing is taken back out of your Stripe ' +
@@ -1017,19 +1021,22 @@ async function refundAndUnwind(
    * After the release: the vendor has the whole payout, so the refunded
    * proportion is clawed back and they keep the rest where it already is.
    *
+   * Whether a transfer exists is asked of Stripe, not of the row: a transfer
+   * that landed while the sweep recorded a failure leaves `stripeTransferId`
+   * null, and trusting the row would refund the customer and leave the vendor
+   * holding the money. The row's field is only a hint.
+   *
    * Before it: nothing was transferred, there is nothing to reverse and nobody
    * to carry negative — which is the cost D31 had to accept, now confined to
    * bookings cancelled after their event. The caller writes `retainedPayoutCents`
    * back to the row so the sweep still pays it out on the original schedule.
    */
-  if (booking.stripeTransferId) {
-    await reverseOutstanding(context, booking, {
-      target: booking.vendorPayoutCents - retainedPayoutCents,
-      idempotencyKey: `${keyPrefix}_${booking.id}_reversal`,
-    });
-  }
+  const transferReversed = await reverseOutstanding(context, booking, {
+    target: booking.vendorPayoutCents - retainedPayoutCents,
+    idempotencyKey: `${keyPrefix}_${booking.id}_reversal`,
+  });
 
-  return { ...refund, retainedPayoutCents };
+  return { ...refund, retainedPayoutCents, transferReversed };
 }
 
 /** A refund, and what of the vendor's share survives it. */
@@ -1042,6 +1049,8 @@ interface UnwoundRefund {
    * not.
    */
   retainedPayoutCents: number;
+  /** Whether Stripe holds a transfer for this booking, i.e. it had been paid out. */
+  transferReversed: boolean;
 }
 
 /**
@@ -1059,28 +1068,45 @@ interface UnwoundRefund {
  *
  * Asking what is already reversed turns that into a no-op, exactly as asking
  * what is already refunded does.
+ *
+ * Answers whether Stripe holds a transfer for the booking at all, which is what
+ * the vendor's notification needs to say truthfully.
  */
 async function reverseOutstanding(
   context: BookingContext,
   booking: BookingRow,
   reversal: { target: number; idempotencyKey: string },
-): Promise<void> {
-  if (reversal.target <= 0 || !booking.stripeTransferId) {
-    return;
+): Promise<boolean> {
+  const transfer = await context.stripe.findTransfer(transferGroupFor(booking.requestId));
+
+  if (reversal.target <= 0) {
+    return transfer !== null;
   }
 
-  const transfer = await context.stripe.findTransfer(transferGroupFor(booking.requestId));
-  const outstanding = reversal.target - (transfer?.reversedCents ?? 0);
+  if (!transfer) {
+    if (booking.stripeTransferId) {
+      context.log.error(
+        { bookingId: booking.id, transferId: booking.stripeTransferId },
+        'The row records a transfer that Stripe cannot find under its group; nothing reversed',
+      );
+    }
+
+    return false;
+  }
+
+  const outstanding = reversal.target - transfer.reversedCents;
 
   if (outstanding <= 0) {
-    return;
+    return true;
   }
 
   await context.stripe.reverseTransfer({
-    transferId: booking.stripeTransferId,
+    transferId: transfer.transferId,
     amountCents: outstanding,
     idempotencyKey: reversal.idempotencyKey,
   });
+
+  return true;
 }
 
 /**
@@ -1176,7 +1202,7 @@ export async function cancelBooking(
         'booking_cancelled',
         {
           title: 'A booking was cancelled',
-          body: `The date is free again on your calendar. ${unwindSentence(cancelled)}`,
+          body: `The date is free again on your calendar. ${unwindSentence(refund.transferReversed)}`,
           bookingId: cancelled.id,
         },
         'vendor',
@@ -1615,7 +1641,7 @@ export async function resolveDispute(
         'booking_cancelled',
         {
           title: 'A reported booking was refunded',
-          body: `The customer's report was upheld. ${unwindSentence(cancelled)}`,
+          body: `The customer's report was upheld. ${unwindSentence(refund.transferReversed)}`,
           bookingId: cancelled.id,
         },
         'vendor',

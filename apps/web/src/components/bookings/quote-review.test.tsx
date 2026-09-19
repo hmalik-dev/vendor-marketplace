@@ -38,6 +38,7 @@ function cancelledBooking(
       status: 'cancelled',
       totalAmountCents: 145_000,
       paidAt: new Date('2026-05-02T00:00:00Z'),
+      paidOutAt: null,
       cancelledAt: new Date('2026-06-01T12:00:00Z'),
       cancelledBy: 'customer',
       refundAmountCents: 145_000,

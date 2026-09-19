@@ -236,6 +236,7 @@ export const wireBookingRequestSchema = bookingRequestDetailSchema.extend({
     .unwrap()
     .extend({
       paidAt: z.coerce.date().nullable(),
+      paidOutAt: z.coerce.date().nullable(),
       cancelledAt: z.coerce.date().nullable(),
     })
     .nullable(),

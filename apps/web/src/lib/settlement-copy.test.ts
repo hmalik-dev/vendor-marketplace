@@ -8,6 +8,7 @@ function settlement(overrides: Partial<Settlement> = {}): Settlement {
     status: 'cancelled',
     totalAmountCents: 145_000,
     paidAt: new Date('2026-05-02T00:00:00Z'),
+    paidOutAt: new Date('2026-05-20T00:00:00Z'),
     cancelledAt: new Date('2026-06-01T12:00:00Z'),
     cancelledBy: 'customer',
     refundAmountCents: 145_000,
@@ -133,6 +134,32 @@ describe('cancellationNarrative', () => {
       expect(cancellationNarrative(settlement(), 'vendor').money).toBe(
         'They paid $1,450 and were refunded all of it. Your share was reversed out of your Stripe balance.',
       );
+    });
+
+    it('says nothing was taken back when the payout had not been released', () => {
+      const unreleased = { paidOutAt: null };
+
+      expect(cancellationNarrative(settlement(unreleased), 'vendor').money).toBe(
+        'They paid $1,450 and were refunded all of it. This booking had not been paid out yet, so nothing is taken back out of your Stripe balance.',
+      );
+      expect(
+        cancellationNarrative(settlement({ ...unreleased, refundAmountCents: 72_500 }), 'vendor')
+          .money,
+      ).toBe(
+        'They paid $1,450 and were refunded $725. This booking had not been paid out yet, so nothing is taken back out of your Stripe balance.',
+      );
+    });
+
+    it('leaves the customer sentence identical whether or not the payout was released', () => {
+      for (const paidOutAt of [null, new Date('2026-05-20T00:00:00Z')]) {
+        expect(cancellationNarrative(settlement({ paidOutAt }), 'customer').money).toBe(
+          'You paid $1,450, and all of it was refunded to your original payment method.',
+        );
+        expect(
+          cancellationNarrative(settlement({ paidOutAt, refundAmountCents: 72_500 }), 'customer')
+            .money,
+        ).toBe('You paid $1,450, and $725 was refunded to your original payment method.');
+      }
     });
 
     it('names the proportional reversal on a partial refund', () => {
