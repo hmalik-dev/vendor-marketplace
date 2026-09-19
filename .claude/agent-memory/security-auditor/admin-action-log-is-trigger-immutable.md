@@ -40,6 +40,13 @@ CREATE TABLE evil.users(id uuid); SET search_path = evil, public`. There is a
   judged acceptable because a tag name is public product vocabulary, is capped
   at `MAX_NAME_LENGTH`, and is rendered as escaped text. `AdminActionDetail`'s
   flat-scalar `z.record` is what makes nesting an entity unwritable.
+- **An empty `detail` is only safe while the subject row outlives the action.**
+  `subject_id` has no FK (above), so PII-minimising a payload down to `{}` can
+  leave an entry naming nothing. VEN-436 did exactly that to
+  `vendor_invite_revoked`, whose transaction also `DELETE`s the `vendor_invites`
+  row (`deleteUnusedInvite`) — the address an operator withdrew became
+  unrecoverable, and the log is immutable so it cannot be repaired. Check the
+  deletion path of the subject table before accepting a `detail: {}`.
 - **Best-effort vs transactional logging is a stated rule, not a mistake.** Only
   the ban and the dispute resolution log best-effort, because both have already
   moved money through Stripe; every other writer rides its own transaction.

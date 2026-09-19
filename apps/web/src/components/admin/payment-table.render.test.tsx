@@ -20,6 +20,7 @@ const BASE: WireAdminPaymentRow = {
   stripePaymentIntentId: 'pi_test_1',
   vendorName: 'Sunlit Studio',
   vendorSlug: 'sunlit-studio',
+  vendorId: '22222222-2222-4222-8222-222222222222',
   customerName: 'Anjali Rao',
   paidAt: new Date('2026-05-01T00:00:00.000Z'),
   payoutStatus: 'pending',
@@ -55,6 +56,13 @@ const retryResult = (
 });
 
 describe('the payments table', () => {
+  it('links the vendor to the console, not to a storefront a banned vendor no longer has', () => {
+    render(<PaymentTable empty={EMPTY} rows={[BASE]} />);
+
+    const link = screen.getAllByRole('link', { name: 'Sunlit Studio' })[0]!;
+    expect(link.getAttribute('href')).toBe('/admin/vendors/22222222-2222-4222-8222-222222222222');
+  });
+
   it('draws the payout state each row is in, in the shared vocabulary', () => {
     render(
       <PaymentTable

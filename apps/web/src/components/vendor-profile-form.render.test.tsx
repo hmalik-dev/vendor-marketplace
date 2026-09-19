@@ -84,6 +84,23 @@ function savedProfile(overrides: Partial<WireVendorProfile> = {}): WireVendorPro
   };
 }
 
+describe('a tag an operator deactivated after the vendor chose it', () => {
+  it('still draws a removable pill, though the active list no longer offers it', () => {
+    const hidden = {
+      id: 'language-24',
+      name: 'Amharic',
+      slug: 'language-amharic',
+      category: 'language' as const,
+      displayOrder: 24,
+      isActive: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+    renderSaved({ tags: [hidden] });
+
+    expect(screen.getByRole('button', { name: 'Remove Amharic' })).toBeDefined();
+  });
+});
+
 function renderSaved(overrides: Partial<WireVendorProfile> = {}): void {
   render(
     <VendorProfileForm profile={savedProfile(overrides)} categories={CATEGORIES} allTags={[]} />,

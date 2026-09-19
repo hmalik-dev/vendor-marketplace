@@ -20,7 +20,7 @@ import { TagSuggestionForm } from './tag-suggestion-form';
 
 export interface TagCategorySectionProps {
   category: TagCategory;
-  /** Every active tag, of every category; this section filters to its own. */
+  /** Every active tag, plus any inactive one the vendor holds; this section filters to its own category. */
   allTags: readonly WireTag[];
   selectedTagIds: readonly string[];
   onToggle: (tag: WireTag) => void;
@@ -48,6 +48,9 @@ export function TagCategorySection({
   const options = allTags.filter((tag) => tag.category === category);
   const selectedIds = new Set(selectedTagIds);
   const selected = options.filter((tag) => selectedIds.has(tag.id));
+  // A tag an operator has since deactivated is held, not offered: it shows as a
+  // removable pill but is not a choice once it is removed.
+  const choices = options.filter((tag) => tag.isActive || selectedIds.has(tag.id));
   const atLimit = selected.length >= MAX_TAGS_PER_CATEGORY;
   const label = TAG_CATEGORY_LABELS[category];
 
@@ -104,7 +107,7 @@ export function TagCategorySection({
             <CommandList>
               <CommandEmpty>No match. Suggest it below instead.</CommandEmpty>
               <CommandGroup>
-                {options.map((tag) => {
+                {choices.map((tag) => {
                   const isSelected = selectedIds.has(tag.id);
                   return (
                     <CommandItem
@@ -140,6 +143,7 @@ export function TagCategorySection({
               )}
             >
               {tag.name}
+              {tag.isActive ? null : <span className="text-xs">(no longer offered)</span>}
               <button
                 type="button"
                 onClick={() => onToggle(tag)}
@@ -154,7 +158,13 @@ export function TagCategorySection({
         ))}
       </ul>
 
-      <TagSuggestionForm category={category} allTags={allTags} onTagResolved={onSelect} />
+      {/* Active only: a suggestion matching a hidden tag must reach the server, not
+          resolve to a tag the vendor's next save would be refused for. */}
+      <TagSuggestionForm
+        category={category}
+        allTags={allTags.filter((tag) => tag.isActive)}
+        onTagResolved={onSelect}
+      />
     </section>
   );
 }

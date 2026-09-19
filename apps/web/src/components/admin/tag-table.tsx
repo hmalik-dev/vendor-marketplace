@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import type { TagCategory } from '@vendor-marketplace/shared';
+import { MAX_NAME_LENGTH, type TagCategory } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { DataTable } from '@/components/admin/data-table';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { TAG_CATEGORY_LABELS } from '@/components/tags/tag-display';
 import { useApi } from '@/lib/use-api';
-import { userFacingError } from '@/lib/user-facing-error';
+import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { wireAdminTagRowSchema, type WireAdminTagRow } from '@/lib/wire-schemas';
 
 /**
@@ -142,6 +142,7 @@ function TagName({ tag }: { tag: WireAdminTagRow }): React.ReactElement {
       <input
         type="text"
         value={name}
+        maxLength={MAX_NAME_LENGTH}
         autoFocus
         aria-label={`Rename ${tag.name}`}
         onChange={(event) => setName(event.target.value)}
@@ -168,6 +169,7 @@ function TagName({ tag }: { tag: WireAdminTagRow }): React.ReactElement {
 function ToggleActive({ tag }: { tag: WireAdminTagRow }): React.ReactElement {
   const router = useRouter();
   const call = useApi();
+  const [error, setError] = useState<string | null>(null);
 
   async function setActive(isActive: boolean): Promise<void> {
     await call(`/admin/tags/${tag.id}`, {
@@ -178,11 +180,34 @@ function ToggleActive({ tag }: { tag: WireAdminTagRow }): React.ReactElement {
     router.refresh();
   }
 
+  /*
+   * Reactivating has no dialog, so nothing else would report a failure — an
+   * expired session or a 5xx would be an unhandled rejection and a button that
+   * appears to do nothing. Deactivate goes through `ConfirmAction`, which
+   * surfaces its own.
+   */
+  async function reactivate(): Promise<void> {
+    setError(null);
+
+    try {
+      await setActive(true);
+    } catch (failure) {
+      setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
+    }
+  }
+
   if (!tag.isActive) {
     return (
-      <Button type="button" size="sm" variant="secondary" onClick={() => void setActive(true)}>
-        Reactivate
-      </Button>
+      <span className="flex flex-col items-end gap-1">
+        <Button type="button" size="sm" variant="secondary" onClick={() => void reactivate()}>
+          Reactivate
+        </Button>
+        {error ? (
+          <span role="alert" className="text-helper text-error-500">
+            {error}
+          </span>
+        ) : null}
+      </span>
     );
   }
 
