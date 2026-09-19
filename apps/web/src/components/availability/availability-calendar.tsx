@@ -321,7 +321,9 @@ export function AvailabilityCalendar({
       // dependencies are exactly what it uses.
       const status = statusByDate.get(date) ?? 'available';
 
-      if (status === 'booked') {
+      // Booked stays `booked` for a day or two after the event, until it is past
+      // everywhere; the grid already draws that cell as past, so it is not ahead.
+      if (status === 'booked' && !isPastDate(date, today)) {
         booked += 1;
       }
       /*
