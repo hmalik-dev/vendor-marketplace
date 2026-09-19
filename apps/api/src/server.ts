@@ -12,7 +12,8 @@ import {
   type FastifyPluginAsyncZod,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
-import { createDatabase, loadEnv } from '@vendor-marketplace/db';
+import { createDatabase } from '@vendor-marketplace/db';
+import { bootEnv } from './config/boot.js';
 import {
   MAX_UPLOAD_BYTES,
   OPERATOR_DIGEST_POLL_INTERVAL_MS,
@@ -22,7 +23,7 @@ import {
   WEB_TIER_KEY_HEADER,
 } from '@vendor-marketplace/shared';
 import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
-import { allowedOrigins, canonicalWebOrigin, parseEnv, type ApiEnv } from './config/env.js';
+import { allowedOrigins, canonicalWebOrigin, type ApiEnv } from './config/env.js';
 import type { AppDatabase } from './lib/database.js';
 import { redactLogRecord, serializeError } from './lib/log-error-serializer.js';
 import { redactQueryValues } from './lib/log-redaction.js';
@@ -488,9 +489,7 @@ let bootstrapped: Promise<FastifyInstance> | undefined;
  * during test collection.
  */
 async function bootstrap(): Promise<FastifyInstance> {
-  loadEnv();
-
-  const env = parseEnv();
+  const env = bootEnv();
   const { db } = createDatabase();
 
   // `buildServer` awaits `app.ready()`, which is what makes `app.server` able

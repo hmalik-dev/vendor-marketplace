@@ -1,15 +1,14 @@
-import { createDatabase, loadEnv } from '@vendor-marketplace/db';
-import { parseEnv } from './config/env.js';
+import { createDatabase } from '@vendor-marketplace/db';
+import { bootEnv } from './config/boot.js';
 import { createS3Storage } from './lib/storage.js';
 import { buildServer } from './server.js';
 
 async function main(): Promise<void> {
   // pnpm runs package scripts with the cwd set to the package directory, so
   // the repository-root `.env` the developer actually edits has to be loaded
-  // explicitly. Real process variables still win over anything in the file.
-  loadEnv();
-
-  const env = parseEnv();
+  // explicitly (`bootEnv` does, and runs the same boot guards as the serverless
+  // handler). Real process variables still win over anything in the file.
+  const env = bootEnv();
   const { db, client } = createDatabase();
 
   const app = await buildServer({ env, db, storage: createS3Storage(env) });

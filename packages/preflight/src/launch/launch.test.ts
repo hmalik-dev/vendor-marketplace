@@ -20,6 +20,8 @@ function fakeKey(prefix: string, mode: 'live' | 'test', lastFour: string): strin
 
 const LIVE_STRIPE = fakeKey('sk', 'live', '9003');
 const TEST_STRIPE = fakeKey('sk', 'test', '9004');
+const LIVE_PUBLISHABLE = fakeKey('pk', 'live', '9006');
+const TEST_PUBLISHABLE = fakeKey('pk', 'test', '9007');
 const RESEND = ['re', 'FAKEabcdefghijklmnop9005'].join('_');
 
 const SECURE_HEADERS = {
@@ -42,6 +44,7 @@ function envFor(mode: Mode): NodeJS.ProcessEnv {
       ? 'postgresql://ep-x-pooler.us-east-2.aws.neon.tech/db'
       : 'postgresql://ep-other.us-east-2.aws.neon.tech/db',
     STRIPE_SECRET_KEY: live ? LIVE_STRIPE : TEST_STRIPE,
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: live ? LIVE_PUBLISHABLE : TEST_PUBLISHABLE,
     RESEND_API_KEY: RESEND,
     EMAIL_FROM: `${BRAND_NAME} <noreply@orla.test>`,
     S3_PUBLIC_URL: live ? 'https://cdn.orla.test' : 'https://pub-x.r2.dev',
@@ -200,6 +203,38 @@ describe('launch:check against test-mode doubles', () => {
     expect(find(results, 'S3_PUBLIC_URL')).toMatchObject({
       status: 'FAIL',
       detail: 'https://pub-x.r2.dev is the rate-limited r2.dev URL (expected a custom domain)',
+    });
+  });
+});
+
+describe('the Stripe browser and server keys', () => {
+  it('fails a live secret key beside a test-mode publishable key', async () => {
+    const env = { ...envFor('live'), NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: TEST_PUBLISHABLE };
+    const results = await runLaunchChecks(options('live', { env }));
+
+    expect(find(results, 'stripe key').status).toBe('PASS');
+    expect(find(results, 'stripe publishable key')).toMatchObject({
+      status: 'FAIL',
+      detail: 'pk_test_…9007 (expected pk_live_)',
+    });
+  });
+
+  it('fails an unset publishable key', async () => {
+    const env = { ...envFor('live'), NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: undefined };
+    const results = await runLaunchChecks(options('live', { env }));
+
+    expect(find(results, 'stripe publishable key')).toMatchObject({
+      status: 'FAIL',
+      detail: 'unset (expected pk_live_)',
+    });
+  });
+
+  it('passes a live pair', async () => {
+    const results = await runLaunchChecks(options('live'));
+
+    expect(find(results, 'stripe publishable key')).toMatchObject({
+      status: 'PASS',
+      detail: 'pk_live_…9006',
     });
   });
 });
