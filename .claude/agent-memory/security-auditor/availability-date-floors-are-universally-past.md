@@ -23,6 +23,18 @@ nothing, and a visitor west of UTC was told a blocked day was free. The audit
 question a later diff will ask — "can the extra day reopen a settled date?" —
 is answered by the DAO predicates, not by the date arithmetic.
 
+VEN-432 widened the **far** edge to the last day of the final rendered month
+(`Date.UTC(y, m + AVAILABILITY_MONTHS_AHEAD + 1, 0)`). That `to` is shared by
+three readers: the vendor's own calendar, the **public** profile availability
+read (`vendor-profile.service.ts`) and the admin vendor detail — so any widening
+is a public disclosure change. It stays safe only because the public read is a
+separate column list that never selects `note` (#407).
+
+The same ticket made the `pending` overlay cover a stored `available` row (the
+row a cancellation leaves behind). The derived row carries a `randomUUID` and no
+request or customer identity, and `VENDOR_SETTABLE_AVAILABILITY_STATUSES`
+refuses `pending`/`booked` on the way back in, so it cannot round-trip.
+
 **How to apply:** any further widening of these floors has to be checked against
 those two predicates and against `setHeldDate`'s clear path (which deletes only
 `booked`/`pending` rows and only when no live `bookings` row exists). A floor

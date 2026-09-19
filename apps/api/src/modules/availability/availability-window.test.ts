@@ -39,16 +39,23 @@ describe('availabilityWindow', () => {
   it('reaches a day further out, so the viewer east of UTC does not run past it', () => {
     const { to } = availabilityWindow(new Date('2026-10-31T23:30:00.000Z'));
 
-    expect(to).toBe('2027-11-01');
+    expect(to).toBe('2027-11-30');
   });
 
   it('runs the stated number of months ahead', () => {
     const now = new Date('2026-10-15T12:00:00.000Z');
     const { to } = availabilityWindow(now);
 
-    // Tomorrow, `AVAILABILITY_MONTHS_AHEAD` months on: 2026-10-16 -> 2027-10-16.
+    // Tomorrow's month, `AVAILABILITY_MONTHS_AHEAD` months on, to its last day.
     expect(AVAILABILITY_MONTHS_AHEAD).toBe(12);
-    expect(to).toBe('2027-10-16');
+    expect(to).toBe('2027-10-31');
+  });
+
+  it('covers every date the calendar can render, to the end of its last month', () => {
+    const { to } = availabilityWindow(new Date('2026-10-15T12:00:00.000Z'));
+    // `monthsFrom(today, AVAILABILITY_MONTHS_AHEAD + 1)` ends with October 2027.
+    expect(to >= '2027-10-31').toBe(true);
+    expect(availabilityWindow(new Date('2027-02-10T12:00:00.000Z')).to).toBe('2028-02-29');
   });
 
   it('always spans forwards, near edge before far', () => {

@@ -5,7 +5,7 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { addDays, toDateString } from '@vendor-marketplace/shared';
+import { AVAILABILITY_MONTHS_AHEAD, addDays, toDateString } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -70,7 +70,7 @@ describe('/vendor/availability', () => {
   }
 
   beforeAll(async () => {
-    harness = await createTestHarness();
+    harness = await createTestHarness({ clock: () => NOW });
 
     for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
@@ -168,6 +168,26 @@ describe('/vendor/availability', () => {
     });
   });
 
+  it('reads a block in the last week of the final rendered month back as blocked', async () => {
+    await createProfile(VENDOR, 'Sunlit Studio');
+    const tomorrow = addDays(NOW, 1);
+    const lastDay = new Date(
+      Date.UTC(
+        tomorrow.getUTCFullYear(),
+        tomorrow.getUTCMonth() + AVAILABILITY_MONTHS_AHEAD + 1,
+        0,
+      ),
+    );
+    const tail = toDateString(lastDay);
+
+    const response = await put(VENDOR, [{ date: tail, status: 'blocked' }]);
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      (response.json() as AvailabilityBody[]).map(({ date, status }) => ({ date, status })),
+    ).toEqual([{ date: tail, status: 'blocked' }]);
+  });
+
   /**
    * `#212`: a live request has to read `Pending request` on the vendor's own
    * calendar, but must not be stored — search excludes any date row that is not
@@ -230,6 +250,16 @@ describe('/vendor/availability', () => {
 
       const stored = await harness.database.db.select().from(availability);
       expect(stored).toEqual([]);
+    });
+
+    it('shows a request on a date a cancellation freed as pending', async () => {
+      await requestOn(TOMORROW);
+      const [profile] = await harness.database.db.select().from(vendorProfiles);
+      await harness.database.db
+        .insert(availability)
+        .values({ vendorId: profile!.id, date: TOMORROW, status: 'available' });
+
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'pending' }]);
     });
 
     it('shows the date booked, and stored, once the vendor accepts', async () => {
