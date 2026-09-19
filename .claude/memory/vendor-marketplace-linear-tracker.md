@@ -22,8 +22,10 @@ deleted in the same PR; git history before `chore/linear-tracker` holds them.
 - Capabilities → `cap:auth` / `cap:storage` / `cap:stripe` / `cap:email` /
   `cap:sentry` labels; the gate is `pnpm preflight --capabilities <a,b>`
   (`--ticket <n>` is gone). `core` and `e2e` are implicit.
-- "Deferred — needs a human" → the `blocked` label plus a first-line quote of
-  what the person must decide. `/next-ticket` skips it.
+- "Deferred — needs a human" → assign it to the account holder (or make it a
+  `blockedBy` of the ticket that waits on it), with a first-line quote of what
+  the person must decide. There is no `blocked` label (removed 2026-09-19);
+  `/next-ticket` skips anything with an open `blockedBy` or a person assigned.
 - Blocked By → Linear's blocking relation. A blocker that was already closed on
   the board is prose in _Provenance_, not a relation.
 - Branch / Notes → the issue description and comments; `/land-lanes` reads the

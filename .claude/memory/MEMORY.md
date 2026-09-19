@@ -1,4 +1,4 @@
-- [The tracker is Linear: team VEN, project Vendor Marketplace](vendor-marketplace-linear-tracker.md) — since 2026-09-14; ids `VEN-n`, capabilities are `cap:*` labels, `blocked` marks a human gate; the markdown board and ticket registry are deleted
+- [The tracker is Linear: team VEN, project Vendor Marketplace](vendor-marketplace-linear-tracker.md) — since 2026-09-14; ids `VEN-n`, capabilities are `cap:*` labels, blocking is `blockedBy` relations only (no `blocked` label), a person-owned ticket is assigned to them; the markdown board and ticket registry are deleted
 - [Docker Postgres IS the local app database](vendor-marketplace-no-docker.md) — postgres:18-alpine on 5432; migrate/seed go there, not Neon. MinIO matters too
 - [Playwright browser verification is mandatory](vendor-marketplace-playwright-verification.md) — every ticket flow gets driven in a real browser before Done
 - [E2E test accounts, one per role](vendor-marketplace-e2e-credentials.md) — customer + vendor credentials in the gitignored .env.e2e.local, never in the repo
