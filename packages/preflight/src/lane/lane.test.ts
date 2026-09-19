@@ -131,6 +131,29 @@ describe('laneUp', () => {
     expect(parsed.WEB_URL).toBe(`http://localhost:${manifest.webPort}`);
   });
 
+  // VEN-453. A lane written before the Sentry rows were blanked still agrees on
+  // every other field, so without comparing them it keeps the inherited
+  // placeholder and its API never boots.
+  it('rewrites a lane env file that does not blank the Sentry DSNs', async () => {
+    vi.stubEnv('DATABASE_URL', databaseUrl);
+    const manifest = await laneUp(root, worktree, '42', deps());
+    const file = path.join(worktree, '.env.lane');
+    const api = `http://localhost:${manifest.apiPort}`;
+
+    writeFileSync(
+      file,
+      `PORT=${manifest.apiPort}\nWEB_PORT=${manifest.webPort}\n` +
+        `NEXT_PUBLIC_API_URL=${api}\nAPI_URL=${api}\n` +
+        `WEB_URL=http://localhost:${manifest.webPort}\nDATABASE_URL=${databaseUrl}\n`,
+    );
+
+    await laneUp(root, worktree, '42', deps());
+
+    const parsed = parseLaneEnv(readFileSync(file, 'utf8'));
+    expect(parsed.SENTRY_DSN).toBe('');
+    expect(parsed.NEXT_PUBLIC_SENTRY_DSN).toBe('');
+  });
+
   it('installs, builds and migrates exactly once, after the env file exists', async () => {
     const d = deps();
     await laneUp(root, worktree, '42', d);
