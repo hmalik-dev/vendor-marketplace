@@ -249,7 +249,19 @@ async function main(): Promise<void> {
             role: 'admin',
           },
           fetch,
-        ),
+        ).catch((error: unknown) => {
+          /*
+           * The operator identity is the one account a human provisions in Neon
+           * Auth (there is no sign-up path to an admin, and none may be added),
+           * so a lane may reach this before anyone has. It must not take the
+           * customer and vendor fixtures down with it, but it must not pass
+           * quietly either: the message is the whole diagnosis.
+           */
+          console.warn(
+            `Skipping the admin fixture — ${error instanceof Error ? error.message : String(error)}`,
+          );
+          return undefined;
+        }),
   ]);
 
   /*
