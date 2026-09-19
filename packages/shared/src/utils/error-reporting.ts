@@ -40,7 +40,7 @@ export const PAYMENT_ERROR_TAGS = { area: 'payments', severity: 'critical' } as 
  * both undone if the caller's address arrives in a header instead.
  */
 const CREDENTIAL_HEADER =
-  /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-forwarded-for|x-real-ip|forwarded)$|token|secret|signature|session|svix|clerk/i;
+  /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-forwarded-for|x-real-ip|forwarded|x-web-tier-key|x-visitor-ip)$|token|secret|signature|session|svix|clerk/i;
 
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 /** A JWT — Clerk's session token is one, and so is its `__session` cookie. */
