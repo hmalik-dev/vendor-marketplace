@@ -56,3 +56,11 @@ regexes = ['''E2E_CLERK_PUBLISHABLE_KEY''']
 description = "CI's placeholder Clerk publishable key: public by construction, and reaches no instance"
 regexTarget = "match"
 regexes = ['''NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2kuY2xlcmsuYWNjb3VudHMuZGV2JA''']
+
+# The generic rule reads a Neon branch id as an API key when it sits beside the
+# word "Auth"/"key" in prose. It is an identifier, not a credential: it names the
+# `dev` branch and grants nothing without a Neon API key or a connection string.
+# Exactly one id, so any other `br-…` string still fires.
+[[allowlists]]
+description = "The Neon `dev` branch id: an identifier named in the memory notes, not a credential"
+regexes = ['''^br-silent-queen-ax78ksii$''']
