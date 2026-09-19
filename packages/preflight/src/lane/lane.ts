@@ -221,6 +221,8 @@ function laneEnvAgreesWith(file: string, manifest: LaneManifest): boolean {
     values.NEXT_PUBLIC_API_URL === api &&
     values.API_URL === api &&
     values.WEB_URL === `http://localhost:${manifest.webPort}` &&
+    values.SENTRY_DSN === '' &&
+    values.NEXT_PUBLIC_SENTRY_DSN === '' &&
     (values.DATABASE_URL ?? '').endsWith(`/${manifest.database}`)
   );
 }

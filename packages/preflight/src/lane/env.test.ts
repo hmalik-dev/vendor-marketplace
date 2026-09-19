@@ -61,6 +61,33 @@ describe('renderLaneEnv', () => {
   });
 });
 
+/**
+ * `cp .env.example .env` writes `https://...@sentry.io/...` into both DSN rows,
+ * the API refuses to boot on it (the shape check calls it "not a real value"),
+ * and a lane inherits that `.env`. The lane file wins over an inherited value
+ * and the schemas read an empty one as absent, so blank is "Sentry off".
+ */
+describe('a lane runs with Sentry off', () => {
+  const placeholder = 'https://...@sentry.io/...';
+
+  it('blanks both DSN rows so the root .env placeholder cannot reach the lane', () => {
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
+    expect(parsed.SENTRY_DSN).toBe('');
+    expect(parsed.NEXT_PUBLIC_SENTRY_DSN).toBe('');
+  });
+
+  it('overrides an inherited placeholder in the child environment', () => {
+    const base = { SENTRY_DSN: placeholder, NEXT_PUBLIC_SENTRY_DSN: placeholder };
+    const env = laneChildEnv(base, renderLaneEnv(manifest, databaseUrl), ['pnpm', 'dev']);
+    expect(env.SENTRY_DSN).toBe('');
+    expect(env.NEXT_PUBLIC_SENTRY_DSN).toBe('');
+  });
+
+  it('leaves the upload token to the root .env, which only a production build reads', () => {
+    expect(parseLaneEnv(renderLaneEnv(manifest, databaseUrl)).SENTRY_AUTH_TOKEN).toBeUndefined();
+  });
+});
+
 describe('parseLaneEnv', () => {
   it('ignores comments and blank lines', () => {
     expect(parseLaneEnv('# a comment\n\nPORT=4007\n')).toEqual({ PORT: '4007' });
