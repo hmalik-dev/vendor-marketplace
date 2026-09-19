@@ -1125,6 +1125,13 @@ export const PAYOUT_RELEASE_HOURS = 72;
 export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
 
 /**
+ * How often each instance ages lapsed booking requests. Ageing is guarded on
+ * the status it read, so instances overlapping is safe; the interval only
+ * bounds how long a customer waits to hear that their request lapsed.
+ */
+export const EXPIRY_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+/**
  * What the vendor's side of a booking can say about its payout, as data.
  *
  * `status` cannot carry this: a booking is `confirmed` both before and after

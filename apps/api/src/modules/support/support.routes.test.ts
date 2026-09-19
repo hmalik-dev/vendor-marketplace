@@ -6,7 +6,7 @@ import {
   supportMessageReceiptSchema,
   supportSendFailureDetailsSchema,
 } from '@vendor-marketplace/shared';
-import { users } from '@vendor-marketplace/db/schema';
+import { supportCases, users } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -185,6 +185,59 @@ describe('POST /support/messages', () => {
       await harness.database.db
         .update(users)
         .set({ pendingEmail: null, emailSyncFailedAt: null })
+        .where(eq(users.authUserId, CUSTOMER));
+    }
+  });
+
+  it('returns the address the answer goes to in the receipt', async () => {
+    const result = await harness.app.inject({
+      method: 'POST',
+      url: '/support/messages',
+      ...fromANewVisitor(),
+      headers: bearer(CUSTOMER),
+      payload: { topic: 'something-else', email: 'attacker@example.com', message: MESSAGE },
+    });
+
+    expect(supportMessageReceiptSchema.parse(result.json()).replyTo).toBe(CUSTOMER_EMAIL);
+  });
+
+  /*
+   * The route is documented as open to the person who cannot get in. A
+   * suspended or retired account is read as a visitor: it answers 200 and is
+   * asked for an address like one, rather than meeting the auth hook's 403/401.
+   */
+  it.each([
+    ['a suspended account', { isBanned: true }],
+    ['a retired account', { deletedAt: new Date('2026-06-01T00:00:00.000Z') }],
+  ])('takes a message from %s, as a visitor, and writes the case', async (_label, lock) => {
+    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
+    await harness.database.db.update(users).set(lock).where(eq(users.authUserId, CUSTOMER));
+
+    try {
+      const result = await harness.app.inject({
+        method: 'POST',
+        url: '/support/messages',
+        ...fromANewVisitor(),
+        headers: bearer(CUSTOMER),
+        payload: { topic: 'something-else', email: 'locked@example.com', message: MESSAGE },
+      });
+
+      expect(result.statusCode).toBe(200);
+      const receipt = supportMessageReceiptSchema.parse(result.json());
+      expect(receipt.replyTo).toBe('locked@example.com');
+
+      const [report] = harness.email.sent;
+      expect(report?.replyTo).toBe('locked@example.com');
+
+      const [row] = await harness.database.db
+        .select({ senderEmail: supportCases.senderEmail })
+        .from(supportCases)
+        .where(eq(supportCases.reference, receipt.reference));
+      expect(row?.senderEmail).toBe('locked@example.com');
+    } finally {
+      await harness.database.db
+        .update(users)
+        .set({ isBanned: false, deletedAt: null })
         .where(eq(users.authUserId, CUSTOMER));
     }
   });

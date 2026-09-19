@@ -246,6 +246,8 @@ export function SupportScreen({
   const [message, setMessage] = useState('');
   const [phase, setPhase] = useState<Phase>('editing');
   const [reference, setReference] = useState<string | null>(null);
+  /** The address the server answered to, from the receipt — never inferred here. */
+  const [answeredAt, setAnsweredAt] = useState<string | null>(null);
   /*
    * A refusal that is about what they typed, shown beside the fields rather
    * than as state 6.
@@ -264,8 +266,6 @@ export function SupportScreen({
   const messageId = `${fieldId}-message`;
 
   const locked = phase === 'sending';
-  const replyTo = accountEmail ?? email;
-
   /*
    * The address has to be one the answer can actually reach, and the schema
    * that decides is the API's own rather than a second regex written here —
@@ -310,6 +310,7 @@ export function SupportScreen({
       });
 
       setReference(receipt.reference);
+      setAnsweredAt(receipt.replyTo);
       setPhase('sent');
     } catch (error) {
       /*
@@ -353,8 +354,8 @@ export function SupportScreen({
         <h1 className="font-display text-[23px] text-stone-900">Message sent</h1>
 
         <p className="mt-2.25 max-w-[290px] text-[13px] leading-[1.6] text-stone-700">
-          We&apos;ll reply to <strong className="font-semibold text-stone-900">{replyTo}</strong>,
-          usually within one business day.
+          We&apos;ll reply to <strong className="font-semibold text-stone-900">{answeredAt}</strong>
+          , usually within one business day.
         </p>
 
         {/*

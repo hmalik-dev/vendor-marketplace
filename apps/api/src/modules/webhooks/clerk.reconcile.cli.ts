@@ -39,6 +39,7 @@ const app = await buildServer({
   db,
   storage: createS3Storage(env),
   payoutSweepIntervalMs: 0,
+  expirySweepIntervalMs: 0,
 });
 
 try {
