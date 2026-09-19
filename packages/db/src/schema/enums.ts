@@ -10,6 +10,7 @@ import {
   TAG_CATEGORIES,
   TAG_SUGGESTION_STATUSES,
   USER_ROLES,
+  AUTH_PROVIDERS,
   US_STATE_CODES,
 } from '@vendor-marketplace/shared';
 import { pgEnum } from 'drizzle-orm/pg-core';
@@ -18,6 +19,7 @@ import { pgEnum } from 'drizzle-orm/pg-core';
  * Postgres enums are declared from the shared constant arrays, so a value can
  * never exist in Zod validation without also existing in the database type.
  */
+export const authProviderEnum = pgEnum('auth_provider', AUTH_PROVIDERS);
 export const userRoleEnum = pgEnum('user_role', USER_ROLES);
 export const priceTypeEnum = pgEnum('price_type', PRICE_TYPES);
 export const availabilityStatusEnum = pgEnum('availability_status', AVAILABILITY_STATUSES);

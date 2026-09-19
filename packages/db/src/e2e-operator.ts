@@ -9,10 +9,11 @@ type Database = PgDatabase<PgQueryResultHKT, Record<string, unknown>, TablesRela
  * A second, **disposable** operator for the browser pass that closes one
  * (VEN-391).
  *
- * Closing an operator deletes their Clerk identity, and the seed resolves the
+ * Closing an operator deletes their Neon Auth identity, and the seed resolves the
  * persistent E2E admin's identity rather than creating it — so that account must
- * never be the target. The spec mints a throwaway `+clerk_test` identity through
- * Clerk's Backend API and hands its id here, which gives it an operator row.
+ * never be the target. The spec hands a `seed_e2e_…` id here, which gives it an
+ * operator row with `auth_provider = 'seed'`: no identity backs it, so a closure
+ * owes no deletion.
  *
  * `role = 'admin'` is unreachable from inside the product, which is why this is
  * a database write at all. The address pattern is the fence: nothing here reads
@@ -37,6 +38,7 @@ export async function insertDisposableOperator(
     .insert(users)
     .values({
       authUserId: input.authUserId,
+      authProvider: 'seed',
       email: input.email,
       role: 'admin',
       firstName: 'Disposable',

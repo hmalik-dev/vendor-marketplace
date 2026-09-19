@@ -1,4 +1,5 @@
 import type { NeonAuthIdentity } from '@vendor-marketplace/db';
+import type { AuthProvider } from '@vendor-marketplace/shared';
 import type { AdminContext } from '../admin/account-unwind.js';
 import { listLiveAuthIdentities } from '../users/users.dao.js';
 import { applyAuthSyncEvent } from './auth-sync.service.js';
@@ -61,6 +62,7 @@ const BATCH_SIZE = 100;
 
 interface LocalRow {
   authUserId: string;
+  authProvider: AuthProvider;
   email: string;
   firstName: string;
   lastName: string;
@@ -110,7 +112,7 @@ export async function reconcileAuthUsers(
   now: Date = new Date(),
 ): Promise<ReconcileSummary> {
   const rows = await listLiveAuthIdentities(context.db);
-  const local = rows.filter((row) => !isUnbackedIdentity(row.authUserId));
+  const local = rows.filter((row) => !isUnbackedIdentity(row.authProvider));
   const summary: ReconcileSummary = {
     examined: local.length,
     updated: 0,

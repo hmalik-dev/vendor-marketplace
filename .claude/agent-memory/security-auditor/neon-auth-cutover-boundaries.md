@@ -28,12 +28,18 @@ the localStorage `signup_role` value as trusted input.
   limiter never sees it, and the provider sees the server's IP, not the caller's.
 - `/api/session/token` hands the browser a 15-minute JWT from the httpOnly
   cookie. `no-store`, no CORS, never a client prop — verified.
-- `users.auth_user_id` holds ids from two providers in one column. VEN-448
-  deleted `isClerkIdentity`, so `pnpm reconcile:auth` now filters only `seed_`
-  and **retires (and refunds) every live row Neon Auth does not know** — any
-  surviving Clerk-era row. The only backstop is `remote.size === 0`, which does
-  not fire while one Neon identity answers. Audit any pass that treats "absent
-  at the provider" as "deleted by the user".
+- `users.auth_user_id` holds ids from two providers in one column, and since
+  **VEN-450 `users.auth_provider`** (`neon_auth|legacy_clerk|seed`) says which —
+  recorded at insert, never inferred from the id. `isUnbackedIdentity` is
+  `!== 'neon_auth'`, and it is the _only_ thing keeping `pnpm reconcile:auth`,
+  `releaseStaleHolder` and `closeAccount`'s identity deletion off seeded and
+  Clerk-era rows: absent at Neon Auth otherwise means **retired and refunded**.
+  The column defaults to `neon_auth`, so **the dangerous value is the default** —
+  a new writer of an unbacked row (seed, fixture, import) that omits it arms a
+  mass retirement, and no CHECK ties `'seed'` to a `seed_` id. Migration 0056 is
+  the last place an id shape decides anything. Audit any pass that treats
+  "absent at the provider" as "deleted by the user"; the only backstop is
+  `remote.size === 0 && local.length > 1`.
 - `packages/db/src/neon-auth-directory.ts` is raw SQL on `neon_auth` over a
   second connection (`NEON_AUTH_DATABASE_URL`, required off baseline/local).
   Queries are module constants and parameterised; the one wart is the

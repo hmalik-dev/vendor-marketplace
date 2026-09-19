@@ -186,10 +186,43 @@ describe('applyAuthSyncEvent, when an update meets a stale holder', () => {
     expect((await rowFor(CLAIMANT))?.pendingEmail).toBe(CONTESTED);
   });
 
+  /*
+   * VEN-450: a Clerk-era holder has no Neon Auth identity by construction, so
+   * its absence there is not a deletion and it must not be retired and refunded.
+   */
+  it('never asks Neon Auth about, or retires, a legacy-provider holder', async () => {
+    await harness.database.db
+      .update(users)
+      .set({ authUserId: 'user_2abcdefghijklmnopqrstuvwxyz', authProvider: 'legacy_clerk' })
+      .where(eq(users.authUserId, HOLDER));
+    const directory = directoryHolding(neonIdentity(CLAIMANT, CONTESTED));
+
+    const outcome = await applyAuthSyncEvent(context(), claimAddress(), NOW, directory);
+
+    expect(outcome).toBe('diverged');
+    expect(directory.lookup).not.toHaveBeenCalled();
+    expect((await rowFor('user_2abcdefghijklmnopqrstuvwxyz'))?.deletedAt).toBeNull();
+  });
+
+  /* The recorded provider decides, not the id: a Neon-issued id shaped like a Clerk one is released. */
+  it('still retires a Neon-issued holder whose id looks like a Clerk one', async () => {
+    const lookalike = 'user_2abcdefghijklmnopqrstuvwxyz';
+    await harness.database.db
+      .update(users)
+      .set({ authUserId: lookalike })
+      .where(eq(users.authUserId, HOLDER));
+    const directory = directoryHolding(neonIdentity(CLAIMANT, CONTESTED));
+
+    const outcome = await applyAuthSyncEvent(context(), claimAddress(), NOW, directory);
+
+    expect(outcome).toBe('updated');
+    expect((await rowFor(lookalike))?.deletedAt).toBeInstanceOf(Date);
+  });
+
   it('never asks Neon Auth about, or retires, a seeded holder it never issued', async () => {
     await harness.database.db
       .update(users)
-      .set({ authUserId: 'seed_mkt_ada' })
+      .set({ authUserId: 'seed_mkt_ada', authProvider: 'seed' })
       .where(eq(users.authUserId, HOLDER));
     const directory = directoryHolding();
 

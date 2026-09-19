@@ -295,8 +295,8 @@ describe('reconcileAuthUsers', () => {
    * take the entire public marketplace down on the first real run.
    */
   it('leaves seeded accounts no identity was issued for alone', async () => {
-    await seed('seed_mkt_vendor_june-harlow');
-    await seed('seed_mkt_customer_0');
+    await seed('seed_mkt_vendor_june-harlow', { authProvider: 'seed' });
+    await seed('seed_mkt_customer_0', { authProvider: 'seed' });
 
     const source = sourceHolding();
     const summary = await reconcileAuthUsers(context(), source);
@@ -311,7 +311,7 @@ describe('reconcileAuthUsers', () => {
    * deletion would retire the account and refund its bookings.
    */
   it('leaves rows the previous provider issued alone', async () => {
-    await seed('user_2abcdefghijklmnopqrstuvwxyz');
+    await seed('user_2abcdefghijklmnopqrstuvwxyz', { authProvider: 'legacy_clerk' });
     await seed('user_a', { email: 'katherine@example.com' });
 
     const summary = await reconcileAuthUsers(context(), sourceHolding(identity('user_a')));
@@ -320,8 +320,24 @@ describe('reconcileAuthUsers', () => {
     expect((await read('user_2abcdefghijklmnopqrstuvwxyz'))[0]?.deletedAt).toBeNull();
   });
 
+  /*
+   * VEN-450: the provider is recorded, not read off the id. A Neon Auth id that
+   * happens to look like a Clerk one is a live Neon account, and its deletion at
+   * Neon Auth must still retire it.
+   */
+  it('retires a Neon-issued row whose id merely looks like a Clerk one', async () => {
+    const lookalike = 'user_2abcdefghijklmnopqrstuvwxyz';
+    await seed(lookalike);
+    await seed('user_a', { email: 'katherine@example.com' });
+
+    const summary = await reconcileAuthUsers(context(), sourceHolding(identity('user_a')));
+
+    expect(summary).toMatchObject({ examined: 2, deleted: 1, skipped: 0 });
+    expect((await read(lookalike))[0]?.deletedAt).not.toBeNull();
+  });
+
   it('still reconciles real rows alongside seeded ones', async () => {
-    await seed('seed_mkt_customer_0');
+    await seed('seed_mkt_customer_0', { authProvider: 'seed' });
     await seed('user_a', { email: 'katherine@example.com', firstName: 'Kathryn' });
 
     const summary = await reconcileAuthUsers(context(), sourceHolding(identity('user_a')));
