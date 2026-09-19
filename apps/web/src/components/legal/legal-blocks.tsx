@@ -14,7 +14,7 @@ import type { LegalBlock, LegalSpan } from '@/lib/legal-markdown';
 /** The prose scale, used on these pages and nowhere else in the product. */
 export const LEGAL_PROSE = 'text-md leading-legal text-stone-800 text-pretty';
 
-function Spans({ spans }: { spans: LegalSpan[] }): React.ReactElement {
+function Spans({ spans, newTab }: { spans: LegalSpan[]; newTab: boolean }): React.ReactElement {
   return (
     <>
       {spans.map((span, index) => {
@@ -25,6 +25,7 @@ function Spans({ spans }: { spans: LegalSpan[] }): React.ReactElement {
             <Link
               key={key}
               href={span.href}
+              {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
               className="text-clay-500 underline-offset-4 hover:underline"
             >
               {span.text}
@@ -65,9 +66,11 @@ function Spans({ spans }: { spans: LegalSpan[] }): React.ReactElement {
 function LegalTable({
   header,
   rows,
+  newTab,
 }: {
   header: string[];
   rows: LegalSpan[][][];
+  newTab: boolean;
 }): React.ReactElement {
   const template = { gridTemplateColumns: `repeat(${header.length}, minmax(0, 1fr))` };
 
@@ -99,7 +102,7 @@ function LegalTable({
                   column === 0 ? 'px-3.5 py-3 font-semibold' : 'px-3.5 py-3 text-stone-700'
                 }
               >
-                <Spans spans={cell} />
+                <Spans spans={cell} newTab={newTab} />
               </span>
             ))}
           </div>
@@ -129,20 +132,31 @@ function ShieldCheck(): React.ReactElement {
   );
 }
 
-export function LegalBlocks({ blocks }: { blocks: LegalBlock[] }): React.ReactElement {
+/**
+ * `newTabLinks` for a document rendered inside a gate that promises the reader
+ * does not lose their place (`ExpandableDocumentCard`): an in-text link would
+ * otherwise unmount the screen and the tick with it.
+ */
+export function LegalBlocks({
+  blocks,
+  newTabLinks: newTab = false,
+}: {
+  blocks: LegalBlock[];
+  newTabLinks?: boolean;
+}): React.ReactElement {
   return (
     <>
       {blocks.map((block, index) => {
         if (block.kind === 'paragraph') {
           return (
             <p key={index} className={`${LEGAL_PROSE} mb-4`}>
-              <Spans spans={block.spans} />
+              <Spans spans={block.spans} newTab={newTab} />
             </p>
           );
         }
 
         if (block.kind === 'table') {
-          return <LegalTable key={index} header={block.header} rows={block.rows} />;
+          return <LegalTable key={index} header={block.header} rows={block.rows} newTab={newTab} />;
         }
 
         if (block.kind === 'panel') {
@@ -153,7 +167,7 @@ export function LegalBlocks({ blocks }: { blocks: LegalBlock[] }): React.ReactEl
                   key={at}
                   className="text-[14.5px] leading-[1.75] text-stone-800 not-first:mt-3 text-pretty"
                 >
-                  <Spans spans={paragraph} />
+                  <Spans spans={paragraph} newTab={newTab} />
                 </p>
               ))}
             </div>
@@ -169,7 +183,7 @@ export function LegalBlocks({ blocks }: { blocks: LegalBlock[] }): React.ReactEl
             <div>
               {block.paragraphs.map((paragraph, at) => (
                 <p key={at} className="text-base leading-[1.7] text-stone-800 not-first:mt-3">
-                  <Spans spans={paragraph} />
+                  <Spans spans={paragraph} newTab={newTab} />
                 </p>
               ))}
             </div>

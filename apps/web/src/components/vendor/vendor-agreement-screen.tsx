@@ -13,6 +13,7 @@ import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { ExpandableDocumentCard } from '@/components/legal/expandable-document-card';
 import { OnboardingSteps } from '@/components/vendor/onboarding-steps';
+import { ApiClientError } from '@/lib/api-client';
 import type { LegalDocument } from '@/lib/legal-markdown';
 import { useApi } from '@/lib/use-api';
 
@@ -98,13 +99,13 @@ function UnacceptedStep({
   const router = useRouter();
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const terms = vendorAgreementTerms();
   const isNewVersion = status.accepted !== null;
 
   async function accept(submitted: React.FormEvent): Promise<void> {
     submitted.preventDefault();
-    setFailed(false);
+    setFailed(null);
     setSaving(true);
 
     try {
@@ -121,9 +122,14 @@ function UnacceptedStep({
        * sees the blocker when they navigate back.
        */
       router.refresh();
-    } catch {
-      // The API's own words never reach a screen — `40-states.md`.
-      setFailed(true);
+    } catch (error) {
+      // The API's own words never reach a screen — `40-states.md`. A 409 is the
+      // one refusal a retry can never clear: the page holds a stale version.
+      setFailed(
+        error instanceof ApiClientError && error.statusCode === 409
+          ? 'The agreement was updated while this page was open. Reload and read it before accepting.'
+          : 'Nothing has been recorded — try again.',
+      );
     } finally {
       setSaving(false);
     }
@@ -152,7 +158,7 @@ function UnacceptedStep({
 
       {failed ? (
         <Banner status="failed" title="That did not save" className="mt-5">
-          Nothing has been recorded &mdash; try again.
+          {failed}
         </Banner>
       ) : null}
 
