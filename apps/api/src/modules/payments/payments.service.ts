@@ -1559,11 +1559,15 @@ export async function announceDisputeHold(
       vendorUserId,
       'booking_cancelled',
       {
-        title: origin === 'network' ? 'A chargeback was opened' : 'A customer reported a problem',
-        body:
-          origin === 'network'
-            ? "The customer's bank opened a chargeback on this booking. Your payout for it is on hold until the case is resolved."
-            : 'Your payout for this booking is on hold until we have looked into it.',
+        ...(origin === 'network'
+          ? {
+              title: 'A chargeback was opened',
+              body: "The customer's bank opened a chargeback on this booking. Your payout for it is on hold until the case is resolved.",
+            }
+          : {
+              title: 'A customer reported a problem',
+              body: 'Your payout for this booking is on hold until we have looked into it.',
+            }),
         bookingId,
       },
       'vendor',
