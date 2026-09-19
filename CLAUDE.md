@@ -18,8 +18,9 @@ monorepo; repo and packages are named `vendor-marketplace`, the product is
 ## Project
 
 - **Tracker:** Linear team `VEN`, project `Vendor Marketplace`. Ready =
-  `Todo` / `Backlog`; `In Progress` means a lane holds it; `blocked` label =
-  waits on a person, skip it. Ids are `VEN-n`, the branch is `worktree-ven-n`.
+  `Todo` / `Backlog`; `In Progress` means a lane holds it; blocking is Linear's
+  `blockedBy` relation only, never a label, and a ticket assigned to a person
+  (a console action, binding copy) is theirs: skip it. Ids are `VEN-n`, the branch is `worktree-ven-n`.
   A ticket's `cap:*` labels are what `pnpm preflight --capabilities` checks.
   Never recreate a local board: state lives in Linear, not in a file or a PR.
 - **Lanes:** `pnpm lane:up <id>` allocates ports and a lane database; every
