@@ -158,6 +158,30 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
     expect(inBucket(image.replace(/\.webp$/, '-thumb.webp'))).toBe(true);
   });
 
+  /*
+   * The editor is handed resolved URLs and sends the cover back on every save.
+   * Stored as sent, `<base>/<key>` replaced the key and the reap deleted the
+   * object the URL still pointed at (VEN-442).
+   */
+  it('keeps the stored key, and its object, when the editor echoes the resolved URL', async () => {
+    await createProfile(VENDOR, 'Sunlit Studio');
+    const owner = await ownerIdOf(VENDOR);
+    const cover = await upload('vendor-cover', owner, 'echoed');
+
+    await save(VENDOR, { coverImageUrl: cover });
+    await save(VENDOR, { coverImageUrl: `http://cdn.test/${cover}`, yearsInBusiness: 3 });
+
+    expect(inBucket(cover)).toBe(true);
+    expect(inBucket(cover.replace(/\.webp$/, '-thumb.webp'))).toBe(true);
+
+    const profile = await harness.app.inject({
+      method: 'GET',
+      url: '/vendor/profile',
+      headers: bearer(VENDOR),
+    });
+    expect(profile.json().coverImageUrl).toBe(cover);
+  });
+
   it('re-saving the same key is not a replacement', async () => {
     await createProfile(VENDOR, 'Sunlit Studio');
     const owner = await ownerIdOf(VENDOR);

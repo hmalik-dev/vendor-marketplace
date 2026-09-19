@@ -467,10 +467,10 @@ export async function updateVendorProfile(
     patch.responseTimeHours = input.responseTimeHours;
   }
   if (input.profileImageUrl !== undefined) {
-    patch.profileImageUrl = input.profileImageUrl;
+    patch.profileImageUrl = keepStoredKey(existing.profileImageUrl, input.profileImageUrl);
   }
   if (input.coverImageUrl !== undefined) {
-    patch.coverImageUrl = input.coverImageUrl;
+    patch.coverImageUrl = keepStoredKey(existing.coverImageUrl, input.coverImageUrl);
   }
 
   // Resolved before anything is written, and concurrently — see
@@ -618,6 +618,19 @@ export async function updateVendorProfile(
   );
 
   return loadDetail(db, row);
+}
+
+/**
+ * The editor holds each image as the resolved URL the API served and sends it
+ * back on every save, so an untouched cover arrives as `<base>/<stored key>`.
+ * Storing that would swap the key for a URL and read as a replacement, and the
+ * reap would then delete the object the URL still points at. A submitted value
+ * that is the stored key behind a base URL is the same image: keep the key.
+ */
+function keepStoredKey(stored: string | null, submitted: string | null): string | null {
+  return stored !== null && submitted !== null && submitted.endsWith(`/${stored}`)
+    ? stored
+    : submitted;
 }
 
 /** The old key, when a write actually replaced it with a different one. */
