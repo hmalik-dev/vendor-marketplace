@@ -163,8 +163,11 @@ export type BookingRequestStatus = (typeof BOOKING_REQUEST_STATUSES)[number];
  * refused with `INVALID_STATE_TRANSITION` — the map is the state machine, so a
  * new edge cannot be introduced by an endpoint forgetting to check.
  *
- * `accepted` is terminal for this ticket: payment turns it into a booking in
- * #10, and `declined`, `expired` and `cancelled` are final in every case.
+ * `accepted` has exactly one way out: `expired`, when the customer never pays
+ * inside the payment window. Payment turns an accepted request into a booking
+ * without changing its status, and `declined`, `expired` and `cancelled` are
+ * final in every case. An accepted request that is never paid for would hold
+ * the vendor's date forever otherwise (VEN-433).
  */
 export const BOOKING_REQUEST_TRANSITIONS: Record<
   BookingRequestStatus,
@@ -172,19 +175,24 @@ export const BOOKING_REQUEST_TRANSITIONS: Record<
 > = {
   pending: ['quoted', 'accepted', 'declined', 'cancelled', 'expired'],
   quoted: ['accepted', 'declined', 'cancelled', 'expired'],
-  accepted: [],
+  accepted: ['expired'],
   declined: [],
   expired: [],
   cancelled: [],
 };
 
-/** Statuses a lazy expiry sweep may still move to `expired`. */
-export const EXPIRABLE_BOOKING_REQUEST_STATUSES = ['pending', 'quoted'] as const;
+/**
+ * Statuses a lazy expiry sweep may still move to `expired`. An `accepted`
+ * request only lapses while no booking stands behind it — a paid one never
+ * does.
+ */
+export const EXPIRABLE_BOOKING_REQUEST_STATUSES = ['pending', 'quoted', 'accepted'] as const;
 
 /**
  * A request still awaiting a decision from someone — derived from the state
  * machine rather than listed, so it cannot drift from it: a status is live
- * exactly while it still has somewhere to go.
+ * exactly while it can still become `accepted`. `accepted` itself is decided,
+ * awaiting only payment, so it is not live even though it can expire.
  *
  * This is what the `booking_requests_live_*` unique indexes cover. `pending`
  * alone would not: a vendor who quotes a custom request moves it out of
@@ -192,7 +200,9 @@ export const EXPIRABLE_BOOKING_REQUEST_STATUSES = ['pending', 'quoted'] as const
  * would then open a second thread for one date.
  */
 export const LIVE_BOOKING_REQUEST_STATUSES: readonly BookingRequestStatus[] =
-  BOOKING_REQUEST_STATUSES.filter((status) => BOOKING_REQUEST_TRANSITIONS[status].length > 0);
+  BOOKING_REQUEST_STATUSES.filter((status) =>
+    BOOKING_REQUEST_TRANSITIONS[status].includes('accepted'),
+  );
 
 /**
  * Which statuses each `Bookings · Requests` group holds. `live` is the state
@@ -1032,6 +1042,9 @@ export const DEFAULT_PLATFORM_FEE_RATE = 0.12;
 
 /** A pending booking request auto-expires this many days after creation. */
 export const BOOKING_REQUEST_EXPIRY_DAYS = 7;
+
+/** An accepted request must be paid for within this many days of acceptance. */
+export const BOOKING_PAYMENT_WINDOW_DAYS = 7;
 
 /**
  * What each side is told about money, in the one place both are decided.

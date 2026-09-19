@@ -1,4 +1,5 @@
 import {
+  BOOKING_PAYMENT_WINDOW_DAYS,
   BOOKING_REQUEST_EXPIRY_DAYS,
   DEFAULT_PLATFORM_FEE_RATE,
   EXPIRABLE_BOOKING_REQUEST_STATUSES,
@@ -755,6 +756,19 @@ export function isLegacyDestinationPayout(booking: PayoutSubject): boolean {
  */
 export function replyDeadline(createdAt: Date, eventDate: string): Date {
   const week = addDays(createdAt, BOOKING_REQUEST_EXPIRY_DAYS);
+  const cap = universallyPastFrom(eventDate);
+
+  return cap !== null && cap.getTime() < week.getTime() ? cap : week;
+}
+
+/**
+ * When an accepted request stops awaiting payment: a week from acceptance, or
+ * the moment its event date is past everywhere, whichever comes first — the
+ * same cap `replyDeadline` uses, so a date is never held for an event that can
+ * no longer happen (VEN-433).
+ */
+export function paymentDeadline(acceptedAt: Date, eventDate: string): Date {
+  const week = addDays(acceptedAt, BOOKING_PAYMENT_WINDOW_DAYS);
   const cap = universallyPastFrom(eventDate);
 
   return cap !== null && cap.getTime() < week.getTime() ? cap : week;

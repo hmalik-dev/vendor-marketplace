@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -256,6 +256,25 @@ export async function confirmBooking(
         target: [availability.vendorId, availability.date],
         set: { status: 'booked' },
       });
+
+    /*
+     * Paid, so the payment deadline no longer applies: an accepted request
+     * with a deadline is one that is still unpaid (VEN-433).
+     *
+     * `expired` is put back to `accepted` because the expiry sweep can commit
+     * between the caller's status read and this insert. The customer has paid
+     * and the booking exists, so the payment wins and the request must read as
+     * the accepted one it is behind, not as an expired one.
+     */
+    await tx
+      .update(bookingRequests)
+      .set({ status: 'accepted', expiresAt: null })
+      .where(
+        and(
+          eq(bookingRequests.id, row.requestId),
+          inArray(bookingRequests.status, ['accepted', 'expired']),
+        ),
+      );
 
     await refreshCustomerBookingCounts(tx, row.customerId);
 

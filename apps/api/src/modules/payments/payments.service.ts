@@ -6,6 +6,7 @@ import {
   formatPrice,
   isLegacyDestinationPayout,
   isUniversallyFutureDate,
+  isUniversallyPastDate,
   parseDurationHours,
   type Booking,
   type BookingStatus,
@@ -229,6 +230,7 @@ export async function openCheckout(
   context: PaymentContext,
   user: AuthenticatedUser,
   requestId: string,
+  now: Date = new Date(),
 ): Promise<CheckoutIntent> {
   const row = await requirePayableByCustomer(context, user, requestId);
   const amountCents = payableAmount(row);
@@ -253,6 +255,18 @@ export async function openCheckout(
       clientSecret: null,
       metadata: {},
     });
+  }
+
+  /*
+   * The date has to still be ahead. The same refusal `accept` makes, carried to
+   * the point money moves: without it a request accepted for a date that has
+   * since passed could be paid for, and the payout sweep would release the
+   * vendor's share for an event that never happened (VEN-433). After the
+   * booking lookup above, because a request that was already paid keeps
+   * answering `succeeded` however long ago its event was.
+   */
+  if (isUniversallyPastDate(row.eventDate, now)) {
+    throw conflict('That date has passed, so this booking can no longer be paid for');
   }
 
   // The launch switches (VEN-404), checked before Stripe is asked for anything.

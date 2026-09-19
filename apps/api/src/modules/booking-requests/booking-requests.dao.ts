@@ -10,6 +10,7 @@ import {
   lte,
   ne,
   not,
+  notExists,
   or,
   sql,
   type SQL,
@@ -147,7 +148,18 @@ function hasLapsed(now: Date): SQL {
     inArray(bookingRequests.status, [...EXPIRABLE_BOOKING_REQUEST_STATUSES]),
     isNotNull(bookingRequests.expiresAt),
     lte(bookingRequests.expiresAt, now),
+    /*
+     * An accepted request that has been paid for keeps its status, so its
+     * deadline is not one it can lapse on. Payment clears `expiresAt`, and this
+     * is the backstop for a row that was paid before it did (VEN-433).
+     */
+    or(ne(bookingRequests.status, 'accepted'), notExists(bookingBehindRequest())),
   ) as SQL;
+}
+
+/** The booking a request became, if it ever became one — at most one row. */
+function bookingBehindRequest(): SQL {
+  return sql`(select 1 from ${bookings} where ${bookings.requestId} = ${bookingRequests.id})`;
 }
 
 /**
@@ -323,6 +335,31 @@ export async function applyTransition(
     .update(bookingRequests)
     .set({ ...patch, updatedAt: sql`now()` })
     .where(and(eq(bookingRequests.id, requestId), eq(bookingRequests.status, from)))
+    .returning();
+
+  return updated?.[0] ?? null;
+}
+
+/**
+ * Moves a lapsed request to `expired`, but only from the status it was read at
+ * — and, for an accepted one, only while no booking stands behind it, so a
+ * payment landing in the same instant wins (VEN-433).
+ */
+export async function applyExpiry(
+  db: AppDatabase,
+  requestId: string,
+  from: BookingRequestStatus,
+): Promise<BookingRequestRow | null> {
+  const updated = await db
+    .update(bookingRequests)
+    .set({ status: 'expired', updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(bookingRequests.id, requestId),
+        eq(bookingRequests.status, from),
+        or(ne(bookingRequests.status, 'accepted'), notExists(bookingBehindRequest())),
+      ),
+    )
     .returning();
 
   return updated?.[0] ?? null;

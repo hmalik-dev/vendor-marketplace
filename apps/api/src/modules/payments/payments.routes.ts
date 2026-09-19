@@ -50,7 +50,12 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
       schema: { params: requestParamsSchema, response: { 200: checkoutIntentSchema } },
     },
     async (request) =>
-      openCheckout(contextFor(request.log), authenticated(request.auth), request.params.requestId),
+      openCheckout(
+        contextFor(request.log),
+        authenticated(request.auth),
+        request.params.requestId,
+        app.clock(),
+      ),
   );
 
   /**

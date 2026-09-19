@@ -4,6 +4,7 @@ import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
+import { readEveryPage } from './read-every-page';
 import { redirectIfTermsRequired } from './terms-gate';
 import {
   wireBookingListSchema,
@@ -69,7 +70,9 @@ export async function getOwnBookingRequests(): Promise<WireBookingRequest[]> {
   const token = await customerToken();
 
   return degradeToEmpty(() =>
-    apiRequest('/booking-requests', { schema: wireBookingRequestListSchema, token }),
+    readEveryPage((query) =>
+      apiRequest(`/booking-requests${query}`, { schema: wireBookingRequestListSchema, token }),
+    ),
   );
 }
 
@@ -248,7 +251,11 @@ export async function getBookingForRequest(requestId: string): Promise<WireBooki
 export async function getOwnBookings(): Promise<WireBooking[]> {
   const token = await customerToken();
 
-  return degradeToEmpty(() => apiRequest('/bookings', { schema: wireBookingListSchema, token }));
+  return degradeToEmpty(() =>
+    readEveryPage((query) =>
+      apiRequest(`/bookings${query}`, { schema: wireBookingListSchema, token }),
+    ),
+  );
 }
 
 /**

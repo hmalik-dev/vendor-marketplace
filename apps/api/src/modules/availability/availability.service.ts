@@ -16,6 +16,7 @@ import {
   findAvailabilityInRange,
   findAvailabilityOnDates,
   findLiveRequestDates,
+  findPaidBookingDates,
 } from './availability.dao.js';
 
 export function toAvailability(row: AvailabilityRow): Availability {
@@ -83,9 +84,10 @@ export function availabilityWindow(now: Date = new Date()): { from: string; to: 
  */
 async function readCalendar(db: AppDatabase, vendorId: string, now: Date): Promise<Availability[]> {
   const { from, to } = availabilityWindow(now);
-  const [rows, liveDates] = await Promise.all([
+  const [rows, liveDates, paidDates] = await Promise.all([
     findAvailabilityInRange(db, vendorId, from, to),
     findLiveRequestDates(db, vendorId, from, to, now),
+    findPaidBookingDates(db, vendorId, from, to),
   ]);
 
   /*
@@ -119,7 +121,7 @@ async function readCalendar(db: AppDatabase, vendorId: string, now: Date): Promi
   const overlaid = new Set(pending.map((row) => row.date));
   const shown = rows.filter((row) => !overlaid.has(row.date));
 
-  return [...shown.map(toCalendarRow(now)), ...pending].sort((left, right) =>
+  return [...shown.map(toCalendarRow(now, new Set(paidDates))), ...pending].sort((left, right) =>
     left.date.localeCompare(right.date),
   );
 }
@@ -140,10 +142,18 @@ async function readCalendar(db: AppDatabase, vendorId: string, now: Date): Promi
  * `completed` is a locked status, so calling it a day early told a vendor at
  * UTC-5 that this evening's booking was already delivered and took the cell
  * out of their hands. A day is only over once it is over everywhere.
+ *
+ * **And only when it was paid for** (VEN-433). A `booked` cell is written by
+ * acceptance, before payment, so a hold nobody paid for reads `booked` to the
+ * end of the date; calling it `completed` reported an event that never
+ * happened. `paidDates` are the dates a booking stands on.
  */
-function toCalendarRow(now: Date): (row: AvailabilityRow) => Availability {
+export function toCalendarRow(
+  now: Date,
+  paidDates: ReadonlySet<string>,
+): (row: AvailabilityRow) => Availability {
   return (row) =>
-    row.status === 'booked' && isUniversallyPastDate(row.date, now)
+    row.status === 'booked' && paidDates.has(row.date) && isUniversallyPastDate(row.date, now)
       ? { ...toAvailability(row), status: 'completed' as const }
       : toAvailability(row);
 }

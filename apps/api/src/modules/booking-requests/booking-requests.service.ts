@@ -7,6 +7,7 @@ import {
   isUniversallyPastDate,
   pageWindow,
   parseDurationHours,
+  paymentDeadline,
   replyDeadline,
   requestStatusAsRead,
   toDateString,
@@ -39,6 +40,7 @@ import { notificationHref } from '../messaging/messaging.service.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import {
+  applyExpiry,
   applyTransition,
   ensureConversation,
   findActivePackage,
@@ -252,7 +254,8 @@ async function ageIfExpired(
     return row;
   }
 
-  const expired = await applyTransition(db, row.id, row.status, { status: 'expired' });
+  const wasAccepted = row.status === 'accepted';
+  const expired = await applyExpiry(db, row.id, row.status);
   if (!expired) {
     // Something else moved it first; that decision stands.
     return (await findRequestById(db, row.id)) ?? row;
@@ -277,7 +280,7 @@ async function ageIfExpired(
       'customer',
       'request_expired',
       {
-        title: 'Your request expired',
+        title: wasAccepted ? 'Your booking was not paid in time' : 'Your request expired',
         /*
          * "for a week" was a literal that #401 made false: the reply window is
          * now capped at the event, so a request sent four days before its date
@@ -286,12 +289,35 @@ async function ageIfExpired(
          * waited, and a second place that states this deadline is a second place
          * for it to drift.
          */
-        body: 'It closed without a reply. Send it again, or find another vendor for the date.',
+        body: wasAccepted
+          ? 'The payment window closed, so the date was released. Send a new request if you still want it.'
+          : 'It closed without a reply. Send it again, or find another vendor for the date.',
       },
       undefined,
       mail,
     ),
   );
+
+  /*
+   * The vendor lost the date too, and nothing else on their side records it:
+   * the booking leaves `/vendor/bookings` and the calendar cell frees.
+   */
+  if (wasAccepted) {
+    await bestEffortAnnouncement(mail, expired.id, () =>
+      notifyParty(
+        db,
+        expired,
+        'vendor',
+        'request_expired',
+        {
+          title: 'A booking was not paid in time',
+          body: 'The customer did not pay inside the window, so the date is open on your calendar again.',
+        },
+        undefined,
+        mail,
+      ),
+    );
+  }
 
   return expired;
 }
@@ -1067,7 +1093,12 @@ async function prepareTransition({
    * checkout opens on "…accepted your request on May 2", and `updatedAt` moves
    * again the moment a payment intent is recorded against the request.
    */
-  const acceptance = { acceptedAt: options.now ?? new Date() };
+  const acceptedAt = options.now ?? new Date();
+  /*
+   * The deadline moves from "reply by" to "pay by": an accepted request that
+   * nobody pays for lapses and frees the vendor's date (VEN-433).
+   */
+  const acceptance = { acceptedAt, expiresAt: paymentDeadline(acceptedAt, row.eventDate) };
 
   return row.finalPriceCents === null && row.quotedPriceCents !== null
     ? { ...acceptance, finalPriceCents: row.quotedPriceCents }

@@ -10,14 +10,17 @@ import {
 } from '@vendor-marketplace/db/schema';
 import {
   addDays,
+  BOOKING_PAYMENT_WINDOW_DAYS,
   BOOKING_REQUEST_EXPIRY_DAYS,
   ERROR_CODES,
   MAX_PACKAGE_PRICE_CENTS,
   MIN_BOOKING_AMOUNT_CENTS,
+  paymentDeadline,
   toDateString,
   universallyPastFrom,
 } from '@vendor-marketplace/shared';
 import { eq, sql } from 'drizzle-orm';
+import { confirmBooking } from '../payments/payments.dao.js';
 import { expireLapsedRequests } from './booking-requests.service.js';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -1024,6 +1027,186 @@ describe('/booking-requests', () => {
 
       expect(harness.email.sent).toHaveLength(1);
       expect(harness.email.sent[0]?.subject).toBe('Your request expired');
+    });
+
+    describe('an accepted request nobody pays for (VEN-433)', () => {
+      const mailDeps = (): Parameters<typeof expireLapsedRequests>[2] => ({
+        db: harness.app.db,
+        email: harness.app.email,
+        log: harness.app.log,
+        webOrigin: 'https://web.test',
+        background: harness.app.background,
+      });
+
+      async function acceptedRequest(): Promise<{
+        vendorId: string;
+        packageId: string;
+        requestId: string;
+      }> {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+        const created = await createRequest(vendorId, { packageId });
+        const requestId: string = created.json().id;
+        const accepted = await post(VENDOR, `/booking-requests/${requestId}/accept`);
+        expect(accepted.statusCode).toBe(200);
+
+        return { vendorId, packageId, requestId };
+      }
+
+      async function availabilityStatusOn(vendorId: string, date: string): Promise<string | null> {
+        const rows = await harness.database.db
+          .select({ status: availability.status, date: availability.date })
+          .from(availability)
+          .where(eq(availability.vendorId, vendorId));
+
+        return rows.find((row) => row.date === date)?.status ?? null;
+      }
+
+      it('gives the accepted request a payment deadline a week out', async () => {
+        const { requestId } = await acceptedRequest();
+
+        const [row] = await harness.database.db
+          .select({ expiresAt: bookingRequests.expiresAt, acceptedAt: bookingRequests.acceptedAt })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId));
+
+        expect(row?.expiresAt?.getTime()).toBe(
+          paymentDeadline(row!.acceptedAt!, EVENT_DATE).getTime(),
+        );
+        expect(row!.expiresAt!.getTime() - row!.acceptedAt!.getTime()).toBe(
+          BOOKING_PAYMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+        );
+      });
+
+      it('caps the deadline at the event date for a request accepted the day before', () => {
+        const acceptedAt = new Date('2026-06-13T12:00:00.000Z');
+
+        expect(paymentDeadline(acceptedAt, '2026-06-14').toISOString()).toBe(
+          '2026-06-16T00:00:00.000Z',
+        );
+      });
+
+      it('releases the held date once the window closes, so another customer can book it', async () => {
+        const { vendorId, packageId, requestId } = await acceptedRequest();
+        expect(await availabilityStatusOn(vendorId, EVENT_DATE)).toBe('booked');
+
+        const blocked = await createRequest(vendorId, { packageId }, OTHER_CUSTOMER);
+        expect(blocked.statusCode).toBe(409);
+
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ expiresAt: addDays(new Date(), -1) })
+          .where(eq(bookingRequests.id, requestId));
+
+        expect(await expireLapsedRequests(harness.app.db, new Date(), mailDeps())).toBe(1);
+
+        const [row] = await harness.database.db
+          .select({ status: bookingRequests.status })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId));
+        expect(row?.status).toBe('expired');
+        expect(await availabilityStatusOn(vendorId, EVENT_DATE)).toBeNull();
+
+        const [vendor] = await harness.database.db
+          .select({ slug: vendorProfiles.slug })
+          .from(vendorProfiles)
+          .where(eq(vendorProfiles.id, vendorId));
+        const calendar = await harness.app.inject({
+          method: 'GET',
+          url: `/vendors/${vendor!.slug}/availability`,
+        });
+        expect(calendar.statusCode).toBe(200);
+        expect(
+          (calendar.json() as { date: string; status: string }[]).filter(
+            (cell) => cell.date === EVENT_DATE && cell.status === 'booked',
+          ),
+        ).toEqual([]);
+
+        const retried = await createRequest(vendorId, { packageId }, OTHER_CUSTOMER);
+        expect(retried.statusCode).toBe(201);
+        expect(
+          (await post(VENDOR, `/booking-requests/${retried.json().id}/accept`)).statusCode,
+        ).toBe(200);
+      });
+
+      it('tells the customer their booking was not paid in time', async () => {
+        const { requestId } = await acceptedRequest();
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ expiresAt: addDays(new Date(), -1) })
+          .where(eq(bookingRequests.id, requestId));
+        await harness.flushEmail();
+        harness.email.sent.length = 0;
+
+        await expireLapsedRequests(harness.app.db, new Date(), mailDeps());
+        await harness.flushEmail();
+
+        expect(harness.email.sent.map((mail) => mail.subject).toSorted()).toEqual([
+          'A booking was not paid in time',
+          'Your booking was not paid in time',
+        ]);
+      });
+
+      it('lets a payment that lands as the sweep expires the request win', async () => {
+        const { vendorId, requestId } = await acceptedRequest();
+        const [customer] = await harness.database.db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.authUserId, CUSTOMER));
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ status: 'expired' })
+          .where(eq(bookingRequests.id, requestId));
+
+        const booking = await confirmBooking(harness.app.db, {
+          booking: {
+            requestId,
+            customerId: customer!.id,
+            vendorId,
+            eventDate: EVENT_DATE,
+            totalAmountCents: 145_000,
+            platformFeeCents: 17_400,
+            vendorPayoutCents: 127_600,
+          },
+        });
+
+        expect(booking?.requestId).toBe(requestId);
+        const [row] = await harness.database.db
+          .select({ status: bookingRequests.status, expiresAt: bookingRequests.expiresAt })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId));
+        expect(row).toEqual({ status: 'accepted', expiresAt: null });
+        expect(await availabilityStatusOn(vendorId, EVENT_DATE)).toBe('booked');
+      });
+
+      it('never expires an accepted request that has been paid for', async () => {
+        const { vendorId, requestId } = await acceptedRequest();
+        const [customer] = await harness.database.db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.authUserId, CUSTOMER));
+        await harness.database.db.insert(bookings).values({
+          requestId,
+          customerId: customer!.id,
+          vendorId,
+          eventDate: EVENT_DATE,
+          totalAmountCents: 145_000,
+          platformFeeCents: 17_400,
+          vendorPayoutCents: 127_600,
+        });
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ expiresAt: addDays(new Date(), -1) })
+          .where(eq(bookingRequests.id, requestId));
+
+        expect(await expireLapsedRequests(harness.app.db, new Date(), mailDeps())).toBe(0);
+
+        const [row] = await harness.database.db
+          .select({ status: bookingRequests.status })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId));
+        expect(row?.status).toBe('accepted');
+        expect(await availabilityStatusOn(vendorId, EVENT_DATE)).toBe('booked');
+      });
     });
 
     it('refuses to accept a request that has already expired', async () => {
