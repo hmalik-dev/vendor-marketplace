@@ -292,9 +292,9 @@ export type BookingStatus = (typeof BOOKING_STATUSES)[number];
  * `separate`: separate charges and transfers. The whole amount sits in Orla's
  * balance until the payout sweep moves the vendor's share.
  *
- * The default is what closes the deploy window. Migrations run in Railway's
- * `preDeployCommand`, so the old image keeps serving until the new one is
- * healthy — every checkout completing in between is a destination charge that
+ * The default is what closes the deploy window. Migrations run before the new
+ * image deploys (`deploy.yml`; Railway's `preDeployCommand` when this was
+ * written), so the old image keeps serving until the new one is healthy — every checkout completing in between is a destination charge that
  * the backfill has already been and gone past. Defaulting to `destination` and
  * having only the new code write `separate` means those rows identify
  * themselves, instead of looking to the sweep like unpaid new-model bookings

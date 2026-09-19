@@ -23,6 +23,7 @@
     "@fastify/helmet": "13.1.1",
     "@fastify/multipart": "^10.1.1",
     "@fastify/rate-limit": "11.2.0",
+    "@sentry/node": "10.74.0",
     "@vendor-marketplace/db": "workspace:*",
     "@vendor-marketplace/shared": "workspace:*",
     "drizzle-orm": "0.45.2",

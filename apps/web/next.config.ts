@@ -1,6 +1,9 @@
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import type { NextConfig } from 'next';
+import { withSentryConfig } from '@sentry/nextjs';
+import { releaseIdentifier } from '@vendor-marketplace/shared/env';
+import { errorIngestOrigin, sentryBuildOptions } from './src/config/error-reporting';
 import { assertWebEnv, servesOverTls } from './src/config/env';
 import { securityHeaders, shouldEnforceCsp } from './src/config/security-headers';
 
@@ -51,6 +54,14 @@ const isProduction = process.env.NODE_ENV === 'production';
  */
 const servesTls = servesOverTls();
 
+/*
+ * The release this bundle is — the commit the deploy workflow set, or the
+ * platform's. Inlined for the browser, the server and the edge alike, and
+ * handed to the source-map upload, so an error and the maps it resolves
+ * against name one commit.
+ */
+const release = releaseIdentifier();
+
 const nextConfig: NextConfig = {
   /*
    * Next infers the workspace root from the nearest lockfile, and a stray
@@ -59,6 +70,8 @@ const nextConfig: NextConfig = {
    * Pinned to the repo root, which is two levels up from `apps/web`.
    */
   outputFileTracingRoot: path.resolve(process.cwd(), '../..'),
+
+  env: { NEXT_PUBLIC_SENTRY_RELEASE: release ?? '' },
 
   /*
    * The legal copy is read off disk at build time, and file tracing cannot see
@@ -87,6 +100,7 @@ const nextConfig: NextConfig = {
         headers: securityHeaders({
           apiOrigin,
           imageOrigin,
+          errorIngestOrigin: errorIngestOrigin(webEnv.NEXT_PUBLIC_SENTRY_DSN),
           allowEval: !isProduction,
           enforceCsp: shouldEnforceCsp({
             cspEnforce: process.env.CSP_ENFORCE,
@@ -99,4 +113,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, sentryBuildOptions(process.env, release));

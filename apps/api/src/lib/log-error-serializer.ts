@@ -399,6 +399,32 @@ export function serializeError(error: Error): ReturnType<typeof stdSerializers.e
 }
 
 /**
+ * The same withholding for an error leaving the process through a sink that is
+ * **not** the log. VEN-397.
+ *
+ * #445 put the guard at pino's `err` serialiser because that was the only way
+ * out. Sentry is a second one, and it reads `message` and `stack` off the error
+ * object it is handed — `eventFromUnknownInput` copies the message into
+ * `exception.values[0].value` and the frames from the stack, and the default
+ * `linkedErrors` integration walks `cause` and does it again. None of that
+ * passes through a pino serialiser, so `captureException(error)` on a failed
+ * statement ships every bound value to a third party: the same leak as #445,
+ * through a door that did not exist when #445 was closed.
+ *
+ * The event scrubber in `packages/shared` is not a substitute. It redacts four
+ * shapes — emails, JWTs, `Bearer …` and provider keys — and a bound value is a
+ * customer's name, address or the free text they typed into the public support
+ * form, which match none of them.
+ *
+ * Returns an error with the same prototype, so the tracker still reports the
+ * type and the frames, and returns the value itself when there was nothing to
+ * strip.
+ */
+export function redactErrorValues(error: unknown): unknown {
+  return sanitize(error, new Set(), 0);
+}
+
+/**
  * The same redaction for every *other* key of a log record. #445.
  *
  * `serializeError` above is bound to `err`, and pino applies a serialiser by

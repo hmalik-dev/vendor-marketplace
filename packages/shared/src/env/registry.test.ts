@@ -421,13 +421,20 @@ describe('registrySchemaShape', () => {
      * branch, and an assertion that mirrors the implementation cannot fail for
      * any change made consistently in both.
      *
-     * Only `RESEND_WEBHOOK_SECRET` is excused on a deployment (#439): the
+     * `RESEND_WEBHOOK_SECRET` is excused on a deployment (#439): the
      * delivery record has to hold what was attempted whether or not the account
      * holder configured the webhook, and absence there means the endpoint is
      * not registered at all rather than a permissive one. The other two are
-     * `tooling` rows that no deployed app reads.
+     * `tooling` rows that no deployed app reads. The two Sentry upload rows
+     * (VEN-397) are read by the web build, but only the production build
+     * uploads source maps; a preview deployment has none to send, and the
+     * deploy workflow refuses to start without them.
      */
-    const EXCUSED_ON_DEPLOYED = ['RESEND_WEBHOOK_SECRET'];
+    const EXCUSED_ON_DEPLOYED = [
+      'RESEND_WEBHOOK_SECRET',
+      'SENTRY_AUTH_TOKEN',
+      'SENTRY_WEB_PROJECT',
+    ];
 
     it('requires exactly the per-environment rows, and every one of them', () => {
       for (const variable of ENV_REGISTRY) {
@@ -472,4 +479,58 @@ describe('registrySchemaShape', () => {
       }
     });
   });
+});
+
+/*
+ * VEN-397's contract for the DSNs, stated per target rather than inferred from
+ * `optionalFor`: a deployment that cannot report its errors must refuse to boot
+ * or build, and a laptop must run with reporting simply off.
+ */
+describe('the Sentry DSNs', () => {
+  const DSN = 'https://abc123@o1.ingest.sentry.io/42';
+
+  for (const [consumer, key] of [
+    ['api', 'SENTRY_DSN'],
+    ['web', 'NEXT_PUBLIC_SENTRY_DSN'],
+  ] as const) {
+    const shapeFor = (target: 'baseline' | 'local' | 'deployed' | 'production') =>
+      registrySchemaShape({ consumer, capabilities: ['sentry'], target }) as Record<
+        string,
+        { parse: (value: unknown) => unknown }
+      >;
+
+    for (const target of ['deployed', 'production'] as const) {
+      it(`${key}: refuses a missing value on the ${target} target`, () => {
+        expect(() => shapeFor(target)[key]!.parse(undefined)).toThrow(`${key} is required`);
+        expect(() => shapeFor(target)[key]!.parse('')).toThrow(`${key} is required`);
+      });
+
+      it(`${key}: refuses a malformed value and the placeholder on the ${target} target`, () => {
+        for (const bad of [
+          'http://abc123@o1.ingest.sentry.io/42',
+          'not-a-dsn',
+          findVariable(key)!.placeholder,
+        ]) {
+          expect(() => shapeFor(target)[key]!.parse(bad), bad).toThrow(
+            `${key} does not look like a real value`,
+          );
+        }
+      });
+
+      it(`${key}: accepts a real DSN on the ${target} target`, () => {
+        expect(shapeFor(target)[key]!.parse(DSN)).toBe(DSN);
+      });
+    }
+
+    for (const target of ['baseline', 'local'] as const) {
+      it(`${key}: tolerates absence in development (${target})`, () => {
+        expect(shapeFor(target)[key]!.parse(undefined)).toBeUndefined();
+        expect(shapeFor(target)[key]!.parse('')).toBeUndefined();
+      });
+
+      it(`${key}: still refuses a malformed value in development (${target})`, () => {
+        expect(() => shapeFor(target)[key]!.parse('not-a-dsn')).toThrow(key);
+      });
+    }
+  }
 });

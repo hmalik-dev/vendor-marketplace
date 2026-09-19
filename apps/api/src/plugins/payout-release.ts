@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin';
+import type { ErrorReporter } from '../lib/error-reporting.js';
 import { releaseDuePayouts } from '../modules/payments/payouts.service.js';
 
 export interface PayoutReleasePluginOptions {
@@ -8,6 +9,12 @@ export interface PayoutReleasePluginOptions {
    * against fixtures nobody asked it to touch.
    */
   intervalMs: number;
+  /**
+   * Where a failed sweep is reported. A sweep has no request to fail and no
+   * screen to show it, so without this a Stripe outage that stops every payout
+   * is a log line nobody reads.
+   */
+  reporter: ErrorReporter;
 }
 
 /**
@@ -65,6 +72,7 @@ export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
         // Logged and swallowed: an unhandled rejection here would take the
         // process down over a job whose next run repairs it.
         app.log.error({ err: error }, 'Payout sweep failed');
+        options.reporter.capture(error, { payment: true });
       } finally {
         running = false;
       }

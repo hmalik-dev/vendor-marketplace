@@ -23,6 +23,17 @@ const redirect = vi.fn((path: string) => {
 let requestPath: string | null = null;
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: async () => ({ getToken, userId }) }));
+/*
+ * The **isolation** scope, not the current one: `Sentry.setUser` is per request
+ * only where the SDK's auto-instrumentation has wrapped the render, and the id
+ * landing on a shared scope reports one visitor's error against another's
+ * account. Mocking only the scope's `setUser` is what pins that — a change back
+ * to the bare call fails here rather than passing quietly.
+ */
+const setUser = vi.fn();
+vi.mock('@sentry/nextjs', () => ({
+  getIsolationScope: () => ({ setUser: (user: unknown) => setUser(user) }),
+}));
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => requestPath }),
 }));
@@ -55,6 +66,17 @@ describe('getCurrentUser', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('attaches only the Clerk user id to server error reports', async () => {
+    getToken.mockResolvedValue('token');
+    userId = 'user_2abc';
+    apiRequest.mockResolvedValue(CUSTOMER);
+
+    await getCurrentUser();
+
+    expect(setUser.mock.calls).toEqual([[{ id: 'user_2abc' }]]);
+    userId = null;
   });
 
   it('returns null when there is no Clerk session', async () => {

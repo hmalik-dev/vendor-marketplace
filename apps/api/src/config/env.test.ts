@@ -299,7 +299,7 @@ describe('parseEnv on a deployment', () => {
   it('lists every defaulted per-environment row the API reads', () => {
     const derived = registryKeys({
       consumer: 'api',
-      capabilities: ['core', 'auth', 'storage', 'stripe', 'email'],
+      capabilities: ['core', 'auth', 'storage', 'stripe', 'email', 'sentry'],
     }).filter((key) => {
       const variable = findVariable(key);
       return (
@@ -327,6 +327,7 @@ describe('parseEnv on a deployment', () => {
     S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
     S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
     SUPPORT_EMAIL_TO: 'support@orla.test',
+    SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',
   };
 
   /** `REQUIRED` with every defaulted per-environment row removed. */
@@ -472,5 +473,49 @@ describe('parseEnv on a deployment', () => {
     expect(env.PORT).toBe(4000);
     expect(env.LOG_LEVEL).toBe('info');
     expect(env.STRIPE_PLATFORM_FEE_RATE).toBe(0.12);
+  });
+});
+
+/*
+ * AC 10 of VEN-397, at the boot path itself rather than the registry: the
+ * signal that selects the value set is `NODE_ENV=production`, exactly as the
+ * API's Dockerfile sets it.
+ */
+describe('SENTRY_DSN at boot', () => {
+  const DSN = 'https://abc123@o1.ingest.sentry.io/42';
+  const DEPLOYED: NodeJS.ProcessEnv = {
+    ...REQUIRED,
+    NODE_ENV: 'production',
+    DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
+    WEB_URL: 'https://orla.test',
+    CLERK_WEBHOOK_ENDPOINT: 'https://api.orla.test/webhooks/clerk',
+    S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
+    S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+    SUPPORT_EMAIL_TO: 'support@orla.test',
+    SENTRY_DSN: DSN,
+  };
+
+  it('boots a deployment that states a real DSN', () => {
+    expect(parseEnv(DEPLOYED).SENTRY_DSN).toBe(DSN);
+  });
+
+  it('refuses to boot a deployment with no DSN, or a blank one', () => {
+    const { SENTRY_DSN: _dsn, ...missing } = DEPLOYED;
+
+    expect(() => parseEnv(missing)).toThrow(/SENTRY_DSN: SENTRY_DSN is required/);
+    expect(() => parseEnv({ ...DEPLOYED, SENTRY_DSN: '' })).toThrow(/SENTRY_DSN/);
+  });
+
+  it('refuses to boot a deployment on a malformed DSN or the placeholder', () => {
+    for (const bad of ['http://abc123@o1.ingest.sentry.io/42', 'https://...@sentry.io/...']) {
+      expect(() => parseEnv({ ...DEPLOYED, SENTRY_DSN: bad }), bad).toThrow(
+        /SENTRY_DSN does not look like a real value/,
+      );
+    }
+  });
+
+  it('boots in development with no DSN, and reporting stays off', () => {
+    expect(parseEnv(REQUIRED).SENTRY_DSN).toBeUndefined();
+    expect(parseEnv({ ...REQUIRED, SENTRY_DSN: '' }).SENTRY_DSN).toBeUndefined();
   });
 });

@@ -1,7 +1,9 @@
 'use client';
 
+import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
 import { ErrorScreen } from '@/components/errors/error-screen';
+import { boundaryCaptureContext } from '@/config/error-reporting';
 
 /**
  * Catches a throw anywhere below the root layout — which is what makes the
@@ -31,6 +33,10 @@ export default function Error({
     // The digest is on the server log already; this ties the client half of
     // the story to it for anyone reading a browser console or session replay.
     console.error(`Unhandled render error${error.digest ? ` [${error.digest}]` : ''}`, error);
+    Sentry.captureException(
+      error,
+      boundaryCaptureContext({ payment: false, digest: error.digest }),
+    );
   }, [error]);
 
   return <ErrorScreen digest={error.digest} reset={reset} />;

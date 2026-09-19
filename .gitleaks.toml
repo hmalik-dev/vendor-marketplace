@@ -1,0 +1,58 @@
+# gitleaks configuration for CI's secret scan (VEN-397).
+#
+# The default rule set, plus the narrowest allowlist that lets the full history
+# scan pass. Every entry is a file whose whole purpose is to hold
+# credential-shaped *fixtures* — the env registry's shape tests, the repository's
+# own secret scanner and its tests, the log-redaction suites. Allowlisting by
+# exact path rather than by rule keeps every other file under every rule, and
+# `scripts/gitleaks/planted.test.mjs` proves a planted credential outside these
+# paths is still caught under this very file.
+#
+# **What these paths do and do not cost.** `pnpm secrets:scan:all` still reads
+# every one of them in full: its allowlist is four literal fixture *values*
+# (`KNOWN_FIXTURES` in `packages/preflight/src/secrets/patterns.ts`), not a path
+# list, so a real credential committed into one of these files today is still
+# caught by the repository's own scanner. What the two scanners do not share is
+# reach — `gitleaks git` reads history, `secrets:scan:all` reads the tree — so
+# what these paths give up is a credential that was committed into one of them
+# and deleted again. That is the whole residual hole; it is not "reviewed
+# elsewhere".
+#
+# Adding a path here is a decision to record in the pull request, not a way to
+# make CI green: a real credential that fired the scan is rotated, not
+# allowlisted.
+
+title = "vendor-marketplace"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Suites and scanners whose subject is credential-shaped fixtures"
+paths = [
+  '''^apps/api/src/config/env\.test\.ts$''',
+  '''^apps/api/src/lib/log-redaction\.test\.ts$''',
+  '''^apps/api/src/modules/messaging/stream-auth\.routes\.test\.ts$''',
+  '''^apps/web/src/config/env\.test\.ts$''',
+  '''^apps/web/src/lib/use-event-stream\.test\.tsx$''',
+  '''^packages/preflight/src/checks/environment\.test\.ts$''',
+  '''^packages/preflight/src/secrets/patterns\.ts$''',
+  '''^packages/preflight/src/secrets/scan\.test\.ts$''',
+  '''^packages/shared/src/env/registry\.test\.ts$''',
+]
+
+# `scripts/e2e-ci.mjs` was on the list above until it was measured: the whole
+# file was exempt for a single match, and it is the one entry that is not a test
+# — the file where a live `CLERK_SECRET_KEY` is a realistic slip. The match is
+# `REQUIRED_SECRETS`' `[variable, secret]` row, two variable *names* the generic
+# rule reads as an assignment, so allowlisting that name returns every other
+# line of the file to every rule.
+[[allowlists]]
+description = "`scripts/e2e-ci.mjs`'s [variable, secret] table: a name, never a value"
+regexTarget = "match"
+regexes = ['''E2E_CLERK_PUBLISHABLE_KEY''']
+
+[[allowlists]]
+description = "CI's placeholder Clerk publishable key: public by construction, and reaches no instance"
+regexTarget = "match"
+regexes = ['''NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2kuY2xlcmsuYWNjb3VudHMuZGV2JA''']

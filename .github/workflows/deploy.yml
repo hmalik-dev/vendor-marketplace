@@ -1,0 +1,141 @@
+# The production release path (VEN-397).
+#
+#   CI succeeds on a push to main
+#     → gate       the commit is still main's tip
+#     → preflight  every secret and variable is configured, or the run fails
+#     → migrate    DATABASE_URL_UNPOOLED only, then the idempotent reference seed
+#     → api        deploy the API image
+#     → web        prebuilt Vercel production deploy, source maps to Sentry
+#     → ready      GET /ready names this commit before the deadline, or the run fails
+#
+# Every step runs only if the one before it succeeded; nothing here is
+# `if: always()` or `continue-on-error`, so a failed migration stops the release
+# before either service moves, and `scripts/deploy.test.mjs` dry-runs this file
+# to prove it. Migrations therefore always run against the *previous* release's
+# code, so every one of them must be backwards-compatible with it — additive
+# columns, never a destructive rename in one step.
+#
+# There is deliberately no automatic rollback: a failed readiness poll stops the
+# release and says so, and deciding whether to revert or fix forward is a person's.
+#
+# The API host is decision D10, reopened when the Railway service was removed;
+# it is chosen by the repository variable API_HOST and implemented by one entry
+# in scripts/deploy.mjs. Until VEN-377 provisions the inputs below, preflight
+# fails every run by name — deliberately red rather than silently skipped.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# One deploy at a time, and never one cancelled mid-migration. A newer run
+# waits for the running one; GitHub keeps only the newest waiting run, which is
+# correct, since it carries every commit the discarded one would have shipped.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Migrate, deploy, prove ready
+    # Success only. `skipped`, `cancelled`, `failure`, `timed_out` and
+    # `action_required` are all not passing, and a pull request's CI run never
+    # deploys. The gate step checks the same again, where it is tested.
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      TURBO_TELEMETRY_DISABLED: 1
+      # The release identifier, end to end: the API reports it to Sentry and
+      # names it on /ready, the web bundle inlines it and uploads its source
+      # maps under it, and the poll waits for /ready to say it.
+      SENTRY_RELEASE: ${{ github.event.workflow_run.head_sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Gate on CI success and on still being main's tip
+        id: gate
+        env:
+          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CI_EVENT: ${{ github.event.workflow_run.event }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/deploy.mjs gate
+
+      # Handed whether each input is set, never its value.
+      - name: Refuse to start unless every deploy input is configured
+        if: steps.gate.outputs.deploy == 'true'
+        env:
+          HAS_DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED != '' }}
+          HAS_API_HOST: ${{ vars.API_HOST != '' }}
+          HAS_API_SERVICE: ${{ vars.API_SERVICE != '' }}
+          HAS_API_HOST_TOKEN: ${{ secrets.API_HOST_TOKEN != '' }}
+          HAS_VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
+          HAS_VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID != '' }}
+          HAS_VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID != '' }}
+          HAS_SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN != '' }}
+          HAS_SENTRY_WEB_PROJECT: ${{ vars.SENTRY_WEB_PROJECT != '' }}
+          HAS_API_URL: ${{ vars.API_URL != '' }}
+          HAS_WEB_URL: ${{ vars.WEB_URL != '' }}
+          API_HOST: ${{ vars.API_HOST }}
+        run: node scripts/deploy.mjs preflight
+
+      - uses: pnpm/action-setup@v4
+        if: steps.gate.outputs.deploy == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.deploy == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # The migrator, the seed and the poll import the workspace packages' builds.
+      - name: Install and build the release tooling
+        if: steps.gate.outputs.deploy == 'true'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm turbo run build --filter=@vendor-marketplace/db --filter=@vendor-marketplace/shared
+
+      # The unpooled URL and nothing else: no DATABASE_URL reaches this step, so
+      # DDL cannot route through the pooler.
+      - name: Migrate, then seed reference data
+        if: steps.gate.outputs.deploy == 'true'
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: node scripts/deploy.mjs migrate
+
+      - name: Deploy the API
+        if: steps.gate.outputs.deploy == 'true'
+        env:
+          API_HOST: ${{ vars.API_HOST }}
+          API_SERVICE: ${{ vars.API_SERVICE }}
+          API_HOST_TOKEN: ${{ secrets.API_HOST_TOKEN }}
+        run: node scripts/deploy.mjs api
+
+      - name: Deploy the web app
+        if: steps.gate.outputs.deploy == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_WEB_PROJECT: ${{ vars.SENTRY_WEB_PROJECT }}
+        run: node scripts/deploy.mjs web
+
+      # Bounded: ten minutes covers a cold build on either platform without
+      # retrying a dead deployment indefinitely. A timeout fails the run.
+      - name: Poll /ready until it names this release
+        if: steps.gate.outputs.deploy == 'true'
+        env:
+          API_URL: ${{ vars.API_URL }}
+          WEB_URL: ${{ vars.WEB_URL }}
+          SMOKE_DEADLINE_MS: '600000'
+        run: node scripts/deploy.mjs ready
