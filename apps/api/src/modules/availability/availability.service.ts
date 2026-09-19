@@ -39,11 +39,10 @@ export function toAvailability(row: AvailabilityRow): Availability {
  * The near edge is the first of **yesterday's** month: a viewer west of UTC is a
  * day behind this process, so on the 1st their own today is the previous month's
  * last day, which anchoring on the server's month left outside the read
- * entirely. The far edge counts from **tomorrow**: the calendar renders
- * `AVAILABILITY_MONTHS_AHEAD + 1` months from the *viewer's* day, so a viewer
- * east of UTC on the last day of a month reached a final month that began after
- * this bound and drew every cell in it as available. Both edges land on the same
- * day as before on every day but those two.
+ * entirely. The far edge counts from **tomorrow** and runs to the **end** of the
+ * last month: the calendar renders `AVAILABILITY_MONTHS_AHEAD + 1` whole months
+ * from the *viewer's* day, so a bound landing mid-month left the back half of
+ * that final month drawn as available whatever was stored or requested there.
  *
  * Only the read widens. `setOwnAvailability` still refuses to write a date that
  * is past everywhere, and that guard is `isUniversallyPastDate`, not this floor.
@@ -54,12 +53,9 @@ export function availabilityWindow(now: Date = new Date()): { from: string; to: 
   const from = toDateString(
     new Date(Date.UTC(yesterday.getUTCFullYear(), yesterday.getUTCMonth(), 1)),
   );
+  // Day 0 of the month after the last rendered one: that month's final day.
   const end = new Date(
-    Date.UTC(
-      tomorrow.getUTCFullYear(),
-      tomorrow.getUTCMonth() + AVAILABILITY_MONTHS_AHEAD,
-      tomorrow.getUTCDate(),
-    ),
+    Date.UTC(tomorrow.getUTCFullYear(), tomorrow.getUTCMonth() + AVAILABILITY_MONTHS_AHEAD + 1, 0),
   );
 
   return { from, to: toDateString(end) };
@@ -74,7 +70,7 @@ export function availabilityWindow(now: Date = new Date()): { from: string; to: 
  * the vendor out of every date-filtered search over a message they have not
  * answered.
  *
- * The overlay never covers a stored row. A date the vendor blocked reads
+ * The overlay never covers a blocked or booked row. A date the vendor blocked reads
  * `blocked` even with a request sitting on it — that is the vendor's own
  * decision and it outranks somebody else's hope — and an accepted date already
  * reads `booked`.
@@ -92,10 +88,19 @@ async function readCalendar(db: AppDatabase, vendorId: string, now: Date): Promi
     findLiveRequestDates(db, vendorId, from, to, now),
   ]);
 
-  const stored = new Set(rows.map((row) => row.date));
+  /*
+   * Only a decision outranks a request. A stored `available` row is what a
+   * cancellation leaves behind on the freed date, and a request sent for it
+   * afterwards is as live as any other.
+   */
+  const held = new Set(
+    rows
+      .filter((row) => row.status === 'blocked' || row.status === 'booked')
+      .map((row) => row.date),
+  );
 
   const pending: Availability[] = liveDates
-    .filter((date) => !stored.has(date))
+    .filter((date) => !held.has(date))
     .map((date) => ({
       /*
        * A derived row has no stored id to carry. The calendar keys on `date`
@@ -110,7 +115,11 @@ async function readCalendar(db: AppDatabase, vendorId: string, now: Date): Promi
       note: null,
     }));
 
-  return [...rows.map(toCalendarRow(now)), ...pending].sort((left, right) =>
+  // A stored row under a pending one (never blocked or booked) is the date said twice.
+  const overlaid = new Set(pending.map((row) => row.date));
+  const shown = rows.filter((row) => !overlaid.has(row.date));
+
+  return [...shown.map(toCalendarRow(now)), ...pending].sort((left, right) =>
     left.date.localeCompare(right.date),
   );
 }
