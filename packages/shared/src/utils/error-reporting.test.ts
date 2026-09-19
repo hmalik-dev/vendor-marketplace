@@ -93,6 +93,22 @@ describe('scrubErrorEvent', () => {
     expect(scrubErrorEvent(event).request?.headers).toEqual({ 'x-attempt': '3' });
   });
 
+  it('redacts the web tier headers, which name a visitor and prove the caller', () => {
+    const { request, ...rest } = leakyEvent();
+    const event = {
+      ...rest,
+      request: {
+        ...request,
+        headers: { 'x-web-tier-key': 'proof', 'x-visitor-ip': '203.0.113.9' },
+      },
+    };
+
+    expect(scrubErrorEvent(event).request?.headers).toEqual({
+      'x-web-tier-key': REDACTED,
+      'x-visitor-ip': REDACTED,
+    });
+  });
+
   it('keeps the text around what it redacts, so the error still reads', () => {
     const scrubbed = scrubErrorEvent(leakyEvent());
 
