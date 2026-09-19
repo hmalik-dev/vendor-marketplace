@@ -336,6 +336,16 @@ export function VendorProfileForm({
   const request = useApi();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => initialState(profile));
+  // A tag the vendor holds but an operator has since deactivated is not in the
+  // active list; without it the picker draws no pill and no Remove control, and
+  // the vendor cannot see what they are saving.
+  const pickerTags = useMemo(
+    () => [
+      ...allTags,
+      ...(profile?.tags ?? []).filter((held) => !allTags.some((known) => known.id === held.id)),
+    ],
+    [allTags, profile],
+  );
   const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(initialState(profile)));
   const [isSaving, setIsSaving] = useState(false);
   /*
@@ -1090,7 +1100,7 @@ export function VendorProfileForm({
                 {...describedByProps(validation.issueFor('tags'))}
               >
                 <TagPicker
-                  allTags={allTags}
+                  allTags={pickerTags}
                   selectedTagIds={form.tagIds}
                   onTagsChange={(ids) => update('tagIds', ids)}
                   disabled={isSaving}

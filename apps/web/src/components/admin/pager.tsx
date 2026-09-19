@@ -10,12 +10,19 @@ export interface PagerProps {
   page: number;
   pageSize: number;
   total: number;
+  /** The query key this pager walks, for a surface with two paged tables. */
+  pageParam?: string;
   className?: string;
 }
 
 /** The same emptiness rule the filter links use — see `adminQueryString`. */
-function href(path: string, params: Record<string, string | undefined>, page: number): string {
-  return `${path}${adminQueryString({ ...params, page })}`;
+function href(
+  path: string,
+  params: Record<string, string | undefined>,
+  pageParam: string,
+  page: number,
+): string {
+  return `${path}${adminQueryString({ ...params, [pageParam]: page })}`;
 }
 
 /**
@@ -35,6 +42,7 @@ export function Pager({
   page,
   pageSize,
   total,
+  pageParam = 'page',
   className,
 }: PagerProps): React.ReactElement | null {
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
@@ -43,18 +51,23 @@ export function Pager({
     return null;
   }
 
+  /*
+   * A page past the end has no window to state: `first` would exceed `last`
+   * ("1486–16"). Say so, and let Previous land on the last page that has rows.
+   */
+  const pastEnd = page > lastPage;
   const first = (page - 1) * pageSize + 1;
   const last = Math.min(page * pageSize, total);
 
   return (
     <nav aria-label="Pagination" className={cn('flex shrink-0 items-center gap-2.5', className)}>
       <p className="text-sm text-stone-600">
-        {first}–{last}
+        {pastEnd ? 'Past the last page' : `${first}–${last}`}
       </p>
       <span className="flex items-center gap-1.5">
         {page > 1 ? (
           <Link
-            href={href(path, params, page - 1)}
+            href={href(path, params, pageParam, Math.min(page - 1, lastPage))}
             rel="prev"
             className="rounded-md border border-stone-300 bg-stone-0 px-2.5 py-1 text-sm font-semibold text-stone-900 hover:bg-stone-150"
           >
@@ -63,7 +76,7 @@ export function Pager({
         ) : null}
         {page < lastPage ? (
           <Link
-            href={href(path, params, page + 1)}
+            href={href(path, params, pageParam, page + 1)}
             rel="next"
             className="rounded-md border border-stone-300 bg-stone-0 px-2.5 py-1 text-sm font-semibold text-stone-900 hover:bg-stone-150"
           >

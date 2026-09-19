@@ -45,13 +45,18 @@ export interface VendorTagSelection {
  * tag an admin has since hidden, a selection over the per-category ceiling — is
  * knowable up front, so the vendor gets one failed save rather than a profile
  * edit that stands with no tags to go with it.
+ *
+ * `heldTagIds` are the tags the vendor already holds. One an operator has since
+ * deactivated still resolves, so a vendor can save unchanged or remove it; a
+ * deactivated tag they do not hold is still refused.
  */
 export async function resolveVendorTagSelection(
   db: AppDatabase,
   tagIds: readonly string[],
+  heldTagIds: readonly string[] = [],
 ): Promise<VendorTagSelection> {
   const unique = [...new Set(tagIds)];
-  const resolved = await findActiveTagsByIds(db, unique);
+  const resolved = await findActiveTagsByIds(db, unique, heldTagIds);
 
   if (resolved.length !== unique.length) {
     // Attributed to the tag picker rather than left as a toast, for the reason

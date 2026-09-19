@@ -2,6 +2,7 @@ import { ADMIN_PAYMENT_FLAGS, formatPrice } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { FilteredEmpty } from '@/components/admin/filtered-empty';
+import { OutOfRange } from '@/components/admin/out-of-range';
 import { PaymentTable } from '@/components/admin/payment-table';
 import { PAYOUT_FAILING_LABEL } from '@/lib/booking-entries';
 import { getAdminPayments } from '@/lib/admin-data';
@@ -44,6 +45,9 @@ export default async function AdminPaymentsPage({
   const feeTotal = payments.items
     .filter((row) => row.status !== 'cancelled')
     .reduce((total, row) => total + row.platformFeeCents, 0);
+
+  // Rows exist, this page is just past them: not "no payments", and not filtered-empty.
+  const pastEnd = payments.items.length === 0 && payments.total > 0;
 
   const empty = flag
     ? {
@@ -98,7 +102,15 @@ export default async function AdminPaymentsPage({
          * screen about payments.
          */
         filteredEmpty={
-          flag ? (
+          pastEnd ? (
+            <OutOfRange
+              path={PATH}
+              params={{ flag }}
+              page={payments.page}
+              pageSize={payments.pageSize}
+              total={payments.total}
+            />
+          ) : flag ? (
             <FilteredEmpty
               headline={`No payments match "${PAYOUT_FAILING_LABEL}"`}
               path={PATH}

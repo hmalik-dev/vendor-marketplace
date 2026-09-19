@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   tagSuggestions,
   tags,
@@ -18,10 +18,16 @@ export async function findActiveTags(db: AppDatabase): Promise<TagRow[]> {
     .orderBy(asc(tags.category), asc(tags.displayOrder), asc(tags.name));
 }
 
-/** Only active tags resolve — a deactivated tag must not become selectable. */
+/**
+ * Only active tags resolve — a deactivated tag must not become selectable. The
+ * one exception is a tag the caller already holds (`heldTagIds`): deactivation
+ * promises it is not removed from the profiles that have it, so a save that
+ * sends it back unchanged has to keep resolving.
+ */
 export async function findActiveTagsByIds(
   db: AppDatabase,
   tagIds: readonly string[],
+  heldTagIds: readonly string[] = [],
 ): Promise<TagRow[]> {
   if (tagIds.length === 0) {
     return [];
@@ -30,7 +36,14 @@ export async function findActiveTagsByIds(
   return db
     .select()
     .from(tags)
-    .where(and(inArray(tags.id, [...tagIds]), eq(tags.isActive, true)));
+    .where(
+      and(
+        inArray(tags.id, [...tagIds]),
+        heldTagIds.length === 0
+          ? eq(tags.isActive, true)
+          : or(eq(tags.isActive, true), inArray(tags.id, [...heldTagIds])),
+      ),
+    );
 }
 
 /**

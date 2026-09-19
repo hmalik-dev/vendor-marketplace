@@ -612,9 +612,9 @@ export const wireAdminVendorApplicationRowSchema = adminVendorApplicationRowSche
 });
 export type WireAdminVendorApplicationRow = z.infer<typeof wireAdminVendorApplicationRowSchema>;
 
-export const wireAdminVendorApplicationListSchema = z.object({
-  items: z.array(wireAdminVendorApplicationRowSchema),
-});
+export const wireAdminVendorApplicationListSchema = paginatedSchema(
+  wireAdminVendorApplicationRowSchema,
+).extend({ waiting: z.int().min(0) });
 export type WireAdminVendorApplicationList = z.infer<typeof wireAdminVendorApplicationListSchema>;
 
 /** The vendor invites (VEN-406): when sent, and when used. */
@@ -624,9 +624,7 @@ export const wireAdminVendorInviteRowSchema = adminVendorInviteRowSchema.extend(
 });
 export type WireAdminVendorInviteRow = z.infer<typeof wireAdminVendorInviteRowSchema>;
 
-export const wireAdminVendorInviteListSchema = z.object({
-  items: z.array(wireAdminVendorInviteRowSchema),
-});
+export const wireAdminVendorInviteListSchema = paginatedSchema(wireAdminVendorInviteRowSchema);
 export type WireAdminVendorInviteList = z.infer<typeof wireAdminVendorInviteListSchema>;
 
 /**

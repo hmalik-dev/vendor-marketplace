@@ -440,6 +440,78 @@ describe('tag routes', () => {
     });
   });
 
+  describe('a vendor holding a tag an operator has since deactivated', () => {
+    async function holdDeactivated(): Promise<{ heldId: string; otherId: string }> {
+      const heldId = await tagIdByName('Spanish');
+      const otherId = await tagIdByName('French');
+      const created = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: {
+          businessName: 'Sunlit Studio',
+          categoryIds: [photographyId],
+          city: 'Austin',
+          state: 'TX',
+          tagIds: [heldId, otherId],
+        },
+      });
+      expect(created.statusCode).toBe(201);
+      await harness.database.db.update(tags).set({ isActive: false }).where(eq(tags.id, heldId));
+      return { heldId, otherId };
+    }
+
+    it('can save the selection unchanged', async () => {
+      const { heldId, otherId } = await holdDeactivated();
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { tagline: 'Golden hour', tagIds: [heldId, otherId] },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(
+        response
+          .json()
+          .tags.map((tag: { id: string }) => tag.id)
+          .sort(),
+      ).toEqual([heldId, otherId].sort());
+    });
+
+    it('can remove it', async () => {
+      const { heldId, otherId } = await holdDeactivated();
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { tagIds: [otherId] },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().tags.map((tag: { id: string }) => tag.id)).toEqual([otherId]);
+      expect(response.json().tags.map((tag: { id: string }) => tag.id)).not.toContain(heldId);
+    });
+
+    it('still cannot newly pick a deactivated tag it does not hold', async () => {
+      const { otherId } = await holdDeactivated();
+      const hiddenId = await tagIdByName('German');
+      await harness.database.db.update(tags).set({ isActive: false }).where(eq(tags.id, hiddenId));
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload: { tagIds: [otherId, hiddenId] },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().message).toMatch(/selected tags are unavailable/i);
+    });
+  });
+
   describe('GET /categories', () => {
     it('lists the seeded categories in display order', async () => {
       const response = await harness.app.inject({ method: 'GET', url: '/categories' });

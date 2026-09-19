@@ -6,6 +6,7 @@ import { DataTable } from '@/components/admin/data-table';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
+import { OutOfRange } from '@/components/admin/out-of-range';
 import { StatusPill } from '@/components/ui/status-pill';
 import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
 import { getAdminBookings } from '@/lib/admin-data';
@@ -80,6 +81,8 @@ export default async function AdminBookingsPage({
    * says so before the operator clicks.
    */
   const filtered = Boolean(status ?? flag);
+  // Rows exist, this page is just past them: not "no bookings", and not filtered-empty.
+  const pastEnd = bookings.items.length === 0 && bookings.total > 0;
   const active: ActiveFilter[] = [
     { key: 'status', widening: 'Any status', carried: { flag } },
     { key: 'flag', widening: 'Any booking', carried: { status } },
@@ -131,7 +134,15 @@ export default async function AdminBookingsPage({
         rows={bookings.items}
         rowKey={(row) => row.id}
         empty={
-          filtered ? (
+          pastEnd ? (
+            <OutOfRange
+              path={PATH}
+              params={{ status, flag }}
+              page={bookings.page}
+              pageSize={bookings.pageSize}
+              total={bookings.total}
+            />
+          ) : filtered ? (
             <FilteredEmpty
               headline={empty.headline}
               path={PATH}
@@ -149,7 +160,7 @@ export default async function AdminBookingsPage({
             header: 'Vendor',
             className: 'font-semibold text-stone-900',
             cell: (row) => (
-              <Link href={`/vendors/${row.vendorSlug}`} className="hover:underline">
+              <Link href={`/admin/vendors/${row.vendorId}`} className="hover:underline">
                 {row.vendorName}
               </Link>
             ),

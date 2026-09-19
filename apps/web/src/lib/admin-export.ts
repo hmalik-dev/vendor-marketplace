@@ -129,11 +129,22 @@ export async function csvExport<T>({
   const lines: string[] = [columns.map((column) => csvField(column)).join(',')];
   let page = 1;
   let total = 0;
+  let firstTotal: number | null = null;
+  let changedDuringWalk = false;
 
   do {
     filters.set('page', String(page));
     const result = await readPage(`?${filters.toString()}`);
     total = result.total;
+    /*
+     * The walk is offset paging over live data, so a colleague resolving a case
+     * mid-export shifts every later offset: a row is skipped or repeated. The
+     * total is re-read on each page, and the only place that shows is here — by
+     * the end it equals the number of lines written and the truncation check
+     * below cannot fire.
+     */
+    changedDuringWalk ||= firstTotal !== null && total !== firstTotal;
+    firstTotal ??= total;
 
     for (const item of result.items) {
       lines.push(row(item).map(csvField).join(','));
@@ -151,6 +162,14 @@ export async function csvExport<T>({
     lines.push(
       csvField(
         `Truncated at ${lines.length - 1} of ${total} rows — narrow the filters to export the rest.`,
+      ),
+    );
+  }
+
+  if (changedDuringWalk) {
+    lines.push(
+      csvField(
+        `The rows changed while this file was being exported (${firstTotal} at the start, ${total} at the end), so it may be incomplete or repeat a row — export again to confirm.`,
       ),
     );
   }
