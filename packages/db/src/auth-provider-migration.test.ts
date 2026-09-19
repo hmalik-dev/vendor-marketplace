@@ -5,15 +5,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './testing/test-db.js';
 
 /**
- * `0054` adds `users.auth_provider` and `0055` backfills it (VEN-450).
+ * `0055` adds `users.auth_provider` and `0056` backfills it (VEN-450).
  *
  * The backfill is the only place the shape of an id still decides a provider,
  * once, for rows that predate the column. A Neon Auth id that merely resembles
  * a Clerk one must stay `neon_auth` after it, which is why the pattern is the
  * full Clerk shape and not the bare `user_` prefix.
  */
-const ADD_COLUMN = '0054_organic_elektra';
-const BACKFILL = '0055_backfill_auth_provider';
+const ADD_COLUMN = '0055_goofy_wind_dancer';
+const BACKFILL = '0056_backfill_auth_provider';
 
 const ROWS = [
   ['seed_mkt_vendor_ada', 'seed'],
@@ -42,7 +42,7 @@ afterAll(async () => {
   await testDb.close();
 });
 
-describe('0054 and 0055 record who issued each existing identity', () => {
+describe('0055 and 0056 record who issued each existing identity', () => {
   it('backfills seed and Clerk-shaped rows and leaves everything else on neon_auth', async () => {
     for (const [index, [authUserId]] of ROWS.entries()) {
       await testDb.db.execute(

@@ -228,3 +228,53 @@ export async function setApplicationStatus(
         : eq(vendorApplications.email, inviteKey(where.email)),
     );
 }
+
+/**
+ * Marks every application from the address `invited`, remembering what it was so a
+ * revoke can put it back. An application already `invited` keeps its remembered status.
+ */
+export async function markApplicationInvited(tx: AppDatabase, email: string): Promise<void> {
+  await tx
+    .update(vendorApplications)
+    .set({
+      statusBeforeInvite: sql`case when ${vendorApplications.status} <> 'invited' then ${vendorApplications.status} else ${vendorApplications.statusBeforeInvite} end`,
+      status: 'invited',
+      updatedAt: sql`now()`,
+    })
+    .where(eq(vendorApplications.email, inviteKey(email)));
+}
+
+/** Undoes `markApplicationInvited`: the remembered status, or `new` when there is none. */
+export async function restoreApplicationStatus(tx: AppDatabase, email: string): Promise<void> {
+  const key = inviteKey(email);
+  const rows = await tx
+    .select({ before: vendorApplications.statusBeforeInvite })
+    .from(vendorApplications)
+    .where(and(eq(vendorApplications.email, key), eq(vendorApplications.status, 'invited')))
+    .for('update')
+    .limit(1);
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  await tx
+    .update(vendorApplications)
+    .set({
+      status: rows[0]?.before ?? 'new',
+      statusBeforeInvite: null,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(vendorApplications.email, key));
+}
+
+/** Whether the address already belongs to a live account, whatever its role. */
+export async function hasLiveAccount(db: AppDatabase, email: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(sql`lower(${users.email}) = ${inviteKey(email)}`, isNull(users.deletedAt)))
+    .limit(1);
+
+  return rows.length > 0;
+}

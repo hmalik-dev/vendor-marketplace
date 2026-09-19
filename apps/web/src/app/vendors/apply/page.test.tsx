@@ -66,6 +66,18 @@ describe('/vendors/apply', () => {
     expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
   });
 
+  it('tells a customer who already has an account so, with no form and no false sentence', async () => {
+    identity.user = { role: 'customer' };
+    identity.email = 'customer@example.com';
+
+    render(await VendorApplyPage());
+
+    expect(screen.getByRole('heading', { name: 'You already have an account' })).toBeDefined();
+    expect(screen.queryByText(/form for/)).toBeNull();
+    expect(screen.queryByText(/No account was created/)).toBeNull();
+    expect(screen.getByRole('button', { name: /Sign out/ })).toBeDefined();
+  });
+
   it('sends a vendor who already has an account to their dashboard', async () => {
     identity.user = { role: 'vendor' };
 
