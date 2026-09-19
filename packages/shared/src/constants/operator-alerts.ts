@@ -14,6 +14,7 @@ export const OPERATOR_ALERT_KINDS = [
   'dispute_opened',
   'payout_failed',
   'refund_failed',
+  'payment_refused',
   'stripe_webhook_failing',
   'vendor_payouts_disabled',
   'report_filed',

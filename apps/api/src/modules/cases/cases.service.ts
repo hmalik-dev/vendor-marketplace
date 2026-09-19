@@ -276,6 +276,17 @@ export interface ChargebackDeps extends CaseDeps {
 }
 
 /**
+ * Stripe's terminal dispute statuses. Both `charge.dispute.closed` and
+ * `funds_reinstated` end in one of these; every other status is still live.
+ */
+const CLOSED_DISPUTE_STATUSES: ReadonlySet<string> = new Set([
+  'won',
+  'lost',
+  'warning_closed',
+  'charge_refunded',
+]);
+
+/**
  * The sentence the operator reads. Composed here, from figures Stripe answered
  * with — never a field a payload could have carried arbitrary text in.
  */
@@ -372,6 +383,30 @@ export async function openChargebackCase(
    */
   if (!target) {
     return 'ignored';
+  }
+
+  /*
+   * A dispute Stripe already closed is recorded, never held. `created` is
+   * redelivered after a failure, so it can land after a `closed` that matched
+   * no case and was answered `already-recorded` — placing the hold now would
+   * freeze a vendor's payout for a dispute that is over. The case still opens,
+   * carrying the outcome that close would have written, so the operator sees it.
+   */
+  if (CLOSED_DISPUTE_STATUSES.has(dispute.status)) {
+    const recorded = await insertSupportCase(deps.db, {
+      reference,
+      origin: 'chargeback',
+      message: chargebackMessage(dispute),
+      senderUserId: target.customerId,
+      bookingId: target.bookingId,
+      stripeDisputeId: dispute.id,
+      holdRefusal:
+        'Stripe reported this dispute already closed when the platform first heard of it, ' +
+        'so no hold was placed on the payout.',
+      networkOutcome: dispute.status,
+    });
+
+    return recorded ? 'dispute-recorded' : 'already-recorded';
   }
 
   /*

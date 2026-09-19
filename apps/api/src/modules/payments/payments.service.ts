@@ -38,6 +38,7 @@ import {
 } from '../booking-requests/booking-requests.dao.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import {
+  paymentRefusedAlert,
   refundFailedAlert,
   type OperatorAlerts,
 } from '../operator-alerts/operator-alerts.service.js';
@@ -321,6 +322,11 @@ function toRailPackage(row: PayableRequestRow): CheckoutIntent['servicePackage']
   };
 }
 
+/** What became of a succeeded intent. `refunded` is a charge that was not booked. */
+export type RecordedPayment =
+  | { outcome: 'booked' | 'already-booked'; booking: BookingRow }
+  | { outcome: 'refunded'; booking: null };
+
 /**
  * Turns a succeeded intent into a booking. Called by the webhook, and by the
  * reconciliation read when the webhook never arrives.
@@ -328,11 +334,14 @@ function toRailPackage(row: PayableRequestRow): CheckoutIntent['servicePackage']
  * Safe to call repeatedly: the unique index on `request_id` makes the second
  * call a no-op that reports the booking the first one made, which is what
  * Stripe's three-day retry schedule requires of it.
+ *
+ * A request that is no longer `accepted` is **not booked**: the charge is
+ * refunded in full and the operator is told (see `refuseDeclinedPayment`).
  */
 export async function recordSuccessfulPayment(
   context: PaymentContext,
   intent: PaymentIntentSnapshot,
-): Promise<{ booking: BookingRow; created: boolean }> {
+): Promise<RecordedPayment> {
   const requestId = intent.metadata.requestId;
 
   if (!requestId) {
@@ -353,13 +362,23 @@ export async function recordSuccessfulPayment(
   const existing = await findAnyBookingByRequest(context.db, requestId);
 
   if (existing) {
-    return { booking: existing, created: false };
+    return { outcome: 'already-booked', booking: existing };
   }
 
   const row = await findPayableRequest(context.db, requestId);
 
   if (!row) {
     throw notFound('That request does not exist');
+  }
+
+  /*
+   * The sibling paths both guard this (`requirePayableByCustomer`,
+   * `reconcileBooking`); this one did not, and it is the one a customer's open
+   * tab can reach after an account unwind declined the request — the client
+   * secret outlives the request, and nothing cancels the intent.
+   */
+  if (row.status !== 'accepted') {
+    return refuseDeclinedPayment(context, intent, requestId);
   }
 
   /*
@@ -410,14 +429,66 @@ export async function recordSuccessfulPayment(
       throw conflict('That booking could not be recorded');
     }
 
-    return { booking: settled, created: false };
+    return { outcome: 'already-booked', booking: settled };
   }
 
   await bestEffortNotice(context, { bookingId: booking.id }, () =>
     announceBooking(context, booking, row.vendorBusinessName),
   );
 
-  return { booking, created: true };
+  return { outcome: 'booked', booking };
+}
+
+/**
+ * Gives back a charge that cannot become a booking, and says so.
+ *
+ * Refunded in full — nothing was booked, so there is no tier and nothing to
+ * keep — under a key derived from the intent, and only after asking Stripe
+ * whether a refund already exists, the way `refundAndUnwind` does: the key
+ * covers 24 hours and Stripe redelivers for three days. No `reason`, because
+ * the customer did not ask for this (`CreateRefundInput`).
+ *
+ * A refund that fails is alerted and **rethrown**: unlike the decline itself,
+ * that is a state a redelivery can fix, so the webhook answers 5xx and Stripe
+ * retries. A refund that succeeds answers 200 so Stripe stops.
+ */
+async function refuseDeclinedPayment(
+  context: PaymentContext,
+  intent: PaymentIntentSnapshot,
+  requestId: string,
+): Promise<RecordedPayment> {
+  const alert = (refunded: boolean): void =>
+    context.alerts?.dispatch(
+      paymentRefusedAlert({
+        requestId,
+        paymentIntentId: intent.id,
+        amountCents: intent.amountReceivedCents,
+        refunded,
+      }),
+    );
+
+  try {
+    const alreadyRefunded = await context.stripe.findRefund(intent.id);
+
+    if (!alreadyRefunded) {
+      await context.stripe.createRefund({
+        paymentIntentId: intent.id,
+        amountCents: intent.amountReceivedCents,
+        idempotencyKey: `${intent.id}_declined_request`,
+      });
+    }
+  } catch (error) {
+    alert(false);
+    throw error;
+  }
+
+  context.log.warn(
+    { requestId, paymentIntentId: intent.id },
+    'Refunded a payment made on a request the platform had already declined',
+  );
+  alert(true);
+
+  return { outcome: 'refunded', booking: null };
 }
 
 /**
@@ -588,9 +659,9 @@ export async function reconcileBooking(
     'Reconciled a paid booking whose webhook never arrived',
   );
 
-  const { booking } = await recordSuccessfulPayment(context, intent);
+  const recorded = await recordSuccessfulPayment(context, intent);
 
-  return toBookingWithContext(booking, row.eventType);
+  return recorded.booking ? toBookingWithContext(recorded.booking, row.eventType) : null;
 }
 
 /**

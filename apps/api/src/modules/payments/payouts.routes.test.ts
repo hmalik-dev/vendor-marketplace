@@ -6,6 +6,7 @@ import {
   categories,
   conversations,
   notifications,
+  operatorAlerts,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
@@ -297,6 +298,8 @@ describe('payouts', () => {
     harness.stripe.reversals.length = 0;
     harness.stripe.transfersToRefuse.clear();
     harness.stripe.failedTransferKeys.clear();
+    harness.email.sent.length = 0;
+    await harness.database.db.delete(operatorAlerts);
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -393,6 +396,52 @@ describe('payouts', () => {
       expect(result.payoutFailureReason).toContain('refused a transfer');
       expect(result.payoutReleasedAt).toBeNull();
       expect(harness.stripe.transfers).toEqual([]);
+    });
+
+    /**
+     * `PayoutContext.alerts` is documented as the sweep's alone — the operator
+     * pressing Retry is already looking at the result. The admin route built its
+     * context from `bookingContextFor`, which always carries the pager, so the
+     * third failure paged the person who had just caused it.
+     */
+    it('does not page the operator for their own failed retry, and still pages for the sweep', async () => {
+      await signInAsAdmin();
+      const paid = await paidBooking();
+      clockNow = AFTER_RELEASE;
+      harness.stripe.transfersToRefuse.add(paid.id);
+      const sweepWithPager = () =>
+        releaseDuePayouts(
+          {
+            db: harness.database.db,
+            stripe: harness.stripe,
+            log: harness.app.log,
+            alerts: harness.app.operatorAlerts,
+          },
+          clockNow,
+        );
+      const operatorMail = (): EmailMessage[] =>
+        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL);
+
+      await sweepWithPager();
+      await sweepWithPager();
+      await harness.flushEmail();
+      expect(operatorMail()).toEqual([]);
+
+      const retried = await inject('PUT', `/admin/bookings/${paid.id}/payout/retry`, ADMIN);
+      await harness.flushEmail();
+
+      expect(retried.statusCode).toBe(200);
+      expect(retried.json().outcome).toBe('failed');
+      expect(retried.json().payoutAttempts).toBe(3);
+      expect(operatorMail()).toEqual([]);
+      expect(await harness.database.db.select().from(operatorAlerts)).toEqual([]);
+
+      await sweepWithPager();
+      await harness.flushEmail();
+
+      expect(operatorMail().map((message) => message.subject)).toEqual([
+        `[Orla ops] Payout failed 4 times on booking ${paid.id}`,
+      ]);
     });
 
     it('refuses a payout that has already been released, and says so', async () => {

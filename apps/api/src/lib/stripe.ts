@@ -752,7 +752,10 @@ export function readAccountStatusFrom(account: Stripe.V2.Core.Account): StripeAc
 
 export interface StripeCredentials {
   secretKey: string;
+  /** Signs the endpoint that receives the platform account's own events. */
   webhookSecret: string;
+  /** Signs the endpoint that receives connected accounts' events, when there is a second one. */
+  connectWebhookSecret?: string;
 }
 
 /**
@@ -775,6 +778,29 @@ const STRIPE_REQUEST_TIMEOUT_MS = 10_000;
 
 export function createStripeConnectGateway(credentials: StripeCredentials): StripeConnectGateway {
   const stripe = new Stripe(credentials.secretKey, { timeout: STRIPE_REQUEST_TIMEOUT_MS });
+  const signingSecrets = [credentials.webhookSecret, credentials.connectWebhookSecret].filter(
+    (secret): secret is string => Boolean(secret),
+  );
+
+  /*
+   * One endpoint listens to the platform's own events and another to connected
+   * accounts', and each signs with its own secret, so a delivery is accepted
+   * when **any** configured secret verifies it. The last refusal is rethrown
+   * as it came: the route logs its message only, never the error object.
+   */
+  function verifyWithEachSecret(payload: string, signature: string): unknown {
+    let refusal: unknown = new Error('No webhook signing secret is configured');
+
+    for (const secret of signingSecrets) {
+      try {
+        return stripe.webhooks.constructEvent(payload, signature, secret);
+      } catch (error) {
+        refusal = error;
+      }
+    }
+
+    throw refusal;
+  }
 
   return {
     async createRecipientAccount(input) {
@@ -844,13 +870,7 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
        * HMAC over the exact bytes and enforces its timestamp tolerance, then
        * JSON-parses — it does not care which shape it got.
        */
-      const verified: unknown = stripe.webhooks.constructEvent(
-        payload,
-        signature,
-        credentials.webhookSecret,
-      );
-
-      return describeAccountEvent(verified);
+      return describeAccountEvent(verifyWithEachSecret(payload, signature));
     },
 
     async createPaymentIntent(input) {

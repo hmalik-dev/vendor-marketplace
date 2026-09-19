@@ -432,6 +432,7 @@ describe('registrySchemaShape', () => {
      */
     const EXCUSED_ON_DEPLOYED = [
       'RESEND_WEBHOOK_SECRET',
+      'STRIPE_CONNECT_WEBHOOK_SECRET',
       'SENTRY_AUTH_TOKEN',
       'SENTRY_WEB_PROJECT',
     ];

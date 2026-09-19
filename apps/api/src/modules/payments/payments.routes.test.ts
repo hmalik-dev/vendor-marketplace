@@ -5,6 +5,7 @@ import {
   categories,
   conversations,
   notifications,
+  operatorAlerts,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
@@ -17,7 +18,12 @@ import {
 } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  TEST_ENV,
+  type TestHarness,
+} from '../../testing/test-server.js';
 
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
@@ -219,6 +225,9 @@ describe('payments', () => {
     harness.stripe.paymentIntents.clear();
     harness.stripe.intentsByKey.clear();
     harness.stripe.refunds.length = 0;
+    harness.stripe.refundsToRefuse.clear();
+    harness.email.sent.length = 0;
+    await harness.database.db.delete(operatorAlerts);
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -458,6 +467,97 @@ describe('payments', () => {
       expect(again.statusCode).toBe(200);
       expect(again.json().outcome).toBe('already-booked');
       expect(await harness.database.db.select().from(bookings)).toHaveLength(1);
+    });
+
+    /**
+     * The platform refused the request (an account unwind declined it) while the
+     * customer's tab still held a live client secret and confirmed against
+     * Stripe.js. The money moved; booking it would sell a date the vendor no
+     * longer offers, so the webhook refunds the charge and tells the operator.
+     */
+    it('refunds a payment on a declined request instead of booking it', async () => {
+      const requestId = await acceptedRequest();
+      const checkout = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      const intentId: string = checkout.json().paymentIntentId;
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ status: 'declined' })
+        .where(eq(bookingRequests.id, requestId));
+      const calendarBefore = await harness.database.db.select().from(availability);
+      harness.stripe.succeed(intentId);
+
+      const response = await redeliver(intentId);
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().outcome).toBe('refunded');
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+      expect(await harness.database.db.select().from(availability)).toEqual(calendarBefore);
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(harness.stripe.refunds[0]).toMatchObject({
+        paymentIntentId: intentId,
+        amountCents: PRICE_CENTS,
+        idempotencyKey: `${intentId}_declined_request`,
+      });
+      const [mail] = harness.email.sent.filter(
+        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+      );
+      expect(mail?.subject).toContain('declined request');
+      expect(mail?.text).toContain(requestId);
+
+      // Stripe retries what it cannot confirm: the second delivery answers 200 and refunds nothing more.
+      const again = await redeliver(intentId);
+      expect(again.statusCode).toBe(200);
+      expect(again.json().outcome).toBe('refunded');
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+    });
+
+    it('answers 500 and alerts when the refund of a declined request fails, so Stripe retries', async () => {
+      const requestId = await acceptedRequest();
+      const checkout = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      const intentId: string = checkout.json().paymentIntentId;
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ status: 'declined' })
+        .where(eq(bookingRequests.id, requestId));
+      harness.stripe.succeed(intentId);
+      harness.stripe.refundsToRefuse.add(intentId);
+
+      const response = await redeliver(intentId);
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(500);
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+      const [mail] = harness.email.sent.filter(
+        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+      );
+      expect(mail?.text).toContain('has not been refunded');
+    });
+
+    it('still answers 200 with no new row when the delivery follows a cancellation', async () => {
+      const requestId = await acceptedRequest();
+      const intentId = await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      expect(
+        (await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {})).statusCode,
+      ).toBe(200);
+
+      const again = await redeliver(intentId);
+
+      expect(again.statusCode).toBe(200);
+      expect(again.json().outcome).toBe('already-booked');
+      expect(await harness.database.db.select().from(bookings)).toHaveLength(1);
+      // The refund the cancellation issued is the only one.
+      expect(harness.stripe.refunds).toHaveLength(1);
     });
 
     it('tells both parties the booking is confirmed', async () => {

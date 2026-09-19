@@ -156,6 +156,14 @@ const STRIPE_WEBHOOK_SETUP: EnvSetup = {
   ],
 };
 
+const STRIPE_CONNECT_WEBHOOK_SETUP: EnvSetup = {
+  url: 'https://dashboard.stripe.com/webhooks',
+  steps: [
+    'Add a second endpoint at the same /webhooks/stripe URL with "Listen to events on Connected accounts" selected',
+    "Copy that endpoint's signing secret (`whsec_...`) into STRIPE_CONNECT_WEBHOOK_SECRET",
+  ],
+};
+
 const RESEND_SETUP: EnvSetup = {
   url: 'https://resend.com/api-keys',
   steps: ['Open Resend → API Keys → Create API Key'],
@@ -586,8 +594,34 @@ export const ENV_REGISTRY = [
     environments: 'per-environment',
     shape: /^whsec_[A-Za-z0-9+/=]{16,}$/,
     placeholder: 'whsec_...',
-    description: 'Signing secret for POST /webhooks/stripe.',
+    description:
+      "Signing secret for POST /webhooks/stripe, for the endpoint that receives the platform account's own events.",
     setup: STRIPE_WEBHOOK_SETUP,
+  },
+  {
+    /*
+     * The second endpoint's secret. A Stripe endpoint listens either to the
+     * platform's events or to connected accounts', and each signs with its own
+     * secret, so vendor `account.updated` cannot reach an endpoint that also
+     * receives `payment_intent.succeeded`. The API accepts a delivery signed
+     * with either key.
+     *
+     * Optional everywhere: locally one `stripe listen` forwards every stream
+     * under the single listener secret above, and a deployment that has not
+     * created the connected-account endpoint yet must still boot. Absence adds
+     * no permissive path — it only means one signing key is tried, not two.
+     */
+    key: 'STRIPE_CONNECT_WEBHOOK_SECRET',
+    capability: 'stripe',
+    audience: 'server',
+    consumers: ['api'],
+    environments: 'per-environment',
+    optionalFor: ['baseline', 'local', 'production', 'deployed'],
+    shape: /^whsec_[A-Za-z0-9+/=]{16,}$/,
+    placeholder: 'whsec_...',
+    description:
+      "Signing secret for the second POST /webhooks/stripe endpoint, the one that receives connected accounts' events. Optional: locally the single listener secret covers both streams.",
+    setup: STRIPE_CONNECT_WEBHOOK_SETUP,
   },
   {
     key: 'STRIPE_PLATFORM_FEE_RATE',
