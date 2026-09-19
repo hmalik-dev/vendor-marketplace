@@ -195,11 +195,11 @@ export function CheckoutUnavailable({
         {copy.eyebrow}
       </p>
 
-      <h1 className="mt-3 font-display text-display-lg tracking-[-.015em] text-stone-900">
+      <h1 className="mt-3 font-display text-display-error tracking-[-.015em] text-stone-900">
         {copy.heading}
       </h1>
 
-      <p className="mt-3 max-w-[460px] text-sm leading-[1.65] text-stone-700">{copy.body}</p>
+      <p className="mt-3 max-w-[460px] text-cta leading-[1.65] text-stone-700">{copy.body}</p>
 
       {/* Sage because the money position is settled, not because it is good news. */}
       <Banner status="settled" className="mt-5.5 text-left">
