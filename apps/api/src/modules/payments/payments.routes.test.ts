@@ -15,6 +15,7 @@ import {
   DEFAULT_PLATFORM_FEE_RATE,
   ERROR_CODES,
   toDateString,
+  formatPrice,
 } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -1039,6 +1040,66 @@ describe('payments', () => {
           refundApplicationFee: false,
         },
       ]);
+    });
+
+    /*
+     * VEN-425. The page quotes on the browser's clock; a booking that crossed the
+     * cutoff between render and press must not refund a different amount than the
+     * one confirmed. Refused before any money moves, with the true figure named.
+     */
+    it('refuses a cancel confirmed against a stale refund quote', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      clockNow = addDays(START, 28);
+
+      const stale = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {
+        expectedRefundCents: PRICE_CENTS,
+      });
+
+      expect(stale.statusCode).toBe(409);
+      expect(stale.json().message).toContain(formatPrice(PRICE_CENTS / 2));
+      expect(harness.stripe.refunds).toEqual([]);
+
+      const confirmed = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {
+        expectedRefundCents: PRICE_CENTS / 2,
+      });
+
+      expect(confirmed.statusCode).toBe(200);
+      expect(confirmed.json().refundCents).toBe(PRICE_CENTS / 2);
+    });
+
+    /*
+     * VEN-425. The vendor completes across the event-date boundary while the
+     * refund is in flight: the refund stands, so the row must end cancelled and
+     * not `completed` with a full payout owed.
+     */
+    it('leaves a cancel that raced a completion cancelled, not completed and refunded', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      clockNow = addDays(START, 28);
+      harness.stripe.duringNextRefund = async () => {
+        await harness.database.db
+          .update(bookings)
+          .set({ status: 'completed', completedAt: clockNow })
+          .where(eq(bookings.id, booking!.id));
+      };
+
+      const response = await inject(
+        'PUT',
+        `/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
+
+      expect(response.statusCode).toBe(200);
+      const [after] = await harness.database.db.select().from(bookings);
+      expect(after).toMatchObject({
+        status: 'cancelled',
+        refundAmountCents: PRICE_CENTS / 2,
+      });
+      expect(harness.stripe.refunds).toHaveLength(1);
     });
 
     /*

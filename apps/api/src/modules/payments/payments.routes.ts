@@ -138,6 +138,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
         request.params.bookingId,
         request.body.reason,
         app.clock(),
+        request.body.expectedRefundCents,
       ),
   );
 };
