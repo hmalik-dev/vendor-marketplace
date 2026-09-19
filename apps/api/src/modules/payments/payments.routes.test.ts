@@ -14,6 +14,7 @@ import {
   CURRENT_VENDOR_AGREEMENT_VERSION,
   DEFAULT_PLATFORM_FEE_RATE,
   ERROR_CODES,
+  paymentDeadline,
   toDateString,
   formatPrice,
 } from '@vendor-marketplace/shared';
@@ -129,8 +130,28 @@ describe('payments', () => {
     });
     expect(request.statusCode).toBe(201);
 
-    const accepted = await inject('POST', `/booking-requests/${request.json().id}/accept`, VENDOR);
-    expect(accepted.statusCode).toBe(200);
+    if (acceptsAgreement) {
+      const accepted = await inject(
+        'POST',
+        `/booking-requests/${request.json().id}/accept`,
+        VENDOR,
+      );
+      expect(accepted.statusCode).toBe(200);
+    } else {
+      /*
+       * Accepting refuses a vendor without the agreement (VEN-428), so the only
+       * way to reach this state is a request accepted before the agreement was
+       * bumped. Written as the accept would have, straight to the row.
+       */
+      await harness.database.db
+        .update(bookingRequests)
+        .set({
+          status: 'accepted',
+          acceptedAt: new Date(),
+          expiresAt: paymentDeadline(new Date(), eventDate),
+        })
+        .where(eq(bookingRequests.id, request.json().id));
+    }
 
     return request.json().id;
   }

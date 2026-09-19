@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AvailabilityStatus } from '@vendor-marketplace/shared';
@@ -580,6 +580,120 @@ describe('the request survives leaving the page', () => {
  * too. `appearance: none` on its own leaves 42.17, and so does a `line-height`
  * on the edit region; the picker indicator is what carries the extra height.
  */
+describe('a custom request (VEN-428)', () => {
+  const BRIEF = 'Two hours of engagement portraits at Zilker, golden hour.';
+
+  async function fillCustom(notes: string, venue = 'Zilker Park'): Promise<void> {
+    await chooseEventType();
+    fireEvent.change(screen.getByLabelText('Venue or location'), { target: { value: venue } });
+    fireEvent.change(screen.getByLabelText('Describe what you need'), {
+      target: { value: BRIEF },
+    });
+    fireEvent.change(screen.getByLabelText('Anything else they should know?'), {
+      target: { value: notes },
+    });
+  }
+
+  it('sends the notes with the brief, and shows both on the review step', async () => {
+    requestMock.mockResolvedValue({ id: 'r-1', expiresAt: SENT_DEADLINE });
+    renderScreen({ servicePackage: null });
+    await fillCustom('We have a dog who must be in every shot.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+
+    const review = document.querySelector('dl')?.textContent ?? '';
+    expect(review).toContain(BRIEF);
+    expect(review).toContain('We have a dog who must be in every shot.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+
+    expect(requestMock.mock.calls[0]?.[1]?.body.customDetails).toBe(
+      `${BRIEF}\n\nWe have a dog who must be in every shot.`,
+    );
+  });
+
+  it('sends the brief alone when there are no notes', async () => {
+    requestMock.mockResolvedValue({ id: 'r-1', expiresAt: SENT_DEADLINE });
+    renderScreen({ servicePackage: null });
+    await fillCustom('');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+
+    expect(requestMock.mock.calls[0]?.[1]?.body.customDetails).toBe(BRIEF);
+  });
+
+  it('blocks a brief and notes that together are over 600 characters, sending nothing', async () => {
+    renderScreen({ servicePackage: null });
+    await fillCustom('n'.repeat(560));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+
+    const total = BRIEF.length + 2 + 560;
+    expect(
+      screen.getAllByText(
+        `Your description and notes are ${total - 600} characters over the 600 the vendor can be sent. Trim either.`,
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText(`${total} / 600`)).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Send request' })).toBeNull();
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('the venue length (VEN-428)', () => {
+  it('blocks a venue over 500 characters with its own message, sending nothing', async () => {
+    renderScreen();
+    await chooseEventType();
+    fireEvent.change(screen.getByLabelText('Venue or location'), {
+      target: { value: 'v'.repeat(501) },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+
+    expect(
+      screen.getAllByText('You are 1 characters over. Trim the venue to 500.').length,
+    ).toBeGreaterThan(0);
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('the stored draft on mount (VEN-428)', () => {
+  it('never removes a stored draft while the form is still being restored', async () => {
+    const key = 'orla:booking-request:11111111-1111-4111-8111-111111111111';
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 1,
+        savedAt: Date.now(),
+        value: {
+          form: {
+            eventDate: '',
+            eventType: '',
+            eventStartTime: '',
+            guestCount: '',
+            eventLocation: 'The Marfa barn',
+            notes: '',
+          },
+          customDetails: '',
+        },
+      }),
+    );
+    const removed = vi.spyOn(Storage.prototype, 'removeItem');
+
+    renderScreen();
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(
+        'The Marfa barn',
+      ),
+    );
+    expect(removed).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(key)).not.toBeNull();
+    removed.mockRestore();
+  });
+});
+
 describe('frame 04 — the two fields the frame draws at one height', () => {
   const css = readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../app/globals.css'),

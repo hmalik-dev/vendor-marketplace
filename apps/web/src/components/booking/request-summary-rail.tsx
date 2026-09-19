@@ -2,7 +2,7 @@
 
 import { FieldMessage, errorProps } from '@/components/form-error-summary';
 import type { FieldIssue } from '@/lib/use-submit-validation';
-import { formatPrice } from '@vendor-marketplace/shared';
+import { BOOKING_REQUEST_NOTES_MAX_LENGTH, formatPrice } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import {
   FALLBACK_TONES as AVATAR_FALLBACK_TONES,
@@ -36,6 +36,11 @@ export interface RequestSummaryRailProps {
   /** `null` for a custom request, which trades the package block for a brief. */
   servicePackage: RailPackage | null;
   customDetails: string;
+  /**
+   * Characters of the brief and the notes together, as they will be sent: the
+   * API stores them as one field, so the limit is on the pair.
+   */
+  detailsLength: number;
   onCustomDetailsChange: (value: string) => void;
   customDetailsId: string;
   /**
@@ -67,6 +72,7 @@ export function RequestSummaryRail({
   vendor,
   servicePackage,
   customDetails,
+  detailsLength,
   onCustomDetailsChange,
   customDetailsId,
   customDetailsIssue,
@@ -167,6 +173,9 @@ export function RequestSummaryRail({
             placeholder="Two hours of engagement portraits at Zilker, golden hour."
             className="min-h-24 rounded-[10px] border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900"
           />
+          <p className="mt-1.25 text-right text-xs text-stone-600">
+            {detailsLength} / {BOOKING_REQUEST_NOTES_MAX_LENGTH}
+          </p>
           <FieldMessage issue={customDetailsIssue} />
         </div>
       )}

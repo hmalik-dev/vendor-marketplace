@@ -43,6 +43,29 @@ describe('useSavedDraft', () => {
     await waitFor(() => expect(reopened.result.current.restored).toEqual({ text: 'for A' }));
   });
 
+  /*
+   * VEN-428: `restored` lands a render after mount, so a caller that saved in
+   * that window wrote the empty form over the draft it had not yet been shown.
+   * `checked` is what it waits for.
+   */
+  it('says when storage has been read, with the draft in the same render', async () => {
+    const first = renderHook(() => useSavedDraft<Draft>('k', isEmpty));
+    act(() => first.result.current.save({ text: 'a venue in Marfa' }));
+
+    const seen: { checked: boolean; restored: Draft | null }[] = [];
+    renderHook(() => {
+      const draft = useSavedDraft<Draft>('k', isEmpty);
+      seen.push({ checked: draft.checked, restored: draft.restored });
+      return draft;
+    });
+
+    await waitFor(() => expect(seen.at(-1)?.checked).toBe(true));
+    expect(
+      seen.filter((render) => render.checked).every((render) => render.restored !== null),
+    ).toBe(true);
+    expect(seen[0]?.checked).toBe(false);
+  });
+
   it('starts empty when nothing was saved', () => {
     const { result } = renderHook(() => useSavedDraft<Draft>('k', isEmpty));
 

@@ -34,6 +34,17 @@ correct — but it turns any column on it into unerasable personal data, and the
 privacy page is a public claim the code has to satisfy the way the fee
 constants satisfy `legalFactTokens()`.
 
+**The vendor-agreement fact now has two readers, and they must stay identical**
+(VEN-428). `vendorHoldsCurrentAgreement` in
+`apps/api/src/modules/booking-requests/booking-requests.dao.ts` gates the
+**accept** with a 402; `payments.dao.ts`'s `EXISTS` subquery of the same name
+gates **checkout**. Both are the same three equalities — `vendor_id`,
+`document = 'vendor_agreement'`, `version = CURRENT_VENDOR_AGREEMENT_VERSION` —
+verified aligned 2026-09-19. Loosen the accept side and a vendor books a date
+checkout can never take payment for (`accepted` is terminal); tighten it past
+checkout and the customer's accept dead-ends on a vendor checkout would accept.
+Version equality, not `>=`: bumping the constant re-gates every vendor.
+
 **How to apply:** any diff that adds a column to `legal_acceptances`, widens who
 gets a row, or collects a new address/device string anywhere is also a change to
 `privacy.md`. Do not accept "it is only recorded, never trusted" — recorded _is_

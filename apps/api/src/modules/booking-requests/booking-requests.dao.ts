@@ -20,6 +20,7 @@ import {
   bookingRequests,
   bookings,
   conversations,
+  legalAcceptances,
   servicePackages,
   users,
   vendorProfiles,
@@ -30,6 +31,7 @@ import {
   type VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
 import {
+  CURRENT_VENDOR_AGREEMENT_VERSION,
   EXPIRABLE_BOOKING_REQUEST_STATUSES,
   LIVE_BOOKING_REQUEST_STATUSES,
   type BookingRequestStatus,
@@ -262,6 +264,30 @@ export async function findLiveRequest(
     .limit(1);
 
   return rows?.[0] ?? null;
+}
+
+/**
+ * Whether the vendor has accepted the agreement version in force — the same
+ * fact checkout reads as `vendorHoldsCurrentAgreement`, so an accept and the
+ * payment it leads to cannot disagree about it.
+ */
+export async function vendorHoldsCurrentAgreement(
+  db: AppDatabase,
+  vendorId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ held: sql<boolean>`true` })
+    .from(legalAcceptances)
+    .where(
+      and(
+        eq(legalAcceptances.vendorId, vendorId),
+        eq(legalAcceptances.document, 'vendor_agreement'),
+        eq(legalAcceptances.version, CURRENT_VENDOR_AGREEMENT_VERSION),
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
 }
 
 /** The live-request predicate, shared by the two indexes and this module. */

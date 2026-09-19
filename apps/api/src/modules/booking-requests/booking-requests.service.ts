@@ -63,8 +63,12 @@ import {
   statusesOnDate,
   hasRivalAcceptanceOn,
   lockHeldDate,
+  vendorHoldsCurrentAgreement,
 } from './booking-requests.dao.js';
-import { assertBookingRequestsOpen } from '../platform-settings/platform-settings.service.js';
+import {
+  assertBookingRequestsOpen,
+  assertUnderBetaCap,
+} from '../platform-settings/platform-settings.service.js';
 import type { CustomerIdentityRow, VendorSummaryRow } from './booking-requests.dao.js';
 
 /** The four things either party can do to a live request. */
@@ -661,6 +665,23 @@ export async function createBookingRequest(
       throw conflict('That request could not be sent. Try again.');
     }
 
+    /*
+     * The unique index matches on the stored status, so a request nobody has
+     * read since its window closed still reads as live here. Age it first: if
+     * it lapsed, it stops being the answer and the submission starts again
+     * against a free slot, so the vendor is told about the new request.
+     */
+    const current = await ageIfExpired(db, existing, now, mail);
+
+    if (current.status === 'expired') {
+      return createBookingRequest(db, hub, user, input, now, mail);
+    }
+
+    // Something else moved it while it was being aged; it is no longer the live one.
+    if (current.status !== 'pending' && current.status !== 'quoted') {
+      throw conflict('That request could not be sent. Try again.');
+    }
+
     return {
       /*
        * `null`, and provably so: this branch returns a request the unique index
@@ -668,10 +689,10 @@ export async function createBookingRequest(
        * `accepted`.
        */
       request: toDetail(
-        existing,
+        current,
         vendor,
         servicePackage,
-        await nameOf(db, existing.customerId),
+        await nameOf(db, current.customerId),
         null,
       ),
       created: false,
@@ -1022,6 +1043,9 @@ async function prepareTransition({
       throw validationFailed('A quote needs a price');
     }
 
+    // A quote over the cap would be accepted into a booking checkout refuses.
+    await assertUnderBetaCap(db, quote.quotedPriceCents);
+
     return { quotedPriceCents: quote.quotedPriceCents, quoteNote: quote.quoteNote ?? null };
   }
 
@@ -1039,6 +1063,21 @@ async function prepareTransition({
       ERROR_CODES.PAYMENT_REQUIRED,
       party === 'vendor'
         ? 'Finish your payout setup before accepting bookings'
+        : `${vendor.businessName} cannot take payment yet`,
+    );
+  }
+
+  /*
+   * The same 402 checkout raises for the same reason (`payments.service.ts`):
+   * `accepted` is terminal, so an accept from a vendor who has not signed the
+   * agreement in force would book the date and never be payable.
+   */
+  if (!(await vendorHoldsCurrentAgreement(db, row.vendorId))) {
+    throw new AppError(
+      402,
+      ERROR_CODES.PAYMENT_REQUIRED,
+      party === 'vendor'
+        ? 'Accept the current vendor agreement before accepting bookings'
         : `${vendor.businessName} cannot take payment yet`,
     );
   }
@@ -1093,6 +1132,8 @@ async function prepareTransition({
    * checkout opens on "…accepted your request on May 2", and `updatedAt` moves
    * again the moment a payment intent is recorded against the request.
    */
+  await assertUnderBetaCap(db, row.finalPriceCents ?? row.quotedPriceCents ?? 0);
+
   const acceptedAt = options.now ?? new Date();
   /*
    * The deadline moves from "reply by" to "pay by": an accepted request that

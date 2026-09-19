@@ -43,6 +43,15 @@ on `bookings` in `hasLapsed`/`applyExpiry`; the TypeScript twin
 `requestStatusAsRead` has no such arm, so a paid row whose `expires_at`
 predates `confirmBooking`'s new `expires_at = null` still _reads_ expired.
 
+**The cap is also what bounds `createBookingRequest`'s retry** (VEN-428). A
+duplicate submission whose matched live row has lapsed is now aged and the
+create **recurses**. It terminates only because creation refuses
+`isUniversallyPastDate` and `replyDeadline` derives from the same instant, so a
+freshly inserted row can never be born already expired — and because the live
+partial unique index drops the row the moment `applyExpiry` writes `expired`, so
+the retry's `onConflictDoNothing` arbiter no longer matches it. Move either half
+and the recursion stops being depth-1.
+
 **How to apply:** a diff touching any one of the five must be checked against
 the other three, including the SQL. Verified aligned 2026-09-04. Also note the
 knock-on: expiry calls `syncHeldDate`, so a shorter window releases a vendor's

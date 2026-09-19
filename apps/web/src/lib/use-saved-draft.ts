@@ -79,6 +79,12 @@ export interface SavedDraft<T> {
   restored: T | null;
   /** True once, when a draft was found — for telling the customer why the form is filled. */
   wasRestored: boolean;
+  /**
+   * False until storage has been read. A caller that saves before this is true
+   * writes over the draft it has not yet been shown — an empty form is "not a
+   * draft", and saving one removes the stored key.
+   */
+  checked: boolean;
   save: (value: T) => void;
   /** Called on a successful send, so the next request starts empty. */
   clear: () => void;
@@ -87,6 +93,7 @@ export interface SavedDraft<T> {
 export function useSavedDraft<T>(key: string, isEmpty: (value: T) => boolean): SavedDraft<T> {
   const [restored, setRestored] = useState<T | null>(null);
   const [wasRestored, setWasRestored] = useState(false);
+  const [checked, setChecked] = useState(false);
 
   /*
    * Read after mount, never during render. `localStorage` does not exist on
@@ -101,6 +108,8 @@ export function useSavedDraft<T>(key: string, isEmpty: (value: T) => boolean): S
       setRestored(found);
       setWasRestored(true);
     }
+
+    setChecked(true);
   }, [key]);
 
   // Held in a ref so `save` keeps a stable identity and callers can put it in
@@ -130,5 +139,5 @@ export function useSavedDraft<T>(key: string, isEmpty: (value: T) => boolean): S
     setWasRestored(false);
   }, []);
 
-  return { restored, wasRestored, save, clear };
+  return { restored, wasRestored, checked, save, clear };
 }
