@@ -1,12 +1,13 @@
 import { request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type * as UsersDao from '../users/users.dao.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
 const gate = vi.hoisted(() => ({ hold: null as Promise<void> | null, entered: false }));
 
 vi.mock('../users/users.dao.js', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../users/users.dao.js')>();
+  const original = await importOriginal<typeof UsersDao>();
 
   return {
     ...original,
