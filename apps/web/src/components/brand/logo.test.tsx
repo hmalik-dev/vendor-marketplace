@@ -47,6 +47,13 @@ describe('Logo', () => {
     cleanup();
   });
 
+  /* VEN-451: `12 Sign up` draws the auth lockup's wordmark at 29px, not 1.60 D = 30.4. */
+  it('draws the auth panel wordmark at the 29px frame 12 measures', () => {
+    render(<Logo size={LOGO_SIZES.authPanel} />);
+
+    expect(screen.getByTestId('logo-wordmark').style.fontSize).toBe('29px');
+  });
+
   /*
    * The wordmark size is a ratio; the gap is not (#244). This probes the
    * fallback, so it needs a diameter `WORDMARK_GAPS` does not measure.
