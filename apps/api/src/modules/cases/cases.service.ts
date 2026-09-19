@@ -546,6 +546,13 @@ export async function openChargebackCase(
     bookingId: target.bookingId,
     stripeDisputeId: dispute.id,
     holdRefusal,
+    /*
+     * A `lost` that closed while this delivery was failing and being retried
+     * matched no case and was dropped; `retrieve` is the only place left that
+     * still knows it. Only `lost`: every other open status means the dispute is
+     * still with the network, which is what `null` says.
+     */
+    networkOutcome: dispute.status === 'lost' ? 'lost' : null,
   });
 
   if (written && audience) {

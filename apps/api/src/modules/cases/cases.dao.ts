@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   bookings,
@@ -457,9 +457,9 @@ export async function findOpenCaseForConversation(
 export async function findOpenChargebackCase(
   db: AppDatabase,
   bookingId: string,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; networkOutcome: string | null } | null> {
   const rows = await db
-    .select({ id: supportCases.id })
+    .select({ id: supportCases.id, networkOutcome: supportCases.networkOutcome })
     .from(supportCases)
     .where(
       and(
@@ -468,6 +468,8 @@ export async function findOpenChargebackCase(
         eq(supportCases.status, 'open'),
       ),
     )
+    // Newest first: with two chargebacks on one booking the latest is the live one.
+    .orderBy(desc(supportCases.createdAt))
     .limit(1);
 
   return rows[0] ?? null;

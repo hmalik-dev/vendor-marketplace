@@ -736,6 +736,19 @@ describe('the operations case queue (#431)', () => {
       expect(await bookingStatus(fixture.bookingId)).toBe('disputed');
     });
 
+    it('carries a loss the network reached before the case existed, so the vendor is not paid it', async () => {
+      // `created` failed and was retried after the `closed` (lost) had matched
+      // no case: the retry's read from Stripe already says `lost`.
+      const fixture = await openChargeback('lost');
+
+      const detail = await readCase((await readCases()).items[0]!.id);
+      expect(detail.networkOutcome).toBe('lost');
+
+      const vendor = await rule(fixture.bookingId, 'vendor');
+      expect(vendor.statusCode).toBe(409);
+      expect(await bookingStatus(fixture.bookingId)).toBe('disputed');
+    });
+
     it('still lifts the hold for the vendor while the dispute is live', async () => {
       const fixture = await openChargeback('needs_response');
 

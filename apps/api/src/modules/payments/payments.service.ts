@@ -38,6 +38,7 @@ import {
   findVendorContact,
   findVendorUserId,
 } from '../booking-requests/booking-requests.dao.js';
+import { findOpenChargebackCase } from '../cases/cases.dao.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import {
   paymentRefusedAlert,
@@ -52,7 +53,6 @@ import {
   cancelBookingAndFreeDate,
   confirmBooking,
   findBookingById,
-  findOpenChargebackCase,
   findAnyBookingByRequest,
   findBookingByRequest,
   findPayableRequest,
@@ -1623,7 +1623,9 @@ export async function resolveDispute(
   if (
     chargeback &&
     outcome === 'customer' &&
-    (chargeback.networkOutcome === null || chargeback.networkOutcome === 'lost')
+    // An allowlist, so a status Stripe adds later fails closed.
+    chargeback.networkOutcome !== 'won' &&
+    chargeback.networkOutcome !== 'warning_closed'
   ) {
     throw conflict(
       chargeback.networkOutcome === 'lost'

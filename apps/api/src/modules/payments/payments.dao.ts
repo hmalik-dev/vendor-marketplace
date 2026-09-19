@@ -5,7 +5,6 @@ import {
   bookings,
   legalAcceptances,
   servicePackages,
-  supportCases,
   vendorProfiles,
   type BookingRow,
   type NewBookingRow,
@@ -183,30 +182,6 @@ export async function findBookingById(
   const rows = await db.select().from(bookings).where(eq(bookings.id, bookingId)).limit(1);
 
   return rows?.[0] ?? null;
-}
-
-/**
- * The open chargeback on a booking, if there is one — what `resolveDispute`
- * decides its ruling on. `networkOutcome` is `null` while the dispute is still
- * with the card network.
- */
-export async function findOpenChargebackCase(
-  db: AppDatabase,
-  bookingId: string,
-): Promise<{ networkOutcome: string | null } | null> {
-  const rows = await db
-    .select({ networkOutcome: supportCases.networkOutcome })
-    .from(supportCases)
-    .where(
-      and(
-        eq(supportCases.bookingId, bookingId),
-        eq(supportCases.origin, 'chargeback'),
-        eq(supportCases.status, 'open'),
-      ),
-    )
-    .limit(1);
-
-  return rows[0] ?? null;
 }
 
 /**
