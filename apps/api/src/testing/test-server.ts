@@ -429,6 +429,8 @@ export interface FakeStripe extends StripeConnectGateway {
   disputes: Map<string, StripeDisputeSnapshot>;
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
+  /** Moves an intent to `canceled`, as Stripe does once it can never be paid. */
+  cancel: (paymentIntentId: string) => PaymentIntentSnapshot;
 }
 
 function createFakeStripe(): FakeStripe {
@@ -462,6 +464,23 @@ function createFakeStripe(): FakeStripe {
     failedTransferKeys,
     disputes,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
+
+    cancel: (paymentIntentId) => {
+      const intent = paymentIntents.get(paymentIntentId);
+
+      if (!intent) {
+        throw new Error(`No fake payment intent ${paymentIntentId}`);
+      }
+
+      const cancelled: PaymentIntentSnapshot = {
+        ...intent,
+        status: 'canceled',
+        clientSecret: null,
+      };
+      paymentIntents.set(paymentIntentId, cancelled);
+
+      return cancelled;
+    },
 
     succeed: (paymentIntentId) => {
       const intent = paymentIntents.get(paymentIntentId);

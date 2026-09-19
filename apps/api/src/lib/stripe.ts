@@ -504,6 +504,9 @@ export interface PaymentIntentSnapshot {
 /** Stripe's terminal success state for an intent. */
 export const PAYMENT_INTENT_SUCCEEDED = 'succeeded';
 
+/** Stripe's terminal failure state: the intent can never be paid. */
+export const PAYMENT_INTENT_CANCELED = 'canceled';
+
 /**
  * A chargeback as this platform reads it (#431).
  *

@@ -9,6 +9,24 @@ describe('CheckoutUnavailable', () => {
     cleanup();
   });
 
+  /* VEN-439: the API's 402, which used to render "This page isn't here". */
+  it('names the vendor who cannot take payment and says the account is fine', () => {
+    render(
+      <CheckoutUnavailable
+        reason="vendor-unavailable"
+        requestId={REQUEST_ID}
+        vendorName="Kessler & Co."
+      />,
+    );
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      "Kessler & Co. can't take payment right now",
+    );
+    expect(screen.getByText(/nothing is wrong with your account/)).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Try this payment again' })).toBeDefined();
+    expect(screen.queryByText(/isn't here/)).toBeNull();
+  });
+
   /* VEN-404: over the beta cap, where a retry can never succeed. */
   it('sends a customer over the beta cap to support rather than a retry', () => {
     render(<CheckoutUnavailable reason="over-cap" requestId={REQUEST_ID} vendorName={null} />);
