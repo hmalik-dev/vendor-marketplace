@@ -58,12 +58,20 @@ export interface ErrorScreenProps {
    * grow a marketplace footer under a crashed payment.
    */
   chrome?: boolean;
+  /**
+   * What this boundary can honestly say about money. `none` — the default —
+   * is right where nothing can have been charged yet. `unknown` is for a
+   * segment a customer reaches *after* paying: the boundary cannot tell a
+   * failed read from a failed charge, so it asserts neither.
+   */
+  payment?: 'none' | 'unknown';
 }
 
 export function ErrorScreen({
   digest,
   reset,
   chrome = true,
+  payment = 'none',
 }: ErrorScreenProps): React.ReactElement {
   /*
    * The route and the moment can only be read in the browser, and this screen
@@ -192,9 +200,21 @@ export function ErrorScreen({
           borderless and no other frame does; ruled 2026-09-06 in
           `03-components.md` — the component wins and the frame is corrected.
         */}
-        <Banner status="settled" className="mt-5.5 text-left">
-          No payment was taken and no booking was changed.
-        </Banner>
+        {payment === 'unknown' ? (
+          <Banner status="informational" className="mt-5.5 text-left">
+            We&apos;re confirming your payment. Check{' '}
+            {/* A hard navigation for the reason every link on this screen is one. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a href="/bookings" className="underline">
+              My bookings
+            </a>{' '}
+            before paying again.
+          </Banner>
+        ) : (
+          <Banner status="settled" className="mt-5.5 text-left">
+            No payment was taken and no booking was changed.
+          </Banner>
+        )}
 
         <div className="mt-6.5 flex flex-wrap justify-center gap-3">
           {/* Most 500s are transient, so retrying the segment is the primary action. */}

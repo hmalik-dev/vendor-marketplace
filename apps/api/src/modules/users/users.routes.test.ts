@@ -5,6 +5,7 @@ import { bearer, createTestHarness, type TestHarness } from '../../testing/test-
 
 const CUSTOMER_CLERK_ID = 'user_customer';
 const VENDOR_CLERK_ID = 'user_vendor';
+const AMPERSAND_CLERK_ID = 'user_ampersand';
 
 describe('/users/me', () => {
   let harness: TestHarness;
@@ -55,6 +56,37 @@ describe('/users/me', () => {
 
       expect(response.statusCode).toBe(401);
       expect(response.json().error).toBe('UNAUTHORIZED');
+    });
+
+    it('answers GET and PUT for an address the strict email check refuses', async () => {
+      harness.clerkUsers.set(AMPERSAND_CLERK_ID, {
+        authUserId: AMPERSAND_CLERK_ID,
+        email: 'first&last@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        roleHint: 'customer',
+        avatarUrl: null,
+      });
+
+      const read = await harness.app.inject({
+        method: 'GET',
+        url: '/users/me',
+        headers: bearer(AMPERSAND_CLERK_ID),
+      });
+      const written = await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer(AMPERSAND_CLERK_ID),
+        payload: { firstName: 'Augusta' },
+      });
+
+      expect(read.statusCode).toBe(200);
+      expect(read.json().email).toBe('first&last@example.com');
+      expect(written.statusCode).toBe(200);
+      expect(written.json()).toMatchObject({
+        firstName: 'Augusta',
+        email: 'first&last@example.com',
+      });
     });
 
     it('lazily creates the local user when the webhook has not landed yet', async () => {

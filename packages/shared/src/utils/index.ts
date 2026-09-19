@@ -97,13 +97,23 @@ export function expiryCountdown(expiresAt: Date | null, now: Date = new Date()):
     return null;
   }
 
-  const days = Math.ceil((expiresAt.getTime() - now.getTime()) / MS_PER_DAY);
-
-  if (days <= 0) {
+  if (expiresAt.getTime() <= now.getTime()) {
     return 'expired';
   }
 
-  return days === 1 ? 'expires today' : `expires in ${days}d`;
+  /*
+   * Whole calendar days in the reader's own zone, not elapsed 24-hour blocks:
+   * viewed at 22:00 with a deadline at 18:00 the next day, the deadline is 20
+   * hours away and still tomorrow. `Math.round` absorbs a DST day's 23 or 25
+   * hours, since both operands are local midnights.
+   */
+  const days = Math.round((localMidnight(expiresAt) - localMidnight(now)) / MS_PER_DAY);
+
+  return days === 0 ? 'expires today' : `expires in ${days}d`;
+}
+
+function localMidnight(instant: Date): number {
+  return new Date(instant.getFullYear(), instant.getMonth(), instant.getDate()).getTime();
 }
 
 /**

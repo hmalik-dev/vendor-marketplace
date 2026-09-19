@@ -1714,6 +1714,31 @@ describe('/booking-requests', () => {
       });
     });
 
+    /*
+     * The identity provider decides what an address is, and it accepts ones
+     * `z.email()` refuses; serialising such a row used to 500 the request.
+     */
+    it('discloses an address the strict email check refuses, without failing', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const requestId: string = created.json().id;
+      await post(VENDOR, `/booking-requests/${requestId}/accept`);
+      await harness.database.db
+        .update(users)
+        .set({ email: 'first&last@example.com' })
+        .where(eq(users.authUserId, CUSTOMER));
+
+      expect(await customerOn(requestId, VENDOR)).toMatchObject({
+        email: 'first&last@example.com',
+      });
+      const queue = await harness.app.inject({
+        method: 'GET',
+        url: '/booking-requests',
+        headers: bearer(VENDOR),
+      });
+      expect(queue.statusCode).toBe(200);
+    });
+
     it('keeps the details withheld when the vendor declined instead', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });

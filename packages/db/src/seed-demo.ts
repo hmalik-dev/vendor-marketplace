@@ -14,6 +14,7 @@ import { and, inArray, like, notInArray, or, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgColumn, PgQueryResultHKT, PgTable } from 'drizzle-orm/pg-core';
 
+import { deleteBookingRequests } from './delete-booking-requests.js';
 import { deterministicUuid, hashString, makeRandom, pick } from './deterministic.js';
 import {
   DEMO_ADMIN,
@@ -1225,7 +1226,15 @@ export async function seedDemoData<
 
   await pruneStale(db, bookings, bookings.customerId, demoCustomerIds, bookingValues);
   await pruneStale(db, reviews, reviews.reviewerId, demoUserIds, reviewValues);
-  await pruneStale(db, bookingRequests, bookingRequests.customerId, demoCustomerIds, requestValues);
+  if (demoCustomerIds.length > 0) {
+    const kept = requestValues.map((row) => row.id);
+    const owned = inArray(bookingRequests.customerId, [...demoCustomerIds]);
+
+    await deleteBookingRequests(
+      db,
+      kept.length === 0 ? owned : and(owned, notInArray(bookingRequests.id, kept))!,
+    );
+  }
   await pruneStale(
     db,
     conversations,

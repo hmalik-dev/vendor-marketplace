@@ -63,7 +63,22 @@ function buildSchema(target: ShapeTarget) {
      * already constrains the shape to `0.dddd`, so the bound below is the
      * belt-and-braces half — a rate at or above 1 would pay the vendor nothing.
      */
-    STRIPE_PLATFORM_FEE_RATE: z.coerce.number().min(0).lt(1).default(DEFAULT_PLATFORM_FEE_RATE),
+    STRIPE_PLATFORM_FEE_RATE: z.coerce
+      .number()
+      .min(0)
+      .lt(1)
+      .default(DEFAULT_PLATFORM_FEE_RATE)
+      /*
+       * The vendor agreement, `/terms` and `/for-vendors` all print
+       * `DEFAULT_PLATFORM_FEE_RATE`, and the acceptance hash covers the
+       * Markdown with a `{{commission}}` token in it, so nothing else notices
+       * when the rate charged stops being the rate promised. The documented way
+       * to change the commission is to change that constant, which moves the
+       * copy and the money together; a per-deployment value can only split them.
+       */
+      .refine((rate) => rate === DEFAULT_PLATFORM_FEE_RATE, {
+        message: `must equal the ${DEFAULT_PLATFORM_FEE_RATE} the legal copy states; change DEFAULT_PLATFORM_FEE_RATE in packages/shared to change the commission`,
+      }),
   });
 }
 

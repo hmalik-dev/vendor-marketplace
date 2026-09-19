@@ -1,37 +1,40 @@
 ---
 name: rate-limit-key-is-the-proxy-not-the-caller
-description: Route rate limiters can read request.auth (hook order verified), but request.ip is the socket address — no trustProxy anywhere, so every deployed caller shares one bucket
+description: How rate limiting is wired here — hop-0 trustProxy, the pre-auth instance hook and its five skipped routes, and the shared rateLimitRan symbol that makes "just drop the skip" silently disable four custom limits
 metadata:
   type: project
 ---
 
-Two facts about `@fastify/rate-limit` 11.2.0 on Fastify 5.12.1 in this repo,
-both verified by reading the vendored source rather than inferred:
+Facts about `@fastify/rate-limit` 11.2.0 on Fastify 5, all read from the vendored
+source (`node_modules/.pnpm/@fastify+rate-limit@11.2.0/.../index.js`):
 
-- **A route's `keyGenerator` can see `request.auth`.** A `config.rateLimit`
-  object makes the plugin push its handler into `routeOptions.onRequest`
-  (`addRouteRateHook`), and `lib/route.js` concatenates instance hooks _then_
-  route hooks — so `clerkAuthPlugin`'s global `onRequest` has already run.
-  `request.auth?.id ?? request.ip` really does key by account when there is one.
-  A route with its own `config.rateLimit` is **not** additionally covered by the
-  global `RATE_LIMIT_MAX` limiter; the plugin registers one or the other.
-- **`request.ip` was not the client, and now is.** `trustProxy` was set nowhere
-  in `apps/api`, so Fastify used the socket address — behind Render
-  (`render.yaml`), Vercel, or any load balancer that is the proxy, and _every
-  caller shared a single bucket_. **Fixed in #421**: `buildServer` now sets
-  `trustProxy` to a hop-0 predicate when `isDeployedRuntime()`, and `false`
-  otherwise.
+- **`request.ip` is hop 0, not the socket.** `trustProxy` was unset, so every
+  deployed caller shared one bucket; **fixed in #421** with a `hop === 0`
+  predicate, `false` off a deployment. Never `trustProxy: true`. Guard:
+  `server.test.ts` §"the rate-limit key behind a proxy".
+- **The limiter runs ahead of authentication (VEN-437).** `server.ts` keeps one
+  `const limitRequest = app.rateLimit()` in an **instance** `onRequest` hook, so
+  a flood of junk bearer tokens is counted before `neon-auth` throws. It skips
+  any route declaring `config.rateLimit`.
+- **`app.rateLimit()` with no argument shares the plugin's store, `globalParams`
+  and keyGenerator**, and sets `req[rateLimitRan]`, so the plugin's own route
+  hook returns early — no double counting, and the web-tier visitor keying is
+  preserved.
+- **`rateLimitRan` is one symbol for the whole registration**: a route's
+  component is `Object.create(pluginComponent)` and inherits it. So running the
+  global limiter on a route that has its own config **disables that route's
+  limit entirely**. The skip in `server.ts` is load-bearing; `support`, `reports`
+  and `vendor-invites` route tests assert their own 429 and would catch it,
+  `/tags/suggest` has no such test.
+- **The skip's residual:** `neon-auth`'s instance hook throws 401/403 (bad token,
+  deleted identity, ban) before any _route_ hook, so the five config routes —
+  `/webhooks/stripe`, `/support/messages`, `/tags/suggest`, `/reports`,
+  `/vendor-applications` — are still floodable at any rate with
+  `Authorization: Bearer garbage`. On the webhook that lands in the `signature`
+  failure kind unlimited, the VEN-405 residual without its rate cap. Only
+  `server-error` reaches the persisted counter, so there is no DB write per shed
+  request. Count-only fix: `app.createRateLimit()`, which does not set
+  `rateLimitRan`.
 
-**Why:** the second fact was invisible locally — `pnpm dev` and `app.inject()`
-both give a real per-caller address, so a per-IP limit tested perfectly and
-collapsed on deploy. It is also why the demo raised `RATE_LIMIT_MAX` to 600.
-
-**How to apply:** the guard is `apps/api/src/server.test.ts` §"the rate-limit
-key behind a proxy", which drives all three cases — the header ignored locally,
-two deployed callers keyed apart, and a forged leading `X-Forwarded-For` entry
-failing to mint a fresh bucket. Keep the predicate a **bounded** hop count;
-never `trustProxy: true`, which walks the header to its leftmost entry and hands
-the key straight back to the attacker. Before #421 the right reading was "N per
-IP means N for the whole deployment" — check that test still exists before
-trusting any per-IP limit here again. Related:
-[[public-mail-endpoint-echoes-to-any-address]].
+Related: [[public-mail-endpoint-echoes-to-any-address]],
+[[operator-alert-dedupe-is-attacker-armable]].
