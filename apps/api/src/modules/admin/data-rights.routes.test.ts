@@ -1096,7 +1096,7 @@ describe('data rights', () => {
       const neonUser = await harness.database.db
         .insert(users)
         .values({
-          authUserId: 'q1w2e3r4t5y6u7i8o9p0aSdFgHjKlZxC',
+          authUserId: 'neon-auth-id-not-clerk-shaped',
           email: 'neon-closure@example.com',
           role: 'customer',
           firstName: 'Neon',
