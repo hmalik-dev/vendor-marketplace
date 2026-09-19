@@ -1,9 +1,16 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { REVIEW_PAGE_SIZE } from '@vendor-marketplace/shared';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReviewsPane } from './reviews-pane';
 import type { WirePublicReview, WireVendorReviewsPage } from '@/lib/wire-schemas';
+
+// The formatter is built at import, so the zone must be set before the imports run.
+const originalTz = vi.hoisted(() => {
+  const previous = process.env.TZ;
+  process.env.TZ = 'America/Los_Angeles';
+  return previous;
+});
 
 const requestMock = vi.fn();
 const refreshMock = vi.fn();
@@ -11,6 +18,10 @@ const refreshMock = vi.fn();
 vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshMock }) }));
 
+afterAll(() => {
+  if (originalTz === undefined) delete process.env.TZ;
+  else process.env.TZ = originalTz;
+});
 afterEach(cleanup);
 beforeEach(() => {
   requestMock.mockReset();
@@ -128,6 +139,22 @@ describe('ReviewsPane — the cards', () => {
     expect(screen.getByText('Worth every penny')).toBeDefined();
     expect(screen.getByText('June 20, 2026')).toBeDefined();
     expect(screen.getByText('Wedding')).toBeDefined();
+  });
+
+  it('dates a review to its UTC day for a reader west of UTC, with no hydration warning', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <ReviewsPane
+        {...BASE}
+        reviewCount={2}
+        initial={payload({ items: [review({ createdAt: new Date('2026-09-14T03:00:00.000Z') })] })}
+      />,
+    );
+
+    expect(screen.getByText('September 14, 2026')).toBeDefined();
+    expect(screen.queryByText('September 13, 2026')).toBeNull();
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   it('draws no badge for a booking with no event type', () => {
