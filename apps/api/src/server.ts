@@ -266,6 +266,9 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(stripePlugin, {
     secretKey: env.STRIPE_SECRET_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+    ...(env.STRIPE_CONNECT_WEBHOOK_SECRET
+      ? { connectWebhookSecret: env.STRIPE_CONNECT_WEBHOOK_SECRET }
+      : {}),
     ...(options.stripe ? { gateway: options.stripe } : {}),
   });
   await app.register(emailPlugin, {

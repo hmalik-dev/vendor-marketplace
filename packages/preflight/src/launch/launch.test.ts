@@ -282,20 +282,71 @@ describe('the Stripe webhook subscription', () => {
     });
   });
 
-  it('fails two endpoints at the API URL, since the API verifies one signing secret', async () => {
-    const endpoint = { url: `${API}/webhooks/stripe`, status: 'enabled', enabled_events: ['*'] };
-    const get: HttpGet = async () => ({
-      status: 200,
-      headers: new Headers(),
-      body: { data: [endpoint, endpoint] },
-    });
-    const results = await runLaunchChecks(options('live', { get }));
+  const endpointsGet = (...events: string[][]): HttpGet => {
+    const data = events.map((enabled_events) => ({
+      url: `${API}/webhooks/stripe`,
+      status: 'enabled',
+      enabled_events,
+    }));
+
+    return async () => ({ status: 200, headers: new Headers(), body: { data } });
+  };
+
+  /**
+   * The environment of a deployment that has created the second endpoint. Key
+   * and value are assembled here so no signing-secret literal sits in the source.
+   */
+  const withSecondEndpoint = (): Record<string, string | undefined> => ({
+    ...envFor('live'),
+    [['STRIPE_CONNECT', 'WEBHOOK', 'SECRET'].join('_')]: ['whsec', 'second', 'endpoint'].join('_'),
+  });
+
+  it('fails two endpoints at the API URL while no connected-account secret is configured', async () => {
+    const results = await runLaunchChecks(options('live', { get: endpointsGet(['*'], ['*']) }));
 
     expect(find(results, 'stripe webhook endpoint')).toMatchObject({
       status: 'FAIL',
-      detail: `2 enabled endpoints at ${API}/webhooks/stripe (expected 1 — the API verifies one STRIPE_WEBHOOK_SECRET)`,
+      detail: `2 enabled endpoints at ${API}/webhooks/stripe (expected 1 — the API verifies one STRIPE_WEBHOOK_SECRET; set STRIPE_CONNECT_WEBHOOK_SECRET for a connected-account endpoint)`,
     });
     expect(find(results, 'stripe connected-account events').status).toBe('MANUAL');
+  });
+
+  it('counts endpoints per configured secret: two endpoints covering the types between them pass', async () => {
+    const results = await runLaunchChecks(
+      options('live', {
+        env: withSecondEndpoint(),
+        get: endpointsGet(HANDLED.slice(0, 2), HANDLED.slice(2)),
+      }),
+    );
+
+    expect(find(results, 'stripe webhook endpoint').status).toBe('PASS');
+    expect(find(results, 'stripe connected-account events').status).toBe('PASS');
+  });
+
+  it('names the types neither of two endpoints receives', async () => {
+    const results = await runLaunchChecks(
+      options('live', {
+        env: withSecondEndpoint(),
+        get: endpointsGet(HANDLED.slice(0, 1), HANDLED.slice(1, 2)),
+      }),
+    );
+
+    expect(find(results, 'stripe webhook endpoint')).toMatchObject({
+      status: 'FAIL',
+      detail: `missing ${HANDLED.slice(2).join(', ')}`,
+    });
+    expect(find(results, 'stripe connected-account events').status).toBe('MANUAL');
+  });
+
+  it('fails a single endpoint once a connected-account secret says there should be two', async () => {
+    const results = await runLaunchChecks(
+      options('live', { env: withSecondEndpoint(), get: endpointsGet(['*']) }),
+    );
+
+    expect(find(results, 'stripe webhook endpoint')).toMatchObject({
+      status: 'FAIL',
+      detail: `1 enabled endpoints at ${API}/webhooks/stripe (expected 2 — the API verifies STRIPE_WEBHOOK_SECRET and STRIPE_CONNECT_WEBHOOK_SECRET, one per endpoint)`,
+    });
   });
 
   it('asks for a manual look when a sending-only Resend key cannot list domains', async () => {

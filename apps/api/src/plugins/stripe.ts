@@ -11,6 +11,7 @@ declare module 'fastify' {
 export interface StripePluginOptions {
   secretKey: string;
   webhookSecret: string;
+  connectWebhookSecret?: string;
   /** Overridden by the route suites so they need no Stripe account at all. */
   gateway?: StripeConnectGateway;
 }

@@ -29,6 +29,7 @@ const REQUIRED: NodeJS.ProcessEnv = {
 for (const [borrower, lender] of [
   ['STRIPE_SECRET_KEY', 'CLERK_SECRET_KEY'],
   ['STRIPE_WEBHOOK_SECRET', 'CLERK_WEBHOOK_SECRET'],
+  ['STRIPE_CONNECT_WEBHOOK_SECRET', 'CLERK_WEBHOOK_SECRET'],
   // Resend signs with svix too, so its signing secret takes the same shape.
   ['RESEND_WEBHOOK_SECRET', 'CLERK_WEBHOOK_SECRET'],
 ] as const) {

@@ -344,6 +344,13 @@
       "when": 1789789106036,
       "tag": "0048_spicy_jack_power",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1789794372451,
+      "tag": "0049_futuristic_living_mummy",
+      "breakpoints": true
     }
   ]
 }

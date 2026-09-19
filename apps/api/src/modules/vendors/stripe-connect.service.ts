@@ -13,7 +13,7 @@ import {
   claimStripeAccountId,
   findVendorProfileByStripeAccountId,
   findVendorProfileByUserId,
-  updateVendorProfileById,
+  updateVendorStripeStatusIfUnchanged,
 } from './vendors.dao.js';
 
 /** What every Stripe Connect operation needs. */
@@ -155,16 +155,44 @@ export const accountUpdateOutcomeSchema = z.enum([
 export type AccountUpdateOutcome = z.infer<typeof accountUpdateOutcomeSchema>;
 
 /**
+ * How many times one delivery re-reads after finding the row moved under it.
+ * Each miss means another handler wrote, so one retry nearly always settles it.
+ */
+const MAX_STATUS_ATTEMPTS = 3;
+
+/**
  * Re-reads the account from Stripe and writes the derived flag. The event
  * itself is not trusted for the value — a thin notification says only that
  * something changed, and re-reading is what makes the handler correct under
  * out-of-order delivery and what lets a *revoked* capability flip the flag back
  * to false through exactly the same path that set it.
+ *
+ * Re-reading covers events arriving out of order, not handlers running at once:
+ * `account.updated` and each `capability.updated` are separate deliveries, and
+ * one whose Stripe read was older can write last. So the write is conditional on
+ * the row still being what the decision was read from, and a handler that finds
+ * it moved starts over with a fresh read of both.
  */
 export async function applyAccountStatusChange(
   deps: StripeConnectDeps,
   accountId: string,
 ): Promise<AccountUpdateOutcome> {
+  for (let attempt = 1; attempt <= MAX_STATUS_ATTEMPTS; attempt += 1) {
+    const outcome = await attemptAccountStatusChange(deps, accountId);
+
+    if (outcome !== null) {
+      return outcome;
+    }
+  }
+
+  throw conflict('That vendor account is being updated by another delivery');
+}
+
+/** One read-decide-write pass; `null` when the row changed before the write. */
+async function attemptAccountStatusChange(
+  deps: StripeConnectDeps,
+  accountId: string,
+): Promise<AccountUpdateOutcome | null> {
   const vendor = await findVendorProfileByStripeAccountId(deps.db, accountId);
   if (!vendor) {
     return 'ignored';
@@ -201,11 +229,15 @@ export async function applyAccountStatusChange(
     return 'unchanged';
   }
 
-  await updateVendorProfileById(deps.db, vendor.id, {
+  const written = await updateVendorStripeStatusIfUnchanged(deps.db, vendor, {
     stripeOnboarded: onboarded,
     stripeDisabledReason: status.disabledReason,
     stripeRequirementsDue: status.requirementsDue,
   });
+
+  if (!written) {
+    return null;
+  }
 
   /*
    * The outcome still names what happened to the **flag**, because that is what

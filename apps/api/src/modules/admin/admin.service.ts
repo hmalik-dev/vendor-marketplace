@@ -812,7 +812,17 @@ export async function retryBookingPayout(
   bookingId: string,
   now: Date,
 ): Promise<AdminPayoutRetryResult> {
-  const result = await retryPayoutRelease(context, bookingId, now);
+  /*
+   * Without `alerts`: `PayoutContext` documents the pager as the sweep's alone,
+   * because the operator pressing Retry is already looking at the result. The
+   * admin context carries it for the actions that do page (a refused refund),
+   * so it is left behind here rather than trusted to be ignored downstream.
+   */
+  const result = await retryPayoutRelease(
+    { db: context.db, stripe: context.stripe, log: context.log },
+    bookingId,
+    now,
+  );
 
   await recordAdminActionBestEffort(context, {
     actorId,

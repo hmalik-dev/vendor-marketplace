@@ -105,6 +105,7 @@ function webhookSubscription(
   reply: HttpReply,
   target: string,
   handled: readonly string[],
+  expected: number,
 ): LaunchResult {
   const name = 'stripe webhook endpoint';
   const endpoints: unknown = field(reply.body, 'data');
@@ -126,18 +127,28 @@ function webhookSubscription(
     );
   }
 
-  // Each endpoint signs with its own secret and the API verifies exactly one
-  // STRIPE_WEBHOOK_SECRET, so a second endpoint at the same URL is a stream of 401s.
-  if (matching.length > 1) {
+  // Each endpoint signs with its own secret and the API verifies one per
+  // configured key, so an endpoint beyond that count is a stream of 401s.
+  if (matching.length !== expected) {
     return failed(
       'stripe',
       name,
-      `${matching.length} enabled endpoints at ${target} (expected 1 — the API verifies one STRIPE_WEBHOOK_SECRET)`,
+      `${matching.length} enabled endpoints at ${target} (expected ${expected} — ${
+        expected === 1
+          ? 'the API verifies one STRIPE_WEBHOOK_SECRET; set STRIPE_CONNECT_WEBHOOK_SECRET for a connected-account endpoint'
+          : 'the API verifies STRIPE_WEBHOOK_SECRET and STRIPE_CONNECT_WEBHOOK_SECRET, one per endpoint'
+      })`,
     );
   }
 
-  const events = field(matching[0], 'enabled_events');
-  const subscribed = new Set<unknown>(Array.isArray(events) ? events : []);
+  // The two endpoints split the handled types between them (platform events on
+  // one, connected accounts' on the other), so coverage is the union.
+  const subscribed = new Set<unknown>(
+    matching.flatMap((endpoint) => {
+      const events = field(endpoint, 'enabled_events');
+      return Array.isArray(events) ? events : [];
+    }),
+  );
   const missing = subscribed.has('*') ? [] : handled.filter((type) => !subscribed.has(type));
 
   return missing.length > 0
@@ -192,16 +203,34 @@ function stripeProbes({ env, get, handledStripeEvents }: LaunchOptions): Probe[]
       async run() {
         const target = `${originOf(env, 'API_URL')}/webhooks/stripe`;
         const reply = await get(`${STRIPE_API}/webhook_endpoints?limit=100`, auth);
+        const connectConfigured = Boolean(env.STRIPE_CONNECT_WEBHOOK_SECRET);
+        const subscription = webhookSubscription(
+          reply,
+          target,
+          handledStripeEvents,
+          connectConfigured ? 2 : 1,
+        );
+        const connectedName = 'stripe connected-account events';
+
         return [
-          webhookSubscription(reply, target, handledStripeEvents),
-          {
-            // The endpoint object does not expose whether it listens to
-            // connected accounts, and vendor `account.updated` arrives only if it does.
-            group: 'stripe',
-            name: 'stripe connected-account events',
-            status: 'MANUAL',
-            detail: `confirm the endpoint at ${target} receives events from connected accounts as well as your own — the endpoint list does not say`,
-          },
+          subscription,
+          // The endpoint object does not expose whether it listens to connected
+          // accounts, so the API cannot be asked. What it can be asked is
+          // whether the second endpoint exists to carry them, and the key that
+          // verifies it is configured: two secrets, two endpoints, and the
+          // handled types covered between them.
+          connectConfigured && subscription.status === 'PASS'
+            ? passed(
+                'stripe',
+                connectedName,
+                'a second endpoint exists and STRIPE_CONNECT_WEBHOOK_SECRET is set — confirm in the Dashboard that it is the one listening to connected accounts',
+              )
+            : {
+                group: 'stripe',
+                name: connectedName,
+                status: 'MANUAL',
+                detail: `confirm ${target} has a second endpoint listening to connected accounts, and put its signing secret in STRIPE_CONNECT_WEBHOOK_SECRET — vendor account.updated arrives only there`,
+              },
         ];
       },
     },

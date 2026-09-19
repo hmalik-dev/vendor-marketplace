@@ -1,0 +1,1 @@
+ALTER TYPE "public"."operator_alert_kind" ADD VALUE 'payment_refused' BEFORE 'stripe_webhook_failing';
