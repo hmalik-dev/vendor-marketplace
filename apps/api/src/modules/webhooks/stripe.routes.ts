@@ -25,11 +25,12 @@ import { keepRawJsonBody, rawBodyOf } from './raw-body.js';
  * What the handler did, in one word, for the log line and the response body.
  *
  * The payment outcomes are separate values rather than folded into the account
- * ones because the two halves fail differently: `booked` and `already-booked`
- * are both successes and Stripe must stop retrying on either, while `ignored`
+ * ones because the two halves fail differently: `booked`, `already-booked` and
+ * `refunded` (a charge on a request the platform had already declined) are all
+ * successes and Stripe must stop retrying on any of them, while `ignored`
  * means the event was not ours to act on at all.
  */
-const paymentOutcomeSchema = z.enum(['booked', 'already-booked']);
+const paymentOutcomeSchema = z.enum(['booked', 'already-booked', 'refunded']);
 
 /**
  * The chargeback outcomes (#431), separate again for the same reason.
@@ -260,12 +261,13 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           return 'ignored';
         }
 
-        const { created } = await recordSuccessfulPayment(
+        const { outcome: recorded } = await recordSuccessfulPayment(
           {
             db: app.db,
             stripe: app.stripe,
             hub: app.events,
             log: request.log,
+            alerts: app.operatorAlerts,
             mail: {
               db: app.db,
               email: app.email,
@@ -278,7 +280,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           intent,
         );
 
-        return created ? 'booked' : 'already-booked';
+        return recorded;
       }
 
       /**

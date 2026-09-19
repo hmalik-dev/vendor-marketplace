@@ -257,3 +257,38 @@ export async function findVendorProfileByStripeAccountId(
 
   return rows?.[0] ?? null;
 }
+
+/**
+ * Writes a Stripe status derived from `seen`, only if the row still says what
+ * `seen` said — a compare-and-set on the three columns the webhook owns.
+ *
+ * The handler reads the row, reads Stripe, and writes several round trips
+ * later with no lock, and Stripe does not order its events. Without the
+ * predicate a handler whose Stripe read was older but whose write landed last
+ * put the older answer over the newer one. `null` means the row moved: the
+ * caller re-reads rather than writing.
+ */
+export async function updateVendorStripeStatusIfUnchanged(
+  db: AppDatabase,
+  seen: VendorProfileRow,
+  patch: Pick<
+    NewVendorProfileRow,
+    'stripeOnboarded' | 'stripeDisabledReason' | 'stripeRequirementsDue'
+  >,
+): Promise<VendorProfileRow | null> {
+  const updated = await db
+    .update(vendorProfiles)
+    .set({ ...patch, updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(vendorProfiles.id, seen.id),
+        live,
+        eq(vendorProfiles.stripeOnboarded, seen.stripeOnboarded),
+        sql`${vendorProfiles.stripeDisabledReason} IS NOT DISTINCT FROM ${seen.stripeDisabledReason}`,
+        sql`${vendorProfiles.stripeRequirementsDue} = ${JSON.stringify(seen.stripeRequirementsDue)}::jsonb`,
+      ),
+    )
+    .returning();
+
+  return updated?.[0] ?? null;
+}

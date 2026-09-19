@@ -629,6 +629,39 @@ describe('the operations case queue (#431)', () => {
     expect((await readCase(detail.id)).networkOutcome).toBe('won');
   });
 
+  it('records a dispute Stripe already closed without holding the payout', async () => {
+    /*
+     * `charge.dispute.created` failed once and its retry landed after the close —
+     * the close, arriving first, matched no case and was dropped. The hold on
+     * that retry would freeze a vendor's payout for a dispute that is over.
+     */
+    const fixture = await seed();
+    const dispute = {
+      id: 'dp_test_already_closed',
+      status: 'warning_closed',
+      reason: 'fraudulent',
+      amountCents: TOTAL_CENTS,
+      intentId: fixture.paymentIntentId,
+    };
+
+    const delivered = await deliverDispute('charge.dispute.created', dispute);
+    expect(delivered.statusCode).toBe(200);
+    expect(delivered.json().outcome).toBe('dispute-recorded');
+
+    const page = await readCases();
+    expect(page.total).toBe(1);
+
+    const detail = await readCase(page.items[0]!.id);
+    expect(detail.networkOutcome).toBe('warning_closed');
+    expect(detail.holdRefusal).toContain('already closed');
+    expect(detail.booking?.status).toBe('confirmed');
+    expect(detail.booking?.payoutStatus).not.toBe('held');
+
+    const replay = await deliverDispute('charge.dispute.created', dispute);
+    expect(replay.json().outcome).toBe('already-recorded');
+    expect((await readCases()).total).toBe(1);
+  });
+
   it('ignores a dispute on a charge this platform did not make', async () => {
     await seed();
 

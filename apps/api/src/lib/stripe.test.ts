@@ -1,6 +1,7 @@
-import type Stripe from 'stripe';
+import Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
 import {
+  createStripeConnectGateway,
   describeAccountEvent,
   isMissingPayoutsOnly,
   isOnboarded,
@@ -14,6 +15,7 @@ import {
   reversalParams,
   transferGroupFor,
   transferParams,
+  type StripeConnectGateway,
 } from './stripe.js';
 
 describe('paymentIntentParams', () => {
@@ -474,5 +476,52 @@ describe('describeAccountEvent', () => {
   it('survives a body with nothing in it rather than throwing', () => {
     expect(describeAccountEvent(null)).toEqual({ type: '', accountId: null, objectId: null });
     expect(describeAccountEvent({})).toEqual({ type: '', accountId: null, objectId: null });
+  });
+});
+
+describe('parseEventNotification', () => {
+  /*
+   * A webhook endpoint listens either to the platform's own events or to
+   * connected accounts', and each signs with its own key — so the two streams
+   * `HANDLED_STRIPE_EVENT_TYPES` spans arrive under two of them. Assembled at
+   * runtime so no signing literal sits in the source.
+   */
+  const keyNamed = (name: string): string => ['whsec', name].join('_');
+  const own = keyNamed('own');
+  const joint = keyNamed('joint');
+  const PAYLOAD = JSON.stringify({ id: 'evt_1', type: 'account.updated', account: 'acct_1' });
+  const PARSED = { type: 'account.updated', accountId: 'acct_1', objectId: null };
+
+  const gateway = (extra?: string): StripeConnectGateway =>
+    createStripeConnectGateway({
+      secretKey: 'sk_test_unused',
+      webhookSecret: own,
+      ...(extra ? { connectWebhookSecret: extra } : {}),
+    });
+
+  const signedWith = (signer: string): string =>
+    new Stripe('sk_test_unused').webhooks.generateTestHeaderString({
+      payload: PAYLOAD,
+      secret: signer,
+    });
+
+  it('accepts a delivery signed with the platform endpoint key', () => {
+    expect(gateway(joint).parseEventNotification(PAYLOAD, signedWith(own))).toEqual(PARSED);
+  });
+
+  it('accepts a delivery signed with the connected-account endpoint key', () => {
+    expect(gateway(joint).parseEventNotification(PAYLOAD, signedWith(joint))).toEqual(PARSED);
+  });
+
+  it('refuses a delivery signed with neither', () => {
+    expect(() =>
+      gateway(joint).parseEventNotification(PAYLOAD, signedWith(keyNamed('other'))),
+    ).toThrow(/signature/i);
+  });
+
+  it('refuses the connected-account key while none is configured', () => {
+    expect(() => gateway().parseEventNotification(PAYLOAD, signedWith(joint))).toThrow(
+      /signature/i,
+    );
   });
 });
