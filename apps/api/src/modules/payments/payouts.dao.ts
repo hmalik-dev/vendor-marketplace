@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, inArray, isNull, lte, notInArray, sql, type SQL } from 'drizzle-orm';
-import { bookings, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { bookings, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { HELD_PAYOUT_STATUSES } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
@@ -138,12 +138,20 @@ export async function findDuePayoutBookingIds(
      * vendors behind it. They stay due and come back once the hold is lifted.
      */
     .innerJoin(vendorProfiles, eq(bookings.vendorId, vendorProfiles.id))
+    .innerJoin(users, eq(vendorProfiles.userId, users.id))
     .where(
       and(
         inArray(bookings.status, [...RELEASABLE_STATUSES]),
         ...payoutOwedClauses(),
         lte(bookings.eventDate, dueThroughDate),
         eq(vendorProfiles.payoutHold, false),
+        /*
+         * Banned and retired vendors are left out the same way. Their
+         * unwind refunds every booking still ahead, so what remains is not
+         * owed to an account that can no longer be answered for.
+         */
+        eq(users.isBanned, false),
+        isNull(users.deletedAt),
       ),
     )
     /*
@@ -202,12 +210,20 @@ export async function claimReleasableBooking(
     })
     .from(bookings)
     .innerJoin(vendorProfiles, eq(bookings.vendorId, vendorProfiles.id))
+    .innerJoin(users, eq(vendorProfiles.userId, users.id))
     .where(
       and(
         eq(bookings.id, bookingId),
         inArray(bookings.status, [...RELEASABLE_STATUSES]),
         ...payoutOwedClauses(),
         lte(bookings.eventDate, dueThroughDate),
+        /*
+         * The ban and retirement gate is re-read under the lock as well as in
+         * `findDuePayoutBookingIds`: a ban committed after the id scan, or an
+         * operator's retry (which skips the hold), must not pay the account.
+         */
+        eq(users.isBanned, false),
+        isNull(users.deletedAt),
       ),
     )
     .for('update', { of: bookings, skipLocked: true })

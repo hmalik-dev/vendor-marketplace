@@ -539,7 +539,7 @@ export async function findConfirmedBookingsToUnwind(
   db: AppDatabase,
   userId: string,
   vendorProfileId: string | null,
-  today: string,
+  floorDate: string,
 ): Promise<BanAffectedBooking[]> {
   const sides = vendorProfileId
     ? or(eq(bookings.customerId, userId), eq(bookings.vendorId, vendorProfileId))
@@ -579,7 +579,7 @@ export async function findConfirmedBookingsToUnwind(
     })
     .from(bookings)
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
-    .where(and(eq(bookings.status, 'confirmed'), gt(bookings.eventDate, today), sides));
+    .where(and(eq(bookings.status, 'confirmed'), gt(bookings.eventDate, floorDate), sides));
 }
 
 /**
@@ -980,7 +980,7 @@ const vendorOwner = alias(users, 'vendor_owner');
  * and an `EXISTS` under an `or` is never pulled up into a semi-join, so it
  * would run once per candidate row instead of once.
  */
-function refundStuck(today: string): SQL<boolean> {
+function refundStuck(floorDate: string): SQL<boolean> {
   /*
    * **Retired accounts as well as banned ones (#433).** This flag was written
    * for #415, when a ban was the only thing that unwound an account, so
@@ -994,7 +994,7 @@ function refundStuck(today: string): SQL<boolean> {
    */
   return sql<boolean>`(
     ${bookings.status} = 'confirmed'
-    and ${bookings.eventDate} > ${today}
+    and ${bookings.eventDate} > ${floorDate}
     and (
       ${users.isBanned} or ${vendorOwner.isBanned}
       or ${users.deletedAt} is not null or ${vendorOwner.deletedAt} is not null
@@ -1067,14 +1067,14 @@ export interface AdminBookingListProjection extends AdminBookingProjection {
 export interface AdminBookingFilters {
   status?: BookingStatus | undefined;
   flag?: AdminBookingFlag | undefined;
-  /** The operator's day, for the one filter that is bounded by the event date. */
-  today: string;
+  /** The unwind floor date, for the one filter that is bounded by the event date. */
+  floorDate: string;
 }
 
 function bookingFilterCondition(filters: AdminBookingFilters): SQL | undefined {
   return and(
     filters.status ? eq(bookings.status, filters.status) : undefined,
-    filters.flag === 'refund-stuck' ? refundStuck(filters.today) : undefined,
+    filters.flag === 'refund-stuck' ? refundStuck(filters.floorDate) : undefined,
   );
 }
 
@@ -1120,7 +1120,7 @@ export async function findAdminBookings(
    * answer 500 on a column its own query does not join.
    */
   return db
-    .select({ ...bookingSelection(), refundStuck: refundStuck(filters.today) })
+    .select({ ...bookingSelection(), refundStuck: refundStuck(filters.floorDate) })
     .from(bookings)
     .innerJoin(users, eq(users.id, bookings.customerId))
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))

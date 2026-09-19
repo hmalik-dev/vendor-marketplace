@@ -1,4 +1,4 @@
-import { toDateString } from '@vendor-marketplace/shared';
+import { unwindFloorDate } from '@vendor-marketplace/shared';
 import type {
   AdminCloseAccountResult,
   AdminCloseBlocker,
@@ -378,7 +378,7 @@ async function closeBlockers(
   userId: string,
   now: Date,
 ): Promise<AdminCloseBlocker[]> {
-  const held = await findConfirmedBookingsToUnwind(db, userId, null, toDateString(now));
+  const held = await findConfirmedBookingsToUnwind(db, userId, null, unwindFloorDate(now));
 
   if (held.length === 0) {
     return [];
@@ -433,7 +433,12 @@ async function vendorSideRefundsOnClose(
     return 0;
   }
 
-  const held = await findConfirmedBookingsToUnwind(db, userId, vendorProfileId, toDateString(now));
+  const held = await findConfirmedBookingsToUnwind(
+    db,
+    userId,
+    vendorProfileId,
+    unwindFloorDate(now),
+  );
 
   return held.filter((booking) => booking.customerId !== userId).length;
 }

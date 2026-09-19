@@ -12,6 +12,7 @@ import type {
   AdminCaseQuery,
   BookingStatus,
   FilterWidening,
+  PayoutModel,
   ReportReason,
   ReportSubject,
   SupportCaseOrigin,
@@ -258,6 +259,7 @@ export interface CaseBookingProjection {
   totalAmountCents: number;
   platformFeeCents: number;
   vendorPayoutCents: number;
+  payoutModel: PayoutModel;
   refundAmountCents: number | null;
   paidAt: Date | null;
   payoutReleasedAt: Date | null;
@@ -290,6 +292,7 @@ export async function findCaseBooking(
       totalAmountCents: bookings.totalAmountCents,
       platformFeeCents: bookings.platformFeeCents,
       vendorPayoutCents: bookings.vendorPayoutCents,
+      payoutModel: bookings.payoutModel,
       refundAmountCents: bookings.refundAmountCents,
       paidAt: bookings.paidAt,
       payoutReleasedAt: bookings.payoutReleasedAt,

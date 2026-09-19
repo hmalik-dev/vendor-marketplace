@@ -150,7 +150,9 @@ export default async function AdminBookingDetailPage({
               ) : null}
               <KeyValue label="Payout">
                 {payout.label}
-                {vendor.payoutHold && booking.payoutStatus !== 'released' ? (
+                {vendor.payoutHold &&
+                booking.payoutStatus !== 'released' &&
+                booking.payoutStatus !== 'not-owed' ? (
                   <span className="text-gold-600">
                     {' '}
                     · vendor&apos;s payouts held by an operator

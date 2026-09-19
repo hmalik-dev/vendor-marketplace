@@ -36,6 +36,18 @@ release sweep would transfer for the same rows") calls
 `findDuePayoutBookingIds` directly and is the thing that fails if they drift —
 keep it. Related: [[payout-sweep-is-a-second-money-mover]].
 
+**VEN-423 put a fourth guard in the pre-scan only.** `findDuePayoutBookingIds`
+now joins `users` through `vendorProfiles.userId` and adds
+`is_banned = false` + `deleted_at is null`. `claimReleasableBooking` — the
+`FOR UPDATE SKIP LOCKED` row that actually transfers — was **not** given them,
+and `refusePayoutRetry` has no ban/retired arm either, so the operator retry
+(`honourVendorHold: false`) pays a banned or retired vendor outright. Every
+other payout guard (status, amount, release, `payout_hold`) is re-read under
+the lock; this one is not. The mirror cost: a retired vendor's owed payout for a
+past event is now claimed by nothing, `payout_attempts` never increments so
+`payoutFailingClauses` cannot see it, and the console still prints
+"Awaiting release".
+
 **#432 added a second shared predicate and a third money mover.**
 `payoutFailingClauses()` (same file) is `payoutReleasedAt is null` +
 `payout_attempts > 0` and is spread into the admin Payments filter and the
