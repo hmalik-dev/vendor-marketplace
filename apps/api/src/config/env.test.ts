@@ -36,6 +36,9 @@ for (const [borrower, lender] of [
   REQUIRED[borrower] = REQUIRED[lender];
 }
 
+// Optional, but the key-list test needs it present to see it parsed.
+REQUIRED.WEB_TIER_KEY = 'w'.repeat(40);
+
 /*
  * Resend's key is composed rather than written out, for the same reason and one
  * more. Its registry `shape` is `/^re_[A-Za-z0-9_]{16,}$/`, so unlike the
