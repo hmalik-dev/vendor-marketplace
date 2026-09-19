@@ -52,7 +52,7 @@ describe('the Neon Auth trust boundary', () => {
   let jwks: ReturnType<typeof createLocalJWKSet>;
   let sign: (
     claims: JWTPayload,
-    options?: { expiresIn?: string | number; key?: CryptoKey },
+    options?: { expiresIn?: string | number; key?: Parameters<SignJWT['sign']>[0] },
   ) => Promise<string>;
 
   beforeAll(async () => {
@@ -124,7 +124,9 @@ describe('the Neon Auth trust boundary', () => {
     const lines: string[] = [];
     const logged = await createTestHarness({
       env: { LOG_LEVEL: 'info' },
-      loggerStream: { write: (chunk: string) => void lines.push(chunk) } as NodeJS.WritableStream,
+      loggerStream: {
+        write: (chunk: string) => void lines.push(chunk),
+      } as unknown as NodeJS.WritableStream,
       neonAuth: {
         verifySessionToken: createNeonTokenVerifier(BASE_URL, jwks),
         loadAuthUser: createNeonUserLoader(BASE_URL, jwks),

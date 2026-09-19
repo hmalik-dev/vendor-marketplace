@@ -200,7 +200,6 @@ const HTTPS_URL = /^https:\/\/[^\s,]+$/;
  */
 const HTTP_URL_LIST = /^\s*https?:\/\/[^\s,]+\s*(,\s*https?:\/\/[^\s,]+\s*)*,?\s*$/;
 const HTTPS_URL_LIST = /^\s*https:\/\/[^\s,]+\s*(,\s*https:\/\/[^\s,]+\s*)*,?\s*$/;
-const APP_PATH = /^\/[A-Za-z0-9\-_/[\]]*$/;
 /** user:password@host/database — the placeholder form has no credentials and fails it. */
 const POSTGRES_URL = /^postgres(ql)?:\/\/[^:@\s/]+:[^@\s/]+@[^\s/]+\/[^\s?]+/;
 
