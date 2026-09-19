@@ -12,15 +12,12 @@ import {
   type Probe,
 } from './types.js';
 
-const CLERK_API = 'https://api.clerk.com/v1';
 const STRIPE_API = 'https://api.stripe.com/v1';
 const RESEND_API = 'https://api.resend.com';
 const LIVE_SECRET_PREFIX = 'sk_live_';
 /** Stripe's own minimum for a statement descriptor. */
 const MIN_DESCRIPTOR_LENGTH = 5;
 const PLACEHOLDER_DESCRIPTOR = /\b(test|example|placeholder|todo|x{3,})\b/i;
-const PUBLISHABLE_KEY = /^pk_(?:live|test)_([A-Za-z0-9+/=]+)$/;
-const HOSTNAME = /^[a-z0-9.-]+$/i;
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
 
@@ -35,67 +32,58 @@ function liveKey(group: LaunchGroup, name: string, key: string | undefined): Lau
   );
 }
 
-/** A publishable key is `pk_<mode>_` + base64 of the Frontend API host and a `$`. */
-function frontendApiHost(publishableKey: string | undefined): string | null {
-  const encoded = PUBLISHABLE_KEY.exec(publishableKey ?? '')?.[1];
-  const host = encoded ? Buffer.from(encoded, 'base64').toString('utf8').replace(/\$$/, '') : '';
-
-  return HOSTNAME.test(host) ? host : null;
+/** A connection string's host, with Neon's pooler suffix dropped so a pooled and a direct URL compare equal. */
+function databaseHost(url: string | undefined): string | null {
+  try {
+    return new URL(url ?? '').hostname.replace('-pooler', '');
+  } catch {
+    return null;
+  }
 }
 
-function clerkProbes({ env, get }: LaunchOptions): Probe[] {
-  const manualDeletion = (reason: string): LaunchResult => ({
-    group: 'clerk',
-    name: 'clerk self-serve deletion',
-    status: 'MANUAL',
-    detail: `${reason} — confirm Dashboard → User & authentication → "Allow users to delete their accounts" is off`,
-  });
-
+function authProbes({ env, get }: LaunchOptions): Probe[] {
   return [
     {
-      group: 'clerk',
-      name: 'clerk key',
-      run: async () => [liveKey('clerk', 'clerk key', env.CLERK_SECRET_KEY)],
-    },
-    {
-      group: 'clerk',
-      name: 'clerk instance',
+      group: 'auth',
+      name: 'neon auth endpoint',
       async run() {
-        const reply = await get(`${CLERK_API}/instance`, bearer(env.CLERK_SECRET_KEY));
-        const type = field(reply.body, 'environment_type');
-        const found = isString(type) ? type : `no environment_type (HTTP ${reply.status})`;
-        return [judge('clerk', 'clerk instance', found, type === 'production', 'production')];
+        const base = env.NEON_AUTH_BASE_URL?.trim().replace(/\/+$/, '');
+        if (!base) {
+          return [failed('auth', 'neon auth endpoint', 'NEON_AUTH_BASE_URL is unset')];
+        }
+
+        const reply = await get(`${base}/.well-known/jwks.json`);
+        const keys = field(reply.body, 'keys');
+        const signing = Array.isArray(keys) ? keys.length : 0;
+        const found =
+          signing > 0
+            ? `${signing} signing key(s) served`
+            : `no signing keys (HTTP ${reply.status})`;
+
+        return [judge('auth', 'neon auth endpoint', found, signing > 0, 'a JWKS with a key')];
       },
     },
     {
-      // Clerk has no read API for its Svix endpoints, so the check holds the
-      // declared endpoint the API already refuses to boot without to API_URL.
-      group: 'clerk',
-      name: 'clerk webhook endpoint',
+      // The reconcile pass and account closure read and end identities over this
+      // connection, so it has to reach the same branch the API's own database is
+      // on: a source pointed anywhere else answers empty, and the pass refuses.
+      group: 'auth',
+      name: 'neon auth identity store',
       async run() {
-        const expected = `${originOf(env, 'API_URL')}/webhooks/clerk`;
-        const declared = env.CLERK_WEBHOOK_ENDPOINT?.trim();
-        const found = `CLERK_WEBHOOK_ENDPOINT is ${declared || 'unset'}`;
-        return [judge('clerk', 'clerk webhook endpoint', found, declared === expected, expected)];
-      },
-    },
-    {
-      group: 'clerk',
-      name: 'clerk self-serve deletion',
-      async run() {
-        const host = frontendApiHost(env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-        if (!host) {
-          return [manualDeletion('the publishable key names no Frontend API host')];
-        }
+        const store = databaseHost(env.NEON_AUTH_DATABASE_URL);
+        const app = databaseHost(env.DATABASE_URL);
+        const found =
+          store === null ? 'NEON_AUTH_DATABASE_URL is unset' : `identities read from ${store}`;
 
-        const reply = await get(`https://${host}/v1/environment`);
-        const deleteSelf = field(reply.body, 'user_settings', 'actions', 'delete_self');
-        if (typeof deleteSelf !== 'boolean') {
-          return [manualDeletion(`the instance settings are unreadable (HTTP ${reply.status})`)];
-        }
-
-        const found = `delete_self is ${deleteSelf ? 'on' : 'off'}`;
-        return [judge('clerk', 'clerk self-serve deletion', found, !deleteSelf, 'off')];
+        return [
+          judge(
+            'auth',
+            'neon auth identity store',
+            found,
+            store !== null && store === app,
+            'the API database host',
+          ),
+        ];
       },
     },
   ];
@@ -290,5 +278,5 @@ function resendProbes({ env, get }: LaunchOptions): Probe[] {
 }
 
 export function providerProbes(options: LaunchOptions): Probe[] {
-  return [...clerkProbes(options), ...stripeProbes(options), ...resendProbes(options)];
+  return [...authProbes(options), ...stripeProbes(options), ...resendProbes(options)];
 }

@@ -13,7 +13,7 @@ import {
 export type { LaunchOptions } from './types.js';
 
 const GROUP_LABELS: Readonly<Record<LaunchGroup, string>> = {
-  clerk: 'Clerk',
+  auth: 'Neon Auth',
   stripe: 'Stripe',
   resend: 'Resend',
   storage: 'Storage',

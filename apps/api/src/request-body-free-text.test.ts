@@ -29,7 +29,7 @@ import { describe, expect, it } from 'vitest';
  * request body. Names mirrored from Clerk are the live example — the account
  * holder types them, they reach the public vendor page through `reviewerName`,
  * and no route schema ever sees them. Those go through `mirroredAuthName` and
- * are covered by `modules/webhooks/clerk.routes.test.ts`. A new write path of
+ * are covered by `modules/auth-sync/auth-sync.service.test.ts`. A new write path of
  * that shape needs its own guard; this one cannot see it.
  */
 const MODULES = join(import.meta.dirname, 'modules');

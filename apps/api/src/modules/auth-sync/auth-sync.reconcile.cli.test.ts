@@ -19,6 +19,7 @@ const buildServer = vi.fn();
 const close = vi.fn(async () => undefined);
 const listen = vi.fn(async () => '');
 const end = vi.fn(async () => undefined);
+const directoryClose = vi.fn(async () => undefined);
 
 vi.mock('../../server.js', () => ({
   buildServer: (options: unknown) => {
@@ -35,21 +36,21 @@ vi.mock('../../server.js', () => ({
 
 vi.mock('@vendor-marketplace/db', () => ({
   createDatabase: () => ({ db: {}, client: { end } }),
+  createNeonAuthDirectory: () => ({ lookup: async () => [], close: directoryClose }),
   loadEnv: () => undefined,
 }));
 
 vi.mock('../../config/env.js', () => ({
-  parseEnv: () => ({ CLERK_SECRET_KEY: 'sk_test_reconcile', WEB_URL: 'https://orla.test' }),
+  parseEnv: () => ({
+    NEON_AUTH_DATABASE_URL: 'postgres://neon-auth.test/db',
+    WEB_URL: 'https://orla.test',
+  }),
   canonicalWebOrigin: () => 'https://orla.test',
 }));
 
 vi.mock('../../lib/storage.js', () => ({ createS3Storage: () => ({}) }));
 
-vi.mock('@clerk/backend', () => ({
-  createClerkClient: () => ({ users: { getUserList: async () => ({ data: [] }) } }),
-}));
-
-const reconcileClerkUsers = vi.fn(async () => ({
+const reconcileAuthUsers = vi.fn(async () => ({
   examined: 0,
   updated: 0,
   deleted: 0,
@@ -58,16 +59,16 @@ const reconcileClerkUsers = vi.fn(async () => ({
   skipped: 0,
 }));
 
-vi.mock('./clerk.reconcile.js', () => ({
-  reconcileClerkUsers: (...args: unknown[]) => reconcileClerkUsers(...(args as [])),
+vi.mock('./auth-sync.reconcile.js', () => ({
+  reconcileAuthUsers: (...args: unknown[]) => reconcileAuthUsers(...(args as [])),
 }));
 
-describe('the Clerk reconciliation CLI', () => {
+describe('the Neon Auth reconciliation CLI', () => {
   it('builds the server with the payout sweep off, and never listens', async () => {
     const write = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
 
     try {
-      await import('./clerk.reconcile.cli.js');
+      await import('./auth-sync.reconcile.cli.js');
     } finally {
       write.mockRestore();
     }
@@ -84,11 +85,12 @@ describe('the Clerk reconciliation CLI', () => {
 
     expect(listen).not.toHaveBeenCalled();
 
-    // Both handles released, or a `pnpm reconcile:clerk` never returns.
+    // Both handles released, or a `pnpm reconcile:auth` never returns.
     expect(close).toHaveBeenCalledTimes(1);
     expect(end).toHaveBeenCalledTimes(1);
+    expect(directoryClose).toHaveBeenCalledTimes(1);
 
     // It did the work it exists to do, rather than exiting before reaching it.
-    expect(reconcileClerkUsers).toHaveBeenCalledTimes(1);
+    expect(reconcileAuthUsers).toHaveBeenCalledTimes(1);
   });
 });

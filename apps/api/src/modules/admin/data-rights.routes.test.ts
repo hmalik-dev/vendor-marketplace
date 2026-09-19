@@ -23,12 +23,9 @@ import {
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { CLOSURE_UNWIND, DELETION_UNWIND, SUSPENSION_UNWIND } from './account-unwind.js';
 import { LAST_OPERATOR_REFUSAL } from './data-rights.service.js';
-import {
-  bearer,
-  createTestHarness,
-  SVIX_HEADERS,
-  type TestHarness,
-} from '../../testing/test-server.js';
+import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { reconcileAuthUsers } from '../auth-sync/auth-sync.reconcile.js';
+import { bookingContextFor } from '../payments/payments.service.js';
 
 /**
  * Data rights — #438.
@@ -927,14 +924,15 @@ describe('data rights', () => {
       expect(closed.json()).toMatchObject({ refundsIssued: 1, identityDeleted: true });
       expect(harness.stripe.refunds).toHaveLength(refundsBefore + 1);
 
-      const replay = await harness.app.inject({
-        method: 'POST',
-        url: '/webhooks/clerk',
-        headers: { ...SVIX_HEADERS, 'content-type': 'application/json' },
-        payload: JSON.stringify({ type: 'user.deleted', data: { id: VENDOR, deleted: true } }),
-      });
+      // The pass finds the identity already gone and the row already retired: nothing to redo.
+      const replay = await reconcileAuthUsers(
+        bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+        harness.app.authDirectory!,
+        {},
+        new Date(),
+      );
 
-      expect(replay.json()).toEqual({ received: true, outcome: 'ignored' });
+      expect(replay).toMatchObject({ deleted: 0, updated: 0 });
       expect(harness.stripe.refunds).toHaveLength(refundsBefore + 1);
     });
 
@@ -1058,7 +1056,7 @@ describe('data rights', () => {
      * `isClerkIdentity` is the predicate the reconcile pass already owns for
      * exactly this distinction.
      */
-    it('does not ask Clerk about a row Clerk never issued', async () => {
+    it('does not ask Neon Auth about a row it never issued', async () => {
       await signIn(ADMIN, true);
 
       const seeded = await harness.database.db
@@ -1085,18 +1083,26 @@ describe('data rights', () => {
     });
 
     /*
-     * A Neon Auth identity is real and outlives the retired row (VEN-447).
-     * Reporting it deleted would write a false, permanent `admin_actions`
-     * record and leave a person who can still sign in; until VEN-448 ends it,
-     * the answer is `false` so the console asks for a human.
+     * A Neon Auth identity is real and outlives the retired row, so the closure
+     * ends it (VEN-448) — whatever shape its id has, since Neon mints its own —
+     * and the record says so only because it happened.
      */
-    it('reports a Neon Auth identity as not deleted, and does not ask Clerk', async () => {
+    it('deletes a Neon Auth identity, whatever shape its id has', async () => {
       await signIn(ADMIN, true);
 
+      const neonId = 'neon-auth-id-not-a-seed';
+      harness.authUsers.set(neonId, {
+        authUserId: neonId,
+        email: 'neon-closure@example.com',
+        firstName: 'Neon',
+        lastName: 'Customer',
+        roleHint: 'customer',
+        avatarUrl: null,
+      });
       const neonUser = await harness.database.db
         .insert(users)
         .values({
-          authUserId: 'neon-auth-id-not-clerk-shaped',
+          authUserId: neonId,
           email: 'neon-closure@example.com',
           role: 'customer',
           firstName: 'Neon',
@@ -1111,8 +1117,100 @@ describe('data rights', () => {
       });
 
       expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ identityDeleted: true });
+      expect(harness.deletedAuthUsers).toEqual([neonId]);
+      expect(harness.authUsers.has(neonId)).toBe(false);
+    });
+
+    /*
+     * A Clerk-era row has no Neon Auth identity to end, and claiming it was
+     * ended would write a false, permanent `admin_actions` record.
+     */
+    it('reports a legacy-provider row as not deleted, and asks nothing', async () => {
+      await signIn(ADMIN, true);
+      const legacy = await harness.database.db
+        .insert(users)
+        .values({
+          authUserId: 'user_2abcdefghijklmnopqrstuvwxyz',
+          email: 'legacy-closure@example.com',
+          role: 'customer',
+          firstName: 'Legacy',
+          lastName: 'Customer',
+        })
+        .returning({ id: users.id });
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${legacy[0]!.id}/close`,
+        headers: bearer(ADMIN),
+      });
+
       expect(response.json()).toMatchObject({ identityDeleted: false });
-      expect(harness.deletedClerkUsers).toEqual([]);
+      expect(harness.deletedAuthUsers).toEqual([]);
+    });
+
+    /*
+     * An id this branch does not hold reads the same as one already gone, and a
+     * store pointed at the wrong branch is the anticipated mistake. Claiming the
+     * identity deleted would be written into `admin_actions` for ever.
+     */
+    it('reports the identity as not deleted when the store held no such identity', async () => {
+      await signIn(ADMIN, true);
+      const unheld = await harness.database.db
+        .insert(users)
+        .values({
+          authUserId: 'neon-auth-id-not-on-this-branch',
+          email: 'neon-unheld@example.com',
+          role: 'customer',
+          firstName: 'Neon',
+          lastName: 'Customer',
+        })
+        .returning({ id: users.id });
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${unheld[0]!.id}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ identityDeleted: false });
+    });
+
+    /*
+     * A lane's API has no connection to the identity store (`NEON_AUTH_DATABASE_URL`
+     * is unset there on purpose). It cannot end an identity and must not say it
+     * did: a false `identityDeleted` in `admin_actions` cannot be corrected.
+     */
+    it('reports the identity as not deleted when there is no store to delete from', async () => {
+      await signIn(ADMIN, true);
+      const directory = harness.app.authDirectory;
+      harness.app.authDirectory = null;
+
+      try {
+        const neonUser = await harness.database.db
+          .insert(users)
+          .values({
+            authUserId: 'neon-auth-id-no-store',
+            email: 'neon-no-store@example.com',
+            role: 'customer',
+            firstName: 'Neon',
+            lastName: 'Customer',
+          })
+          .returning({ id: users.id });
+
+        const response = await harness.app.inject({
+          method: 'POST',
+          url: `/admin/users/${neonUser[0]!.id}/close`,
+          headers: bearer(ADMIN),
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ identityDeleted: false });
+        expect(harness.deletedAuthUsers).toEqual([]);
+      } finally {
+        harness.app.authDirectory = directory;
+      }
     });
 
     /*

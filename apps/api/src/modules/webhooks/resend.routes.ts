@@ -30,7 +30,7 @@ const webhookResponseSchema = z.object({
 /**
  * Resend's delivery events, recorded against the attempt rows the send wrote.
  *
- * Signature-verified through the same svix seam the Clerk webhook uses, because
+ * Signature-verified through the svix seam, because
  * Resend signs with svix too — and idempotent under replay by the rank
  * predicate in `applyDeliveryEvent` rather than by a table of event ids.
  *

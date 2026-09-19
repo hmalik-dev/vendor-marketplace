@@ -28,11 +28,16 @@ the localStorage `signup_role` value as trusted input.
   limiter never sees it, and the provider sees the server's IP, not the caller's.
 - `/api/session/token` hands the browser a 15-minute JWT from the httpOnly
   cookie. `no-store`, no CORS, never a client prop — verified.
-- `users.auth_user_id` now holds Clerk ids (`user_…`, operator only until
-  VEN-448) **and** Neon ids in one column, and `isClerkIdentity` tells them apart
-  by prefix. `reconcile:clerk` retires every row it reads as Clerk's that Clerk
-  does not know, so that prefix is load-bearing against a beta provider's id
-  format.
+- `users.auth_user_id` holds ids from two providers in one column. VEN-448
+  deleted `isClerkIdentity`, so `pnpm reconcile:auth` now filters only `seed_`
+  and **retires (and refunds) every live row Neon Auth does not know** — any
+  surviving Clerk-era row. The only backstop is `remote.size === 0`, which does
+  not fire while one Neon identity answers. Audit any pass that treats "absent
+  at the provider" as "deleted by the user".
+- `packages/db/src/neon-auth-directory.ts` is raw SQL on `neon_auth` over a
+  second connection (`NEON_AUTH_DATABASE_URL`, required off baseline/local).
+  Queries are module constants and parameterised; the one wart is the
+  verification cleanup matching the address as a **substring** of `identifier`.
 
 **How to apply:** audit any new `/api/auth/*` allowlist entry as an account
 operation, and any new writer of `users` rows as a second provider writing into

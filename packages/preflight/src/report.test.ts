@@ -11,7 +11,7 @@ describe('renderReport', () => {
     const text = lines.join('\n');
 
     expect(text).toContain('App + Database');
-    expect(text).toContain('Auth (Clerk)');
+    expect(text).toContain('Auth (Neon Auth)');
   });
 
   it('prints the fix on its own line under a failure', () => {

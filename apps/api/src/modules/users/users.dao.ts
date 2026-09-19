@@ -272,7 +272,7 @@ export async function updateUserById(
  * address Clerk sent could not be written, so `email` below is the **old** one
  * and `pendingEmail` is what it should have been.
  */
-export interface ClerkMirrorResult {
+export interface AuthMirrorResult {
   user: UserRow;
   emailDiverged: boolean;
 }
@@ -325,7 +325,7 @@ type EmailDivergenceWrite =
  * **Rows that diverged before this landed carry neither column**, and no
  * migration backfills them: the old code never learnt which address it failed
  * to write, so there is nothing in the database to backfill *from*. The repair
- * is `pnpm reconcile:clerk`, which reads every live row's current address out
+ * is `pnpm reconcile:auth`, which reads every live row's current address out
  * of Clerk and hands it to this function — a diverged row records its pending
  * address on that pass, and an agreeing one is left alone.
  */
@@ -333,7 +333,7 @@ export async function updateUserByAuthId(
   db: AppDatabase,
   authUserId: string,
   patch: Partial<NewUserRow>,
-): Promise<ClerkMirrorResult | null> {
+): Promise<AuthMirrorResult | null> {
   if (!authUserId || Object.keys(patch).length === 0) {
     return null;
   }
@@ -357,7 +357,7 @@ export async function updateUserByAuthId(
     // Read first: `RETURNING` carries only the new address, and the old one is what is released.
     const previousEmail =
       email === undefined ? undefined : (await findUserByAuthId(db, authUserId))?.email;
-    const user = await writeClerkPatch(db, authUserId, patch, resolving);
+    const user = await writeAuthPatch(db, authUserId, patch, resolving);
 
     if (user && previousEmail !== undefined && previousEmail !== user.email) {
       await handAddressToWaiter(db, previousEmail);
@@ -393,7 +393,7 @@ export async function updateUserByAuthId(
      * redeliveries and across later events that collide again, so it answers
      * "since when has this been wrong" rather than "when did we last look".
      */
-    const user = await writeClerkPatch(db, authUserId, rest, {
+    const user = await writeAuthPatch(db, authUserId, rest, {
       pendingEmail: email,
       emailSyncFailedAt: sql`coalesce(${users.emailSyncFailedAt}, now())`,
     });
@@ -467,7 +467,7 @@ export async function findLiveUserByEmail(db: AppDatabase, email: string): Promi
 }
 
 /** The one `UPDATE` both branches above run, so they cannot drift apart. */
-async function writeClerkPatch(
+async function writeAuthPatch(
   db: AppDatabase,
   authUserId: string,
   patch: Partial<NewUserRow>,
@@ -749,17 +749,18 @@ async function retireUserInTransaction(
 /**
  * Every live row, for the reconciliation pass.
  *
- * Only the columns Clerk owns are selected: reconciliation compares against
- * Clerk and must never be tempted to overwrite anything Clerk does not know
- * about, such as the narrowed local `role`.
+ * Only the columns the identity owns are selected, plus the divergence record:
+ * reconciliation compares against Neon Auth and must never be tempted to
+ * overwrite anything it does not know about, such as the narrowed local `role`.
  */
-export async function listLiveClerkIdentities(db: AppDatabase): Promise<
+export async function listLiveAuthIdentities(db: AppDatabase): Promise<
   {
     authUserId: string;
     email: string;
     firstName: string;
     lastName: string;
     avatarUrl: string | null;
+    pendingEmail: string | null;
   }[]
 > {
   return db
@@ -769,6 +770,7 @@ export async function listLiveClerkIdentities(db: AppDatabase): Promise<
       firstName: users.firstName,
       lastName: users.lastName,
       avatarUrl: users.avatarUrl,
+      pendingEmail: users.pendingEmail,
     })
     .from(users)
     .where(notDeleted)

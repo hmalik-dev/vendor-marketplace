@@ -17,27 +17,24 @@ Pasted into a chat transcript on **2026-08-27** while provisioning Railway.
 Low risk today (empty bucket, Clerk development instance, no real users, no
 money) but they must not survive to launch.
 
-| Credential             | How it was exposed       | Action                                                           |
-| ---------------------- | ------------------------ | ---------------------------------------------------------------- |
-| `S3_ACCESS_KEY_ID`     | Pasted in chat           | Rotate — §4.3                                                    |
-| `S3_SECRET_ACCESS_KEY` | Pasted in chat           | Rotate — §4.3                                                    |
-| `CLERK_WEBHOOK_SECRET` | Pasted in chat           | Rotate — §4.2. Moot if the Clerk production instance replaces it |
-| Svix dashboard URL     | Printed by the assistant | Self-expiring one-time token; no action, do not re-share         |
+| Credential             | How it was exposed       | Action                                                         |
+| ---------------------- | ------------------------ | -------------------------------------------------------------- |
+| `S3_ACCESS_KEY_ID`     | Pasted in chat           | Rotate — §4.3                                                  |
+| `S3_SECRET_ACCESS_KEY` | Pasted in chat           | Rotate — §4.3                                                  |
+| `CLERK_WEBHOOK_SECRET` | Pasted in chat           | None — the variable and its endpoint went with Clerk (VEN-448) |
+| Svix dashboard URL     | Printed by the assistant | Self-expiring one-time token; no action, do not re-share       |
 
 **Not exposed, for the record.** These were handled without ever being printed:
 `DATABASE_URL` and `DATABASE_URL_UNPOOLED` (piped from the Neon CLI straight
-into Railway by you; every display was masked), and `CLERK_SECRET_KEY` (pulled
-by the Clerk CLI and piped into Railway by you — never printed, never read by
-the assistant, which only verified its length and that it was not a
-placeholder).
+into Railway by you; every display was masked). `CLERK_SECRET_KEY` was
+handled the same way and has since been retired with Clerk (VEN-448).
 
 ---
 
 ## 2. Why some of this needed you and not the assistant
 
 The agent sandbox refuses to read a credential from one place and write it to
-another. That is why `DATABASE_URL` and `CLERK_SECRET_KEY` came back to you as
-commands to run rather than actions taken.
+another. That is why `DATABASE_URL` came back to you as a command to run rather than actions taken.
 
 Treat that as the normal path, not an obstacle. The practical consequence:
 **anything shaped like "move this secret from A to B" is yours to run.** The
@@ -52,10 +49,9 @@ afterwards — none of which requires seeing the value.
 | Variable                                      | System of record           | Lives in            | Secret?                 |
 | --------------------------------------------- | -------------------------- | ------------------- | ----------------------- |
 | `DATABASE_URL` / `_UNPOOLED`                  | Neon (`production` branch) | Railway             | Yes                     |
-| `CLERK_SECRET_KEY`                            | Clerk                      | Railway, Vercel web | Yes                     |
 | `NEON_AUTH_BASE_URL`                          | Neon Auth (branch)         | Railway, Vercel web | No (an endpoint)        |
 | `NEON_AUTH_COOKIE_SECRET`                     | `openssl rand -base64 32`  | Vercel web          | Yes                     |
-| `CLERK_WEBHOOK_SECRET`                        | Clerk → Svix endpoint      | Railway             | Yes                     |
+| `NEON_AUTH_DATABASE_URL`                      | Neon (the branch's DB)     | Railway             | Yes                     |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`   | Cloudflare R2 API token    | Railway             | Yes                     |
 | `S3_ENDPOINT` / `S3_BUCKET` / `S3_PUBLIC_URL` | Cloudflare R2              | Railway             | No                      |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe                     | Railway             | Yes                     |
@@ -92,29 +88,26 @@ Pooled for runtime, direct for migrations — `packages/db/src/migration-url.ts`
 prefers the unpooled URL for DDL because Neon's PgBouncer is unreliable for
 `CREATE SCHEMA`.
 
-### 4.2 Clerk — secret key and webhook secret
+### 4.2 Neon Auth — identity store connection
+
+`NEON_AUTH_DATABASE_URL` is the connection string of the database that holds
+the branch's `neon_auth` schema: the reconcile pass (`pnpm reconcile:auth`)
+reads identities over it, and an account closure deletes one. On a Neon
+deployment it is the same database as `DATABASE_URL`. Name the branch
+**positionally** — `neon connection-string --branch-id` ignores the branch and
+answers for production:
 
 ```bash
-clerk env pull --app app_3ISNDGyof237HdYg2FndWSK8uTx --file /tmp/.ck.env >/dev/null
 railway variables --service vendor-marketplace \
-  --set "CLERK_SECRET_KEY=$(grep '^CLERK_SECRET_KEY=' /tmp/.ck.env | cut -d= -f2- | tr -d '"')"
-rm /tmp/.ck.env
+  --set "NEON_AUTH_DATABASE_URL=$(neonctl connection-string production --project-id dark-surf-79137727)"
 ```
 
-The **webhook** secret is not in the Clerk API — it belongs to the Svix
-endpoint. Get a fresh dashboard link with:
-
-```bash
-clerk api /webhooks/svix_url -X POST --yes
-```
-
-Then rotate the endpoint's signing secret there and set
-`CLERK_WEBHOOK_SECRET` on Railway to match.
-
-**Always verify the instance matches.** A `sk_` from one instance and a `pk_`
-from another fails every token verification with an unhelpful error. Production
-web currently runs `stirred-flea-3295.clerk.accounts.dev` — decode the
-publishable key to confirm before swapping either half.
+**Always verify the branch matches.** `NEON_AUTH_BASE_URL` and this connection
+must name the same branch, or the reconcile pass sees none of your users and
+refuses to run (it never retires anyone on an empty answer). `pnpm launch:check`
+compares the two hosts. Neon Auth has no webhook secret: it sends no update or
+delete events, so `pnpm reconcile:auth` is how a changed name and a deleted
+identity reach the local row.
 
 ### 4.3 Cloudflare R2 — access key pair
 
@@ -168,7 +161,7 @@ railway variables --service vendor-marketplace \
 **Vercel** takes the value on stdin:
 
 ```bash
- printf '%s' "$V" | vercel env add CLERK_SECRET_KEY production
+ printf '%s' "$V" | vercel env add NEON_AUTH_COOKIE_SECRET production
 ```
 
 Avoid: pasting into chat, committing to `.env` (git-ignored, but a hook and CI
@@ -189,14 +182,13 @@ report healthy with a dead credential.
 
 Then confirm the credential-specific path actually works:
 
-| Rotated          | Verify by                                                      |
-| ---------------- | -------------------------------------------------------------- |
-| Database         | `/ready` shows `database: up`, and a real read returns rows    |
-| R2               | `/ready` shows `storage: up`, then upload an image and load it |
-| Clerk secret key | Sign in, and hit an authenticated endpoint                     |
-| Clerk webhook    | Trigger a `user.updated` and confirm the local row changes     |
-| Stripe           | A test payment, capture and refund                             |
-| Resend           | A real send, checked in the inbox — not the spam folder        |
+| Rotated   | Verify by                                                                   |
+| --------- | --------------------------------------------------------------------------- |
+| Database  | `/ready` shows `database: up`, and a real read returns rows                 |
+| R2        | `/ready` shows `storage: up`, then upload an image and load it              |
+| Neon Auth | Sign in, hit an authenticated endpoint, run `pnpm reconcile:auth --dry-run` |
+| Stripe    | A test payment, capture and refund                                          |
+| Resend    | A real send, checked in the inbox — not the spam folder                     |
 
 If the project's credential scan ever fires on a committed value, **rotate it
 rather than only deleting the line.** The commit is still in history, and on a

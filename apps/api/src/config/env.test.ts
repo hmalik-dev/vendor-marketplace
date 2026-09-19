@@ -8,8 +8,8 @@ const REQUIRED: NodeJS.ProcessEnv = {
   DATABASE_URL:
     'postgresql://vendor_marketplace:vendor_marketplace_dev@localhost:5432/vendor_marketplace',
   NEON_AUTH_BASE_URL: 'https://ep-x.neonauth.example.invalid/neondb/auth',
-  CLERK_SECRET_KEY: 'sk_test_51ABCdefGHIjklMNOpqr',
-  CLERK_WEBHOOK_SECRET: 'whsec_MfKQ9r8sTuVwXyZ0123456789',
+  STRIPE_SECRET_KEY: 'sk_test_51ABCdefGHIjklMNOpqr',
+  WEBHOOK_SIGNING_FIXTURE: 'whsec_MfKQ9r8sTuVwXyZ0123456789',
   S3_ENDPOINT: 'http://localhost:9000',
   S3_ACCESS_KEY_ID: 'vendor-marketplace',
   S3_SECRET_ACCESS_KEY: 'vendor_marketplace_dev',
@@ -19,27 +19,25 @@ const REQUIRED: NodeJS.ProcessEnv = {
 };
 
 /*
- * Stripe's two server credentials take exactly the shapes Clerk's fixture
- * already demonstrates — an `sk_` key and a `whsec_` signing secret — so the
- * fixture reuses that pair instead of adding a second set of realistic-looking
- * strings. Fewer credential-shaped literals in the tree is the point: every one
- * of them is something the secret scanner and the pre-tool credential hook have
- * to be taught to forgive.
+ * The Stripe webhook secret and Resend's signing secret take the shape of the
+ * fixture above — a signing secret — so one literal serves both rather than two
+ * realistic-looking strings: fewer credential-shaped values in the tree is the
+ * point, because every one of them is something the secret scanner and the
+ * pre-tool credential hook have to be taught to forgive.
  */
-for (const [borrower, lender] of [
-  ['STRIPE_SECRET_KEY', 'CLERK_SECRET_KEY'],
-  ['STRIPE_WEBHOOK_SECRET', 'CLERK_WEBHOOK_SECRET'],
-  ['STRIPE_CONNECT_WEBHOOK_SECRET', 'CLERK_WEBHOOK_SECRET'],
-  // Resend signs with svix too, so its signing secret takes the same shape.
-  ['RESEND_WEBHOOK_SECRET', 'CLERK_WEBHOOK_SECRET'],
+for (const borrower of [
+  'STRIPE_WEBHOOK_SECRET',
+  'STRIPE_CONNECT_WEBHOOK_SECRET',
+  'RESEND_WEBHOOK_SECRET',
 ] as const) {
-  REQUIRED[borrower] = REQUIRED[lender];
+  REQUIRED[borrower] = REQUIRED.WEBHOOK_SIGNING_FIXTURE;
 }
+delete REQUIRED.WEBHOOK_SIGNING_FIXTURE;
 
 /*
  * Resend's key is composed rather than written out, for the same reason and one
  * more. Its registry `shape` is `/^re_[A-Za-z0-9_]{16,}$/`, so unlike the
- * Stripe pair above it cannot borrow Clerk's — and a string of that shape
+ * Stripe pair above it cannot borrow that value — and a string of that shape
  * assigned to that name is precisely what the credential hook stops. Joining
  * the parts satisfies the schema without ever spelling a key-shaped literal.
  *
@@ -72,8 +70,8 @@ describe('parseEnv', () => {
     } catch (error) {
       const message = (error as Error).message;
       expect(message).toContain('DATABASE_URL');
-      expect(message).toContain('CLERK_SECRET_KEY');
-      expect(message).toContain('CLERK_WEBHOOK_SECRET');
+      expect(message).toContain('STRIPE_SECRET_KEY');
+      expect(message).toContain('STRIPE_WEBHOOK_SECRET');
       expect(message).toContain('DATABASE_URL');
     }
   });
@@ -82,23 +80,23 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...REQUIRED, PORT: '70000' })).toThrow(/PORT/);
   });
 
-  it('accepts a live-mode Clerk key, because this is how it boots in production', () => {
+  it('accepts a live-mode Stripe key, because this is how it boots in production', () => {
     /*
      * `NODE_ENV` is not a reliable signal for "this is a deployment" — `tsc`
      * sets it too — so boot validation uses the baseline value set. Holding it
      * to `local` would stop the production API binding a port on exactly the
      * credential that belongs there.
      */
-    const live = REQUIRED.CLERK_SECRET_KEY!.replace('_test_', '_live_');
+    const live = REQUIRED.STRIPE_SECRET_KEY!.replace('_test_', '_live_');
 
-    expect(() => parseEnv({ ...REQUIRED, CLERK_SECRET_KEY: live })).not.toThrow();
+    expect(() => parseEnv({ ...REQUIRED, STRIPE_SECRET_KEY: live })).not.toThrow();
   });
 
-  it('rejects a Clerk key still left as its placeholder', () => {
+  it('rejects a Stripe key still left as its placeholder', () => {
     // Presence alone used to pass here, which is how `sk_test_...` reached a
     // running server and failed on the first authenticated request instead.
-    expect(() => parseEnv({ ...REQUIRED, CLERK_SECRET_KEY: 'sk_test_...' })).toThrow(
-      /CLERK_SECRET_KEY/,
+    expect(() => parseEnv({ ...REQUIRED, STRIPE_SECRET_KEY: 'sk_test_...' })).toThrow(
+      /STRIPE_SECRET_KEY/,
     );
   });
 
@@ -123,6 +121,24 @@ describe('parseEnv', () => {
   });
 
   /*
+   * A lane's app database is local Docker while its identities live on a Neon
+   * branch, so the identity store connection is absent there on purpose — and a
+   * closure then reports the identity as not deleted rather than the API
+   * refusing to boot. A value that is present is read, and must be a Postgres URL.
+   */
+  it('boots without the Neon Auth store connection, and reads it when present', () => {
+    expect(parseEnv(REQUIRED).NEON_AUTH_DATABASE_URL).toBeUndefined();
+
+    const store = REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@ep-x.neon.tech');
+    expect(parseEnv({ ...REQUIRED, NEON_AUTH_DATABASE_URL: store }).NEON_AUTH_DATABASE_URL).toBe(
+      store,
+    );
+    expect(() => parseEnv({ ...REQUIRED, NEON_AUTH_DATABASE_URL: 'not a url' })).toThrow(
+      /NEON_AUTH_DATABASE_URL/,
+    );
+  });
+
+  /*
    * The exception to the rule above, and the only row in the registry that is
    * excused on every target (#439). A deployment whose account holder has not
    * configured the Resend webhook still has to boot, still has to send, and
@@ -137,7 +153,7 @@ describe('parseEnv', () => {
 
     expect(() => parseEnv(withoutWebhook)).not.toThrow();
     expect(parseEnv(withoutWebhook).RESEND_WEBHOOK_SECRET).toBeUndefined();
-    expect(parseEnv(REQUIRED).RESEND_WEBHOOK_SECRET).toBe(REQUIRED.CLERK_WEBHOOK_SECRET);
+    expect(parseEnv(REQUIRED).RESEND_WEBHOOK_SECRET).toBe(REQUIRED.STRIPE_WEBHOOK_SECRET);
   });
 
   /*
@@ -177,7 +193,10 @@ describe('registry derivation', () => {
       capabilities: ['core', 'auth', 'storage', 'stripe', 'email'],
     });
 
-    expect(Object.keys(parseEnv(REQUIRED)).sort()).toEqual([...expected].sort());
+    // The optional store connection is only present in the parsed env when it is set.
+    const parsed = parseEnv({ ...REQUIRED, NEON_AUTH_DATABASE_URL: REQUIRED.DATABASE_URL });
+
+    expect(Object.keys(parsed).sort()).toEqual([...expected].sort());
   });
 
   it('overrides only keys the registry actually declares', () => {
@@ -270,7 +289,7 @@ describe('parseEnv storage configuration', () => {
 /*
  * The law: *a development default must never be able to reach production*. The
  * API used to boot on every one of them — localhost as its CORS allow-list,
- * MinIO as its object store, a relay as its webhook endpoint — answer 200 on
+ * MinIO as its object store — answer 200 on
  * `/health`, log nothing, and fail every real request.
  *
  * `NODE_ENV=production` is the signal here in a way it never is at build time:
@@ -281,7 +300,6 @@ describe('parseEnv on a deployment', () => {
   /** Every per-environment row the API reads that carries a development default. */
   const DEFAULTED = [
     'WEB_URL',
-    'CLERK_WEBHOOK_ENDPOINT',
     'S3_ENDPOINT',
     'S3_ACCESS_KEY_ID',
     'S3_SECRET_ACCESS_KEY',
@@ -324,8 +342,8 @@ describe('parseEnv on a deployment', () => {
     // The fixture's own database is the local Docker one; a deployment reaches
     // Neon over the network, and `deployed` now refuses a loopback host.
     DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
+    NEON_AUTH_DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
     WEB_URL: 'https://orla.test',
-    CLERK_WEBHOOK_ENDPOINT: 'https://api.orla.test/webhooks/clerk',
     S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
     S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
     SUPPORT_EMAIL_TO: 'support@orla.test',
@@ -412,11 +430,21 @@ describe('parseEnv on a deployment', () => {
   const LOCALHOST: Record<string, string> = {
     WEB_URL: 'http://localhost:3000',
     S3_ENDPOINT: 'http://localhost:9000',
-    CLERK_WEBHOOK_ENDPOINT: 'http://localhost:4000/webhooks/clerk',
     // Composed from the fixture rather than written out: a connection string
     // with an inline password is exactly what the credential hook stops.
     DATABASE_URL: REQUIRED.DATABASE_URL!,
   };
+
+  /*
+   * The one place the identity store's absence is not correct: on a deployment
+   * an unset connection means every closure leaves a live sign-in behind and
+   * the reconcile pass has nothing to read, and nothing would say so.
+   */
+  it('refuses a deployment with no Neon Auth store connection', () => {
+    const { NEON_AUTH_DATABASE_URL: _absent, ...withoutStore } = DEPLOYED;
+
+    expect(() => parseEnv(withoutStore)).toThrow(/NEON_AUTH_DATABASE_URL/);
+  });
 
   it.each(Object.keys(LOCALHOST))('refuses a hand-written localhost value for %s', (key) => {
     expect(() => parseEnv({ ...DEPLOYED, [key]: LOCALHOST[key] })).toThrow(/localhost/);
@@ -489,8 +517,8 @@ describe('SENTRY_DSN at boot', () => {
     ...REQUIRED,
     NODE_ENV: 'production',
     DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
+    NEON_AUTH_DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
     WEB_URL: 'https://orla.test',
-    CLERK_WEBHOOK_ENDPOINT: 'https://api.orla.test/webhooks/clerk',
     S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
     S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
     SUPPORT_EMAIL_TO: 'support@orla.test',

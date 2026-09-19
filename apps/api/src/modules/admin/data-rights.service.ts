@@ -8,15 +8,13 @@ import type {
 } from '@vendor-marketplace/shared';
 import type { LegalAcceptanceRow, UserRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
-import type { ClerkUserDeleter } from '../../plugins/clerk-admin.js';
+import {
+  isLegacyIdentity,
+  isSeededIdentity,
+  type AuthIdentityDeleter,
+} from '../auth-sync/identity.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import { hasAnotherLiveOperator, retireOperatorById, retireUserById } from '../users/users.dao.js';
-import { isClerkIdentity } from '../webhooks/clerk.reconcile.js';
-
-/** Marketplace demo accounts carry ids no provider ever issued. */
-function isSeededIdentity(authUserId: string): boolean {
-  return authUserId.startsWith('seed_');
-}
 import { findConfirmedBookingsToUnwind } from './admin.dao.js';
 import { fullName, recordAdminActionBestEffort } from './admin.service.js';
 import {
@@ -463,46 +461,79 @@ export const LAST_OPERATOR_REFUSAL =
  * refund on every future booking at once, with the vendors paid nothing.
  *
  * What it does when it proceeds is **#433's path, not a second one**: the same
- * `unwindAccountBookings` the Clerk `user.deleted` webhook runs, so a closure
- * asked for through the product and one that arrives as a deleted identity
- * leave the marketplace in the same state. It soft-deletes; it never hard-
+ * `unwindAccountBookings` the reconcile pass runs for an identity deleted at
+ * Neon Auth, so a closure asked for through the product and one that arrives as
+ * a deleted identity leave the marketplace in the same state. It soft-deletes; it never hard-
  * deletes. The privacy policy already says payment and booking records persist,
  * and the acceptance record survives an account by design.
  *
- * **The Clerk self-serve path remains an unrefusable backstop, and that is
- * stated rather than implied.** `<UserButton />` offers account deletion at the
- * identity provider; a deletion there is *reactive*, so by the time
- * `user.deleted` reaches the webhook there is no identity left to refuse and no
- * response to carry a 409. Disabling that control is a setting in the Clerk
- * instance, not a line of code in this repository, so this route is the
- * refusing door and the webhook is the one that cannot refuse — where it leaves
- * the booking confirmed, payable and logged for a human, which decides nothing.
+ * **A deletion at the identity provider remains an unrefusable backstop, and
+ * that is stated rather than implied.** Neon Auth has no self-serve account
+ * deletion in this product, but its console can delete a user; that deletion is
+ * *reactive*, so by the time the reconcile pass sees it there is no identity
+ * left to refuse and no response to carry a 409. This route is the refusing
+ * door and the pass is the one that cannot refuse — where it leaves the booking
+ * confirmed, payable and logged for a human, which decides nothing.
  *
  * ---
  *
- * **NEVER DRIVE THIS ROUTE AGAINST A SEEDED E2E ACCOUNT.** Since #451 a closure
- * **deletes the Clerk identity**, and that deletion is not recoverable from
- * this repository. `db:seed:e2e` *resolves* the Clerk ids behind the E2E
- * customer, vendor and admin emails rather than creating them — deliberately,
- * because a `users` row carrying an E2E email under an invented id locks that
- * account out on its next sign-in — so re-seeding cannot put a deleted identity
- * back. Only a person with the Clerk dashboard can. The admin fixture is the
- * worst case: it is the only route to `/admin` at all, because `role = 'admin'`
- * is unreachable from inside the product.
+ * **NEVER DRIVE THIS ROUTE AGAINST A SEEDED E2E ACCOUNT.** A closure
+ * **deletes the Neon Auth identity**, and that deletion is not recoverable from
+ * this repository. `db:seed:e2e` *resolves* the ids behind the E2E customer,
+ * vendor and admin by signing in as them rather than creating them —
+ * deliberately, because a `users` row carrying an E2E email under an invented id
+ * locks that account out on its next sign-in — so re-seeding cannot put a
+ * deleted identity back. Only a person can. The admin fixture is the worst
+ * case: it is the only route to `/admin` at all, because `role = 'admin'` is
+ * unreachable from inside the product.
  *
- * Verify against a throwaway `+clerk_test` sign-up instead. The **refusal**
- * path is safe and is what most passes actually want — D39 answers 409 while
- * the account holds a future confirmed booking, and the console disables the
- * button before it can be pressed — so verifying the refusal never reaches the
- * deletion.
+ * Verify against the throwaway account instead. The **refusal** path is safe
+ * and is what most passes actually want — D39 answers 409 while the account
+ * holds a future confirmed booking, and the console disables the button before
+ * it can be pressed — so verifying the refusal never reaches the deletion.
  */
+
+/**
+ * Ends the identity, and reports it only when something was actually removed.
+ *
+ * "Nothing removed" is not success here: an id this branch does not hold reads
+ * the same as one already gone — a store pointed at the wrong branch is the
+ * anticipated mistake — and `identityDeleted: true` goes into `admin_actions`,
+ * which cannot be corrected. So the console asks for a person instead.
+ */
+async function deleteAndConfirm(
+  context: AdminContext,
+  userId: string,
+  authUserId: string,
+  deleteIdentity: AuthIdentityDeleter,
+): Promise<boolean> {
+  let removed = false;
+  const completed = await bestEffortNotice(
+    context,
+    { userId },
+    async () => {
+      removed = await deleteIdentity(authUserId);
+    },
+    'An account closure could not delete its Neon Auth identity; that person can still sign in',
+  );
+
+  if (completed && !removed) {
+    context.log.error(
+      { userId },
+      'An account closure found no Neon Auth identity to delete; the store may point at another branch',
+    );
+  }
+
+  return completed && removed;
+}
 
 export async function closeAccount(
   context: AdminContext,
   actorId: string,
   userId: string,
   now: Date,
-  deleteClerkUser: ClerkUserDeleter,
+  /** `null` where the deployment has no connection to Neon Auth's schema. */
+  deleteIdentity: AuthIdentityDeleter | null,
 ): Promise<AdminCloseAccountResult> {
   const user = await findUserRecord(context.db, userId);
 
@@ -600,41 +631,29 @@ export async function closeAccount(
   /*
    * The identity itself goes, not just its sessions — last, and deliberately.
    *
-   * Deleting the Clerk user fires `user.deleted` straight back at our own
-   * webhook, so the local row has to be retired and the marketplace already
-   * tidied by the time that arrives. It is: `applyUserDeleted` looks for a
-   * **live** row and finds none, and `retireUserByAuthId` would fail its
-   * `notDeleted` predicate anyway. The redelivery is therefore `ignored` and
-   * cannot unwind this account a second time or refund anything twice, which
-   * is #433's replay guard doing exactly the job it was built for.
+   * The local row is already retired and the marketplace tidied by the time the
+   * identity goes, so the next reconcile pass finds no **live** row for it and
+   * cannot unwind this account a second time or refund anything twice — #433's
+   * replay guard doing exactly the job it was built for. Until the identity is
+   * gone a session token for it still verifies for up to 15 minutes (VEN-444,
+   * q3); the retired row is what refuses it meanwhile.
    *
    * Reported rather than thrown, through the same helper the audit write and
    * the unwind's notifications use: the retirement has already committed and
    * an operator cannot repeat a closure — the route answers 409 on a closed
-   * account — so a network failure at Clerk must not answer 500 and tell them
+   * account — so a failure at Neon Auth must not answer 500 and tell them
    * nothing happened. It comes back as `identityDeleted: false`, and the
    * console asks for a person, the shape a refused refund already takes.
+   *
+   * A seeded marketplace account (`seed_…`) has no identity anywhere, so
+   * nothing is owed. A deployment with no connection to the identity store
+   * (`deleteIdentity` is `null`) cannot end one, and says so the same way.
    */
-  const identityDeleted = isClerkIdentity(user.authUserId)
-    ? await bestEffortNotice(
-        context,
-        { userId },
-        () => deleteClerkUser(user.authUserId),
-        'An account closure could not delete its Clerk identity; that person is still signed in',
-      )
-    : /*
-       * Not a Clerk row, so Clerk is not asked — asking it about an id it never
-       * issued reports its 404 as "deleted" and is written into
-       * `admin_actions`, which cannot be corrected afterwards.
-       *
-       * What is owed then depends on who issued it. A seeded marketplace
-       * account (`seed_…`) has no identity anywhere, so nothing is owed. A
-       * **Neon Auth** identity is real and stays signed in after the row is
-       * retired: ending it is VEN-448's closure work, so until then the
-       * honest answer is `false` and the console asks for a person, the shape
-       * a refused refund already takes.
-       */
-      isSeededIdentity(user.authUserId);
+  const identityDeleted = isSeededIdentity(user.authUserId)
+    ? true
+    : deleteIdentity === null || isLegacyIdentity(user.authUserId)
+      ? false
+      : await deleteAndConfirm(context, userId, user.authUserId, deleteIdentity);
 
   await recordAdminActionBestEffort(context, {
     actorId,

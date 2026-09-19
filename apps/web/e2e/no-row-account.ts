@@ -19,53 +19,13 @@ import { AUTH_DIR } from './fixtures.js';
  * is shown; the moment anything ticks the box the state is gone and the account
  * has to be replaced — `noRowStillHasNoRow` says so before it is used.
  *
- * The Clerk helpers below serve the operator-closure spec only, and go with it
- * when VEN-448 moves the operator surface.
  */
-const CLERK_API = 'https://api.clerk.com/v1';
 
 const REPO_ROOT = dirname(AUTH_DIR);
 
 /**
- * The secret, from the environment or the repository's gitignored `.env` —
- * the file `seed:e2e` reads it from — and never from this file.
- */
-function clerkSecretKey(): string {
-  const name = 'CLERK_SECRET_KEY';
-  const fromEnvironment = process.env[name];
-
-  if (fromEnvironment) {
-    return fromEnvironment;
-  }
-
-  const envFile = resolve(REPO_ROOT, '.env');
-  const line = existsSync(envFile)
-    ? readFileSync(envFile, 'utf8')
-        .split('\n')
-        .find((candidate) => candidate.startsWith(`${name}=`))
-    : undefined;
-  const value = line
-    ?.slice(name.length + 1)
-    .trim()
-    .replace(/^["']|["']$/g, '');
-
-  if (!value) {
-    throw new Error(
-      `${name} is not set and ${envFile} does not define it — the no-row persona needs it.`,
-    );
-  }
-
-  // Never mint or delete people in a live instance, whatever an env file holds.
-  if (!value.startsWith('sk_test_')) {
-    throw new Error(`${name} is not a development-instance key; the no-row persona refuses it.`);
-  }
-
-  return value;
-}
-
-/**
  * The same refusal `scripts/e2e-roles.mjs` makes: the deployed site shares this
- * Clerk development instance, so aiming `E2E_BASE_URL` at it must not be enough
+ * Neon Auth branch, so aiming `E2E_BASE_URL` at it must not be enough
  * to create an account there. Exact hostnames, never a substring test.
  */
 export function assertLoopbackOrigin(baseUrl: string): void {
@@ -73,20 +33,9 @@ export function assertLoopbackOrigin(baseUrl: string): void {
 
   if (!['localhost', '127.0.0.1', '[::1]', '::1'].includes(hostname)) {
     throw new Error(
-      `The no-row persona mints a Clerk identity, so it runs against loopback only — not ${hostname}.`,
+      `The no-row persona signs in as a real identity, so it runs against loopback only — not ${hostname}.`,
     );
   }
-}
-
-export async function clerk(
-  path: string,
-  init: { method: string; body?: unknown },
-): Promise<Response> {
-  return fetch(`${CLERK_API}${path}`, {
-    method: init.method,
-    headers: { authorization: `Bearer ${clerkSecretKey()}`, 'content-type': 'application/json' },
-    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-  });
 }
 
 export interface NoRowAccount {

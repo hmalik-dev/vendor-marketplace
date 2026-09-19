@@ -82,7 +82,7 @@ export interface EnvVariable {
   readonly setup: EnvSetup;
 }
 
-/** Stripe and Clerk both name the environment a credential belongs to in its prefix. */
+/** Stripe names the environment a credential belongs to in its prefix. */
 const TEST_LIVE_MODES = { local: 'test', production: 'live' } as const;
 
 const NEON_SETUP: EnvSetup = {
@@ -106,19 +106,7 @@ const NEON_AUTH_SETUP: EnvSetup = {
     'Enable Auth on the Neon branch (Project → Branch → Auth)',
     'Copy the branch Auth URL into NEON_AUTH_BASE_URL',
     'Generate the cookie secret: openssl rand -base64 32',
-  ],
-};
-
-const CLERK_SETUP: EnvSetup = {
-  url: 'https://dashboard.clerk.com/last-active?path=api-keys',
-  steps: ['Open the Clerk dashboard → API keys', 'Copy the key into .env'],
-};
-
-const CLERK_WEBHOOK_SETUP: EnvSetup = {
-  url: 'https://dashboard.clerk.com/last-active?path=webhooks',
-  steps: [
-    'Open the Clerk dashboard → Configure → Webhooks → your endpoint → Signing Secret',
-    'Local relay: clerk webhooks listen --forward-to http://localhost:4000/webhooks/clerk',
+    'Copy the branch connection string into NEON_AUTH_DATABASE_URL: neon connection-string <branch> (name the branch positionally; --branch-id defaults to production)',
   ],
 };
 
@@ -424,45 +412,17 @@ export const ENV_REGISTRY = [
     setup: NEON_AUTH_SETUP,
   },
   {
-    key: 'CLERK_SECRET_KEY',
+    key: 'NEON_AUTH_DATABASE_URL',
     capability: 'auth',
     audience: 'server',
     consumers: ['api'],
+    optionalFor: ['baseline', 'local'],
     environments: 'per-environment',
-    shape: /^sk_(test|live)_[A-Za-z0-9]{16,}$/,
-    localShape: /^sk_test_[A-Za-z0-9]{16,}$/,
-    productionShape: /^sk_live_[A-Za-z0-9]{16,}$/,
-    modes: TEST_LIVE_MODES,
-    placeholder: 'sk_test_...',
-    description: 'Clerk secret key used by the API to verify session tokens.',
-    setup: CLERK_SETUP,
-  },
-  {
-    key: 'CLERK_WEBHOOK_SECRET',
-    capability: 'auth',
-    audience: 'server',
-    consumers: ['api'],
-    environments: 'per-environment',
-    shape: /^whsec_[A-Za-z0-9+/=]{16,}$/,
-    placeholder: 'whsec_...',
-    description: 'svix signing secret for POST /webhooks/clerk.',
-    setup: CLERK_WEBHOOK_SETUP,
-  },
-  {
-    key: 'CLERK_WEBHOOK_ENDPOINT',
-    capability: 'auth',
-    audience: 'server',
-    consumers: ['api'],
-    environments: 'per-environment',
-    shape: HTTP_URL,
-    productionShape: HTTPS_URL,
-    // Localhost, because `clerk webhooks listen` forwarding here is the
-    // *correct* local setup. On a deployment the same value being a relay is
-    // the bug this records, which is why the guard only runs off localhost.
-    defaultValue: 'http://localhost:4000/webhooks/clerk',
+    shape: POSTGRES_URL,
+    placeholder: 'postgresql://...',
     description:
-      'The Svix endpoint configured on the Clerk app. Checked at startup against this deployment, because a webhook pointed elsewhere fails silently.',
-    setup: CLERK_WEBHOOK_SETUP,
+      "Connection to the database holding the branch's `neon_auth` schema: the reconcile pass reads identities over it and an account closure deletes one. Neon only — on the Neon branch it is the same database as DATABASE_URL. Leave unset in a lane, where the app database is local Docker while the identities live on a Neon branch; a closure then reports the identity as not deleted.",
+    setup: NEON_AUTH_SETUP,
   },
 
   // --- storage -------------------------------------------------------------

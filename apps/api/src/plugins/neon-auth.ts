@@ -3,7 +3,7 @@ import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { CURRENT_TERMS_VERSION, type UserRole } from '@vendor-marketplace/shared';
 import { forbidden, unauthorized } from '../lib/errors.js';
 import { findSessionSubject } from '../modules/users/users.dao.js';
-import type { AuthUserSnapshot } from '../modules/users/users.service.js';
+import { splitAuthName, type AuthUserSnapshot } from '../modules/users/users.service.js';
 
 export interface AuthenticatedUser {
   /** Local `users.id`; the only identifier services and DAOs accept. */
@@ -112,12 +112,6 @@ function stringClaim(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** First and last name out of Better Auth's single `name` field. */
-function splitName(name: string): { firstName: string; lastName: string } {
-  const [first = '', ...rest] = name.trim().split(/\s+/);
-  return { firstName: first, lastName: rest.join(' ') };
-}
-
 /** The default verifier: signature, issuer, audience, expiry and a verified address. */
 export function createNeonTokenVerifier(baseUrl: string, jwks?: JWTVerifyGetKey): TokenVerifier {
   const keys = jwks ?? jwksFor(baseUrl);
@@ -137,7 +131,7 @@ export function createNeonUserLoader(baseUrl: string, jwks?: JWTVerifyGetKey): A
     return {
       authUserId,
       email,
-      ...splitName(stringClaim(claims['name'])),
+      ...splitAuthName(stringClaim(claims['name'])),
       // Set by the acceptance gate from the sign-up choice, never by the token.
       roleHint: undefined,
       avatarUrl: stringClaim(claims['image']) || null,

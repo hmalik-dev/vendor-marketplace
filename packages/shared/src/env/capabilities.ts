@@ -31,7 +31,7 @@ export const BASELINE_CAPABILITIES: readonly Capability[] = ['core', 'e2e'];
 /** Human-readable heading used when preflight and `.env.example` group by capability. */
 export const CAPABILITY_LABELS: Readonly<Record<Capability, string>> = {
   core: 'App + Database',
-  auth: 'Auth (Clerk)',
+  auth: 'Auth (Neon Auth)',
   storage: 'Object storage (Cloudflare R2 / MinIO)',
   stripe: 'Payments (Stripe Connect)',
   email: 'Email (Resend)',
@@ -55,11 +55,6 @@ export interface WebhookForwarder {
 }
 
 export const WEBHOOK_FORWARDERS: Readonly<Partial<Record<Capability, WebhookForwarder>>> = {
-  auth: {
-    command: 'clerk',
-    install: 'brew install clerk/tap/clerk',
-    forward: 'clerk webhooks listen --forward-to http://localhost:4000/webhooks/clerk',
-  },
   stripe: {
     command: 'stripe',
     install: 'brew install stripe/stripe-cli/stripe',

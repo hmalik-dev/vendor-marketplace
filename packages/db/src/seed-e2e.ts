@@ -96,9 +96,9 @@ export interface E2eAccount {
    * Not optional and not inventable. A `users` row carrying the end-to-end
    * email under a made-up id makes the account's first real sign-in hit
    * `users_email_key`: `insertUserIfAbsent` declines the write, finds no row
-   * under the real Clerk id, and **throws** naming that id — so the account
+   * under the real Neon Auth id, and **throws** naming that id — so the account
    * cannot sign in until somebody removes the fixture's row. The fixture is
-   * therefore only ever allowed to attach to the identity Clerk actually has.
+   * therefore only ever allowed to attach to the identity Neon Auth actually has.
    *
    * #442 changed how it fails without changing that it fails. The conflict is
    * now swallowed by an untargeted `DO NOTHING` rather than raising a 23505,
@@ -121,7 +121,7 @@ export interface E2eSeedInput {
    * seeds, rather than every lane breaking on a file it cannot edit for itself.
    *
    * It exists because `role = 'admin'` cannot be reached from inside the
-   * product: the role is read from Clerk's `unsafeMetadata` at first sign-in,
+   * product: the role is chosen at first acceptance,
    * falls back to `customer`, and is immutable afterwards — so no sign-up flow
    * produces an admin, and `seed-demo.ts` gives its admin a synthetic
    * `auth_user_id` that cannot authenticate. Before this, the only route to
@@ -328,11 +328,11 @@ export async function seedE2eFixtures<
 }
 
 /**
- * Ensures the local row for a Clerk identity, and that it holds the role the
+ * Ensures the local row for a Neon Auth identity, and that it holds the role the
  * fixture needs.
  *
- * The role is forced rather than left alone: it comes from Clerk's
- * `unsafeMetadata` at first sign-in, falls back to `customer` for anything
+ * The role is forced rather than left alone: it comes from the sign-up choice
+ * at first acceptance, falls back to `customer` for anything
  * unrecognised, and is immutable afterwards — so an end-to-end vendor account
  * that signed up without the hint has a `customer` row that nothing in the
  * application can correct, and every vendor guard refuses it.

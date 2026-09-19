@@ -294,8 +294,8 @@ export function DataRightsActions({
                   <strong className="font-semibold">
                     This deletes their sign-in, and it can&apos;t be restored from here.
                   </strong>{' '}
-                  They lose the console immediately. Only someone with access to Clerk&apos;s
-                  dashboard can give them a sign-in again, and they would still need to be made an
+                  They lose the console immediately. Only someone with access to the Neon Auth
+                  console can give them a sign-in again, and they would still need to be made an
                   operator by hand.
                 </>
               ) : undefined

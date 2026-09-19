@@ -395,7 +395,7 @@ describe('an operator closure', () => {
     expect(confirmButton(dialog).disabled).toBe(true);
   });
 
-  it("says the sign-in is deleted and only Clerk's dashboard restores it", () => {
+  it('says the sign-in is deleted and only the Neon Auth console restores it', () => {
     renderActions({ isOperator: true });
     const dialog = openConfirmation();
 
@@ -406,7 +406,7 @@ describe('an operator closure', () => {
       "This deletes their sign-in, and it can't be restored from here.",
     );
     expect(dialog.textContent).toContain(
-      "Only someone with access to Clerk's dashboard can give them a sign-in again",
+      'Only someone with access to the Neon Auth console can give them a sign-in again',
     );
   });
 
@@ -416,6 +416,6 @@ describe('an operator closure', () => {
 
     expect(within(dialog).queryByRole('textbox')).toBeNull();
     expect(confirmButton(dialog).disabled).toBe(false);
-    expect(dialog.textContent).not.toContain("Clerk's dashboard");
+    expect(dialog.textContent).not.toContain('Neon Auth console');
   });
 });

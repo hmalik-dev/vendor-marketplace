@@ -13,7 +13,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   bearer,
   createTestHarness,
-  SVIX_HEADERS,
   TEST_ENV,
   type TestHarness,
 } from '../../testing/test-server.js';
@@ -257,33 +256,24 @@ describe('the vendor gate', () => {
       expect(held).toHaveLength(0);
     });
 
-    it('never makes a webhook-created row for an un-invited vendor usable', async () => {
+    it('never makes a vendor row that exists without an invite usable', async () => {
       await setGate(true);
       const vendor = freshIdentity('vendor');
       const snapshot = harness.clerkUsers.get(vendor)!;
 
-      const webhook = await harness.app.inject({
-        method: 'POST',
-        url: '/webhooks/clerk',
-        headers: {
-          ...SVIX_HEADERS,
-          'svix-signature': 'valid-signature',
-          'content-type': 'application/json',
-        },
-        payload: JSON.stringify({
-          type: 'user.created',
-          data: {
-            id: vendor,
-            email_addresses: [{ id: 'idn_primary', email_address: snapshot.email }],
-            primary_email_address_id: 'idn_primary',
-            first_name: 'Grace',
-            last_name: 'Hopper',
-            image_url: null,
-            unsafe_metadata: { role: 'vendor' },
-          },
-        }),
+      /*
+       * The row a writer other than the acceptance gate would leave: a `vendor`
+       * role, no acceptance, no invite. Nothing writes one on the product path
+       * now, and the gate must not treat one as an account if something ever
+       * does.
+       */
+      await harness.database.db.insert(users).values({
+        authUserId: vendor,
+        email: snapshot.email,
+        firstName: 'Grace',
+        lastName: 'Hopper',
+        role: 'vendor',
       });
-      expect(webhook.statusCode).toBe(200);
       const [row] = await harness.database.db
         .select({ id: users.id, role: users.role })
         .from(users)

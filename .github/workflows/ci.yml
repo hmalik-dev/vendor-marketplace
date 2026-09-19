@@ -24,8 +24,6 @@ env:
   # rather than written down: a literal here would read as a credential.
   NEON_AUTH_BASE_URL: https://ep-ci.neonauth.example.invalid/neondb/auth
   NEON_AUTH_COOKIE_SECRET: ${{ github.sha }}${{ github.sha }}
-  CLERK_SECRET_KEY: sk_test_ci_placeholder
-  CLERK_WEBHOOK_SECRET: whsec_ci_placeholder
   NEXT_PUBLIC_API_URL: http://localhost:4000
   # Same category, and required for the same reason since #406 made the web
   # build validate the `stripe` capability: the registry gives this row a
@@ -221,7 +219,6 @@ jobs:
       # The secrets. GitHub masks each value in the log wherever it appears.
       NEON_AUTH_BASE_URL: ${{ secrets.E2E_NEON_AUTH_BASE_URL }}
       NEON_AUTH_COOKIE_SECRET: ${{ secrets.E2E_NEON_AUTH_COOKIE_SECRET }}
-      CLERK_SECRET_KEY: ${{ secrets.E2E_CLERK_SECRET_KEY }}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.E2E_STRIPE_PUBLISHABLE_KEY }}
       STRIPE_SECRET_KEY: ${{ secrets.E2E_STRIPE_SECRET_KEY }}
       E2E_VENDOR_STRIPE_ACCOUNT_ID: ${{ secrets.E2E_VENDOR_STRIPE_ACCOUNT_ID }}

@@ -10,7 +10,7 @@ import type { LaunchResult } from './types.js';
 
 const API = 'https://api.orla.test';
 const WEB = 'https://orla.test';
-const FAPI_HOST = 'clerk.orla.test';
+const AUTH_HOST = 'ep-x.neonauth.orla.test';
 const HANDLED = ['account.updated', 'payment_intent.succeeded', 'charge.dispute.created'];
 
 /** Assembled at runtime so no literal in this file reads as a real credential. */
@@ -18,8 +18,6 @@ function fakeKey(prefix: string, mode: 'live' | 'test', lastFour: string): strin
   return [prefix, mode, `FAKEabcdefghijklmn${lastFour}`].join('_');
 }
 
-const LIVE_CLERK = fakeKey('sk', 'live', '9001');
-const TEST_CLERK = fakeKey('sk', 'test', '9002');
 const LIVE_STRIPE = fakeKey('sk', 'live', '9003');
 const TEST_STRIPE = fakeKey('sk', 'test', '9004');
 const RESEND = ['re', 'FAKEabcdefghijklmnop9005'].join('_');
@@ -39,9 +37,10 @@ function envFor(mode: Mode): NodeJS.ProcessEnv {
   return {
     API_URL: API,
     WEB_URL: WEB,
-    CLERK_SECRET_KEY: live ? LIVE_CLERK : TEST_CLERK,
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: `pk_${mode}_${Buffer.from(`${FAPI_HOST}$`).toString('base64')}`,
-    CLERK_WEBHOOK_ENDPOINT: live ? `${API}/webhooks/clerk` : 'https://webhooks.clerk.com/in/c_1',
+    NEON_AUTH_BASE_URL: `https://${AUTH_HOST}/neondb/auth`,
+    NEON_AUTH_DATABASE_URL: live
+      ? 'postgresql://ep-x-pooler.us-east-2.aws.neon.tech/db'
+      : 'postgresql://ep-other.us-east-2.aws.neon.tech/db',
     STRIPE_SECRET_KEY: live ? LIVE_STRIPE : TEST_STRIPE,
     RESEND_API_KEY: RESEND,
     EMAIL_FROM: `${BRAND_NAME} <noreply@orla.test>`,
@@ -64,7 +63,7 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
 
-/** Provider doubles: one fake `fetch` answering Clerk, Stripe, Resend and the app. */
+/** Provider doubles: one fake `fetch` answering Neon Auth, Stripe, Resend and the app. */
 function doubles(mode: Mode, events: readonly string[] = HANDLED): { get: HttpGet; calls: Call[] } {
   const live = mode === 'live';
   const calls: Call[] = [];
@@ -73,11 +72,8 @@ function doubles(mode: Mode, events: readonly string[] = HANDLED): { get: HttpGe
     calls.push({ method: init.method ?? 'GET', url });
     const { hostname, pathname } = new URL(url);
 
-    if (hostname === 'api.clerk.com' && pathname === '/v1/instance') {
-      return json({ environment_type: live ? 'production' : 'development' });
-    }
-    if (hostname === FAPI_HOST && pathname === '/v1/environment') {
-      return json({ user_settings: { actions: { delete_self: !live } } });
+    if (hostname === AUTH_HOST && pathname === '/neondb/auth/.well-known/jwks.json') {
+      return json({ keys: live ? [{ kty: 'OKP', kid: 'k1' }] : [] });
     }
     if (hostname === 'api.stripe.com' && pathname === '/v1/webhook_endpoints') {
       return json({
@@ -145,21 +141,14 @@ describe('launch:check against test-mode doubles', () => {
   it('fails every provider check, naming the value it found', async () => {
     const results = await runLaunchChecks(options('test'));
 
-    expect(find(results, 'clerk key')).toMatchObject({
+    expect(find(results, 'neon auth endpoint')).toMatchObject({
       status: 'FAIL',
-      detail: 'sk_test_…9002 (expected sk_live_)',
+      detail: `no signing keys (HTTP 200) (expected a JWKS with a key)`,
     });
-    expect(find(results, 'clerk instance')).toMatchObject({
+    expect(find(results, 'neon auth identity store')).toMatchObject({
       status: 'FAIL',
-      detail: 'development (expected production)',
-    });
-    expect(find(results, 'clerk webhook endpoint')).toMatchObject({
-      status: 'FAIL',
-      detail: `CLERK_WEBHOOK_ENDPOINT is https://webhooks.clerk.com/in/c_1 (expected ${API}/webhooks/clerk)`,
-    });
-    expect(find(results, 'clerk self-serve deletion')).toMatchObject({
-      status: 'FAIL',
-      detail: 'delete_self is on (expected off)',
+      detail:
+        'identities read from ep-other.us-east-2.aws.neon.tech (expected the API database host)',
     });
     expect(find(results, 'stripe key')).toMatchObject({
       status: 'FAIL',
@@ -223,6 +212,10 @@ describe('launch:check against correctly configured doubles', () => {
     expect(results.filter((result) => result.status === 'FAIL')).toEqual([]);
     expect(report.failures).toBe(0);
     expect(find(results, 'stripe key').detail).toBe('sk_live_…9003');
+    expect(find(results, 'neon auth endpoint').detail).toBe('1 signing key(s) served');
+    expect(find(results, 'neon auth identity store').detail).toBe(
+      'identities read from ep-x.us-east-2.aws.neon.tech',
+    );
   });
 
   it('reads the booking cap, and reports invite-only as SKIP until VEN-406 lands', async () => {
@@ -250,7 +243,7 @@ describe('launch:check against correctly configured doubles', () => {
     };
     const results = await runLaunchChecks(options('live', { get }));
 
-    expect(find(results, 'clerk instance')).toMatchObject({
+    expect(find(results, 'neon auth endpoint')).toMatchObject({
       status: 'FAIL',
       detail: 'getaddrinfo ENOTFOUND',
     });
@@ -430,8 +423,8 @@ describe('secrets and read-only access', () => {
     ].join('\n');
 
     expect(text).not.toContain('FAKEabcdefghijklmn');
-    expect(text).toContain('sk_live_…9001');
-    expect(text).toContain('sk_test_…9002');
+    expect(text).toContain('sk_live_…9003');
+    expect(text).toContain('sk_test_…9004');
   });
 
   it('masks to the prefix and the last four', () => {

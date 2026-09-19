@@ -18,8 +18,8 @@ function contextWith(env: NodeJS.ProcessEnv, target: Target = 'local'): CheckCon
 }
 
 const STRIPE_KEY = findVariable('STRIPE_SECRET_KEY')!;
-const CLERK_SECRET = findVariable('CLERK_SECRET_KEY')!;
-const CLERK_WEBHOOK = findVariable('CLERK_WEBHOOK_SECRET')!;
+const STRIPE_PUBLISHABLE = findVariable('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY')!;
+const STRIPE_WEBHOOK = findVariable('STRIPE_WEBHOOK_SECRET')!;
 const API_URL = findVariable('API_URL')!;
 const EMAIL_FROM = findVariable('EMAIL_FROM')!;
 
@@ -136,10 +136,10 @@ describe('evaluateVariable', () => {
     expect(result.fix).toContain('https://dashboard.stripe.com/test/apikeys');
   });
 
-  it('rejects a live Clerk key against a local target too, not only Stripe', () => {
+  it('rejects a live publishable key against a local target too, not only the secret', () => {
     const result = evaluateVariable(
-      CLERK_SECRET,
-      contextWith({ [CLERK_SECRET.key]: liveKeyFor(CLERK_SECRET) }),
+      STRIPE_PUBLISHABLE,
+      contextWith({ [STRIPE_PUBLISHABLE.key]: liveKeyFor(STRIPE_PUBLISHABLE) }),
     );
 
     expect(result.ok).toBe(false);
@@ -165,10 +165,10 @@ describe('evaluateVariable', () => {
 
   it('leaves a credential carrying no mode in its prefix alone in both targets', () => {
     const value = ['whsec', '9QmZp0RvT7bNw4LcYdF1sHgU'].join('_');
-    const env = { [CLERK_WEBHOOK.key]: value };
+    const env = { [STRIPE_WEBHOOK.key]: value };
 
-    expect(evaluateVariable(CLERK_WEBHOOK, contextWith(env)).ok).toBe(true);
-    expect(evaluateVariable(CLERK_WEBHOOK, contextWith(env, 'production')).ok).toBe(true);
+    expect(evaluateVariable(STRIPE_WEBHOOK, contextWith(env)).ok).toBe(true);
+    expect(evaluateVariable(STRIPE_WEBHOOK, contextWith(env, 'production')).ok).toBe(true);
   });
 
   it('reports an absent mode-carrying credential as unset, not as the wrong mode', () => {
@@ -213,12 +213,12 @@ describe('environmentCheck', () => {
     const results = await environmentCheck.run(
       contextWith({
         [STRIPE_KEY.key]: liveKeyFor(STRIPE_KEY),
-        [CLERK_SECRET.key]: liveKeyFor(CLERK_SECRET),
+        [STRIPE_PUBLISHABLE.key]: liveKeyFor(STRIPE_PUBLISHABLE),
       }),
     );
     const byName = new Map(results.map((result) => [result.name, result]));
 
-    for (const variable of [STRIPE_KEY, CLERK_SECRET]) {
+    for (const variable of [STRIPE_KEY, STRIPE_PUBLISHABLE]) {
       expect(byName.get(variable.key)?.ok, variable.key).toBe(false);
       expect(byName.get(variable.key)?.detail, variable.key).toBe(
         'is a live key — the local target needs a test key',

@@ -242,7 +242,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
         assertRole(request.auth, ['admin']).id,
         request.params.userId,
         app.clock(),
-        app.deleteClerkUser,
+        app.authDirectory?.deleteIdentity ?? null,
       ),
   );
 

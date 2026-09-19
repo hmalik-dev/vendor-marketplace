@@ -18,7 +18,6 @@ import {
 } from '@vendor-marketplace/shared';
 import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
 import { allowedOrigins, canonicalWebOrigin, parseEnv, type ApiEnv } from './config/env.js';
-import { assertWebhookEndpoint } from './modules/webhooks/clerk.endpoint-guard.js';
 import type { AppDatabase } from './lib/database.js';
 import { redactLogRecord, serializeError } from './lib/log-error-serializer.js';
 import { redactQueryValues } from './lib/log-redaction.js';
@@ -26,7 +25,7 @@ import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import type { EmailGateway } from './lib/email.js';
 import type { StripeConnectGateway } from './lib/stripe.js';
 import { neonAuthPlugin, type NeonAuthPluginOptions } from './plugins/neon-auth.js';
-import { clerkAdminPlugin, type ClerkAdminPluginOptions } from './plugins/clerk-admin.js';
+import { authDirectoryPlugin, type AuthDirectoryPluginOptions } from './plugins/auth-directory.js';
 import { backgroundPlugin } from './plugins/background.js';
 import { clockPlugin, type Clock } from './plugins/clock.js';
 import { databasePlugin } from './plugins/database.js';
@@ -66,10 +65,9 @@ import {
 import { paymentRoutes } from './modules/payments/payments.routes.js';
 import { stripeWebhookRoutes } from './modules/webhooks/stripe.routes.js';
 import {
-  clerkWebhookRoutes,
-  type ClerkWebhookRoutesOptions,
-} from './modules/webhooks/clerk.routes.js';
-import { resendWebhookRoutes } from './modules/webhooks/resend.routes.js';
+  resendWebhookRoutes,
+  type ResendWebhookRoutesOptions,
+} from './modules/webhooks/resend.routes.js';
 
 /*
  * @fastify/cors defaults to GET, HEAD, and POST only, which silently blocks
@@ -91,14 +89,11 @@ export interface BuildServerOptions {
    * run happens to start at.
    */
   clock?: Clock;
-  /** Test seams; production wiring uses the real Neon Auth, Clerk and svix clients. */
+  /** Test seams; production wiring uses the real Neon Auth clients. */
   auth?: Pick<NeonAuthPluginOptions, 'verifySessionToken' | 'loadAuthUser'> &
-    Pick<ClerkAdminPluginOptions, 'deleteClerkUser' | 'clerkUsers'>;
-  /**
-   * The svix seam, shared by both webhooks that use it — Clerk's and Resend's.
-   * One verifier because it stands in for one library.
-   */
-  webhooks?: Pick<ClerkWebhookRoutesOptions, 'verifySignature'>;
+    Pick<AuthDirectoryPluginOptions, 'directory'>;
+  /** The signature seam for the Resend delivery webhook; the suites never hold its secret. */
+  webhooks?: Pick<ResendWebhookRoutesOptions, 'verifySignature'>;
   /** Stripe Connect seam; the plugin builds the real gateway from the secrets. */
   stripe?: StripeConnectGateway;
   /** Resend seam, for the same reason: the suites assert on what would be sent. */
@@ -283,10 +278,9 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
       : {}),
     ...(options.auth?.loadAuthUser ? { loadAuthUser: options.auth.loadAuthUser } : {}),
   });
-  await app.register(clerkAdminPlugin, {
-    secretKey: env.CLERK_SECRET_KEY,
-    ...(options.auth?.deleteClerkUser ? { deleteClerkUser: options.auth.deleteClerkUser } : {}),
-    ...(options.auth?.clerkUsers ? { clerkUsers: options.auth.clerkUsers } : {}),
+  await app.register(authDirectoryPlugin, {
+    connectionString: env.NEON_AUTH_DATABASE_URL,
+    ...(options.auth?.directory ? { directory: options.auth.directory } : {}),
   });
   await app.register(operatorAlertsPlugin, {
     to: env.OPERATOR_ALERT_EMAIL,
@@ -328,16 +322,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     webOrigin: canonicalWebOrigin(env),
   });
   await app.register(reportRoutes, { supportEmailTo: env.SUPPORT_EMAIL_TO });
-  await app.register(clerkWebhookRoutes, {
-    signingSecret: env.CLERK_WEBHOOK_SECRET,
-    webOrigin: canonicalWebOrigin(env),
-    ...options.webhooks,
-  });
   /*
    * The one route this API registers conditionally, and the condition is an
    * environment fact rather than a plugin's business — so it is decided here,
-   * beside every other env-driven wiring choice, and the plugin keeps the same
-   * `signingSecret: string` contract the Clerk one has.
+   * beside every other env-driven wiring choice, and the plugin keeps a
+   * plain `signingSecret: string` contract.
    *
    * No secret means **no endpoint**, not a handler that answers 503: there is
    * then no code path in which an unsigned delivery event can reach the record,
@@ -395,10 +384,6 @@ async function bootstrap(): Promise<FastifyInstance> {
   loadEnv();
 
   const env = parseEnv();
-  // Before anything binds: a deployment whose webhooks go elsewhere looks
-  // perfectly healthy, so the only way to find out is to refuse to start.
-  assertWebhookEndpoint(env.CLERK_WEBHOOK_ENDPOINT);
-
   const { db } = createDatabase();
 
   // `buildServer` awaits `app.ready()`, which is what makes `app.server` able
