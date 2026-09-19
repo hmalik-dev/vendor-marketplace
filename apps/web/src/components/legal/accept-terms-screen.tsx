@@ -14,8 +14,10 @@ import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { ExpandableDocumentCard } from '@/components/legal/expandable-document-card';
 import { ApiClientError } from '@/lib/api-client';
+import { signOut } from '@/lib/auth/auth-requests';
 import { clearSignUpRole, readSignUpRole } from '@/lib/auth/signup-role';
 import type { LegalDocument } from '@/lib/legal-markdown';
+import { terminalRefusal } from '@/lib/terms-gate-paths';
 import { useApi } from '@/lib/use-api';
 
 /**
@@ -101,6 +103,20 @@ export function AcceptTermsScreen({
        */
       if (error instanceof ApiClientError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
         router.replace(VENDOR_APPLY_PATH);
+        return;
+      }
+
+      const refusal = terminalRefusal(error);
+
+      if (refusal === 'suspended') {
+        router.replace('/suspended');
+        return;
+      }
+
+      if (refusal === 'signed-out') {
+        // A session the API no longer honours: end it, so sign-in is a fresh one.
+        const leave = (): void => window.location.assign('/sign-in');
+        void signOut().then(leave, leave);
         return;
       }
 

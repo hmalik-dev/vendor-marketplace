@@ -7,6 +7,7 @@ import {
   type VendorAgreementStatus,
 } from '@vendor-marketplace/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiClientError } from '@/lib/api-client';
 import { vendorAgreementDocument } from '@/lib/legal-content';
 import { VendorAgreementScreen } from './vendor-agreement-screen';
 
@@ -161,6 +162,37 @@ describe('the unaccepted step', () => {
       expect(screen.getByText('That did not save')).toBeDefined();
     });
     expect(screen.getByRole('button', { name: 'Accept and continue' })).toBeDefined();
+  });
+
+  it('tells the vendor to reload when the version is stale, since a retry re-posts the same one', async () => {
+    post.mockRejectedValue(
+      new ApiClientError(409, 'CONFLICT', 'That is not the current agreement'),
+    );
+    render(<VendorAgreementScreen status={status()} agreement={AGREEMENT} payoutsLive={false} />);
+
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: 'Accept and continue' }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'The agreement was updated while this page was open. Reload and read it before accepting.',
+        ),
+      ).toBeDefined();
+    });
+    expect(screen.queryByText(/try again/)).toBeNull();
+  });
+
+  it('keeps the generic sentence for a server failure', async () => {
+    post.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
+    render(<VendorAgreementScreen status={status()} agreement={AGREEMENT} payoutsLive={false} />);
+
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: 'Accept and continue' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Nothing has been recorded — try again.')).toBeDefined();
+    });
   });
 
   /** Acceptance 11's other half: a version behind re-opens this step, saying why. */

@@ -32,11 +32,14 @@ import {
   findAdminInvites,
   findInviteByEmail,
   findInviteById,
+  hasLiveAccount,
   insertInviteIfAbsent,
   inviteKey,
   lockApplication,
   lockInviteByEmail,
+  markApplicationInvited,
   markInviteAccepted,
+  restoreApplicationStatus,
   setApplicationStatus,
   upsertApplication,
 } from './vendor-invites.dao.js';
@@ -59,11 +62,14 @@ export interface VendorInviteMailDeps {
   webOrigin: string;
 }
 
+const ACCOUNT_EXISTS_MESSAGE =
+  'That address already has an account, and an account cannot become a vendor. Use a different email address to apply.';
+
 export function vendorNotInvited(): AppError {
   return new AppError(
     403,
     ERROR_CODES.VENDOR_NOT_INVITED,
-    'Vendor accounts are by invitation for now. No account was created — apply to join, and sign up again with this email once you are invited.',
+    'Vendor accounts are by invitation for now. No account was created — apply to join, then sign in with this same email once you are invited.',
   );
 }
 
@@ -92,6 +98,24 @@ export async function admitVendor(tx: AppDatabase, role: UserRole, email: string
   await markInviteAccepted(tx, email);
 }
 
+/**
+ * The role for a first acceptance that carries no chosen one: `vendor` for an
+ * address with an unused invite, otherwise nothing (so `normalizeRole` narrows
+ * to customer).
+ *
+ * The chosen role travels in the browser for 24 hours only, and the invite email
+ * tells a refused vendor to sign in rather than sign up again. Without this, an
+ * invitee who signs in after that window is made a customer for good.
+ */
+export async function invitedRoleHint(
+  db: AppDatabase,
+  email: string,
+): Promise<'vendor' | undefined> {
+  const invite = await findInviteByEmail(db, email);
+
+  return invite && invite.acceptedAt === null ? 'vendor' : undefined;
+}
+
 /** `GET /vendor-applications/gate`. */
 export async function readVendorSignUpGate(db: AppDatabase): Promise<VendorSignUpGate> {
   const { vendorInviteOnly } = await readPlatformSwitches(db);
@@ -112,6 +136,21 @@ export async function submitVendorApplication(
   sessionEmail: string | null,
 ): Promise<VendorApplicationReceipt> {
   const input = sessionEmail === null ? body : { ...body, email: sessionEmail };
+
+  /*
+   * An address with an account can never become a vendor (`users.role` is fixed at
+   * creation), so an application from it could only wait forever. A signed-in
+   * caller is told; a signed-out one gets the uniform receipt, because the form
+   * must not answer whether an address is registered.
+   */
+  if (await hasLiveAccount(db, input.email)) {
+    if (sessionEmail !== null) {
+      throw conflict(ACCOUNT_EXISTS_MESSAGE);
+    }
+
+    return { received: true };
+  }
+
   // Already invited by address: the application arrives decided, so it cannot be declined past the invite.
   const invited = (await findInviteByEmail(db, input.email)) !== null;
   await upsertApplication(db, input, invited ? 'invited' : 'new', sessionEmail !== null);
@@ -157,7 +196,8 @@ export function renderVendorInviteEmail(webOrigin: string): {
   const link = `${webOrigin}${VENDOR_SIGN_UP_PATH}`;
   const href = escapeHtml(link);
   const intro = `You're invited to open a vendor account on ${BRAND_NAME}.`;
-  const how = 'Sign up with this email address and choose vendor to list your services.';
+  const how =
+    'Sign up with this email address and choose vendor to list your services. If you already signed up with it, sign in instead: your vendor account opens then.';
 
   return {
     subject: `You're invited to join ${BRAND_NAME} as a vendor`,
@@ -197,7 +237,7 @@ async function inviteAddress(
     return null;
   }
 
-  await setApplicationStatus(tx, { email }, 'invited');
+  await markApplicationInvited(tx, email);
   // An empty `detail`: the invite id resolves to the address, and the log is immutable.
   await insertAdminAction(tx, {
     actorId,
@@ -222,6 +262,10 @@ export async function createVendorInvite(
   actorId: string,
   email: string,
 ): Promise<AdminVendorInviteRow> {
+  if (await hasLiveAccount(deps.db, email)) {
+    throw conflict(ACCOUNT_EXISTS_MESSAGE);
+  }
+
   const invite = await deps.db.transaction((tx) => inviteAddress(tx, actorId, email));
 
   if (!invite) {
@@ -254,7 +298,7 @@ export async function revokeVendorInvite(
       throw conflict('That invite has been used: the vendor account already exists');
     }
 
-    await setApplicationStatus(tx, { email: invite.email }, 'new');
+    await restoreApplicationStatus(tx, invite.email);
     await insertAdminAction(tx, {
       actorId,
       action: 'vendor_invite_revoked',
@@ -309,11 +353,15 @@ export async function decideVendorApplication(
       return { application: { ...row, status: 'declined' as const }, invite: null };
     }
 
+    if (await hasLiveAccount(tx, row.email)) {
+      throw conflict(ACCOUNT_EXISTS_MESSAGE);
+    }
+
     const created = await inviteAddress(tx, actorId, row.email);
 
     // Invited by address already, before this application arrived: only the status was behind.
     if (!created) {
-      await setApplicationStatus(tx, { id: row.id }, 'invited');
+      await markApplicationInvited(tx, row.email);
     }
 
     return { application: { ...row, status: 'invited' as const }, invite: created };

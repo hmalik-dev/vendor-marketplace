@@ -8,7 +8,7 @@ import type { AppDatabase } from '../../lib/database.js';
 import { conflict, unauthorized, validationFailed } from '../../lib/errors.js';
 import { findUserByAuthIdIncludingRetired } from '../users/users.dao.js';
 import { displayName, syncUserFromAuth } from '../users/users.service.js';
-import { admitVendor } from '../vendor-invites/vendor-invites.service.js';
+import { admitVendor, invitedRoleHint } from '../vendor-invites/vendor-invites.service.js';
 import type { AuthUserSnapshot } from '../users/users.service.js';
 import {
   findAcceptanceOfVersion,
@@ -181,7 +181,11 @@ export async function acceptTerms(
    * becomes a held connection.
    */
   const loaded = await loadSnapshot();
-  const snapshot = { ...loaded, roleHint: input.role ?? loaded.roleHint };
+  const chosenRole = input.role ?? loaded.roleHint;
+  const snapshot = {
+    ...loaded,
+    roleHint: chosenRole ?? (await invitedRoleHint(db, loaded.email)),
+  };
 
   const userId = await db.transaction(async (tx) => {
     const user = await syncUserFromAuth(tx, snapshot);

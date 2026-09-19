@@ -2,6 +2,27 @@ import { ERROR_CODES, TERMS_ACCEPTANCE_PATH } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
 import { ApiClientError } from './api-client';
 import { isTermsRequired, signedInFailurePath, termsAcceptancePath } from './terms-gate';
+import { terminalRefusal } from './terms-gate-paths';
+
+describe('terminalRefusal', () => {
+  it('sends a suspension to /suspended and a dead session to sign-out', () => {
+    expect(terminalRefusal(new ApiClientError(403, ERROR_CODES.FORBIDDEN, 'suspended'))).toBe(
+      'suspended',
+    );
+    expect(terminalRefusal(new ApiClientError(401, ERROR_CODES.UNAUTHORIZED, 'gone'))).toBe(
+      'signed-out',
+    );
+  });
+
+  it('leaves the gate, the vendor gate, a conflict and a failure to their own handling', () => {
+    expect(terminalRefusal(new ApiClientError(403, ERROR_CODES.TERMS_REQUIRED, 'gate'))).toBeNull();
+    expect(
+      terminalRefusal(new ApiClientError(403, ERROR_CODES.VENDOR_NOT_INVITED, 'gate')),
+    ).toBeNull();
+    expect(terminalRefusal(new ApiClientError(409, ERROR_CODES.CONFLICT, 'stale'))).toBeNull();
+    expect(terminalRefusal(new Error('network'))).toBeNull();
+  });
+});
 
 /**
  * Telling the acceptance gate apart from a suspension.
