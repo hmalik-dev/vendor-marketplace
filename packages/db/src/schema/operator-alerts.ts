@@ -43,3 +43,24 @@ export const operatorAlerts = pgTable(
 );
 
 export type OperatorAlertRow = typeof operatorAlerts.$inferSelect;
+
+/**
+ * One row per refused or failed Stripe webhook request (VEN-430), so a single
+ * event failing on every redelivery — hours apart — is counted across
+ * processes and restarts, which the in-process ten-minute window cannot do.
+ * Rows older than the longest window are pruned as new ones arrive.
+ */
+export const stripeWebhookFailures = pgTable(
+  'stripe_webhook_failures',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    /** A `StripeWebhookFailureKind`; text so a new kind needs no migration. */
+    failure: text('failure').notNull(),
+    failedAt: timestamp('failed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('stripe_webhook_failures_failure_failed_at_idx').on(table.failure, table.failedAt),
+  ],
+);

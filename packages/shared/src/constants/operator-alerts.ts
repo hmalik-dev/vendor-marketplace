@@ -48,10 +48,33 @@ export const OPERATOR_DIGEST_LOCAL_HOUR = 7;
  */
 export const OPERATOR_DIGEST_POLL_INTERVAL_MS = 5 * 60_000;
 
-/** Stripe webhook failures (bad signature or a 5xx) that raise one alert… */
+/** Stripe webhook failures (bad signature, a 5xx or a 429) that raise one alert… */
 export const STRIPE_WEBHOOK_FAILURE_THRESHOLD = 3;
 /** …when they fall inside this window. */
 export const STRIPE_WEBHOOK_FAILURE_WINDOW_MS = 10 * 60_000;
+/**
+ * The same threshold over a persisted, longer window (VEN-430).
+ *
+ * Stripe's redelivery backoff spaces the retries of one failing event minutes to
+ * hours apart, so the ten-minute in-process window never sees three of them. A
+ * steadily failing event therefore alerts on its third delivery, and no later
+ * than this after the first failure — provided the failures keep arriving.
+ */
+export const STRIPE_WEBHOOK_PERSISTED_FAILURE_WINDOW_MS = 24 * 60 * 60_000;
+
+/**
+ * What a refused or failed webhook request counts as. `signature-missing` is
+ * the header absent altogether (a scanner), kept apart from `signature` (a
+ * header that does not verify — a rotated secret) so junk traffic cannot use up
+ * the dedupe window a real credential break needs.
+ */
+export const STRIPE_WEBHOOK_FAILURE_KINDS = [
+  'signature',
+  'signature-missing',
+  'server-error',
+  'rate-limited',
+] as const;
+export type StripeWebhookFailureKind = (typeof STRIPE_WEBHOOK_FAILURE_KINDS)[number];
 
 /**
  * Failed transfer attempts on one booking before the operator is told.

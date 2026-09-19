@@ -5,8 +5,11 @@ import {
   PAYOUT_FAILURE_ALERT_ATTEMPTS,
   STRIPE_WEBHOOK_FAILURE_THRESHOLD,
   STRIPE_WEBHOOK_FAILURE_WINDOW_MS,
+  STRIPE_WEBHOOK_PERSISTED_FAILURE_WINDOW_MS,
   type ImmediateOperatorAlertKind,
+  type StripeWebhookFailureKind,
 } from '@vendor-marketplace/shared';
+import { randomUUID } from 'node:crypto';
 import type { FastifyBaseLogger } from 'fastify';
 import type { BackgroundWork } from '../../lib/background.js';
 import type { AppDatabase } from '../../lib/database.js';
@@ -14,9 +17,11 @@ import type { EmailGateway } from '../../lib/email.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import type { Clock } from '../../plugins/clock.js';
 import {
+  clearStripeWebhookFailures,
   findDisputeAlertSubject,
   findVendorAlertSubject,
   recordAlertUnlessRecent,
+  recordStripeWebhookFailure,
   releaseAlert,
 } from './operator-alerts.dao.js';
 
@@ -56,6 +61,9 @@ export interface OperatorAlertDeps {
 
 /** Waits before each retry of a failed alert send — two retries, then give up. */
 export const OPERATOR_ALERT_RETRY_DELAYS_MS = [2_000, 10_000] as const;
+
+/** When each alert last went out with no dedupe row behind it, per instance. */
+const unrecordedSends = new Map<string, number>();
 
 export type AlertResult = 'sent' | 'logged' | 'deduplicated' | 'failed';
 
@@ -108,7 +116,17 @@ export async function alertNow(
   const now = deps.clock();
   const outcome = deps.to === undefined ? 'logged' : 'sent';
 
+  /*
+   * The record is the dedupe and the audit trail, not a precondition for
+   * telling a person. When it cannot be written — a database outage, which is
+   * the likeliest cause of the incidents this watches for — the alert goes out
+   * anyway under a fresh idempotency key: a duplicate email is the cheaper
+   * mistake than a page that never happens (VEN-430). Duplicates are capped at
+   * one per kind and subject per instance per dedupe window, so an outage an
+   * anonymous flood rides cannot turn into a mailbomb.
+   */
   let id: string | null;
+  let recorded = true;
   try {
     id = await recordAlertUnlessRecent(
       deps.db,
@@ -118,9 +136,18 @@ export async function alertNow(
   } catch (error) {
     deps.log.error(
       { kind: alert.kind, subjectId: alert.subjectId, err: error },
-      'Could not record an operator alert',
+      'Could not record an operator alert; sending it unrecorded',
     );
-    return 'failed';
+    const key = `${alert.kind}:${alert.subjectId}`;
+    const last = unrecordedSends.get(key);
+
+    if (last !== undefined && now.getTime() - last < OPERATOR_ALERT_DEDUPE_MS) {
+      return 'deduplicated';
+    }
+
+    unrecordedSends.set(key, now.getTime());
+    id = randomUUID();
+    recorded = false;
   }
 
   if (id === null) {
@@ -160,12 +187,14 @@ export async function alertNow(
       { kind: alert.kind, subjectId: alert.subjectId, err: error },
       'An operator alert could not be sent after every retry',
     );
-    await releaseAlert(deps.db, id).catch((releaseError: unknown) => {
-      deps.log.error(
-        { kind: alert.kind, subjectId: alert.subjectId, err: releaseError },
-        'Could not release the record of an unsent operator alert',
-      );
-    });
+    if (recorded) {
+      await releaseAlert(deps.db, id).catch((releaseError: unknown) => {
+        deps.log.error(
+          { kind: alert.kind, subjectId: alert.subjectId, err: releaseError },
+          'Could not release the record of an unsent operator alert',
+        );
+      });
+    }
     return 'failed';
   }
 }
@@ -224,6 +253,32 @@ export async function disputeOpenedAlert(
       `Case: ${subject.reference} (${subject.caseId})`,
     ],
     adminPath: `/admin/cases/${subject.caseId}`,
+  };
+}
+
+/**
+ * A chargeback on a charge no booking here owns. Stripe has still debited the
+ * disputed amount and fee from the platform balance and the evidence deadline
+ * runs regardless, but there is no case to work from — so the operator is told
+ * directly, by payment intent, and answers in the Stripe dashboard.
+ *
+ * Shares `dispute_opened`'s kind with its own `pi:` subject, so it dedupes
+ * apart from a case-backed alert and needs no new enum member.
+ */
+export function unmatchedDisputeAlert(input: {
+  disputeId: string;
+  paymentIntentId: string;
+  amountCents: number;
+}): OperatorAlert {
+  return {
+    kind: 'dispute_opened',
+    subjectId: `pi:${input.paymentIntentId}`,
+    summary: `Chargeback on ${input.paymentIntentId} matches no booking`,
+    details: [
+      `A card network opened dispute ${input.disputeId} for ${formatPrice(input.amountCents)} on payment intent ${input.paymentIntentId}, which no booking here owns.`,
+      'No case was opened and no payout was held. Stripe has debited the platform; check the Stripe dashboard before the evidence deadline.',
+    ],
+    adminPath: null,
   };
 }
 
@@ -293,6 +348,31 @@ export function refundFailedAlert(input: { bookingId: string; during: string }):
 }
 
 /**
+ * A refund Stripe later failed on a payment no booking owns — the refund of a
+ * charge on a request the platform had already declined, which by design has no
+ * booking row. The operator was told that refund was on its way, so this is the
+ * correction, keyed on the payment intent.
+ */
+export function unmatchedRefundFailedAlert(input: {
+  refundId: string;
+  paymentIntentId: string;
+  status: string;
+  amountCents: number;
+}): OperatorAlert {
+  return {
+    kind: 'refund_failed',
+    subjectId: `pi:${input.paymentIntentId}`,
+    summary: `Refund ${input.refundId} on ${input.paymentIntentId} ${input.status}`,
+    details: [
+      `Stripe marked the ${formatPrice(input.amountCents)} refund ${input.status} after accepting it; the customer's money has not moved.`,
+      `Payment intent: ${input.paymentIntentId}`,
+      'No booking owns this payment (a charge on a declined request). Refund it from the Stripe dashboard.',
+    ],
+    adminPath: '/admin/payments',
+  };
+}
+
+/**
  * A charge succeeded on a request the platform had already refused, so it was
  * not booked. `refunded` says whether the money is already on its way back;
  * when it is not, the webhook answers 500 and Stripe redelivers.
@@ -347,29 +427,38 @@ export function reportFiledAlert(input: {
   };
 }
 
-export type StripeWebhookFailure = 'signature' | 'server-error';
+export type StripeWebhookFailure = StripeWebhookFailureKind;
+
+const FAILURE_DESCRIPTIONS: Record<StripeWebhookFailure, { verb: string; described: string }> = {
+  signature: { verb: 'refused', described: 'a signature failure' },
+  'signature-missing': { verb: 'refused without a signature', described: 'a missing signature' },
+  'server-error': { verb: 'failed', described: 'a server error' },
+  'rate-limited': { verb: 'rate limited', described: 'a 429' },
+};
 
 /**
  * The Stripe webhook keeps being refused or keeps failing.
  *
- * The two failures are **separate subjects**, deduplicated apart. Anybody can
- * send an unsigned POST, so a signature burst is attacker-triggerable; sharing
+ * Every failure kind is a **separate subject**, deduplicated apart. Anybody can
+ * send an unsigned POST, so a burst of those is attacker-triggerable; sharing
  * one dedupe key would let three anonymous requests silence a real handler 5xx
- * outage for six hours.
+ * outage, or a rotated signing secret, for six hours.
  */
 export function stripeWebhookFailingAlert(
   failure: StripeWebhookFailure,
   failures: number,
+  windowMs: number = STRIPE_WEBHOOK_FAILURE_WINDOW_MS,
 ): OperatorAlert {
-  const minutes = STRIPE_WEBHOOK_FAILURE_WINDOW_MS / 60_000;
-  const described = failure === 'signature' ? 'a signature failure' : 'a server error';
+  const span =
+    windowMs >= 60 * 60_000 ? `${windowMs / 3_600_000} hours` : `${windowMs / 60_000} minutes`;
+  const { verb, described } = FAILURE_DESCRIPTIONS[failure];
 
   return {
     kind: 'stripe_webhook_failing',
     subjectId: `stripe:${failure}`,
-    summary: `Stripe webhook ${failure === 'signature' ? 'refused' : 'failed'} ${failures} times in ${minutes} minutes`,
+    summary: `Stripe webhook ${verb} ${failures} times in ${span}`,
     details: [
-      `POST /webhooks/stripe answered ${described} ${failures} times within ${minutes} minutes.`,
+      `POST /webhooks/stripe answered ${described} ${failures} times within ${span}.`,
       'Payments, disputes and account updates may not be recorded. Check the API logs and the Stripe dashboard.',
     ],
     adminPath: null,
@@ -400,4 +489,32 @@ export function createFailureWindow(clock: Clock): { record(): number | null } {
       return crossed;
     },
   };
+}
+
+/**
+ * The persisted counterpart of `createFailureWindow`: counts failures across
+ * processes over `STRIPE_WEBHOOK_PERSISTED_FAILURE_WINDOW_MS`, so a single event
+ * failing on every redelivery still crosses the threshold. Answers the count on
+ * a crossing and null otherwise; a database that cannot be written answers null,
+ * because the in-process window has already had its say.
+ */
+export async function recordPersistedWebhookFailure(
+  db: AppDatabase,
+  clock: Clock,
+  failure: StripeWebhookFailure,
+): Promise<number | null> {
+  const now = clock();
+  const total = await recordStripeWebhookFailure(
+    db,
+    failure,
+    now,
+    new Date(now.getTime() - STRIPE_WEBHOOK_PERSISTED_FAILURE_WINDOW_MS),
+  );
+
+  if (total < STRIPE_WEBHOOK_FAILURE_THRESHOLD) {
+    return null;
+  }
+
+  await clearStripeWebhookFailures(db, failure);
+  return total;
 }

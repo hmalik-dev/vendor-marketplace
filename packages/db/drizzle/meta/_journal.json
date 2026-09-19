@@ -351,6 +351,13 @@
       "when": 1789794372451,
       "tag": "0049_futuristic_living_mummy",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789798015055,
+      "tag": "0050_fixed_thor",
+      "breakpoints": true
     }
   ]
 }
