@@ -22,3 +22,4 @@
 - [Hero jump row is hardcoded, not live categories](hero-jump-row-is-hardcoded-not-live-categories.md) — SUPERSEDED: `offeredJumpCategories` now filters against live categories; deactivation correctly removes it
 - [bringToFront() can silently hijack MCP's current page](bringtofront-can-silently-hijack-mcp-current-page.md) — a scratch-context admin script's `bringToFront()` made later browser_navigate/evaluate reads silently admin-authenticated; verify the auth marker, don't trust the URL alone
 - [Next's route announcer is role=alert on every page](next-route-announcer-is-role-alert.md) — a bare `getByRole('alert')).toHaveCount(0)` always finds it; deterministic spec-authoring bug, not a product regression
+- [Admin review delete does not block a repost](admin-review-delete-does-not-block-repost.md) — deleting a review just removes the row; the same reviewer can repost the same content and it restores the rating + re-notifies the vendor
