@@ -72,6 +72,21 @@ export function MessagesScreen({
   const router = useRouter();
 
   const [conversations, setConversations] = useState<WireConversation[]>([...initialConversations]);
+  /*
+   * `router.refresh()` (Try again) hands this component fresh props without
+   * remounting it, so state seeded from them once would stay `[]` and read
+   * "No conversations yet" over a real inbox. A recovery — `listFailed` going
+   * from true to false — adopts the list the server has now (VEN-426). Adjusted
+   * during render, not in an effect, so no frame shows the stale list.
+   */
+  const [wasListFailed, setWasListFailed] = useState(listFailed);
+  if (wasListFailed !== listFailed) {
+    setWasListFailed(listFailed);
+
+    if (!listFailed) {
+      setConversations([...initialConversations]);
+    }
+  }
   const [activeId, setActiveId] = useState<string | null>(
     initialConversationId ?? initialConversations[0]?.id ?? null,
   );
@@ -113,6 +128,9 @@ export function MessagesScreen({
    * rather than closed over, so the check sees the thread that is open *now*.
    */
   const openThreadRef = useRef<string | null>(null);
+
+  /** The thread a message arrived on while the tab was hidden, still to be marked read. */
+  const unreadWhileHidden = useRef<string | null>(null);
 
   /** Guards the send synchronously; React state lands a render too late. */
   const sendingRef = useRef(false);
@@ -368,6 +386,12 @@ export function MessagesScreen({
         }
       }
 
+      // A thread opened in a background tab has not been seen either.
+      if (document.visibilityState === 'hidden') {
+        unreadWhileHidden.current = threadId;
+        return;
+      }
+
       await markRead(threadId);
     })();
 
@@ -519,6 +543,17 @@ export function MessagesScreen({
             return;
           }
 
+          if (document.visibilityState === 'hidden') {
+            /*
+             * Not seen yet: a background tab has not shown the reader anything,
+             * so marking it read would clear the unread dot on every other
+             * device for a reply nobody looked at. Owed until the tab is shown.
+             */
+            unreadWhileHidden.current = arrived.conversationId;
+            void refreshConversations();
+            return;
+          }
+
           /*
            * On screen is read (#402). Without this the row went bold with an
            * unread dot and the header counted "Unread (1)" for a message the
@@ -609,23 +644,11 @@ export function MessagesScreen({
    * statement about their own inbox, with no explanation and no way back.
    */
   function vacantPane(): React.ReactElement {
-    if (notFound) {
-      return (
-        <EmptyState
-          headline="We could not find that conversation"
-          description="The link may be out of date, or the thread may belong to another account. Your other conversations are all still here."
-          action={
-            <Button type="button" variant="secondary" onClick={() => select(null)}>
-              Back to messages
-            </Button>
-          }
-          className="flex-1"
-        />
-      );
-    }
-
     /*
-     * The outage, said as an outage. `40-states.md`: an empty state is a
+     * The outage, said as an outage — and first: with the list unread, a thread
+     * that is not in it is indistinguishable from one that is not the reader's
+     * (`active` is `null` either way), so "not found" cannot be claimed.
+     * `40-states.md`: an empty state is a
      * statement about the data, and it must not be made on a read that never
      * landed — a browser pass saw "No conversations yet" over an inbox holding
      * two threads, because the API was down at render time. The stream refills
@@ -639,6 +662,21 @@ export function MessagesScreen({
           action={
             <Button type="button" variant="secondary" onClick={() => router.refresh()}>
               Try again
+            </Button>
+          }
+          className="flex-1"
+        />
+      );
+    }
+
+    if (notFound) {
+      return (
+        <EmptyState
+          headline="We could not find that conversation"
+          description="The link may be out of date, or the thread may belong to another account. Your other conversations are all still here."
+          action={
+            <Button type="button" variant="secondary" onClick={() => select(null)}>
+              Back to messages
             </Button>
           }
           className="flex-1"
@@ -661,6 +699,33 @@ export function MessagesScreen({
 
     return <EmptyState {...words} className="flex-1" />;
   }
+
+  /** The receipt a hidden tab owed, paid once the reader can see the thread. */
+  useEffect(() => {
+    function onVisible(): void {
+      const owed = unreadWhileHidden.current;
+
+      if (document.visibilityState !== 'visible' || owed === null) {
+        return;
+      }
+
+      unreadWhileHidden.current = null;
+
+      if (owed !== openThreadRef.current) {
+        return;
+      }
+
+      void markRead(owed)
+        .then(refreshConversations)
+        .catch((error: unknown) => {
+          reportSwallowedError('messages: refreshing the list after regaining focus failed', error);
+        });
+    }
+
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [markRead, refreshConversations]);
 
   return (
     <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">

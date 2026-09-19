@@ -73,6 +73,28 @@ export class EventHub {
     return this.connections.get(userId)?.size ?? 0;
   }
 
+  /**
+   * Ends every stream one user has open — a ban or a closure, after which a
+   * tab left open must stop receiving message content and notifications.
+   */
+  closeFor(userId: string): void {
+    const targets = this.connections.get(userId);
+
+    if (!targets) {
+      return;
+    }
+
+    this.connections.delete(userId);
+
+    for (const response of targets) {
+      try {
+        response.end();
+      } catch {
+        // Already gone; nothing to close.
+      }
+    }
+  }
+
   /** Ends every open stream — the shutdown path, so sockets are not leaked. */
   closeAll(): void {
     for (const targets of this.connections.values()) {
