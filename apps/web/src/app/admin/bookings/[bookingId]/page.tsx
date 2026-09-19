@@ -22,6 +22,7 @@ import {
   BOOKING_PRESENTATION,
   PAYOUT_FAILING_LABEL,
   PAYOUT_PRESENTATION,
+  PAYOUT_STRANDED_LABEL,
   formatEventDate,
 } from '@/lib/booking-entries';
 import { cn } from '@/lib/utils';
@@ -93,7 +94,9 @@ export default async function AdminBookingDetailPage({
 
   const { vendor, customer } = booking;
   const presentation = BOOKING_PRESENTATION[booking.status];
-  const payout = PAYOUT_PRESENTATION[booking.payoutStatus];
+  const payout = booking.payoutStranded
+    ? { label: PAYOUT_STRANDED_LABEL, tone: 'failed' as const }
+    : PAYOUT_PRESENTATION[booking.payoutStatus];
   const heading = `${vendor.businessName} · ${formatEventDate(booking.eventDate)}`;
 
   return (
@@ -158,7 +161,7 @@ export default async function AdminBookingDetailPage({
                     · vendor&apos;s payouts held by an operator
                   </span>
                 ) : null}
-                {booking.payoutFailing ? (
+                {booking.payoutFailing && !booking.payoutStranded ? (
                   <span className="ml-2 align-middle">
                     <StatusPill tone="failed">{PAYOUT_FAILING_LABEL}</StatusPill>
                   </span>

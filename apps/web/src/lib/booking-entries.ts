@@ -122,6 +122,13 @@ export const PAYOUT_PRESENTATION: Record<PayoutStatus, { label: string; tone: St
  */
 export const PAYOUT_FAILING_LABEL = 'Transfer failing';
 
+/**
+ * Owed to a banned or closed vendor, so the sweep will never send it (VEN-445).
+ * Drawn *instead of* `Awaiting release`, which promises a release that is not
+ * coming; a flag beside `PAYOUT_PRESENTATION` for the same reason as the above.
+ */
+export const PAYOUT_STRANDED_LABEL = 'Stranded — vendor banned or closed';
+
 function occasionOf(eventType: string | null): string | null {
   if (!eventType) {
     return null;
