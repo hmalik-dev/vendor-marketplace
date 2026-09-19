@@ -57,6 +57,7 @@ const REVIEW_DATE = new Intl.DateTimeFormat('en-US', {
   month: 'long',
   day: 'numeric',
   year: 'numeric',
+  timeZone: 'UTC',
 });
 
 function occasionOf(eventType: string | null): string | null {
