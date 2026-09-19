@@ -341,18 +341,22 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
    */
   const limitRequest = app.rateLimit();
   const countBearer = app.createRateLimit();
+  // The plugin types `this` as a bare FastifyInstance; ours carries the Zod provider.
+  const plain = app as unknown as FastifyInstance;
   app.addHook('onRequest', async (request, reply) => {
     const routeLimit = request.routeOptions.config?.rateLimit;
 
-    if (routeLimit == null) {
-      await limitRequest(request, reply);
+    if (routeLimit === undefined || routeLimit === null) {
+      await limitRequest.call(plain, request, reply);
     } else if (routeLimit !== false && request.headers.authorization !== undefined) {
-      const { isExceeded } = await countBearer(request);
-      if (isExceeded) {
+      const counted = await countBearer.call(plain, request);
+      if (!counted.isAllowed && counted.isExceeded) {
         throw Object.assign(new Error('Rate limit exceeded'), { statusCode: 429 });
       }
     }
   });
+  // The per-file ceiling is also enforced when the part is buffered, so an
+  // oversized upload is refused rather than read into memory in full.
   await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
 
   await app.register(backgroundPlugin);

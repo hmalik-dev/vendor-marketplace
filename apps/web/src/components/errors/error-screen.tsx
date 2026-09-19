@@ -203,6 +203,8 @@ export function ErrorScreen({
         {payment === 'unknown' ? (
           <Banner status="informational" className="mt-5.5 text-left">
             We&apos;re confirming your payment. Check{' '}
+            {/* A hard navigation for the reason every link on this screen is one. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a href="/bookings" className="underline">
               My bookings
             </a>{' '}
