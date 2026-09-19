@@ -3,6 +3,7 @@ import {
   bookings,
   emailDeliveries,
   operatorAlerts,
+  stripeWebhookFailures,
   supportCases,
   users,
   vendorProfiles,
@@ -74,6 +75,48 @@ export async function recordAlertUnlessRecent(
 
     return rows[0]?.id ?? null;
   });
+}
+
+/**
+ * Records one webhook failure and answers how many of that kind fall at or
+ * after `since`, pruning what has aged out of it. The count includes this one.
+ */
+export async function recordStripeWebhookFailure(
+  db: AppDatabase,
+  failure: string,
+  at: Date,
+  since: Date,
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    await tx.insert(stripeWebhookFailures).values({ failure, failedAt: at });
+    await tx.delete(stripeWebhookFailures).where(lt(stripeWebhookFailures.failedAt, since));
+
+    const rows = await tx
+      .select({ total: count() })
+      .from(stripeWebhookFailures)
+      .where(eq(stripeWebhookFailures.failure, failure));
+
+    return rows[0]?.total ?? 0;
+  });
+}
+
+/** The booking a payment intent paid for, or null when none here owns it. */
+export async function findBookingIdByPaymentIntent(
+  db: AppDatabase,
+  paymentIntentId: string,
+): Promise<string | null> {
+  const rows = await db
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(eq(bookings.stripePaymentIntentId, paymentIntentId))
+    .limit(1);
+
+  return rows[0]?.id ?? null;
+}
+
+/** Forgets the failures of one kind once they have been alerted on. */
+export async function clearStripeWebhookFailures(db: AppDatabase, failure: string): Promise<void> {
+  await db.delete(stripeWebhookFailures).where(eq(stripeWebhookFailures.failure, failure));
 }
 
 /** Whether today's digest has already been claimed by any instance. */
