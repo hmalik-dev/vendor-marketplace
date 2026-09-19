@@ -78,6 +78,16 @@ describe('SignUpForm', () => {
     expect(screen.getByText('Pick one above to continue')).toBeDefined();
   });
 
+  /* VEN-451: frame `12` draws the card description at 12px and the fields on stone-0. */
+  it('draws the role descriptions at 12px and the fields on stone-0', () => {
+    render(<SignUpForm />);
+
+    const description = screen.getByText('Find and book vendors near you.');
+    expect(description.className.split(' ')).toContain('text-[12px]');
+    expect(description.className.split(' ')).not.toContain('text-sm');
+    expect(screen.getByLabelText('Email').className.split(' ')).toContain('bg-stone-0');
+  });
+
   /*
    * The API narrows a missing role to `customer`, so a sign-up that got through
    * without one would put a vendor on the wrong side of the product with no way

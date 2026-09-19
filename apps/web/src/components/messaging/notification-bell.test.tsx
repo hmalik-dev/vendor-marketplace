@@ -2,8 +2,10 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+let pathname: string | null = '/dashboard';
 const call = vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 20 }));
 
+vi.mock('next/navigation', () => ({ usePathname: () => pathname }));
 vi.mock('@/lib/use-api', () => ({ useApi: () => call }));
 vi.mock('@/lib/use-event-stream', () => ({
   useEventStream: () => ({ connected: true }),
@@ -12,7 +14,31 @@ vi.mock('@/lib/use-event-stream', () => ({
 const { NotificationBell } = await import('./notification-bell');
 
 afterEach(() => {
+  pathname = '/dashboard';
+  call.mockClear();
   cleanup();
+});
+
+/*
+ * VEN-451. A gated account on these screens is answered 403 by both of the
+ * bell's calls, and the browser logs each as a console error.
+ */
+describe.each(['/accept-terms', '/vendors/apply'])('the bell on %s', (path) => {
+  it('renders nothing and makes no request', () => {
+    pathname = path;
+    const { container } = render(<NotificationBell />);
+
+    expect(container.innerHTML).toBe('');
+    expect(call).not.toHaveBeenCalled();
+  });
+});
+
+describe('the bell elsewhere', () => {
+  it('still asks for the notifications', async () => {
+    render(<NotificationBell />);
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/notifications', expect.anything()));
+  });
 });
 
 /*

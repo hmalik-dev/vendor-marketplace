@@ -203,7 +203,7 @@ export function AuthScreen({
       */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-30 -left-27 size-85 rounded-full bg-clay-400/5"
+        className="pointer-events-none absolute -bottom-30 -left-27 size-85 rounded-full bg-stone-900/[.035]"
       />
 
       {/*
