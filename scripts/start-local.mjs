@@ -68,6 +68,8 @@ export const OPTIONAL_PLACEHOLDER_KEYS = [
   'NEXT_PUBLIC_SENTRY_DSN',
   'SENTRY_AUTH_TOKEN',
   'SENTRY_WEB_PROJECT',
+  // Shared web-to-API key for per-visitor rate limiting; empty locally, so the API keys on the socket.
+  'WEB_TIER_KEY',
 ];
 
 const DOCKER_NOT_INSTALLED =

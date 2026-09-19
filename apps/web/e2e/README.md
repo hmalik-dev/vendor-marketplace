@@ -68,6 +68,10 @@ raised:
 RATE_LIMIT_MAX=100000 pnpm lane:exec <n> -- pnpm --filter @vendor-marketplace/api dev
 ```
 
+(Deployed, server-rendered calls are keyed per visitor when `WEB_TIER_KEY` is
+set on both apps, so this is about one run's volume, not shared traffic. A lane
+has no such key, and one caller makes every call.)
+
 The fixtures watch for 429 and fail with this instruction, so you get told rather
 than having to read the server log. Two runs of this suite were misdiagnosed as
 flaky messaging tests before that existed.

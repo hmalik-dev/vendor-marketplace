@@ -357,6 +357,19 @@ export const ENV_REGISTRY = [
     setup: APP_SETUP,
   },
   {
+    key: 'WEB_TIER_KEY',
+    capability: 'core',
+    audience: 'server',
+    consumers: ['api', 'web'],
+    environments: 'shared',
+    optionalFor: ['baseline', 'local', 'production', 'deployed'],
+    shape: /^[A-Za-z0-9_-]{32,}$/,
+    placeholder: 'openssl-rand-hex-32-...',
+    description:
+      "Shared between the web app and the API so the API can key its rate limit on the visitor the web tier forwards rather than on the web platform's one egress address. Optional: without it the forwarded address is ignored and every call is keyed on its own socket, as before.",
+    setup: APP_SETUP,
+  },
+  {
     key: 'DATABASE_URL',
     capability: 'core',
     audience: 'server',

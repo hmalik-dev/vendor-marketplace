@@ -133,6 +133,83 @@ describe('the rate-limit key behind a proxy', () => {
   });
 });
 
+/*
+ * VEN-440. Behind the web platform every server-rendered call arrives from one
+ * egress address, so `request.ip` cannot tell visitors apart. The web tier
+ * names the visitor in a header and proves it is the web tier with a shared
+ * key; a header on its own is one any caller could write.
+ */
+describe('the rate-limit key for the web tier', () => {
+  const TIER_VALUE = 'k'.repeat(40);
+  const tierEnv = { RATE_LIMIT_MAX: 2, WEB_TIER_KEY: TIER_VALUE };
+
+  /** Every request shares one socket and sends no `x-forwarded-for`, as the web tier's fan-out does. */
+  function callAs(
+    harness: TestHarness,
+    headers: Record<string, string>,
+  ): Promise<{ statusCode: number }> {
+    return harness.app.inject({ method: 'GET', url: '/categories', headers });
+  }
+
+  const asVisitor = (visitor: string, proof: string = TIER_VALUE): Record<string, string> => ({
+    'x-visitor-ip': visitor,
+    'x-web-tier-key': proof,
+  });
+
+  it('gives each forwarded visitor their own bucket', async () => {
+    const harness = await createTestHarness({ env: tierEnv });
+
+    try {
+      for (const visitor of ['198.51.100.10', '198.51.100.11', '198.51.100.12']) {
+        expect((await callAs(harness, asVisitor(visitor))).statusCode).toBe(200);
+        expect((await callAs(harness, asVisitor(visitor))).statusCode).toBe(200);
+      }
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('still refuses one forwarded visitor past the limit', async () => {
+    const harness = await createTestHarness({ env: tierEnv });
+
+    try {
+      await callAs(harness, asVisitor('198.51.100.20'));
+      await callAs(harness, asVisitor('198.51.100.20'));
+
+      expect((await callAs(harness, asVisitor('198.51.100.20'))).statusCode).toBe(429);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('ignores the forwarded visitor without the key, so it cannot mint buckets', async () => {
+    const harness = await createTestHarness({ env: tierEnv });
+
+    try {
+      await callAs(harness, asVisitor('198.51.100.30', 'wrong'));
+      await callAs(harness, asVisitor('198.51.100.31', 'wrong'));
+
+      expect((await callAs(harness, asVisitor('198.51.100.32', 'wrong'))).statusCode).toBe(429);
+      expect((await callAs(harness, { 'x-visitor-ip': '198.51.100.33' })).statusCode).toBe(429);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('ignores the forwarded visitor when no key is configured', async () => {
+    const harness = await createTestHarness({ env: { RATE_LIMIT_MAX: 2 } });
+
+    try {
+      await callAs(harness, asVisitor('198.51.100.40', ''));
+      await callAs(harness, asVisitor('198.51.100.41', ''));
+
+      expect((await callAs(harness, asVisitor('198.51.100.42', ''))).statusCode).toBe(429);
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
 describe('CORS', () => {
   let harness: TestHarness;
 

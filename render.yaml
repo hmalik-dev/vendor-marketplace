@@ -45,7 +45,9 @@ services:
       - key: LOG_LEVEL
         value: info
       # Higher than the 120/min default: a person clicking through a demo
-      # trips the limiter, and a 429 renders as the generic 500 page.
+      # makes many calls a minute, and a 429 renders as the generic 500 page.
+      # Server-rendered calls are keyed per visitor once WEB_TIER_KEY is set
+      # on both this service and the web app; without it they share one bucket.
       - key: RATE_LIMIT_MAX
         value: '600'
       - key: STRIPE_PLATFORM_FEE_RATE

@@ -1,4 +1,10 @@
-import { apiErrorSchema, ERROR_CODES, type ErrorCode } from '@vendor-marketplace/shared';
+import {
+  apiErrorSchema,
+  ERROR_CODES,
+  VISITOR_IP_HEADER,
+  WEB_TIER_KEY_HEADER,
+  type ErrorCode,
+} from '@vendor-marketplace/shared';
 import type { z } from 'zod';
 import { apiOrigin } from '@/config/public-env';
 
@@ -142,6 +148,29 @@ async function readJsonBody(response: Response, path: string): Promise<unknown> 
 }
 
 /**
+ * Names the visitor a server-rendered call is for, so the API's per-IP rate
+ * limit does not see every visitor as this platform's one egress address.
+ *
+ * Only for uncached calls: reading the request headers makes a render dynamic,
+ * and a `revalidate` call is shared between visitors anyway. Absent the shared
+ * secret, or outside a request, it adds nothing and the API keys on the socket.
+ */
+async function visitorHeaders(secret: string): Promise<Record<string, string>> {
+  try {
+    // Imported here, not at the top: this module is also bundled for the browser.
+    const { headers: requestHeaders } = await import('next/headers');
+    const incoming = await requestHeaders();
+    // The rightmost entry, the one the nearest proxy appended: the leftmost is
+    // written by the caller, and this value is vouched for with the shared key.
+    const visitor = incoming.get('x-forwarded-for')?.split(',').at(-1)?.trim();
+    return visitor ? { [WEB_TIER_KEY_HEADER]: secret, [VISITOR_IP_HEADER]: visitor } : {};
+  } catch {
+    // Outside a request scope (a build-time render, a script): nobody to name.
+    return {};
+  }
+}
+
+/**
  * The single fetch path to the Fastify API. Every response is validated
  * against a schema, so a contract drift surfaces here rather than as a
  * `undefined` deep inside a component.
@@ -155,6 +184,10 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
   }
   if (body !== undefined) {
     headers['content-type'] = 'application/json';
+  }
+  const tierKey = typeof window === 'undefined' ? process.env.WEB_TIER_KEY : undefined;
+  if (revalidate === undefined && tierKey) {
+    Object.assign(headers, await visitorHeaders(tierKey));
   }
 
   /*

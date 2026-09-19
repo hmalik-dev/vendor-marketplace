@@ -95,4 +95,5 @@
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — public repo: traces carry Clerk cookies, stripe-listen.log carries whsec; masking never reaches artifacts
 - [Sentry is a second log sink](sentry-is-a-second-log-sink.md) — VEN-397: `captureException` bypasses `log-error-serializer`'s bound-param strip, and `scrubErrorEvent` keeps `request.url` with its query
 - [Neon Auth cutover boundaries](neon-auth-cutover-boundaries.md) — VEN-447: verification is sound and the role hint is double-narrowed; the unthrottled `/api/auth` proxy, `/api/session/token` and two providers in one `auth_user_id` are the new surface
+- [A new secret header has three registries](new-secret-header-has-three-registries.md) — VEN-440: pino `redact`, Sentry's `CREDENTIAL_HEADER` (it keeps headers, matched by name only), and a placeholder that must fail its own shape
 - [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — VEN-397: child output is redacted and `workflow_run` is gated; only `PhaseError`s built from argv are not
