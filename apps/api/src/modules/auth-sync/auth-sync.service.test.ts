@@ -187,7 +187,7 @@ describe('applyAuthSyncEvent, when an update meets a stale holder', () => {
   });
 
   /*
-   * VEN-450: a Clerk-era holder has no Neon Auth identity by construction, so
+   * VEN-450: an auth-era holder has no Neon Auth identity by construction, so
    * its absence there is not a deletion and it must not be retired and refunded.
    */
   it('never asks Neon Auth about, or retires, a legacy-provider holder', async () => {
@@ -204,8 +204,8 @@ describe('applyAuthSyncEvent, when an update meets a stale holder', () => {
     expect((await rowFor('user_2abcdefghijklmnopqrstuvwxyz'))?.deletedAt).toBeNull();
   });
 
-  /* The recorded provider decides, not the id: a Neon-issued id shaped like a Clerk one is released. */
-  it('still retires a Neon-issued holder whose id looks like a Clerk one', async () => {
+  /* The recorded provider decides, not the id: a Neon-issued id shaped like an auth one is released. */
+  it('still retires a Neon-issued holder whose id looks like an auth one', async () => {
     const lookalike = 'user_2abcdefghijklmnopqrstuvwxyz';
     await harness.database.db
       .update(users)

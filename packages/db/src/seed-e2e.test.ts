@@ -43,13 +43,13 @@ describe('seedE2eFixtures', () => {
   const INPUT: E2eSeedInput = {
     vendor: {
       authUserId: 'user_e2e_vendor',
-      email: 'vendor+clerk_test@example.com',
+      email: 'vendor+auth_test@example.com',
       firstName: 'Evie',
       lastName: 'Vendor',
     },
     customer: {
       authUserId: 'user_e2e_customer',
-      email: 'customer+clerk_test@example.com',
+      email: 'customer+auth_test@example.com',
       firstName: 'Cal',
       lastName: 'Customer',
     },
@@ -152,7 +152,7 @@ describe('seedE2eFixtures', () => {
    */
   /*
    * `/admin` is gated on `users.role = 'admin'`, and that role cannot be reached
-   * from inside the product: it is read from Clerk's `unsafeMetadata` at first
+   * from inside the product: it is read from the auth provider's `unsafeMetadata` at first
    * sign-in, falls back to `customer`, and is immutable afterwards. So no
    * sign-up flow produces an admin, `seed-demo.ts` gives its admin a synthetic
    * `auth_user_id` that cannot authenticate, and before this the only route to
@@ -165,7 +165,7 @@ describe('seedE2eFixtures', () => {
     const invites = await database.db.select().from(vendorInvites);
 
     expect(invites.map((invite) => [invite.email, invite.acceptedAt instanceof Date])).toEqual([
-      ['vendor+clerk_test@example.com', true],
+      ['vendor+auth_test@example.com', true],
     ]);
   });
 
@@ -174,7 +174,7 @@ describe('seedE2eFixtures', () => {
       ...INPUT,
       admin: {
         authUserId: 'user_e2e_admin',
-        email: 'admin+clerk_test@example.com',
+        email: 'admin+auth_test@example.com',
         firstName: 'Ada',
         lastName: 'Admin',
       },
@@ -188,7 +188,7 @@ describe('seedE2eFixtures', () => {
       .where(eq(users.id, result.adminUserId as string));
 
     expect(row?.role).toBe('admin');
-    expect(row?.email).toBe('admin+clerk_test@example.com');
+    expect(row?.email).toBe('admin+auth_test@example.com');
     expect(row?.authUserId).toBe('user_e2e_admin');
   });
 
@@ -216,10 +216,10 @@ describe('seedE2eFixtures', () => {
    * correct, so adopting it rather than overwriting would leave `/admin`
    * unreachable with a green seed.
    */
-  it('promotes an account Clerk had already created as a customer to admin', async () => {
+  it('promotes an account the auth provider had already created as a customer to admin', async () => {
     await database.db.insert(users).values({
       authUserId: 'user_e2e_admin',
-      email: 'admin+clerk_test@example.com',
+      email: 'admin+auth_test@example.com',
       role: 'customer',
       firstName: 'Ada',
       lastName: 'Admin',
@@ -229,7 +229,7 @@ describe('seedE2eFixtures', () => {
       ...INPUT,
       admin: {
         authUserId: 'user_e2e_admin',
-        email: 'admin+clerk_test@example.com',
+        email: 'admin+auth_test@example.com',
         firstName: 'Ada',
         lastName: 'Admin',
       },
@@ -244,17 +244,17 @@ describe('seedE2eFixtures', () => {
   });
 
   /**
-   * A database that predates the Clerk to Neon Auth swap holds the operator under
-   * a Clerk id. The identity Neon Auth now resolves has the same address, so an
+   * A database that predates the swap to Neon Auth holds the operator under
+   * An auth id. The identity Neon Auth now resolves has the same address, so an
    * upsert keyed on `auth_user_id` alone inserts a second row and dies on the
    * unique email — leaving `/admin` unreachable.
    */
   describe('a row the previous identity provider issued', () => {
-    const CLERK_ID = 'user_3Ih6Qg2FLQhY4qUsPAE7dS8lL5r';
+    const AUTH_ID = 'user_3Ih6Qg2FLQhY4qUsPAE7dS8lL5r';
     const NEON_ID = 'b139cd4d-6f64-4860-913d-86137bc605fb';
     const ADMIN = {
       authUserId: NEON_ID,
-      email: 'admin+clerk_test@example.com',
+      email: 'admin+auth_test@example.com',
       firstName: 'Ada',
       lastName: 'Admin',
     };
@@ -263,7 +263,7 @@ describe('seedE2eFixtures', () => {
       const [legacy] = await database.db
         .insert(users)
         .values({
-          authUserId: CLERK_ID,
+          authUserId: AUTH_ID,
           authProvider: 'legacy_clerk',
           email: ADMIN.email,
           role: 'admin',
@@ -301,7 +301,7 @@ describe('seedE2eFixtures', () => {
         lastName: 'Else',
       });
       await database.db.insert(users).values({
-        authUserId: CLERK_ID,
+        authUserId: AUTH_ID,
         authProvider: 'legacy_clerk',
         email: ADMIN.email,
         role: 'customer',
@@ -316,7 +316,7 @@ describe('seedE2eFixtures', () => {
         .from(users)
         .where(eq(users.email, ADMIN.email));
 
-      expect(legacy).toEqual([{ authUserId: CLERK_ID }]);
+      expect(legacy).toEqual([{ authUserId: AUTH_ID }]);
     });
   });
 
@@ -381,12 +381,12 @@ describe('seedE2eFixtures', () => {
   });
 
   /*
-   * The role comes from Clerk's `unsafeMetadata` at first sign-in and falls back
+   * The role comes from the auth provider's `unsafeMetadata` at first sign-in and falls back
    * to `customer` for anything unrecognised — so an end-to-end vendor that
    * signed up without the hint has a `customer` row and every vendor guard
    * refuses it. The fixture has to correct that, not assume it.
    */
-  it('promotes an account Clerk had already created as a customer', async () => {
+  it('promotes an account the auth provider had already created as a customer', async () => {
     await database.db.insert(users).values({
       authUserId: INPUT.vendor.authUserId,
       email: INPUT.vendor.email,
@@ -776,7 +776,7 @@ describe('seedE2eFixtures', () => {
    * The hazard the whole design turns on. A fixture that invented an id would
    * leave this email attached to the wrong identity — and the account's first
    * real sign-in would hit `users_email_key`, where `insertUserIfAbsent`
-   * declines the write, finds no row under the real Clerk id and throws,
+   * declines the write, finds no row under the real auth id and throws,
    * locking the account out. Attaching by the real id is what makes a later
    * sign-in a no-op.
    */

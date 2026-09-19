@@ -47,7 +47,7 @@ describe('POST /upload/image', () => {
       [CUSTOMER, 'customer'],
       [ADMIN, 'admin'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',
@@ -96,7 +96,7 @@ describe('POST /upload/image', () => {
   };
 
   /*
-   * `normalizeRole` refuses to take `admin` from Clerk metadata, which is the
+   * `normalizeRole` refuses to take `admin` from auth metadata, which is the
    * control that stops a user self-promoting — so an admin cannot be minted
    * through the sync path and has to be written directly. Signing in first is
    * what creates the row the update then promotes.

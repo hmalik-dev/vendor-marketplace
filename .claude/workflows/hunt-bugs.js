@@ -43,7 +43,7 @@ const DIMENSIONS = [
   {
     key: 'authorization',
     prompt: `Hunt for authorization defects across apps/api and apps/web.
-Every authorization decision must read the local users.role column, never Clerk
+Every authorization decision must read the local users.role column, never auth
 unsafeMetadata, which the account holder can write. Look for: an endpoint with no
 guard beside guarded neighbours; a guard that checks authentication but not
 ownership; a resource fetched by id without scoping to the caller; a role checked
@@ -353,7 +353,7 @@ service reaches, and what it returns on each failure branch. Read the files.`,
       `Map this application's authorization model. Where is a user row created and
 how is the role narrowed there? Which surfaces are customer-only, vendor-only,
 admin-only, or public? Where does any code read the role from a token or from
-Clerk metadata rather than the local users.role column? List every place the two
+Auth metadata rather than the local users.role column? List every place the two
 could disagree.`,
       { label: 'map:authz', phase: 'Map' },
     ),

@@ -1260,7 +1260,7 @@ export const ADMIN_ACTIONS = [
    * Its own value rather than `user_closed` with a flag in the detail, because
    * this is the one closure nothing inside the product can undo: `role =
    * 'admin'` is unreachable from the console, so the sign-in comes back only
-   * from Clerk's dashboard. The immutability trigger means a row written under
+   * from the auth provider's dashboard. The immutability trigger means a row written under
    * the wrong value stays wrong, so the distinction is made at the writer.
    */
   'operator_account_closed',

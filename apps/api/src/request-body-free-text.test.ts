@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest';
  * written, not on the day someone re-reads the file.
  *
  * **What it does not cover, deliberately:** a write path that is not a Fastify
- * request body. Names mirrored from Clerk are the live example — the account
+ * request body. Names mirrored from the auth provider are the live example — the account
  * holder types them, they reach the public vendor page through `reviewerName`,
  * and no route schema ever sees them. Those go through `mirroredAuthName` and
  * are covered by `modules/auth-sync/auth-sync.service.test.ts`. A new write path of

@@ -27,7 +27,7 @@ env:
   NEXT_PUBLIC_API_URL: http://localhost:4000
   # Same category, and required for the same reason since #406 made the web
   # build validate the `stripe` capability: the registry gives this row a
-  # placeholder rather than a default, so — like the Clerk key above — it must
+  # placeholder rather than a default, so — like the auth key above — it must
   # be stated on every build, not only a deployed one.
   #
   # Inline rather than a repository secret, deliberately. A Stripe
@@ -162,7 +162,7 @@ jobs:
         run: gitleaks git . --config .gitleaks.toml --redact --no-banner --verbose
 
   # The committed Playwright journeys against the whole stack — built, served
-  # with `next start`, real Clerk test instance, Stripe test mode with webhooks
+  # with `next start`, real auth test instance, Stripe test mode with webhooks
   # forwarded (VEN-411). After `verify`, so a pull request that does not compile
   # spends no browser minutes.
   #
@@ -176,7 +176,7 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # This job holds the Stripe and Clerk secrets, so its token reads and nothing more.
+    # This job holds the Stripe and auth secrets, so its token reads and nothing more.
     permissions:
       contents: read
     # One run per branch. The workflow-level group already cancels a superseded
@@ -203,7 +203,7 @@ jobs:
           --health-retries 5
 
     # Everything not set here is inherited from the workflow's `env:` above,
-    # the Clerk webhook placeholder included: no journey signs a Clerk webhook.
+    # The auth webhook placeholder included: no journey signs an auth webhook.
     env:
       E2E_GATE: ${{ vars.E2E_GATE }}
       # The stack's own origins, which the E2E harness refuses to guess.
@@ -340,7 +340,7 @@ jobs:
 
       # The repository is public, so an artifact is readable by any GitHub user.
       # Hence no traces (`playwright.config.ts` turns them off on CI — a trace
-      # records the E2E accounts' Clerk session cookies, the admin's included)
+      # records the E2E accounts' auth session cookies, the admin's included)
       # and no `stripe-listen.log`, which prints the webhook signing secret
       # unmasked. The report keeps each failure's screenshot and error context.
       # `cancelled()` too, so a run that hit `timeout-minutes` still leaves them.

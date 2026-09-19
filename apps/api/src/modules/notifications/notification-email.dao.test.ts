@@ -6,7 +6,7 @@ import { findNotificationRecipient, findUserEmail } from './notification-email.d
 import { sendNotificationEmail } from './notification-email.js';
 
 /*
- * VEN-386, against a real Postgres: a row whose address is diverged from Clerk
+ * VEN-386, against a real Postgres: a row whose address is diverged from auth
  * gets its notification in-app only, while the acknowledgement read keeps the
  * stored address.
  */

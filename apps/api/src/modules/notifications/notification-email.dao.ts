@@ -32,12 +32,12 @@ export async function findUserEmail(
 /**
  * Where a notification is emailed, or why it is not (VEN-386).
  *
- * **A diverged row gets no email.** `pending_email` set means Clerk has given
+ * **A diverged row gets no email.** `pending_email` set means the auth provider has given
  * this account a different address and `users_email_key` refused it (#462) —
  * so `email` is an address the person has moved off, and a notification
  * carries counterparty detail: names, event dates, booking specifics. The
- * collision means another row is stale, the Clerk webhook repairs it
- * (`clerk.service.ts`), and the window is one webhook hop; the in-app row is
+ * collision means another row is stale, the auth webhook repairs it
+ * (`auth.service.ts`), and the window is one webhook hop; the in-app row is
  * already durable and carries the content, so nothing is queued for later.
  *
  * `null` for an account that is gone, as `findUserEmail`.

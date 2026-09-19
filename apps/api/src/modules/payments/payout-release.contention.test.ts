@@ -92,7 +92,7 @@ describe('two payout sweeps racing one booking, on two real connections', () => 
       [VENDOR, 'vendor', 'grace@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Test',

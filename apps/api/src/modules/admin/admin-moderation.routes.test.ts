@@ -242,7 +242,7 @@ describe('admin graduated moderation', () => {
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',
@@ -552,7 +552,7 @@ describe('admin graduated moderation', () => {
     /**
      * A missing owner is unverifiable, not unbanned.
      *
-     * `findUserById` excludes soft-deleted accounts, and the Clerk webhook
+     * `findUserById` excludes soft-deleted accounts, and the auth webhook
      * soft-deletes the user while leaving the vendor profile behind — so
      * `owner?.isBanned` read `false` for an account that no longer exists and
      * republished a storefront that would take booking requests nobody can
@@ -571,7 +571,7 @@ describe('admin graduated moderation', () => {
       });
       expect(down.statusCode).toBe(200);
 
-      // What the Clerk `user.deleted` webhook does: the account goes, the
+      // What the auth `user.deleted` webhook does: the account goes, the
       // storefront stays.
       await harness.database.db
         .update(users)

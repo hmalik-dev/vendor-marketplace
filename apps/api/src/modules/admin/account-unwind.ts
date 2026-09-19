@@ -39,7 +39,7 @@ export type AdminContext = BookingContext;
  * the same drift again, one ticket later. It is the **last** parameter so the
  * two notification callers keep the shape they already had.
  *
- * #451 gave it a third kind: an outbound call to Clerk, after the retirement
+ * #451 gave it a third kind: an outbound call to auth, after the retirement
  * it follows has committed. So this is no longer only about notifications —
  * it is about any work that follows a committed operation the caller cannot
  * repeat. That caller needs to **report** the failure rather than only log it,
@@ -157,7 +157,7 @@ export interface AccountUnwindResult {
  * Open requests are declined, future confirmed bookings are cancelled and
  * refunded **in full**, and both counterparties are told. Extracted from
  * `setUserBanned` by #433, which needed the identical unwind for a deleted
- * Clerk identity: a customer can no more be left holding a booking against an
+ * Auth identity: a customer can no more be left holding a booking against an
  * account that was deleted than against one that was suspended, and the two
  * cannot be allowed to drift apart.
  *
@@ -212,7 +212,7 @@ export async function unwindAccountBookings(
      * — the customer cancels through D3's existing tiers first — so no new
      * money path is created at all. #438 builds that refusal.
      *
-     * This branch is therefore the **backstop, not the policy**. A Clerk
+     * This branch is therefore the **backstop, not the policy**. An auth
      * account deletion is reactive: by the time `user.deleted` arrives the
      * identity is already gone and there is nothing left to refuse, so any
      * closure that walks around the product's own route still lands here. The

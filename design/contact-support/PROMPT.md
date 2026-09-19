@@ -17,7 +17,7 @@ beyond the Google Fonts link.
    visitor to paste that reference to support. A form carries it as a hidden
    field, which removes the step and removes the common case where they don't
    paste it and you get an unactionable report.
-3. **It already knows who's asking.** Clerk identifies signed-in users — no email
+3. **It already knows who's asking.** Auth identifies signed-in users — no email
    field, no typos.
 4. **Transport exists.** `email.ts` posts to Resend. This is a route and a form,
    not new infrastructure.

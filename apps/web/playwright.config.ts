@@ -70,7 +70,7 @@ export default defineConfig({
     baseURL,
     /*
      * Playwright's 30s navigation default is too tight for a cold dev server:
-     * the first hit on a route compiles it, and a heavy route plus Clerk exceeds
+     * the first hit on a route compiles it, and a heavy route plus the auth provider exceeds
      * that with the server perfectly healthy. A `page.goto` timeout then reads
      * as a broken route, which is the most expensive kind of wrong answer — it
      * points the next person at the feature instead of at the compile.
@@ -79,7 +79,7 @@ export default defineConfig({
     actionTimeout: 15_000,
     /*
      * Off on CI (VEN-411): a trace records the context's cookies and every
-     * request's headers — the E2E accounts' live Clerk sessions — and CI uploads
+     * request's headers — the E2E accounts' live auth sessions — and CI uploads
      * the report from a public repository. Reproduce a CI failure on a lane.
      */
     trace: process.env.CI ? 'off' : 'retain-on-failure',

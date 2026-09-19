@@ -863,19 +863,19 @@ describe('idempotency and determinism', () => {
     expect(result.availabilityRowsUpserted).toBe(counts.availability);
   });
 
-  it('needs no Clerk or Stripe credentials', async () => {
+  it('needs no auth or Stripe credentials', async () => {
     const saved = {
-      clerk: process.env.CLERK_SECRET_KEY,
+      auth: process.env.NEON_AUTH_BASE_URL,
       stripe: process.env.STRIPE_SECRET_KEY,
     };
-    delete process.env.CLERK_SECRET_KEY;
+    delete process.env.NEON_AUTH_BASE_URL;
     delete process.env.STRIPE_SECRET_KEY;
 
     try {
       const result = await seedDemoData(testDb.db, NOW);
       expect(result.vendorsUpserted).toBe(DEMO_VENDORS.length);
     } finally {
-      if (saved.clerk !== undefined) process.env.CLERK_SECRET_KEY = saved.clerk;
+      if (saved.auth !== undefined) process.env.NEON_AUTH_BASE_URL = saved.auth;
       if (saved.stripe !== undefined) process.env.STRIPE_SECRET_KEY = saved.stripe;
     }
   });

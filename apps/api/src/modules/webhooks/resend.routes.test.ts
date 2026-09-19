@@ -22,7 +22,7 @@ import {
  * would let the two halves disagree and still pass.
  */
 
-const CLERK_ID = 'user_delivery_reader';
+const AUTH_ID = 'user_delivery_reader';
 const BOOKING_ID = '33333333-3333-4333-8333-333333333333';
 /*
  * The two timestamps a Resend payload carries, and they must differ here.
@@ -131,7 +131,7 @@ describe('POST /webhooks/resend', () => {
     harness = await createTestHarness({ clock: () => new Date(EVENT_AT) });
 
     const user = await syncUserFromAuth(harness.database.db, {
-      authUserId: CLERK_ID,
+      authUserId: AUTH_ID,
       email: 'reader@example.test',
       firstName: 'Katherine',
       lastName: 'Johnson',

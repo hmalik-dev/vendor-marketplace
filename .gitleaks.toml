@@ -41,21 +41,6 @@ paths = [
   '''^packages/shared/src/env/registry\.test\.ts$''',
 ]
 
-# `scripts/e2e-ci.mjs` was on the list above until it was measured: the whole
-# file was exempt for a single match, and it is the one entry that is not a test
-# — the file where a live `CLERK_SECRET_KEY` is a realistic slip. The match is
-# `REQUIRED_SECRETS`' `[variable, secret]` row, two variable *names* the generic
-# rule reads as an assignment, so allowlisting that name returns every other
-# line of the file to every rule.
-[[allowlists]]
-description = "`scripts/e2e-ci.mjs`'s [variable, secret] table: a name, never a value"
-regexTarget = "match"
-regexes = ['''E2E_CLERK_PUBLISHABLE_KEY''']
-
-[[allowlists]]
-description = "CI's placeholder Clerk publishable key: public by construction, and reaches no instance"
-regexTarget = "match"
-regexes = ['''NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2kuY2xlcmsuYWNjb3VudHMuZGV2JA''']
 
 # The generic rule reads a Neon branch id as an API key when it sits beside the
 # word "Auth"/"key" in prose. It is an identifier, not a credential: it names the

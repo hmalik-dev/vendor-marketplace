@@ -15,7 +15,7 @@ import { portfolioItems, users, vendorProfiles } from '../schema/index.js';
  * data split across two hosts forever.
  *
  * **Re-runnable and idempotent.** A value that is already a key, or that
- * belongs to another host entirely (a Clerk avatar, a site-relative marketing
+ * belongs to another host entirely (an auth avatar, a site-relative marketing
  * path), is left exactly as it is — so a second run changes nothing.
  */
 export async function convertUrlsToKeys<

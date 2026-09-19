@@ -10,7 +10,7 @@ import { acceptTerms, readTermsStatus, unacceptedTermsStatus } from './terms.ser
  *
  * Every other guarded route refuses such a session with `TERMS_REQUIRED`, so
  * these deliberately do not use `requireAuth`: they authorise on the verified
- * Clerk subject rather than on a local account row, because on a first sign-in
+ * Auth subject rather than on a local account row, because on a first sign-in
  * there is no local row yet — this is the path that creates it.
  */
 export const termsRoutes: FastifyPluginAsyncZod = async (app) => {

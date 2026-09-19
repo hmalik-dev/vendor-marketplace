@@ -36,7 +36,7 @@ describe('the counted filtered-empty routes on /admin/cases', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    harness.clerkUsers.set(ADMIN, {
+    harness.authUsers.set(ADMIN, {
       authUserId: ADMIN,
       email: `${ADMIN}@example.com`,
       firstName: 'Ops',

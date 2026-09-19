@@ -5,7 +5,7 @@ import { fail, pass } from './types.js';
 describe('renderReport', () => {
   it('groups results under their capability heading', () => {
     const { lines } = renderReport(
-      [pass('core', 'Node >= 20', 'v22'), pass('auth', 'CLERK_SECRET_KEY', 'set')],
+      [pass('core', 'Node >= 20', 'v22'), pass('auth', 'NEON_AUTH_BASE_URL', 'set')],
       'Preflight',
     );
     const text = lines.join('\n');

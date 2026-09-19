@@ -123,7 +123,7 @@ describe('userSchema', () => {
   });
 
   it('accepts a row whose name is not set yet', () => {
-    // Clerk's email-and-password sign-up collects no name, so the row the API
+    // The auth provider's email-and-password sign-up collects no name, so the row the API
     // lazily creates has none until the user fills their profile in.
     const parsed = userSchema.parse({ ...valid, firstName: '', lastName: '' });
 
@@ -137,7 +137,7 @@ describe('userSchema', () => {
     expect(userSchema.safeParse({ ...valid, firstName: tooLong }).success).toBe(false);
   });
 
-  it('accepts a row retired after its Clerk identity was deleted', () => {
+  it('accepts a row retired after its auth identity was deleted', () => {
     const deletedAt = new Date('2026-02-01T00:00:00.000Z');
 
     expect(userSchema.parse({ ...valid, deletedAt }).deletedAt).toEqual(deletedAt);
@@ -183,8 +183,8 @@ describe('a user avatar is an image reference, not a URL', () => {
     expect(updateUserSchema.safeParse({ avatarUrl: 'javascript:alert(1)' }).success).toBe(false);
   });
 
-  it('still accepts the absolute Clerk URL a synced account arrives with', () => {
-    expect(updateUserSchema.safeParse({ avatarUrl: 'https://img.clerk.com/abc' }).success).toBe(
+  it('still accepts the absolute auth URL a synced account arrives with', () => {
+    expect(updateUserSchema.safeParse({ avatarUrl: 'https://img.auth.com/abc' }).success).toBe(
       true,
     );
   });
@@ -982,7 +982,7 @@ describe('the tagline and the experience figure', () => {
 
 /**
  * Since #47 an upload stores an object key, seeded art is a site-relative
- * path, and a Clerk avatar is an absolute URL on a host that is not ours. All
+ * path, and an auth avatar is an absolute URL on a host that is not ours. All
  * three are persisted, so all three have to pass on the way in — a bare
  * `z.url()` here is what made adding a portfolio photo fail for every real
  * upload.
@@ -1000,7 +1000,7 @@ describe('imageRefSchema', () => {
     ['a stored object key', 'portfolio/abc.webp', true],
     ['seeded marketing art', '/marketing/covers/june-harlow.jpg', true],
     ['a CDN URL', `${CDN_BASE}/a.webp`, true],
-    ['a Clerk avatar', 'https://img.clerk.com/abc', true],
+    ['an auth avatar', 'https://img.auth.com/abc', true],
 
     /* An `img src` is a sink, so the non-http schemes are an allowlist, not a filter. */
     ['a javascript: URL', 'javascript:alert(1)', false],
@@ -1085,7 +1085,7 @@ describe('imageRefSchema', () => {
 
   /*
    * The other half of that sentence, asserted rather than left out. An
-   * absolute `http(s)` URL is accepted on **any** host on purpose: a Clerk
+   * absolute `http(s)` URL is accepted on **any** host on purpose: an auth
    * avatar is one, and so is a row written before #47 stored keys. So a
    * vendor-supplied absolute URL does reach a host the product did not choose,
    * and the enforced `img-src` CSP — not this schema — is what stops it at an

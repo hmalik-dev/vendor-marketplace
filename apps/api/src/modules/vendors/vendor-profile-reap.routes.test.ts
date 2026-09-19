@@ -102,7 +102,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
       [VENDOR, 'reap-one@example.com'],
       [OTHER_VENDOR, 'reap-two@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Reap',

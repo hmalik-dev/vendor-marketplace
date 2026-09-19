@@ -110,7 +110,7 @@ describe('admin customer detail', () => {
       [CUSTOMER, 'customer', 'Rosa'],
       [OTHER, 'customer', 'Ada'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName,

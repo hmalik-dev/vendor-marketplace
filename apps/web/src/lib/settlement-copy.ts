@@ -77,7 +77,7 @@ function whatHappened(settlement: Settlement, audience: SettlementAudience): str
      * direction.
      *
      * **"no longer active", not "suspended" (#433).** The column no longer
-     * means only a ban: a vendor deleting their Clerk identity now runs the
+     * means only a ban: a vendor deleting their auth identity now runs the
      * same unwind and writes the same `admin`, so the old sentence told a
      * customer that an account had been *suspended* when nobody had moderated
      * anything — the fabricated moderation claim this comment already argues

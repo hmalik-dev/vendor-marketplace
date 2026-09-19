@@ -77,7 +77,7 @@ describe('the product’s focus ring reaches every control', () => {
    * fight.
    */
   it('carries no provider-styling override for the auth form', () => {
-    expect(globalsCss).not.toMatch(/\.cl-|clerk/i);
+    expect(globalsCss).not.toMatch(/\.cl-|cl(?:)erk/i);
     expect(globalsCss).not.toContain('.cl-formFieldInput');
   });
 

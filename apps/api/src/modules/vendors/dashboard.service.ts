@@ -263,7 +263,7 @@ function toNextPending(
     cents: row.vendorPayoutCents,
     /*
      * Blank becomes absent. `users.first_name` is written as `firstName ?? ''`
-     * at both Clerk entry points, so a customer who signed up without one
+     * at both auth entry points, so a customer who signed up without one
      * yields an empty string — and the card would render an orphan separator,
      * ` · pays out Jun 18`, rather than dropping the name.
      */

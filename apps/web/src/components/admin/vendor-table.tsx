@@ -464,7 +464,7 @@ function VendorRowActions({
 
   /*
     A retired account gets **View and nothing else** (#433, VEN-423). Its owner
-    deleted their Clerk identity, its bookings were unwound and refunded when
+    deleted their auth identity, its bookings were unwound and refunded when
     they did, and there is nothing left for a suspension, a reinstatement **or a
     publish** to reach: `setUserBanned` and `setVendorPublished` both look the
     account up through `findUserById`, which filters `deleted_at`, so every

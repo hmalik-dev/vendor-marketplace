@@ -79,7 +79,7 @@ flaky messaging tests before that existed.
 ## The two rules the specs follow
 
 **Assert the resolved pathname before anything else.** A signed-out run does not
-look broken: Clerk redirects to `/sign-in`, which renders cleanly, logs nothing
+look broken: auth redirects to `/sign-in`, which renders cleanly, logs nothing
 to the console and does not overflow. Every content-shaped assertion passes on
 it. The URL check is the one that fires.
 
@@ -153,4 +153,4 @@ reason — see the follow-up ticket rather than assuming they were forgotten.
 job summary by `scripts/e2e-ci.mjs`. It skips with a warning until the
 repository has its `E2E_*` secrets (VEN-377); set the variable `E2E_GATE=required`
 once they exist. Traces are off on CI, because the repository is public and a
-trace carries the accounts' Clerk sessions — reproduce a CI failure on a lane.
+trace carries the accounts' auth sessions — reproduce a CI failure on a lane.

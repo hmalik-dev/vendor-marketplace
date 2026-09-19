@@ -170,7 +170,7 @@ copy, since a ticket may not. #305 made the change as a ticket, correctly revert
 question instead.
 
 An auth-aware pair of strings was rejected: `global-error.tsx` renders **outside
-the Clerk provider** and cannot know who is reading, so it would need a
+the auth provider** and cannot know who is reading, so it would need a
 signed-out default anyway, and two strings on one screen would drift. One
 destination that is true for everyone is the smaller and more honest answer.
 

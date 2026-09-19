@@ -26,7 +26,7 @@ Three-tier validation.
    `31-content-voice.md`.
 2. Drive the live screen at exactly 1440×900. If signed in via a restored
    `storageState`, navigate once and discard that render, then navigate again
-   before reading anything Clerk renders (#321, #259).
+   before reading anything the auth provider renders (#321, #259).
 3. Read computed styles from the DOM for colour, font and spacing; never judge
    them from a screenshot. Compare and report per axis:
 

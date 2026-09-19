@@ -275,7 +275,7 @@ describe('reporting and message visibility (#436)', () => {
       [CUSTOMER, 'customer'],
       [OUTSIDER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',

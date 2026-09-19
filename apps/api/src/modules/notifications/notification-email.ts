@@ -184,7 +184,7 @@ export async function sendNotificationEmail(
 
     if (!recipient) {
       /*
-       * Deleted in Clerk between the event and the send, or a row whose user
+       * Deleted in the auth provider between the event and the send, or a row whose user
        * was removed. Skip rather than crash — the in-app notification is
        * already durable and this is the half that has nowhere to go.
        */
@@ -196,10 +196,10 @@ export async function sendNotificationEmail(
     }
 
     if ('emailDiverged' in recipient) {
-      // The stored address is one Clerk has moved off (VEN-386); no address in the log.
+      // The stored address is one the auth provider has moved off (VEN-386); no address in the log.
       deps.log.info(
         { notificationId: row.id, userId: row.userId, reason: 'email-diverged' },
-        'Skipped an email while the account address disagrees with Clerk',
+        'Skipped an email while the account address disagrees with auth',
       );
       return;
     }

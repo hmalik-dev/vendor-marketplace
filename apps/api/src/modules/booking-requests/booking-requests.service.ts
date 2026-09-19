@@ -211,7 +211,7 @@ function toDetail(
       lastInitial: customer.lastName.trim().slice(0, 1).toUpperCase(),
       lastName: disclosed ? customer.lastName : null,
       /*
-       * An empty string is what a user row carries before Clerk has supplied a
+       * An empty string is what a user row carries before the auth provider has supplied a
        * name, and it is not an address — send `null` rather than fail the
        * response schema on a row that is merely incomplete.
        */
@@ -541,7 +541,7 @@ export async function createBookingRequest(
    * to read `isDeleted` and `isPublished` off a row fetched regardless of
    * either, which meant it agreed with the public profile page on two columns
    * and knew nothing of the third — a vendor whose owner had deleted their
-   * Clerk identity was unreachable everywhere and still bookable here.
+   * Auth identity was unreachable everywhere and still bookable here.
    */
   const vendor = await findBookableVendorById(db, input.vendorId);
 

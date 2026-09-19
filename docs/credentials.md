@@ -14,20 +14,20 @@ secret ever appearing in conversation, and §5 gives the exact command for each.
 ## 1. Currently exposed — rotate these
 
 Pasted into a chat transcript on **2026-08-27** while provisioning Railway.
-Low risk today (empty bucket, Clerk development instance, no real users, no
+Low risk today (empty bucket, Neon dev branch, no real users, no
 money) but they must not survive to launch.
 
-| Credential             | How it was exposed       | Action                                                         |
-| ---------------------- | ------------------------ | -------------------------------------------------------------- |
-| `S3_ACCESS_KEY_ID`     | Pasted in chat           | Rotate — §4.3                                                  |
-| `S3_SECRET_ACCESS_KEY` | Pasted in chat           | Rotate — §4.3                                                  |
-| `CLERK_WEBHOOK_SECRET` | Pasted in chat           | None — the variable and its endpoint went with Clerk (VEN-448) |
-| Svix dashboard URL     | Printed by the assistant | Self-expiring one-time token; no action, do not re-share       |
+| Credential                  | How it was exposed       | Action                                                   |
+| --------------------------- | ------------------------ | -------------------------------------------------------- |
+| `S3_ACCESS_KEY_ID`          | Pasted in chat           | Rotate — §4.3                                            |
+| `S3_SECRET_ACCESS_KEY`      | Pasted in chat           | Rotate — §4.3                                            |
+| Retired auth webhook secret | Pasted in chat           | Revoke with the retired account — VEN-377 checklist      |
+| Webhook dashboard URL       | Printed by the assistant | Self-expiring one-time token; no action, do not re-share |
 
 **Not exposed, for the record.** These were handled without ever being printed:
 `DATABASE_URL` and `DATABASE_URL_UNPOOLED` (piped from the Neon CLI straight
-into Railway by you; every display was masked). `CLERK_SECRET_KEY` was
-handled the same way and has since been retired with Clerk (VEN-448).
+into Railway by you; every display was masked). The retired auth provider's key was
+handled the same way and went with that provider (VEN-448).
 
 ---
 

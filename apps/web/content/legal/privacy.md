@@ -29,7 +29,7 @@ Because you asked us to run a booking for you, and a booking cannot be run witho
 
 ## Who else sees it
 
-A vendor sees the requests and bookings addressed to them, and the messages you send them. A customer sees the profile a vendor published. Nobody sees anybody else's. Our processors — Stripe, Clerk and Cloudflare — see what the table above says they hold, and are contractually barred from doing anything else with it.
+A vendor sees the requests and bookings addressed to them, and the messages you send them. A customer sees the profile a vendor published. Nobody sees anybody else's. Our processors — Stripe, Neon (which also runs sign-in) and Cloudflare — see what the table above says they hold, and are contractually barred from doing anything else with it.
 
 **One exception, and it is the reason reporting works at all: when a message thread is reported, the people who operate the platform can read it.** They can read that thread, and only that thread, and only while the report is open — a closed report stops being a key to the conversation. Every such read is written to an internal log naming the operator, the thread and the report it was read under. Staff never write into a thread: an operator reads and then acts, and nothing you see in a conversation is from us. We do not otherwise read your messages, and there is no way in the product for anybody to browse conversations they have no report about.
 

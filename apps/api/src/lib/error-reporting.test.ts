@@ -217,7 +217,7 @@ describe('buildServer marks the money routes', () => {
 
   it('reports a failed Connect onboarding as a payment error for the signed-in vendor', async () => {
     harness = await createTestHarness({ errorReporter: reporter });
-    harness.clerkUsers.set('vendor_err', {
+    harness.authUsers.set('vendor_err', {
       authUserId: 'vendor_err',
       email: EMAIL,
       firstName: 'Test',

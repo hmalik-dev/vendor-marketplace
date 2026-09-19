@@ -85,7 +85,7 @@ describe('the vendor’s own storefront writes, against a real Postgres', () => 
     harness = await createTestHarness({ database });
 
     for (const authUserId of [VENDOR, OTHER_VENDOR]) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',

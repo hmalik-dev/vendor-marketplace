@@ -67,7 +67,7 @@ describe('/vendor/portfolio', () => {
       [OTHER_VENDOR, 'vendor', 'ada@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Test',
@@ -537,7 +537,7 @@ describe('portfolio writes never touch the cover', () => {
 
   beforeAll(async () => {
     harness = await createTestHarness();
-    harness.clerkUsers.set(VENDOR, {
+    harness.authUsers.set(VENDOR, {
       authUserId: VENDOR,
       email: 'cover@example.com',
       firstName: 'Cover',

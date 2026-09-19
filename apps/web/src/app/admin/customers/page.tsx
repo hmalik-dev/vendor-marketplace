@@ -200,7 +200,7 @@ export default async function AdminCustomersPage({
               filter exists, which is the whole failure this replaces.
 
               Both addresses are printed because the repair needs both: the one
-              mail is going to, and the one Clerk says it should be going to.
+              mail is going to, and the one the auth provider says it should be going to.
             */
             cell: (row) =>
               row.pendingEmail === null ? (

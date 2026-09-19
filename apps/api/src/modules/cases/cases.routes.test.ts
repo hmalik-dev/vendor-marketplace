@@ -234,7 +234,7 @@ describe('the operations case queue (#431)', () => {
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',
@@ -1127,7 +1127,7 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',
@@ -1259,7 +1259,7 @@ describe('a case row that cannot be written (#431 security review)', () => {
   beforeAll(async () => {
     harness = await createTestHarness({ env: { LOG_LEVEL: 'trace' }, loggerStream: collector });
 
-    harness.clerkUsers.set(CUSTOMER, {
+    harness.authUsers.set(CUSTOMER, {
       authUserId: CUSTOMER,
       email: `${CUSTOMER}@example.com`,
       firstName: 'Test',

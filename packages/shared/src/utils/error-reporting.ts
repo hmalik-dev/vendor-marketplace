@@ -40,14 +40,14 @@ export const PAYMENT_ERROR_TAGS = { area: 'payments', severity: 'critical' } as 
  * both undone if the caller's address arrives in a header instead.
  */
 const CREDENTIAL_HEADER =
-  /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-forwarded-for|x-real-ip|forwarded|x-web-tier-key|x-visitor-ip)$|token|secret|signature|session|svix|clerk/i;
+  /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-forwarded-for|x-real-ip|forwarded|x-web-tier-key|x-visitor-ip)$|token|secret|signature|session|svix/i;
 
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-/** A JWT — Clerk's session token is one, and so is its `__session` cookie. */
+/** A JWT — the auth provider's session token is one, and so is its `__session` cookie. */
 const JWT = /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
 /** A bearer credential in free text, whatever its shape. */
 const BEARER = /\bBearer\s+[^\s"',]+/gi;
-/** Stripe, Clerk and Resend server keys and signing secrets. */
+/** Stripe, the auth provider and Resend server keys and signing secrets. */
 const PROVIDER_CREDENTIAL = /\b(?:sk|rk|whsec|re)_[A-Za-z0-9_]{8,}/g;
 
 export const REDACTED = '[redacted]';
@@ -113,7 +113,7 @@ function pathOf(url: unknown): unknown {
 /**
  * The `beforeSend` both apps install.
  *
- * **The user is reduced to an id.** Clerk's session carries the email, the SDKs
+ * **The user is reduced to an id.** The auth provider's session carries the email, the SDKs
  * attach an IP address and a username when they can, and none of that is needed
  * to find the account — the id is. Then, because a message, a stack frame's
  * local or a breadcrumb can still quote an email or a token no field was meant

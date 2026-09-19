@@ -52,7 +52,7 @@ export const vendorApplicationRoutes: FastifyPluginAsyncZod = async (app) => {
     {
       /*
        * Deliberately unauthenticated: the applicant the gate sends here has a
-       * Clerk session and no account, and a visitor from `/for-vendors` has
+       * Auth session and no account, and a visitor from `/for-vendors` has
        * neither. Keyed by account where there is one, by IP where there is not.
        */
       config: {

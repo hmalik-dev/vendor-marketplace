@@ -6,7 +6,7 @@ import { vendorProfiles } from '@vendor-marketplace/db/schema';
  *
  * `users.deleted_at` was written by the `user.deleted` webhook and read by
  * nothing: no vendor visibility predicate joined it, so a vendor who deleted
- * their Clerk identity kept a published, searchable, bookable profile. The
+ * their auth identity kept a published, searchable, bookable profile. The
  * deletion path now retires the profile itself, and this is the belt to that
  * pair of braces — a profile whose retirement failed still cannot be reached.
  *

@@ -30,7 +30,7 @@ export const users = pgTable(
     id: uuid('id')
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    /** Clerk identity link — the join key for token verification. */
+    /** Auth identity link — the join key for token verification. */
     authUserId: varchar('auth_user_id', { length: 255 }).notNull(),
     /** Who issued `authUserId`; set at insert, so no reader has to guess from its shape. */
     authProvider: authProviderEnum('auth_provider').notNull().default('neon_auth'),
@@ -66,12 +66,12 @@ export const users = pgTable(
     isBanned: boolean('is_banned').notNull().default(false),
     bannedAt: timestamp('banned_at', { withTimezone: true }),
     /**
-     * Set when Clerk reports the identity was deleted. Bookings, reviews, and
+     * Set when the auth provider reports the identity was deleted. Bookings, reviews, and
      * messages reference this row, so it is retired rather than removed.
      */
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     /**
-     * The address Clerk holds that this row could **not** be given, and when
+     * The address the auth provider holds that this row could **not** be given, and when
      * the mirror first failed (#462).
      *
      * `users.email` is written from `user.updated`, and `users_email_key` can
@@ -83,7 +83,7 @@ export const users = pgTable(
      * address the account holder has already given up.
      *
      * So the divergence is stored on the row it is about rather than only
-     * logged: `pending_email` is what Clerk says the address is, and
+     * logged: `pending_email` is what the auth provider says the address is, and
      * `email_sync_failed_at` is when the two stopped agreeing. Both are cleared
      * the moment a later `user.updated` writes the address successfully, so a
      * set `pending_email` always means *currently* diverged rather than *once

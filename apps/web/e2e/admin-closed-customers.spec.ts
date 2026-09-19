@@ -7,7 +7,7 @@ import { expect, expectSignedIn, storageStatePath, test } from './fixtures';
  *
  * Driven through the real closure — the data-rights page's `Close account` —
  * never a row hand-set with `deleted_at`. It closes a **marketing seed**
- * customer (`@orla-demo.example`, `seed_mkt_…`): those rows have no Clerk
+ * customer (`@orla-demo.example`, `seed_mkt_…`): those rows have no auth
  * identity to destroy, whereas closing a seeded E2E account would delete a
  * real sign-in the seed cannot rebuild. The closure is permanent in the lane
  * database, so the spec picks whichever seed customer is still closable.

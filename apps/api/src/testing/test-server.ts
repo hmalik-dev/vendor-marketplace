@@ -814,8 +814,6 @@ export interface TestHarness<TDatabase extends HarnessDatabase = TestDatabase> {
   storedObjects: RecordedObject[];
   /** Neon Auth identities the fake token verifier and acceptance-gate loader resolve. */
   authUsers: Map<string, AuthUserSnapshot>;
-  /** The old name of `authUsers`, kept so peer lanes' suites still compile; VEN-449 retires it. */
-  clerkUsers: Map<string, AuthUserSnapshot>;
   /** Signatures the fake svix verifier accepts; anything else is rejected. */
   validWebhookSignatures: Set<string>;
   /** The Stripe Connect boundary, recorded rather than called. */
@@ -834,7 +832,7 @@ export interface TestHarness<TDatabase extends HarnessDatabase = TestDatabase> {
   /** Simulates the storage bucket going away, for the readiness probe. */
   setStorageAvailable: (available: boolean) => void;
   /**
-   * Clerk identities the fake deleter ended, in order (#451).
+   * Auth identities the fake deleter ended, in order (#451).
    *
    * Also the fake's record of **who is gone**: the token verifier refuses an
    * id in this list, and the deleter drops it from `authUsers` as well, so an
@@ -845,15 +843,12 @@ export interface TestHarness<TDatabase extends HarnessDatabase = TestDatabase> {
   deletedAuthUsers: string[];
   /** Simulates the identity store refusing the deletion, for the half-closed account case. */
   setAuthDeletionFails: (fails: boolean) => void;
-  /** The old names of the two above, kept for the same reason as `clerkUsers`. */
-  deletedClerkUsers: string[];
-  setClerkDeletionFails: (fails: boolean) => void;
   close: () => Promise<void>;
 }
 
 /**
  * Boots the real server against an in-process Postgres, with the four network
- * boundaries (Clerk token verification, svix signature verification, Stripe
+ * boundaries (auth token verification, svix signature verification, Stripe
  * Connect and Resend) replaced by explicit fakes. Everything between the HTTP
  * edge and SQL is the production code path.
  *
@@ -930,7 +925,7 @@ export async function createTestHarness(
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.errorReporter ? { errorReporter: options.errorReporter } : {}),
     auth: {
-      // Tokens in the suites are literally the Clerk user id they stand for.
+      // Tokens in the suites are literally the auth user id they stand for.
       verifySessionToken: async (token) => {
         if (!token.startsWith('token-')) {
           throw new Error('Unrecognised test token');
@@ -955,7 +950,7 @@ export async function createTestHarness(
          * Without this the fake could not tell #451's change from the state it
          * replaced: the local row is retired either way, so the gate 401s on
          * `deletedAt` and a suite asserting only the status code passes with
-         * the Clerk deletion removed. Clerk answers a token for a deleted user
+         * The auth deletion removed. The auth provider answers a token for a deleted user
          * by refusing to verify it, so that is what this does — and the two
          * refusals carry different messages, which is what lets a suite say
          * which one it got.
@@ -1033,7 +1028,6 @@ export async function createTestHarness(
     email,
     storedObjects,
     authUsers,
-    clerkUsers: authUsers,
     validWebhookSignatures,
     stripe,
     flushEmail: () => app.background.drain(),
@@ -1042,10 +1036,6 @@ export async function createTestHarness(
     },
     deletedAuthUsers,
     setAuthDeletionFails: (fails) => {
-      authDeletionFails = fails;
-    },
-    deletedClerkUsers: deletedAuthUsers,
-    setClerkDeletionFails: (fails) => {
       authDeletionFails = fails;
     },
     close: async () => {
@@ -1060,14 +1050,14 @@ export function bearer(authUserId: string): Record<string, string> {
 }
 
 /**
- * Creates the `users` row for a fake Clerk identity and returns its id.
+ * Creates the `users` row for a fake auth identity and returns its id.
  *
  * A sign-in is the only thing that writes a `users` row, so a test that wants a
  * user has to make the request rather than insert one — the row carries columns
  * (`role`, `auth_user_id`, the mirrored name) that the sync owns.
  *
  * `promoteToAdmin` is a second step and cannot be a first one: `normalizeRole`
- * refuses `admin` from Clerk metadata **by design**, precisely so the role can
+ * refuses `admin` from auth metadata **by design**, precisely so the role can
  * only be granted by an operator with database access. Every admin-facing suite
  * therefore signs in and then promotes, and three of them had written that out
  * by hand before this lived here.

@@ -65,7 +65,7 @@ async function walk(dir: string, extensions: readonly string[]): Promise<string[
  *   nearly shipped. The `:` stops the *line*-comment rule, then the scan
  *   advances one character and the second slash of `://*` opens a **block**
  *   comment that runs to the next `*​/` anywhere below. On `security-headers.ts`,
- *   whose CSP lists `'https://*.clerk.accounts.dev'`, that swallowed 151 lines.
+ *   whose CSP lists `'https://*.auth.accounts.dev'`, that swallowed 151 lines.
  *
  * So the URL is consumed rather than merely stepped over. `[^\s'"\`]*` ends it
  * at whitespace or the closing quote, which is where a URL in source ends.

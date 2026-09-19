@@ -116,7 +116,7 @@ describe('banning an operator while the other operator leaves the live set', () 
     harness = await createTestHarness({ database });
 
     for (const authUserId of [ADMIN_ONE, ADMIN_TWO]) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',

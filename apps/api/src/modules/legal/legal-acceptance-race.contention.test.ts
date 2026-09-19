@@ -150,7 +150,7 @@ describe('several acceptances of one document at once, against a real Postgres',
       [CUSTOMER, 'customer'],
       [VENDOR, 'vendor'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Ada',

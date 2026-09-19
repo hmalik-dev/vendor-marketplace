@@ -3,9 +3,9 @@ import { users } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
-const CUSTOMER_CLERK_ID = 'user_customer';
-const VENDOR_CLERK_ID = 'user_vendor';
-const AMPERSAND_CLERK_ID = 'user_ampersand';
+const CUSTOMER_AUTH_ID = 'user_customer';
+const VENDOR_AUTH_ID = 'user_vendor';
+const AMPERSAND_AUTH_ID = 'user_ampersand';
 
 describe('/users/me', () => {
   let harness: TestHarness;
@@ -13,16 +13,16 @@ describe('/users/me', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    harness.clerkUsers.set(CUSTOMER_CLERK_ID, {
-      authUserId: CUSTOMER_CLERK_ID,
+    harness.authUsers.set(CUSTOMER_AUTH_ID, {
+      authUserId: CUSTOMER_AUTH_ID,
       email: 'ada@example.com',
       firstName: 'Ada',
       lastName: 'Lovelace',
       roleHint: 'customer',
       avatarUrl: null,
     });
-    harness.clerkUsers.set(VENDOR_CLERK_ID, {
-      authUserId: VENDOR_CLERK_ID,
+    harness.authUsers.set(VENDOR_AUTH_ID, {
+      authUserId: VENDOR_AUTH_ID,
       email: 'grace@example.com',
       firstName: 'Grace',
       lastName: 'Hopper',
@@ -59,8 +59,8 @@ describe('/users/me', () => {
     });
 
     it('answers GET and PUT for an address the strict email check refuses', async () => {
-      harness.clerkUsers.set(AMPERSAND_CLERK_ID, {
-        authUserId: AMPERSAND_CLERK_ID,
+      harness.authUsers.set(AMPERSAND_AUTH_ID, {
+        authUserId: AMPERSAND_AUTH_ID,
         email: 'first&last@example.com',
         firstName: 'Ada',
         lastName: 'Lovelace',
@@ -71,12 +71,12 @@ describe('/users/me', () => {
       const read = await harness.app.inject({
         method: 'GET',
         url: '/users/me',
-        headers: bearer(AMPERSAND_CLERK_ID),
+        headers: bearer(AMPERSAND_AUTH_ID),
       });
       const written = await harness.app.inject({
         method: 'PUT',
         url: '/users/me',
-        headers: bearer(AMPERSAND_CLERK_ID),
+        headers: bearer(AMPERSAND_AUTH_ID),
         payload: { firstName: 'Augusta' },
       });
 
@@ -93,12 +93,12 @@ describe('/users/me', () => {
       const response = await harness.app.inject({
         method: 'GET',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
-        authUserId: CUSTOMER_CLERK_ID,
+        authUserId: CUSTOMER_AUTH_ID,
         email: 'ada@example.com',
         firstName: 'Ada',
         lastName: 'Lovelace',
@@ -110,7 +110,7 @@ describe('/users/me', () => {
       const rows = await harness.database.db
         .select()
         .from(users)
-        .where(eq(users.authUserId, CUSTOMER_CLERK_ID));
+        .where(eq(users.authUserId, CUSTOMER_AUTH_ID));
       expect(rows).toHaveLength(1);
     });
 
@@ -118,12 +118,12 @@ describe('/users/me', () => {
       await harness.app.inject({
         method: 'GET',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
       });
       const second = await harness.app.inject({
         method: 'GET',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
       });
 
       expect(second.statusCode).toBe(200);
@@ -131,17 +131,17 @@ describe('/users/me', () => {
       const rows = await harness.database.db
         .select()
         .from(users)
-        .where(eq(users.authUserId, CUSTOMER_CLERK_ID));
+        .where(eq(users.authUserId, CUSTOMER_AUTH_ID));
       expect(rows).toHaveLength(1);
     });
 
-    it('never exposes an admin role chosen in client-writable Clerk metadata', async () => {
-      harness.clerkUsers.set('user_escalate', {
+    it('never exposes an admin role chosen in client-writable auth metadata', async () => {
+      harness.authUsers.set('user_escalate', {
         authUserId: 'user_escalate',
         email: 'mallory@example.com',
         firstName: 'Mallory',
         lastName: 'Nguyen',
-        // Clerk `unsafeMetadata` is writable by the account holder.
+        // auth `unsafeMetadata` is writable by the account holder.
         roleHint: 'admin',
         avatarUrl: null,
       });
@@ -156,14 +156,14 @@ describe('/users/me', () => {
       expect(response.json().role).toBe('customer');
     });
 
-    it('serializes a Clerk identity that carries no name', async () => {
+    it('serializes an auth identity that carries no name', async () => {
       /*
-       * Clerk's email-and-password sign-up does not collect a name, so
+       * The auth provider's email-and-password sign-up does not collect a name, so
        * `first_name` arrives null and the lazily created row has none. The
        * response schema has to tolerate that — it previously required a
        * non-empty name and answered its own freshly created user with a 500.
        */
-      harness.clerkUsers.set('user_nameless', {
+      harness.authUsers.set('user_nameless', {
         authUserId: 'user_nameless',
         email: 'nameless@example.com',
         firstName: '',
@@ -188,7 +188,7 @@ describe('/users/me', () => {
     });
 
     it('lets a nameless user fill their name in afterwards', async () => {
-      harness.clerkUsers.set('user_nameless2', {
+      harness.authUsers.set('user_nameless2', {
         authUserId: 'user_nameless2',
         email: 'nameless2@example.com',
         firstName: '',
@@ -217,17 +217,17 @@ describe('/users/me', () => {
       await harness.app.inject({
         method: 'GET',
         url: '/users/me',
-        headers: bearer(VENDOR_CLERK_ID),
+        headers: bearer(VENDOR_AUTH_ID),
       });
       await harness.database.db
         .update(users)
         .set({ isBanned: true })
-        .where(eq(users.authUserId, VENDOR_CLERK_ID));
+        .where(eq(users.authUserId, VENDOR_AUTH_ID));
 
       const response = await harness.app.inject({
         method: 'GET',
         url: '/users/me',
-        headers: bearer(VENDOR_CLERK_ID),
+        headers: bearer(VENDOR_AUTH_ID),
       });
 
       expect(response.statusCode).toBe(403);
@@ -256,12 +256,12 @@ describe('/users/me', () => {
     }
 
     it('updates the fields a user owns', async () => {
-      await signIn(CUSTOMER_CLERK_ID);
+      await signIn(CUSTOMER_AUTH_ID);
 
       const response = await harness.app.inject({
         method: 'PUT',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'Ada', lastName: 'Byron', phone: '+15551234567' },
       });
 
@@ -278,16 +278,16 @@ describe('/users/me', () => {
      * than the schema because it is the round trip that was broken.
      */
     it('stores the object key an upload returns, and reads it back', async () => {
-      await signIn(CUSTOMER_CLERK_ID);
+      await signIn(CUSTOMER_AUTH_ID);
 
       // The owner segment is the caller's own `users.id`, exactly as the upload
       // route mints it — anything else is now refused (#407).
-      const avatarUrl = `customer-profile/${await userIdOf(CUSTOMER_CLERK_ID)}/0f4a1c2e.webp`;
+      const avatarUrl = `customer-profile/${await userIdOf(CUSTOMER_AUTH_ID)}/0f4a1c2e.webp`;
 
       const saved = await harness.app.inject({
         method: 'PUT',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'Ada', lastName: 'Byron', avatarUrl },
       });
 
@@ -298,7 +298,7 @@ describe('/users/me', () => {
       const reloaded = await harness.app.inject({
         method: 'GET',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
       });
 
       expect(reloaded.statusCode).toBe(200);
@@ -307,15 +307,15 @@ describe('/users/me', () => {
 
     /* #407 — the write guard on `avatarUrl`. See `assertOwnedImageRefs`. */
     it('refuses an avatar naming an object minted for another account', async () => {
-      await signIn(CUSTOMER_CLERK_ID);
+      await signIn(CUSTOMER_AUTH_ID);
       // The other account has to exist for its key to have a real owner segment.
-      await signIn(VENDOR_CLERK_ID);
-      const theirs = await userIdOf(VENDOR_CLERK_ID);
+      await signIn(VENDOR_AUTH_ID);
+      const theirs = await userIdOf(VENDOR_AUTH_ID);
 
       const response = await harness.app.inject({
         method: 'PUT',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'Ada', avatarUrl: `customer-profile/${theirs}/stolen.webp` },
       });
 
@@ -325,18 +325,18 @@ describe('/users/me', () => {
 
     /*
      * The two references that carry no owner still pass: seeded marketing art
-     * is a site-relative path, and a Clerk avatar is an absolute URL on a host
+     * is a site-relative path, and an auth avatar is an absolute URL on a host
      * that is not ours. Refusing "not mine" rather than "someone else's" would
      * have locked both out.
      */
     it('still accepts a reference that carries no owner at all', async () => {
-      await signIn(CUSTOMER_CLERK_ID);
+      await signIn(CUSTOMER_AUTH_ID);
 
-      for (const avatarUrl of ['/images/placeholder-avatar.webp', 'https://img.clerk.com/a.png']) {
+      for (const avatarUrl of ['/images/placeholder-avatar.webp', 'https://img.auth.com/a.png']) {
         const response = await harness.app.inject({
           method: 'PUT',
           url: '/users/me',
-          headers: bearer(CUSTOMER_CLERK_ID),
+          headers: bearer(CUSTOMER_AUTH_ID),
           payload: { firstName: 'Ada', avatarUrl },
         });
 
@@ -346,12 +346,12 @@ describe('/users/me', () => {
     });
 
     it('still refuses an avatar reference that would reach an img src', async () => {
-      await signIn(CUSTOMER_CLERK_ID);
+      await signIn(CUSTOMER_AUTH_ID);
 
       const response = await harness.app.inject({
         method: 'PUT',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'Ada', lastName: 'Byron', avatarUrl: 'javascript:alert(1)' },
       });
 
@@ -359,12 +359,12 @@ describe('/users/me', () => {
     });
 
     it('rejects an empty body', async () => {
-      await signIn(CUSTOMER_CLERK_ID);
+      await signIn(CUSTOMER_AUTH_ID);
 
       const response = await harness.app.inject({
         method: 'PUT',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
         payload: {},
       });
 
@@ -373,12 +373,12 @@ describe('/users/me', () => {
     });
 
     it('rejects a guest range whose minimum exceeds its maximum', async () => {
-      await signIn(CUSTOMER_CLERK_ID);
+      await signIn(CUSTOMER_AUTH_ID);
 
       const response = await harness.app.inject({
         method: 'PUT',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
         payload: { typicalGuestCountMin: 200, typicalGuestCountMax: 50 },
       });
 
@@ -387,12 +387,12 @@ describe('/users/me', () => {
     });
 
     it('ignores fields outside the self-service contract', async () => {
-      await signIn(CUSTOMER_CLERK_ID);
+      await signIn(CUSTOMER_AUTH_ID);
 
       const response = await harness.app.inject({
         method: 'PUT',
         url: '/users/me',
-        headers: bearer(CUSTOMER_CLERK_ID),
+        headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'Ada', role: 'admin', isBanned: true, completedBookingsCount: 99 },
       });
 

@@ -27,7 +27,7 @@ The DB and API suites boot an in-process Postgres (PGlite) through
 `@vendor-marketplace/db/testing`, so schema, seed and route behaviour are all
 verified against real Postgres without Docker. `apps/api/src/testing/test-server.ts`
 wraps it with the real Fastify instance and fakes only the two network
-boundaries: Clerk token verification and svix signature verification.
+boundaries: auth token verification and svix signature verification.
 
 Fake nothing else. A test that mocks a DAO is testing the mock.
 

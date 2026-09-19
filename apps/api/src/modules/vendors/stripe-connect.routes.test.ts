@@ -70,7 +70,7 @@ describe('vendor Stripe Connect onboarding', () => {
   beforeAll(async () => {
     harness = await createTestHarness();
 
-    harness.clerkUsers.set('vendor_a', {
+    harness.authUsers.set('vendor_a', {
       authUserId: 'vendor_a',
       email: 'vendor_a@example.com',
       firstName: 'Test',
@@ -78,7 +78,7 @@ describe('vendor Stripe Connect onboarding', () => {
       roleHint: 'vendor',
       avatarUrl: null,
     });
-    harness.clerkUsers.set('customer_a', {
+    harness.authUsers.set('customer_a', {
       authUserId: 'customer_a',
       email: 'customer_a@example.com',
       firstName: 'Test',

@@ -92,7 +92,7 @@ const SEEDED_REVIEW_RATINGS = { customer_to_vendor: 5, vendor_to_customer: 4 } a
 
 export interface E2eAccount {
   /**
-   * The account's **real** Clerk id.
+   * The account's **real** Auth id.
    *
    * Not optional and not inventable. A `users` row carrying the end-to-end
    * email under a made-up id makes the account's first real sign-in hit
@@ -337,8 +337,8 @@ const UNBACKED_ROW = ne(users.authProvider, 'neon_auth');
 /**
  * Re-keys a pre-swap row to the identity Neon Auth actually holds.
  *
- * A database that predates the Clerk to Neon Auth swap already has the fixture's
- * row under a Clerk id. The upsert below is keyed on `auth_user_id`, so without
+ * A database that predates the swap to Neon Auth already has the fixture's
+ * row under an auth id. The upsert below is keyed on `auth_user_id`, so without
  * this it would insert a second row and die on the unique email. Only a row no
  * identity backs is touched, and only when the Neon id has no row yet: a
  * Neon-keyed row is never re-keyed, and its email and role are left to the

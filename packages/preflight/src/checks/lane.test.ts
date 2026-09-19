@@ -26,7 +26,7 @@ const policy = (apiOrigin: string): string =>
   [
     `default-src 'self'`,
     `script-src 'self' 'unsafe-inline'`,
-    `connect-src 'self' ${apiOrigin} https://clerk.example.com`,
+    `connect-src 'self' ${apiOrigin} https://auth.example.com`,
     `frame-src 'self'`,
   ].join('; ');
 
@@ -154,7 +154,7 @@ describe('connectSrc', () => {
     expect(connectSrc(policy('http://localhost:4007'))).toEqual([
       "'self'",
       'http://localhost:4007',
-      'https://clerk.example.com',
+      'https://auth.example.com',
     ]);
   });
 

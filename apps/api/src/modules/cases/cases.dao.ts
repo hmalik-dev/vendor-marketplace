@@ -322,7 +322,7 @@ export interface DisputedBookingProjection {
    * is looking at a synthetic account.
    */
   customerId: string;
-  customerClerkUserId: string;
+  customerAuthUserId: string;
   customerRole: (typeof users.$inferSelect)['role'];
   /**
    * What the booking was **before** the hold was attempted.
@@ -347,7 +347,7 @@ export async function findBookingForDispute(
     .select({
       bookingId: bookings.id,
       customerId: users.id,
-      customerClerkUserId: users.authUserId,
+      customerAuthUserId: users.authUserId,
       customerRole: users.role,
       bookingStatus: bookings.status,
       vendorId: bookings.vendorId,

@@ -239,9 +239,9 @@ function referencedObjectKeyOwner(ref: string): string | null {
  *
  * Not `!ownsObjectKey`, and the difference is the point. An image reference is
  * legitimately one of three shapes — an object key, a site-relative path for
- * seeded art, or an absolute URL for a Clerk avatar — and only the first
+ * seeded art, or an absolute URL for an auth avatar — and only the first
  * carries an owner, so only the first can be refused. "Is this mine" would
- * reject every seeded path and every Clerk avatar on the way in.
+ * reject every seeded path and every auth avatar on the way in.
  *
  * The refusal is one-sided on purpose: `ownsObjectKey` keeps deciding on the
  * raw spelling, because widening *it* would start reaping objects that absolute

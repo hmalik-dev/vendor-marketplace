@@ -297,7 +297,7 @@ test.describe('paid booking', () => {
      * back from — is already on the next one. A pinned zone and a pinned clock,
      * so this runs the edge at any hour instead of only between 00:00 UTC and
      * local midnight. UTC-12 keeps the pinned instant within twelve hours of the
-     * real one, where the Clerk session the vendor holds is still honoured.
+     * real one, where the auth session the vendor holds is still honoured.
      */
     const vendorContext = await browser.newContext({
       storageState: storageStatePath('vendor'),

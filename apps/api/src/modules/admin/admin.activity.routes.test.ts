@@ -40,7 +40,7 @@ describe('the admin action log', () => {
   let seededTagIds: string[];
 
   /**
-   * `normalizeRole` refuses `admin` from Clerk metadata on purpose, so an admin
+   * `normalizeRole` refuses `admin` from auth metadata on purpose, so an admin
    * cannot be minted through sync. Sign in to create the row, then promote it.
    */
   async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
@@ -149,7 +149,7 @@ describe('the admin action log', () => {
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',
@@ -969,7 +969,7 @@ describe('a failed action write', () => {
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',

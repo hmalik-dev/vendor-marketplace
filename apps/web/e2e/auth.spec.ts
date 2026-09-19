@@ -10,7 +10,7 @@ import { expect, test } from './fixtures.js';
  * Sign-up is deliberately absent. #340 lists it, but the same ticket requires
  * that sign-in use the stored `.auth/` state and never a typed password, and a
  * sign-up journey cannot honour that — it would also mint real users in the
- * shared Clerk development instance on every run. Recorded rather than dropped:
+ * shared auth development instance on every run. Recorded rather than dropped:
  * see the ticket's notes.
  */
 

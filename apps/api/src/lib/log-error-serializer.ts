@@ -234,7 +234,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * record carrying `detail`, a `{ query, params }` payload, a nested array of
  * failures or a record wrapping one all reach the line raw unless the sink
  * walks them — and nothing about the error type that carries the array (a
- * `ClerkAPIResponseError`, an `AggregateError`, anyone's own) decides which of
+ * provider SDK error, an `AggregateError`, anyone's own) decides which of
  * those arrives.
  */
 function sanitizeEntries(entries: unknown[], seen: Set<unknown>, depth: number): unknown[] {

@@ -82,7 +82,7 @@ export interface E2eStripeAccountResult {
 /**
  * Builds the gateway against the real Stripe API.
  *
- * Unlike the Clerk lookup in `scripts/seed-e2e.ts`, this goes through the SDK
+ * Unlike the auth lookup in `scripts/seed-e2e.ts`, this goes through the SDK
  * rather than `fetch`. The v2 Accounts API **requires** a `Stripe-Version`
  * header, so a hand-rolled call means pinning an API version string in a second
  * place and letting it drift silently from the one `apps/api` sends. The SDK

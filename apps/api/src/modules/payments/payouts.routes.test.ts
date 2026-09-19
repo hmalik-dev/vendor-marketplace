@@ -247,7 +247,7 @@ describe('payouts', () => {
       [OUTSIDER, 'customer', 'edsger@example.com'],
       [ADMIN, 'admin', 'ada@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Test',
@@ -268,7 +268,7 @@ describe('payouts', () => {
   /**
    * `admin` is promoted in the database, because it cannot be reached from
    * inside the product: `normalizeRole` refuses it at sync precisely so the
-   * account holder cannot grant it to themselves through Clerk metadata. The
+   * account holder cannot grant it to themselves through auth metadata. The
    * users table is wiped after every test, so this runs per test rather than
    * once.
    */

@@ -45,7 +45,7 @@ monorepo; repo and packages are named `vendor-marketplace`, the product is
 reachable: it gives the E2E vendor a published storefront, a package, a live
 booking request and a **real Stripe test-mode connected account**, and seeds the
 persistent admin account (the only way `/admin` is reachable; never delete it).
-It needs `.env.e2e.local` and a `CLERK_SECRET_KEY` for the same Clerk instance,
+It needs `.env.e2e.local` and a `NEON_AUTH_BASE_URL` for the same auth branch,
 refuses production and protected Neon branches, and `lane:up` runs it per lane.
 Pin the connected account across lanes with `E2E_VENDOR_STRIPE_ACCOUNT_ID`.
 
@@ -102,5 +102,5 @@ edits ride on `main` directly, never inside a code PR.
 
 ## Stack
 
-Next.js 15 · Fastify 5 · Drizzle · PostgreSQL 18 (Neon; Docker locally) · Clerk ·
+Next.js 15 · Fastify 5 · Drizzle · PostgreSQL 18 (Neon; Docker locally) · Neon Auth ·
 Stripe Connect · Cloudflare R2 · Resend · Tailwind 4 + shadcn/ui · Zod · Vitest · Playwright

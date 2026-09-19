@@ -321,7 +321,7 @@ async function landCell(
 
   /*
    * The marketplace header, where the route draws it: the console and checkout
-   * draw their own, and the auth screens cover it. Clerk's signed-in and
+   * draw their own, and the auth screens cover it. The auth provider's signed-in and
    * signed-out branches render on the client, so these wait rather than read.
    */
   const siteHeader = page.locator('[data-slot="site-header"]');
@@ -350,7 +350,7 @@ async function landCell(
 }
 
 /**
- * The storage state's first navigation reads signed-out until Clerk's handshake
+ * The storage state's first navigation reads signed-out until the auth provider's handshake
  * settles (`.claude/rules/e2e-auth.md`), so a persona is warmed until the
  * session is live before any cell counts.
  */

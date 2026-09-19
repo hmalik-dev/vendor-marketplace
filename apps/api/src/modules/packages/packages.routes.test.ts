@@ -65,7 +65,7 @@ describe('/vendor/packages', () => {
       [OTHER_VENDOR, 'vendor', 'ada@example.com'],
       [CUSTOMER, 'customer', 'alan@example.com'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email,
         firstName: 'Test',

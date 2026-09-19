@@ -53,7 +53,7 @@ describe('withoutComments', () => {
    */
   it('does not let a wildcard URL open a block comment that eats the file', () => {
     const source = [
-      "const csp = ['https://*.clerk.accounts.dev'];",
+      "const csp = ['https://*.auth.accounts.dev'];",
       'const between = 1;',
       '/* an ordinary block comment */',
       'const after = 2;',

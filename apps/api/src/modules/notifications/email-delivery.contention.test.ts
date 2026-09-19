@@ -33,7 +33,7 @@ describe('the email delivery record, under real contention', () => {
 
     await database.db.insert(users).values({
       id: USER_ID,
-      authUserId: 'clerk_delivery_contention',
+      authUserId: 'auth_delivery_contention',
       email: 'reader@example.com',
       role: 'customer',
       firstName: 'Ada',

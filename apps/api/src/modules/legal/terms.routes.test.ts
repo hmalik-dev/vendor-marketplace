@@ -59,7 +59,7 @@ describe('the Terms of Service acceptance gate', () => {
       [CUSTOMER, 'customer'],
       [VENDOR, 'vendor'],
     ] as const) {
-      harness.clerkUsers.set(id, {
+      harness.authUsers.set(id, {
         authUserId: id,
         email: `${id}@example.com`,
         firstName: 'Ada',
@@ -169,7 +169,7 @@ describe('the Terms of Service acceptance gate', () => {
    * **The path production actually takes**, and the one every other test here
    * misses.
    *
-   * Clerk fires `user.created` at sign-up, long before anybody ticks a box, so
+   * Auth fires `user.created` at sign-up, long before anybody ticks a box, so
    * by the time the accept arrives the `users` row usually already exists and
    * the request takes the "account is already there" branch rather than the
    * transaction. Nothing else in the suite reaches it: the first accept finds no

@@ -122,15 +122,15 @@ below were written to the rules at the top of this file and to `40-states.md`,
 and are recorded as approved rather than invented. A future design pass may
 reword them; a future lane may not.
 
-Sign-up runs a Cloudflare bot challenge before Clerk will create an account.
+Sign-up runs a Cloudflare bot challenge before the auth provider will create an account.
 There are three ways it can go wrong and **only one of them says this**, which
 is the distinction the row did not have and the implementation measured:
 
-| The challenge host is…                 | What happens                                                                         | What the product says  |
-| -------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------- |
-| **Dropped** — accepted, never answered | Clerk waits on a token for ever, sends no create, disables every field, says nothing | **This copy**          |
-| **Refused** — answered with a reset    | Clerk gives up, attempts the create, is rejected, leaves the fields live             | Clerk's own message    |
-| **Reachable, unsolved**                | The challenge loads and declines to issue a token; the card is disabled the same way | Nothing yet — not this |
+| The challenge host is…                 | What happens                                                                         | What the product says           |
+| -------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------- |
+| **Dropped** — accepted, never answered | Auth waits on a token for ever, sends no create, disables every field, says nothing  | **This copy**                   |
+| **Refused** — answered with a reset    | Auth gives up, attempts the create, is rejected, leaves the fields live              | The auth provider's own message |
+| **Reachable, unsolved**                | The challenge loads and declines to issue a token; the card is disabled the same way | Nothing yet — not this          |
 
 Dropping is what a filtering corporate or school network does, and what several
 privacy extensions do. It is the only one of the three where nothing at all
@@ -146,7 +146,7 @@ alternative — "something went wrong" — is the state the row was filed agains
 `{challengeTimeoutSeconds}` is `SIGN_UP_CHALLENGE_TIMEOUT_MS`, per the rule
 directly above: no approved string hard-codes a duration the code derives.
 
-**Whether a challenge-free sign-up path should exist is still open** — Clerk
+**Whether a challenge-free sign-up path should exist is still open** — auth
 supports email-code sign-up without a password, which would route around the
 challenge entirely, and that trades directly against what bot protection is
 there to stop. #464 shipped the bounded wait, the message and the retry without

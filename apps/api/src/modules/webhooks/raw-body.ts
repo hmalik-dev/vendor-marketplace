@@ -9,7 +9,7 @@ import type { FastifyInstance } from 'fastify';
  * plugin, so this affects only the webhook route that asks for it and no other
  * JSON route in the application.
  *
- * Shared by the Clerk and Stripe webhooks: the rule is one rule, and stating it
+ * Shared by the auth provider and Stripe webhooks: the rule is one rule, and stating it
  * twice is how one of the two ends up quietly parsing its body again.
  */
 export function keepRawJsonBody(app: FastifyInstance): void {

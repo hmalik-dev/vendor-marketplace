@@ -7,12 +7,12 @@ import { readStreamTicket } from './messaging.routes.js';
 
 const CUSTOMER = 'user_customer';
 
-/** What a Clerk session token looks like to anything reading a URL. */
+/** What an auth session token looks like to anything reading a URL. */
 const JWT_SHAPED = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/;
 
-/** The harness resolves Clerk identities from this map rather than the network. */
+/** The harness resolves auth identities from this map rather than the network. */
 function registerCustomer(harness: TestHarness): void {
-  harness.clerkUsers.set(CUSTOMER, {
+  harness.authUsers.set(CUSTOMER, {
     authUserId: CUSTOMER,
     email: 'stream@example.com',
     firstName: 'Stream',
@@ -245,7 +245,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
   });
 
   it("closes a banned account's open stream without the client closing it", async () => {
-    harness.clerkUsers.set('user_admin_stream', {
+    harness.authUsers.set('user_admin_stream', {
       authUserId: 'user_admin_stream',
       email: 'ops@example.com',
       firstName: 'Ops',

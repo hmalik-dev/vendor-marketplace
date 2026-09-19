@@ -258,7 +258,7 @@ export async function listActivityActors(db: AppDatabase): Promise<AdminActivity
  *
  * Order matters and is the same order `statusCondition` filters in. `retired`
  * is tested first, ahead even of the ban (#433): an account whose owner deleted
- * their Clerk identity cannot be moderated, reinstated or asked anything, so
+ * their auth identity cannot be moderated, reinstated or asked anything, so
  * "this account is gone" is the fact that makes every other one moot. A
  * suspension on a retired row is history, not a lever.
  *
@@ -1028,7 +1028,7 @@ export async function setVendorPublished(
       /*
        * A missing owner is unverifiable, not unbanned.
        *
-       * `findUserById` excludes soft-deleted accounts, and the Clerk webhook
+       * `findUserById` excludes soft-deleted accounts, and the auth webhook
        * soft-deletes the user while leaving the vendor profile behind — so
        * `owner?.isBanned` read as `false` for an account that no longer exists,
        * and republished a storefront that would take booking requests nobody

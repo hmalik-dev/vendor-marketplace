@@ -77,7 +77,7 @@ why_. The rows are the real stack and must stay accurate:
 | What                 | Held by       | Why                                                     |
 | -------------------- | ------------- | ------------------------------------------------------- |
 | Card details         | Stripe        | Taking the payment. These never reach an Orla server.   |
-| Name, email, session | Clerk         | Signing you in and keeping you signed in.               |
+| Name, email, session | auth          | Signing you in and keeping you signed in.               |
 | Photos and files     | Cloudflare R2 | Vendor covers and portfolio images.                     |
 | Bookings, messages   | Orla          | The record of what was agreed, and the thread about it. |
 | Payout details       | Stripe        | Vendors only. Collected by Stripe Connect, not by us.   |
@@ -86,7 +86,7 @@ Ends with the sage note: no advertising networks, no analytics vendors, no data
 brokers.
 
 **`/cookies`** — deliberately thin. **No jump rail.** One opening line, one
-single-row data table (`__session`, set by Clerk, strictly necessary — your
+single-row data table (`__session`, set by auth, strictly necessary — your
 sign-in), and one closing paragraph stating that Orla sets no cookies of its own,
 loads no analytics/advertising/session-recording scripts, and that a strictly
 necessary cookie needs no consent, which is why there is no banner. **Do not add a
@@ -139,7 +139,7 @@ accepted.
 
 Onboarding order, which is deliberate and must not be reordered:
 
-1. **Create account** — Clerk. Terms of Service accepted here, at sign-up.
+1. **Create account** — auth. Terms of Service accepted here, at sign-up.
 2. **Profile basics** — name, category, city, prices. Saveable as a draft.
 3. **Vendor agreement** — this surface.
 4. **Connect payouts** — Stripe Connect, hosted.

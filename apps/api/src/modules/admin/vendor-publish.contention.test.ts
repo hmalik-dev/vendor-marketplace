@@ -96,7 +96,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
       [ADMIN_TWO, 'customer'],
       [VENDOR, 'vendor'],
     ] as const) {
-      harness.clerkUsers.set(authUserId, {
+      harness.authUsers.set(authUserId, {
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',

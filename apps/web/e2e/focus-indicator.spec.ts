@@ -240,7 +240,7 @@ async function readStop(page: Page): Promise<Stop | null> {
  */
 async function walk(page: Page, settled?: string): Promise<Stop[]> {
   /*
-   * Clerk mounts its form after hydration, so `/sign-in` had two keyboard stops
+   * Auth mounts its form after hydration, so `/sign-in` had two keyboard stops
    * — the skip link and the logo — at the moment the walk began. That is a page
    * that has not finished arriving, and measuring it reports a clean run for
    * every control it never reached.
@@ -477,7 +477,7 @@ test.describe('one focus indicator per keyboard stop', () => {
   });
 
   /*
-   * Clerk's own controls, which the base rule reaches and `data-focus-own`
+   * The auth provider's own controls, which the base rule reaches and `data-focus-own`
    * cannot: `globals.css` restates each treatment unlayered for them, and the
    * text field is the one that has to zero the offset by hand.
    */
@@ -504,7 +504,7 @@ test.describe('one focus indicator per keyboard stop', () => {
 
     expect(style.focused, 'the field lost focus before its indicator was read').toBe(true);
     expect(style.ring).toContain('3px');
-    // `ring-offset-0` on Clerk's field leaves a real declaration at zero width.
+    // `ring-offset-0` on the auth provider's field leaves a real declaration at zero width.
     expect(style.offset).toMatch(PAINTS_NOTHING);
     expect(style.border).toBe('rgb(180, 85, 47)');
     expect(style.outline).toBe('none');
