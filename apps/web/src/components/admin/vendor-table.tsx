@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { VENDOR_STATUS_TONES } from '@/components/admin/vendor-status';
 import { displayRating } from '@/lib/admin-params';
+import { userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import type { WireAdminVendorRow } from '@/lib/wire-schemas';
 
@@ -30,19 +31,18 @@ export const STUCK_REFUNDS_PATH = '/admin/bookings?flag=refund-stuck';
  * learns not to read them. `subject` is the only word that legitimately differs
  * — one dialog is about several accounts, the other about one.
  *
- * The refund's second half is named as well (D31). A full refund reverses the
- * vendor's transfer out of their connected account, which can take a vendor
- * already paid out negative — the operator is the one party who can weigh that
- * before pressing the button, and a dialog that says only "refunded in full"
- * hides the half of the unwind that lands on somebody else.
+ * The refund's other half is named too, and it is the vendor's loss rather than
+ * a reversal (VEN-423): the customer is refunded from the platform balance and
+ * no payout is made for the booking. Nothing is reversed out of the vendor's
+ * Stripe balance on this path, so the copy must not say so.
  */
 export function SuspensionConsequence({ subject }: { subject: string }): React.ReactElement {
   return (
     <>
       Their open requests are declined and every confirmed booking in the future is cancelled and{' '}
-      <strong className="font-semibold">refunded in full</strong>, which reverses the vendor&apos;s
-      share out of their Stripe balance and can leave it negative. {subject} comes down. Suspension
-      can be lifted, but the bookings are not restored.
+      <strong className="font-semibold">refunded in full</strong> from the platform balance, and no
+      payout is made to the vendor for them. {subject} comes down. Suspension can be lifted, but the
+      bookings are not restored.
     </>
   );
 }
@@ -130,6 +130,8 @@ export function VendorTable({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** Set when a ban left money with Stripe. Never cleared by a later action. */
   const [stuckRefunds, setStuckRefunds] = useState<string | null>(null);
+  /** Set when a bulk suspend had rows the API refused. Successes are not discarded. */
+  const [bulkFailures, setBulkFailures] = useState<string | null>(null);
 
   const selectedRows = rows.filter((row) => selected.has(row.userId));
   /*
@@ -218,6 +220,14 @@ export function VendorTable({
         (#400). It survives the `router.refresh()` the action fires, because it
         is the one thing on this screen a person still has to act on.
       */}
+      {bulkFailures ? (
+        <p
+          role="alert"
+          className="mb-3 rounded-lg border border-error-500 bg-stone-0 px-4 py-2.5 text-sm text-error-500"
+        >
+          {bulkFailures}
+        </p>
+      ) : null}
       {stuckRefunds ? (
         <p
           role="alert"
@@ -282,11 +292,32 @@ export function VendorTable({
                * the payment provider is how a bulk action becomes a rate-limit
                * failure halfway through with no record of where it stopped.
                */
+              /*
+               * One refusal — another operator got there first, a 409 — does not
+               * end the run (VEN-423). An abort discarded the earlier bans'
+               * stuck-refund count and left every later row unsuspended and
+               * unreachable from this dialog. The run finishes, the successes
+               * are reported as they always were, and the refusals are named.
+               */
               let failed = 0;
+              let suspended = 0;
+              const refused: string[] = [];
               for (const row of suspendable) {
-                failed += await setBanned(row.userId, true);
+                try {
+                  failed += await setBanned(row.userId, true);
+                  suspended += 1;
+                } catch (error) {
+                  refused.push(
+                    `${row.businessName} (${userFacingError(error, 'the request did not reach the server')})`,
+                  );
+                }
               }
-              reportStuckRefunds(failed, suspendable.length);
+              reportStuckRefunds(failed, suspended);
+              setBulkFailures(
+                refused.length === 0
+                  ? null
+                  : `${refused.length} of ${suspendable.length} accounts were not suspended: ${refused.join('; ')}.`,
+              );
               setSelected(new Set());
               router.refresh();
             }}
@@ -432,25 +463,23 @@ function VendorRowActions({
   const [open, setOpen] = useState<'ban' | 'publish' | 'unpublish' | null>(null);
 
   /*
-    A retired account gets no control at all (#433), and #435 does not give it
-    one back. Its owner deleted their Clerk identity, its bookings were unwound
-    and refunded when they did, and there is nothing left for a suspension, a
-    reinstatement **or a publish** to reach: `setUserBanned` and
-    `setVendorPublished` both look the account up through `findUserById`, which
-    filters `deleted_at`, so every item this menu could offer answers 404 or
-    409. Opening a menu of dead actions is worse than opening none.
+    A retired account gets **View and nothing else** (#433, VEN-423). Its owner
+    deleted their Clerk identity, its bookings were unwound and refunded when
+    they did, and there is nothing left for a suspension, a reinstatement **or a
+    publish** to reach: `setUserBanned` and `setVendorPublished` both look the
+    account up through `findUserById`, which filters `deleted_at`, so every
+    lever this menu could offer answers 404 or 409. `View` is read-only and the
+    detail page reads retired vendors on purpose — the business name links to a
+    storefront that 404s for them, so this is the only way in from the list.
 
     **This is a deliberate composition difference from frame `13`, which draws
-    the `···` in all fifteen rows.** The frame cannot arbitrate it — `retired`
-    postdates it — and matching the frame here would mean drawing a control that
-    cannot do anything. Recorded so a parity pass does not re-find and file it.
+    the full lever menu in all fifteen rows.** The frame cannot arbitrate it —
+    `retired` postdates it. Recorded so a parity pass does not re-find and file it.
   */
-  if (row.status === 'retired') {
-    return null;
-  }
 
   const flagged = row.status === 'flagged';
   const held = row.status === 'held';
+  const retired = row.status === 'retired';
   const unpublishing = open === 'unpublish';
 
   async function setPublished(isPublished: boolean): Promise<void> {
@@ -485,35 +514,29 @@ function VendorRowActions({
     label: 'View',
     onSelect: () => router.push(`/admin/vendors/${row.id}`),
   };
-  const items = flagged
-    ? [view, { key: 'ban', label: 'Lift suspension', onSelect: () => setOpen('ban') }]
-    : [
-        view,
-        ...(row.status === 'live'
-          ? []
-          : [
-              {
-                key: 'publish',
-                label: 'Publish profile',
-                onSelect: () => setOpen('publish'),
-              },
-            ]),
-        ...(held
-          ? []
-          : [
-              {
-                key: 'unpublish',
-                label: 'Unpublish profile',
-                onSelect: () => setOpen('unpublish'),
-              },
-            ]),
-        {
-          key: 'ban',
-          label: 'Suspend vendor',
-          destructive: true,
-          onSelect: () => setOpen('ban'),
-        },
-      ];
+  const suspend = {
+    key: 'ban',
+    label: 'Suspend vendor',
+    destructive: true,
+    onSelect: () => setOpen('ban'),
+  };
+  const publish = { key: 'publish', label: 'Publish profile', onSelect: () => setOpen('publish') };
+  const unpublish = {
+    key: 'unpublish',
+    label: 'Unpublish profile',
+    onSelect: () => setOpen('unpublish'),
+  };
+  let items = [
+    view,
+    ...(row.status === 'live' ? [] : [publish]),
+    ...(held ? [] : [unpublish]),
+    suspend,
+  ];
+  if (retired) {
+    items = [view];
+  } else if (flagged) {
+    items = [view, { key: 'ban', label: 'Lift suspension', onSelect: () => setOpen('ban') }];
+  }
 
   /*
     Mounted only while open, not rendered alongside the menu and hidden.

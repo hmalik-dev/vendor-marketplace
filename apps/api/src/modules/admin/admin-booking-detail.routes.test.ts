@@ -200,6 +200,71 @@ describe('admin booking detail and requests', () => {
     });
   });
 
+  /*
+   * VEN-423. A full refund writes `vendor_payout_cents = 0`, and the sweep
+   * excludes it by amount, so "Awaiting release" would be a promise nothing
+   * keeps. The control differs only in the amount and stays `pending`.
+   */
+  it('reads a fully refunded cancelled booking as not owed, and an owed one as pending', async () => {
+    const { vendorId, customerId } = await seedParties();
+    const db = harness.database.db;
+    await db
+      .update(vendorProfiles)
+      .set({ payoutHold: true })
+      .where(eq(vendorProfiles.id, vendorId));
+
+    async function insertBooking(
+      eventDate: string,
+      status: 'cancelled' | 'confirmed',
+      vendorPayoutCents: number,
+      intent: string,
+    ): Promise<string> {
+      const [request] = await db
+        .insert(bookingRequests)
+        .values({ customerId, vendorId, eventDate, status: 'accepted', finalPriceCents: 120_000 })
+        .returning({ id: bookingRequests.id });
+      const [row] = await db
+        .insert(bookings)
+        .values({
+          requestId: request!.id,
+          customerId,
+          vendorId,
+          eventDate,
+          eventLocation: 'Barr Mansion',
+          totalAmountCents: 120_000,
+          platformFeeCents: 14_400,
+          vendorPayoutCents,
+          payoutModel: 'separate',
+          status,
+          stripePaymentIntentId: intent,
+          paidAt: new Date('2026-09-02T10:00:00.000Z'),
+        })
+        .returning({ id: bookings.id });
+
+      return row!.id;
+    }
+
+    const refunded = await insertBooking('2026-10-10', 'cancelled', 0, 'pi_test_not_owed');
+    const owed = await insertBooking('2026-10-11', 'confirmed', 105_600, 'pi_test_owed');
+
+    const detail = await get(`/admin/bookings/${refunded}`);
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().payoutStatus).toBe('not-owed');
+    expect((await get(`/admin/bookings/${owed}`)).json().payoutStatus).toBe('pending');
+
+    const list = await get('/admin/payments');
+    const statuses = new Map(
+      list
+        .json()
+        .items.map((item: { bookingId: string; payoutStatus: string }) => [
+          item.bookingId,
+          item.payoutStatus,
+        ]),
+    );
+    expect(statuses.get(refunded)).toBe('not-owed');
+    expect(statuses.get(owed)).toBe('pending');
+  });
+
   it('lists what either party was told about the booking or its request, and nothing else', async () => {
     const { vendorId, vendorUserId, customerId } = await seedParties();
     const db = harness.database.db;

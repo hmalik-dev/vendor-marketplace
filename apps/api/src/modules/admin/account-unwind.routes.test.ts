@@ -2,6 +2,7 @@ import {
   bookingRequests,
   bookings,
   categories,
+  notifications,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import {
@@ -9,8 +10,9 @@ import {
   CURRENT_VENDOR_AGREEMENT_VERSION,
   toDateString,
 } from '@vendor-marketplace/shared';
-import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq, inArray } from 'drizzle-orm';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { findUserById } from '../users/users.dao.js';
 import {
   bearer,
   createTestHarness,
@@ -39,6 +41,13 @@ const SETTLED_EVENT_DATE = toDateString(addDays(START, 30));
 let clockNow = START;
 
 /**
+ * 20:00 US Eastern on Oct 7 is 00:00 UTC on Oct 8, so an operator at that hour
+ * is already "on" the day of an Oct 8 event by the process's own UTC clock.
+ */
+const SAME_UTC_DAY_EVENT = '2026-10-08';
+const OPERATOR_EVENING = new Date('2026-10-08T01:00:00Z');
+
+/**
  * #444: an unwind must not rewrite the history of a booking that already
  * happened.
  *
@@ -59,6 +68,10 @@ describe('an account unwind and the requests behind settled bookings', () => {
   let harness: TestHarness;
   let photographyId: string;
 
+  /* The parties the helpers below act as; a test that bans one takes fresh ones. */
+  let vendorActor = VENDOR;
+  let customerActor = CUSTOMER;
+
   async function inject(
     method: 'GET' | 'POST' | 'PUT',
     url: string,
@@ -75,7 +88,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
 
   /** A published, payout-ready vendor holding the current agreement. */
   async function createVendor(): Promise<{ vendorId: string; packageId: string }> {
-    const profile = await inject('POST', '/vendor/profile', VENDOR, {
+    const profile = await inject('POST', '/vendor/profile', vendorActor, {
       businessName: 'Sunlit Studio',
       categoryIds: [photographyId],
       city: 'Austin',
@@ -85,7 +98,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
     expect(profile.statusCode).toBe(201);
     const vendorId: string = profile.json().id;
 
-    const created = await inject('POST', '/vendor/packages', VENDOR, {
+    const created = await inject('POST', '/vendor/packages', vendorActor, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: 120_000,
@@ -99,7 +112,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
       .where(eq(vendorProfiles.id, vendorId));
 
     /* A vendor cannot take payment without the current agreement (#427). */
-    const accepted = await inject('POST', '/vendor/agreement/accept', VENDOR, {
+    const accepted = await inject('POST', '/vendor/agreement/accept', vendorActor, {
       version: CURRENT_VENDOR_AGREEMENT_VERSION,
     });
     expect(accepted.statusCode).toBe(200);
@@ -117,7 +130,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
     packageId: string | null,
     eventDate: string,
   ): Promise<string> {
-    const request = await inject('POST', '/booking-requests', CUSTOMER, {
+    const request = await inject('POST', '/booking-requests', customerActor, {
       vendorId,
       ...(packageId
         ? { packageId }
@@ -140,7 +153,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
     const checkout = await inject(
       'POST',
       `/customer/booking-requests/${requestId}/checkout`,
-      CUSTOMER,
+      customerActor,
     );
     expect(checkout.statusCode).toBe(200);
 
@@ -194,6 +207,11 @@ describe('an account unwind and the requests behind settled bookings', () => {
       .where(eq(categories.slug, 'photography'))
       .limit(1);
     photographyId = rows[0]!.id;
+  });
+
+  afterEach(() => {
+    vendorActor = VENDOR;
+    customerActor = CUSTOMER;
   });
 
   afterAll(async () => {
@@ -302,4 +320,96 @@ describe('an account unwind and the requests behind settled bookings', () => {
       .where(eq(bookings.id, booking!.id));
     expect(after).toMatchObject({ status: 'completed', refundAmountCents: null });
   });
+
+  /**
+   * VEN-423. The unwind's day bound was the operator's UTC date, so a booking on
+   * the next local day fell outside it for anyone west of UTC: at 01:00 UTC on
+   * Oct 8 an event dated Oct 8 was neither cancelled, refunded nor notified.
+   *
+   * Both ban paths, because the same test pins the flag being written **before**
+   * the first refund (acceptance 7) — the refund stub reads `is_banned` at call
+   * time — and the vendor-facing sentence, which used to claim a Stripe reversal
+   * this path never makes.
+   */
+  it.each(['vendor', 'customer'] as const)(
+    'refunds a booking dated the UTC day of the operator, banning the %s first',
+    async (banned) => {
+      vendorActor = `user_vendor_${banned}`;
+      customerActor = `user_customer_${banned}`;
+      for (const [clerkUserId, role] of [
+        [vendorActor, 'vendor'],
+        [customerActor, 'customer'],
+      ] as const) {
+        harness.clerkUsers.set(clerkUserId, {
+          clerkUserId,
+          email: `${clerkUserId}@example.com`,
+          firstName: 'Test',
+          lastName: 'User',
+          roleHint: role,
+          avatarUrl: null,
+        });
+      }
+
+      clockNow = new Date('2026-09-01T12:00:00Z');
+      await signInAs(harness, ADMIN, true);
+      const customerUserId = await signInAs(harness, customerActor);
+      const vendorUserId = await signInAs(harness, vendorActor);
+      const { vendorId, packageId } = await createVendor();
+
+      const requestId = await requestFor(vendorId, packageId, SAME_UTC_DAY_EVENT);
+      expect(
+        (await inject('POST', `/booking-requests/${requestId}/accept`, vendorActor)).statusCode,
+      ).toBe(200);
+      await payFor(requestId);
+
+      clockNow = OPERATOR_EVENING;
+      const targetId = banned === 'vendor' ? vendorUserId : customerUserId;
+      const bannedAtRefund: boolean[] = [];
+      const createRefund = harness.stripe.createRefund;
+      harness.stripe.createRefund = async (input) => {
+        bannedAtRefund.push((await findUserById(harness.database.db, targetId))!.isBanned);
+
+        return createRefund(input);
+      };
+
+      let response;
+      try {
+        response = await inject('PUT', `/admin/users/${targetId}/ban`, ADMIN);
+      } finally {
+        harness.stripe.createRefund = createRefund;
+      }
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        bookingsCancelled: 1,
+        refundsIssued: 1,
+        refundsFailed: 0,
+      });
+      expect(bannedAtRefund).toEqual([true]);
+
+      const [booking] = await harness.database.db
+        .select({ status: bookings.status, eventDate: bookings.eventDate })
+        .from(bookings)
+        .where(eq(bookings.requestId, requestId));
+      expect(booking).toEqual({ status: 'cancelled', eventDate: SAME_UTC_DAY_EVENT });
+
+      const sent = await harness.database.db
+        .select({ userId: notifications.userId, body: notifications.body })
+        .from(notifications)
+        .where(inArray(notifications.userId, [vendorUserId, customerUserId]));
+      const bodyFor = (userId: string): string[] =>
+        sent.filter((row) => row.userId === userId).map((row) => row.body ?? '');
+
+      if (banned === 'customer') {
+        expect(bodyFor(vendorUserId)).toContain(
+          "The customer's account was suspended and the booking was cancelled. Their payment has been refunded in full from the platform balance, and no payout will be made to you for this booking.",
+        );
+      } else {
+        expect(bodyFor(customerUserId)).toContain(
+          "The other party's account was suspended. Your payment has been refunded in full.",
+        );
+      }
+      expect(sent.map((row) => row.body).join(' ')).not.toMatch(/Stripe balance/);
+    },
+  );
 });

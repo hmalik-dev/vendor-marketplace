@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Toaster } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AdminVendorStatus } from '@vendor-marketplace/shared';
+import { ERROR_CODES, type AdminVendorStatus } from '@vendor-marketplace/shared';
+import { ApiClientError } from '@/lib/api-client';
 import type { WireAdminVendorRow } from '@/lib/wire-schemas';
 
-vi.mock('@/lib/use-api', () => ({ useApi: () => vi.fn() }));
+const { callMock } = vi.hoisted(() => ({ callMock: vi.fn() }));
+vi.mock('@/lib/use-api', () => ({ useApi: () => callMock }));
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push }) }));
 
@@ -53,7 +55,10 @@ function copyOf(element: React.ReactElement): string {
   return container.textContent ?? '';
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  callMock.mockReset();
+});
 
 describe('SuspensionConsequence', () => {
   /*
@@ -64,15 +69,12 @@ describe('SuspensionConsequence', () => {
    * describing the action has to name it rather than stop at "refunded in
    * full".
    */
-  it('names the payout reversal, not only the refund', () => {
-    render(<SuspensionConsequence subject="Their storefront" />);
+  it('says what happened to the money, and claims no Stripe reversal (VEN-423)', () => {
+    const copy = copyOf(<SuspensionConsequence subject="Their storefront" />);
 
-    expect(screen.getByText(/refunded in full/)).toBeDefined();
-    expect(
-      screen.getByText(
-        /reverses the vendor's share out of their Stripe balance and can leave it negative/,
-      ),
-    ).toBeDefined();
+    expect(copy).toMatch(/refunded in full from the platform balance/);
+    expect(copy).toMatch(/no payout is made to the vendor/);
+    expect(copy).not.toMatch(/reverses|reversed|can leave it negative|Stripe balance/);
   });
 
   /** One dialog is about several accounts, the other about one. */
@@ -279,7 +281,7 @@ describe('VendorRowActions', () => {
   });
 
   /*
-   * Fails on deleting `if (row.status === 'retired') return null`.
+   * Fails on offering any lever on a retired row (VEN-423: View only).
    *
    * #433 ruled that a retired row draws no control, and
    * `.claude/rules/web-design-parity.md` records it as a deliberate difference
@@ -287,10 +289,15 @@ describe('VendorRowActions', () => {
    * re-establishing here rather than inheriting: every item the menu could
    * offer targets an owner `findUserById` filters out, and answers 404 or 409.
    */
-  it('draws no control at all on a retired vendor', () => {
-    render(<VendorTable filtered={false} rows={[vendorRow('retired')]} />);
+  it('offers View and nothing destructive on a retired vendor, and View navigates', async () => {
+    expect(menuLabelsFor('retired')).toEqual(['View']);
 
-    expect(screen.queryByRole('button', { name: /^Actions for/ })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'View' }));
+
+    /* `RowMenu` defers the select one task so the menu can close first. */
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith('/admin/vendors/11111111-1111-4111-8111-111111111111'),
+    );
   });
 
   /** The trigger names its row, so the menu is not an anonymous glyph. */
@@ -417,11 +424,65 @@ describe('the held status (#457)', () => {
     push.mockClear();
     menuLabelsFor('live');
 
-    fireEvent.click(screen.getByRole('menuitem', { name: 'View' }));
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'View' }), { key: 'Enter' });
 
     // `RowMenu` runs an item's `onSelect` on the next tick, after the menu closes.
     await vi.waitFor(() =>
       expect(push).toHaveBeenCalledWith('/admin/vendors/11111111-1111-4111-8111-111111111111'),
     );
+  });
+});
+
+/**
+ * VEN-423 acceptance 6. A refusal on one row must not end the bulk run: the
+ * earlier ban's stuck-refund warning is kept and the later rows are still
+ * suspended. Fails on a loop with no per-row catch — the 409 escapes after two
+ * calls, the warning is never raised and the third vendor is never suspended.
+ */
+describe('bulk Suspend selected', () => {
+  const BAN_RESULT = {
+    isBanned: true,
+    profileUnpublished: true,
+    requestsDeclined: 0,
+    bookingsCancelled: 1,
+    refundsIssued: 0,
+    bookingsLeftForReview: 0,
+  };
+
+  it('finishes the run, warns about the stuck refund and names the refused row', async () => {
+    const rows = ['Alpha', 'Bravo', 'Charlie'].map((businessName, index) => ({
+      ...vendorRow('live'),
+      id: `11111111-1111-4111-8111-11111111111${index}`,
+      userId: `22222222-2222-4222-8222-22222222222${index}`,
+      businessName,
+      slug: businessName.toLowerCase(),
+    }));
+    callMock
+      .mockResolvedValueOnce({ ...BAN_RESULT, refundsFailed: 1 })
+      .mockRejectedValueOnce(
+        new ApiClientError(409, ERROR_CODES.CONFLICT, 'That account is already banned'),
+      )
+      .mockResolvedValueOnce({ ...BAN_RESULT, refundsFailed: 0 });
+
+    render(<VendorTable filtered={false} rows={rows} />);
+    for (const { businessName } of rows) {
+      fireEvent.click(screen.getByRole('checkbox', { name: `Select ${businessName}` }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Suspend selected' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend vendors' }));
+
+    expect(await screen.findByText(/1 refund could not be issued/)).not.toBeNull();
+    expect(
+      screen.getByText(
+        '1 of 3 accounts were not suspended: Bravo (That account is already banned).',
+      ),
+    ).not.toBeNull();
+    expect(callMock).toHaveBeenCalledTimes(3);
+    expect(callMock.mock.calls.map(([path]) => path)).toEqual([
+      '/admin/users/22222222-2222-4222-8222-222222222220/ban',
+      '/admin/users/22222222-2222-4222-8222-222222222221/ban',
+      '/admin/users/22222222-2222-4222-8222-222222222222/ban',
+    ]);
   });
 });

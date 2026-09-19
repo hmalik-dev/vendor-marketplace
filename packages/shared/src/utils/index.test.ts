@@ -23,6 +23,7 @@ import {
   payoutReleaseAt,
   isPayoutFailing,
   payoutStatusOf,
+  unwindFloorDate,
   replyDeadline,
   requestStatusAsRead,
   shortTimeAgo,
@@ -711,5 +712,42 @@ describe('isLegacyDestinationPayout', () => {
         stripeTransferId: null,
       }),
     ).toBe(false);
+  });
+});
+
+describe('payoutStatusOf when the payout amount is known (VEN-423)', () => {
+  const OWED = {
+    status: 'cancelled',
+    payoutReleasedAt: null,
+    payoutModel: 'separate',
+    vendorPayoutCents: 90_000,
+  } as const;
+
+  it('reads a zero payout as not owed, and an owed one as pending', () => {
+    expect(payoutStatusOf({ ...OWED, vendorPayoutCents: 0 })).toBe('not-owed');
+    expect(payoutStatusOf(OWED)).toBe('pending');
+  });
+
+  it('reads a destination-model payout as not owed', () => {
+    expect(payoutStatusOf({ ...OWED, payoutModel: 'destination' })).toBe('not-owed');
+  });
+
+  it('lets a released payout win, and leaves callers without the amount unchanged', () => {
+    expect(
+      payoutStatusOf({ ...OWED, vendorPayoutCents: 0, payoutReleasedAt: new Date('2026-06-18') }),
+    ).toBe('released');
+    expect(payoutStatusOf({ status: 'confirmed', payoutReleasedAt: null })).toBe('pending');
+    expect(payoutStatusOf({ status: 'disputed', payoutReleasedAt: null })).toBe('held');
+  });
+});
+
+describe('unwindFloorDate', () => {
+  it("is yesterday in UTC, so the operator's tomorrow is still ahead", () => {
+    expect(unwindFloorDate(new Date('2026-10-08T01:00:00Z'))).toBe('2026-10-07');
+  });
+
+  it('is today from noon UTC, so an event already delivered today is not refunded', () => {
+    expect(unwindFloorDate(new Date('2026-10-08T12:00:00Z'))).toBe('2026-10-08');
+    expect(unwindFloorDate(new Date('2026-10-08T22:00:00Z'))).toBe('2026-10-08');
   });
 });

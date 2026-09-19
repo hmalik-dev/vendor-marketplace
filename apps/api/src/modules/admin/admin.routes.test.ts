@@ -126,8 +126,11 @@ describe('admin routes', () => {
     return bookingRows[0]!.id;
   }
 
+  /** Pinned by the one test that needs a date; `null` is the wall clock. */
+  let clockNow: Date | null = null;
+
   beforeAll(async () => {
-    harness = await createTestHarness();
+    harness = await createTestHarness({ clock: () => clockNow ?? new Date() });
 
     for (const [clerkUserId, role] of [
       [ADMIN, 'customer'],
@@ -157,6 +160,7 @@ describe('admin routes', () => {
   });
 
   afterEach(async () => {
+    clockNow = null;
     await harness.database.db.delete(notifications);
     await harness.database.db.delete(reviews);
     await harness.database.db.delete(tagSuggestions);
@@ -1398,6 +1402,41 @@ describe('admin routes', () => {
     });
 
     /*
+     * VEN-423. The unwind's day bound is yesterday-UTC, so an operator west of
+     * UTC still catches tomorrow's booking. At 01:00Z on Oct 8 a booking dated
+     * Oct 8 is still ahead of an operator at 21:00 Oct 7 US Eastern; one dated
+     * Oct 6 is gone and stays out, so the bound cannot simply be loosened.
+     */
+    it('lists a booking on the operator’s next local day, not one already gone', async () => {
+      clockNow = new Date('2026-10-08T01:00:00Z');
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const ahead = await createFutureBooking(customerId, vendor.profileId, {
+        eventDate: '2026-10-08',
+        stripePaymentIntentId: 'pi_test_ahead',
+      });
+      await createFutureBooking(customerId, vendor.profileId, {
+        eventDate: '2026-10-06',
+        stripePaymentIntentId: 'pi_test_gone',
+      });
+      await harness.database.db
+        .update(users)
+        .set({ isBanned: true })
+        .where(eq(users.id, vendor.userId));
+
+      const listed = await harness.app.inject({
+        method: 'GET',
+        url: '/admin/bookings?flag=refund-stuck',
+        headers: bearer(ADMIN),
+      });
+
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().total).toBe(1);
+      expect(listed.json().items[0]).toMatchObject({ id: ahead, refundStuck: true });
+    });
+
+    /*
      * The filter has to *filter*. Reading `total` off an unfiltered count is
      * how a pager comes to promise pages the table cannot show, and a list
      * that returns every booking would send the operator hunting.
@@ -1903,13 +1942,14 @@ describe('admin routes', () => {
       const toVendor = sent.find((row) => row.userId === vendor.userId);
 
       /*
-       * "No payout will follow" was only true while the transfer was never
-       * reversed. Under D31 a payout already made is clawed back, so the line
-       * names the reversal instead of implying the vendor is merely not paid.
+       * Nothing is reversed on this path (VEN-423): the refund comes out of the
+       * platform balance and the vendor is simply not paid, so the line says
+       * that rather than naming a Stripe reversal that never happens.
        */
       expect(toVendor?.body).toBe(
-        "The customer's account was suspended and the booking was cancelled. Their payment has been refunded, and your share of it has been reversed out of your Stripe balance.",
+        "The customer's account was suspended and the booking was cancelled. Their payment has been refunded in full from the platform balance, and no payout will be made to you for this booking.",
       );
+      expect(toVendor?.body).not.toContain('Stripe balance');
       expect(toVendor?.body).not.toContain('Your payment');
     });
 

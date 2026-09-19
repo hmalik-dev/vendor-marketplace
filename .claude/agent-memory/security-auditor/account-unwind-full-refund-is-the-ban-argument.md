@@ -24,6 +24,17 @@ the account instead pays 100% on **every** future confirmed booking at once and
 zeroes every vendor's payout. `findConfirmedBookingsToUnwind` bounds only on
 `event_date > today`, so the day before the event is in range.
 
+**VEN-423 moved the day bound onto the event day itself.** `unwindFloorDate` is
+`toDateString(addDays(now, -1))`, so the loop now selects `event_date >= today`
+UTC. Its doc claims "a booking already past is `completed`, not `confirmed`",
+which `RELEASABLE_STATUSES`' own comment contradicts — `completed` is written
+only by the vendor pressing Mark complete (`payments.service.ts`), so a
+delivered same-day event is still `confirmed`. A ban of the _customer_ on the
+event day therefore refunds 100% and writes `vendor_payout_cents = 0` for a
+service already performed, with no D3 retained share. The `isUniversally*`
+family is where that bound belongs; the honest west-leaning form is "include
+today only while the UTC hour is still before 12:00".
+
 **How to apply:** the loop already knows which side was deleted —
 `booking.customerId === targetId`. Any future caller of `unwindAccountBookings`
 must be classified before it reuses the copy constants: operator-initiated
