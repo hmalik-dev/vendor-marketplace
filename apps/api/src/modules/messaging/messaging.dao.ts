@@ -12,6 +12,7 @@ import {
   type NewNotificationRow,
   type NotificationRow,
 } from '@vendor-marketplace/db/schema';
+import { alias } from 'drizzle-orm/pg-core';
 import type { NotificationType } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
@@ -119,6 +120,9 @@ export interface ConversationParties extends ConversationRow {
   vendorBusinessName: string;
   customerFirstName: string;
   customerLastName: string;
+  /** Whether each party can still receive a message (VEN-426). */
+  customerReachable: boolean;
+  vendorReachable: boolean;
 }
 
 /** The conversation and the two people in it, for a participant check. */
@@ -126,6 +130,8 @@ export async function findConversationById(
   db: AppDatabase,
   conversationId: string,
 ): Promise<ConversationParties | null> {
+  const vendorOwner = alias(users, 'vendor_owner');
+
   const rows = await db
     .select({
       id: conversations.id,
@@ -138,9 +144,17 @@ export async function findConversationById(
       vendorBusinessName: vendorProfiles.businessName,
       customerFirstName: users.firstName,
       customerLastName: users.lastName,
+      customerReachable: sql<boolean>`(${users.isBanned} = false AND ${users.deletedAt} IS NULL)`,
+      /*
+       * `VENDOR_VISIBLE` is the rule `openConversation` applies, so a thread
+       * that could not be opened cannot be written into either. Its owner
+       * predicate is correlated on `vendor_profiles`, which this select has.
+       */
+      vendorReachable: sql<boolean>`(${VENDOR_VISIBLE} AND ${vendorOwner.isBanned} = false)`,
     })
     .from(conversations)
     .innerJoin(vendorProfiles, eq(conversations.vendorId, vendorProfiles.id))
+    .innerJoin(vendorOwner, eq(vendorProfiles.userId, vendorOwner.id))
     .innerJoin(users, eq(conversations.customerId, users.id))
     .where(eq(conversations.id, conversationId))
     .limit(1);
