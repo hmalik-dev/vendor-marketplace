@@ -12,8 +12,7 @@ import { bearer, createTestHarness, type TestHarness } from '../../testing/test-
  * - `vendor_profiles` has **no thumbnail column**, so the `-thumb.webp` sibling
  *   every upload writes is referenced by nothing here and has to be derived or
  *   it is orphaned by every single photo change.
- * - The cover is a *designation on a portfolio tile*, not an upload
- *   (`syncCoverFromPortfolio` copies the tile's key onto the profile). Two
+ * - The cover may name a key a portfolio tile also holds. Two
  *   rows, one object. Reaping on the strength of the profile row alone would
  *   destroy an image the vendor still has in their portfolio — a vendor
  *   deleting their own live photo by saving a form.
@@ -171,7 +170,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
   });
 
   /*
-   * The cover is a copy of a portfolio tile's key. Reaping it because the
+   * A cover the vendor pointed at a tile's key. Reaping it because the
    * profile row moved on would delete a photo the vendor still has — and they
    * would have done it to themselves with a perfectly legal request.
    */
@@ -181,8 +180,9 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
     const tile = await upload('portfolio', owner, 'tile');
     const thumb = tile.replace(/\.webp$/, '-thumb.webp');
 
-    // Adding the tile sets the cover to the same key, via syncCoverFromPortfolio.
     await addPortfolioItem(VENDOR, tile, thumb);
+    // The cover names the tile's key: two rows, one object.
+    await save(VENDOR, { coverImageUrl: tile });
 
     const standalone = await upload('vendor-cover', owner, 'standalone');
     await save(VENDOR, { coverImageUrl: standalone });

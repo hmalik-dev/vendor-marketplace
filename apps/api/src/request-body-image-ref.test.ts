@@ -29,9 +29,8 @@ import { describe, expect, it } from 'vitest';
  * declaring its body inline — rather than leaving that as a silent gap.
  *
  * **What it does not cover, deliberately:** a write path that is not a Fastify
- * request body. `syncCoverFromPortfolio` copies a key the vendor already owns
- * from one of their own rows onto another, and the seeds write keys directly.
- * Neither takes a key from a caller, so neither is in scope.
+ * request body. The seeds write keys directly and take none from a caller, so
+ * they are not in scope.
  */
 const MODULES = join(import.meta.dirname, 'modules');
 

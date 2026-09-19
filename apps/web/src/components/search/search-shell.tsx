@@ -25,6 +25,7 @@ import { NameSearch } from './name-search';
 import { RefineBar } from './refine-bar';
 import { SearchBar } from './search-bar';
 import { NearbyDatesBand } from './nearby-dates-band';
+import { SearchPagination } from './search-pagination';
 import { useSearchStatus } from './search-status';
 import { noResultsDiagnosis, noResultsHeadline, relaxations } from './relaxations';
 import {
@@ -247,15 +248,12 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
         /*
           A page past the end of the result set. `/search?page=2` returned 200
           with an empty pane while the heading still claimed the full count —
-          nothing drawn under a line reading "17 photographers". `pageSize` is
-          20 against 17 vendors so nothing is lost today, but the URL is
-          reachable by hand and stops being harmless the moment the marketplace
-          outgrows one page.
+          nothing drawn under a line reading "17 photographers". The URL is
+          reachable by hand, so a page past the last one has to land somewhere.
 
-          A clamp rather than a message: frame `02` draws no pagination, so
-          there is no approved string for "that page does not exist" and
-          inventing one would fail the text axis. Going back to the first page
-          is the only correction the frame can support.
+          A clamp rather than a message: there is no approved string for "that
+          page does not exist" and inventing one would fail the text axis. Going
+          back to the first page is the only correction available.
 
           Guarded on `page > 1`, so it cannot re-enter: page 1 with no rows is
           a genuinely empty search and belongs to frame `18`.
@@ -836,15 +834,30 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
                 asked a date question, and the band would be answering something
                 nobody said.
               */}
-              <NearbyDatesBand date={state.date} category={state.category} city={state.city} />
+              <NearbyDatesBand
+                date={state.date}
+                category={state.category}
+                city={state.city}
+                state={state.state}
+              />
             </div>
           </div>
         ) : (
-          <div className={GRID_COLUMNS}>
-            {result?.items.map((vendor) => (
-              <VendorCard key={vendor.id} vendor={vendor} density="compact" />
-            ))}
-          </div>
+          <>
+            <div className={GRID_COLUMNS}>
+              {result?.items.map((vendor) => (
+                <VendorCard key={vendor.id} vendor={vendor} density="compact" />
+              ))}
+            </div>
+            {result === null ? null : (
+              <SearchPagination
+                page={result.page}
+                pageSize={result.pageSize}
+                total={result.total}
+                onPageChange={(page) => setState({ page })}
+              />
+            )}
+          </>
         )}
       </div>
 

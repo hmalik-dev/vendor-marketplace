@@ -32,6 +32,7 @@ const PAID_DASHBOARD = {
   reviewCount: 127,
   earningsThisMonthCents: 894_000,
   isPublished: true,
+  moderationHold: false,
   publishBlockers: [],
   stripeOnboarded: true,
   bookingWindow: Array.from({ length: 9 }, (_, offset) => ({

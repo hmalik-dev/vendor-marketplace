@@ -40,6 +40,9 @@ function isAcceptedMimeType(value: string): boolean {
  */
 const ACCEPTED_DECODED_FORMATS: readonly string[] = ['jpeg', 'png'];
 
+/** EXIF orientations 5-8 swap the image's width and height; 1-4 and junk do not. */
+const EXIF_QUARTER_TURNS: readonly number[] = [5, 6, 7, 8];
+
 /**
  * Refuses an image whose bytes are not what it says they are, or that is too
  * narrow to publish.
@@ -54,7 +57,16 @@ async function assertDecodableAndWideEnough(buffer: Buffer): Promise<void> {
   let format: string | undefined;
 
   try {
-    ({ width, format } = await sharp(buffer).metadata());
+    const metadata = await sharp(buffer).metadata();
+    format = metadata.format;
+    /*
+     * EXIF orientations 5-8 turn the image a quarter turn, so the stored width
+     * is the displayed height. The client measures after orientation
+     * (`createImageBitmap`) and the re-encode below applies `rotate()`, so the
+     * floor has to be checked on the same side.
+     */
+    const quarterTurned = EXIF_QUARTER_TURNS.includes(metadata.orientation ?? 1);
+    width = quarterTurned ? metadata.height : metadata.width;
   } catch {
     // A buffer sharp cannot read at all is reported by the decode below, which
     // has the better message for it.

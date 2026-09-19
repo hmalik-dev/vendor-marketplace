@@ -1,7 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { VENDOR_PAYMENTS_PATH, pageTitle, toDateString } from '@vendor-marketplace/shared';
+import {
+  VENDOR_PAYMENTS_PATH,
+  VENDOR_PROFILE_MODERATION_HOLD_MESSAGE,
+  pageTitle,
+  toDateString,
+} from '@vendor-marketplace/shared';
 import { DashboardStats } from '@/components/vendor/dashboard-stats';
 import { PublishBlockerBanner } from '@/components/vendor/publish-blocker-banner';
 import { AgreementBlockerBanner } from '@/components/vendor/agreement-blocker-banner';
@@ -113,7 +118,9 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
         description={
           dashboard.isPublished
             ? 'Requests land here the moment a customer sends one. Keeping your calendar current is what puts you in their search.'
-            : 'Nothing has come in because your listing is still a draft.'
+            : dashboard.moderationHold
+              ? 'Nothing can come in while your storefront is off search.'
+              : 'Nothing has come in because your listing is still a draft.'
         }
         /*
           **No control, and that is the correction, not an omission.** Frames
@@ -186,10 +193,21 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
           it. Payouts keep their own banner below, where frame `08` puts them and
           where #360 ruled they belong — they are not a publish blocker.
         */}
-        <PublishBlockerBanner
-          blockers={dashboard.publishBlockers}
-          isPublished={dashboard.isPublished}
-        />
+        {dashboard.moderationHold ? (
+          /*
+            A takedown is not a draft. The vendor cannot clear it from this
+            screen, so the checklist below is withheld and the reason is the same
+            sentence the API refuses a publish with.
+          */
+          <Banner status="pending" title="Your storefront is off search" className="mb-4">
+            {VENDOR_PROFILE_MODERATION_HOLD_MESSAGE}
+          </Banner>
+        ) : (
+          <PublishBlockerBanner
+            blockers={dashboard.publishBlockers}
+            isPublished={dashboard.isPublished}
+          />
+        )}
 
         {/*
           The agreement gate (#427). Above the payout one because it comes
@@ -252,7 +270,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-5">{requestsPane}</div>
           {dashboard.isPublished ? (
             <PublishedRail dashboard={dashboard} serverToday={today} />
-          ) : (
+          ) : dashboard.moderationHold ? null : (
             <PublishChecklist dashboard={dashboard} />
           )}
         </div>

@@ -854,3 +854,48 @@ describe('VendorProfileForm under a moderation hold', () => {
     ).toBe(false);
   });
 });
+
+/*
+ * VEN-442. The Preview link opens the storefront's public address, which is
+ * filtered to published storefronts — for a draft it is a guaranteed 404.
+ */
+describe('VendorProfileForm — the Preview link', () => {
+  it('is offered for a published storefront', () => {
+    renderSaved({ isPublished: true });
+
+    const preview = screen.getByRole('link', { name: 'Preview' });
+    expect(preview.getAttribute('href')).toBe('/vendors/sunlit-studio');
+  });
+
+  it('is withheld while the storefront is unpublished', () => {
+    renderSaved({ isPublished: false });
+
+    expect(screen.queryByRole('link', { name: 'Preview' })).toBeNull();
+  });
+});
+
+/*
+ * VEN-442. A blanked "Years in business" was sent as an absent key, which the
+ * API reads as "leave it alone" — so the bar said Saved over a value the server
+ * still held.
+ */
+describe('VendorProfileForm — clearing years in business', () => {
+  it('sends null, not an absent key', async () => {
+    const user = userEvent.setup();
+    requestMock.mockResolvedValue(savedProfile({ yearsInBusiness: null }));
+    renderSaved({ isPublished: false, state: 'TX' });
+
+    await user.clear(screen.getByLabelText('Years in business'));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(requestMock).toHaveBeenCalledWith(
+        '/vendor/profile',
+        expect.objectContaining({
+          method: 'PUT',
+          body: expect.objectContaining({ yearsInBusiness: null }),
+        }),
+      );
+    });
+  });
+});

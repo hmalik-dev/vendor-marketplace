@@ -595,6 +595,7 @@ export const createVendorProfileSchema = z.object({
     .int()
     .min(MIN_YEARS_IN_BUSINESS, 'Years in business cannot be negative')
     .max(MAX_YEARS_IN_BUSINESS, `Enter ${MAX_YEARS_IN_BUSINESS} or fewer years`)
+    .nullable()
     .optional(),
   address: freeText().max(MAX_ADDRESS_LENGTH).optional(),
   latitude: latitudeSchema.optional(),
@@ -605,6 +606,7 @@ export const createVendorProfileSchema = z.object({
     .refine((hours) => (RESPONSE_TIME_HOURS_OPTIONS as readonly number[]).includes(hours), {
       message: 'Choose one of the offered response windows',
     })
+    .nullable()
     .optional(),
   profileImageUrl: imageRefSchema.optional(),
   coverImageUrl: imageRefSchema.optional(),
@@ -686,8 +688,9 @@ const servicePackageFieldsSchema = z.object({
   description: trimmedString(5_000, 10),
   priceCents: priceCentsSchema,
   priceType: priceTypeSchema,
-  durationHours: z.number().min(0.5).max(999.9).optional(),
-  maxGuests: z.int().min(1).max(MAX_GUEST_COUNT).optional(),
+  // `null` clears the column; omitting the key leaves it alone.
+  durationHours: z.number().min(0.5).max(999.9).nullable().optional(),
+  maxGuests: z.int().min(1).max(MAX_GUEST_COUNT).nullable().optional(),
   inclusions: inclusionsSchema,
   displayOrder: z.int().min(0).max(MAX_DISPLAY_ORDER).optional(),
 });
@@ -1409,6 +1412,11 @@ export const vendorDashboardSchema = z.object({
   /** The vendor's share, not the gross — what actually reaches them. */
   earningsThisMonthCents: z.int().min(0),
   isPublished: z.boolean(),
+  /**
+   * An operator took the storefront down. Not a draft the vendor can finish:
+   * they cannot clear it from the dashboard, so the page must say so.
+   */
+  moderationHold: z.boolean(),
   /** The **real** publish gate, so the checklist cannot disagree with it. */
   publishBlockers: z.array(z.enum(PUBLISH_BLOCKER_KEYS)),
   /**
@@ -1865,7 +1873,10 @@ export const vendorSearchQuerySchema = z
     tags: z
       .union([z.array(uuidSchema), uuidSchema.transform((one) => [one])])
       .optional()
-      .transform((value) => (value === undefined || value.length === 0 ? undefined : value)),
+      // Deduplicated: the AND-match compares a distinct count against this length.
+      .transform((value) =>
+        value === undefined || value.length === 0 ? undefined : [...new Set(value)],
+      ),
     sort: vendorSortOptionSchema.default('relevance'),
     // Spread, not restated. These two were declared here as well as in
     // `paginationQuerySchema`, and the copies disagreed: only one of them ever

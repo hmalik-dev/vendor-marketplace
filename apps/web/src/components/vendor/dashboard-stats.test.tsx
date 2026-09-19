@@ -8,6 +8,7 @@ afterEach(cleanup);
 function dashboard(overrides: Partial<WireVendorDashboard> = {}): WireVendorDashboard {
   return {
     isPublished: true,
+    moderationHold: false,
     publishBlockers: [],
     bookingsThisMonth: 7,
     bookingsLastMonth: 5,
