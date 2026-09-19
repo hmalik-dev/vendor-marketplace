@@ -318,20 +318,19 @@ describe('admin vendor detail', () => {
     });
 
     /*
-     * A stored row wins its date over the request overlay, as on the vendor's
-     * calendar: the `available` a cancelled booking leaves hides the live
-     * request on 10-04, and a stored `pending` names the request it holds.
+     * A held row wins its date over the request overlay, as on the vendor's
+     * calendar: a stored `pending` names the request it holds, while the
+     * `available` a cancelled booking leaves does not hide the live request on
+     * 10-04.
      */
     const [heldRequest] = await db
       .insert(bookingRequests)
       .values({ customerId, vendorId: vendor.id, eventDate: '2026-10-03', status: 'pending' })
       .returning({ id: bookingRequests.id });
-    await db.insert(bookingRequests).values({
-      customerId,
-      vendorId: vendor.id,
-      eventDate: '2026-10-04',
-      status: 'pending',
-    });
+    const [freedRequest] = await db
+      .insert(bookingRequests)
+      .values({ customerId, vendorId: vendor.id, eventDate: '2026-10-04', status: 'pending' })
+      .returning({ id: bookingRequests.id });
 
     await db.insert(availability).values([
       { vendorId: vendor.id, date: '2026-10-03', status: 'pending' },
@@ -355,6 +354,20 @@ describe('admin vendor detail', () => {
           {
             kind: 'request',
             id: heldRequest!.id,
+            customerName: 'Rosa Rivera',
+            status: 'pending',
+            expiresAt: null,
+          },
+        ],
+      },
+      {
+        date: '2026-10-04',
+        status: 'pending',
+        note: null,
+        holders: [
+          {
+            kind: 'request',
+            id: freedRequest!.id,
             customerName: 'Rosa Rivera',
             status: 'pending',
             expiresAt: null,
