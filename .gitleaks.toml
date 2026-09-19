@@ -64,3 +64,10 @@ regexes = ['''NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2kuY2xlcmsuYWNjb3VudHM
 [[allowlists]]
 description = "The Neon `dev` branch id: an identifier named in the memory notes, not a credential"
 regexes = ['''^br-silent-queen-ax78ksii$''']
+
+# A fabricated Neon-Auth-shaped user id in a closure test (VEN-447): the generic rule reads
+# the 32-character mixed-case string as a key. It names no account. The test now uses a
+# plainly fake id, but the string stays in this PR branch history, which the scan reads.
+[[allowlists]]
+description = "Fabricated Neon Auth user id in a test fixture, superseded in the same PR"
+regexes = ['''^q1w2e3r4t5y6u7i8o9p0aSdFgHjKlZxC$''']
