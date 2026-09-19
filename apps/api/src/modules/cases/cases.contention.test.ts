@@ -224,10 +224,13 @@ describe('the case queue under contention, against a real Postgres', () => {
     expect(opened).toHaveLength(1);
 
     const cases = await harness!.database.db
-      .select({ id: supportCases.id })
+      .select({ id: supportCases.id, holdRefusal: supportCases.holdRefusal })
       .from(supportCases)
       .where(eq(supportCases.stripeDisputeId, 'dp_contention_race'));
     expect(cases).toHaveLength(1);
+    // Whichever delivery's row survived, this dispute placed the hold — never
+    // "this case did not place it" (VEN-429).
+    expect(cases[0]?.holdRefusal).toBeNull();
 
     // And exactly one hold: the booking is `disputed` once, not held twice.
     const [row] = await harness!.database.db

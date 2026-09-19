@@ -412,7 +412,9 @@ export async function sendSupportMessage(
    * on the other, and sequencing them only lengthened the request.
    */
   await Promise.all([
-    audience === null ? Promise.resolve() : announceDisputeHold(deps.bookings, audience),
+    audience === null
+      ? Promise.resolve()
+      : announceDisputeHold(deps.bookings, audience, 'customer'),
     deps.email
       .send({
         to: replyTo,

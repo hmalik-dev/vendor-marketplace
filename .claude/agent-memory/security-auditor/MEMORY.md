@@ -68,7 +68,7 @@
 - [The Clerk webhook is now a money mover](clerk-webhook-is-now-a-money-mover.md) — svix order is sound; the replay guard is a read that closes only after an unbounded Stripe loop
 - [Webhook payload text bypasses the bidi strip](provider-payload-text-bypasses-the-bidi-strip.md) — a hand-`safeParse`d schema is invisible to the free-text guard; the Resend bounce diagnostic is chosen by the recipient's own MTA
 - [The Resend secret's absence is refusal](resend-webhook-absence-is-refusal.md) — optional on every target is correct here; `requiresExplicitValue` + the `.optional()` branch are what hold it, and no route exists without a secret
-- [`support_cases` is the first durable copy of a complaint](support-cases-is-the-first-durable-copy-of-a-complaint.md) — the admin routes are gated and the chargeback actor is sound; audit the public writer's failure branch
+- [`support_cases` is the first durable copy of a complaint](support-cases-is-the-first-durable-copy-of-a-complaint.md) — admin routes gated, chargeback actor sound; VEN-429's refund gate is a deny-list on Stripe's raw `dispute.status`
 - [The staff read of a private thread is one `support_cases` row](conversation-read-grant-is-an-open-case-row.md) — the admin guard is settled; audit any new writer of `subject_type='conversation'`, since no FK or CHECK constrains it
 - [`freeText()` lets NUL through](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — Postgres raises 22021, so a caller picks when a user-text insert fails and which branch runs
 - [TLS headers key on the build-time origin](tls-headers-key-on-build-time-origin.md) — `headers()` is baked into routes-manifest at build; `deploymentOrigin` passes an explicit `http://` through and outranks WEB_URL

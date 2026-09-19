@@ -34,9 +34,22 @@ and only one of them is an admin operation:
 and no email, per [[admin-action-log-is-trigger-immutable]].
 
 **How to apply:** the table is not the audit log and is mutated normally, so the
-questions are disclosure and integrity rather than tamper-evidence. The one
-recorded soft spot: `openChargebackCase` places the hold _before_ it writes the
-case and has no compensation, and it files `placeDisputeHold`'s customer-facing
-409 copy verbatim into `hold_refusal` — so a booking already held (by a report,
-or by this same path's failed first attempt) yields a case telling an operator
-"the payout could not be put on hold" while it is frozen.
+questions are disclosure and integrity rather than tamper-evidence.
+
+**VEN-429 closed the false-refusal spot and added a money gate.** The
+`AlreadyHeldError` branch re-reads the booking and compares `disputeReason` to
+this dispute's own generated message, so a retry that finds its own hold records
+`hold_refusal = null`; the bell now rings only for the delivery whose insert
+wins. And `resolveDispute` (payments) refuses both rulings against
+`findOpenChargebackCase` — a **deny**-list, not an allowlist: refund blocked when
+`network_outcome` is `null` or `'lost'`, vendor blocked only on `'lost'`.
+`network_outcome` is Stripe's `dispute.status` written verbatim by
+`recordChargebackOutcome`, so any status that is neither of those opens the
+refund path. Two soft spots left, both non-blocking: the DAO's `limit(1)` has no
+`ORDER BY` (a second chargeback on one booking can hide a `lost` one behind a
+`won` one), and the console keys its hidden buttons on the _viewed case's_
+`origin`, so the report case beside a chargeback still draws controls the API
+409s. `resolveCase` refuses a `disputed` booking and `resolveCasesForBooking`
+runs only after the ruling, so the `status='open'` predicate cannot be
+short-circuited from the console; `account-unwind` does not call
+`resolveDispute`, so a chargeback cannot block a closure.
