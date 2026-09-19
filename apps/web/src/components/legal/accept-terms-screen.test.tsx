@@ -18,9 +18,12 @@ import { AcceptTermsScreen } from './accept-terms-screen';
 
 const post = vi.fn();
 const replace = vi.fn();
+const signOut = vi.fn<() => Promise<void>>();
+const assign = vi.fn();
 
 vi.mock('@/lib/use-api', () => ({ useApi: () => post }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }) }));
+vi.mock('@/lib/auth/auth-requests', () => ({ signOut: () => signOut() }));
 
 const TERMS = legalDocument('terms');
 
@@ -46,10 +49,17 @@ beforeEach(() => {
   post.mockReset();
   post.mockResolvedValue(status({ accepted: true, acceptedAt: new Date() }));
   replace.mockReset();
+  signOut.mockReset();
+  signOut.mockResolvedValue(undefined);
+  assign.mockReset();
+  vi.stubGlobal('location', { ...window.location, assign });
   window.localStorage.clear();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('the role chosen at sign-up', () => {
   it('is sent with the acceptance and cleared once it lands', async () => {
@@ -221,5 +231,60 @@ describe('the acceptance gate', () => {
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/vendors/apply'));
     expect(screen.queryByText('That did not save')).toBeNull();
+  });
+
+  /** A ban landing while the page is open: a retry re-posts into the same 403. */
+  it('sends a suspended account to /suspended instead of offering a retry', async () => {
+    const user = userEvent.setup();
+    post.mockRejectedValue(new ApiClientError(403, 'FORBIDDEN', 'This account has been suspended'));
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    await user.click(box());
+    await user.click(submit());
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/suspended'));
+    expect(screen.queryByText(/try again/)).toBeNull();
+  });
+
+  /** A retired row with a live session: nothing this page posts can succeed. */
+  it('ends a session the API no longer honours and returns to sign-in', async () => {
+    const user = userEvent.setup();
+    post.mockRejectedValue(new ApiClientError(401, 'UNAUTHORIZED', 'Sign in again'));
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    await user.click(box());
+    await user.click(submit());
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/sign-in'));
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/try again/)).toBeNull();
+  });
+
+  it('still offers a retry for a server failure', async () => {
+    const user = userEvent.setup();
+    post.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    await user.click(box());
+    await user.click(submit());
+
+    await waitFor(() =>
+      expect(screen.getByText('Nothing has been recorded — try again.')).toBeDefined(),
+    );
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  /** The card promises "you don't lose your place", so an in-text link must not navigate this tab. */
+  it('opens the Privacy Policy link inside the Terms card in a new tab', () => {
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    const links = screen.getAllByRole('link', { name: 'Privacy Policy' });
+
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link.getAttribute('href')).toBe('/privacy');
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    }
   });
 });

@@ -329,6 +329,39 @@ export async function seedE2eFixtures<
 }
 
 /**
+ * A `users` row the previous identity provider issued (a Clerk id, `user_` plus
+ * 24 or more alphanumerics) or a seeded one (`seed_…`), as SQL. Mirrors
+ * `isUnbackedIdentity` in the API, which this package cannot import.
+ */
+const UNBACKED_AUTH_ID = sql`(${users.authUserId} ~ '^user_[A-Za-z0-9]{24,}$' or ${users.authUserId} like 'seed\\_%')`;
+
+/**
+ * Re-keys a pre-swap row to the identity Neon Auth actually holds.
+ *
+ * A database that predates the Clerk to Neon Auth swap already has the fixture's
+ * row under a Clerk id. The upsert below is keyed on `auth_user_id`, so without
+ * this it would insert a second row and die on the unique email. Only a row no
+ * identity backs is touched, and only when the Neon id has no row yet: a
+ * Neon-keyed row is never re-keyed, and its email and role are left to the
+ * upsert exactly as before. Re-running finds nothing to adopt.
+ */
+async function adoptUnbackedRow(tx: Tx, account: E2eAccount): Promise<void> {
+  const [existing] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.authUserId, account.authUserId));
+
+  if (existing) {
+    return;
+  }
+
+  await tx
+    .update(users)
+    .set({ authUserId: account.authUserId, updatedAt: sql`now()` })
+    .where(and(sql`lower(${users.email}) = lower(${account.email})`, UNBACKED_AUTH_ID));
+}
+
+/**
  * Ensures the local row for a Neon Auth identity, and that it holds the role the
  * fixture needs.
  *
@@ -343,6 +376,8 @@ async function upsertAccount(
   account: E2eAccount,
   role: 'vendor' | 'customer' | 'admin',
 ): Promise<string> {
+  await adoptUnbackedRow(tx, account);
+
   const [row] = await tx
     .insert(users)
     .values({

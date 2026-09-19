@@ -1,0 +1,1 @@
+ALTER TABLE "vendor_applications" ADD COLUMN "status_before_invite" "vendor_application_status";
