@@ -132,11 +132,14 @@ function whatTheMoneyDid(settlement: Settlement, audience: SettlementAudience): 
   }
 
   /*
-   * The reversal is named here for the same reason D31 names it in the
-   * notification: a destination charge takes the vendor's share back out of
-   * their Stripe balance, and a vendor reading their own cancelled booking
-   * should not have to discover that on a statement.
+   * Branches on whether the payout had gone out, as the vendor's notification
+   * does (`unwindSentence`): the platform holds the charge until the release,
+   * so a booking cancelled before it took nothing back out of their balance.
    */
+  if (settlement.paidOutAt === null) {
+    return `They paid ${paid} and were refunded ${refunded === ALL_OF_IT ? 'all of it' : refunded}. This booking had not been paid out yet, so nothing is taken back out of your Stripe balance.`;
+  }
+
   return refunded === ALL_OF_IT
     ? `They paid ${paid} and were refunded all of it. Your share was reversed out of your Stripe balance.`
     : `They paid ${paid} and were refunded ${refunded}. The same share of your payout was reversed out of your Stripe balance.`;

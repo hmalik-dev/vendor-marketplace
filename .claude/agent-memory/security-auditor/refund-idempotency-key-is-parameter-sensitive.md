@@ -31,3 +31,16 @@ reason — the key has to change with them, or the first 24 hours after deploy
 answer an opaque 400 on the money path. Version the key alongside the policy.
 Related: the >24h direction is the opposite failure, see
 [[refund-before-row-move-can-double-refund]].
+
+**The reversal keys have the second half of the problem: a cached _failure_.**
+`stripe.ts:185` records the incident that put `attempt` into the transfer key —
+Stripe replays a refused response, log URL and all, for 24h, so a fixed key froze
+one blip into a day of stuck payouts. Every `reverseTransfer` key in the tree is
+still fixed per booking (`${keyPrefix}_${id}_reversal`, and VEN-424's
+`release_${id}_surplus`), and `balance_insufficient` on the connected account is
+the realistic refusal. Varying them costs nothing: `findTransfer().reversedCents`
+is the durable, expiry-free guard against a double reversal — which is exactly
+why `createTransfer` was allowed to vary. The test double
+(`testing/test-server.ts:690`) replays a reversal on the key alone and models no
+cached failure, so no suite can go red for this; `createTransfer`'s
+`failedTransferKeys` branch beside it is the shape to copy.
