@@ -12,6 +12,11 @@ import type { ClerkUserDeleter } from '../../plugins/clerk-admin.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import { hasAnotherLiveOperator, retireOperatorById, retireUserById } from '../users/users.dao.js';
 import { isClerkIdentity } from '../webhooks/clerk.reconcile.js';
+
+/** Marketplace demo accounts carry ids no provider ever issued. */
+function isSeededIdentity(authUserId: string): boolean {
+  return authUserId.startsWith('seed_');
+}
 import { findConfirmedBookingsToUnwind } from './admin.dao.js';
 import { fullName, recordAdminActionBestEffort } from './admin.service.js';
 import {
@@ -618,19 +623,18 @@ export async function closeAccount(
         'An account closure could not delete its Clerk identity; that person is still signed in',
       )
     : /*
-       * A row Clerk never issued has no identity to end, so there is nothing
-       * owed and nothing to call. `isClerkIdentity` is the predicate the
-       * reconcile pass already owns for this exact distinction — *"a row Clerk
-       * never issued is not a row Clerk deleted"* — and the seeded marketplace
-       * accounts (`seed_mkt_…`) are live, listed on `/admin/customers`, and
-       * closable. Without it, closing one sends a fabricated id to Clerk and
-       * reports whatever Clerk says about it: a 404 becomes `true`, telling an
-       * operator a sign-in was deleted that never existed, and a 400 becomes
-       * `false`, sending them to the dashboard to hunt for it. Both answers are
-       * written into `admin_actions`, which carries an immutability trigger, so
-       * the false record cannot be corrected afterwards.
+       * Not a Clerk row, so Clerk is not asked — asking it about an id it never
+       * issued reports its 404 as "deleted" and is written into
+       * `admin_actions`, which cannot be corrected afterwards.
+       *
+       * What is owed then depends on who issued it. A seeded marketplace
+       * account (`seed_…`) has no identity anywhere, so nothing is owed. A
+       * **Neon Auth** identity is real and stays signed in after the row is
+       * retired: ending it is VEN-448's closure work, so until then the
+       * honest answer is `false` and the console asks for a person, the shape
+       * a refused refund already takes.
        */
-      true;
+      isSeededIdentity(user.authUserId);
 
   await recordAdminActionBestEffort(context, {
     actorId,

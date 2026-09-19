@@ -80,55 +80,54 @@ export default async function RootLayout({
       className={`${instrumentSerif.variable} ${instrumentSans.variable} ${jetBrainsMono.variable}`}
     >
       <body className="flex min-h-screen flex-col">
-        <>
-          <ErrorReportingUser userId={session?.userId ?? null} />
-          {/*
+        <ErrorReportingUser userId={session?.userId ?? null} />
+        {/*
             The adapter sits above the header, not inside the search page: on
             `/search` the query bar lives in the header and the results live in
             the page, and both read the same `nuqs` params. Two readers of one
             URL cannot disagree; two copies of the adapter could.
           */}
-          <NuqsAdapter>
-            {/*
+        <NuqsAdapter>
+          {/*
               First in the tab order, and the only thing before the header.
               Off-screen until focused, then it lands on the cream surface at
               the top-left rather than shifting the layout — `sr-only` alone
               would keep it unreachable to a sighted keyboard user.
             */}
-            <a
-              href="#main"
-              className="sr-only rounded-lg bg-stone-0 px-4 py-2 text-sm font-semibold text-stone-900 shadow-md focus-visible:not-sr-only focus-visible:absolute focus-visible:top-3 focus-visible:left-3 focus-visible:z-(--z-skip-link)"
-            >
-              Skip to content
-            </a>
-            {/*
+          <a
+            href="#main"
+            className="sr-only rounded-lg bg-stone-0 px-4 py-2 text-sm font-semibold text-stone-900 shadow-md focus-visible:not-sr-only focus-visible:absolute focus-visible:top-3 focus-visible:left-3 focus-visible:z-(--z-skip-link)"
+          >
+            Skip to content
+          </a>
+          {/*
               Wraps the header and the page together, because the one thing it
               carries — whether a search is in flight — is set by the results
               and read by the query bar in the header. See `search-status.tsx`.
             */}
-            <SearchStatusProvider>
-              {/*
+          <SearchStatusProvider>
+            {/*
                 The operations console draws its own inverted header (frame
                 `13`), so the marketplace one is removed there rather than
                 stacked above it. Same argument as `PublicChrome` below.
               */}
-              <OutsideAdmin>
-                <SiteHeader />
-              </OutsideAdmin>
-              <main id="main" tabIndex={-1} className="flex-1">
-                {children}
-              </main>
-            </SearchStatusProvider>
-            {/*
+            <OutsideAdmin>
+              <SiteHeader />
+            </OutsideAdmin>
+            <main id="main" tabIndex={-1} className="flex-1">
+              {children}
+            </main>
+          </SearchStatusProvider>
+          {/*
               The footer belongs to the public face. An app screen owns the
               whole viewport, and a footer under a full-height pane layout is
               what makes the page scroll when only the panes should.
             */}
-            <PublicChrome>
-              <SiteFooter />
-            </PublicChrome>
-          </NuqsAdapter>
-          {/*
+          <PublicChrome>
+            <SiteFooter />
+          </PublicChrome>
+        </NuqsAdapter>
+        {/*
             Bottom-right, 5s dismiss, per design/design-plan/03-components.md.
             `richColors` is deliberately absent: it fills the whole toast with
             a tint per type, where the spec puts the type in a 4px left accent
@@ -149,13 +148,12 @@ export default async function RootLayout({
             `static` — so leaving it at its 16px default would have left #225's
             trap intact on exactly the widths that still have the bar.
           */}
-          <Toaster
-            position="bottom-right"
-            duration={5000}
-            offset={{ bottom: TOAST_BOTTOM_OFFSET }}
-            mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
-          />
-        </>
+        <Toaster
+          position="bottom-right"
+          duration={5000}
+          offset={{ bottom: TOAST_BOTTOM_OFFSET }}
+          mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
+        />
       </body>
     </html>
   );

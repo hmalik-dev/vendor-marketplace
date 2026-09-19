@@ -49,6 +49,7 @@ const KID = 'test-key';
 
 describe('the Neon Auth trust boundary', () => {
   let harness: TestHarness;
+  let jwks: ReturnType<typeof createLocalJWKSet>;
   let sign: (
     claims: JWTPayload,
     options?: { expiresIn?: string | number; key?: CryptoKey },
@@ -56,7 +57,7 @@ describe('the Neon Auth trust boundary', () => {
 
   beforeAll(async () => {
     const { publicKey, privateKey } = await generateKeyPair('EdDSA', { extractable: true });
-    const jwks = createLocalJWKSet({
+    jwks = createLocalJWKSet({
       keys: [{ ...(await exportJWK(publicKey)), kid: KID, alg: 'EdDSA' }],
     });
 
@@ -117,6 +118,38 @@ describe('the Neon Auth trust boundary', () => {
     const expired = await sign(claims(), { expiresIn: Math.floor(Date.now() / 1000) - 60 });
 
     expect((await get('/users/me', expired)).statusCode).toBe(401);
+  });
+
+  it('logs why an expired token was refused, and none of the claims it carried', async () => {
+    const lines: string[] = [];
+    const logged = await createTestHarness({
+      env: { LOG_LEVEL: 'info' },
+      loggerStream: { write: (chunk: string) => void lines.push(chunk) } as NodeJS.WritableStream,
+      neonAuth: {
+        verifySessionToken: createNeonTokenVerifier(BASE_URL, jwks),
+        loadAuthUser: createNeonUserLoader(BASE_URL, jwks),
+      },
+    });
+
+    try {
+      const expired = await sign(claims({ email: 'leaky@example.com', name: 'Leaky Person' }), {
+        expiresIn: Math.floor(Date.now() / 1000) - 60,
+      });
+      const response = await logged.app.inject({
+        method: 'GET',
+        url: '/users/me',
+        headers: { authorization: `Bearer ${expired}` },
+      });
+      const output = lines.join('');
+
+      expect(response.statusCode).toBe(401);
+      expect(output).toContain('Rejected an unverifiable session token');
+      expect(output).toContain('JWTExpired');
+      expect(output).not.toContain('leaky@example.com');
+      expect(output).not.toContain('Leaky Person');
+    } finally {
+      await logged.close();
+    }
   });
 
   it('answers 401 to a token for another issuer', async () => {

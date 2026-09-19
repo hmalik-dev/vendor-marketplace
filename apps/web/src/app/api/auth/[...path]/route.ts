@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { neonAuth } from '@/lib/auth/server';
 import { isProxiedAuthCall } from '@/lib/auth/proxy-allowlist';
+import { callerAddress, isThrottled } from '@/lib/auth/proxy-throttle';
 
 /**
  * Same-origin proxy to Neon Auth. The browser talks to this, never to the
@@ -15,6 +16,9 @@ import { isProxiedAuthCall } from '@/lib/auth/proxy-allowlist';
  * app's own rules for closing or changing an account. Anything not listed is a
  * 404 here.
  *
+ * **Throttled per caller** (`proxy-throttle.ts`): the API's limiter never sees
+ * these calls, and Neon would see them all from this server's one address.
+ *
  * Built per request, because `neonAuth()` reads the environment on first use
  * and a module-level `auth.handler()` would read it at build.
  */
@@ -27,6 +31,13 @@ const forward =
 
     if (!isProxiedAuthCall(method, path)) {
       return NextResponse.json({ message: 'Not found' }, { status: 404 });
+    }
+
+    if (isThrottled(callerAddress(request.headers), path)) {
+      return NextResponse.json(
+        { message: 'Too many attempts' },
+        { status: 429, headers: { 'Retry-After': '60' } },
+      );
     }
 
     return neonAuth().handler()[method](request, context);

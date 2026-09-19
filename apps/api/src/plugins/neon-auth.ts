@@ -181,7 +181,15 @@ export const neonAuthPlugin = fp<NeonAuthPluginOptions>(
       try {
         authUserId = await verify(token);
       } catch (error) {
-        request.log.info({ err: error }, 'Rejected an unverifiable session token');
+        /*
+         * A reason, never the error: jose attaches the rejected token's decoded
+         * claims (`sub`, `email`, `name`) to an expiry or claim failure, and an
+         * expired token is routine — one per idle tab every fifteen minutes.
+         */
+        request.log.info(
+          { reason: error instanceof Error ? error.name : 'unknown' },
+          'Rejected an unverifiable session token',
+        );
         throw unauthorized('Session token is invalid or expired');
       }
 

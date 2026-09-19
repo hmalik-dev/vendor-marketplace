@@ -149,6 +149,17 @@ export async function redirectIfSignedIn(returnTo?: string | null): Promise<void
     return;
   }
 
+  /*
+   * A session the API does not honour is not a reason to leave this page. An
+   * account an operator has closed keeps its provider cookie, but `/users/me`
+   * answers it 401 and `/after-sign-in` would send it straight back here —
+   * a redirect loop with no sign-out control to break it. Only a caller the
+   * API resolves has somewhere to be sent.
+   */
+  if ((await readUserForChrome()) === null) {
+    return;
+  }
+
   const safe = safeReturnPath(returnTo);
 
   redirect(

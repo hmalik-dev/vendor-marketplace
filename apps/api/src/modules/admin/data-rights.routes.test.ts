@@ -1085,6 +1085,37 @@ describe('data rights', () => {
     });
 
     /*
+     * A Neon Auth identity is real and outlives the retired row (VEN-447).
+     * Reporting it deleted would write a false, permanent `admin_actions`
+     * record and leave a person who can still sign in; until VEN-448 ends it,
+     * the answer is `false` so the console asks for a human.
+     */
+    it('reports a Neon Auth identity as not deleted, and does not ask Clerk', async () => {
+      await signIn(ADMIN, true);
+
+      const neonUser = await harness.database.db
+        .insert(users)
+        .values({
+          authUserId: 'q1w2e3r4t5y6u7i8o9p0aSdFgHjKlZxC',
+          email: 'neon-closure@example.com',
+          role: 'customer',
+          firstName: 'Neon',
+          lastName: 'Customer',
+        })
+        .returning({ id: users.id });
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${neonUser[0]!.id}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ identityDeleted: false });
+      expect(harness.deletedClerkUsers).toEqual([]);
+    });
+
+    /*
      * VEN-382. Driven through the real closure route rather than a row hand-set
      * with `deleted_at`, so the fixture is whatever closure actually produces.
      */

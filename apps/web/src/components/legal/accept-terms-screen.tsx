@@ -74,7 +74,7 @@ export function AcceptTermsScreen({
         /*
          * The role chosen at sign-up, which Neon Auth has no field to carry.
          * Read fresh and validated here; the API narrows it again, so a
-         * tampered cookie can at worst pick between the two public roles.
+         * tampered stored value can at worst pick between the two public roles.
          */
         body: { version: status.current, accepted: true, role: readSignUpRole() ?? undefined },
         schema: termsAcceptanceStatusSchema,
@@ -95,10 +95,11 @@ export function AcceptTermsScreen({
     } catch (error) {
       /*
        * The vendor gate (VEN-406): no account was created for this address, so
-       * the next step is the application form rather than a retry.
+       * the next step is the application form rather than a retry. The stored
+       * choice stays: clearing it would let a return visit here quietly make
+       * them a customer, after a screen that said the choice cannot change.
        */
       if (error instanceof ApiClientError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
-        clearSignUpRole();
         router.replace(VENDOR_APPLY_PATH);
         return;
       }

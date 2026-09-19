@@ -64,7 +64,7 @@ export interface SignUpFormProps {
 
 /**
  * Role is chosen before the form is submitted and is remembered in a
- * short-lived cookie (`signup-role.ts`) that the accept-terms screen sends to
+ * short-lived local-storage entry (`signup-role.ts`) that the accept-terms screen sends to
  * the API, which narrows it and persists it on the local user row; nothing
  * downstream trusts this value on its own.
  *

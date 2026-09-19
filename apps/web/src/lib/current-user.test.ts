@@ -131,6 +131,7 @@ describe('requireCurrentUser', () => {
   it('returns the user when the session resolves', async () => {
     getToken.mockResolvedValue('token');
     apiRequest.mockResolvedValue(VENDOR);
+    getToken.mockResolvedValue('token');
 
     await expect(requireCurrentUser()).resolves.toEqual(VENDOR);
     expect(redirect).not.toHaveBeenCalled();
@@ -165,6 +166,7 @@ describe('requireRole', () => {
   it('admits a user holding the required role', async () => {
     getToken.mockResolvedValue('token');
     apiRequest.mockResolvedValue(VENDOR);
+    getToken.mockResolvedValue('token');
 
     await expect(requireRole('vendor')).resolves.toEqual(VENDOR);
     expect(redirect).not.toHaveBeenCalled();
@@ -181,6 +183,7 @@ describe('requireRole', () => {
   it('bounces a vendor out of a customer route to their own dashboard', async () => {
     getToken.mockResolvedValue('token');
     apiRequest.mockResolvedValue(VENDOR);
+    getToken.mockResolvedValue('token');
 
     await expect(requireRole('customer')).rejects.toThrow('NEXT_REDIRECT:/vendor/dashboard');
     expect(redirect).toHaveBeenCalledWith('/vendor/dashboard');
@@ -194,6 +197,9 @@ describe('redirectIfSignedIn', () => {
 
   beforeEach(() => {
     getToken.mockReset();
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue(VENDOR);
+    getToken.mockResolvedValue('token');
   });
 
   afterEach(() => {
@@ -201,8 +207,17 @@ describe('redirectIfSignedIn', () => {
     vi.clearAllMocks();
   });
 
+  it('keeps an account the API refuses on the page, so a closed account cannot loop', async () => {
+    userId = 'user_closed';
+    apiRequest.mockRejectedValue(new ApiClientError(401, 'UNAUTHORIZED', 'No account is linked'));
+
+    await expect(redirectIfSignedIn('/bookings')).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
   it('lets a signed-out visitor stay on the authentication page', async () => {
     userId = null;
+    getToken.mockResolvedValue(null);
 
     await expect(redirectIfSignedIn()).resolves.toBeUndefined();
     expect(redirect).not.toHaveBeenCalled();
@@ -245,6 +260,7 @@ describe('redirectVendorToDashboard', () => {
   it('sends a vendor to the vendor dashboard instead', async () => {
     getToken.mockResolvedValue('token');
     apiRequest.mockResolvedValue(VENDOR);
+    getToken.mockResolvedValue('token');
 
     await expect(redirectVendorToDashboard()).rejects.toThrow('NEXT_REDIRECT:/vendor/dashboard');
     expect(redirect).toHaveBeenCalledWith('/vendor/dashboard');
@@ -333,6 +349,7 @@ describe('readRoleForChrome', () => {
   it('returns the role when the record reads', async () => {
     getToken.mockResolvedValue('token');
     apiRequest.mockResolvedValue(VENDOR);
+    getToken.mockResolvedValue('token');
 
     await expect(readRoleForChrome()).resolves.toBe('vendor');
   });
@@ -528,6 +545,9 @@ describe('redirectIfSignedIn', () => {
   beforeEach(() => {
     redirect.mockClear();
     getToken.mockReset();
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue(VENDOR);
+    getToken.mockResolvedValue('token');
     requestPath = null;
     userId = 'user_123';
   });
@@ -556,6 +576,7 @@ describe('redirectIfSignedIn', () => {
 
   it('does nothing at all when nobody is signed in', async () => {
     userId = null;
+    getToken.mockResolvedValue(null);
 
     await expect(redirectIfSignedIn('/bookings')).resolves.toBeUndefined();
     expect(redirect).not.toHaveBeenCalled();
