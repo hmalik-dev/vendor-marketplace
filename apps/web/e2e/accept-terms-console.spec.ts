@@ -9,12 +9,19 @@ import {
 } from './no-row-account.js';
 
 /*
- * VEN-451. The Terms-gated header used to ask `/notifications` and
- * `/events/stream-ticket` for an account the gate refuses, and the browser
- * logged both 403s as console errors on a screen that is otherwise correct.
+ * VEN-451 AC 2: `/accept-terms` for a fresh account logs no console errors.
+ *
+ * What this pins is the acceptance screen's own health for the persistent
+ * newcomer (no `users` row, so its header is the signed-out one). It does
+ * **not** fail if the bell's `usePathname` guard is removed: that case needs an
+ * account that has a row but has not accepted the current Terms, which no
+ * persona provides. The guard itself is asserted in
+ * `notification-bell.test.tsx`, which does fail without it.
  */
 test.describe('the acceptance interstitial', () => {
-  test('logs no console errors for a fresh account', async ({ browser }) => {
+  test('logs no console errors and makes no bell requests for a fresh account', async ({
+    browser,
+  }) => {
     assertLoopbackOrigin(resolveE2EBaseUrl());
     const account = await mintNoRowAccount();
     const context = await browser.newContext();
@@ -33,12 +40,6 @@ test.describe('the acceptance interstitial', () => {
 
       const landing = await signInThroughTheForm(page, account);
       expect(landing.pathname).toBe('/accept-terms');
-
-      /*
-       * The bell's calls are issued from an effect, so they start the moment
-       * the header hydrates; the request log is the deterministic half (a
-       * request is recorded when sent), the console the symptom.
-       */
       await waitForHydration(page, 'header button');
 
       expect(
