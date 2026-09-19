@@ -43,12 +43,12 @@
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "devDependencies": {
-    "playwright": "1.62.1",
+    "playwright": "1.63.0",
     "prettier": "3.9.6",
-    "tsx": "4.23.12",
-    "turbo": "2.10.12",
+    "tsx": "4.23.13",
+    "turbo": "2.10.13",
     "typescript": "5.9.3",
-    "yaml": "2.9.0"
+    "yaml": "2.9.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
