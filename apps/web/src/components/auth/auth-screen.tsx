@@ -120,7 +120,7 @@ export const AUTH_PANELS: Record<AuthPanelRole, AuthPanel> = {
     guarantees: [
       "See what a vendor charges and when they're free",
       'Publish your prices and own your calendar',
-      'Payment held until the event is complete',
+      'Payment held until after the event',
     ],
     sideLabels: ['Booking', 'Vending', 'Both'],
     sideLabelClasses: ['text-gold-200', 'text-sage-175', 'text-stone-0/82'],
@@ -136,7 +136,7 @@ export const AUTH_PANELS: Record<AuthPanelRole, AuthPanel> = {
     body: "Every vendor publishes what they charge and when they're free — before you talk to anyone, and without asking for a quote.",
     guarantees: [
       'Live calendars — if a date shows open, it is',
-      'Payment held until the event is complete',
+      'Payment held until after the event',
       'Published prices, and no service fee on top',
     ],
     dotClass: 'bg-sage-200',
