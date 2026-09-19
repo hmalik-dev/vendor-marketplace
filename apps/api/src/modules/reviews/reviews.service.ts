@@ -27,7 +27,9 @@ import {
   findReviewableBooking,
   findUnreviewedCompletedBooking,
   findVendorReviewSummary,
+  hasReviewTombstone,
   insertReviewAndRecalculate,
+  isBookingReviewable,
 } from './reviews.dao.js';
 
 /**
@@ -141,7 +143,7 @@ export async function createReview(
     throw notFound('That booking could not be found');
   }
 
-  if (booking.status !== 'completed') {
+  if (!isBookingReviewable(booking)) {
     throw validationFailed('A booking can only be reviewed once the event has happened');
   }
 
@@ -154,10 +156,14 @@ export async function createReview(
    * `UNIQUE(booking_id, reviewer_id)` for the truth. Two submissions racing
    * both pass this read; the index is what stops the second one landing, and
    * the conflict below is what turns its error into a sentence.
+   *
+   * The tombstone is read *after* the review, on purpose: an admin deletion
+   * commits the delete and the tombstone together, so a reader that sees the
+   * review gone is reading after that commit and must see the tombstone.
    */
   const existing = await findReviewByBookingAndReviewer(db, bookingId, reviewerId);
 
-  if (existing) {
+  if (existing || (await hasReviewTombstone(db, bookingId, reviewerId))) {
     throw conflict('You have already reviewed this booking');
   }
 
