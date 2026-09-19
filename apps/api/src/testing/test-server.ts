@@ -12,6 +12,7 @@ import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
 import {
   paymentIntentParams,
   refundParams,
+  assertUsableRefund,
   refusedRefundParams,
   refusedReversalParams,
   refusedTransferParams,
@@ -340,6 +341,8 @@ export interface FakeStripe extends StripeConnectGateway {
    * with nobody told (#400). There is no other way to reach it from a test.
    */
   refundsToRefuse: Set<string>;
+  /** The status Stripe answers the next `createRefund` with; unset means `succeeded`. */
+  nextRefundStatus: string | undefined;
   /** Every intent the fake has minted, keyed by id, in Stripe's own shape. */
   paymentIntents: Map<string, PaymentIntentSnapshot>;
   /**
@@ -456,6 +459,7 @@ function createFakeStripe(): FakeStripe {
     intentsByKey,
     refunds,
     refundsToRefuse,
+    nextRefundStatus: undefined,
     transfers,
     reversals,
     transfersToRefuse,
@@ -723,6 +727,8 @@ function createFakeStripe(): FakeStripe {
         throw new Error(refusal);
       }
 
+      assertUsableRefund(`re_test_${refunds.length + 1}`, fake.nextRefundStatus ?? 'succeeded');
+
       refunds.push({
         paymentIntentId: input.paymentIntentId,
         amountCents: input.amountCents,
@@ -738,6 +744,21 @@ function createFakeStripe(): FakeStripe {
       });
 
       return { refundId: `re_test_${refunds.length}`, amountCents: input.amountCents };
+    },
+
+    retrieveRefund: async (refundId) => {
+      const refund = refunds[Number(refundId.replace('re_test_', '')) - 1];
+
+      if (!refund) {
+        throw new Error(`No fake refund ${refundId}`);
+      }
+
+      return {
+        refundId,
+        status: refund.status ?? 'succeeded',
+        paymentIntentId: refund.paymentIntentId,
+        amountCents: refund.amountCents,
+      };
     },
 
     findRefund: async (paymentIntentId) => {

@@ -24,6 +24,10 @@ import { AppError, conflict, forbidden, notFound } from '../../lib/errors.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
 import { fullName } from '../admin/admin.service.js';
 import {
+  unmatchedDisputeAlert,
+  type OperatorAlerts,
+} from '../operator-alerts/operator-alerts.service.js';
+import {
   announceDisputeHold,
   disputeHoldAudience,
   placeDisputeHold,
@@ -273,6 +277,8 @@ export type ChargebackOutcome =
 export interface ChargebackDeps extends CaseDeps {
   /** The payments module's context, so the hold is placed by its own primitive. */
   bookings: BookingContext;
+  /** Told of a dispute that matches no booking; absent in a suite that does not care. */
+  alerts?: OperatorAlerts;
 }
 
 /**
@@ -375,9 +381,18 @@ export async function openChargebackCase(
    * payment, another product on the same Stripe account. Acknowledged rather
    * than refused, for the reason the intent handler beside it gives: a 4xx
    * makes Stripe retry for three days and count the endpoint as failing, for
-   * an event that could never be applied.
+   * an event that could never be applied. But Stripe has still debited the
+   * platform and the evidence deadline still runs, so the operator is told
+   * (VEN-430): with no case and no email it would pass by default.
    */
   if (!target) {
+    deps.alerts?.dispatch(
+      unmatchedDisputeAlert({
+        disputeId,
+        paymentIntentId: dispute.paymentIntentId,
+        amountCents: dispute.amountCents,
+      }),
+    );
     return 'ignored';
   }
 
