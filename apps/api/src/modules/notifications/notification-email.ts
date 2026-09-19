@@ -87,6 +87,17 @@ const EMAIL_LABELS: Partial<Record<NotificationType, string>> = {
 };
 
 /**
+ * Labels that differ when the recipient reads the email on the vendor side.
+ *
+ * `request_declined` is the one type sent to both parties: the customer whose
+ * request was declined is offered other vendors, but the vendor whose quote was
+ * turned down has nobody to find — their button goes to their bookings.
+ */
+const VENDOR_EMAIL_LABELS: Partial<Record<NotificationType, string>> = {
+  request_declined: 'Open your bookings',
+};
+
+/**
  * The vendor's own half of the product, where the shared path is customer-only.
  *
  * `/bookings` is gated by `requireRole('customer')`, so a vendor following it
@@ -160,7 +171,9 @@ export async function sendNotificationEmail(
   /** `vendor` when the recipient reads this on their own side of the product. */
   audience: 'customer' | 'vendor' = 'customer',
 ): Promise<void> {
-  const label = EMAIL_LABELS[row.type as NotificationType];
+  const type = row.type as NotificationType;
+  const vendorLabel = audience === 'vendor' ? VENDOR_EMAIL_LABELS[type] : undefined;
+  const label = vendorLabel ?? EMAIL_LABELS[type];
 
   if (!label) {
     return;

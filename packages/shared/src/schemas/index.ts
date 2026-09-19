@@ -2234,13 +2234,15 @@ export const supportMessageSchema = z.object({
 export type SupportMessageInput = z.infer<typeof supportMessageSchema>;
 
 /**
- * What a send hands back: the reference, and nothing else.
+ * What a send hands back: the reference, and the address the answer goes to.
  *
- * There is no status to poll and no thread to open, so there is nothing else
- * for this to carry — which is the scope line the screen states in words.
+ * There is no status to poll and no thread to open. The address is the one the
+ * server actually used — a signed-in sender's is read off their account, so the
+ * screen must show this rather than what it believed or what was typed.
  */
 export const supportMessageReceiptSchema = z.object({
   reference: z.string().regex(SUPPORT_REFERENCE_PATTERN),
+  replyTo: emailSchema,
 });
 export type SupportMessageReceipt = z.infer<typeof supportMessageReceiptSchema>;
 
@@ -2252,7 +2254,9 @@ export type SupportMessageReceipt = z.infer<typeof supportMessageReceiptSchema>;
  * is the whole reason this shape exists: without it a failure hands back
  * nothing, and the one state that most needs a handle has none.
  */
-export const supportSendFailureDetailsSchema = supportMessageReceiptSchema;
+export const supportSendFailureDetailsSchema = supportMessageReceiptSchema.pick({
+  reference: true,
+});
 export type SupportSendFailureDetails = z.infer<typeof supportSendFailureDetailsSchema>;
 
 // --- In-product reporting (#436) -------------------------------------------
@@ -2286,12 +2290,12 @@ export type CreateReportInput = z.infer<typeof createReportSchema>;
 /**
  * What a report hands back: the reference, and nothing else.
  *
- * Deliberately the same shape as a support send's receipt. There is no status
+ * The support receipt's reference, without its reply address. There is no status
  * to poll and no case the reporter can open — the queue is the operator's
  * screen — so the reference is the whole of what they are given, and the
  * dialog says so in words.
  */
-export const reportReceiptSchema = supportMessageReceiptSchema;
+export const reportReceiptSchema = supportMessageReceiptSchema.pick({ reference: true });
 export type ReportReceipt = z.infer<typeof reportReceiptSchema>;
 
 // --- Errors ----------------------------------------------------------------

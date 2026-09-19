@@ -47,6 +47,7 @@ import {
   findSettlements,
   findLiveRequest,
   findPackagesByIds,
+  findLapsedRequests,
   findRequestById,
   findRequests,
   findBookableVendorById,
@@ -236,8 +237,8 @@ async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerIden
 const EXPIRY_CONCURRENCY = 4;
 
 /**
- * Expiry is lazy: nothing sweeps the table on a timer, so a request that has
- * run past its window is aged on the next read of it. The write is guarded on
+ * Ages a request that has run past its window — on the next read of it, or in
+ * `expireLapsedRequests`' sweep, whichever comes first. The write is guarded on
  * the status it was read at, so a vendor accepting in the same second either
  * wins or is told the request expired — never both.
  */
@@ -293,6 +294,31 @@ async function ageIfExpired(
   );
 
   return expired;
+}
+
+/** How many lapsed requests one sweep tick works; the next tick takes the rest. */
+const EXPIRY_SWEEP_BATCH = 100;
+
+/**
+ * Ages every request whose window has run out, without waiting for a read.
+ *
+ * The same `ageIfExpired` a read runs, so the guarded UPDATE that makes the
+ * status change and the `request_expired` email happen once per request holds
+ * here too: two instances sweeping at once, or a sweep racing a read, cannot
+ * send it twice. Returns how many rows this call moved to `expired`.
+ */
+export async function expireLapsedRequests(
+  db: AppDatabase,
+  now: Date,
+  mail: NotificationEmailDeps,
+): Promise<number> {
+  const lapsed = await findLapsedRequests(db, now, EXPIRY_SWEEP_BATCH);
+  const aged = await mapWithConcurrency(lapsed, EXPIRY_CONCURRENCY, async (row) => {
+    const after = await ageIfExpired(db, row, now, mail);
+    return after.status === 'expired' && row.status !== 'expired';
+  });
+
+  return aged.filter(Boolean).length;
 }
 
 interface NotificationCopy {

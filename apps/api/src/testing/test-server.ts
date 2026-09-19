@@ -918,6 +918,8 @@ export async function createTestHarness(
      * directly, which is the same function the timer calls.
      */
     payoutSweepIntervalMs: 0,
+    // Nor does the expiry sweep: suites call `expireLapsedRequests` with a pinned clock.
+    expirySweepIntervalMs: 0,
     // The digest likewise: suites call `runOperatorDigest` with a pinned clock.
     operatorDigestIntervalMs: 0,
     // Alert send retries do not wait on a real timer in a suite.

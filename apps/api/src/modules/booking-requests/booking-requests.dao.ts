@@ -1,5 +1,6 @@
 import {
   and,
+  asc,
   desc,
   eq,
   getTableColumns,
@@ -102,6 +103,24 @@ export async function findRequestById(
     .limit(1);
 
   return rows?.[0] ?? null;
+}
+
+/**
+ * The requests whose window has run out but whose status has not been written
+ * yet, oldest first, for the expiry sweep. Bounded so one tick after an outage
+ * works a batch rather than the whole backlog; the next tick takes the rest.
+ */
+export async function findLapsedRequests(
+  db: AppDatabase,
+  now: Date,
+  limit: number,
+): Promise<BookingRequestRow[]> {
+  return db
+    .select()
+    .from(bookingRequests)
+    .where(hasLapsed(now))
+    .orderBy(asc(bookingRequests.expiresAt))
+    .limit(limit);
 }
 
 export interface RequestListFilter {

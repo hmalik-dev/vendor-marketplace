@@ -40,8 +40,12 @@ export const supportRoutes: FastifyPluginAsyncZod<SupportRoutesOptions> = async 
        * Keyed by account where there is one, so a shared office IP cannot
        * spend one person's allowance on everybody behind it, and by IP where
        * there is not.
+       *
+       * `openToLockedOut`: a suspended or retired account passes the auth
+       * hook here and is read as a visitor, who supplies an address to answer.
        */
       config: {
+        openToLockedOut: true,
         rateLimit: {
           ...SUPPORT_RATE_LIMIT,
           keyGenerator: (request: { auth: { id: string } | null; ip: string }) =>
