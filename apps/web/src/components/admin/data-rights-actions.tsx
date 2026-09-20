@@ -3,7 +3,7 @@
 import { BRAND_NAME, toDateString } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 /*
  * `formatEventDate`, not the raw column. An event date is a Postgres `DATE`
  * that travels as a `YYYY-MM-DD` string (`.claude/rules/shared-contracts.md`),
@@ -113,6 +113,7 @@ export function DataRightsActions({
   const call = useApi();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [refreshing, startRefresh] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   async function exportRecord(): Promise<void> {
@@ -214,7 +215,8 @@ export function DataRightsActions({
           ? 'Some bookings are still confirmed: Stripe refused a refund. This needs a person.'
           : null,
       );
-      router.refresh();
+      /* In a transition, so the page re-renders with the refreshed props rather than beside them. */
+      startRefresh(() => router.refresh());
     } catch (failure) {
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
@@ -265,10 +267,10 @@ export function DataRightsActions({
               variant="secondary"
               size="sm"
               className="w-full"
-              disabled={busy}
+              disabled={busy || refreshing}
               onClick={() => void finishUnwind()}
             >
-              {busy ? 'Working…' : 'Finish'}
+              {busy || refreshing ? 'Working…' : 'Finish'}
             </Button>
             <p className={CONSEQUENCE}>
               Refunds each remaining booking in full, once, and cancels it. Nothing already done is
