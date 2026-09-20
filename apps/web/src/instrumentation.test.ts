@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import * as Sentry from '@sentry/nextjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -42,4 +44,12 @@ describe('Sentry environment', () => {
       expect(vi.mocked(Sentry.init).mock.calls[0]?.[0]?.environment).toBe(tier);
     },
   );
+
+  it('inlines the validated DEPLOY_ENV as NEXT_PUBLIC_DEPLOY_ENV in next.config.ts', () => {
+    // The browser test stubs the variable at runtime; a shipped bundle has it
+    // only because next.config inlines it, so pin that line itself.
+    const config = readFileSync(path.resolve(__dirname, '../next.config.ts'), 'utf8');
+
+    expect(config).toMatch(/env:\s*\{[^}]*NEXT_PUBLIC_DEPLOY_ENV:\s*webEnv\.DEPLOY_ENV/);
+  });
 });

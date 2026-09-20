@@ -80,8 +80,9 @@ const nextConfig: NextConfig = {
 
   /*
    * `DEPLOY_ENV` is a server-only registry row, so the browser bundle receives
-   * it here: one read of the validated value, inlined, so the client's Sentry
-   * `environment` cannot disagree with the server's or the API's.
+   * it here: the validated value, inlined at build. A deployment refuses to build
+   * without it, so there the client's Sentry `environment` is the tier the
+   * server and the API report.
    */
   env: { NEXT_PUBLIC_SENTRY_RELEASE: release ?? '', NEXT_PUBLIC_DEPLOY_ENV: webEnv.DEPLOY_ENV },
 
