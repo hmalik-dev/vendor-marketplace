@@ -108,6 +108,46 @@ afterAll(async () => {
   await testDb.close();
 });
 
+/*
+ * Drizzle's migrator applies every pending migration in ONE transaction, and
+ * Postgres refuses to use an enum value in the transaction that added it
+ * (55P04). `0015` adds `'style'`; `0016` must not name it as an enum literal, or
+ * the first database to run 0015-0017 together (Neon dev, staging, production)
+ * fails at 0016. Each statement auto-committing, as above, cannot see that.
+ */
+describe('0015 → 0017 applied in a single transaction, as the migrator does', () => {
+  it('runs to the end on a database still at 0014', async () => {
+    const fresh = await createTestDatabase();
+    try {
+      expect(ENTRIES.slice(15, 18).map((entry) => entry.tag)).toEqual([
+        '0015_simple_johnny_blaze',
+        '0016_drop_style_tags',
+        '0017_same_khan',
+      ]);
+      for (const entry of ENTRIES.slice(0, 15)) {
+        for (const statement of statementsOf(entry.tag)) {
+          await fresh.db.execute(sql.raw(statement));
+        }
+      }
+      await fresh.db.transaction(async (tx) => {
+        for (const entry of ENTRIES.slice(15, 18)) {
+          for (const statement of statementsOf(entry.tag)) {
+            await tx.execute(sql.raw(statement));
+          }
+        }
+      });
+      const labels = await fresh.db.execute(
+        sql.raw(`SELECT count(*) AS count FROM pg_enum
+                   JOIN pg_type ON pg_type.oid = pg_enum.enumtypid
+                  WHERE pg_type.typname = 'tag_category'`),
+      );
+      expect(Number((labels.rows[0] as { count: string | number }).count)).toBe(3);
+    } finally {
+      await fresh.close();
+    }
+  });
+});
+
 describe('0016_drop_style_tags + 0017_same_khan', () => {
   it('starts from a database that really holds style rows', async () => {
     expect(await countOf(`SELECT count(*) AS count FROM tags WHERE category = 'style'`)).toBe(1);
