@@ -70,9 +70,10 @@ which is not a launch.
       and the landing-page category photography.
 - [ ] **A real end-to-end transaction** on live keys before opening to customers:
       book, pay, message, cancel with a refund, and see the payout arrive.
-- [ ] **Restore drill.** Nightly encrypted off-platform backups exist (VEN-408);
-      run the drill in `docs/runbook-restore.md` against the production backups
-      once before launch, not only by reading the workflow.
+- [ ] **Restore drill.** Backups are Neon-native only (VEN-408): the
+      `production` branch needs its snapshot schedule on (read it back), and the
+      drill in `docs/runbook-restore.md` must run once into a scratch branch.
+      Loss of the Neon account is an accepted, unprotected risk.
 - [ ] **Rotate every credential touched during setup**.
 
 ## Known limits to revisit before scaling out

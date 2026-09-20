@@ -1,8 +1,0 @@
-# Public age keys the nightly database backup is encrypted to, one per line.
-#
-# Only the PUBLIC key (age1…) belongs here. The matching secret key is held by
-# the operator offline and never enters this repository, GitHub or a Claude
-# configuration. Generating one: docs/runbook-restore.md, "The key pair".
-#
-# Until a key is listed, `pnpm db:backup` refuses to run — a backup is never
-# stored unencrypted.
