@@ -399,20 +399,7 @@ export async function recordSuccessfulPayment(
   const existing = await findAnyBookingByRequest(context.db, requestId);
 
   if (existing) {
-    /*
-     * A booking is already held, so this charge is a *second* one unless it is
-     * the intent that made the booking: after Stripe's 24-hour idempotency
-     * window a reopened checkout used to mint another intent, and both could be
-     * paid. Nothing pointed at the extra money, so it is refunded and the
-     * operator told. The answer stays 200 `already-booked` — the booking is
-     * fine, and a 5xx would only make Stripe redeliver a decided event. A
-     * failed refund is rethrown by `refuseDeclinedPayment` and does redeliver.
-     */
-    if (existing.stripePaymentIntentId && existing.stripePaymentIntentId !== intent.id) {
-      await refuseDeclinedPayment(context, intent, requestId, 'duplicate_intent');
-    }
-
-    return { outcome: 'already-booked', booking: existing };
+    return answerForHeldBooking(context, intent, requestId, existing);
   }
 
   const row = await findPayableRequest(context.db, requestId);
@@ -479,7 +466,7 @@ export async function recordSuccessfulPayment(
       throw conflict('That booking could not be recorded');
     }
 
-    return { outcome: 'already-booked', booking: settled };
+    return answerForHeldBooking(context, intent, requestId, settled);
   }
 
   await bestEffortNotice(context, { bookingId: booking.id }, () =>
@@ -487,6 +474,34 @@ export async function recordSuccessfulPayment(
   );
 
   return { outcome: 'booked', booking };
+}
+
+/**
+ * The answer for an intent that finds its request already booked.
+ *
+ * A booking is held, so this charge is a *second* one unless it is the intent
+ * that made the booking: after Stripe's 24-hour idempotency window a reopened
+ * checkout used to mint another intent, and both could be paid. Nothing pointed
+ * at the extra money, so it is refunded and the operator told. The answer stays
+ * 200 `already-booked` — the booking is fine, and a 5xx would only make Stripe
+ * redeliver a decided event. A failed refund is rethrown by
+ * `refuseDeclinedPayment` and does redeliver.
+ *
+ * Both ways of finding the booking come here: the read before the insert, and
+ * the read after losing the insert to a concurrent delivery (VEN-471), which
+ * used to skip the comparison and keep the loser's charge without a word.
+ */
+async function answerForHeldBooking(
+  context: PaymentContext,
+  intent: PaymentIntentSnapshot,
+  requestId: string,
+  held: BookingRow,
+): Promise<RecordedPayment> {
+  if (held.stripePaymentIntentId && held.stripePaymentIntentId !== intent.id) {
+    await refuseDeclinedPayment(context, intent, requestId, 'duplicate_intent');
+  }
+
+  return { outcome: 'already-booked', booking: held };
 }
 
 const REFUSED_PAYMENT_LOG: Record<RefusedPaymentCause, string> = {

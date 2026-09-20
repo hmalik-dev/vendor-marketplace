@@ -1,0 +1,320 @@
+import {
+  bookingRequests,
+  bookings,
+  categories,
+  vendorProfiles,
+} from '@vendor-marketplace/db/schema';
+import {
+  addDays,
+  CURRENT_VENDOR_AGREEMENT_VERSION,
+  toDateString,
+} from '@vendor-marketplace/shared';
+import { eq, sql } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  createPostgresTestDatabase,
+  type PostgresTestDatabase,
+} from '@vendor-marketplace/db/testing/postgres';
+import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { recordSuccessfulPayment, type PaymentContext } from './payments.service.js';
+
+/**
+ * VEN-471: two paid intents for one request, delivered at the same moment.
+ *
+ * `recordSuccessfulPayment` asks "is there a booking already?" and only then
+ * inserts, so two deliveries for two *different* intents can both see none. The
+ * unique index on `request_id` lets one insert win; the loser used to read the
+ * winner's row and answer 200 `already-booked` without asking whose intent made
+ * it. Stripe never redelivers a 200, so the second charge stayed in the platform
+ * balance with nothing pointing at it.
+ *
+ * PGlite is one connection and cannot interleave the two reads, so this needs a
+ * real Postgres. The first test builds the interleaving exactly: it holds the
+ * winner's insert uncommitted, so the loser reads no booking, reaches its own
+ * insert and blocks on the unique index until the winner commits.
+ */
+describe('two payment intents succeeding for one request, on real connections', () => {
+  const VENDOR = 'user_vendor';
+  const CUSTOMER = 'user_customer';
+  const PRICE_CENTS = 145_000;
+  const PLATFORM_FEE_RATE = 0.12;
+  const LOCK_WAIT_ATTEMPTS = 500;
+
+  const START = new Date('2026-06-01T12:00:00Z');
+
+  let database: PostgresTestDatabase | undefined;
+  let harness: TestHarness<PostgresTestDatabase> | undefined;
+  let vendorProfileId: string;
+  let packageId: string;
+  let daysOut = 30;
+  const dispatch = vi.fn();
+
+  async function inject(
+    method: 'POST',
+    url: string,
+    actor: string,
+    payload?: Record<string, unknown>,
+  ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
+    return harness!.app.inject({
+      method,
+      url,
+      headers: bearer(actor),
+      ...(payload ? { payload } : {}),
+    });
+  }
+
+  function context(): PaymentContext {
+    const db = harness!.database.db;
+
+    return {
+      db,
+      stripe: harness!.stripe,
+      hub: harness!.app.events,
+      log: harness!.app.log,
+      mail: {
+        db,
+        email: harness!.email,
+        log: harness!.app.log,
+        webOrigin: 'http://localhost:3000',
+        background: harness!.app.background,
+      },
+      alerts: { dispatch },
+      platformFeeRate: PLATFORM_FEE_RATE,
+    };
+  }
+
+  /** An accepted request on its own event date, and the intent its checkout opened. */
+  async function checkedOutRequest(): Promise<{ requestId: string; firstIntentId: string }> {
+    daysOut += 1;
+    const request = await inject('POST', '/booking-requests', CUSTOMER, {
+      vendorId: vendorProfileId,
+      packageId,
+      eventDate: toDateString(addDays(START, daysOut)),
+      eventType: 'wedding',
+      eventLocation: 'Barr Mansion, Austin, TX',
+      guestCount: 120,
+    });
+    expect(request.statusCode).toBe(201);
+    const requestId: string = request.json().id;
+
+    expect((await inject('POST', `/booking-requests/${requestId}/accept`, VENDOR)).statusCode).toBe(
+      200,
+    );
+
+    const checkout = await inject(
+      'POST',
+      `/customer/booking-requests/${requestId}/checkout`,
+      CUSTOMER,
+    );
+    expect(checkout.statusCode).toBe(200);
+
+    return { requestId, firstIntentId: checkout.json().paymentIntentId };
+  }
+
+  /** A second intent for the same request, as a reopened checkout mints one. */
+  async function secondIntent(requestId: string): Promise<string> {
+    harness!.stripe.intentsByKey.clear();
+    const stray = await harness!.stripe.createPaymentIntent({
+      requestId,
+      amountCents: PRICE_CENTS,
+      customerId: 'cus_test',
+      vendorId: 'ven_test',
+    });
+
+    return stray.id;
+  }
+
+  async function bookingsFor(requestId: string): Promise<(typeof bookings.$inferSelect)[]> {
+    return harness!.database.db.select().from(bookings).where(eq(bookings.requestId, requestId));
+  }
+
+  /** Holds until some other connection is parked waiting on a lock. */
+  async function untilAConnectionWaitsOnALock(): Promise<void> {
+    for (let attempt = 0; attempt < LOCK_WAIT_ATTEMPTS; attempt += 1) {
+      const result = await harness!.database.db.execute(
+        sql`select count(*)::int as waiting from pg_stat_activity where wait_event_type = 'Lock'`,
+      );
+      /* postgres-js answers the row array itself. */
+      const rows = result as unknown as { waiting: number }[];
+
+      if ((rows[0]?.waiting ?? 0) > 0) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    throw new Error('No connection ever waited on the winner’s insert');
+  }
+
+  beforeAll(async () => {
+    database = await createPostgresTestDatabase({ poolSize: 6 });
+    harness = await createTestHarness({ database, clock: () => START });
+
+    for (const [authUserId, role, email] of [
+      [VENDOR, 'vendor', 'grace@example.com'],
+      [CUSTOMER, 'customer', 'alan@example.com'],
+    ] as const) {
+      harness.authUsers.set(authUserId, {
+        authUserId,
+        email,
+        firstName: 'Test',
+        lastName: 'User',
+        roleHint: role,
+        avatarUrl: null,
+      });
+    }
+
+    harness.stripe.accountStatuses.set('acct_test_vendor', {
+      transfersActive: true,
+      payoutsActive: true,
+    });
+
+    const [photography] = await harness.database.db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.slug, 'photography'))
+      .limit(1);
+
+    const profile = await inject('POST', '/vendor/profile', VENDOR, {
+      businessName: 'Sunlit Studio',
+      categoryIds: [photography!.id],
+      city: 'Austin',
+      state: 'TX',
+      bio: 'Documentary wedding photography for people who hate posing.',
+    });
+    expect(profile.statusCode).toBe(201);
+    vendorProfileId = profile.json().id;
+
+    const servicePackage = await inject('POST', '/vendor/packages', VENDOR, {
+      name: 'Full day coverage',
+      description: 'Six hours of coverage with two photographers on site.',
+      priceCents: PRICE_CENTS,
+      priceType: 'fixed',
+      inclusions: ['6 hours', '2 photographers'],
+    });
+    expect(servicePackage.statusCode).toBe(201);
+    packageId = servicePackage.json().id;
+
+    await harness.database.db
+      .update(vendorProfiles)
+      .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
+      .where(eq(vendorProfiles.id, vendorProfileId));
+
+    expect(
+      (
+        await inject('POST', '/vendor/agreement/accept', VENDOR, {
+          version: CURRENT_VENDOR_AGREEMENT_VERSION,
+        })
+      ).statusCode,
+    ).toBe(200);
+  });
+
+  afterAll(async () => {
+    if (harness) {
+      await harness.close();
+    } else {
+      await database?.close();
+    }
+  });
+
+  it('refunds the losing intent when the winner commits between its read and its insert', async () => {
+    const { requestId, firstIntentId } = await checkedOutRequest();
+    const secondIntentId = await secondIntent(requestId);
+    const winner = harness!.stripe.succeed(firstIntentId);
+    const loser = harness!.stripe.succeed(secondIntentId);
+    const [request] = await harness!.database.db
+      .select()
+      .from(bookingRequests)
+      .where(eq(bookingRequests.id, requestId));
+    dispatch.mockClear();
+
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let inserted!: () => void;
+    const winnerInserted = new Promise<void>((resolve) => {
+      inserted = resolve;
+    });
+
+    /* The winner's insert, uncommitted: invisible to the loser's read, in the way of its insert. */
+    const winnerTransaction = harness!.database.db.transaction(async (tx) => {
+      await tx.insert(bookings).values({
+        requestId,
+        customerId: request!.customerId,
+        vendorId: request!.vendorId,
+        eventDate: request!.eventDate,
+        eventLocation: request!.eventLocation,
+        totalAmountCents: PRICE_CENTS,
+        platformFeeCents: 17_400,
+        vendorPayoutCents: 127_600,
+        status: 'confirmed',
+        payoutModel: 'separate',
+        stripePaymentIntentId: winner.id,
+        paidAt: START,
+      });
+      inserted();
+      await held;
+    });
+    await winnerInserted;
+
+    const losingDelivery = recordSuccessfulPayment(context(), loser);
+    try {
+      await untilAConnectionWaitsOnALock();
+    } finally {
+      release();
+    }
+    await winnerTransaction;
+    const result = await losingDelivery;
+
+    expect(result.outcome).toBe('already-booked');
+    expect(harness!.stripe.refunds).toHaveLength(1);
+    expect(harness!.stripe.refunds[0]).toMatchObject({
+      paymentIntentId: loser.id,
+      amountCents: PRICE_CENTS,
+    });
+    expect(harness!.stripe.refunds[0]?.idempotencyKey).toMatch(
+      new RegExp(`^${loser.id}_duplicate_intent_\\d+$`),
+    );
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch.mock.calls[0]?.[0]).toMatchObject({
+      kind: 'payment_refused',
+      subjectId: `${requestId}:refunded`,
+    });
+    const rows = await bookingsFor(requestId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.stripePaymentIntentId).toBe(winner.id);
+  });
+
+  it('books one intent and refunds the other when both events arrive together', async () => {
+    const { requestId, firstIntentId } = await checkedOutRequest();
+    const secondIntentId = await secondIntent(requestId);
+    const first = harness!.stripe.succeed(firstIntentId);
+    const second = harness!.stripe.succeed(secondIntentId);
+    harness!.stripe.refunds.length = 0;
+    dispatch.mockClear();
+
+    const results = await Promise.all([
+      recordSuccessfulPayment(context(), first),
+      recordSuccessfulPayment(context(), second),
+    ]);
+
+    const rows = await bookingsFor(requestId);
+    expect(rows).toHaveLength(1);
+    const kept = rows[0]!.stripePaymentIntentId;
+    const refundedIntent = kept === first.id ? second.id : first.id;
+    expect(results.map((result) => result.outcome).sort()).toEqual(['already-booked', 'booked']);
+    expect(harness!.stripe.refunds).toHaveLength(1);
+    expect(harness!.stripe.refunds[0]?.paymentIntentId).toBe(refundedIntent);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+
+    /* The winner's event arrives again afterwards: nothing changes, nothing is refunded. */
+    const winnerSnapshot = kept === first.id ? first : second;
+    const redelivered = await recordSuccessfulPayment(context(), winnerSnapshot);
+
+    expect(redelivered.outcome).toBe('already-booked');
+    expect(harness!.stripe.refunds).toHaveLength(1);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(await bookingsFor(requestId)).toHaveLength(1);
+  });
+});

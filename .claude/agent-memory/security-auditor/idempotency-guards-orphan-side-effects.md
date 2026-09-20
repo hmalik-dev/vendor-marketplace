@@ -19,6 +19,14 @@ Confirmed instances:
 - `bookings_request_id_key` is described in `packages/db/src/schema/bookings.ts`
   as "the idempotency guard for the `payment_intent.succeeded` webhook, which
   may be delivered more than once" — same shape, check it the same way.
+- The mirror failure (VEN-471, fixed): the dedupe branch absorbed a charge it
+  should have refused. `recordSuccessfulPayment` has **two** already-booked
+  exits — the read before the insert and the read after losing the insert — and
+  only the first compared `booking.stripe_payment_intent_id` with the event's
+  intent, so a second paid intent that lost the race answered 200 and kept the
+  money. Ask of any "the other delivery won, return its row" branch: is the
+  winner's row funded by _this_ event's money? Both exits now go through
+  `answerForHeldBooking`.
 
 **Why:** the guard turns a loud partial failure (500, client retries, second row
 created, vendor still notified) into a silent permanent one (200 "sent", vendor
