@@ -23,6 +23,12 @@ export interface WebReportingInputs {
   readonly release: string | undefined;
   /** `VERCEL_ENV` on the platform; absent on a laptop. */
   readonly environment: string | undefined;
+  /**
+   * Whether this process is serving a deployment: `NODE_ENV === 'production'`,
+   * written out at each call site because the browser bundle inlines only that
+   * literal form. It is what decides the tag when `environment` is empty.
+   */
+  readonly deployed: boolean;
 }
 
 /** `null` means reporting is off: no DSN, which the registry allows only off a deployment. */
@@ -34,7 +40,7 @@ export function webSentryOptions(inputs: WebReportingInputs): BrowserOptions | n
   return {
     dsn: inputs.dsn,
     release: inputs.release || undefined,
-    environment: inputs.environment || 'development',
+    environment: inputs.environment || (inputs.deployed ? 'production' : 'development'),
     sendDefaultPii: false,
     ...ERROR_REPORTING_SAMPLING,
     beforeSend: (event) => scrubErrorEvent(event),

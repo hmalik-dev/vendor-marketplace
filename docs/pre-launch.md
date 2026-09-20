@@ -105,7 +105,40 @@ first. Both branches were empty of user rows and both held 0000–0009.
       it back), and the
       drill in `docs/runbook-restore.md` must run once into a scratch branch.
       Loss of the Neon account is an accepted, unprotected risk.
+- [ ] **Rollback drill.** Read [runbook-rollback.md](runbook-rollback.md) and
+      confirm you can promote the previous Vercel deployment and redeploy the API
+      host's previous image before the first real release.
 - [ ] **Rotate every credential touched during setup**.
+
+## Deploy constraints
+
+**The API runs as exactly one replica** (`railway.json` sets
+`deploy.numReplicas: 1`, and `apps/api/src/config/railway.test.ts` fails if it
+does not). Above one, these break, because each keeps its state in one process:
+
+- **Stream tickets** (`apps/api/src/lib/stream-tickets.ts`) are issued and
+  redeemed in memory, so a ticket minted by one replica is unknown to the other
+  and the live stream refuses it.
+- **Rate-limit counters** are per process (see below).
+
+The payout and expiry timers also run in every process. Their row locks keep an
+overlap correct, and the in-process guard only stops ticks piling up, so a second
+replica does duplicated work rather than wrong work; it is not a reason on its own
+to pin one.
+
+The web sign-in throttle (`apps/web/src/lib/auth/proxy-throttle.ts`) is not on
+this list because `railway.json` cannot bound it: it counts per Vercel function
+instance, so its budget is multiplied by instance count by design and is a floor,
+not a limit.
+
+**One replica is not the whole constraint.** A rolling deploy starts the new
+container before it stops the old one, so two containers overlap for the length
+of the release whatever `numReplicas` says. Each of them is
+therefore briefly split at each deploy; a ticket or a counter lost to it is
+expected, and the payout and expiry sweeps must stay safe to run twice.
+
+Lifting this is VEN-462, and the same pull request removes the constraint.
+Rolling back is in [runbook-rollback.md](runbook-rollback.md).
 
 ## Known limits to revisit before scaling out
 

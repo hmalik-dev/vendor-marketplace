@@ -12,6 +12,7 @@ export function register(): void {
     dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
     release: process.env.NEXT_PUBLIC_SENTRY_RELEASE,
     environment: process.env.VERCEL_ENV,
+    deployed: process.env.NODE_ENV === 'production',
   });
 
   if (options !== null) {
