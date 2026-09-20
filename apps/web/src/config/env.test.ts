@@ -127,6 +127,7 @@ describe('assertWebEnv', () => {
     const deployed = {
       ...VALID,
       VERCEL: '1',
+      DEPLOY_ENV: 'production',
       WEB_URL: 'https://orla.test',
       API_URL: 'https://api.orla.test',
       NEXT_PUBLIC_API_URL: 'https://api.orla.test',
