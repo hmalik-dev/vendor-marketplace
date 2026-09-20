@@ -170,3 +170,31 @@ describe('createS3Storage checkAvailable', () => {
     await expect(createS3Storage(wrong).checkAvailable()).rejects.toThrow('NoSuchBucket');
   });
 });
+
+/** The sweep's only view of an upload's age is what the listing reports. */
+describe('createS3Storage list', () => {
+  it('lists one prefix with last-modified times and hands back the continuation token', async () => {
+    const modified = new Date('2026-09-01T00:00:00Z');
+    send.mockResolvedValue({
+      Contents: [
+        { Key: 'portfolio/o/a.webp', LastModified: modified },
+        { Key: 'portfolio/o/no-date.webp' },
+      ],
+      IsTruncated: true,
+      NextContinuationToken: 'next-page',
+    });
+
+    const page = await createS3Storage(env).list('portfolio', { limit: 200, token: 'this-page' });
+
+    expect(page).toEqual({
+      objects: [{ key: 'portfolio/o/a.webp', lastModified: modified }],
+      nextToken: 'next-page',
+    });
+    expect(send.mock.calls.at(-1)?.[0].input).toEqual({
+      Bucket: 'uploads',
+      Prefix: 'portfolio/',
+      MaxKeys: 200,
+      ContinuationToken: 'this-page',
+    });
+  });
+});
