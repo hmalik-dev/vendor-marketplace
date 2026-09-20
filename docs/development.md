@@ -188,4 +188,5 @@ node node_modules/@vendor-marketplace/db/dist/scripts/migrate.js
 
 - [pre-launch.md](pre-launch.md) — `pnpm launch:check` and what must be true before real users
 - [runbook-restore.md](runbook-restore.md) — nightly backups and restoring from one
+- [runbook-rollback.md](runbook-rollback.md) — undoing a bad deploy: web, API and migrations
 - [demo.md](demo.md) — the hosted demo for friends

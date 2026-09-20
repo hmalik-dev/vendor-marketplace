@@ -1,3 +1,5 @@
+import { users } from '@vendor-marketplace/db/schema';
+import { eq } from 'drizzle-orm';
 import { Writable } from 'node:stream';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -268,6 +270,53 @@ describe('CORS', () => {
     });
 
     expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
+describe('response hardening', () => {
+  let harness: TestHarness;
+  const AUTH_ID = 'user_hardening';
+
+  beforeAll(async () => {
+    harness = await createTestHarness();
+    harness.authUsers.set(AUTH_ID, {
+      authUserId: AUTH_ID,
+      email: 'hardening@example.com',
+      firstName: 'Hard',
+      lastName: 'Ening',
+      roleHint: 'customer',
+      avatarUrl: null,
+    });
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  async function me() {
+    return harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(AUTH_ID) });
+  }
+
+  it('gives a JSON response a CSP that allows nothing, since the API serves no documents', async () => {
+    const response = await me();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('application/json');
+    expect(response.headers['content-security-policy']).toBe("default-src 'none'");
+  });
+
+  it('does not return the Stripe customer id from GET /users/me, even when one is stored', async () => {
+    await me();
+    await harness.database.db
+      .update(users)
+      .set({ stripeCustomerId: 'cus_storedForHardening' })
+      .where(eq(users.authUserId, AUTH_ID));
+
+    const response = await me();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).not.toHaveProperty('stripeCustomerId');
+    expect(response.body).not.toContain('cus_storedForHardening');
   });
 });
 

@@ -53,6 +53,37 @@ describe('sentryOptions', () => {
   });
 });
 
+describe('what the API scrubs, at beforeSend', () => {
+  const TICKET = 'Zk3xQ9vL2mN8pR4tY7wB1cD5fG6hJ0kA_s-Ue3XoIiE';
+  const KEY = ['sk', 'live', 'fixtureLiveKeyValue0123'].join('_');
+  const SIGNING = ['whsec', 'fixtureSigningSecret0123'].join('_');
+  const PHONE = '(415) 555-0132';
+  const ACCOUNT = ['acct', '1Fixture0Account'].join('_');
+
+  it('leaves no email, phone, credential, cookie or stream ticket in the event', () => {
+    const options = sentryOptions({ SENTRY_DSN: DSN }, {})!;
+    const event: Sentry.ErrorEvent = {
+      type: undefined,
+      message: `${EMAIL} ${PHONE} ${KEY} ${SIGNING}`,
+      request: {
+        url: `https://api.example.test/stream?ticket=${TICKET}`,
+        headers: { Authorization: `Bearer ${KEY}`, Cookie: '__session=abc' },
+        cookies: { __session: 'abc' },
+      },
+      breadcrumbs: [
+        { category: 'http', data: { url: `/stream?ticket=${TICKET}` } },
+        { message: `paid out to ${ACCOUNT}` },
+      ],
+    };
+    const serialized = JSON.stringify(options.beforeSend!(event, {}));
+
+    for (const leaked of [EMAIL, PHONE, KEY, SIGNING, TICKET, ACCOUNT, '__session=abc']) {
+      expect(serialized).not.toContain(leaked);
+    }
+    expect(serialized).toContain('[redacted]');
+  });
+});
+
 /*
  * Through the real SDK, asserted at the scrubbing hook: `beforeSend` sees the
  * event exactly as it would leave the process, and returning `null` from the

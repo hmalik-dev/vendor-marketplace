@@ -53,7 +53,6 @@ describe('userSchema', () => {
     lastName: 'Doe',
     phone: null,
     avatarUrl: null,
-    stripeCustomerId: null,
     bio: null,
     city: null,
     state: null,

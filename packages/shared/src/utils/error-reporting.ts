@@ -50,6 +50,35 @@ const BEARER = /\bBearer\s+[^\s"',]+/gi;
 /** Stripe, the auth provider and Resend server keys and signing secrets. */
 const PROVIDER_CREDENTIAL = /\b(?:sk|rk|whsec|re)_[A-Za-z0-9_]{8,}/g;
 
+/**
+ * A Stripe customer or connected-account id. Not a secret, but it is the key to
+ * one person's payment record, and nothing in an error report needs it.
+ */
+const STRIPE_OBJECT_ID = /\b(?:cus|acct)_[A-Za-z0-9]{8,}/g;
+
+/**
+ * A phone number: an international number opened by `+`, or the three-group
+ * North American form, whose last two groups are separated. A bare run of ten
+ * digits is left alone on purpose: it is a Unix timestamp or a booking number
+ * far more often than a phone, and `phoneSchema`'s numbers reach a report only
+ * through free text a user typed. The boundary is captured rather than asserted
+ * with a lookbehind, which the browser bundle's Safari floor cannot parse.
+ */
+const PHONE =
+  /(^|[^\w.])(?:\+\d[\d\s().-]{8,}\d|(?:\+?\d{1,2}[\s.-])?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]\d{4})(?!\w)/g;
+
+/**
+ * The value of a query parameter, wherever a URL-shaped string turns up.
+ *
+ * A stream ticket is 43 opaque characters, so it matches no credential shape,
+ * and it rides in `?ticket=` on a breadcrumb's `url`, an `extra` field or a
+ * transaction name — fields `request.url`'s path cut never reaches. Redacting
+ * the value and keeping the name leaves the breadcrumb readable.
+ */
+const QUERY_VALUE = /([?&][^\s=&#"']+=)[^\s&#"']*/g;
+/** The same secrets when a query string travels bare, as `searchParams.toString()` builds it. */
+const BARE_SECRET_PARAM = /\b((?:ticket|token|secret|signature)=)[^\s&#"']+/gi;
+
 export const REDACTED = '[redacted]';
 
 /** Deeper than any event an SDK builds; a cycle stops here instead of overflowing. */
@@ -60,7 +89,11 @@ function redactString(value: string): string {
     .replace(JWT, REDACTED)
     .replace(BEARER, REDACTED)
     .replace(PROVIDER_CREDENTIAL, REDACTED)
-    .replace(EMAIL, REDACTED);
+    .replace(STRIPE_OBJECT_ID, REDACTED)
+    .replace(QUERY_VALUE, `$1${REDACTED}`)
+    .replace(BARE_SECRET_PARAM, `$1${REDACTED}`)
+    .replace(EMAIL, REDACTED)
+    .replace(PHONE, `$1${REDACTED}`);
 }
 
 function redactDeep(value: unknown, depth: number): unknown {

@@ -44,6 +44,8 @@ const ALLOWED_FILES: Readonly<Record<string, string>> = {
     'repoints image URLs stored under the retired provider to the configured base',
   'packages/shared/src/utils/image-url.test.ts': 'pins that repointing',
   'packages/db/src/scripts/keys-from-urls.test.ts': 'normalises retired-provider URLs to keys',
+  'docs/pre-launch.md':
+    'the migration rehearsal record names the old column the staging run dropped (VEN-474)',
   'pnpm-lock.yaml': 'the resolved graph of the webhook-signature package Resend uses',
   'packages/preflight/src/secrets/patterns.ts':
     'the secret scanner still recognises the retired providers key shapes until they are revoked (VEN-377)',

@@ -306,7 +306,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   app.setSerializerCompiler(serializerCompiler);
 
   await app.register(errorHandlerPlugin, { reporter: errorReporter, paymentRoutes: moneyRoutes });
-  await app.register(helmet, { contentSecurityPolicy: false });
+  // The API serves JSON and nothing a browser renders, so a response that is ever
+  // opened as a document is told to load nothing.
+  await app.register(helmet, {
+    contentSecurityPolicy: { useDefaults: false, directives: { defaultSrc: ["'none'"] } },
+  });
   await app.register(cors, {
     origin: allowedOrigins(env),
     credentials: true,

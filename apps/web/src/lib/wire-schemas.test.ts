@@ -33,7 +33,6 @@ describe('wireUserSchema', () => {
       lastName: 'Hopper',
       phone: null,
       avatarUrl: null,
-      stripeCustomerId: null,
       bio: null,
       city: null,
       state: null,
