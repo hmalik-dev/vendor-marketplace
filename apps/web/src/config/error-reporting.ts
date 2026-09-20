@@ -21,7 +21,7 @@ export interface WebReportingInputs {
   readonly dsn: string | undefined;
   /** `NEXT_PUBLIC_SENTRY_RELEASE`, inlined by `next.config.ts` from `releaseIdentifier`. */
   readonly release: string | undefined;
-  /** `VERCEL_ENV` on the platform; absent on a laptop. */
+  /** `DEPLOY_ENV` (`NEXT_PUBLIC_DEPLOY_ENV` in the browser): the tier the API tags too. */
   readonly environment: string | undefined;
   /**
    * Whether this process is serving a deployment: `NODE_ENV === 'production'`,
