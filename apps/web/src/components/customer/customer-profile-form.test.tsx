@@ -13,7 +13,7 @@ const requestMock = vi.fn();
 const pushMock = vi.fn();
 const refreshMock = vi.fn();
 const { IMAGE_BASE } = vi.hoisted(() => {
-  process.env.NEXT_PUBLIC_S3_PUBLIC_URL = 'https://images.example.test';
+  process.env.NEXT_PUBLIC_STORAGE_PUBLIC_URL = 'https://images.example.test';
   return { IMAGE_BASE: 'https://images.example.test' };
 });
 

@@ -16,23 +16,34 @@ const NON_PLACEHOLDER_KEYS = ['SENTRY_DSN', 'OPERATOR_ALERT_EMAIL', 'SUPPORT_EMA
  */
 const RATE_LIMIT_BAND = { min: 30, max: 1000 } as const;
 
+const R2_HOST = /\.r2\.(dev|cloudflarestorage\.com)$/i;
+
 function storageResult(env: NodeJS.ProcessEnv): LaunchResult {
-  const name = 'S3_PUBLIC_URL';
-  const value = env.S3_PUBLIC_URL?.trim();
+  const name = 'STORAGE_PUBLIC_URL';
+  const value = env.STORAGE_PUBLIC_URL?.trim();
   const host = hostOf(value);
 
   if (!value || !host) {
     return failed('storage', name, value ? `${value} is not a URL` : 'unset');
   }
-  if (host.endsWith('.r2.dev')) {
+  if (R2_HOST.test(host)) {
     return failed(
       'storage',
       name,
-      `${value} is the rate-limited r2.dev URL (expected a custom domain)`,
+      `${value} is an R2 host (uploads are stored on Neon Object Storage)`,
     );
   }
   if (isLoopbackHost(host)) {
-    return failed('storage', name, `${value} is a local address (expected a custom domain)`);
+    return failed('storage', name, `${value} is a local address (expected the Neon storage host)`);
+  }
+
+  const endpoint = env.STORAGE_ENDPOINT?.trim();
+  if (endpoint && R2_HOST.test(hostOf(endpoint) ?? '')) {
+    return failed(
+      'storage',
+      name,
+      `STORAGE_ENDPOINT ${endpoint} is an R2 host (writes would miss the Neon bucket)`,
+    );
   }
 
   return passed('storage', name, value);
@@ -80,7 +91,7 @@ function rateLimitResult(env: NodeJS.ProcessEnv): LaunchResult {
 
 export function configProbes({ env }: LaunchOptions): Probe[] {
   return [
-    { group: 'storage', name: 'S3_PUBLIC_URL', run: async () => [storageResult(env)] },
+    { group: 'storage', name: 'STORAGE_PUBLIC_URL', run: async () => [storageResult(env)] },
     {
       group: 'env',
       name: 'environment',

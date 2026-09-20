@@ -102,7 +102,7 @@ describe('assertWebEnv', () => {
       message = (error as Error).message;
     }
 
-    for (const key of ['NEXT_PUBLIC_API_URL', 'WEB_URL', 'NEXT_PUBLIC_S3_PUBLIC_URL']) {
+    for (const key of ['NEXT_PUBLIC_API_URL', 'WEB_URL', 'NEXT_PUBLIC_STORAGE_PUBLIC_URL']) {
       expect(message).toContain(key);
     }
   });
@@ -115,7 +115,7 @@ describe('assertWebEnv', () => {
         WEB_URL: 'https://orla.test',
         API_URL: 'https://api.orla.test',
         NEXT_PUBLIC_API_URL: 'https://api.orla.test',
-        NEXT_PUBLIC_S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+        NEXT_PUBLIC_STORAGE_PUBLIC_URL: 'https://cdn.orla.test/uploads',
         NEXT_PUBLIC_SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',
       }).NEXT_PUBLIC_SENTRY_DSN,
     ).toBe('https://abc123@o1.ingest.sentry.io/42');
@@ -132,7 +132,7 @@ describe('assertWebEnv', () => {
       WEB_URL: 'https://orla.test',
       API_URL: 'https://api.orla.test',
       NEXT_PUBLIC_API_URL: 'https://api.orla.test',
-      NEXT_PUBLIC_S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+      NEXT_PUBLIC_STORAGE_PUBLIC_URL: 'https://cdn.orla.test/uploads',
     };
 
     expect(() => assertWebEnv(deployed)).toThrow(/NEXT_PUBLIC_SENTRY_DSN is required/);

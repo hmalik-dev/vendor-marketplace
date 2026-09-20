@@ -544,7 +544,7 @@ describe('the cover drop zone (#360)', () => {
    * An absolute URL, because that is what the form is actually handed:
    * `wireVendorProfileSchema` resolves the stored object key through
    * `resolveImageUrl` at the client boundary. A bare key here would resolve to
-   * null whenever `NEXT_PUBLIC_S3_PUBLIC_URL` is unset and the test would be
+   * null whenever `NEXT_PUBLIC_STORAGE_PUBLIC_URL` is unset and the test would be
    * asserting against a shape the component never receives.
    *
    * Queried by tag, not by role: the preview carries `alt=""` on purpose — it

@@ -52,8 +52,11 @@ services:
         value: '600'
       - key: STRIPE_PLATFORM_FEE_RATE
         value: '0.12'
-      - key: S3_FORCE_PATH_STYLE
+      - key: STORAGE_FORCE_PATH_STYLE
         value: 'true'
+      # The region of the Neon staging branch's storage host.
+      - key: STORAGE_REGION
+        value: us-east-2
 
       # --- Set in the Render dashboard, never in this file ----------------
       # `sync: false` makes Render prompt for the value on first deploy and
@@ -68,15 +71,15 @@ services:
       # no server-side symptom.
       - key: WEB_URL
         sync: false
-      - key: S3_ENDPOINT
+      - key: STORAGE_ENDPOINT
         sync: false
-      - key: S3_ACCESS_KEY_ID
+      - key: STORAGE_ACCESS_KEY_ID
         sync: false
-      - key: S3_SECRET_ACCESS_KEY
+      - key: STORAGE_SECRET_ACCESS_KEY
         sync: false
-      - key: S3_BUCKET
+      - key: STORAGE_BUCKET
         sync: false
-      - key: S3_PUBLIC_URL
+      - key: STORAGE_PUBLIC_URL
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false

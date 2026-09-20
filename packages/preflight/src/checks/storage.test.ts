@@ -38,10 +38,10 @@ describe('checkAnonymousListing', () => {
   });
 
   /*
-   * The probe goes to the **public** host. On R2 that is a different host from
-   * `S3_ENDPOINT` — the endpoint refuses every unsigned request by
-   * construction, so probing it would pass unconditionally in exactly the
-   * environment where public exposure is real.
+   * The probe goes to the **public** host. On Neon that is the bucket path under the
+   * branch's storage host, not a bare `STORAGE_ENDPOINT` — probing the wrong
+   * one would pass unconditionally in exactly the environment where public
+   * exposure is real.
    */
   it('probes the public URL itself, with no bucket path appended', async () => {
     const fetchSpy = vi.fn(

@@ -209,7 +209,7 @@ describe('ENV_REGISTRY integrity', () => {
   });
 
   it('leaves a credential with no mode in its prefix unrestricted by target', () => {
-    for (const key of ['STRIPE_WEBHOOK_SECRET', 'DATABASE_URL', 'S3_ACCESS_KEY_ID']) {
+    for (const key of ['STRIPE_WEBHOOK_SECRET', 'DATABASE_URL', 'STORAGE_ACCESS_KEY_ID']) {
       const variable = findVariable(key);
 
       expect(variable, key).toBeDefined();
@@ -384,8 +384,8 @@ describe('registrySchemaShape', () => {
     });
 
     it('refuses a per-environment row that would fall back to its default', () => {
-      expect(() => shape.S3_ENDPOINT.parse(undefined)).toThrow(
-        /S3_ENDPOINT is required on a deployment/,
+      expect(() => shape.STORAGE_ENDPOINT.parse(undefined)).toThrow(
+        /STORAGE_ENDPOINT is required on a deployment/,
       );
     });
 
@@ -406,7 +406,7 @@ describe('registrySchemaShape', () => {
     });
 
     it('still enforces the row shape', () => {
-      expect(() => shape.S3_ENDPOINT.parse('not-a-url')).toThrow(/S3_ENDPOINT/);
+      expect(() => shape.STORAGE_ENDPOINT.parse('not-a-url')).toThrow(/STORAGE_ENDPOINT/);
     });
 
     /*

@@ -32,8 +32,28 @@ describe('resolveImageUrl', () => {
   /* Neither of these is ours to host, so neither gets a base prepended. */
   it('passes an absolute URL through untouched', () => {
     expect(resolveImageUrl(CDN, 'https://img.auth.com/abc')).toBe('https://img.auth.com/abc');
-    expect(resolveImageUrl(CDN, 'https://pub-f0933b41.r2.dev/portfolio/a.webp')).toBe(
-      'https://pub-f0933b41.r2.dev/portfolio/a.webp',
+  });
+
+  /*
+   * Storage moved from Cloudflare R2 to Neon. A row written under the old
+   * public host would otherwise keep pointing at a bucket nobody serves from.
+   */
+  it.each([
+    ['https://pub-f0933b41.r2.dev/portfolio/a.webp', 'portfolio/a.webp'],
+    [
+      'https://acct.r2.cloudflarestorage.com/orla-uploads/vendor-cover/u1/b.webp',
+      'vendor-cover/u1/b.webp',
+    ],
+    ['https://pub-f0933b41.r2.dev/customer-profile/u2/c.png?v=2', 'customer-profile/u2/c.png'],
+  ])('repoints the old R2 URL %s to the configured base', (stored, key) => {
+    expect(resolveImageUrl('https://br-x.storage.example/uploads', stored)).toBe(
+      `https://br-x.storage.example/uploads/${key}`,
+    );
+  });
+
+  it('leaves an R2 URL that names no known key prefix alone', () => {
+    expect(resolveImageUrl(CDN, 'https://pub-f0933b41.r2.dev/other/a.webp')).toBe(
+      'https://pub-f0933b41.r2.dev/other/a.webp',
     );
   });
 

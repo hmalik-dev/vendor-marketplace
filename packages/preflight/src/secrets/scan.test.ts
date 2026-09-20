@@ -151,7 +151,9 @@ describe('generic secret-named assignments', () => {
   });
 
   it('ignores a long but word-shaped local value', () => {
-    expect(rules('a.ts', "S3_SECRET_ACCESS_KEY = 'vendor_marketplace_dev_password'")).toEqual([]);
+    expect(rules('a.ts', "STORAGE_SECRET_ACCESS_KEY = 'vendor_marketplace_dev_password'")).toEqual(
+      [],
+    );
   });
 
   it('ignores declared placeholders', () => {

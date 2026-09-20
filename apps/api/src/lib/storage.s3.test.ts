@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiEnv } from '../config/env.js';
 
 const send = vi.fn();
+const clientConfigs: unknown[] = [];
 
 vi.mock('@aws-sdk/client-s3', async (importOriginal) => {
   const actual = await importOriginal<typeof S3>();
@@ -10,6 +11,9 @@ vi.mock('@aws-sdk/client-s3', async (importOriginal) => {
   return {
     ...actual,
     S3Client: class {
+      constructor(config: unknown) {
+        clientConfigs.push(config);
+      }
       send = send;
       destroy(): void {}
     },
@@ -19,12 +23,13 @@ vi.mock('@aws-sdk/client-s3', async (importOriginal) => {
 const { createS3Storage } = await import('./storage.js');
 
 const env = {
-  S3_ENDPOINT: 'http://storage.test',
-  S3_BUCKET: 'uploads',
-  S3_ACCESS_KEY_ID: 'key',
-  S3_SECRET_ACCESS_KEY: 'secret',
-  S3_PUBLIC_URL: 'http://cdn.test',
-  S3_FORCE_PATH_STYLE: true,
+  STORAGE_ENDPOINT: 'http://storage.test',
+  STORAGE_BUCKET: 'uploads',
+  STORAGE_ACCESS_KEY_ID: 'key',
+  STORAGE_SECRET_ACCESS_KEY: 'secret',
+  STORAGE_PUBLIC_URL: 'http://cdn.test',
+  STORAGE_REGION: 'us-east-2',
+  STORAGE_FORCE_PATH_STYLE: true,
 } as unknown as ApiEnv;
 
 interface DeleteInput {
@@ -38,6 +43,7 @@ function lastDeleteInput(): DeleteInput {
 
 beforeEach(() => {
   send.mockReset();
+  clientConfigs.length = 0;
 });
 
 /**
@@ -123,5 +129,44 @@ describe('createS3Storage put', () => {
     const input = send.mock.calls[0]?.[0].input as { CacheControl: string; ContentType: string };
     expect(input.CacheControl).toBe('public, max-age=31536000, immutable');
     expect(input.ContentType).toBe('image/webp');
+  });
+});
+
+describe('createS3Storage wiring', () => {
+  it('signs for the configured region and addresses the bucket by path', () => {
+    createS3Storage(env);
+
+    expect(clientConfigs).toEqual([
+      expect.objectContaining({
+        region: 'us-east-2',
+        endpoint: 'http://storage.test',
+        forcePathStyle: true,
+      }),
+    ]);
+  });
+});
+
+/**
+ * Readiness is the only thing that notices a bucket that was never created on
+ * the branch (a new Neon branch, a wrong name in the deploy environment): the
+ * store answers NoSuchBucket for the configured name only.
+ */
+describe('createS3Storage checkAvailable', () => {
+  beforeEach(() => {
+    send.mockImplementation((command: { input: { Bucket: string } }) =>
+      command.input.Bucket === 'uploads'
+        ? Promise.resolve({})
+        : Promise.reject(Object.assign(new Error('NoSuchBucket'), { name: 'NoSuchBucket' })),
+    );
+  });
+
+  it('passes for the bucket that exists', async () => {
+    await expect(createS3Storage(env).checkAvailable()).resolves.toBeUndefined();
+  });
+
+  it('rejects an unknown bucket', async () => {
+    const wrong = { ...env, STORAGE_BUCKET: 'uploads-typo' } as ApiEnv;
+
+    await expect(createS3Storage(wrong).checkAvailable()).rejects.toThrow('NoSuchBucket');
   });
 });

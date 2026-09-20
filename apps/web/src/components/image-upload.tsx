@@ -90,8 +90,8 @@ export function ImageUpload({
    * The upload this component made, kept for as long as it is on screen.
    *
    * The preview keeps the URL the API resolved rather than re-deriving one:
-   * the API builds it from `S3_PUBLIC_URL` and the browser would build it from
-   * `NEXT_PUBLIC_S3_PUBLIC_URL`, and nothing makes those agree — a web deploy
+   * the API builds it from `STORAGE_PUBLIC_URL` and the browser would build it from
+   * `NEXT_PUBLIC_STORAGE_PUBLIC_URL`, and nothing makes those agree — a web deploy
    * missing the public one is accepted by `assertWebEnv`, which validates only
    * the `core` and `auth` capabilities. Swapping to the derived URL at the
    * moment of success is exactly how this ticket's symptom comes back: the

@@ -57,12 +57,13 @@ export const TEST_ENV: ApiEnv = {
   STRIPE_WEBHOOK_SECRET: 'unused',
   STRIPE_PLATFORM_FEE_RATE: 0.12,
   RATE_LIMIT_MAX: 1_000,
-  S3_ENDPOINT: 'http://storage.test',
-  S3_ACCESS_KEY_ID: 'test',
-  S3_SECRET_ACCESS_KEY: 'test',
-  S3_BUCKET: 'test-bucket',
-  S3_PUBLIC_URL: 'http://cdn.test',
-  S3_FORCE_PATH_STYLE: true,
+  STORAGE_ENDPOINT: 'http://storage.test',
+  STORAGE_ACCESS_KEY_ID: 'test',
+  STORAGE_SECRET_ACCESS_KEY: 'test',
+  STORAGE_BUCKET: 'test-bucket',
+  STORAGE_PUBLIC_URL: 'http://cdn.test',
+  STORAGE_REGION: 'us-east-2',
+  STORAGE_FORCE_PATH_STYLE: true,
   /*
    * Composed rather than written as a literal, and both halves of that matter.
    *
@@ -884,7 +885,7 @@ export async function createTestHarness(
   const storage: ObjectStorage = {
     put: async (key, body, contentType) => {
       storedObjects.push({ key, body, contentType });
-      return publicUrlFor(TEST_ENV.S3_PUBLIC_URL, key);
+      return publicUrlFor(TEST_ENV.STORAGE_PUBLIC_URL, key);
     },
     remove: async (keys) => {
       // Mirrors the real store: the objects go, and a missing key is not an

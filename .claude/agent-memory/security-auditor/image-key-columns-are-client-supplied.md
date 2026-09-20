@@ -1,6 +1,6 @@
 ---
 name: image-key-columns-are-client-supplied
-description: Every image column holds a raw client-supplied string; the write guard must decide on the object the ORIGIN derives — probe with the bucket-path S3_PUBLIC_URL and differential the guard against a model of that derivation, not against a spelling list
+description: Every image column holds a raw client-supplied string; the write guard must decide on the object the ORIGIN derives — probe with the bucket-path STORAGE_PUBLIC_URL and differential the guard against a model of that derivation, not against a spelling list
 metadata:
   type: project
 ---
@@ -73,9 +73,25 @@ accepting double-encoded spellings is safe); `…/x.webp?a/b` → `portfolio/abc
 (the query is ignored, which is why it was a bypass); a literal `%2e` segment is
 refused outright as a bad component.
 
-**Probe with the real base, which has a path.** `S3_PUBLIC_URL` is
-`http://localhost:9000/vendor-marketplace-uploads` locally and an R2 bucket URL
-in deployment — an origin **and** a bucket segment. Three audit passes used
+**There is now a second normaliser on the read path** (VEN-455, storage moved
+R2 → Neon Object Storage; every `S3_*` key is `STORAGE_*`). `resolveImageUrl`
+rewrites an absolute URL whose host matches `*.r2.dev` /
+`*.r2.cloudflarestorage.com` onto `STORAGE_PUBLIC_URL`, skipping one optional
+bucket segment and requiring a known upload prefix. It is **not** a new bypass:
+for the rewrite to emit `<prefix>/<owner>/<name>`, the original path must end in
+those three segments, and `referencedObjectKeyOwner` scans every index for a
+prefix exactly three from the end, so it refuses first — checked against the
+bucket skip, a doubled `portfolio/portfolio/…`, `%2f`, `//`, `?a/b` and `..`.
+It also cannot launder foreign _content_: the attacker host is discarded, never
+fetched. The residual hazard is drift — the prefix list is a **literal regex in
+`packages/shared/src/utils/index.ts`**, duplicated from `STORAGE_PREFIXES` in
+`apps/api/src/lib/storage.ts` (shared cannot import an app). A prefix added to
+the shared regex but not to the API's list would be rewritten onto our bucket
+while the write guard read no owner.
+
+**Probe with the real base, which has a path.** `STORAGE_PUBLIC_URL` is
+`http://localhost:9000/vendor-marketplace-uploads` locally and the branch's
+Neon bucket path in deployment — an origin **and** a bucket segment. Three audit passes used
 `http://cdn.test` (no path) and every one of them missed that the absolute form
 of a key is `<origin>/<bucket>/<prefix>/<owner>/<name>`, so the prefix is not
 first. A guard keyed on position passed every test and was bypassed in a browser
