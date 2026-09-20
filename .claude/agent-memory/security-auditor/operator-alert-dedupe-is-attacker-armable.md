@@ -24,8 +24,16 @@ amplifying it. Separately `alertNow` learned to send **unrecorded** (fresh
 `randomUUID`) when `recordAlertUnlessRecent` throws, which deletes the only email
 cap during the one outage an unauthenticated flood can ride.
 
+**VEN-472:** `refund_failed` now carries a **third** meaning under the one
+subject `<bookingId>` — "money never moved" (payments.service refund failure),
+"Stripe later marked it failed" (stripe.routes), and "refund went out, row did
+not move". Two of those on one booking inside the 6h `OPERATOR_ALERT_DEDUPE_MS`
+collapse to whichever spoke first, and the survivor can be the opposite of the
+truth. Same shape as VEN-434: suffix the subject with the outcome.
+
 **Why:** an unauthenticated trigger and a trusted trigger keep sharing a
-mechanism — a dedupe key, a write path, a send budget.
+mechanism — a dedupe key, a write path, a send budget; and one alert kind keeps
+acquiring opposite meanings under one subject id.
 
 **How to apply:** for any new work the webhook's failure hook performs, ask what
 it costs at 10k rejected req/min, not at Stripe's delivery rate. Settled on these

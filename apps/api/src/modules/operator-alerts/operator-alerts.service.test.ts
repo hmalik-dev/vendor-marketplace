@@ -60,6 +60,22 @@ describe('alertNow', () => {
     expect(sent).toHaveLength(1);
   });
 
+  it('does not let "the refund failed" silence "the refund went out and the row did not move" (VEN-472)', async () => {
+    const { all, sent } = deps();
+
+    expect(await alertNow(all, refundFailedAlert({ bookingId: 'b-two', during: 'a test' }))).toBe(
+      'sent',
+    );
+    expect(
+      await alertNow(
+        all,
+        refundFailedAlert({ bookingId: 'b-two', during: 'a test', refundId: 're_1' }),
+      ),
+    ).toBe('sent');
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.text).toContain('re_1');
+  });
+
   it('reports failed, and skips releasing a row it never wrote, when the unrecorded send also fails', async () => {
     const { all, log } = deps({
       send: async () => {

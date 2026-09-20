@@ -1236,7 +1236,7 @@ describe('payments', () => {
      * without an idempotency key the customer was paid twice for one
      * cancellation. Fired with `Promise.all` so both are genuinely in flight.
      */
-    it('refunds once when two cancels race, and answers the loser with a conflict', async () => {
+    it('refunds once when two cancels race, and answers both with the cancellation', async () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
@@ -1246,7 +1246,9 @@ describe('payments', () => {
         inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {}),
       ]);
 
-      expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+      // VEN-472: the loser's cancellation worked, so it is told so.
+      expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
+      expect(responses[0]!.json()).toEqual(responses[1]!.json());
       // Both calls reached Stripe; one key, so Stripe answers the second with
       // the first refund rather than making another.
       expect(new Set(harness.stripe.refunds.map((refund) => refund.idempotencyKey)).size).toBe(1);
@@ -1256,6 +1258,92 @@ describe('payments', () => {
 
       const [row] = await harness.database.db.select().from(bookings);
       expect(row?.status).toBe('cancelled');
+      await harness.flushEmail();
+      expect(
+        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL),
+      ).toEqual([]);
+    });
+
+    /*
+     * VEN-472. The refund is out and a payout sweep commits before the row is
+     * written: the customer is refunded and the vendor paid, which is a person's
+     * problem, so the operator is told before the 409.
+     */
+    it('alerts the operator and answers 409 when a payout release beats a cancel that refunded', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      harness.stripe.duringNextRefund = async () => {
+        await harness.database.db
+          .update(bookings)
+          .set({ payoutReleasedAt: clockNow })
+          .where(eq(bookings.id, booking!.id));
+      };
+
+      const response = await inject(
+        'PUT',
+        `/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(409);
+      expect(harness.stripe.refunds).toHaveLength(1);
+      const alerts = harness.email.sent.filter(
+        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+      );
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]?.text).toContain(booking!.id);
+      expect(alerts[0]?.text).toContain('re_test_1');
+      const [after] = await harness.database.db.select().from(bookings);
+      expect(after?.status).toBe('confirmed');
+    });
+
+    it('still refuses, and alerts, when someone other than the customer cancelled it mid-refund', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      harness.stripe.duringNextRefund = async () => {
+        await harness.database.db
+          .update(bookings)
+          .set({ status: 'cancelled', cancelledBy: 'admin', cancelledAt: clockNow })
+          .where(eq(bookings.id, booking!.id));
+      };
+
+      const response = await inject(
+        'PUT',
+        `/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(409);
+      expect(
+        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL),
+      ).toHaveLength(1);
+    });
+
+    it('refuses a cancel of a booking the admin already cancelled', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      await harness.database.db
+        .update(bookings)
+        .set({ status: 'cancelled', cancelledBy: 'admin', cancelledAt: clockNow })
+        .where(eq(bookings.id, booking!.id));
+
+      const response = await inject(
+        'PUT',
+        `/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe('That booking is already cancelled');
+      expect(harness.stripe.refunds).toHaveLength(0);
     });
 
     it('refunds half inside the cutoff', async () => {
@@ -1513,15 +1601,16 @@ describe('payments', () => {
       expect(held?.status).toBe('booked');
     });
 
-    it('refuses a second cancellation, and refunds nothing twice', async () => {
+    it('answers a repeated cancellation with the first, and refunds nothing twice', async () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
-      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+      const first = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
 
       const again = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
 
-      expect(again.statusCode).toBe(409);
+      expect(again.statusCode).toBe(200);
+      expect(again.json()).toEqual(first.json());
       expect(harness.stripe.refunds).toHaveLength(1);
     });
 
