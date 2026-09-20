@@ -100,6 +100,7 @@
 - [The no-cookie claim rests on one regex list](no-cookie-consent-claim-rests-on-a-source-scan.md) — the scan matches an impossible shape and misses reachable ones
 - [Rate limiting: hop-0 proxy, pre-auth hook, five skipped routes](rate-limit-key-is-the-proxy-not-the-caller.md) — one `rateLimitRan` symbol can silently disable a route's own limit
 - [`request.ip` is one hop, never IP-validated](request-ip-is-one-hop-trusted-not-validated.md) — unbounded text against `varchar(45)` when persisted as evidence
+- [`/ready` is unthrottled by design](ready-probe-is-unthrottled-and-now-reads-a-file.md) — VEN-495 put a per-request `readFileSync` on the one route the limiter cannot protect; `behind` + `commit` are public, counts are log-only
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — a shed 429 costs a DB write; the email cap drops on a DB outage
 
 ## Data layer, seeds and tooling

@@ -58,6 +58,31 @@ new schema. **Do not** write a down migration to roll back. If a release's
 migration is destructive and has run, fix forward; restore from a snapshot only
 as a last resort (`runbook-restore.md`).
 
+## `/ready` says `database: "behind"`
+
+`GET /ready` answers `503` with `"database": "behind"` when the database has
+**fewer** migrations applied than the build serving the request ships (the count
+of `drizzle.__drizzle_migrations` rows against the entries in
+`packages/db/drizzle/meta/_journal.json`). The database is reachable; the
+release landed before its migration ran, so any route touching a missing table
+or column would fail. The deploy workflow's `/ready` wait fails on it too.
+
+- **Run the migration**, then read `/ready` again: `pnpm db:migrate` with
+  `DATABASE_URL_UNPOOLED` set to that environment's database (the deploy
+  workflow's migrate step does the same). Do not restart or roll back the API
+  for this state, since neither changes the database.
+- If migrating is not possible, redeploy the previous image (step 2): an
+  older build ships fewer migrations and reads as ready.
+- A database **ahead** of the build (a rollback onto older code) stays `ready`
+  on purpose, so rolling back across additive migrations keeps serving.
+- The check compares **counts**, so it catches a missing migration, not a
+  database whose history differs from the build's at the same count (a snapshot
+  restored from another branch). Deploys come from one branch, so that is not
+  reachable through the release path.
+- `database: "down"` is a different failure: the database did not answer, or
+  has no migration table at all (a brand-new database also reads `down`; migrate
+  it first). Check the API log for the driver's error.
+
 ## Do not scale by adding replicas
 
 Rolling back is not a reason to add a second API replica, and neither is load.
