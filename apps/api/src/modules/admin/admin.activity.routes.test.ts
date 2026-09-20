@@ -216,14 +216,8 @@ describe('the admin action log', () => {
         subjectType: 'user',
         subjectId: vendor.userId,
       });
-      // The counts a later reader needs — including the one that needs a human.
-      expect(rows[0]?.detail).toMatchObject({
-        requestsDeclined: 0,
-        bookingsCancelled: 0,
-        refundsIssued: 0,
-        refundsFailed: 0,
-        profileUnpublished: false,
-      });
+      // The intent row: written with the flag, before any unwind (VEN-478).
+      expect(rows[0]?.detail).toEqual({ profileUnpublished: false });
     });
 
     it('records an unban as its own action, not as a second ban row', async () => {
@@ -429,7 +423,7 @@ describe('the admin action log', () => {
       expect(await actionRows()).toHaveLength(0);
     });
 
-    it('writes no second row when a ban is re-issued against a banned account (409)', async () => {
+    it('writes no second row when a finished ban is re-issued (resume is a no-op)', async () => {
       await signIn(ADMIN, true);
       await signIn(VENDOR);
       const vendor = await createVendorProfile();
@@ -445,7 +439,7 @@ describe('the admin action log', () => {
         headers: bearer(ADMIN),
       });
 
-      expect(again.statusCode).toBe(409);
+      expect(again.statusCode).toBe(200);
       expect(await actionRows()).toHaveLength(1);
     });
 
@@ -675,7 +669,7 @@ describe('the admin action log', () => {
       });
       expect(body.items[1].action).toBe('user_banned');
       // The payload survives the wire rather than being flattened to a string.
-      expect(body.items[1].detail.refundsFailed).toBe(0);
+      expect(body.items[1].detail.profileUnpublished).toBe(false);
     });
 
     it('filters by actor, so one operator can be read on their own', async () => {
@@ -1084,14 +1078,12 @@ describe('a failed action write', () => {
   });
 
   /**
-   * The best-effort half — acceptance 3.
-   *
-   * A ban has already refunded cards through Stripe by the time it reaches the
-   * log, and no `ROLLBACK` reaches that. A 500 here would send the operator
-   * into a retry against a half-applied ban, so the operation stands and the
-   * gap is recorded loudly instead.
+   * A ban's intent row commits with the flag (VEN-478), so a table that cannot
+   * take it refuses the ban outright rather than suspending an account with no
+   * record of who did it. The outcome row that follows the unwind stays
+   * best-effort, as it always was.
    */
-  it('lets a ban stand and logs the failure as an error', async () => {
+  it('refuses the ban rather than committing it unrecorded', async () => {
     captured.length = 0;
 
     const response = await withActionLogMissing(() =>
@@ -1102,33 +1094,26 @@ describe('a failed action write', () => {
       }),
     );
 
-    // The ban stands, which is the whole point.
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ userId: vendorUserId, isBanned: true });
+    expect(response.statusCode).toBe(500);
 
     const banned = await harness.database.db
       .select({ isBanned: users.isBanned })
       .from(users)
       .where(eq(users.id, vendorUserId));
-    expect(banned[0]?.isBanned).toBe(true);
-
-    // Loudly, so the gap is findable rather than silent.
-    const logged = captured.join('');
-    expect(logged).toContain('its action could not be logged');
-    expect(logged).toContain('"level":50');
+    expect(banned[0]?.isBanned).toBe(false);
   });
 
   /** And with the table back, the same ban records normally. */
-  it('records the action again once the table is reachable', async () => {
+  it('records the ban once the table is reachable', async () => {
     const response = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/users/${vendorUserId}/unban`,
+      url: `/admin/users/${vendorUserId}/ban`,
       headers: bearer(ADMIN),
     });
 
     expect(response.statusCode).toBe(200);
     const rows = await harness.database.db.select().from(adminActions);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ action: 'user_unbanned', subjectId: vendorUserId });
+    expect(rows[0]).toMatchObject({ action: 'user_banned', subjectId: vendorUserId });
   });
 });

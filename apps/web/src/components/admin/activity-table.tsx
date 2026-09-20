@@ -85,6 +85,7 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   vendor_invited: 'Invited a vendor',
   vendor_invite_revoked: 'Revoked a vendor invite',
   vendor_application_declined: 'Declined a vendor application',
+  account_unwind_finished: 'Finished unwinding an account',
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */

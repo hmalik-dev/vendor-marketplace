@@ -3908,6 +3908,12 @@ export const adminUserDataRightsSchema = z.object({
   /** Future confirmed bookings that would refuse a closure right now (D39). */
   closeBlockers: z.array(adminCloseBlockerSchema),
   /**
+   * Bookings a ban or closure has not finished unwinding: the account is banned
+   * or closed and a confirmed booking still stands under it (VEN-478). Non-zero
+   * is what the console's **Finish** control answers.
+   */
+  unwindPending: z.int(),
+  /**
    * Future confirmed bookings this account holds **as the vendor**, which a
    * closure cancels and refunds in full (D39).
    *
