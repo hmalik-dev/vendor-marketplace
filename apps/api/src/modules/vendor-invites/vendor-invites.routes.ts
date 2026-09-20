@@ -20,6 +20,7 @@ import {
   listVendorApplications,
   listVendorInvites,
   readVendorSignUpGate,
+  resendVendorInvite,
   revokeVendorInvite,
   submitVendorApplication,
   type VendorInviteMailDeps,
@@ -84,6 +85,7 @@ function mailDeps(app: FastifyInstance, webOrigin: string): VendorInviteMailDeps
     background: app.background,
     log: app.log,
     webOrigin,
+    now: app.clock,
   };
 }
 
@@ -155,6 +157,17 @@ export const adminVendorInviteRoutes: FastifyPluginAsyncZod<VendorInviteRoutesOp
 
       return reply.code(201).header('location', `/admin/vendor-invites/${invite.id}`).send(invite);
     },
+  );
+
+  /* 200: an action on an existing invite, not a creation. */
+  app.post(
+    '/admin/vendor-invites/:inviteId/resend',
+    {
+      onRequest: adminOnly,
+      schema: { params: inviteParamsSchema, response: { 200: adminVendorInviteRowSchema } },
+    },
+    async (request) =>
+      resendVendorInvite(mailDeps(app, options.webOrigin), request.params.inviteId),
   );
 
   app.delete(

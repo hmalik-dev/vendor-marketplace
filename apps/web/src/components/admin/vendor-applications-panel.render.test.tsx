@@ -52,6 +52,8 @@ const INVITES: WireAdminVendorInviteRow[] = [
     invitedByName: 'Ada Operator',
     createdAt: new Date('2026-09-11T09:00:00.000Z'),
     acceptedAt: null,
+    emailStatus: 'failed',
+    emailFailureReason: 'Resend refused the send (500)',
   },
   {
     id: '44444444-4444-4444-8444-444444444444',
@@ -59,6 +61,8 @@ const INVITES: WireAdminVendorInviteRow[] = [
     invitedByName: null,
     createdAt: new Date('2026-09-01T09:00:00.000Z'),
     acceptedAt: new Date('2026-09-02T09:00:00.000Z'),
+    emailStatus: 'sent',
+    emailFailureReason: null,
   },
 ];
 
@@ -101,6 +105,32 @@ describe('VendorApplicationsPanel', () => {
         path: '/admin/vendor-applications/11111111-1111-4111-8111-111111111111',
         method: 'PUT',
         body: { decision: 'invite' },
+      },
+    ]);
+  });
+
+  it('marks a failed invite email and resends only that invite', async () => {
+    render(
+      <VendorApplicationsPanel applications={[]} invites={INVITES} invitesPager={INVITES_PAGER} />,
+    );
+
+    expect(screen.getByText('Email failed')).toBeDefined();
+    expect(screen.getByText('Email failed').closest('[title]')?.getAttribute('title')).toBe(
+      'Resend refused the send (500)',
+    );
+    expect(screen.getAllByRole('button', { name: /^Resend the invite email/ })).toHaveLength(1);
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Resend the invite email to old@example.com' }),
+      );
+    });
+
+    expect(calls).toEqual([
+      {
+        path: '/admin/vendor-invites/33333333-3333-4333-8333-333333333333/resend',
+        method: 'POST',
+        body: undefined,
       },
     ]);
   });

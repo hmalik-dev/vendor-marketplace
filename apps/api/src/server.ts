@@ -17,6 +17,7 @@ import { bootEnv } from './config/boot.js';
 import {
   MAX_UPLOAD_BYTES,
   OPERATOR_DIGEST_POLL_INTERVAL_MS,
+  EMAIL_RETRY_SWEEP_INTERVAL_MS,
   EXPIRY_SWEEP_INTERVAL_MS,
   PAYOUT_SWEEP_INTERVAL_MS,
   UPLOAD_SWEEP_INTERVAL_MS,
@@ -40,6 +41,7 @@ import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { createErrorReporter, type ErrorReporter } from './lib/error-reporting.js';
 import { eventsPlugin } from './plugins/events.js';
 import { operatorAlertsPlugin } from './plugins/operator-alerts.js';
+import { emailRetryPlugin } from './plugins/email-retry.js';
 import { expirySweepPlugin } from './plugins/expiry-sweep.js';
 import { uploadSweepPlugin } from './plugins/upload-sweep.js';
 import { payoutReleasePlugin } from './plugins/payout-release.js';
@@ -124,6 +126,11 @@ export interface BuildServerOptions {
    * On by default for `payoutSweepIntervalMs`'s reason.
    */
   expirySweepIntervalMs?: number;
+  /**
+   * How often failed transactional email is re-sent; `0` disables it. On by
+   * default for `payoutSweepIntervalMs`'s reason.
+   */
+  emailRetryIntervalMs?: number;
   /**
    * How often unreferenced uploads are swept from storage; `0` disables it. On
    * by default for `payoutSweepIntervalMs`'s reason.
@@ -413,6 +420,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(uploadSweepPlugin, {
     intervalMs: options.uploadSweepIntervalMs ?? UPLOAD_SWEEP_INTERVAL_MS,
     dryRun: options.uploadSweepDryRun ?? false,
+    reporter: errorReporter,
+  });
+  await app.register(emailRetryPlugin, {
+    intervalMs: options.emailRetryIntervalMs ?? EMAIL_RETRY_SWEEP_INTERVAL_MS,
+    webOrigin: canonicalWebOrigin(env),
     reporter: errorReporter,
   });
   await app.register(expirySweepPlugin, {

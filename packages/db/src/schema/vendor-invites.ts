@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   check,
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -11,6 +12,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import {
+  MAX_EMAIL_FAILURE_REASON_LENGTH,
   MAX_EMAIL_LENGTH,
   MAX_NAME_LENGTH,
   VENDOR_APPLICATION_STATUSES,
@@ -45,6 +47,22 @@ export const vendorInvites = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     /** When the invited address opened its vendor account. */
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    /*
+     * The invite email's own record (VEN-465). An invitee has no `users` row, so
+     * `email_deliveries` cannot hold their send; it lives here. **Failed** is
+     * `email_attempts > 0 and email_sent_at is null`.
+     *
+     * Rows written before this existed carry `email_attempts = 0` and no sent
+     * stamp: what was sent then left only a log line, so there is nothing to
+     * backfill and they read as "no record" rather than failed.
+     */
+    emailAttempts: integer('email_attempts').notNull().default(0),
+    emailLastAttemptAt: timestamp('email_last_attempt_at', { withTimezone: true }),
+    emailSentAt: timestamp('email_sent_at', { withTimezone: true }),
+    /** The transport's status-only message, never the recipient. */
+    emailFailureReason: varchar('email_failure_reason', {
+      length: MAX_EMAIL_FAILURE_REASON_LENGTH,
+    }),
   },
   (table) => [
     uniqueIndex('vendor_invites_email_key').on(table.email),
