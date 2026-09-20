@@ -1,6 +1,6 @@
 ---
 name: rate-limit-key-is-the-proxy-not-the-caller
-description: How rate limiting is wired here — hop-0 trustProxy, the pre-auth instance hook and its five skipped routes, and the shared rateLimitRan symbol that makes "just drop the skip" silently disable four custom limits
+description: How rate limiting is wired here — hop-0 trustProxy, the pre-auth instance hook, the shared rateLimitRan symbol that makes "just drop the skip" silently disable a route's own limit, countBearer's header-only residual, and the VEN-484 per-account keys
 metadata:
   type: project
 ---
@@ -26,15 +26,27 @@ source (`node_modules/.pnpm/@fastify+rate-limit@11.2.0/.../index.js`):
   limit entirely**. The skip in `server.ts` is load-bearing; `support`, `reports`
   and `vendor-invites` route tests assert their own 429 and would catch it,
   `/tags/suggest` has no such test.
-- **The skip's residual:** `neon-auth`'s instance hook throws 401/403 (bad token,
-  deleted identity, ban) before any _route_ hook, so the five config routes —
-  `/webhooks/stripe`, `/support/messages`, `/tags/suggest`, `/reports`,
-  `/vendor-applications` — are still floodable at any rate with
-  `Authorization: Bearer garbage`. On the webhook that lands in the `signature`
-  failure kind unlimited, the VEN-405 residual without its rate cap. Only
-  `server-error` reaches the persisted counter, so there is no DB write per shed
-  request. Count-only fix: `app.createRateLimit()`, which does not set
-  `rateLimitRan`.
+- **The skip's residual is closed for bearer traffic:** the same hook now runs
+  `app.createRateLimit()` (`countBearer`) on a config route whenever an
+  `Authorization` header is present — `createRateLimit` never sets
+  `rateLimitRan`, so it counts in the API-wide visitor bucket without silencing
+  the route's own ceiling. **Residual:** a request with _no_ `Authorization`
+  header on a config route is counted by nothing. Auth is bearer-only
+  (`neon-auth` returns early on a missing header), so such a flood costs a route
+  lookup and a guard 401 — no DB, no crypto, no body parse. Widening it would
+  put Stripe's webhook address in the 120/min visitor bucket.
+- **Per-account limits (VEN-484).** `lib/rate-limit.ts` `perAccountRateLimit`
+  keys on `request.auth?.id ?? request.ip` for `/upload/image`,
+  `/conversations`, `/conversations/:id/messages`, `/booking-requests`. Sound
+  because `addRouteRateHook` **pushes** its hook after the route's own
+  `onRequest` guards and `neon-auth` resolves `request.auth` in an instance
+  hook, so the account is known before the key is taken; and
+  `LocalStore.child()` returns a **new** store per route config, so no two
+  routes share a bucket. Two cautions: the fallback is bare `request.ip`, not
+  `rateLimitKey`, so an unauthenticated caller arriving through the web tier
+  keys on the platform's egress address; and a per-_account_ ceiling is only as
+  strong as sign-up, which is open for customers — the API-wide IP bucket stays
+  the only cap on an attacker minting accounts.
 
 Related: [[public-mail-endpoint-echoes-to-any-address]],
 [[operator-alert-dedupe-is-attacker-armable]].

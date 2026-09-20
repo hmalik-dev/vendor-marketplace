@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { unauthorized } from '../../lib/errors.js';
 import { authenticated, requireAuth, requireRoleBeforeValidation } from '../../lib/guards.js';
+import { perAccountRateLimit } from '../../lib/rate-limit.js';
 import { resolveStreamSubject } from '../users/users.service.js';
 import {
   listConversations,
@@ -56,6 +57,10 @@ const NOTIFICATION_PAGE_SIZE = 20;
 const HEARTBEAT_MS = 30_000;
 
 export interface MessagingRoutesOptions {
+  /** Conversations one account may open per hour. */
+  conversationRateLimitMax: number;
+  /** Messages one account may send per minute. */
+  messageRateLimitMax: number;
   /**
    * The CORS allow-list, passed in rather than read from a hook.
    *
@@ -96,6 +101,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
     '/conversations',
     {
       onRequest: requireRoleBeforeValidation('customer'),
+      config: { rateLimit: perAccountRateLimit(options.conversationRateLimitMax, '1 hour') },
       schema: {
         body: openConversationSchema,
         response: { 200: openedConversationSchema, 201: openedConversationSchema },
@@ -143,6 +149,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
     '/conversations/:conversationId/messages',
     {
       preHandler: requireAuth,
+      config: { rateLimit: perAccountRateLimit(options.messageRateLimitMax, '1 minute') },
       schema: {
         params: conversationParamsSchema,
         body: sendMessageSchema,
