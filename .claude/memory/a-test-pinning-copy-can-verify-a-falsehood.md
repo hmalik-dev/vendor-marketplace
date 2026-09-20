@@ -43,7 +43,7 @@ Related: [[record-findings-in-backlog]],
 
 **The comment asserts a mechanism the assertion is too coarse to check.** A lane
 wrote *"the fake really removes it, so presenting that token afterwards fails the
-way a deleted Clerk session does"* over an `expect(401)`. The fake never
+way a deleted (Clerk-era, retired) session does"* over an `expect(401)`. The fake never
 consulted the user store — the 401 came from a **different** check that predated
 the change entirely, so **the test would have passed with the whole change
 removed**. Fixed by pinning the *message* (`Session token is invalid or expired`

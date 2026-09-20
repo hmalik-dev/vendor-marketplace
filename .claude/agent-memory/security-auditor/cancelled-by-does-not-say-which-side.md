@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `bookings.cancelled_by` (#415) has two values, `customer` and `admin`. `admin`
 is written by exactly one path — `setUserBanned` in
 `apps/api/src/modules/admin/admin.service.ts` — and that path unwinds bookings

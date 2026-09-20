@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 VEN-411 added a CI `e2e` job that signs the real E2E accounts (admin included) into the dev Clerk instance and, on failure, uploads `playwright-report/`, `test-results/` (trace zips with Cookie headers and storage state) and `stripe-listen.log` (prints `whsec_`) for 14 days.
 
 **Why:** `gh repo view` reports `visibility: PUBLIC`. Log masking covers the console only. The dev Clerk instance also backs the deployed origin ([[deployed-origin-shares-the-dev-clerk-instance]]), so a traced admin session is a production admin session until it expires or is revoked.

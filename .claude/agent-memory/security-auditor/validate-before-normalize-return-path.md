@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 **Status: FIXED as of ticket #76 (2026-08-29). Do not re-report.**
 
 `apps/web/src/lib/return-path.ts` (`safeReturnPath`) once validated a string that

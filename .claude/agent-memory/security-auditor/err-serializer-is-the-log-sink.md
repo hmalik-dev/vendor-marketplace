@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `apps/api/src/lib/log-error-serializer.ts` (#445) is the single sink for every
 `log.*({ err })` in the API. It strips `DrizzleQueryError`'s bound values from
 `message`, `stack` and the own `params` property, keeps `query`, the frames, the

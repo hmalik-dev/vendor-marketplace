@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 Since #425, `POST /support/messages` is still deliberately public (no
 `requireAuth`, 6/hour keyed by `request.auth?.id ?? request.ip`) but an optional
 `bookingId` in the body turns the send into a money write: `placeDisputeHold`

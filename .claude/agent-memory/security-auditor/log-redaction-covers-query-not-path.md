@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `apps/api/src/server.ts` installs a custom pino `serializers.req` that runs
 `redactQueryValues` (`apps/api/src/lib/log-redaction.ts`) over `request.url`.
 It replaces **every** query value, not a list of suspicious names, so it cannot

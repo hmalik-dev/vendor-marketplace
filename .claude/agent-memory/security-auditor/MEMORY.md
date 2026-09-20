@@ -11,7 +11,7 @@
 - [The Resend secret's absence is refusal](resend-webhook-absence-is-refusal.md) — optional on every target is correct; no route exists without a secret
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — never add script-src hosts; CSP_ENFORCE only turns enforcement on
 - [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child output redacted, `workflow_run` gated; only argv-built `PhaseError`s are not
-- [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — traces carry Clerk cookies, stripe-listen.log carries whsec; masking never reaches artifacts
+- [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — traces carry session cookies, stripe-listen.log carries whsec; masking never reaches artifacts
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — live session JWTs; `FORBIDDEN_PATHS` covers the path, no content rule will
 - [A storage branch per lane, CI run and PR](neon-storage-branch-per-runner.md) — `NEON_API_KEY` is production-capable; keep it step-scoped and away from `npm install`
 - [Backup integrity is not authenticity](backup-integrity-is-not-authenticity.md) — a bucket-token holder forges a dump the drill pg_restores as superuser
@@ -19,10 +19,9 @@
 ## Auth, identity and tenancy
 
 - [Neon Auth cutover boundaries](neon-auth-cutover-boundaries.md) — verification sound, role double-narrowed; the unthrottled `/api/auth` proxy is the new surface
-- [Sign-up role is client-written, server-narrowed](sign-up-role-is-client-written-server-narrowed.md) — only `normalizeRole` refuses `admin`; the sign-up screen is chrome
-- [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` is null for a gated account; `requireClerkSubject` is the deliberate exception
+- [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` is null for a gated account; `requireClerkSubject` (Clerk-era name, retired by VEN-447) is the deliberate exception
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` renders a booking amount with no `force-dynamic`
-- [Email is a label, `clerk_user_id` is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial; nothing resolves a person by email
+- [Email is a label, the auth id is the key (was `clerk_user_id`, retired)](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial; nothing resolves a person by email
 - [Retired users keep their email in the unique index](retired-users-keep-their-email-in-the-unique-index.md) — re-registering the same address is a permanent opaque 500
 - [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes left low-severity on purpose

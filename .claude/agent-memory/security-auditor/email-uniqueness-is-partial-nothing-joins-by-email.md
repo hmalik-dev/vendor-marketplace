@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `users_email_key` is partial as of migration `0039_reflective_dust.sql`:
 `UNIQUE (email) WHERE deleted_at IS NULL`. Closing an account releases its
 address, and two rows — one retired, one live — can now hold the same one.

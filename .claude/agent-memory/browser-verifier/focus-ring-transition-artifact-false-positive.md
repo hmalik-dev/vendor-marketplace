@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 On ticket #73, a parity pass claimed the `Button` primitive's focus ring on
 `secondary`/`ink` variants "computes correctly but the composed box-shadow
 resolves to five all-transparent entries and `outline: 3px none`, so nothing

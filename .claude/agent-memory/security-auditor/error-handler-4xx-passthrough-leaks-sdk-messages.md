@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 **Status: fixed. Do not re-report.** Verified against
 `apps/api/src/plugins/error-handler.ts` on 2026-08-31 (#15 audit).
 

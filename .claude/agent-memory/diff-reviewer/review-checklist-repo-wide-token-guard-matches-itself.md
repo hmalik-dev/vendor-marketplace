@@ -5,6 +5,8 @@ metadata:
   type: feedback
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 A "this word may not come back" guard that scans every tracked file **includes
 its own source**. Its docstring names the word it forbids ("the identity
 provider (Clerk) was replaced…") and every allow-list entry whose _reason_

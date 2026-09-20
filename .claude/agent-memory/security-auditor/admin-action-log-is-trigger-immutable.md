@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `admin_actions` (#434, `packages/db/drizzle/0030_faithful_tomorrow_man.sql`) is
 immutable by trigger, not by convention, and the shape was audited and cleared.
 

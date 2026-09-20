@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `apps/web/src/config/security-headers.ts` is the **only** place the web tier's
 CSP exists — no middleware, no `vercel.json`, no second definition. It ships
 `'unsafe-inline'` on both `style-src` and `script-src`, and that is a recorded
