@@ -16,14 +16,19 @@ async function bootedApp(): Promise<ReturnType<typeof Fastify>> {
   const app = Fastify();
 
   await app.register(
-    fp(async (instance) => instance.decorate('clock', () => new Date()), { name: 'clock' }),
+    fp(
+      async (instance) => {
+        instance.decorate('clock', () => new Date());
+      },
+      { name: 'clock' },
+    ),
   );
   await app.register(
     fp(
       async (instance) => {
-        instance.decorate('operatorAlerts', { dispatch: () => undefined });
-        instance.decorate('db', {});
-        instance.decorate('stripe', {});
+        instance.decorate('operatorAlerts', { dispatch: () => undefined } as never);
+        instance.decorate('db', {} as never);
+        instance.decorate('stripe', {} as never);
       },
       { name: 'operator-alerts' },
     ),
