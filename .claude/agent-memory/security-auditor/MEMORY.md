@@ -71,6 +71,7 @@
 
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking with an empty `closeBlockers`
 - [The unwind's full refund is the ban's argument](account-unwind-full-refund-is-the-ban-argument.md) — superseded by D39: closure refused while a future confirmed booking exists
+- [Ban and closure are resumable endpoints now](unwind-resume-is-a-repeatable-endpoint.md) — VEN-478; the derived pending gate never clears on a legacy/unrefundable booking, and double refund is settled
 - [An unwind spares a request with a booking behind it](unwind-decline-spares-requests-with-a-booking.md) — unarrangeable; it closes a post-unban double-booking window
 - [`cancelled_by` names the actor, not the suspended side](cancelled-by-does-not-say-which-side.md) — "the other account was suspended" is false to an unbanned customer
 - [The acceptance record is undeletable PII](legal-acceptance-record-is-undeletable-pii.md) — closure is a soft delete, so the trigger's delete branch never fires
