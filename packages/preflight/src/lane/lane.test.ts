@@ -508,6 +508,17 @@ describe('laneDown', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('deletes storage before the database, so a Neon refusal never leaves an active lane without one', async () => {
+    await laneUp(root, worktree, '42', deps());
+
+    const dropDatabase = vi.fn().mockResolvedValue(undefined);
+    const dropStorage = vi.fn().mockRejectedValue(new Error('403 forbidden'));
+
+    await expect(laneDown(root, worktree, '42', { dropDatabase, dropStorage })).rejects.toThrow();
+
+    expect(dropDatabase).not.toHaveBeenCalled();
+  });
+
   it('keeps the manifest when the storage branch cannot be deleted, so down can be re-run', async () => {
     await laneUp(root, worktree, '42', deps());
 

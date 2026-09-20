@@ -227,6 +227,21 @@ describe('ensureLaneStorage', () => {
     );
   });
 
+  it('accepts a create that lost a race to another lane:up for the same ticket', async () => {
+    const neon = fakeNeon();
+    const racing: NeonRunner = async (args) => {
+      if (args[0] === 'branches' && args[1] === 'create') {
+        neon.branches.add('lane-ven-457');
+        return failed('ERROR: branch already exists');
+      }
+      return neon.run(args);
+    };
+
+    await expect(ensureLaneStorage('VEN-457', racing, at())).resolves.toMatchObject({
+      STORAGE_BUCKET: 'uploads',
+    });
+  });
+
   it('never calls Neon for a name it refuses', async () => {
     const neon = fakeNeon();
 

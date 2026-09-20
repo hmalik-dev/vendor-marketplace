@@ -202,7 +202,17 @@ async function createLaneBranch(
     'json',
   ]);
 
-  if (created.status !== 'ok') {
+  /*
+   * Two `lane:up` calls for one ticket both reach this line. The loser is
+   * refused because the winner just made the branch, which is the end state
+   * wanted, so a refusal is settled by asking again rather than trusted.
+   */
+  const raced =
+    created.status === 'failed' &&
+    (await run(['branches', 'get', branch, ...project, '-o', 'json', '--no-secrets'])).status ===
+      'ok';
+
+  if (created.status !== 'ok' && !raced) {
     throw new Error(
       `Could not create the Neon branch ${branch} for this lane's storage: ${describeFailure(created)}. ` +
         'A plan branch ceiling is the usual cause; delete an unused lane or preview branch and re-run `pnpm lane:up`.',

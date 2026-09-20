@@ -259,6 +259,12 @@ jobs:
       # end; the one-day expiry is the backstop for a run that never gets there.
       # The pull file is created owner-only first: the CLI keeps an existing
       # file's mode, and it would otherwise be written world-readable.
+      # Its own step, with no credential in scope and no install scripts: a
+      # global install resolves unpinned transitive dependencies afresh.
+      - name: Install the Neon CLI
+        if: steps.secrets.outputs.run == 'true'
+        run: npm install --global --ignore-scripts neonctl@4.11.0
+
       - name: Create this run's storage branch
         id: storage
         if: steps.secrets.outputs.run == 'true'
@@ -267,18 +273,17 @@ jobs:
         run: |
           branch="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          npm install --global neonctl@4.11.0
           neon branches create --project-id "$NEON_PROJECT_ID" --name "$branch" --parent dev \
             --no-compute --no-secrets -o json \
             --expires-at "$(date -u -d '+1 day' +%Y-%m-%dT%H:%M:%SZ)"
           # Cut from `dev`, so the bucket normally came across; create it if not.
           neon buckets list --project-id "$NEON_PROJECT_ID" --branch "$branch" -o json | grep -q '"uploads"' \
-            || neon buckets create uploads --project-id "$NEON_PROJECT_ID" --branch "$branch" --access-level public_read
+            || neon buckets create uploads --project-id "$NEON_PROJECT_ID" --branch "$branch" --access-level public_read >/dev/null
+          trap 'rm -f .env.ci-storage' EXIT
           (umask 077 && : > .env.ci-storage)
           neon env pull --project-id "$NEON_PROJECT_ID" --branch "$branch" \
             --file .env.ci-storage -s object-storage
           node scripts/ci-storage.mjs map .env.ci-storage
-          rm -f .env.ci-storage
 
       # The mutation that proves this step: inject a STORAGE_ value naming the
       # production branch's endpoint and it fails (`scripts/ci-storage.test.mjs`).

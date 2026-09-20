@@ -119,7 +119,7 @@ export const storageCheck: Check = {
       const fix =
         context.target === 'production'
           ? 'Declare the `uploads` bucket in neon.ts and run `neon deploy` on this branch: https://neon.com/docs/storage/overview'
-          : 'Run `pnpm lane:up <ticket>` (a lane gets its own Neon storage branch), or point the STORAGE_* variables at a non-production Neon branch with `neon env pull --branch dev -s object-storage`';
+          : 'Run `pnpm lane:up <ticket>`: a lane gets its own Neon storage branch and writes its STORAGE_* values';
 
       return [fail('storage', name, `${STORAGE_BUCKET} at ${STORAGE_ENDPOINT}: ${reason}`, fix)];
     } finally {

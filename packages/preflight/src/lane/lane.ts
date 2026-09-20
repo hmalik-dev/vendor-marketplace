@@ -201,7 +201,10 @@ async function ensureLaneEnv(
   const file = path.join(worktreePath, LANE_ENV_FILE);
 
   if (!laneEnvAgreesWith(file, manifest)) {
-    writeFileSync(file, renderLaneEnv(manifest, resolveDatabaseUrl(), await resolveStorage()));
+    // Created owner-only: the file holds a bucket credential from its first byte.
+    writeFileSync(file, renderLaneEnv(manifest, resolveDatabaseUrl(), await resolveStorage()), {
+      mode: LANE_ENV_MODE,
+    });
   }
 
   chmodSync(file, LANE_ENV_MODE);
@@ -599,8 +602,14 @@ export async function laneDown(
   ticket: string,
   deps: LaneDownDeps = defaultDownDeps,
 ): Promise<void> {
-  await deps.dropDatabase(ticket);
+  /*
+   * Storage first: it is the step Neon can refuse. Dropping the database first
+   * left a manifest marked active for a lane whose database was gone, which a
+   * later `lane:up` resumed without noticing. Both are idempotent, so a re-run
+   * finishes whichever did not.
+   */
   await deps.dropStorage(ticket);
+  await deps.dropDatabase(ticket);
   rmSync(path.join(worktreePath, LANE_ENV_FILE), { force: true });
   removeManifest(mainCheckout, ticket);
 }

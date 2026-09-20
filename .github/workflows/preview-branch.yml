@@ -75,19 +75,22 @@ jobs:
       # declares) only if `staging` had none. Not `neon deploy`: the pinned CLI
       # rejects neon.ts's `buckets` key. The pull file is created owner-only
       # first, because the CLI keeps an existing file's mode.
+      # Its own step, with no credential in scope and no install scripts.
+      - name: Install the Neon CLI
+        run: npm install --global --ignore-scripts neonctl@4.11.0
+
       - name: Read the branch's storage credential
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           PREVIEW_BRANCH: preview/pr-${{ github.event.pull_request.number }}
         run: |
-          npm install --global neonctl@4.11.0
           neon buckets list --project-id "$NEON_PROJECT_ID" --branch "$PREVIEW_BRANCH" -o json | grep -q '"uploads"' \
-            || neon buckets create uploads --project-id "$NEON_PROJECT_ID" --branch "$PREVIEW_BRANCH" --access-level public_read
+            || neon buckets create uploads --project-id "$NEON_PROJECT_ID" --branch "$PREVIEW_BRANCH" --access-level public_read >/dev/null
+          trap 'rm -f .env.preview-storage' EXIT
           (umask 077 && : > .env.preview-storage)
           neon env pull --project-id "$NEON_PROJECT_ID" --branch "$PREVIEW_BRANCH" \
             --file .env.preview-storage -s object-storage
           node scripts/ci-storage.mjs map .env.preview-storage
-          rm -f .env.preview-storage
 
       # Mutation-tested in `scripts/ci-storage.test.mjs`: a STORAGE_ value naming
       # the production branch's endpoint fails this step.
