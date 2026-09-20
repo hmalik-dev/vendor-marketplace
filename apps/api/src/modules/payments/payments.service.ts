@@ -1226,6 +1226,21 @@ export async function cancelBooking(
     throw forbidden('Only the customer can cancel a confirmed booking');
   }
 
+  /*
+   * A cancel that finds the customer's own cancellation already written — the
+   * second tab, or a retry after a dropped response — is told it worked
+   * (VEN-472). Cancelled by an operator or the ban path it stays a refusal.
+   */
+  if (booking.status === 'cancelled' && booking.cancelledBy === 'customer') {
+    const refundCents = booking.refundAmountCents ?? 0;
+
+    return {
+      booking: toBookingView(booking),
+      refundCents,
+      isFullRefund: refundCents === booking.totalAmountCents,
+    };
+  }
+
   if (booking.status !== 'confirmed') {
     throw conflict(NOT_CANCELLABLE[booking.status]);
   }
@@ -1283,6 +1298,7 @@ export async function cancelBooking(
     'confirmed',
     booking.payoutReleasedAt,
   );
+  let lostTo: BookingRow | null = null;
 
   if (!cancelled) {
     /*
@@ -1294,35 +1310,52 @@ export async function cancelBooking(
      * is carried through from `completed`. Any other loser (a dispute hold, a
      * sweep that released the payout) still needs a human.
      */
-    const current = await findBookingById(context.db, bookingId);
+    lostTo = await findBookingById(context.db, bookingId);
 
-    if (current?.status === 'completed') {
+    if (lostTo?.status === 'completed') {
       cancelled = await cancelBookingAndFreeDate(
         context.db,
         bookingId,
         cancellation,
         'completed',
-        current.payoutReleasedAt,
+        lostTo.payoutReleasedAt,
       );
     }
   }
 
-  if (!cancelled) {
+  /*
+   * A concurrent or retried cancel by the customer: the other request won the
+   * guarded update and already told the vendor, and the refund is the one this
+   * request found through the shared key. The cancellation stands, so this one
+   * answers with it (VEN-472). Cancelled by anyone else it stays a refusal.
+   */
+  const settled =
+    cancelled ??
+    (lostTo?.status === 'cancelled' && lostTo.cancelledBy === 'customer' ? lostTo : null);
+
+  if (!settled) {
     /*
-     * The refund is already out. Logged at error rather than thrown away,
-     * because the money moved and the row did not — the one state that needs a
-     * human to look at it.
+     * The refund is already out, so the money moved and the row did not: the
+     * one state that needs a human, and the operator is told rather than left
+     * to find a log line.
      */
     context.log.error(
       { bookingId, refundId: refund.refundId, refundCents: refund.amountCents },
       'Refunded a booking whose row could not be cancelled',
     );
+    context.alerts?.dispatch(
+      refundFailedAlert({
+        bookingId,
+        during: 'a cancellation',
+        refundId: refund.refundId,
+      }),
+    );
     throw conflict('That booking changed while you were cancelling it');
   }
 
-  const vendorUserId = await findVendorUserId(context.db, cancelled.vendorId);
+  const vendorUserId = cancelled ? await findVendorUserId(context.db, cancelled.vendorId) : null;
 
-  if (vendorUserId) {
+  if (cancelled && vendorUserId) {
     await bestEffortNotice(context, { bookingId: cancelled.id }, () =>
       notify(
         context,
@@ -1339,7 +1372,7 @@ export async function cancelBooking(
   }
 
   return {
-    booking: toBookingView(cancelled),
+    booking: toBookingView(settled),
     refundCents: refund.amountCents,
     /*
      * Read off the money that actually moved, not off the tier the quote would
