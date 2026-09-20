@@ -30,6 +30,18 @@ shared by `resolveDispute` and #425's compensating unwind) still keys on
 rather than the one its caller placed. Audited 2026-09-06; the reachable
 interleaving needs an admin resolve between the hold and its unwind.
 
+**`findTransfer` is shared by the sweep and the reversal path.** `releaseOnePayout`
+(`payouts.service.ts:382`) and `reverseOutstanding` (`payments.service.ts:1178`)
+call the one gateway method, and they want different answers: the sweep must not
+adopt a fully reversed transfer as its release, while the reversal path uses the
+same row to decide `transferReversed` — the vendor's "nothing is taken back out
+of your Stripe balance" sentence — and to log "Stripe cannot find it under its
+group" at error level. Narrowing what the gateway returns silently rewrites both.
+The sweep is only safe to create a fresh transfer for a group whose transfers are
+all reversed because every full reversal here is accompanied by a refund that
+`findRefund` sees first, and by `vendor_payout_cents` rewritten to the retained
+share — a booking with a null `stripe_payment_intent_id` has neither guard.
+
 **How to apply:** any new booking write that reasons about
 `payout_released_at` / `stripe_transfer_id` must carry those columns into its
 guarded update's `where`, or take the row lock the sweep respects. A status-only

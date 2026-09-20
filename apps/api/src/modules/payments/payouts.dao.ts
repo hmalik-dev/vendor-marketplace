@@ -1,4 +1,16 @@
-import { and, asc, eq, gt, inArray, isNull, lte, notInArray, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  notInArray,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { bookings, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { HELD_PAYOUT_STATUSES } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
@@ -177,7 +189,21 @@ export async function findDuePayoutBookingIds(
      * releasable by design. Ordering by attempts first keeps a stuck row being
      * retried without letting it starve the queue.
      */
-    .orderBy(asc(bookings.payoutAttempts), asc(bookings.eventDate))
+    .orderBy(
+      /*
+       * Vendors who can receive a transfer come first (VEN-473). Ordering by
+       * attempts alone still lets a payable booking that has failed a few times
+       * sit behind more unpayable rows than one batch holds, because those rows
+       * are tried fewer times than it was. An unonboarded vendor's rows stay in
+       * the batch, at the back, so the sweep goes on recording why they are
+       * stuck and picks them up the moment the vendor finishes onboarding.
+       */
+      desc(
+        sql`(${vendorProfiles.stripeOnboarded} and ${vendorProfiles.stripeAccountId} is not null)`,
+      ),
+      asc(bookings.payoutAttempts),
+      asc(bookings.eventDate),
+    )
     .limit(limit);
 
   return rows.map((row) => row.id);

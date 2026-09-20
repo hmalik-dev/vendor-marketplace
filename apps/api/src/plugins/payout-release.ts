@@ -17,6 +17,10 @@ export interface PayoutReleasePluginOptions {
   reporter: ErrorReporter;
 }
 
+/** Wait this long after `onReady` before the first sweep, plus up to the jitter. */
+const BOOT_DELAY_MS = 30_000;
+const BOOT_JITTER_MS = 5_000;
+
 /**
  * The payout sweep's schedule — the only scheduler in this repository, and the
  * mechanism #423 had to choose because there was nothing to reuse.
@@ -81,8 +85,23 @@ export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
     const timer = setInterval(() => void tick(), options.intervalMs);
     timer.unref();
 
+    /*
+     * One sweep shortly after boot (VEN-473), so an API restarted more often
+     * than the interval still sweeps. Delayed so the process is serving first,
+     * and jittered so a fleet booting together does not sweep in step; the
+     * `running` guard and the row locks make a second sweep harmless.
+     */
+    const bootDelayMs = BOOT_DELAY_MS + Math.floor(Math.random() * BOOT_JITTER_MS);
+    let bootTimer: NodeJS.Timeout | undefined;
+
+    app.addHook('onReady', async () => {
+      bootTimer = setTimeout(() => void tick(), bootDelayMs);
+      bootTimer.unref();
+    });
+
     app.addHook('onClose', async () => {
       clearInterval(timer);
+      clearTimeout(bootTimer);
     });
   },
   { name: 'payout-release', dependencies: ['clock', 'operator-alerts'] },

@@ -675,6 +675,101 @@ describe('payouts', () => {
     });
 
     /**
+     * VEN-473. Reproduced from a lane that logged `released 0 / failed 100` on
+     * every tick: more unpayable due rows than one batch holds, and one payable
+     * booking behind them by event date.
+     */
+    it('reaches a payable booking however many due bookings of an unonboarded vendor precede it', async () => {
+      const payable = await paidBooking();
+      const [vendor] = await harness.database.db
+        .select()
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, payable.vendorId));
+      const [vendorUser] = await harness.database.db
+        .select()
+        .from(users)
+        .where(eq(users.id, vendor!.userId));
+      const [request] = await harness.database.db
+        .select()
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, payable.requestId));
+
+      const { id: _userId, ...userColumns } = vendorUser!;
+      const [stuckUser] = await harness.database.db
+        .insert(users)
+        .values({
+          ...userColumns,
+          authUserId: 'user_stuck_vendor',
+          email: 'stuck@example.com',
+        })
+        .returning({ id: users.id });
+      const { id: _vendorId, ...vendorColumns } = vendor!;
+      const [stuckVendor] = await harness.database.db
+        .insert(vendorProfiles)
+        .values({
+          ...vendorColumns,
+          userId: stuckUser!.id,
+          slug: 'stuck-studio',
+          stripeOnboarded: false,
+          stripeAccountId: null,
+        })
+        .returning({ id: vendorProfiles.id });
+
+      const earlier = toDateString(addDays(START, 20));
+      const { id: _requestId, ...requestColumns } = request!;
+      const { id: _bookingId, ...bookingColumns } = payable;
+
+      for (let index = 0; index < 101; index += 1) {
+        const [stuckRequest] = await harness.database.db
+          .insert(bookingRequests)
+          .values({
+            ...requestColumns,
+            vendorId: stuckVendor!.id,
+            stripePaymentIntentId: null,
+            eventDate: earlier,
+          })
+          .returning({ id: bookingRequests.id });
+
+        await harness.database.db.insert(bookings).values({
+          ...bookingColumns,
+          requestId: stuckRequest!.id,
+          vendorId: stuckVendor!.id,
+          eventDate: earlier,
+          stripePaymentIntentId: null,
+        });
+      }
+
+      /*
+       * The payable booking has failed a few times already (a transient Stripe
+       * refusal), so ordering by attempts alone puts it behind every unpayable
+       * row that has been tried fewer times.
+       */
+      await harness.database.db
+        .update(bookings)
+        .set({ payoutAttempts: 3 })
+        .where(eq(bookings.id, payable.id));
+
+      clockNow = AFTER_RELEASE;
+      let released = 0;
+
+      for (let run = 0; run < 2 && released === 0; run += 1) {
+        released += (await sweep()).released;
+      }
+
+      const [row] = await harness.database.db
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, payable.id));
+      const attempts = await harness.database.db
+        .select({ attempts: bookings.payoutAttempts })
+        .from(bookings)
+        .where(eq(bookings.vendorId, stuckVendor!.id));
+
+      expect(Math.max(...attempts.map((entry) => entry.attempts))).toBeLessThanOrEqual(2);
+      expect(row!.payoutReleasedAt).not.toBeNull();
+    });
+
+    /**
      * The 24-hour hole the Stripe idempotency key cannot cover.
      *
      * The transfer goes out inside the transaction that claims the booking, so
@@ -698,6 +793,27 @@ describe('payouts', () => {
 
       expect(harness.stripe.transfers).toHaveLength(1);
       expect((await currentBooking()).stripeTransferId).toBe(orphan.transferId);
+    });
+
+    /* VEN-473: a transfer that was fully reversed is not a payout to the vendor. */
+    it('makes a new transfer when the only one in the group was fully reversed', async () => {
+      const paid = await paidBooking();
+      clockNow = AFTER_RELEASE;
+      const reversed = await harness.stripe.createTransfer({
+        bookingId: 'a-manual-transfer-since-reversed',
+        attempt: 0,
+        amountCents: EXPECTED_PAYOUT_CENTS,
+        destinationAccountId: VENDOR_ACCOUNT,
+        transferGroup: `booking_${paid.requestId}`,
+      });
+      harness.stripe.transfers[0]!.reversedCents = EXPECTED_PAYOUT_CENTS;
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      expect(harness.stripe.transfers).toHaveLength(2);
+      const row = await currentBooking();
+      expect(row.stripeTransferId).toBe(harness.stripe.transfers[1]!.transferId);
+      expect(row.stripeTransferId).not.toBe(reversed.transferId);
     });
 
     /*

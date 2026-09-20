@@ -719,8 +719,12 @@ function createFakeStripe(): FakeStripe {
       return { transferId, amountCents: input.amountCents };
     },
 
-    findTransfer: async (transferGroup) => {
-      const transfer = transfers.find((candidate) => candidate.transferGroup === transferGroup);
+    findTransfer: async (transferGroup, options) => {
+      const transfer = transfers.find(
+        (candidate) =>
+          candidate.transferGroup === transferGroup &&
+          (!options?.live || candidate.reversedCents < candidate.amountCents),
+      );
 
       return transfer
         ? {
