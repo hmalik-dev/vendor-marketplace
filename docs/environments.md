@@ -112,8 +112,8 @@ wanted here.
 - Seal secrets in Railway (and mark them sensitive in Vercel) only after the
   service boots and `/ready` answers, and keep each secret at its origin first:
   a sealed value cannot be read back.
-- The retired providers (Clerk, Svix, R2, MinIO) are gone; no variable named for
-  them belongs in any environment or local env file.
+- The retired identity, webhook and object-storage providers are gone; no variable
+  named for them belongs in any environment or local env file.
 
 ## Reset and reseed
 
