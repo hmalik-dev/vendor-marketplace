@@ -13,12 +13,17 @@ vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn() }));
 
 const APP_DIR = join(process.cwd(), 'src/app');
 
+const NO_PAYMENT_CLAIM = 'No payment was taken';
+
 /*
  * VEN-476: a failed read on these routes fell to the root boundary by accident;
- * each now owns a boundary file. `/vendors/[slug]` and `/bookings/[requestId]`
- * deliberately have no `loading.tsx`: their pages call `notFound()`, and a
- * loading boundary above one turns its 404 into a soft 200
- * (`loading-boundaries.test.ts`).
+ * each now owns a boundary file.
+ *
+ * Two routes deliberately have no `loading.tsx`. `/vendors/[slug]` and
+ * `/bookings/[requestId]` call `notFound()`, and `/search` answers a retired
+ * category with `permanentRedirect()`; a loading boundary above either streams
+ * a 200 shell and turns the 404 / 308 into a status the browser and crawlers
+ * never see (`loading-boundaries.test.ts`).
  */
 const ERROR_BOUNDARIES = [
   ['search', SearchError],
@@ -31,8 +36,8 @@ describe('segment error boundaries', () => {
   afterEach(cleanup);
 
   it.each(ERROR_BOUNDARIES)(
-    '%s renders the shared error screen with a working retry',
-    async (segment, Boundary) => {
+    '%s renders the error screen with a working retry and the brand from its source',
+    async (_segment, Boundary) => {
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const reset = vi.fn();
       const error = Object.assign(new Error('upstream exploded'), { digest: 'err_9F3K2QX7' });
@@ -42,9 +47,8 @@ describe('segment error boundaries', () => {
       expect(screen.getByText('err_9F3K2QX7')).toBeTruthy();
       // No stack trace or raw upstream message reaches the page.
       expect(container.textContent).not.toContain('upstream exploded');
-      // Brand copy comes from the shared source, never a hand-typed literal.
-      expect(BRAND_NAME.length).toBeGreaterThan(0);
-      expect(readFileSync(join(APP_DIR, segment, 'error.tsx'), 'utf8')).not.toContain('Orla');
+      // The wordmark is drawn from BRAND_NAME, so a rebrand needs no edit here.
+      expect(screen.getAllByLabelText(BRAND_NAME).length).toBeGreaterThan(0);
 
       await userEvent.click(screen.getByRole('button', { name: /try again/i }));
 
@@ -52,14 +56,28 @@ describe('segment error boundaries', () => {
     },
   );
 
-  it.each(['search', 'support'])('%s streams the page loader', (segment) => {
-    expect(readFileSync(join(APP_DIR, segment, 'loading.tsx'), 'utf8')).toContain(
+  it('does not tell a customer on a booking that no payment was taken', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { container } = render(<BookingError error={new Error('boom')} reset={vi.fn()} />);
+
+    expect(container.textContent).not.toContain(NO_PAYMENT_CLAIM);
+  });
+
+  it('keeps the no-payment reassurance where nothing can have been charged', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { container } = render(<SearchError error={new Error('boom')} reset={vi.fn()} />);
+
+    expect(container.textContent).toContain(NO_PAYMENT_CLAIM);
+  });
+
+  it('streams the page loader on support', () => {
+    expect(readFileSync(join(APP_DIR, 'support/loading.tsx'), 'utf8')).toContain(
       'PageLoader as default',
     );
   });
 
-  it.each(['vendors/[slug]', 'bookings/[requestId]'])(
-    '%s has no loading boundary, so notFound() stays a real 404',
+  it.each(['search', 'vendors/[slug]', 'bookings/[requestId]'])(
+    '%s has no loading boundary, so its 404 or 308 stays a real status',
     (segment) => {
       expect(existsSync(join(APP_DIR, segment, 'loading.tsx'))).toBe(false);
     },
