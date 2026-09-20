@@ -21,7 +21,12 @@ import {
   legalDocumentSha256,
 } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { CLOSURE_UNWIND, DELETION_UNWIND, SUSPENSION_UNWIND } from './account-unwind.js';
+import {
+  CLOSURE_UNWIND,
+  DELETION_UNWIND,
+  SUSPENSION_UNWIND,
+  refundedBody,
+} from './account-unwind.js';
 import { LAST_OPERATOR_REFUSAL } from './data-rights.service.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { reconcileAuthUsers } from '../auth-sync/auth-sync.reconcile.js';
@@ -1526,6 +1531,19 @@ describe('data rights', () => {
   });
 
   describe('the unwind copies', () => {
+    /* VEN-477: "in full" only when the amount returned is the whole charge. */
+    it('states the amount returned unless it is the whole charge', () => {
+      expect(refundedBody(SUSPENSION_UNWIND, 'customer', 50_000, 50_000)).toBe(
+        "The other party's account was suspended. Your payment has been refunded in full.",
+      );
+      expect(refundedBody(SUSPENSION_UNWIND, 'customer', 1_000, 50_000)).toBe(
+        "The other party's account was suspended. $10 of your $500 payment has been refunded.",
+      );
+      expect(refundedBody(CLOSURE_UNWIND, 'vendor', 1_000, 50_000)).toBe(
+        "The customer's account was closed and the booking was cancelled. $10 of their $500 payment has been refunded from the platform balance, and no payout will be made to you for this booking.",
+      );
+    });
+
     /**
      * The closure and the auth provider backstop are the **same decision** about the
      * account holder's own bookings, so they must select the same branch.

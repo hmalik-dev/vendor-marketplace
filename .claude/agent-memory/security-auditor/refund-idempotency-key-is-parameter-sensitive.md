@@ -1,46 +1,43 @@
 ---
 name: refund-idempotency-key-is-parameter-sensitive
-description: Both refund idempotency keys are fixed per booking while their params vary — the amount drifts across the refund tier and the unwind flags changed in #416, so a retry can be refused by Stripe instead of replayed
+description: Both refund idempotency keys carry a version suffix; VEN-477 made that suffix the already-refunded total, so dedup now holds only while two racers read the same Stripe state
 metadata:
   type: project
 ---
 
-`createRefund` sends a key that is a pure function of the booking id —
-`cancel_${bookingId}` (`payments.service.ts`) and `ban-refund:${booking.id}`
-(`admin.service.ts`) — while the _parameters_ under that key are not fixed.
+`createRefund` keys are `cancel_${bookingId}_direct_${alreadyRefundedCents}`
+(`payments.service.ts` `refundAndUnwind`) and
+`${refundKeyPrefix}:${booking.id}:${alreadyRefundedCents}`
+(`admin/account-unwind.ts`). Stripe caches a response — including a _failure_ —
+for 24h per key and refuses a replay with different parameters.
 
-Stripe caches the first response for a key for 24 hours and refuses reuse of the
-same key with different parameters (`idempotency_error`: "Keys for idempotent
-requests can only be used with the same parameters they were first used with").
-Two things vary here:
+**What VEN-477 changed.** `findRefund` now sums every usable refund on the
+intent (`sumUsableRefunds`, all pages) and both paths refund the _remainder_
+instead of skipping when any refund exists. Consequences to keep in mind:
 
-- **`amount`** comes from `calculateRefund`, which is time-dependent: a first
-  attempt above `FULL_REFUND_CUTOFF_HOURS` asks for 100%, a retry below it asks
-  for 50%. Same key, different amount, so the retry is refused rather than
-  replayed and the customer cannot cancel at all until the key ages out.
-- **The unwind flags** changed with D31/#416 (`reverse_transfer` false -> true),
-  so any key minted in the 24h before that deploy refuses the new params too.
+- The key is no longer a pure function of the booking. Two concurrent cancels
+  dedup only if their `findRefund` reads agree; a refund landing between the two
+  reads gives them different keys and different amounts, and only Stripe's
+  charge-amount cap bounds the result — so below the full tier it is a real
+  over-refund. The refund is deliberately sent _before_ the guarded row update
+  (#399), so nothing else serialises the two.
+- The suffix does **not** move when the refund _fails_ (nothing landed, so
+  `alreadyRefundedCents` stays), which is precisely the cached-failure case D36
+  is about. The in-code comment claims otherwise; a transient refusal still
+  locks the booking's refund for 24h.
+- `refundCents` is still time-tiered on the cancel path, so a first attempt
+  above the cutoff and a retry below it share a key with different amounts →
+  `idempotency_error`. Unfixed, pre-VEN-477.
 
-**Why:** the refund is deliberately sent _before_ the guarded row update (#399),
-so the key is the only thing standing between two concurrent cancels and two
-refunds. That design is right; the key being narrower than the request is the
-gap.
+**How to apply:** when a refund's parameters change, the key must change with
+them; when the key gains state, check that concurrent callers still derive the
+same one. Related: [[refund-before-row-move-can-double-refund]],
+[[refund-proportionality-is-now-ours-to-state]].
 
-**How to apply:** when a refund's parameters change — flags, amount derivation,
-reason — the key has to change with them, or the first 24 hours after deploy
-answer an opaque 400 on the money path. Version the key alongside the policy.
-Related: the >24h direction is the opposite failure, see
-[[refund-before-row-move-can-double-refund]].
-
-**The reversal keys have the second half of the problem: a cached _failure_.**
-`stripe.ts:185` records the incident that put `attempt` into the transfer key —
-Stripe replays a refused response, log URL and all, for 24h, so a fixed key froze
-one blip into a day of stuck payouts. Every `reverseTransfer` key in the tree is
-still fixed per booking (`${keyPrefix}_${id}_reversal`, and VEN-424's
-`release_${id}_surplus`), and `balance_insufficient` on the connected account is
-the realistic refusal. Varying them costs nothing: `findTransfer().reversedCents`
-is the durable, expiry-free guard against a double reversal — which is exactly
-why `createTransfer` was allowed to vary. The test double
-(`testing/test-server.ts:690`) replays a reversal on the key alone and models no
-cached failure, so no suite can go red for this; `createTransfer`'s
-`failedTransferKeys` branch beside it is the shape to copy.
+**The reversal keys keep the cached-failure half.** Every `reverseTransfer` key
+is fixed per booking (`${keyPrefix}_${id}_reversal`, VEN-424's
+`release_${id}_surplus`); `balance_insufficient` is the realistic refusal and
+`findTransfer().reversedCents` is the expiry-free guard that makes varying them
+safe. The test double replays a reversal on the key alone and models no cached
+failure, so no suite can go red for it; `createTransfer`'s `failedTransferKeys`
+branch is the shape to copy.

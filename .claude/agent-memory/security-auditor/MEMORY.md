@@ -53,7 +53,7 @@
 - [Availability floors are one day wider than UTC](availability-date-floors-are-universally-past.md) — the DAO's `booked` predicates protect history, not the floor
 - [Booking reads gate on two separate paths](booking-reads-gate-on-two-separate-paths.md) — `reconcileBooking`'s short-circuit leaked the fee split until #387
 - [The reply-window cap lives in five places](reply-deadline-cap-must-match-accept-guard.md) — VEN-433 gave `expires_at` a second meaning with no backfill
-- [Refund idempotency keys are narrower than their params](refund-idempotency-key-is-parameter-sensitive.md) — the amount drifts, Stripe refuses the retry
+- [Refund idempotency keys carry the already-refunded total](refund-idempotency-key-is-parameter-sensitive.md) — VEN-477: dedup holds only while two racers read the same Stripe state
 - [A refund with no durable record can happen twice](refund-before-row-move-can-double-refund.md) — past 24h a retry debits the vendor again
 - [D31's proportional split is now our arithmetic](refund-proportionality-is-now-ours-to-state.md) — the pre-release cancel path states nobody's retained half
 - [The payout sweep is a second money mover](payout-sweep-is-a-second-money-mover.md) — it takes a row lock the cancel and dispute paths do not

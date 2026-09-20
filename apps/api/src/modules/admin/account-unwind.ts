@@ -1,4 +1,8 @@
-import { isLegacyDestinationPayout, unwindFloorDate } from '@vendor-marketplace/shared';
+import {
+  formatPrice,
+  isLegacyDestinationPayout,
+  unwindFloorDate,
+} from '@vendor-marketplace/shared';
 import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { refundFailedAlert } from '../operator-alerts/operator-alerts.service.js';
@@ -103,10 +107,39 @@ export interface AccountUnwindCopy {
   readonly refundKeyPrefix: string;
   /** Written to `bookings.cancellation_reason`. */
   readonly cancellationReason: string;
-  readonly customerRefunded: string;
+  /** The word the refunded sentences use; see `refundedBody` (VEN-477). */
+  readonly state: 'suspended' | 'closed';
   readonly customerUnpaid: string;
-  readonly vendorRefunded: string;
   readonly vendorUnpaid: string;
+}
+
+/**
+ * The refunded sentence for one reader, stating the amount actually returned.
+ *
+ * "In full" only when `refundedCents` is the whole charge (VEN-477): the
+ * sentence was chosen by whether a refund existed and never by how much it was.
+ */
+export function refundedBody(
+  copy: AccountUnwindCopy,
+  reader: 'customer' | 'vendor',
+  refundedCents: number,
+  totalCents: number,
+): string {
+  const inFull = refundedCents === totalCents;
+
+  if (reader === 'customer') {
+    const outcome = inFull
+      ? 'Your payment has been refunded in full.'
+      : `${formatPrice(refundedCents)} of your ${formatPrice(totalCents)} payment has been refunded.`;
+
+    return `The other party's account was ${copy.state}. ${outcome}`;
+  }
+
+  const outcome = inFull
+    ? 'Their payment has been refunded in full'
+    : `${formatPrice(refundedCents)} of their ${formatPrice(totalCents)} payment has been refunded`;
+
+  return `The customer's account was ${copy.state} and the booking was cancelled. ${outcome} from the platform balance, and no payout will be made to you for this booking.`;
 }
 
 /**
@@ -131,9 +164,8 @@ function unwindCopy(
     initiatedBy,
     refundKeyPrefix,
     cancellationReason: `The other party's account was ${state}`,
-    customerRefunded: `The other party's account was ${state}. Your payment has been refunded in full.`,
+    state,
     customerUnpaid: `The other party's account was ${state}. Nothing was charged for this booking.`,
-    vendorRefunded: `The customer's account was ${state} and the booking was cancelled. Their payment has been refunded in full from the platform balance, and no payout will be made to you for this booking.`,
     vendorUnpaid: `The customer's account was ${state} and the booking was cancelled. Nothing had been charged for it.`,
   };
 }
@@ -288,46 +320,42 @@ export async function unwindAccountBookings(
          * otherwise refund every one of them twice (D31).
          */
         const alreadyRefunded = await context.stripe.findRefund(booking.stripePaymentIntentId);
+        const alreadyRefundedCents = alreadyRefunded?.amountCents ?? 0;
+        const remainingCents = booking.totalAmountCents - alreadyRefundedCents;
 
-        if (!alreadyRefunded) {
+        /*
+         * The customer is owed the whole charge, so what was already returned —
+         * by an earlier attempt, a customer cancellation whose row never moved,
+         * or a goodwill refund made in the Stripe Dashboard — is subtracted, not
+         * mistaken for the answer (VEN-477). Reading a $10 refund as "the
+         * refund" left $490 unreturned on a booking then closed as refunded.
+         */
+        refundedCents = alreadyRefundedCents;
+
+        if (remainingCents > 0) {
           const refund = await context.stripe.createRefund({
             paymentIntentId: booking.stripePaymentIntentId,
-            amountCents: booking.totalAmountCents,
+            amountCents: remainingCents,
             /*
              * One refund per booking, however many times the account is
              * unwound. The caller's own precondition check is a read and not a
              * lock, so two concurrent calls both reach this loop; without a key
-             * they would both refund.
-             *
-             * Versioned with the request: Stripe refuses a key replayed with
-             * different parameters. D31 changed them once, and #423 changed
-             * them again — the refund now carries neither `reverse_transfer`
-             * nor `refund_application_fee`, because the charge is a plain one
-             * into the platform balance. A ban re-issued within 24 hours of one
-             * attempted under the old params would otherwise be refused with an
-             * `idempotency_error` rather than refunded.
+             * they would both refund. The key is not versioned by what was
+             * already returned: racers that read different states must share it
+             * so Stripe refuses the second rather than paying twice (VEN-477).
              *
              * There is deliberately no transfer reversal on this path. It only
              * ever unwinds bookings whose event date is still ahead
              * (`findConfirmedBookingsToUnwind`, from `unwindFloorDate`), and a payout is not released
              * until well after the event — so this loop cannot reach a booking
              * that has been transferred, and the money is all still Orla's to
-             * give back.
+             * give back. The refund carries neither `reverse_transfer` nor
+             * `refund_application_fee` (#423).
              */
             idempotencyKey: `${copy.refundKeyPrefix}:${booking.id}`,
           });
 
-          refundedCents = refund.amountCents;
-        } else {
-          /*
-           * Read off the money that moved, not off the amount this call asked
-           * for. They agree on every first attempt and part company on the one
-           * that matters: a booking the customer had already half-refunded
-           * through their own cancellation, whose row never moved, is found
-           * here — and recording `totalAmountCents` for it would tell them
-           * they got everything back when half of it never left Stripe.
-           */
-          refundedCents = alreadyRefunded.amountCents;
+          refundedCents += refund.amountCents;
         }
 
         refundsIssued += 1;
@@ -415,10 +443,10 @@ export async function unwindAccountBookings(
           const body =
             recipient === booking.customerId
               ? refunded
-                ? copy.customerRefunded
+                ? refundedBody(copy, 'customer', refundedCents ?? 0, booking.totalAmountCents)
                 : copy.customerUnpaid
               : refunded
-                ? copy.vendorRefunded
+                ? refundedBody(copy, 'vendor', refundedCents ?? 0, booking.totalAmountCents)
                 : copy.vendorUnpaid;
 
           const stored = await insertNotification(context.db, {

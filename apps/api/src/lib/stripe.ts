@@ -146,7 +146,7 @@ export interface StripeConnectGateway {
    * the retry finds the money already sent and finishes the cancellation
    * instead of paying it out again.
    */
-  findRefund(paymentIntentId: string): Promise<{ refundId: string; amountCents: number } | null>;
+  findRefund(paymentIntentId: string): Promise<FoundRefunds | null>;
 
   /**
    * Reads a refund back (VEN-430). A refund accepted as `pending` can move to
@@ -155,6 +155,18 @@ export interface StripeConnectGateway {
    * not trusted.
    */
   retrieveRefund(refundId: string): Promise<StripeRefundSnapshot>;
+}
+
+/**
+ * Everything already on its way back to the customer for one payment intent.
+ *
+ * A sum, not the first refund found (VEN-477): a Dashboard goodwill refund of
+ * $10 on a $500 charge is a refund, and reading it as "the refund" made the
+ * unwind and the cancel skip the $490 still owed.
+ */
+export interface FoundRefunds {
+  refundIds: string[];
+  amountCents: number;
 }
 
 export interface StripeRefundSnapshot {
@@ -1022,23 +1034,41 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
     },
 
     async findRefund(paymentIntentId) {
-      const { data } = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 10 });
-      /*
-       * Only a refund that is on its way to the customer counts as one (#415).
-       *
-       * `refunds.list` returns `failed` and `canceled` refunds too, with
-       * `amount` populated — a failed refund puts the money back in the
-       * platform balance, not in the customer's account. Reading one of those
-       * as "already refunded" used only to skip a retry; it is now written to
-       * `bookings.refund_amount_cents` and rendered to both parties as money
-       * returned, so a bank rejection would have the product state a refund
-       * that never landed.
-       */
-      const refund = data.find((candidate) => isUsableRefundStatus(candidate.status));
+      const refunds: Stripe.Refund[] = [];
 
-      return refund ? { refundId: refund.id, amountCents: refund.amount } : null;
+      // Sums every page: a total read off the first ten would under-count.
+      for await (const refund of stripe.refunds.list({
+        payment_intent: paymentIntentId,
+        limit: 100,
+      })) {
+        refunds.push(refund);
+      }
+
+      return sumUsableRefunds(refunds);
     },
   };
+}
+
+/**
+ * The refunds that count, added up, or `null` when none does.
+ *
+ * Only a refund that is on its way to the customer counts (#415).
+ * `refunds.list` returns `failed` and `canceled` refunds too, with `amount`
+ * populated — a failed refund puts the money back in the platform balance, not
+ * in the customer's account, and the sum is written to
+ * `bookings.refund_amount_cents` and shown to both parties as money returned.
+ */
+export function sumUsableRefunds(
+  refunds: readonly { id: string; amount: number; status: string | null }[],
+): FoundRefunds | null {
+  const usable = refunds.filter((candidate) => isUsableRefundStatus(candidate.status));
+
+  return usable.length === 0
+    ? null
+    : {
+        refundIds: usable.map((refund) => refund.id),
+        amountCents: usable.reduce((total, refund) => total + refund.amount, 0),
+      };
 }
 
 function toSnapshot(intent: Stripe.PaymentIntent): PaymentIntentSnapshot {

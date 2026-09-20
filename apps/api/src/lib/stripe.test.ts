@@ -13,6 +13,7 @@ import {
   refusedTransferParams,
   reversalAmountCents,
   reversalParams,
+  sumUsableRefunds,
   transferGroupFor,
   transferParams,
   type StripeConnectGateway,
@@ -73,6 +74,24 @@ describe('refundParams', () => {
    */
   it('ships a request Stripe accepts', () => {
     expect(refusedRefundParams(refundParams(INPUT))).toBeNull();
+  });
+});
+
+describe('sumUsableRefunds', () => {
+  it('sums usable refunds and ignores failed and canceled ones', () => {
+    expect(
+      sumUsableRefunds([
+        { id: 're_1', amount: 1_000, status: 'succeeded' },
+        { id: 're_2', amount: 20_000, status: 'failed' },
+        { id: 're_3', amount: 30_000, status: 'canceled' },
+        { id: 're_4', amount: 4_000, status: 'pending' },
+      ]),
+    ).toEqual({ refundIds: ['re_1', 're_4'], amountCents: 5_000 });
+  });
+
+  it('is null when no refund is usable', () => {
+    expect(sumUsableRefunds([])).toBeNull();
+    expect(sumUsableRefunds([{ id: 're_1', amount: 500, status: 'failed' }])).toBeNull();
   });
 });
 

@@ -753,14 +753,15 @@ describe('admin routes', () => {
      * writing `totalAmountCents` for it would tell them on their own screen
      * that they got everything back when half of it never left Stripe.
      */
-    it('records the refund Stripe already sent, not the full charge', async () => {
+    it('tops up a refund Stripe already sent to the whole charge and says so', async () => {
       await signIn(ADMIN, true);
       const customerId = await signIn(CUSTOMER);
       const vendor = await createVendorProfile({ isPublished: true });
       await createFutureBooking(customerId, vendor.profileId);
 
-      /* Half of the $1,200 charge, as a late customer cancellation would have
-         sent under D3's second tier, on a row that then failed to move. */
+      /* VEN-477: a $600 refund made elsewhere on the $1,200 charge, on a row
+         that never moved. It used to be read as the whole answer, leaving $600
+         unreturned on a booking closed as refunded in full. */
       harness.stripe.refunds.push({
         paymentIntentId: 'pi_test_ban',
         amountCents: 60_000,
@@ -776,13 +777,51 @@ describe('admin routes', () => {
         headers: bearer(ADMIN),
       });
 
+      expect(harness.stripe.refunds).toHaveLength(2);
+      expect(harness.stripe.refunds[1]).toMatchObject({ amountCents: 60_000 });
       const [booking] = await harness.database.db.select().from(bookings);
       expect(booking).toMatchObject({
         status: 'cancelled',
         cancelledBy: 'admin',
         totalAmountCents: 120_000,
-        refundAmountCents: 60_000,
+        refundAmountCents: 120_000,
+        vendorPayoutCents: 0,
       });
+      const [told] = await harness.database.db
+        .select({ body: notifications.body })
+        .from(notifications)
+        .where(eq(notifications.userId, customerId));
+      expect(told?.body).toBe(
+        "The other party's account was suspended. Your payment has been refunded in full.",
+      );
+    });
+
+    /* VEN-477 acceptance 2: the remainder is refused, so nothing is closed as
+       refunded and the failure is counted. */
+    it('does not cancel a booking whose remainder refund fails', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      await createFutureBooking(customerId, vendor.profileId);
+      harness.stripe.refunds.push({
+        paymentIntentId: 'pi_test_ban',
+        amountCents: 1_000,
+        reason: undefined,
+        idempotencyKey: undefined,
+        reverseTransfer: false,
+        refundApplicationFee: false,
+      });
+      harness.stripe.refundsToRefuse.add('pi_test_ban');
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/users/${vendor.userId}/ban`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.json()).toMatchObject({ refundsFailed: 1, bookingsCancelled: 0 });
+      const [booking] = await harness.database.db.select().from(bookings);
+      expect(booking).toMatchObject({ status: 'confirmed', refundAmountCents: null });
     });
 
     /*
