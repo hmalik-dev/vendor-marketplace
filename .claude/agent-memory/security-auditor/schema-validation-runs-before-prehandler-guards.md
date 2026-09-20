@@ -28,9 +28,14 @@ POST/PUT/PATCH, `PUT /vendor/availability`, `/tags/suggest`,
 Guard coverage, terms gate and role sets all unchanged; handlers still re-assert
 with `assertRole`/`authenticated`.
 
-Still on `preHandler` **on purpose**: routes with no body (`DELETE
-/vendor/portfolio/:itemId`), and `GET /booking-requests?status=` — its enum is
-already public. Same for every `GET`/`DELETE` in `modules/admin/admin.routes.ts`
+**VEN-490 (2026-09-20)** took the two bodyless holdouts: `DELETE
+/vendor/portfolio/:itemId` and `GET /customers/me/reviews`. A bodyless route is
+still reachable with `content-type: application/json` and an empty payload, so
+the parser's `FST_ERR_CTP_EMPTY_JSON_BODY` 400 preceded the old `preHandler`
+guard; params/query validation did too.
+
+Still on `preHandler` **on purpose**: `GET /booking-requests?status=` — its enum
+is already public. Same for every `GET`/`DELETE` in `modules/admin/admin.routes.ts`
 (its four mutating routes do use `requireRoleBeforeValidation('admin')`): an
 anonymous `GET /admin/vendors?status=bogus` still answers
 `400 {"details":[{"params":{"values":[...]}}]}` where a well-formed request

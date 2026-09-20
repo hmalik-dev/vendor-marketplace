@@ -8,14 +8,20 @@ import { bearer, createTestHarness, type TestHarness } from '../testing/test-ser
  * guard in `onRequest` instead (`requireRoleBeforeValidation`).
  *
  * The body is `[]`: no object schema accepts it, so a route that validated
- * first would answer 400 to all three callers.
+ * first would answer 400 to all three callers. Routes with no body schema are
+ * malformed another way: a JSON content type with an empty body (the parser's
+ * own 400), a non-uuid param, or an out-of-range query string.
  */
 const ID = '11111111-1111-4111-8111-111111111111';
 
 interface GuardedRoute {
-  readonly method: 'POST' | 'PUT' | 'PATCH';
+  readonly method: 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'GET';
   readonly url: string;
   readonly role: 'vendor' | 'customer';
+  /** Sent as the JSON body. Omitted: `[]`. `''`: an empty JSON body. `undefined`: no body. */
+  readonly payload?: unknown;
+  /** False when the right role's 400 is the parser's, which carries no schema details. */
+  readonly schemaDetails?: false;
 }
 
 const ROUTES: readonly GuardedRoute[] = [
@@ -32,6 +38,20 @@ const ROUTES: readonly GuardedRoute[] = [
   { method: 'POST', url: `/booking-requests/${ID}/quote`, role: 'vendor' },
   { method: 'POST', url: '/booking-requests', role: 'customer' },
   { method: 'POST', url: '/conversations', role: 'customer' },
+  { method: 'DELETE', url: '/vendor/portfolio/not-a-uuid', role: 'vendor', payload: undefined },
+  {
+    method: 'DELETE',
+    url: `/vendor/portfolio/${ID}`,
+    role: 'vendor',
+    payload: '',
+    schemaDetails: false,
+  },
+  {
+    method: 'GET',
+    url: '/customers/me/reviews?page=0&pageSize=abc',
+    role: 'customer',
+    payload: undefined,
+  },
 ];
 
 describe('role guards run before body validation', () => {
@@ -63,8 +83,13 @@ describe('role guards run before body validation', () => {
     return harness.app.inject({
       method: route.method,
       url: route.url,
-      ...(user ? { headers: bearer(user) } : {}),
-      payload: [],
+      headers: {
+        ...(route.payload === undefined && 'payload' in route
+          ? {}
+          : { 'content-type': 'application/json' }),
+        ...(user ? bearer(user) : {}),
+      },
+      ...('payload' in route ? { payload: route.payload as string } : { payload: [] }),
     });
   }
 
@@ -88,6 +113,7 @@ describe('role guards run before body validation', () => {
 
       expect(response.statusCode).toBe(400);
       expect(response.json()).toMatchObject({ statusCode: 400, error: 'VALIDATION_ERROR' });
+      if (route.schemaDetails === false) return;
       expect(response.json().details).toEqual(expect.any(Array));
       expect(response.json().details.length).toBeGreaterThan(0);
     });

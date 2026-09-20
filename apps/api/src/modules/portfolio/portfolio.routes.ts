@@ -82,7 +82,7 @@ export const portfolioRoutes: FastifyPluginAsyncZod = async (app) => {
   app.delete(
     `${PORTFOLIO_PATH}/:itemId`,
     {
-      preHandler: vendorOnly,
+      onRequest: vendorOnlyBeforeValidation,
       schema: { params: portfolioParamsSchema, response: { 204: z.null() } },
     },
     async (request, reply) => {
