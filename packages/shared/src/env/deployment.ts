@@ -225,3 +225,32 @@ export const PLATFORM_ENV_KEYS: readonly string[] = [
     ...PLATFORMS.flatMap((candidate) => [...candidate.markers, ...candidate.hosts]),
   ]),
 ];
+
+/** The tiers `DEPLOY_ENV` names. */
+export const DEPLOY_ENVS = ['local', 'staging', 'production'] as const;
+
+export type DeployEnv = (typeof DEPLOY_ENVS)[number];
+
+/**
+ * Whether a Stripe key is live-mode. The prefix is the only place Stripe puts
+ * the mode, and it is the half of the pairing this repository can check: a
+ * `whsec_` signing secret carries none.
+ */
+export function isLiveStripeKey(key: string): boolean {
+  return key.startsWith('sk_live_') || key.startsWith('pk_live_');
+}
+
+/**
+ * The refusal for a live Stripe key outside production, or `null` when the
+ * pair agrees. One sentence for both keys, so the API's boot guard, the web
+ * build and preflight cannot word — or decide — it differently.
+ */
+export function liveKeyOutsideProduction(
+  keyName: string,
+  key: string | undefined,
+  deployEnv: string | undefined,
+): string | null {
+  return key !== undefined && isLiveStripeKey(key) && deployEnv !== 'production'
+    ? `${keyName} is live-mode but DEPLOY_ENV is ${deployEnv ?? 'unset'}; only production may hold a live key`
+    : null;
+}

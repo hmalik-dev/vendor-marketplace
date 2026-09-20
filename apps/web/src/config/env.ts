@@ -2,6 +2,8 @@ import {
   deploymentOrigin,
   deploymentPlatform,
   isDeployedBuild,
+  isLiveStripeKey,
+  liveKeyOutsideProduction,
   registrySchemaShape,
 } from '@vendor-marketplace/shared/env';
 import { z } from 'zod';
@@ -62,7 +64,32 @@ export function assertWebEnv(source: NodeJS.ProcessEnv = process.env): WebEnv {
     );
   }
 
-  return result.data;
+  return assertStripeMode(result.data, source);
+}
+
+/**
+ * A live key needs `DEPLOY_ENV=production`, and the two Stripe keys must be the
+ * same mode wherever a build can see both (CI, a deploy preflight): a live
+ * secret beside a test publishable key charges real cards through a checkout
+ * that was never meant to. Only production-ness is enforced, never the reverse —
+ * the friends beta runs as production on test keys.
+ */
+function assertStripeMode(env: WebEnv, source: NodeJS.ProcessEnv): WebEnv {
+  const secret = source.STRIPE_SECRET_KEY?.trim() || undefined;
+  const publishable = env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  const problems = [
+    liveKeyOutsideProduction('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', publishable, env.DEPLOY_ENV),
+    liveKeyOutsideProduction('STRIPE_SECRET_KEY', secret, env.DEPLOY_ENV),
+    secret !== undefined && isLiveStripeKey(secret) !== isLiveStripeKey(publishable)
+      ? 'STRIPE_SECRET_KEY and NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY are in different Stripe modes'
+      : null,
+  ].filter((problem): problem is string => problem !== null);
+
+  if (problems.length > 0) {
+    throw new Error(`Invalid web environment configuration:\n  ${problems.join('\n  ')}`);
+  }
+
+  return env;
 }
 
 /**

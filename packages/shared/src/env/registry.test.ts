@@ -361,6 +361,7 @@ describe('registrySchemaShape', () => {
   it('lists the keys the web build reads for a capability', () => {
     expect(registryKeys({ consumer: 'web', capabilities: ['core'] })).toEqual([
       'NODE_ENV',
+      'DEPLOY_ENV',
       'WEB_URL',
       'API_URL',
       'CSP_ENFORCE',
@@ -426,6 +427,7 @@ describe('registrySchemaShape', () => {
      * deploy workflow refuses to start without them.
      */
     const EXCUSED_ON_DEPLOYED = [
+      'EMAIL_SINK_ADDRESS',
       'RESEND_WEBHOOK_SECRET',
       'STRIPE_CONNECT_WEBHOOK_SECRET',
       'SENTRY_AUTH_TOKEN',

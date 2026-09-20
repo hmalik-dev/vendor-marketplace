@@ -26,6 +26,7 @@ const CREDENTIAL_ROWS: ReadonlyArray<readonly [string, string]> = [
 
 const DEPLOYED: Record<string, string> = {
   NODE_ENV: 'production',
+  DEPLOY_ENV: 'production',
   NEON_AUTH_BASE_URL: 'https://ep-x.neonauth.example.invalid/neondb/auth',
   EMAIL_FROM: 'Orla <noreply@orla.example.invalid>',
   STORAGE_ENDPOINT: 'https://br-x.storage.c-4.us-east-2.aws.neon.tech',
@@ -72,7 +73,12 @@ describe('the boot guard list', () => {
   });
 
   it('runs every guard and reports each refusal', () => {
-    expect(BOOT_GUARDS.map((guard) => guard.name)).toEqual([GUARD]);
+    expect(BOOT_GUARDS.map((guard) => guard.name)).toEqual([
+      GUARD,
+      'live Stripe key requires DEPLOY_ENV=production',
+      'a hosted platform cannot declare DEPLOY_ENV=local',
+      'staging requires an email sink',
+    ]);
     expect(() =>
       runBootGuards({} as never, {}, [
         { name: 'a', check: () => 'no' },
@@ -80,6 +86,61 @@ describe('the boot guard list', () => {
         { name: 'c', check: () => 'nope' },
       ]),
     ).toThrow('API refused to start:\n  a: no\n  c: nope');
+  });
+});
+
+describe('the DEPLOY_ENV guards', () => {
+  const HTTPS = { WEB_URL: 'https://orla.example.invalid' };
+  const TEST_KEY = fake('sk', 'test', 'FAKEabcdefghijklmn9004');
+
+  it.each(['staging', 'local'])('refuses a live Stripe key with DEPLOY_ENV=%s', (tier) => {
+    stubDeployed({ ...HTTPS, DEPLOY_ENV: tier, EMAIL_SINK_ADDRESS: 'sink@orla.example.invalid' });
+
+    expect(() => bootEnv()).toThrow(
+      `live Stripe key requires DEPLOY_ENV=production: STRIPE_SECRET_KEY is live-mode but DEPLOY_ENV is ${tier}; only production may hold a live key`,
+    );
+  });
+
+  it('refuses staging without EMAIL_SINK_ADDRESS', () => {
+    stubDeployed({ ...HTTPS, DEPLOY_ENV: 'staging', STRIPE_SECRET_KEY: TEST_KEY });
+
+    expect(() => bootEnv()).toThrow(
+      'staging requires an email sink: DEPLOY_ENV is staging but EMAIL_SINK_ADDRESS is not set',
+    );
+  });
+
+  it('refuses a deployed runtime that never declared its tier, naming DEPLOY_ENV', () => {
+    stubDeployed({ ...HTTPS });
+    const { DEPLOY_ENV: _tier, ...source } = process.env;
+
+    expect(() => bootEnv(source)).toThrow(/DEPLOY_ENV is required on a deployment/);
+  });
+
+  it('refuses a hosted platform that declares DEPLOY_ENV=local, but not a local container', () => {
+    stubDeployed({ ...HTTPS, DEPLOY_ENV: 'local', STRIPE_SECRET_KEY: TEST_KEY });
+    expect(() => bootEnv()).not.toThrow();
+
+    vi.stubEnv('RENDER', 'true');
+    expect(() => bootEnv()).toThrow(
+      'a hosted platform cannot declare DEPLOY_ENV=local: this process runs on a hosting platform but DEPLOY_ENV is local',
+    );
+  });
+
+  it('boots production on a test-mode key, which the friends beta runs on', () => {
+    stubDeployed({ ...HTTPS, STRIPE_SECRET_KEY: TEST_KEY });
+
+    expect(bootEnv().DEPLOY_ENV).toBe('production');
+  });
+
+  it('boots staging with a sink and a test-mode key', () => {
+    stubDeployed({
+      ...HTTPS,
+      DEPLOY_ENV: 'staging',
+      EMAIL_SINK_ADDRESS: 'sink@orla.example.invalid',
+      STRIPE_SECRET_KEY: TEST_KEY,
+    });
+
+    expect(bootEnv().EMAIL_SINK_ADDRESS).toBe('sink@orla.example.invalid');
   });
 });
 

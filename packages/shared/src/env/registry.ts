@@ -223,6 +223,32 @@ export const ENV_REGISTRY = [
     setup: APP_SETUP,
   },
   {
+    /*
+     * Which tier this process is: the one fact `NODE_ENV` and the platform
+     * markers cannot carry, because a deployed staging and production look
+     * identical to both. `per-environment` with a `local` default is what makes
+     * the law fall out of the existing machinery: a laptop needs nothing, and a
+     * deployed target refuses to boot without an explicit answer rather than
+     * quietly claiming to be production (or anything else).
+     *
+     * Explicit rather than derived from `VERCEL_ENV`: the API host is not
+     * Vercel, and a derived value is the silent fallback this row exists to
+     * remove. Everything that must behave differently outside production — the
+     * email sink, the live-key boot guard, the Sentry environment — reads this.
+     */
+    key: 'DEPLOY_ENV',
+    capability: 'core',
+    audience: 'server',
+    consumers: ['api', 'web', 'tooling'],
+    environments: 'per-environment',
+    shape: /^(local|staging|production)$/,
+    productionShape: /^production$/,
+    defaultValue: 'local',
+    description:
+      'The tier this process serves: local, staging or production. Required on every deployment; only production may hold a live Stripe key or email a real recipient.',
+    setup: APP_SETUP,
+  },
+  {
     key: 'WEB_URL',
     capability: 'core',
     audience: 'server',
@@ -663,6 +689,25 @@ export const ENV_REGISTRY = [
     description:
       'svix signing secret for POST /webhooks/resend. Optional: without it delivery events are refused and only send attempts are recorded.',
     setup: RESEND_WEBHOOK_SETUP,
+  },
+  {
+    /*
+     * The one inbox every message lands in outside production. Required when
+     * `DEPLOY_ENV=staging` (the API's boot guard enforces that, since the
+     * schema cannot relate two rows) and unused in production, so absence is
+     * correct on every target. Empty is absent, as for every optional row.
+     */
+    key: 'EMAIL_SINK_ADDRESS',
+    capability: 'email',
+    audience: 'server',
+    consumers: ['api'],
+    environments: 'per-environment',
+    optionalFor: ['baseline', 'local', 'production', 'deployed'],
+    shape: /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/,
+    placeholder: '<sink-address>',
+    description:
+      'Where every email is delivered when DEPLOY_ENV is not production, with the intended recipient in the subject. Required for staging; unused in production.',
+    setup: RESEND_SETUP,
   },
   {
     key: 'EMAIL_FROM',

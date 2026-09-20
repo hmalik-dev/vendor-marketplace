@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createResendGateway, EMAIL_SEND_TIMEOUT_MS } from './email.js';
+import { createEmailGateway, createResendGateway, EMAIL_SEND_TIMEOUT_MS } from './email.js';
 
 /**
  * The gateway had no test at all, which is how it carried no deadline for as
@@ -98,5 +98,88 @@ describe('createResendGateway', () => {
     stubFetch(new Response('{"message":"reader@example.test is not allowed"}', { status: 422 }));
 
     await expect(gateway().send(message)).rejects.toThrow('Resend refused the send (422)');
+  });
+});
+
+describe('createEmailGateway', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const SINK = 'sink@orla.example.test';
+  const message = {
+    to: 'real@example.com',
+    subject: 'A booking is confirmed',
+    html: '<p>hi</p>',
+    text: 'hi',
+    replyTo: 'visitor@example.test',
+    idempotencyKey: '11111111-1111-4111-8111-111111111111',
+  };
+
+  function sentBodies(): Record<string, unknown>[] {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal('fetch', async (_url: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+      return new Response('{"id":"abc"}', { status: 200 });
+    });
+    return bodies;
+  }
+
+  const log = { info: vi.fn() };
+  const gateway = (
+    deployEnv: string,
+    sinkAddress?: string,
+  ): ReturnType<typeof createEmailGateway> =>
+    createEmailGateway({
+      apiKey: 'key',
+      from: 'Orla <hi@example.test>',
+      deployEnv,
+      sinkAddress,
+      log,
+    });
+
+  it('staging delivers to the sink only, with the intended recipient in the subject and both bodies', async () => {
+    const bodies = sentBodies();
+
+    await gateway('staging', SINK).send(message);
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]?.to).toBe(SINK);
+    expect(bodies[0]?.subject).toBe('[to: real@example.com] A booking is confirmed');
+    expect(bodies[0]?.html).toBe(
+      '<p><strong>Intended recipient: real@example.com</strong></p><p>hi</p>',
+    );
+    expect(bodies[0]?.text).toBe('Intended recipient: real@example.com\n\nhi');
+    expect(bodies[0]?.reply_to).toBe('visitor@example.test');
+  });
+
+  it('a local process with a real key and a sink is sunk too, never sent to the seeded address', async () => {
+    const bodies = sentBodies();
+
+    await gateway('local', SINK).send(message);
+
+    expect(bodies.map((body) => body.to)).toEqual([SINK]);
+  });
+
+  it('production passes the message through unchanged', async () => {
+    const bodies = sentBodies();
+
+    await gateway('production', SINK).send(message);
+
+    expect(bodies[0]?.to).toBe('real@example.com');
+    expect(bodies[0]?.subject).toBe('A booking is confirmed');
+    expect(bodies[0]?.html).toBe('<p>hi</p>');
+  });
+
+  it('a non-production process with no sink delivers nothing and logs without the recipient', async () => {
+    const bodies = sentBodies();
+
+    await expect(gateway('local').send(message)).resolves.toEqual({ providerMessageId: null });
+
+    expect(bodies).toHaveLength(0);
+    expect(log.info).toHaveBeenCalledWith(
+      { idempotencyKey: message.idempotencyKey },
+      'email not delivered outside production',
+    );
   });
 });

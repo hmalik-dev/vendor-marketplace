@@ -14,6 +14,8 @@
  * directly.
  */
 
+import { escapeHtml } from './html-escape.js';
+
 const RESEND_API = 'https://api.resend.com/emails';
 
 /**
@@ -169,4 +171,69 @@ async function readMessageId(response: Response): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Delivers every message to one fixed address, keeping the intended recipient in
+ * the subject and at the top of both bodies.
+ *
+ * What makes a non-production tier safe to seed with real-looking addresses:
+ * the recipient the database holds is *recorded* in what is sent and never
+ * *delivered to*. The original is never lost, because a tester still needs to
+ * see who a message was for.
+ */
+export function withEmailSink(gateway: EmailGateway, sinkAddress: string): EmailGateway {
+  return {
+    send: (message) =>
+      gateway.send({
+        ...message,
+        to: sinkAddress,
+        // `replyTo` is kept: it is the support form's visitor, and the sunk copy
+        // is only ever replied to by a tester who chose to.
+        subject: `[to: ${message.to}] ${message.subject}`,
+        html: `<p><strong>Intended recipient: ${escapeHtml(message.to)}</strong></p>${message.html}`,
+        text: `Intended recipient: ${message.to}\n\n${message.text}`,
+      }),
+  };
+}
+
+/**
+ * Accepts every message and delivers none: a non-production process with no
+ * sink address has nowhere safe to send. The recipient stays out of the log for
+ * the reason `createResendGateway` keeps it out of its errors.
+ */
+export function createLogOnlyGateway(log: { info(obj: object, msg: string): void }): EmailGateway {
+  return {
+    async send(message) {
+      log.info(
+        { idempotencyKey: message.idempotencyKey },
+        'email not delivered outside production',
+      );
+      return { providerMessageId: null };
+    },
+  };
+}
+
+export interface EmailGatewayOptions extends ResendOptions {
+  /** `DEPLOY_ENV`. Anything but `production` never reaches a real recipient. */
+  deployEnv: string;
+  /** `EMAIL_SINK_ADDRESS`. */
+  sinkAddress?: string | undefined;
+  log: Parameters<typeof createLogOnlyGateway>[0];
+}
+
+/** The gateway for a tier: Resend as-is in production, the sink or nothing elsewhere. */
+export function createEmailGateway({
+  deployEnv,
+  sinkAddress,
+  log,
+  ...resend
+}: EmailGatewayOptions): EmailGateway {
+  if (deployEnv === 'production') {
+    return createResendGateway(resend);
+  }
+
+  return sinkAddress === undefined
+    ? createLogOnlyGateway(log)
+    : withEmailSink(createResendGateway(resend), sinkAddress);
 }

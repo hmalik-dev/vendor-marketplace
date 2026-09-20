@@ -112,6 +112,7 @@ describe('assertWebEnv', () => {
       assertWebEnv({
         ...VALID,
         VERCEL: '1',
+        DEPLOY_ENV: 'production',
         WEB_URL: 'https://orla.test',
         API_URL: 'https://api.orla.test',
         NEXT_PUBLIC_API_URL: 'https://api.orla.test',
@@ -129,6 +130,7 @@ describe('assertWebEnv', () => {
     const deployed = {
       ...VALID,
       VERCEL: '1',
+      DEPLOY_ENV: 'production',
       WEB_URL: 'https://orla.test',
       API_URL: 'https://api.orla.test',
       NEXT_PUBLIC_API_URL: 'https://api.orla.test',
@@ -335,5 +337,42 @@ describe('servesOverTls', () => {
 
   it('does not refuse a laptop, which is the whole point of the change', () => {
     expect(() => servesOverTls(env({ WEB_URL: 'http://localhost:3033' }))).not.toThrow();
+  });
+});
+
+describe('assertWebEnv Stripe mode', () => {
+  const LIVE_PK = ['pk', 'live', '51Qabcdefghijklmnop'].join('_');
+  const LIVE_SK = ['sk', 'live', '51Qabcdefghijklmnop'].join('_');
+  const TEST_SK = ['sk', 'test', '51Qabcdefghijklmnop'].join('_');
+
+  it.each(['local', 'staging'])('refuses a live publishable key with DEPLOY_ENV=%s', (tier) => {
+    expect(() =>
+      assertWebEnv({ ...VALID, DEPLOY_ENV: tier, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: LIVE_PK }),
+    ).toThrow(
+      `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is live-mode but DEPLOY_ENV is ${tier}; only production may hold a live key`,
+    );
+  });
+
+  it('accepts a live publishable key for production, and a test key there too (the beta)', () => {
+    const production = { ...VALID, DEPLOY_ENV: 'production' };
+
+    expect(
+      assertWebEnv({ ...production, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: LIVE_PK })
+        .NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    ).toBe(LIVE_PK);
+    expect(assertWebEnv(production).DEPLOY_ENV).toBe('production');
+  });
+
+  it('refuses a live secret beside a test publishable key where both are visible', () => {
+    expect(() =>
+      assertWebEnv({ ...VALID, DEPLOY_ENV: 'production', STRIPE_SECRET_KEY: LIVE_SK }),
+    ).toThrow(
+      'STRIPE_SECRET_KEY and NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY are in different Stripe modes',
+    );
+    expect(assertWebEnv({ ...VALID, STRIPE_SECRET_KEY: TEST_SK }).DEPLOY_ENV).toBe('local');
+  });
+
+  it('refuses a deployed build with DEPLOY_ENV unset, naming it', () => {
+    expect(() => assertWebEnv({ ...VALID, VERCEL: '1' })).toThrow(/DEPLOY_ENV is required/);
   });
 });

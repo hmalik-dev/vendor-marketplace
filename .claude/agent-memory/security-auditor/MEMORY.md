@@ -2,6 +2,7 @@
 
 ## Environment, config and secrets
 
+- [`DEPLOY_ENV` is the only tier signal](deploy-env-is-the-only-tier-signal.md) — sink, live-key guard and Sentry env all fail closed; the sink rests on one gateway funnel, and Neon Auth mail is outside it
 - [Env schema target is a live-key trap](env-target-live-key-trap.md) — apps must pass `baseline`; `local` bricks the Vercel build
 - [The deployment gate fails open on an unnamed host](deployment-gate-detects-by-marker-and-fails-open.md) — no marker + no `NODE_ENV=production` sets the laptop value silently
 - [Credential fixtures assembled at runtime](credential-fixtures-assembled-at-runtime.md) — a PreToolUse hook blocks credential-shaped literals on any bash line

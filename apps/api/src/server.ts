@@ -375,6 +375,8 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(emailPlugin, {
     apiKey: env.RESEND_API_KEY,
     from: env.EMAIL_FROM,
+    deployEnv: env.DEPLOY_ENV,
+    sinkAddress: env.EMAIL_SINK_ADDRESS,
     ...(options.email ? { gateway: options.email } : {}),
   });
   await app.register(neonAuthPlugin, {

@@ -106,6 +106,7 @@ environment:
 
 | Variable                             | Value                                    |
 | ------------------------------------ | ---------------------------------------- |
+| `DEPLOY_ENV`                         | `staging`                                |
 | `NEXT_PUBLIC_API_URL`                | the Render service URL                   |
 | `API_URL`                            | the same Render service URL              |
 | `WEB_URL`                            | this project's own `*.vercel.app` origin |
