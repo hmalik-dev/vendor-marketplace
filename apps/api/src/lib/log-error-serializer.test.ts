@@ -1,7 +1,7 @@
 import { DrizzleQueryError } from 'drizzle-orm';
 import pino from 'pino';
 import { describe, expect, it } from 'vitest';
-import { redactLogRecord, serializeError } from './log-error-serializer.js';
+import { redactErrorValues, redactLogRecord, serializeError } from './log-error-serializer.js';
 
 /**
  * The sink, on its own. #445.
@@ -332,5 +332,91 @@ describe('the API error serialiser', () => {
     Object.defineProperty(failed, 'cause', { value: failed, configurable: true });
 
     expect(serialized(failed)).not.toContain(SENTINEL);
+  });
+
+  describe('a Postgres driver error that owns a non-configurable `parameters`', () => {
+    function postgresError(): Error {
+      const error = Object.assign(new Error('column "refund_state" does not exist'), {
+        severity: 'ERROR',
+        code: '42703',
+        detail: `Key (email)=(${SENTINEL}) is wrong.`,
+      });
+
+      Object.defineProperty(error, 'parameters', {
+        value: [SENTINEL],
+        enumerable: true,
+        configurable: false,
+      });
+
+      return error;
+    }
+
+    it('logs its message and SQLSTATE with no bound value', () => {
+      const record = serializeError(postgresError());
+
+      expect(record.message).toBe('column "refund_state" does not exist');
+      expect(record.code).toBe('42703');
+      // Only the redaction path produces these; the fallback carries none.
+      expect(record.stack).toContain('log-error-serializer.test.ts');
+      expect(record).toMatchObject({
+        severity: 'ERROR',
+        detail: '[redacted]',
+        parameters: '[redacted]',
+      });
+      expect(JSON.stringify(record)).not.toContain(SENTINEL);
+    });
+
+    it('survives a frozen source error', () => {
+      const frozen = Object.freeze(postgresError());
+
+      expect(serializeError(frozen).code).toBe('42703');
+      expect(serializeError(frozen)).toMatchObject({ parameters: '[redacted]' });
+      expect(JSON.stringify(serializeError(frozen))).not.toContain(SENTINEL);
+    });
+  });
+
+  it('falls back to the original message and code when redaction itself throws', () => {
+    const broken = Object.assign(new Error(`Failed query: ${STATEMENT}\nparams: ${SENTINEL}`), {
+      code: '22021',
+      query: STATEMENT,
+      params: [SENTINEL],
+    });
+
+    Object.defineProperty(broken, 'payload', {
+      enumerable: true,
+      get() {
+        throw new Error('getter exploded');
+      },
+    });
+
+    const record = serializeError(broken);
+
+    expect(record.message).toBe(`Failed query: ${STATEMENT}`);
+    expect(record.code).toBe('22021');
+    expect(record.type).toBe('Error');
+    expect(record.stack).toContain('log-error-serializer.test.ts');
+    expect(JSON.stringify(record)).not.toContain(SENTINEL);
+  });
+
+  it('holds the same fallback for a failure logged under another key and for Sentry', () => {
+    const broken = Object.assign(new Error(`Failed query: ${STATEMENT}\nparams: ${SENTINEL}`), {
+      code: '22021',
+      query: STATEMENT,
+      params: [SENTINEL],
+    });
+
+    Object.defineProperty(broken, 'payload', {
+      enumerable: true,
+      get() {
+        throw new Error('getter exploded');
+      },
+    });
+
+    const logged = redactLogRecord({ failure: broken });
+    const reported = redactErrorValues(broken);
+
+    expect(logged.failure).toMatchObject({ message: `Failed query: ${STATEMENT}`, code: '22021' });
+    expect(reported).toMatchObject({ message: `Failed query: ${STATEMENT}`, code: '22021' });
+    expect(JSON.stringify([logged, reported])).not.toContain(SENTINEL);
   });
 });
