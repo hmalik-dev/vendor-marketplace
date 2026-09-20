@@ -21,7 +21,7 @@ and every item below done.
 **Current state:** not launched. The deployment authenticates against a Neon Auth
 **development** branch and Stripe is in **test mode**, so `launch:check` fails
 on both today — correctly. `docs/demo.md` describes the showcase deployment,
-which is not a launch; `docs/credentials.md` is the credential runbook.
+which is not a launch.
 
 ---
 
@@ -73,7 +73,7 @@ which is not a launch; `docs/credentials.md` is the credential runbook.
 - [ ] **Restore drill.** Nightly encrypted off-platform backups exist (VEN-408);
       run the drill in `docs/runbook-restore.md` against the production backups
       once before launch, not only by reading the workflow.
-- [ ] **Rotate every credential touched during setup** (`docs/credentials.md`).
+- [ ] **Rotate every credential touched during setup**.
 
 ## Known limits to revisit before scaling out
 

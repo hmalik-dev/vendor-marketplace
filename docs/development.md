@@ -124,7 +124,7 @@ whole file and is reserved for suites that exist to hold credential shapes.
 
 **If the scan ever fires on a real value, rotate it.** A credential that reached
 a file you tried to commit should be treated as compromised, not as nearly
-leaked. Rotation runbooks are in [credentials.md](credentials.md).
+leaked. Rotate it at the provider.
 
 ## Running the API in a container
 
@@ -163,7 +163,6 @@ node node_modules/@vendor-marketplace/db/dist/scripts/migrate.js
 
 ## Other developer docs
 
-- [credentials.md](credentials.md) — inventory, rotation, setting a secret without handing it over
 - [pre-launch.md](pre-launch.md) — `pnpm launch:check` and what must be true before real users
 - [runbook-restore.md](runbook-restore.md) — nightly backups and restoring from one
-- [demo.md](demo.md) — the deferred hosted demo
+- [demo.md](demo.md) — the hosted demo for friends

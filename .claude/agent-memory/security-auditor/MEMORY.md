@@ -4,7 +4,6 @@
 
 - [Env schema target is a live-key trap](env-target-live-key-trap.md) — apps must pass `baseline`; `local` bricks the Vercel build
 - [The deployment gate fails open on an unnamed host](deployment-gate-detects-by-marker-and-fails-open.md) — no marker + no `NODE_ENV=production` sets the laptop value silently
-- [The Clerk endpoint guard string-matches localhost](webhook-endpoint-guard-string-matches-localhost.md) — `LOCALHOST`/`127.0.0.1`/`[::1]` pass where no origin is announced
 - [Credential fixtures assembled at runtime](credential-fixtures-assembled-at-runtime.md) — a PreToolUse hook blocks credential-shaped literals on any bash line
 - [.env.lane mode is not repaired on rewrite](lane-env-file-mode-not-repaired.md) — `mode` applies only on create; nothing asserts 0600
 - [TLS headers key on the build-time origin](tls-headers-key-on-build-time-origin.md) — `headers()` is baked at build; `deploymentOrigin` outranks WEB_URL
@@ -21,16 +20,12 @@
 - [Neon Auth cutover boundaries](neon-auth-cutover-boundaries.md) — verification sound, role double-narrowed; the unthrottled `/api/auth` proxy is the new surface
 - [Sign-up role is client-written, server-narrowed](sign-up-role-is-client-written-server-narrowed.md) — only `normalizeRole` refuses `admin`; the sign-up screen is chrome
 - [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` is null for a gated account; `requireClerkSubject` is the deliberate exception
-- [ClerkProvider carries no auth guarantee](clerk-provider-carries-no-auth-guarantee.md) — `assertWebEnv` is the sole gate on the inlined key
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` renders a booking amount with no `force-dynamic`
-- [The deployed origin shares the dev Clerk instance](deployed-origin-shares-the-dev-clerk-instance.md) — one `E2E_BASE_URL` signs E2E accounts into production data
 - [Email is a label, `clerk_user_id` is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial; nothing resolves a person by email
 - [Retired users keep their email in the unique index](retired-users-keep-their-email-in-the-unique-index.md) — re-registering the same address is a permanent opaque 500
-- [Contested-email repair trusts Clerk absence](contested-email-repair-trusts-clerk-absence.md) — PASS; waiter handoff picks the stalest pending row
 - [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes left low-severity on purpose
 - [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — adding `requireAuth` breaks it; removing the inline ban check is the regression
-- [`redirect_url` is Clerk's param, not ours](clerk-redirect-url-param-collision.md) — the raw search param outranks `fallbackRedirectUrl`
 - [safeReturnPath is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise, 894k-case fuzz clean; do not re-report
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — the matcher skips dotted paths
 - [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — `roleCanReach` is a redirect hint and must never become a gate
@@ -67,13 +62,11 @@
 - [Launch switches gate new intents, not open ones](launch-switches-gate-new-intents-not-open-ones.md) — an issued client secret survives the pause
 - [Idempotency guards orphan their side effects](idempotency-guards-orphan-side-effects.md) — every `ON CONFLICT DO NOTHING` here fronts non-transactional follow-on writes
 - [The background queue carries no session](background-work-queue-carries-no-session.md) — re-derive the recipient; never close over `request.auth` or a `tx`
-- [The Clerk webhook is now a money mover](clerk-webhook-is-now-a-money-mover.md) — the replay guard closes only after an unbounded Stripe loop
 - [The e2e fixture now calls Stripe for real](e2e-fixture-creates-real-stripe-accounts.md) — one `sk_test_` prefix check keeps a live key out
 - [`stripe_onboarded` entails an account id](stripe-onboarded-entails-account-id.md) — a CHECK; the `acct_` format check was refused as a product decision
 
 ## Account closure, bans and support
 
-- [Closure deletes the Clerk identity](closure-deletes-the-clerk-identity.md) — the console's only irreversible action; replay sound, both gaps FIXED
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking with an empty `closeBlockers`
 - [The unwind's full refund is the ban's argument](account-unwind-full-refund-is-the-ban-argument.md) — superseded by D39: closure refused while a future confirmed booking exists
 - [An unwind spares a request with a booking behind it](unwind-decline-spares-requests-with-a-booking.md) — unarrangeable; it closes a post-unban double-booking window

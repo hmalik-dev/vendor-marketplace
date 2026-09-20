@@ -15,7 +15,6 @@
 - [Ad-hoc work commits as one](adhoc-work-single-commit.md) — don't isolate unrelated changes; the commit hook blocks on a dirty tree
 - [Production API is intentionally down](production-api-intentionally-down.md) — Railway service removed on purpose; `Application not found` is expected, not an outage
 - [Vercel deployment URL](vendor-marketplace-vercel-deployment.md) — web-gules-eta-41.vercel.app follows `production`, not `main`; parity is checked against localhost
-- [Demo deployment is deferred](demo-deployment-deferred.md) — render.yaml and docs/demo.md are on main and current, but deliberately not stood up until the queue and MVP are done
 - [Record findings in the backlog](record-findings-in-backlog.md) — chat reports scroll away; Linear is the durable queue
 - [Credentials live in env files only](credentials-env-files-only.md) — never inline in a command, never in Claude config; the Neon URL that leaked still needs rotating
 - [Global config repo: claude-workflow](claude-workflow-config-repo.md) — ~/.claude is git-tracked in a private repo; its .gitignore is deny-by-default
@@ -43,7 +42,6 @@
 - [Kill dev servers by lane port, never by name](kill-dev-servers-by-lane-port.md) — an unscoped pkill reaches every lane; it took down two mid-pass
 - [MCP Playwright and storage state](mcp-playwright-cannot-load-storage-state.md) — no MCP *tool* takes one, but `browser_run_code_unsafe` does; never `networkidle`
 - [Guard a delegated browser pass with a liveness watch](guard-a-delegated-browser-pass-with-a-liveness-watch.md) — a dev server that dies mid-pass makes the agent report nothing and look clean
-- [Clerk localization is scoped by route only](clerk-localization-is-scoped-by-route-only.md) — a nested `ClerkProvider` silently drops every prop; branch on `usePathname()` in `ClerkShell`
 - [Migration numbers collide between lanes](migration-numbers-collide-between-lanes.md) — two lanes both claim `0025`; regenerate against the landed snapshot, never rename your own
 - [Class assertions need the split list](class-assertions-need-the-split-list.md) — `toContain` on `className` is a substring match, so `min-[90rem]:text-[11px]` satisfies a check meant to pin `text-[11px]`
 - [Stripe caches failed idempotent results](stripe-caches-failed-idempotent-results.md) — a retry key needs the attempt number; `request_log_url` is the tell (D36)
@@ -62,11 +60,11 @@
 - [Turbo serves a green you did not earn](turbo-serves-a-green-you-did-not-earn.md) — a fast green on inputs you just changed is not a green, and passThrough env vars are outside the cache key
 - [A failed command reads as a passing check](a-failed-command-reads-as-a-passing-check.md) — `grep -c` on a command that errored prints a confident zero; make the check print what it found
 - [A guard reads a smaller region than you think](a-guard-reads-a-smaller-region-than-you-think.md) — a source scan answers clean about code it never looked at; pin the reach with mutations in the real files
-- [Closure destroys a real Clerk identity](closure-destroys-a-real-clerk-identity.md) — never close a seeded E2E account; the seed resolves Clerk ids and cannot rebuild one
 - [TaskStop cannot stop a peer session](taskstop-cannot-stop-peer-sessions.md) — kill the `bg-spare` child, scoped by its cwd; name matching hits every repo
-- [Users never access Clerk](users-never-access-clerk.md) — no Clerk account menu, portal or self-serve delete; account changes go through the app, the owner runs Clerk (VEN-403)
 - [Linear has an archived sibling project](linear-has-an-archived-sibling-project.md) — lowercase `vendor-marketplace`, ~200 archived layer-split rows from the Prisma era; filter to the project in project.json, never clean it up
 - [Check a lane's outcome, not its liveness](orchestrate-check-lane-outcome-not-liveness.md) — read the ticket state and comments, raise blockers first; `working` in `claude agents` proves nothing
 - [Neon dev and staging are safe, production is not](neon-dev-and-staging-are-safe-production-is-not.md) — lanes may use either for Neon Auth/Storage work; `neon connection-string --branch-id` defaults to production
 - [Markdown-only PRs merge without CI](markdown-only-prs-merge-without-ci.md) — branch + PR, then `gh pr merge --squash --admin`; anything non-.md goes the normal way
 - [Neon Auth E2E accounts live on dev](neon-auth-e2e-accounts-on-dev.md) — customer/vendor/no-row newcomer are persistent Neon identities (VEN-447); creds only in .env.e2e.local, never accept Terms as the newcomer
+- [Beta uses real sign-ups, not seeded data](beta-uses-real-signups-not-seeded-data.md) — friends as real vendors/customers on staging; reference seed only, skip db:seed:demo
+- [Orchestrated tickets must end merged](orchestrated-tickets-must-end-merged.md) — stacked drafts merge bottom-up once the parent lands; a human gate is not bypassed
