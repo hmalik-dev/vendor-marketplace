@@ -98,7 +98,7 @@
 - [`violatesConstraint` is FIXED](violates-constraint-matches-bound-parameters.md) — SQLSTATE + `constraint_name` only
 - [A browser parse failure is reader-visible copy](client-parse-failures-are-shown-verbatim.md) — a landed transfer reports as failed
 - [The 500 screen hides chrome, it does not unmount it](error-screen-chrome-is-hidden-not-unmounted.md) — the header hydrates behind `display:none`
-- [The no-cookie claim rests on one regex list](no-cookie-consent-claim-rests-on-a-source-scan.md) — the scan matches an impossible shape and misses reachable ones
+- [Legal claims rest on two under-matching scans](no-cookie-consent-claim-rests-on-a-source-scan.md) — `TRACKERS` is a vendor list; VEN-496's analytics passes it, and a denial survived in untouched prose
 - [Rate limiting: hop-0 proxy, pre-auth hook, five skipped routes](rate-limit-key-is-the-proxy-not-the-caller.md) — one `rateLimitRan` symbol can silently disable a route's own limit
 - [`request.ip` is one hop, never IP-validated](request-ip-is-one-hop-trusted-not-validated.md) — unbounded text against `varchar(45)` when persisted as evidence
 - [`/ready` is unthrottled by design](ready-probe-is-unthrottled-and-now-reads-a-file.md) — VEN-495 put a per-request `readFileSync` on the one route the limiter cannot protect; `behind` + `commit` are public, counts are log-only
