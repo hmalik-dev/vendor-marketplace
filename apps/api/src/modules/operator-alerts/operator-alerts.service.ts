@@ -333,15 +333,30 @@ export function payoutFailedAlert(input: {
   };
 }
 
-/** A refund that should have gone back to a customer did not. */
-export function refundFailedAlert(input: { bookingId: string; during: string }): OperatorAlert {
+/**
+ * A refund that should have gone back to a customer did not — or, with a
+ * `refundId`, one that did go out but whose booking row could not be moved to
+ * match (VEN-472), so the money and the row disagree.
+ */
+export function refundFailedAlert(input: {
+  bookingId: string;
+  during: string;
+  refundId?: string;
+}): OperatorAlert {
+  const { bookingId, during, refundId } = input;
+
   return {
     kind: 'refund_failed',
-    subjectId: input.bookingId,
-    summary: `Refund failed on booking ${input.bookingId}`,
+    subjectId: bookingId,
+    summary: refundId
+      ? `Refund sent but booking ${bookingId} could not be updated`
+      : `Refund failed on booking ${bookingId}`,
     details: [
-      `A refund attempted during ${input.during} did not go through; the customer's money has not moved.`,
-      `Booking: ${input.bookingId}`,
+      refundId
+        ? `A refund sent during ${during} went out, but the booking row changed underneath it and could not be cancelled. The customer is refunded; check whether the vendor was also paid.`
+        : `A refund attempted during ${during} did not go through; the customer's money has not moved.`,
+      `Booking: ${bookingId}`,
+      ...(refundId ? [`Refund: ${refundId}`] : []),
     ],
     adminPath: '/admin/bookings',
   };
