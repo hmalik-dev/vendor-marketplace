@@ -100,7 +100,7 @@ function isAllowed(path: string): boolean {
   return path in ALLOWED_FILES || ALLOWED_PREFIXES.some(([prefix]) => path.startsWith(prefix));
 }
 
-function matches(file: TrackedFile): string[] {
+function matches(file: TrackedFile): RegExp[] {
   const haystack = `${file.path}\n${file.text}`.toLowerCase();
   return NEEDLES.filter((needle) => needle.test(haystack));
 }
