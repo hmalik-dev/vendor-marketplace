@@ -1,7 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { expectedMigrationCount } from '@vendor-marketplace/db';
 import { releaseIdentifier } from '@vendor-marketplace/shared/env';
+import type { AppDatabase } from '../../lib/database.js';
 
 export const healthResponseSchema = z.object({
   status: z.literal('ok'),
@@ -10,9 +12,16 @@ export const healthResponseSchema = z.object({
 
 const dependencyStateSchema = z.enum(['up', 'down']);
 
+/**
+ * `behind` is a database that answers but has fewer migrations applied than
+ * this build ships. It is its own state, not `down`, so the operator reads the
+ * cause: the fix is running the migration, not restarting anything.
+ */
+const databaseStateSchema = z.enum(['up', 'down', 'behind']);
+
 export const readyResponseSchema = z.object({
   status: z.enum(['ready', 'not_ready']),
-  database: dependencyStateSchema,
+  database: databaseStateSchema,
   storage: dependencyStateSchema,
   /**
    * The commit this process is running, or `null` off a platform.
@@ -38,6 +47,28 @@ type DependencyState = z.infer<typeof dependencyStateSchema>;
 const DEPENDENCY_TIMEOUT_MS = 2_000;
 
 /**
+ * Read once at load: the journal cannot change under a running build, and
+ * `/ready` is unthrottled, so a per-request synchronous file read would let any
+ * caller block the event loop. An unreadable journal fails the boot, not a probe.
+ */
+const EXPECTED_MIGRATIONS = expectedMigrationCount();
+
+/**
+ * The one database read `/ready` makes: how many migrations are applied.
+ *
+ * It doubles as the round trip, so a database that cannot answer this is `down`
+ * exactly as it was under `select 1`. A database no migration has ever run on
+ * has no such table and lands there too, with the driver's error in the log.
+ */
+async function appliedMigrations(db: AppDatabase): Promise<number> {
+  const rows = await db
+    .select({ applied: sql<number>`count(*)::int` })
+    .from(sql`drizzle.__drizzle_migrations`);
+
+  return rows[0]?.applied ?? 0;
+}
+
+/**
  * The release this process is: the commit the deploy workflow set as
  * `SENTRY_RELEASE`, or the platform's own commit variable. It is the identifier
  * the error tracker tags events with, so the commit `/ready` names is the commit
@@ -49,13 +80,14 @@ export function deployedCommit(source: NodeJS.ProcessEnv = process.env): string 
   return releaseIdentifier(source);
 }
 
-interface ProbeResult {
+interface ProbeResult<T = unknown> {
   state: DependencyState;
+  value?: T;
   error?: unknown;
 }
 
 /** Runs one dependency check under its own timeout, never throwing. */
-async function probe(run: () => Promise<unknown>, timeoutMs: number): Promise<ProbeResult> {
+async function probe<T>(run: () => Promise<T>, timeoutMs: number): Promise<ProbeResult<T>> {
   let timer: NodeJS.Timeout | undefined;
   const pending = Promise.resolve().then(run);
   // The race settles on the timeout while `pending` is still in flight, so a
@@ -63,7 +95,7 @@ async function probe(run: () => Promise<unknown>, timeoutMs: number): Promise<Pr
   pending.catch(() => undefined);
 
   try {
-    await Promise.race([
+    const value = await Promise.race([
       pending,
       new Promise<never>((_, reject) => {
         timer = setTimeout(
@@ -72,7 +104,7 @@ async function probe(run: () => Promise<unknown>, timeoutMs: number): Promise<Pr
         );
       }),
     ]);
-    return { state: 'up' };
+    return { state: 'up', value };
   } catch (error) {
     return { state: 'down', error };
   } finally {
@@ -108,7 +140,7 @@ export const healthRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const [database, storage] = await Promise.all([
-        probe(() => app.db.execute(sql`select 1`), DEPENDENCY_TIMEOUT_MS),
+        probe(() => appliedMigrations(app.db), DEPENDENCY_TIMEOUT_MS),
         probe(() => app.storage.checkAvailable(), DEPENDENCY_TIMEOUT_MS),
       ]);
 
@@ -119,11 +151,21 @@ export const healthRoutes: FastifyPluginAsyncZod = async (app) => {
         request.log.error({ err: storage.error }, 'Readiness probe could not reach object storage');
       }
 
-      const ready = database.state === 'up' && storage.state === 'up';
+      // Fewer applied than shipped is behind; more is a rollback and keeps serving.
+      const expected = EXPECTED_MIGRATIONS;
+      const behind = database.state === 'up' && (database.value ?? 0) < expected;
+      if (behind) {
+        request.log.error(
+          { applied: database.value, expected },
+          "Readiness probe found the database behind the build's migrations",
+        );
+      }
+      const databaseState: z.infer<typeof databaseStateSchema> = behind ? 'behind' : database.state;
+      const ready = databaseState === 'up' && storage.state === 'up';
 
       return reply.code(ready ? 200 : 503).send({
         status: ready ? ('ready' as const) : ('not_ready' as const),
-        database: database.state,
+        database: databaseState,
         storage: storage.state,
         commit: deployedCommit(),
         timestamp: new Date().toISOString(),

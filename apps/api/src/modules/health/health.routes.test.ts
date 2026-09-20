@@ -1,3 +1,5 @@
+import { expectedMigrationCount } from '@vendor-marketplace/db';
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { deployedCommit } from './health.routes.js';
@@ -83,6 +85,81 @@ describe('GET /ready', () => {
       });
     } finally {
       harness.setStorageAvailable(true);
+    }
+  });
+});
+
+/*
+ * A build whose migrations have not run passes a bare round trip and then fails
+ * every route that touches the missing table or column (VEN-495).
+ */
+describe('GET /ready migration level', () => {
+  let harness: TestHarness;
+
+  beforeAll(async () => {
+    harness = await createTestHarness();
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  async function appliedMigrations(): Promise<number> {
+    const rows = await harness.app.db
+      .select({ applied: sql<number>`count(*)::int` })
+      .from(sql`drizzle.__drizzle_migrations`);
+
+    return rows[0]?.applied ?? -1;
+  }
+
+  it('applies exactly the migrations the journal ships, and is ready', async () => {
+    expect(await appliedMigrations()).toBe(expectedMigrationCount());
+
+    const response = await harness.app.inject({ method: 'GET', url: '/ready' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'ready', database: 'up', storage: 'up' });
+  });
+
+  it('answers 503 naming the database "behind" when one migration is missing', async () => {
+    await harness.app.db.execute(
+      sql`delete from drizzle.__drizzle_migrations where id = (select max(id) from drizzle.__drizzle_migrations)`,
+    );
+
+    try {
+      expect(await appliedMigrations()).toBe(expectedMigrationCount() - 1);
+
+      const response = await harness.app.inject({ method: 'GET', url: '/ready' });
+
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toMatchObject({
+        status: 'not_ready',
+        database: 'behind',
+        storage: 'up',
+      });
+    } finally {
+      await harness.app.db.execute(
+        sql`insert into drizzle.__drizzle_migrations (hash, created_at) values ('restored', 0)`,
+      );
+    }
+  });
+
+  it('stays ready when the database is ahead of the build, so a rollback keeps serving', async () => {
+    await harness.app.db.execute(
+      sql`insert into drizzle.__drizzle_migrations (hash, created_at) values ('from-a-newer-build', 0)`,
+    );
+
+    try {
+      expect(await appliedMigrations()).toBe(expectedMigrationCount() + 1);
+
+      const response = await harness.app.inject({ method: 'GET', url: '/ready' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ status: 'ready', database: 'up' });
+    } finally {
+      await harness.app.db.execute(
+        sql`delete from drizzle.__drizzle_migrations where hash = 'from-a-newer-build'`,
+      );
     }
   });
 });
