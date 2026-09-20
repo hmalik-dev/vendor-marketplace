@@ -586,7 +586,9 @@ async function unwindBatch(
  * Derived from the bookings themselves rather than stored, so it cannot drift
  * from what `unwindAccountBookings` would select. An account-holder unwind
  * leaves the holder's own bookings for review by design, so those never count:
- * they would keep a finished closure looking unfinished for ever. A booking
+ * they would keep a finished closure looking unfinished for ever, and so would a
+ * legacy destination charge, which the unwind hands to an operator rather than
+ * refunds. A booking
  * whose refund Stripe refuses does count, and stays counted until it is fixed.
  */
 export async function countUnwindPending(
@@ -604,7 +606,9 @@ export async function countUnwindPending(
   );
 
   return affected.filter(
-    (booking) => !(copy.initiatedBy === 'account-holder' && booking.customerId === targetId),
+    (booking) =>
+      !(copy.initiatedBy === 'account-holder' && booking.customerId === targetId) &&
+      !isLegacyDestinationPayout(booking),
   ).length;
 }
 
