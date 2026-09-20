@@ -379,7 +379,7 @@ async function releaseOnePayout(
        * window the retry would be a second transfer of the vendor's whole
        * share out of the platform's balance.
        */
-      const existing = await context.stripe.findTransfer(transferGroup);
+      const existing = await context.stripe.findTransfer(transferGroup, { live: true });
 
       const transfer =
         existing ??
