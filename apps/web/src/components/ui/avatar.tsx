@@ -321,6 +321,7 @@ export function Avatar({
       // A vendor's own photograph, already sized by the caller — `next/image`
       // would need a configured remote host per vendor bucket.
       className={cn(shared, 'object-cover', className)}
+      width={pixels}
       style={{ width: `${pixels}px`, height: `${pixels}px` }}
       fallback={monogram}
     />

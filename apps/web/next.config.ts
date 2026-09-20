@@ -5,6 +5,13 @@ import { withSentryConfig } from '@sentry/nextjs';
 import { releaseIdentifier } from '@vendor-marketplace/shared/env';
 import { errorIngestOrigin, sentryBuildOptions } from './src/config/error-reporting';
 import { assertWebEnv, servesOverTls } from './src/config/env';
+import {
+  DEVICE_SIZES,
+  IMAGE_MINIMUM_CACHE_TTL,
+  IMAGE_QUALITY,
+  IMAGE_SIZES,
+  imageRemotePatterns,
+} from './src/config/image-optimizer';
 import { securityHeaders, shouldEnforceCsp } from './src/config/security-headers';
 
 // Next.js only reads `.env` files beside the app, but the file developers edit
@@ -90,6 +97,20 @@ const nextConfig: NextConfig = {
    * is unaffected either way.
    */
   ...(isProduction ? {} : { distDir: '.next-dev' }),
+
+  /*
+   * Uploads are fetched from Neon's storage host once per image and width, then
+   * served from the optimizer's cache (VEN-456). `img-src` still lists the
+   * storage origin: the browser talks to `'self'` for an optimized image, but a
+   * URL the optimizer does not own is served raw and needs it.
+   */
+  images: {
+    remotePatterns: imageRemotePatterns(webEnv.NEXT_PUBLIC_STORAGE_PUBLIC_URL),
+    minimumCacheTTL: IMAGE_MINIMUM_CACHE_TTL,
+    qualities: [IMAGE_QUALITY],
+    deviceSizes: DEVICE_SIZES,
+    imageSizes: IMAGE_SIZES,
+  },
 
   async headers() {
     return [

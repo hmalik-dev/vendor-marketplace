@@ -149,6 +149,7 @@ function ProfilePlacement({ vendor }: { vendor: VendorCardData }): React.ReactEl
         <FallbackImage
           src={vendor.coverImageUrl}
           alt=""
+          width={360}
           className="size-full"
           imageClassName="object-cover"
         />

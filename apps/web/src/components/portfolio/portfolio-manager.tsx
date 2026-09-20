@@ -400,6 +400,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
                   <FallbackImage
                     src={item.thumbnailUrl ?? item.imageUrl}
                     alt={item.caption ?? ''}
+                    width={320}
                     className="aspect-[4/3] w-full cursor-grab"
                     imageClassName="object-cover"
                   />

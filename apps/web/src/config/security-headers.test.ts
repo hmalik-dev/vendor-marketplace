@@ -93,6 +93,24 @@ describe('contentSecurityPolicy', () => {
     );
   });
 
+  it('allows the Neon storage host and refuses any other image origin (VEN-456)', () => {
+    const storage = 'https://ep-abc.storage.us-east-2.aws.neon.tech';
+    const imgSrc = contentSecurityPolicy({ ...ORIGINS, imageOrigin: storage })
+      .split('; ')
+      .find((d) => d.startsWith('img-src'));
+
+    // The whole directive, so a widening — `https:`, a wildcard, a second
+    // origin — fails wherever it is spelled, not only where a substring breaks.
+    expect(imgSrc?.split(' ').slice(1)).toEqual([
+      "'self'",
+      'data:',
+      'blob:',
+      'https://*.stripe.com',
+      'https://*.link.com',
+      storage,
+    ]);
+  });
+
   it('omits the image origin entirely when uploads share this one', () => {
     expect(contentSecurityPolicy({ apiOrigin: 'https://api.example.com' })).toContain(
       `img-src 'self' data: blob: https://*.stripe.com`,
