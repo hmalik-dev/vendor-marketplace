@@ -23,6 +23,9 @@ concurrency:
 jobs:
   smoke:
     name: Does the deployment actually serve?
+    # Skipped until an API URL is chosen (VEN-377, D10). The old default named
+    # the removed Railway host and failed every push to main for ten minutes.
+    if: vars.SMOKE_API_URL != ''
     runs-on: ubuntu-latest
     # Comfortably above the check's own deadline, so the job's ceiling never
     # pre-empts the check's own bounded retry and hides its report.
@@ -42,9 +45,9 @@ jobs:
 
       - name: Wait for the deploy, then prove it serves real data
         env:
-          # Repository variables win, so moving to a custom domain is a
-          # settings change; the defaults keep the check working with no setup.
-          SMOKE_API_URL: ${{ vars.SMOKE_API_URL || 'https://vendor-marketplace-production.up.railway.app' }}
+          # Repository variables, so moving to a custom domain is a settings
+          # change. The job is skipped while SMOKE_API_URL is unset.
+          SMOKE_API_URL: ${{ vars.SMOKE_API_URL }}
           SMOKE_WEB_URL: ${{ vars.SMOKE_WEB_URL || 'https://web-gules-eta-41.vercel.app' }}
           # The check waits for this commit to be the one answering, so it
           # cannot be satisfied by the previous release still standing.

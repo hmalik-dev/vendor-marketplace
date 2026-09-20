@@ -31,6 +31,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WORKFLOW = parse(readFileSync(path.join(ROOT, '.github/workflows/deploy.yml'), 'utf8'));
 const CI = parse(readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
 const JOB = WORKFLOW.jobs.deploy;
+const GATED = "steps.gate.outputs.deploy == 'true'";
+const READY = `${GATED} && steps.preflight.outputs.ready == 'true'`;
 const SHA = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
 
 /*
@@ -110,15 +112,29 @@ function allPresent() {
   };
 }
 
-test('preflight: unconfigured, it fails naming every missing input and where it is set', async () => {
+test('preflight: nothing configured skips with a warning and reports ready=false', async () => {
+  const { io, lines } = recordingIo();
+  const dir = mkdtempSync(path.join(tmpdir(), 'preflight-'));
+  const output = path.join(dir, 'out');
+  writeFileSync(output, '');
+  try {
+    await PHASES.preflight({ GITHUB_OUTPUT: output }, io);
+    assert.equal(readFileSync(output, 'utf8'), 'ready=false\n');
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+  assert.match(lines.join(''), /^::warning::Deploy skipped/);
+  for (const { name, kind } of REQUIRED_INPUTS) {
+    assert.ok(lines.join('').includes(`${name} (${kind})`), name);
+  }
+});
+
+test('preflight: partly configured fails naming what is missing and where it is set', async () => {
   const { io } = recordingIo();
-  await assert.rejects(PHASES.preflight({}, io), (error) => {
-    for (const { name, kind } of REQUIRED_INPUTS) {
-      assert.ok(error.message.includes(`${name} (${kind})`), name);
-    }
-    assert.match(error.message, /VEN-377/);
-    return true;
-  });
+  await assert.rejects(
+    PHASES.preflight({ ...allPresent(), HAS_SENTRY_AUTH_TOKEN: 'false' }, io),
+    /partly configured; missing: SENTRY_AUTH_TOKEN \(secret\).*VEN-377/,
+  );
 });
 
 test('preflight: one missing input still fails, by name', () => {
@@ -341,7 +357,7 @@ test('workflow: no step outlives a failure before it', () => {
   for (const step of JOB.steps) {
     assert.equal(step['continue-on-error'], undefined, step.name);
     assert.ok(
-      step.if === undefined || step.if === "steps.gate.outputs.deploy == 'true'",
+      step.if === undefined || step.if === GATED || step.if === READY,
       `${step.name}: ${step.if}`,
     );
   }
@@ -359,14 +375,15 @@ test('workflow: no step outlives a failure before it', () => {
 test('workflow: the gate declares the id every later step is conditional on', () => {
   const [checkout, gate, ...rest] = JOB.steps;
 
-  assert.equal(checkout.uses, 'actions/checkout@v4');
+  assert.match(checkout.uses, /^actions\/checkout@[0-9a-f]{40}$/);
   assert.equal(gate.id, 'gate');
   assert.equal(gate.run, 'node scripts/deploy.mjs gate');
   assert.equal(gate.if, undefined);
 
   assert.ok(rest.length > 0);
   for (const step of rest) {
-    assert.equal(step.if, `steps.${gate.id}.outputs.deploy == 'true'`, step.name ?? step.uses);
+    const expected = step.id === 'preflight' ? GATED : READY;
+    assert.equal(step.if, expected, step.name ?? step.uses);
   }
 });
 
@@ -477,7 +494,9 @@ function dryRun({ secrets, vars, tip = SHA, fail = '' }) {
         continue;
       }
       // The only condition the workflow may use, asserted above.
-      if (step.if !== undefined && !readFileSync(output, 'utf8').includes('deploy=true')) {
+      const written = step.if === undefined ? '' : readFileSync(output, 'utf8');
+      const needed = step.if === READY ? ['deploy=true', 'ready=true'] : ['deploy=true'];
+      if (step.if !== undefined && !needed.every((line) => written.includes(line))) {
         continue;
       }
 
@@ -596,10 +615,22 @@ test('dry run: a readiness poll that fails fails the release', () => {
   assertNoSecretPrinted(result.printed);
 });
 
-test('dry run: with nothing configured the run fails closed before touching anything', () => {
+const PREFLIGHT_STEP = 'Skip until configured, refuse when partly configured';
+
+test('dry run: with nothing configured the run skips green before touching anything', () => {
   const result = dryRun({ secrets: {}, vars: {} });
 
-  assert.equal(result.failedAt, 'Refuse to start unless every deploy input is configured');
+  assert.equal(result.failedAt, null);
+  assert.equal(result.ran.at(-1), PREFLIGHT_STEP);
+  assert.deepEqual(result.invocations, ['git ls-remote origin']);
+  assert.match(result.printed, /Deploy skipped/);
+});
+
+test('dry run: a partly configured deploy fails closed before touching anything', () => {
+  const { DATABASE_URL_UNPOOLED: _dropped, ...secrets } = SECRETS;
+  const result = dryRun({ secrets, vars: VARS });
+
+  assert.equal(result.failedAt, PREFLIGHT_STEP);
   assert.deepEqual(result.invocations, ['git ls-remote origin']);
   assert.match(result.printed, /DATABASE_URL_UNPOOLED \(secret\)/);
 });

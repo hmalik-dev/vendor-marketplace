@@ -292,10 +292,27 @@ export const PHASES = {
 
   async preflight(env, io) {
     const missing = missingInputs(env);
+    const ready = (value) => {
+      if (!blank(env.GITHUB_OUTPUT)) appendFileSync(env.GITHUB_OUTPUT, `ready=${value}\n`);
+    };
+
+    /*
+     * Nothing provisioned yet (VEN-377) is a release that is not set up, not one
+     * that broke: it is skipped with a warning so a red run means a failure. A
+     * *partly* configured deploy is the broken case and still fails by name.
+     */
+    if (missing.length === REQUIRED_INPUTS.length) {
+      ready(false);
+      io.error(
+        `::warning::Deploy skipped: no deploy input is configured (${missing.join(', ')}). ` +
+          'These are provisioned on VEN-377, and the API host itself is decision D10, still open there.\n',
+      );
+      return;
+    }
 
     if (missing.length > 0) {
       throw new PhaseError(
-        `The deploy is not configured: ${missing.join(', ')}. ` +
+        `The deploy is partly configured; missing: ${missing.join(', ')}. ` +
           'These are provisioned on VEN-377, and the API host itself is decision D10, still open there.',
       );
     }
@@ -306,6 +323,7 @@ export const PHASES = {
       );
     }
 
+    ready(true);
     io.write('Every deploy input is configured.\n');
   },
 
