@@ -334,7 +334,10 @@ export interface FakeStripe extends StripeConnectGateway {
    * them would be ceremony rather than a contract. The gateway itself always
    * reports the field — `parseEventNotification` below fills the default.
    */
-  nextEvent: Omit<StripeEventNotification, 'objectId'> & { objectId?: string | null };
+  nextEvent: Omit<StripeEventNotification, 'objectId' | 'livemode'> & {
+    objectId?: string | null;
+    livemode?: boolean | null;
+  };
   /**
    * Payment intent ids whose refund the fake must refuse.
    *
@@ -575,7 +578,7 @@ function createFakeStripe(): FakeStripe {
       if (!validSignatures.has(signature)) {
         throw new Error('Invalid test Stripe signature');
       }
-      return { objectId: null, ...fake.nextEvent };
+      return { objectId: null, livemode: null, ...fake.nextEvent };
     },
 
     createPaymentIntent: async (input) => {

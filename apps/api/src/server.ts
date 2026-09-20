@@ -30,7 +30,7 @@ import { redactLogRecord, serializeError } from './lib/log-error-serializer.js';
 import { redactQueryValues } from './lib/log-redaction.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import type { EmailGateway } from './lib/email.js';
-import type { StripeConnectGateway } from './lib/stripe.js';
+import { stripeKeyMode, type StripeConnectGateway } from './lib/stripe.js';
 import { neonAuthPlugin, type NeonAuthPluginOptions } from './plugins/neon-auth.js';
 import { authDirectoryPlugin, type AuthDirectoryPluginOptions } from './plugins/auth-directory.js';
 import { backgroundPlugin } from './plugins/background.js';
@@ -480,6 +480,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     rateLimitMax: env.RATE_LIMIT_MAX * WEBHOOK_RATE_LIMIT_FACTOR,
     platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
     webOrigin: canonicalWebOrigin(env),
+    keyMode: stripeKeyMode(env.STRIPE_SECRET_KEY),
   });
 
   await app.ready();
