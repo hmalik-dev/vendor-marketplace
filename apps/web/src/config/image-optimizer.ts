@@ -15,6 +15,8 @@
  * A leaf, like `public-env.ts`: client components import it.
  */
 
+import { UPLOAD_PREFIXES } from '@vendor-marketplace/shared';
+
 /**
  * Object keys are immutable — a replaced photograph gets a new key — so a year
  * is honest, and it is what stops the optimizer revalidating against a host
@@ -22,9 +24,21 @@
  */
 export const IMAGE_MINIMUM_CACHE_TTL = 60 * 60 * 24 * 365;
 
-/** Next's defaults, written out because `optimizedImageProps` snaps to them. */
-export const DEVICE_SIZES = [640, 750, 828, 1080, 1200, 1920, 2048, 3840];
-export const IMAGE_SIZES = [16, 32, 48, 64, 96, 128, 256, 384];
+/**
+ * Every width the optimizer will transform, and nothing else (VEN-486). `w` is
+ * validated against these two lists, so each is a billable transformation an
+ * anonymous caller can force per stored object: Next's sixteen defaults reach
+ * 3840, past anything a layout asks for.
+ *
+ * Derived from the rendered `cssWidth`s (each doubled, then snapped up): the
+ * avatars and thumbnails (30-64px -> 64/96/128), the 104px admin tile (256),
+ * the 320-400px cards and grids (640-828), the 800px lightbox (1600) and the
+ * 1200px profile cover (2400). `image-optimizer.test.ts` recomputes that from
+ * the call sites and fails when a list holds a width none of them produces, or
+ * a site needs one the list lacks.
+ */
+export const IMAGE_SIZES = [64, 96, 128, 256];
+export const DEVICE_SIZES = [640, 750, 828, 1280, 1600, 2400];
 
 const ALLOWED_WIDTHS = [...IMAGE_SIZES, ...DEVICE_SIZES].sort((a, b) => a - b);
 
@@ -59,9 +73,14 @@ export function imageRemotePatterns(publicBaseUrl: string): RemotePattern[] {
 
   const basePath = base.pathname.replace(/\/+$/, '');
 
-  return [
-    { protocol: 'https', hostname: base.hostname, port: base.port, pathname: `${basePath}/**` },
-  ];
+  // One pattern per upload prefix: `${basePath}/**` would also admit anything
+  // else in the bucket, which is not ours to transform.
+  return UPLOAD_PREFIXES.map((prefix) => ({
+    protocol: 'https' as const,
+    hostname: base.hostname,
+    port: base.port,
+    pathname: `${basePath}/${prefix}/**`,
+  }));
 }
 
 function snap(width: number): number {
@@ -94,7 +113,11 @@ export function optimizedImageProps(
 ): string | null {
   const base = publicBaseUrl?.replace(/\/+$/, '');
 
-  if (!base || !base.startsWith('https://') || !src.startsWith(`${base}/`)) {
+  if (
+    !base ||
+    !base.startsWith('https://') ||
+    !UPLOAD_PREFIXES.some((prefix) => src.startsWith(`${base}/${prefix}/`))
+  ) {
     return null;
   }
 

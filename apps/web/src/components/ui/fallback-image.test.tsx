@@ -234,7 +234,7 @@ describe('FallbackImage on the storage host', () => {
   }
 
   it.each([
-    ['a vendor cover', 'vendors/v1/cover.jpg', 400],
+    ['a vendor cover', 'vendor-cover/v1/cover.jpg', 400],
     ['a portfolio image', 'portfolio/p1/thumb.jpg', 320],
   ])(
     'renders %s as an /_next/image URL whose url is the base plus the key',

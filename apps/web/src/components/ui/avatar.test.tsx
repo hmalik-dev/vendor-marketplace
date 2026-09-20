@@ -324,7 +324,7 @@ describe('Avatar on the storage host (VEN-456)', () => {
 
   it('renders an uploaded avatar as an /_next/image URL for the storage key', () => {
     vi.stubEnv('NEXT_PUBLIC_STORAGE_PUBLIC_URL', BASE);
-    render(<Avatar name="Maya Fernandez" src={`${BASE}/avatars/a1.jpg`} />);
+    render(<Avatar name="Maya Fernandez" src={`${BASE}/vendor-profile/v1/a1.jpg`} />);
 
     const src = new URL(
       document.querySelector('img')?.getAttribute('src') ?? '',
@@ -332,6 +332,6 @@ describe('Avatar on the storage host (VEN-456)', () => {
     );
 
     expect(src.pathname).toBe('/_next/image');
-    expect(src.searchParams.get('url')).toBe(`${BASE}/avatars/a1.jpg`);
+    expect(src.searchParams.get('url')).toBe(`${BASE}/vendor-profile/v1/a1.jpg`);
   });
 });
