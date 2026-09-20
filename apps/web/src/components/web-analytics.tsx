@@ -2,6 +2,7 @@
 
 import { Analytics } from '@vercel/analytics/next';
 import { usePathname } from 'next/navigation';
+import { scrubAnalyticsEvent } from './analytics-scrub';
 import { isAdminRoute } from './public-chrome';
 
 /**
@@ -9,8 +10,9 @@ import { isAdminRoute } from './public-chrome';
  *
  * A client component only to read the pathname. `isAdminRoute` rather than
  * `OutsideAdmin`, because the latter also hides checkout, whose page views are
- * wanted. Path and query scrubbing (`beforeSend`) is VEN-497.
+ * wanted. `beforeSend` is a function, so it cannot be passed from the server
+ * layout; `scrubAnalyticsEvent` strips ids and query strings from what is sent.
  */
 export function WebAnalytics(): React.ReactNode {
-  return isAdminRoute(usePathname()) ? null : <Analytics />;
+  return isAdminRoute(usePathname()) ? null : <Analytics beforeSend={scrubAnalyticsEvent} />;
 }

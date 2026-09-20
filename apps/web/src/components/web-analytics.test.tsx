@@ -5,9 +5,15 @@ const navigation = vi.hoisted(() => ({ pathname: '/' }));
 
 vi.mock('next/navigation', () => ({ usePathname: () => navigation.pathname }));
 vi.mock('@vercel/analytics/next', () => ({
-  Analytics: () => <div data-testid="vercel-analytics" />,
+  Analytics: ({ beforeSend }: { beforeSend?: unknown }) => (
+    <div
+      data-testid="vercel-analytics"
+      data-before-send={String(beforeSend === scrubAnalyticsEvent)}
+    />
+  ),
 }));
 
+import { scrubAnalyticsEvent } from './analytics-scrub';
 import { WebAnalytics } from './web-analytics';
 
 describe('WebAnalytics', () => {
@@ -21,7 +27,7 @@ describe('WebAnalytics', () => {
       navigation.pathname = pathname;
       const { queryByTestId } = render(<WebAnalytics />);
 
-      expect(queryByTestId('vercel-analytics')).not.toBeNull();
+      expect(queryByTestId('vercel-analytics')?.getAttribute('data-before-send')).toBe('true');
     },
   );
 
