@@ -35,10 +35,12 @@ export const IMAGE_MINIMUM_CACHE_TTL = 60 * 60 * 24 * 365;
  * the 320-400px cards and grids (640-828), the 800px lightbox (1600) and the
  * 1200px profile cover (2400). `image-optimizer.test.ts` recomputes that from
  * the call sites and fails when a list holds a width none of them produces, or
- * a site needs one the list lacks.
+ * a site is served more than a third wider than it asked for (a missing width).
+ * `next/image` (`StockPhoto`) draws its srcSet from the same lists, so local art
+ * snaps to them too: no 384, hence a 188px card at 2x takes 640.
  */
 export const IMAGE_SIZES = [64, 96, 128, 256];
-export const DEVICE_SIZES = [640, 750, 828, 1280, 1600, 2400];
+export const DEVICE_SIZES = [640, 750, 828, 1600, 2400];
 
 const ALLOWED_WIDTHS = [...IMAGE_SIZES, ...DEVICE_SIZES].sort((a, b) => a - b);
 
@@ -96,7 +98,8 @@ function optimizerUrl(src: string, width: number): string {
 /**
  * The optimizer URL for `src` rendered `cssWidth` px wide, or `null` when the
  * image is not the optimizer's to serve: not under the configured https public
- * base (site-relative `/demo/...` art, local storage, any other host).
+ * base's upload prefixes (site-relative `/demo/...` art, local storage, any
+ * other host, or another path in the same bucket).
  *
  * **One URL at twice the width, deliberately not a `1x, 2x` `srcset`.** With
  * density descriptors the browser divides the chosen candidate's pixel width by

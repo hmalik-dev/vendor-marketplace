@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { UPLOAD_PREFIXES } from '@vendor-marketplace/shared';
 import { AVATAR_SIZES } from '@/components/ui/avatar';
+import { matchRemotePattern } from 'next/dist/shared/lib/match-remote-pattern';
 import { elements, sourceFiles } from '@/testing/source-scan';
 import {
   DEVICE_SIZES,
@@ -75,14 +76,16 @@ describe('imageRemotePatterns', () => {
   });
 
   it('refuses a URL on the same host outside the upload prefixes', () => {
+    // Next's own matcher, so this checks the glob as `/_next/image` reads it.
     const admits = (pathname: string) =>
       imageRemotePatterns(BASE).some((p) =>
-        new RegExp(`^${p.pathname.replace('**', '.*')}$`).test(pathname),
+        matchRemotePattern(p, new URL(`https://ep-abc.storage.us-east-2.aws.neon.tech${pathname}`)),
       );
 
     expect(admits('/uploads/portfolio/v1/cover.jpg')).toBe(true);
     expect(admits('/uploads/private/v1/cover.jpg')).toBe(false);
     expect(admits('/uploads/cover.jpg')).toBe(false);
+    expect(admits('/uploads/portfolio-x/v1/cover.jpg')).toBe(false);
     expect(admits('/other/portfolio/v1/cover.jpg')).toBe(false);
   });
 
@@ -111,9 +114,6 @@ describe('optimizer limits', () => {
   });
 });
 
-/** `FallbackImage`'s default when a site passes no `width`. */
-const DEFAULT_CSS_WIDTH = 640;
-
 /** The literal `width={N}` every `FallbackImage` site passes, read from source. */
 async function fallbackImageCssWidths(): Promise<number[]> {
   const widths = new Set<number>();
@@ -130,33 +130,39 @@ async function fallbackImageCssWidths(): Promise<number[]> {
 }
 
 describe('the widths the pages render (VEN-486)', () => {
-  async function requestedWidths(): Promise<number[]> {
-    // `Avatar` passes its size as a variable, so the scan cannot read it.
-    const cssWidths = [
-      ...(await fallbackImageCssWidths()),
-      ...Object.values(AVATAR_SIZES),
-      DEFAULT_CSS_WIDTH,
-    ];
-    const asked = new Set<number>();
+  /** Rendered widths of every shipped site. `Avatar` passes a variable, so it is read from its table. */
+  async function cssWidths(): Promise<number[]> {
+    return [...(await fallbackImageCssWidths()), ...Object.values(AVATAR_SIZES)];
+  }
 
-    for (const css of cssWidths) {
-      const src = optimizedImageProps(KEY, BASE, css)!;
+  function servedWidth(css: number): number {
+    const src = optimizedImageProps(KEY, BASE, css)!;
 
-      asked.add(Number(new URL(src, 'https://web.example').searchParams.get('w')));
-    }
-
-    return [...asked].sort((a, b) => a - b);
+    return Number(new URL(src, 'https://web.example').searchParams.get('w'));
   }
 
   it('reads the call sites it claims to (a scan that finds nothing proves nothing)', async () => {
     expect(await fallbackImageCssWidths()).toEqual([38, 58, 104, 320, 360, 400, 800, 1200]);
   });
 
-  it('configures exactly the widths a shipped site requests — none larger, none unused', async () => {
-    const configured = [...IMAGE_SIZES, ...DEVICE_SIZES].sort((a, b) => a - b);
+  it('configures no width larger than the largest a shipped site can ask for', async () => {
+    const largest = Math.max(...(await cssWidths())) * 2;
 
-    expect(await requestedWidths()).toEqual(configured);
-    expect(Math.max(...configured)).toBe(2400);
+    expect(largest).toBe(2400);
+    expect(Math.max(...IMAGE_SIZES, ...DEVICE_SIZES)).toBe(largest);
+  });
+
+  it('serves every site within a third of the 2x width it asked for — a dropped width fails here', async () => {
+    for (const css of await cssWidths()) {
+      expect(servedWidth(css), `${css}px`).toBeGreaterThanOrEqual(css * 2);
+      expect(servedWidth(css), `${css}px`).toBeLessThanOrEqual(css * 2 * 1.34);
+    }
+  });
+
+  it('configures no width that no shipped site is served', async () => {
+    const served = new Set((await cssWidths()).map(servedWidth));
+
+    expect([...IMAGE_SIZES, ...DEVICE_SIZES].filter((w) => !served.has(w))).toEqual([]);
   });
 
   it('keeps the two lists ascending, small ones below the device ones, as Next requires', () => {

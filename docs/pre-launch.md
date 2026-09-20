@@ -155,9 +155,9 @@ Rolling back is in [runbook-rollback.md](runbook-rollback.md).
   reads per view. **Read the plan's included source-image and transformation
   quota off the Vercel dashboard (Usage → Image Optimization) and write it here
   before launch; it is not knowable from the repo.** Watch it on VEN-443's caps.
-  The optimizer accepts ten widths (64-2400, `DEVICE_SIZES` and `IMAGE_SIZES` in
+  The optimizer accepts nine widths (64-2400, `DEVICE_SIZES` and `IMAGE_SIZES` in
   `apps/web/src/config/image-optimizer.ts`) and only the four upload prefixes, so
-  one stored URL can force at most ten transformations. Usage is read at Vercel
+  one stored URL can force at most nine transformations. Usage is read at Vercel
   → Usage → Image Optimization; alert at 80% of the plan's included
   transformations (VEN-486).
 - **The rate limiter is in memory, per instance.** `@fastify/rate-limit` in
