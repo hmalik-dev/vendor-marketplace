@@ -71,7 +71,8 @@ which is not a launch.
 - [ ] **A real end-to-end transaction** on live keys before opening to customers:
       book, pay, message, cancel with a refund, and see the payout arrive.
 - [ ] **Restore drill.** Backups are Neon-native only (VEN-408): the
-      `production` branch needs its snapshot schedule on (read it back), and the
+      `production` branch needs its snapshot schedule on (paid plan, VEN-443; read
+      it back), and the
       drill in `docs/runbook-restore.md` must run once into a scratch branch.
       Loss of the Neon account is an accepted, unprotected risk.
 - [ ] **Rotate every credential touched during setup**.

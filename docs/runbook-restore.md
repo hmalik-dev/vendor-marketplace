@@ -35,12 +35,18 @@ choosing it; the API rejects what the plan cannot hold.
 
 ## 1. Check the schedule
 
+Scheduled snapshots need the paid Neon plan (tracked on VEN-443); until the
+upgrade the schedule stays off and only manual snapshots exist.
+
 Read the `production` schedule back. An empty `"schedule": []` means no
 backups exist: set it (table above) and read it back again.
 
 ## 2. The restore drill
 
-1. Pick a snapshot (`List snapshots`), or take one of `staging` first.
+1. Pick a snapshot (`List snapshots`), or take one of `production`. Neon
+   refuses snapshots of non-root branches ("not allowed to snapshot non-root
+   branch"), so `staging` and `dev` cannot be snapshotted; only `production`
+   can.
 2. **Restore into a scratch branch, never `production`.** Give the request a
    `name`; do not pass `target_branch_id`, and never `finalize_restore: true`,
    because either could move or overwrite a live branch. If the response does
