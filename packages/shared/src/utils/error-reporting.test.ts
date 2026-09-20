@@ -126,3 +126,86 @@ describe('scrubErrorEvent', () => {
     expect(scrubErrorEvent(anonymous)).not.toHaveProperty('user');
   });
 });
+
+describe('scrubErrorEvent: what the scrub fixture must never carry', () => {
+  // A stream ticket is 43 opaque characters, so no credential shape matches it.
+  const STREAM_TICKET = 'Zk3xQ9vL2mN8pR4tY7wB1cD5fG6hJ0kA_s-Ue3XoIiE';
+  const WEBHOOK_SECRET = ['whsec', 'fixtureSigningSecret0123'].join('_');
+  const LIVE_KEY = ['sk', 'live', 'fixtureLiveKeyValue0123'].join('_');
+  const PHONE = '(415) 555-0132';
+  const E164_PHONE = '+14155550132';
+  const CUSTOMER_ID = ['cus', 'Qx7fixtureCustomer'].join('_');
+  const ACCOUNT_ID = ['acct', '1Fixture0Account'].join('_');
+
+  function fixtureEvent() {
+    return {
+      message: `Call ${PHONE} or ${E164_PHONE}; key ${LIVE_KEY}; signing ${WEBHOOK_SECRET}`,
+      request: {
+        url: 'https://api.example.test/bookings',
+        headers: { Authorization: `Bearer ${LIVE_KEY}`, Cookie: '__session=abc' },
+        cookies: { __session: 'abc' },
+      },
+      breadcrumbs: [
+        {
+          category: 'fetch',
+          data: {
+            url: `https://api.example.test/stream?ticket=${STREAM_TICKET}`,
+            method: 'GET',
+          },
+        },
+        { category: 'navigation', data: { from: `/x?ticket=${STREAM_TICKET}`, to: '/y' } },
+        { message: `retrieved ${CUSTOMER_ID} on ${ACCOUNT_ID}` },
+      ],
+      transaction: `GET /stream?ticket=${STREAM_TICKET}`,
+      extra: { href: `/stream?ticket=${STREAM_TICKET}&after=3` },
+    };
+  }
+
+  it('leaves none of them in the serialised event', () => {
+    const serialized = JSON.stringify(scrubErrorEvent(fixtureEvent()));
+
+    for (const leaked of [
+      PHONE,
+      E164_PHONE,
+      LIVE_KEY,
+      WEBHOOK_SECRET,
+      STREAM_TICKET,
+      CUSTOMER_ID,
+      ACCOUNT_ID,
+      '__session=abc',
+    ]) {
+      expect(serialized).not.toContain(leaked);
+    }
+  });
+
+  it('keeps the route and the parameter names, so the breadcrumb still explains itself', () => {
+    const scrubbed = scrubErrorEvent(fixtureEvent());
+
+    expect(scrubbed.breadcrumbs).toMatchObject([
+      { data: { url: `https://api.example.test/stream?ticket=${REDACTED}`, method: 'GET' } },
+      { data: { from: `/x?ticket=${REDACTED}`, to: '/y' } },
+      { message: `retrieved ${REDACTED} on ${REDACTED}` },
+    ]);
+    expect(scrubbed.extra).toEqual({ href: `/stream?ticket=${REDACTED}&after=${REDACTED}` });
+  });
+
+  it('catches the other shapes a phone number is typed in, and a bare query string', () => {
+    const scrubbed = scrubErrorEvent({
+      ...fixtureEvent(),
+      message: `(415)555-0132 | +44 20 7946 0958 | 415-555-0132 | ticket=${STREAM_TICKET}&after=3`,
+    });
+
+    expect(scrubbed.message).toBe(
+      `${REDACTED} | ${REDACTED} | ${REDACTED} | ticket=${REDACTED}&after=${REDACTED}`,
+    );
+  });
+
+  it('does not mistake a timestamp or an id for a phone number', () => {
+    const scrubbed = scrubErrorEvent({
+      ...fixtureEvent(),
+      message: 'at 1726790000000 for 2026-09-20 booking 1234567',
+    });
+
+    expect(scrubbed.message).toBe('at 1726790000000 for 2026-09-20 booking 1234567');
+  });
+});

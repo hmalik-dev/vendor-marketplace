@@ -24,15 +24,61 @@ function uploadEnv(
 }
 
 describe('webSentryOptions', () => {
+  it('tags a deployed runtime with no environment input production, never development', () => {
+    const options = webSentryOptions({
+      dsn: DSN,
+      release: undefined,
+      environment: undefined,
+      deployed: true,
+    })!;
+
+    expect(options.environment).toBe('production');
+  });
+
+  it('keeps the platform environment when it names one, and says development off a deployment', () => {
+    const preview = webSentryOptions({
+      dsn: DSN,
+      release: undefined,
+      environment: 'preview',
+      deployed: true,
+    })!;
+    const laptop = webSentryOptions({
+      dsn: DSN,
+      release: undefined,
+      environment: '',
+      deployed: false,
+    })!;
+
+    expect(preview.environment).toBe('preview');
+    expect(laptop.environment).toBe('development');
+  });
+
   it('turns reporting off without a DSN, which only a laptop may have', () => {
     expect(
-      webSentryOptions({ dsn: undefined, release: 'a1b2c3d', environment: undefined }),
+      webSentryOptions({
+        dsn: undefined,
+        release: 'a1b2c3d',
+        environment: undefined,
+        deployed: false,
+      }),
     ).toBeNull();
-    expect(webSentryOptions({ dsn: '', release: undefined, environment: undefined })).toBeNull();
+    expect(
+      webSentryOptions({
+        dsn: '',
+        release: undefined,
+        environment: undefined,
+        deployed: false,
+      }),
+    ).toBeNull();
   });
 
   it('samples explicitly, sends no default PII and names the release', () => {
-    const options = webSentryOptions({ dsn: DSN, release: 'a1b2c3d', environment: 'production' })!;
+    const options = webSentryOptions({
+      dsn: DSN,
+      release: 'a1b2c3d',
+      environment: 'production',
+      deployed: true,
+    })!;
 
     expect(options).toMatchObject({
       dsn: DSN,
@@ -56,9 +102,14 @@ describe('webSentryOptions', () => {
     });
     const build = sentryBuildOptions(uploadEnv(UPLOAD, 'orla-web'), release);
 
-    expect(webSentryOptions({ dsn: DSN, release: release!, environment: undefined })!.release).toBe(
-      'wf-sha',
-    );
+    expect(
+      webSentryOptions({
+        dsn: DSN,
+        release: release!,
+        environment: undefined,
+        deployed: false,
+      })!.release,
+    ).toBe('wf-sha');
     expect(build.release).toEqual({ name: 'wf-sha', create: true });
   });
 });
@@ -69,7 +120,12 @@ describe('webSentryOptions', () => {
  */
 describe('what the web app reports, at the scrubbing hook', () => {
   it('keeps the user id and the checkout tags, and no email or session token', async () => {
-    const options = webSentryOptions({ dsn: DSN, release: 'a1b2c3d', environment: 'production' })!;
+    const options = webSentryOptions({
+      dsn: DSN,
+      release: 'a1b2c3d',
+      environment: 'production',
+      deployed: true,
+    })!;
     const seen: Sentry.ErrorEvent[] = [];
     const session = ['eyJhbGciOiJSUzI1NiJ9', 'eyJzdWIiOiJ1c2VyIn0', 'c2ln'].join('.');
 
@@ -96,6 +152,42 @@ describe('what the web app reports, at the scrubbing hook', () => {
     expect(JSON.stringify(seen[0])).not.toContain(session);
 
     await Sentry.close();
+  });
+});
+
+describe('what the web app scrubs, at beforeSend', () => {
+  const TICKET = 'Zk3xQ9vL2mN8pR4tY7wB1cD5fG6hJ0kA_s-Ue3XoIiE';
+  const KEY = ['sk', 'live', 'fixtureLiveKeyValue0123'].join('_');
+  const SIGNING = ['whsec', 'fixtureSigningSecret0123'].join('_');
+  const PHONE = '(415) 555-0132';
+  const CUSTOMER = ['cus', 'Qx7fixtureCustomer'].join('_');
+
+  it('leaves no email, phone, credential, cookie or stream ticket in the event', () => {
+    const options = webSentryOptions({
+      dsn: DSN,
+      release: undefined,
+      environment: 'production',
+      deployed: true,
+    })!;
+    const event: Sentry.ErrorEvent = {
+      type: undefined,
+      message: `${EMAIL} ${PHONE} ${KEY} ${SIGNING}`,
+      request: {
+        url: 'https://web.example.test/vendors',
+        headers: { Authorization: `Bearer ${KEY}`, Cookie: '__session=abc' },
+        cookies: { __session: 'abc' },
+      },
+      breadcrumbs: [
+        { category: 'fetch', data: { url: `/api/stream?ticket=${TICKET}` } },
+        { message: `loaded ${CUSTOMER}` },
+      ],
+    };
+    const serialized = JSON.stringify(options.beforeSend!(event, {}));
+
+    for (const leaked of [EMAIL, PHONE, KEY, SIGNING, TICKET, CUSTOMER, '__session=abc']) {
+      expect(serialized).not.toContain(leaked);
+    }
+    expect(serialized).toContain('[redacted]');
   });
 });
 

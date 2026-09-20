@@ -324,7 +324,6 @@ export const userSchema = z.object({
    * which is why a customer's uploaded avatar could not be saved or read back.
    */
   avatarUrl: imageRefSchema.nullable(),
-  stripeCustomerId: z.string().max(255).nullable(),
   bio: z.string().max(MAX_CUSTOMER_BIO_LENGTH).nullable(),
   city: z.string().max(MAX_NAME_LENGTH).nullable(),
   state: z.string().max(MAX_NAME_LENGTH).nullable(),
