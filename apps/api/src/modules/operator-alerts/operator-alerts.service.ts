@@ -347,7 +347,8 @@ export function refundFailedAlert(input: {
 
   return {
     kind: 'refund_failed',
-    subjectId: bookingId,
+    // Its own key: "the money did not move" must not silence "it moved and the row did not".
+    subjectId: refundId ? `${bookingId}:unreconciled` : bookingId,
     summary: refundId
       ? `Refund sent but booking ${bookingId} could not be updated`
       : `Refund failed on booking ${bookingId}`,

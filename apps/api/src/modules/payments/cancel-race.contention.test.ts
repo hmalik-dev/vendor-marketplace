@@ -53,7 +53,12 @@ describe('two cancels racing one booking, on two real connections', () => {
     database = await createPostgresTestDatabase({ poolSize: 4 });
     const loggerStream = new PassThrough();
     loggerStream.on('data', (chunk: Buffer) => logged.push(chunk.toString()));
-    harness = await createTestHarness({ database, clock: () => START, loggerStream });
+    harness = await createTestHarness({
+      database,
+      clock: () => START,
+      loggerStream,
+      env: { LOG_LEVEL: 'error' },
+    });
 
     for (const [authUserId, role, email] of [
       [VENDOR, 'vendor', 'grace@example.com'],
@@ -181,6 +186,6 @@ describe('two cancels racing one booking, on two real connections', () => {
 
     const [row] = await harness!.database.db.select().from(bookings);
     expect(row).toMatchObject({ status: 'cancelled', cancelledBy: 'customer' });
-    expect(logged.filter((line) => line.includes('could not be cancelled'))).toEqual([]);
+    expect(logged).toEqual([]);
   });
 });
