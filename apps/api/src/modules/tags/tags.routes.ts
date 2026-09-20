@@ -5,7 +5,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { assertRole, requireRole } from '../../lib/guards.js';
+import { assertRole, requireRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import { listActiveTags, suggestTag } from './tags.service.js';
 
 /** A vendor may propose this many new tags per hour. */
@@ -13,6 +13,7 @@ const SUGGESTION_RATE_LIMIT = { max: 10, timeWindow: '1 hour' } as const;
 
 export const tagRoutes: FastifyPluginAsyncZod = async (app) => {
   const vendorOnly = requireRole('vendor');
+  const vendorOnlyBeforeValidation = requireRoleBeforeValidation('vendor');
 
   app.get('/tags', { schema: { response: { 200: z.array(tagSchema) } } }, async () =>
     listActiveTags(app.db),
@@ -31,7 +32,12 @@ export const tagRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/tags/suggest',
     {
-      preHandler: vendorOnly,
+      // `preParsing`, not `onRequest`: the route's own limiter is appended to
+      // `onRequest`, so a guard there would refuse anonymous callers before
+      // they were counted (the API-wide bucket skips routes with a limit of
+      // their own). `preParsing` is still ahead of the body parser and of
+      // validation, and runs after the limiter.
+      preParsing: vendorOnlyBeforeValidation,
       // Keyed by account rather than IP: the limit is about one vendor
       // flooding the review queue, not about traffic from one network.
       config: {

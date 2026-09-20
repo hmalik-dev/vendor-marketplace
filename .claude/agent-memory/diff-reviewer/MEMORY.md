@@ -1,6 +1,6 @@
 - [Unpinned safety constants](review-checklist-unpinned-safety-constants.md) — flip the literal and re-run the caller's suite; for a derived constant, mutate its _inputs_, not it
 - [Pseudo-element hit areas](review-checklist-pseudo-element-hit-areas.md) — `before:size-11` on a glyph button is clipped by `app-pane`'s overflow; measure with elementFromPoint, not className
-- [Widened write schema vs response schemas](review-checklist-widened-write-schema-vs-response-schemas.md) — this API 500s on response-serialization mismatch; grep every read model for the column a diff relaxed
+- [Schema edits that 500 a screen](review-checklist-widened-write-schema-vs-response-schemas.md) — a relaxed column mismatches a read model, and [a z.date() has no wire coercion](review-checklist-zdate-without-a-wire-coercion.md); grep every response schema
 - [Read-time overlay vs its sibling write](review-checklist-read-time-overlay-vs-sibling-write.md) — the PUT returns the same list and the client stores it; and lazy expiry means the overlay's status predicate lies
 - [onConflict target vs other unique indexes](review-checklist-onconflict-target-vs-other-unique-indexes.md) — an "idempotent" upsert absorbs one constraint; read every uniqueIndex, partials included, and reproduce in PGlite
 - [Derived src flips at commit](review-checklist-derived-src-flips-after-commit.md) — "derive, don't cache" swaps the rendered value the instant success fires; check both sources and what validates them
@@ -27,7 +27,6 @@
 - [Async options vs a controlled active index](review-checklist-async-options-vs-controlled-active-index.md) — dropping `filter` makes Enter commit row 0 of the _previous_ query; hang the second request and press Enter
 - [Relaxation clears half a paired filter](review-checklist-relaxation-clears-half-a-paired-filter.md) — `Anywhere` patches `city` only, leaves `state=IL`, then empties the escape list; apply the patch and re-run toSearchQuery
 - [isDirty gate locks the escape hatch](review-checklist-isdirty-gate-locks-the-escape-hatch.md) — clear a `min(2)` field: the form is dirty AND unsavable, so the switch gated on `!isDirty` never re-enables. Presence is not usability
-- [z.date() without a wire coercion](review-checklist-zdate-without-a-wire-coercion.md) — a new Date field in a shared response schema 500s the screen; and a mutation schema handed to `useApi` has no wire twin to grep for
 - [Ceiling counted over a stale lookup](review-checklist-ceiling-counted-over-a-stale-lookup.md) — fixing the add side leaves `categoryOf(id)` undercounting ids the selection outran; render with an id absent from `allTags` and fill the category
 - [focus()-opener is dead when already focused](review-checklist-focus-opener-dead-when-already-focused.md) — a new affordance in `combobox-field` opens via `inputRef.focus()`; after Escape or a keyboard commit that fires nothing. Drive open→Escape→click
 - [Universal boundary vs a viewer countdown](review-checklist-universal-boundary-vs-viewer-countdown.md) — `isUniversallyPastDate` keeps yesterday, so `days <= 0 → 'today'` labels a past date today; probe yesterday's row and diff the sibling surface
@@ -38,3 +37,4 @@
 - [Build-time output keyed on a passThrough env](review-checklist-build-time-output-keyed-on-passthrough-env.md) — WEB_URL is outside turbo's cache key, but `NEXT_PUBLIC_*` is inferred into web#build anyway, and the root `.env` next.config loads is hashed by nothing
 - [Overlay rule changed in one composer](review-checklist-overlay-rule-changed-in-one-composer.md) — `composeLocks` says "exactly as `readCalendar` overlays"; grep the changed function's name, a comment citing it is a second implementation
 - [Env stub vs the deployed required set](review-checklist-env-stub-vs-deployed-required-set.md) — `loadEnv()` fills the rows a test's stub forgot from the untracked `.env`; recompute requiredness from the registry, then grep ci.yml
+- [Guard moved to onRequest shadows route hooks](review-checklist-guard-moved-to-onrequest-shadows-route-hooks.md) — rate-limit appends after the guard, so refused callers stop being counted; and two error branches share `400 VALIDATION_ERROR`

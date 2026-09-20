@@ -14,7 +14,7 @@ import {
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { unauthorized } from '../../lib/errors.js';
-import { authenticated, requireAuth, requireRole } from '../../lib/guards.js';
+import { authenticated, requireAuth, requireRoleBeforeValidation } from '../../lib/guards.js';
 import { resolveStreamSubject } from '../users/users.service.js';
 import {
   listConversations,
@@ -95,7 +95,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
   app.post(
     '/conversations',
     {
-      preHandler: requireRole('customer'),
+      onRequest: requireRoleBeforeValidation('customer'),
       schema: {
         body: openConversationSchema,
         response: { 200: openedConversationSchema, 201: openedConversationSchema },
