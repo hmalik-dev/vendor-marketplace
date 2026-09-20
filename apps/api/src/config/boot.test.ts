@@ -18,6 +18,8 @@ const CREDENTIAL_ROWS: ReadonlyArray<readonly [string, string]> = [
   ['STRIPE_WEBHOOK_SECRET', fake('whsec', 'MfKQ9r8sTuVwXyZ0123456789')],
   ['STRIPE_CONNECT_WEBHOOK_SECRET', fake('whsec', 'MfKQ9r8sTuVwXyZ0123456789')],
   ['RESEND_API_KEY', fake('re', 'FAKEabcdefghijklmnop9005')],
+  ['RESEND_WEBHOOK_SECRET', fake('whsec', 'PqRsTuVwXyZ0123456789AbCdE')],
+  ['WEB_TIER_KEY', fake('tier', 'key', 'filler', 'abcdefghijklmnopqrstuvwx')],
   ['DATABASE_URL', databaseUrl()],
   ['NEON_AUTH_DATABASE_URL', databaseUrl()],
   ['STORAGE_ACCESS_KEY_ID', fake('access', 'id', 'filler')],
