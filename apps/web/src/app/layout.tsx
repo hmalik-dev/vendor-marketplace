@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
+import { Analytics } from '@vercel/analytics/next';
 import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
 import { siteOrigin } from '@/config/env';
 import { getServerSession } from '@/lib/auth/server';
@@ -154,6 +155,7 @@ export default async function RootLayout({
           offset={{ bottom: TOAST_BOTTOM_OFFSET }}
           mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
         />
+        <Analytics />
       </body>
     </html>
   );
