@@ -225,6 +225,7 @@ export function PackageForm({
         },
       );
 
+      setChangedTo(null);
       toast.success(isNew ? 'Package added.' : 'Package saved.');
       onSaved(saved);
     } catch (error) {

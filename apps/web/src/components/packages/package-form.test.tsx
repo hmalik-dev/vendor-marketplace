@@ -352,6 +352,7 @@ describe('PackageForm — the version a save is judged against (VEN-481)', () =>
     await waitFor(() => expect(requestMock).toHaveBeenCalledTimes(2));
     expect(putBody(1).updatedAt).toEqual(MOVED.updatedAt);
     expect(putBody(1).name).toBe('My typed name');
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
 
   it('loads the current values on request', async () => {
