@@ -40,7 +40,7 @@ on:
 # which is correct, since it carries every commit the discarded one would have
 # shipped.
 concurrency:
-  group: deploy-${{ github.event.workflow_run.head_branch }}
+  group: deploy-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: false
 
 permissions:
@@ -90,6 +90,7 @@ jobs:
         env:
           HAS_DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED != '' }}
           HAS_NEON_BRANCH: ${{ vars.NEON_BRANCH != '' }}
+          HAS_NEON_HOST: ${{ vars.NEON_HOST != '' }}
           HAS_API_HOST: ${{ vars.API_HOST != '' }}
           HAS_API_SERVICE: ${{ vars.API_SERVICE != '' }}
           HAS_API_HOST_TOKEN: ${{ secrets.API_HOST_TOKEN != '' }}
@@ -131,6 +132,7 @@ jobs:
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
           NEON_BRANCH: ${{ vars.NEON_BRANCH }}
+          NEON_HOST: ${{ vars.NEON_HOST }}
         run: node scripts/deploy.mjs migrate
 
       - name: Deploy the API

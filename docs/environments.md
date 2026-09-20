@@ -43,7 +43,9 @@ each has its own secrets and variables.
 2. **Preflight**: every input below is set, or the run fails by name.
 3. **Migrate** the environment's database over its `DATABASE_URL_UNPOOLED`, then
    the idempotent reference seed. `NEON_BRANCH` must equal the environment
-   name; staging can never migrate production's database, nor the reverse.
+   name and the URL's host must equal `NEON_HOST`, so neither a mis-set branch
+   variable nor a secret copied from the other tier can migrate the wrong
+   database.
 4. **API**: `railway up` with the environment's token. Railway's own branch
    auto-deploy must stay **off**, since it cannot be ordered after a GitHub job
    and would ship code before its migration.
@@ -56,12 +58,21 @@ Every step runs only if the one before it succeeded, so a failed migration
 stops the release before either service moves. Migrations therefore run against
 the previous release's code and must stay backwards-compatible with it.
 
-Per GitHub environment (`staging`, `production`), set by the account holder
+Set on each GitHub environment (`staging`, `production`) by the account holder
 (VEN-377): secrets `DATABASE_URL_UNPOOLED`, `API_HOST_TOKEN` (a Railway project
 token scoped to that environment), `VERCEL_TOKEN`, `SENTRY_AUTH_TOKEN`;
-variables `NEON_BRANCH` (`staging` or `production`), `API_HOST`, `API_SERVICE`,
-`API_URL`, `WEB_URL`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SENTRY_WEB_PROJECT`;
-and the repository variable `DEPLOY_GATE=required` once all are set.
+variables `NEON_BRANCH` (`staging` or `production`), `NEON_HOST` (that
+branch's direct endpoint host), `API_HOST`, `API_SERVICE`, `API_URL`, `WEB_URL`
+(staging's first entry must be a host containing `staging`, since it is the
+alias target), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SENTRY_WEB_PROJECT`; and
+the repository variable `DEPLOY_GATE=required` once all are set.
+
+Never set any of these at the repository level: GitHub falls back from an
+environment to the repository, and the names are the same on both tiers, so a
+repository-level value is silently the other tier's. Do not add a deployment
+branch policy to the environments either: a `workflow_run` job runs on the
+default branch, so a rule limiting `production` to the `production` branch
+would refuse every deploy.
 
 Vercel builds only `staging` and `production` from git (`vercel.json`); every
 other branch's deployment is skipped, so pull requests and lanes get no Vercel

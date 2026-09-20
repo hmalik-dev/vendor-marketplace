@@ -70,13 +70,17 @@ export const API_HOSTS = {
 };
 
 /**
- * What the deploy needs, by the name an operator sets. `secret` values come
- * from repository secrets and the rest from repository variables; preflight is
- * handed only whether each is set, never a value.
+ * What the deploy needs, by the name an operator sets. Every one is set on the
+ * GitHub **environment** it belongs to (`staging`, `production`), never at the
+ * repository level: an environment's name is the same on both tiers, and GitHub
+ * falls back from an environment to the repository, so a repository-level value
+ * is silently the other tier's. `secret` values are secrets and the rest are
+ * variables; preflight is handed only whether each is set, never a value.
  */
 export const REQUIRED_INPUTS = [
   { name: 'DATABASE_URL_UNPOOLED', kind: 'secret' },
   { name: 'NEON_BRANCH', kind: 'variable' },
+  { name: 'NEON_HOST', kind: 'variable' },
   { name: 'API_HOST', kind: 'variable' },
   { name: 'API_SERVICE', kind: 'variable' },
   { name: 'API_HOST_TOKEN', kind: 'secret' },
@@ -109,6 +113,20 @@ function need(env, names) {
   if (missing.length > 0) {
     throw new PhaseError(`Missing ${missing.join(', ')}; refusing to continue (VEN-377).`);
   }
+}
+
+/** The host of a URL, or `''` when it is not one; never throws, so no value reaches a message. */
+function urlHost(value) {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return '';
+  }
+}
+
+/** `WEB_URL` may be a comma-separated allow-list (it doubles as CORS); its first entry is the staging host. */
+function aliasHost(env) {
+  return urlHost(env.WEB_URL.split(',')[0].trim());
 }
 
 /** `names` copied out of `env`, and nothing else. */
@@ -359,11 +377,14 @@ export const PHASES = {
    * a first deploy against an empty database comes up usable, not ready-but-empty.
    *
    * The Neon branch behind the URL is declared per environment as `NEON_BRANCH`
-   * and must be the environment's own name, so staging's run can never migrate
-   * production's database, nor the reverse, whatever a mis-scoped secret says.
+   * and must be the environment's own name, and the URL's host must be the
+   * `NEON_HOST` declared beside it. The first catches a whole variable set
+   * falling back to the other tier; the second catches the secret alone doing
+   * so, which `NEON_BRANCH` cannot see. Together, staging's run cannot migrate
+   * production's database, nor the reverse.
    */
   async migrate(env, io) {
-    need(env, ['DATABASE_URL_UNPOOLED', 'DEPLOY_TARGET', 'NEON_BRANCH']);
+    need(env, ['DATABASE_URL_UNPOOLED', 'DEPLOY_TARGET', 'NEON_BRANCH', 'NEON_HOST']);
 
     if (!ENVIRONMENTS.includes(env.DEPLOY_TARGET)) {
       throw new PhaseError(
@@ -374,6 +395,12 @@ export const PHASES = {
     if (env.NEON_BRANCH.trim() !== env.DEPLOY_TARGET) {
       throw new PhaseError(
         `NEON_BRANCH "${env.NEON_BRANCH}" is not the ${env.DEPLOY_TARGET} environment's Neon branch (expected "${env.DEPLOY_TARGET}"); refusing to migrate.`,
+      );
+    }
+
+    if (urlHost(env.DATABASE_URL_UNPOOLED) !== env.NEON_HOST.trim()) {
+      throw new PhaseError(
+        `DATABASE_URL_UNPOOLED is not on NEON_HOST, the ${env.DEPLOY_TARGET} environment's Neon endpoint; refusing to migrate.`,
       );
     }
 
@@ -423,7 +450,7 @@ export const PHASES = {
    * built from the Preview environment's variables (Hobby has no custom
    * environments), then aliased to the host of `WEB_URL` so the readiness poll
    * and people have one stable address; `vercel deploy` prints the deployment's
-   * URL as its last stdout line, which is what the alias names.
+   * URL on its own line, which is what the alias names.
    */
   async web(env, io) {
     const vercel = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
@@ -436,8 +463,19 @@ export const PHASES = {
         `DEPLOY_TARGET "${env.DEPLOY_TARGET}" is not one of ${ENVIRONMENTS.join(', ')}.`,
       );
     }
+    /*
+     * The alias repoints a hostname at this build. WEB_URL resolves environment
+     * → repository, so a repository-level value would be production's; the host
+     * must therefore name the environment, and the run refuses before anything
+     * has shipped.
+     */
     if (!production) {
       need(env, ['WEB_URL']);
+      if (!aliasHost(env).includes(env.DEPLOY_TARGET)) {
+        throw new PhaseError(
+          `WEB_URL is not a ${env.DEPLOY_TARGET} host; refusing to alias a preview deployment to it.`,
+        );
+      }
     }
 
     const redact = redactor([env.VERCEL_TOKEN, env.SENTRY_AUTH_TOKEN]);
@@ -468,11 +506,15 @@ export const PHASES = {
     );
 
     if (!production) {
-      const deployment = printed.trim().split('\n').at(-1)?.trim() ?? '';
-      if (!/^https:\/\/[\w.-]+$/.test(deployment)) {
+      // stdout and stderr share one stream here, so the URL is the last line that is one.
+      const deployment = printed
+        .split('\n')
+        .map((line) => line.trim())
+        .findLast((line) => /^https:\/\/[\w.-]+$/.test(line));
+      if (!deployment) {
         throw new PhaseError('vercel deploy did not print a deployment URL to alias.');
       }
-      await io.run('npx', [...cli, 'alias', 'set', deployment, new URL(env.WEB_URL).hostname], {
+      await io.run('npx', [...cli, 'alias', 'set', deployment, aliasHost(env)], {
         env: child,
         redact,
         write: io.write,

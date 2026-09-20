@@ -197,7 +197,11 @@ test('preflight: an API host with no adapter fails rather than deploying nowhere
 // --- migrate ----------------------------------------------------------------
 
 /** The two variables that say which environment a run deploys and which Neon branch it was given. */
-const TARGET = (target, branch = target) => ({ DEPLOY_TARGET: target, NEON_BRANCH: branch });
+const TARGET = (target, branch = target) => ({
+  DEPLOY_TARGET: target,
+  NEON_BRANCH: branch,
+  NEON_HOST: new URL(UNPOOLED).hostname,
+});
 
 test('migrate: refuses to run without the unpooled URL', async () => {
   const { io, calls } = recordingIo();
@@ -237,6 +241,20 @@ test('migrate: refuses when NEON_BRANCH names a different environment than the o
     );
     assert.equal(calls.length, 0, `${target} against ${branch}`);
   }
+});
+
+test('migrate: refuses a secret from another environment even when NEON_BRANCH is right', async () => {
+  const { io, calls } = recordingIo();
+  const otherTier = ['postgresql://deploy:', fake('other'), '@ep-production.neon.test/orla'].join(
+    '',
+  );
+  await assert.rejects(
+    PHASES.migrate({ ...TARGET('staging'), DATABASE_URL_UNPOOLED: otherTier }, io),
+    new PhaseError(
+      "DATABASE_URL_UNPOOLED is not on NEON_HOST, the staging environment's Neon endpoint; refusing to migrate.",
+    ),
+  );
+  assert.equal(calls.length, 0);
 });
 
 test('migrate: refuses without a Neon branch, or when the target is not an environment', async () => {
@@ -450,7 +468,9 @@ test('workflow: the branch is the environment, so each has its own secrets and v
 
 test('workflow: serialises deploys per environment and never cancels one in flight', () => {
   assert.deepEqual(WORKFLOW.concurrency, {
-    group: 'deploy-${{ github.event.workflow_run.head_branch }}',
+    // The head repository is in the key so a fork's branch of the same name cannot queue in front of a real deploy.
+    group:
+      'deploy-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}',
     'cancel-in-progress': false,
   });
   assert.equal(JOB.concurrency, undefined);
@@ -500,6 +520,7 @@ test('workflow: only the migrate step is handed a database URL, and only the unp
   assert.deepEqual(migrate.env, {
     DATABASE_URL_UNPOOLED: '${{ secrets.DATABASE_URL_UNPOOLED }}',
     NEON_BRANCH: '${{ vars.NEON_BRANCH }}',
+    NEON_HOST: '${{ vars.NEON_HOST }}',
   });
   assert.ok(!Object.keys(JOB.env).some((key) => key.startsWith('DATABASE_URL')));
 });
@@ -542,7 +563,9 @@ here=$(dirname "$0")
 call="$(basename "$0") $*"
 printf '%s\\n' "$call" >> "$here/invocations.log"
 case "$call" in
-  "git ls-remote"*) printf '%s\\t%s\\n' "$(cat "$here/tip")" "$3" ;;
+  "git ls-remote"*)
+    # Answers only for the ref of the branch under test, so a gate that asks for any other sees no tip.
+    [ "$3" = "refs/heads/$(cat "$here/branch")" ] && printf '%s\\t%s\\n' "$(cat "$here/tip")" "$3" ;;
   *) env ;;
 esac
 # \`vercel deploy\` prints the deployment's URL as its last line.
@@ -585,6 +608,7 @@ function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '' }) 
     writeFileSync(log, '');
     writeFileSync(output, '');
     writeFileSync(path.join(dir, 'tip'), tip);
+    writeFileSync(path.join(dir, 'branch'), branch);
     writeFileSync(path.join(dir, 'fail'), fail);
 
     const context = {
@@ -650,6 +674,7 @@ const SECRETS = Object.fromEntries(
 );
 const VARS = {
   NEON_BRANCH: 'production',
+  NEON_HOST: new URL(UNPOOLED).hostname,
   API_HOST: 'railway',
   API_SERVICE: 'orla-api',
   VERCEL_ORG_ID: 'team_x',
@@ -756,7 +781,7 @@ test('dry run: a superseded commit deploys nothing and does not fail', () => {
 test("dry run: a staging push migrates staging first, then deploys, and looks up staging's tip", () => {
   const result = dryRun({
     secrets: SECRETS,
-    vars: { ...VARS, NEON_BRANCH: 'staging' },
+    vars: { ...VARS, NEON_BRANCH: 'staging', WEB_URL: 'https://orla-staging.test' },
     branch: 'staging',
   });
 
@@ -801,10 +826,11 @@ test('web: staging deploys a preview and aliases it to the staging host', async 
   const calls = [];
   const url = 'https://orla-abc123-team.vercel.app';
   const io = {
-    run: async (command, args, options) => {
-      calls.push([command === 'npx' ? '' : command, ...args.slice(2)].join(' ').trim());
+    run: async (_command, args, options) => {
+      calls.push(args.slice(2).join(' '));
       if (args[2] === 'deploy') {
-        options.write(`Inspect: https://vercel.com/x\n${url}\n`);
+        // Progress lines can follow the URL: it is the last line that is one, not the last line.
+        options.write(`Inspect: https://vercel.com/x\n${url}\nPreview: ${url} [3s]\n`);
       }
     },
     write: () => {},
@@ -819,7 +845,8 @@ test('web: staging deploys a preview and aliases it to the staging host', async 
       SENTRY_AUTH_TOKEN: fake('sentry'),
       SENTRY_WEB_PROJECT: 'orla-web',
       SENTRY_RELEASE: SHA,
-      WEB_URL: 'https://orla-staging.vercel.app',
+      // An allow-list: the first entry is the alias host.
+      WEB_URL: 'https://orla-staging.vercel.app,https://staging.orla.test',
     },
     io,
   );
@@ -830,6 +857,52 @@ test('web: staging deploys a preview and aliases it to the staging host', async 
     `deploy --prebuilt --env SENTRY_RELEASE=${SHA}`,
     `alias set ${url} orla-staging.vercel.app`,
   ]);
+});
+
+test('web: staging refuses to alias a host that is not its own, before building anything', async () => {
+  const { io, calls } = recordingIo();
+  for (const WEB_URL of ['https://orla.example', 'orla-staging.vercel.app', '']) {
+    await assert.rejects(
+      PHASES.web(
+        {
+          DEPLOY_TARGET: 'staging',
+          VERCEL_TOKEN: fake('vercel'),
+          VERCEL_ORG_ID: 'org',
+          VERCEL_PROJECT_ID: 'prj',
+          SENTRY_AUTH_TOKEN: fake('sentry'),
+          SENTRY_WEB_PROJECT: 'orla-web',
+          SENTRY_RELEASE: SHA,
+          WEB_URL,
+        },
+        io,
+      ),
+      /WEB_URL/,
+    );
+  }
+  assert.equal(calls.length, 0);
+});
+
+test('web: staging refuses to alias a host that is not its own, before building anything', async () => {
+  const { io, calls } = recordingIo();
+  for (const WEB_URL of ['https://orla.example', 'orla-staging.vercel.app', '']) {
+    await assert.rejects(
+      PHASES.web(
+        {
+          DEPLOY_TARGET: 'staging',
+          VERCEL_TOKEN: fake('vercel'),
+          VERCEL_ORG_ID: 'org',
+          VERCEL_PROJECT_ID: 'prj',
+          SENTRY_AUTH_TOKEN: fake('sentry'),
+          SENTRY_WEB_PROJECT: 'orla-web',
+          SENTRY_RELEASE: SHA,
+          WEB_URL,
+        },
+        io,
+      ),
+      /WEB_URL/,
+    );
+  }
+  assert.equal(calls.length, 0);
 });
 
 test('web: production stays a production deployment and is not aliased', async () => {
