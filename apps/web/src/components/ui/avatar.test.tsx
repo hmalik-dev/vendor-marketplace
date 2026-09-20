@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Avatar, AVATAR_SIZES, avatarToneIndex, initialsFor, SERIF_FLOOR_PX } from './avatar';
 
 describe('initialsFor', () => {
@@ -312,5 +312,26 @@ describe('Avatar image failure', () => {
     fireEvent.error(container.querySelector('img')!);
 
     expect(screen.getByRole('img', { name: 'Maya Fernandez' })).toBeDefined();
+  });
+});
+
+describe('Avatar on the storage host (VEN-456)', () => {
+  const BASE = 'https://ep-abc.storage.us-east-2.aws.neon.tech/uploads';
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('renders an uploaded avatar as an /_next/image URL for the storage key', () => {
+    vi.stubEnv('NEXT_PUBLIC_STORAGE_PUBLIC_URL', BASE);
+    render(<Avatar name="Maya Fernandez" src={`${BASE}/avatars/a1.jpg`} />);
+
+    const src = new URL(
+      document.querySelector('img')?.getAttribute('src') ?? '',
+      'https://web.example',
+    );
+
+    expect(src.pathname).toBe('/_next/image');
+    expect(src.searchParams.get('url')).toBe(`${BASE}/avatars/a1.jpg`);
   });
 });

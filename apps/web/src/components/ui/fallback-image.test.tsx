@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FallbackImage, ImageFallback, IMAGE_FALLBACK_GROUND } from './fallback-image';
 
 /*
@@ -209,5 +209,58 @@ describe('FallbackImage', () => {
     } finally {
       restore();
     }
+  });
+});
+
+/*
+ * VEN-456: an upload on the storage host is served through `/_next/image`, so
+ * the host that has no CDN is fetched once per size, not once per page view.
+ */
+describe('FallbackImage on the storage host', () => {
+  const BASE = 'https://ep-abc.storage.us-east-2.aws.neon.tech/uploads';
+
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_STORAGE_PUBLIC_URL', BASE);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  function renderedSrc(): URL {
+    const img = document.querySelector('img');
+
+    return new URL(img?.getAttribute('src') ?? '', 'https://web.example');
+  }
+
+  it.each([
+    ['a vendor cover', 'vendors/v1/cover.jpg', 400],
+    ['a portfolio image', 'portfolio/p1/thumb.jpg', 320],
+  ])(
+    'renders %s as an /_next/image URL whose url is the base plus the key',
+    (_name, key, width) => {
+      render(<FallbackImage src={`${BASE}/${key}`} alt="" width={width} />);
+
+      const src = renderedSrc();
+
+      expect(src.pathname).toBe('/_next/image');
+      expect(src.searchParams.get('url')).toBe(`${BASE}/${key}`);
+      expect(document.querySelector('img')?.hasAttribute('srcset')).toBe(false);
+    },
+  );
+
+  it('serves a site-relative image untouched', () => {
+    render(<FallbackImage src="/demo/cover.jpg" alt="" />);
+
+    expect(document.querySelector('img')?.getAttribute('src')).toBe('/demo/cover.jpg');
+    expect(document.querySelector('img')?.hasAttribute('srcset')).toBe(false);
+  });
+
+  it('still falls back to the tone block when the optimized image fails', () => {
+    render(<FallbackImage src={`${BASE}/gone.jpg`} alt="" className="size-full" />);
+
+    fireEvent.error(document.querySelector('img') as HTMLImageElement);
+
+    expect(block()).not.toBeNull();
   });
 });

@@ -83,6 +83,14 @@ which is not a launch.
   `publicUrlFor(S3_PUBLIC_URL, key)` into rows, so changing `S3_PUBLIC_URL` after
   vendors upload does not repoint existing images. Put the custom domain in
   place first — which is why `launch:check` fails `*.r2.dev`.
+- **Uploaded images bill on Vercel image optimization (VEN-456).** Neon Object
+  Storage has no CDN, so every upload is served through `/_next/image`, whose
+  cache is the CDN. Cost is one source image and one transformation per upload
+  (one width each — `optimizedImageProps` asks for a single URL, and
+  `images.qualities` is pinned so a request cannot multiply variants), plus cache
+  reads per view. **Read the plan's included source-image and transformation
+  quota off the Vercel dashboard (Usage → Image Optimization) and write it here
+  before launch; it is not knowable from the repo.** Watch it on VEN-443's caps.
 - **The rate limiter is in memory, per instance.** `@fastify/rate-limit` in
   `apps/api/src/server.ts` keeps its counters in each process, so N replicas
   allow N × `RATE_LIMIT_MAX`. Correct on a bounded replica count.
