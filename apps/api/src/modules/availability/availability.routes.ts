@@ -1,7 +1,7 @@
 import { availabilityBulkUpdateSchema, availabilitySchema } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { assertRole, requireRole } from '../../lib/guards.js';
+import { assertRole, requireRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import { listOwnAvailability, setOwnAvailability } from './availability.service.js';
 
 const AVAILABILITY_PATH = '/vendor/availability';
@@ -17,6 +17,7 @@ const availabilityListSchema = z.array(availabilitySchema);
  */
 export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
   const vendorOnly = requireRole('vendor');
+  const vendorOnlyBeforeValidation = requireRoleBeforeValidation('vendor');
 
   app.get(
     AVAILABILITY_PATH,
@@ -28,7 +29,7 @@ export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put(
     AVAILABILITY_PATH,
     {
-      preHandler: vendorOnly,
+      onRequest: vendorOnlyBeforeValidation,
       schema: { body: availabilityBulkUpdateSchema, response: { 200: availabilityListSchema } },
     },
     async (request) =>

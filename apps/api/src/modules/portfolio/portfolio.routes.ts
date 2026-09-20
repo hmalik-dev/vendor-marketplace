@@ -7,7 +7,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { assertRole, requireRole } from '../../lib/guards.js';
+import { assertRole, requireRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import {
   addPortfolioItem,
   listOwnPortfolio,
@@ -24,6 +24,7 @@ const portfolioListSchema = z.array(portfolioItemSchema);
 
 export const portfolioRoutes: FastifyPluginAsyncZod = async (app) => {
   const vendorOnly = requireRole('vendor');
+  const vendorOnlyBeforeValidation = requireRoleBeforeValidation('vendor');
 
   app.get(
     PORTFOLIO_PATH,
@@ -34,7 +35,7 @@ export const portfolioRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     PORTFOLIO_PATH,
     {
-      preHandler: vendorOnly,
+      onRequest: vendorOnlyBeforeValidation,
       schema: { body: createPortfolioItemSchema, response: { 201: portfolioItemSchema } },
     },
     async (request, reply) => {
@@ -52,7 +53,7 @@ export const portfolioRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put(
     `${PORTFOLIO_PATH}/reorder`,
     {
-      preHandler: vendorOnly,
+      onRequest: vendorOnlyBeforeValidation,
       schema: { body: reorderPortfolioSchema, response: { 200: portfolioListSchema } },
     },
     async (request) =>
@@ -62,7 +63,7 @@ export const portfolioRoutes: FastifyPluginAsyncZod = async (app) => {
   app.patch(
     `${PORTFOLIO_PATH}/:itemId`,
     {
-      preHandler: vendorOnly,
+      onRequest: vendorOnlyBeforeValidation,
       schema: {
         params: portfolioParamsSchema,
         body: updatePortfolioItemSchema,
