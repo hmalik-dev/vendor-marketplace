@@ -453,9 +453,19 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(portfolioRoutes);
   await app.register(reviewRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(availabilityRoutes);
-  await app.register(bookingRequestRoutes, { webOrigin: canonicalWebOrigin(env) });
-  await app.register(messagingRoutes, { allowedOrigins: allowedOrigins(env) });
-  await app.register(uploadRoutes);
+  await app.register(bookingRequestRoutes, {
+    webOrigin: canonicalWebOrigin(env),
+    rateLimitMax: env.BOOKING_REQUEST_RATE_LIMIT_MAX,
+  });
+  await app.register(messagingRoutes, {
+    allowedOrigins: allowedOrigins(env),
+    conversationRateLimitMax: env.CONVERSATION_RATE_LIMIT_MAX,
+    messageRateLimitMax: env.MESSAGE_RATE_LIMIT_MAX,
+  });
+  await app.register(uploadRoutes, {
+    rateLimitMax: env.UPLOAD_RATE_LIMIT_MAX,
+    objectLimit: env.UPLOAD_OBJECT_LIMIT,
+  });
   await app.register(supportRoutes, {
     supportEmailTo: env.SUPPORT_EMAIL_TO,
     webOrigin: canonicalWebOrigin(env),

@@ -294,6 +294,36 @@ export function assertOwnedImageRefs(
   }
 }
 
+/**
+ * How many images `ownerId` holds across every namespace, counting no further
+ * than `stopAt` — the cap check only needs to know whether the limit is reached.
+ * A thumbnail is the sibling of an image, not an upload of its own.
+ */
+export async function countOwnedImages(
+  storage: Pick<ObjectStorage, 'list'>,
+  ownerId: string,
+  stopAt: number,
+): Promise<number> {
+  let count = 0;
+
+  for (const prefix of STORAGE_PREFIXES) {
+    let token: string | undefined;
+
+    do {
+      const page = await storage.list(`${prefix}/${ownerId}`, token ? { token } : undefined);
+      count += page.objects.filter((object) => !object.key.endsWith('-thumb.webp')).length;
+
+      if (count >= stopAt) {
+        return count;
+      }
+
+      token = page.nextToken;
+    } while (token);
+  }
+
+  return count;
+}
+
 export function publicUrlFor(publicBaseUrl: string, key: string): string {
   return `${publicBaseUrl.replace(/\/+$/, '')}/${key}`;
 }

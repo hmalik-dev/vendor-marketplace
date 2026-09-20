@@ -60,6 +60,13 @@ export const TEST_ENV: ApiEnv = {
   STRIPE_WEBHOOK_SECRET: 'unused',
   STRIPE_PLATFORM_FEE_RATE: 0.12,
   RATE_LIMIT_MAX: 1_000,
+  // Generous like RATE_LIMIT_MAX: a suite builds one app, so one store spans the whole file.
+  // The per-account suite passes its own small numbers through `env`.
+  UPLOAD_RATE_LIMIT_MAX: 1_000,
+  MESSAGE_RATE_LIMIT_MAX: 1_000,
+  CONVERSATION_RATE_LIMIT_MAX: 1_000,
+  BOOKING_REQUEST_RATE_LIMIT_MAX: 1_000,
+  UPLOAD_OBJECT_LIMIT: 1_000,
   STORAGE_ENDPOINT: 'http://storage.test',
   STORAGE_ACCESS_KEY_ID: 'test',
   STORAGE_SECRET_ACCESS_KEY: 'test',

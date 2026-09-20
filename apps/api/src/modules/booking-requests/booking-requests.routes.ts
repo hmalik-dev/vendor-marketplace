@@ -10,6 +10,7 @@ import {
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { authenticated, requireAuth, requireRoleBeforeValidation } from '../../lib/guards.js';
+import { perAccountRateLimit } from '../../lib/rate-limit.js';
 import type { NotificationEmailDeps } from '../notifications/notification-email.js';
 import {
   createBookingRequest,
@@ -25,6 +26,8 @@ const requestParamsSchema = z.object({ requestId: uuidSchema });
 const requestListSchema = z.array(bookingRequestDetailSchema);
 
 export interface BookingRequestRoutesOptions {
+  /** Booking requests one account may create per hour. */
+  rateLimitMax: number;
   /**
    * `canonicalWebOrigin(env)` — the origin every emailed link is built from.
    *
@@ -69,6 +72,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
        * well-formed body already answered 403, so only the code was wrong.
        */
       onRequest: requireRoleBeforeValidation('customer'),
+      config: { rateLimit: perAccountRateLimit(options.rateLimitMax, '1 hour') },
       schema: {
         body: createBookingRequestSchema,
         response: {
