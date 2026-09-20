@@ -9,7 +9,10 @@ import VendorError from './vendors/[slug]/error';
 import BookingError from './bookings/[requestId]/error';
 import SupportError from './support/error';
 
+const refresh = vi.fn();
+
 vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 const APP_DIR = join(process.cwd(), 'src/app');
 
@@ -52,6 +55,8 @@ describe('segment error boundaries', () => {
 
       await userEvent.click(screen.getByRole('button', { name: /try again/i }));
 
+      // A retry refetches the server payload that failed, then resets the boundary.
+      expect(refresh).toHaveBeenCalled();
       expect(reset).toHaveBeenCalledTimes(1);
     },
   );
