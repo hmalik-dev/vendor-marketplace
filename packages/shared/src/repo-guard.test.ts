@@ -35,7 +35,6 @@ const ALLOWED_FILES: Readonly<Record<string, string>> = {
   '.claude/plans/vendor-marketplace-plan.md':
     'the original architecture plan, marked superseded at its head',
   'design/Orla-Screens-all.html': 'compiled design export, left as imported',
-  'design/delta-legal/Orla-Legal-Surfaces.html': 'compiled design export, left as imported',
   '.gitleaks.toml':
     'CI scans every commit in history, so the allow-lists for values older commits carried must stay',
   'packages/preflight/src/launch/config.ts':

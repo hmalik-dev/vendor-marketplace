@@ -60,8 +60,7 @@ which is not a launch.
       user's private messages — and the legal entity and a monitored support
       destination are named.
 - [ ] **Provider accounts** (VEN-377): the Neon Auth production branch on the real
-      domain, the live Stripe Connect platform, the Resend domain's DNS, the
-      and the **Neon upgrade from
+      domain, the live Stripe Connect platform, the Resend domain's DNS, and the **Neon upgrade from
       Free to Launch** — on Free, `production` has a 6-hour history window, no
       branch protection and a storage cap whose breach makes writes fail. After
       the upgrade: protect the `production` branch and widen its history
