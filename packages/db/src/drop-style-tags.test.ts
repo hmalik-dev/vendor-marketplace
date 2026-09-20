@@ -111,37 +111,46 @@ afterAll(async () => {
 /*
  * Drizzle's migrator applies every pending migration in ONE transaction, and
  * Postgres refuses to use an enum value in the transaction that added it
- * (55P04). `0015` adds `'style'`; `0016` must not name it as an enum literal, or
- * the first database to run 0015-0017 together (Neon dev, staging, production)
- * fails at 0016. Each statement auto-committing, as above, cannot see that.
+ * (55P04) unless the enum type was itself created in that transaction. The
+ * ordinary suites start from an empty database, so every enum is created
+ * in-transaction and the hazard is invisible; Neon dev and staging held 0000-0009
+ * already committed, which is where 0016 failed. This replays the deployed shape:
+ * 0000-0009 committed, then everything after in one transaction.
  */
-describe('0015 → 0017 applied in a single transaction, as the migrator does', () => {
-  it('runs to the end on a database still at 0014', async () => {
+const DEPLOYED_THROUGH = '0009_';
+
+describe('the pending journal applied in a single transaction, as the migrator does', () => {
+  it('runs from the state Neon held to the head of the journal', async () => {
     const fresh = await createTestDatabase();
     try {
-      expect(ENTRIES.slice(15, 18).map((entry) => entry.tag)).toEqual([
-        '0015_simple_johnny_blaze',
-        '0016_drop_style_tags',
-        '0017_same_khan',
-      ]);
-      for (const entry of ENTRIES.slice(0, 15)) {
+      const split = ENTRIES.findIndex((entry) => entry.idx >= 10);
+      expect(ENTRIES[split - 1]?.tag.startsWith(DEPLOYED_THROUGH)).toBe(true);
+      expect(ENTRIES.length).toBeGreaterThan(split);
+
+      for (const entry of ENTRIES.slice(0, split)) {
         for (const statement of statementsOf(entry.tag)) {
           await fresh.db.execute(sql.raw(statement));
         }
       }
       await fresh.db.transaction(async (tx) => {
-        for (const entry of ENTRIES.slice(15, 18)) {
+        for (const entry of ENTRIES.slice(split)) {
           for (const statement of statementsOf(entry.tag)) {
             await tx.execute(sql.raw(statement));
           }
         }
       });
+
       const labels = await fresh.db.execute(
-        sql.raw(`SELECT count(*) AS count FROM pg_enum
+        sql.raw(`SELECT enumlabel FROM pg_enum
                    JOIN pg_type ON pg_type.oid = pg_enum.enumtypid
-                  WHERE pg_type.typname = 'tag_category'`),
+                  WHERE pg_type.typname = 'tag_category'
+                  ORDER BY enumsortorder`),
       );
-      expect(Number((labels.rows[0] as { count: string | number }).count)).toBe(3);
+      expect(labels.rows.map((row) => (row as { enumlabel: string }).enumlabel)).toEqual([
+        'language',
+        'cultural',
+        'dietary',
+      ]);
     } finally {
       await fresh.close();
     }
