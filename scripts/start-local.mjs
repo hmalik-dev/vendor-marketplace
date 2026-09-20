@@ -60,6 +60,8 @@ export const OPTIONAL_PLACEHOLDER_KEYS = [
   // Neon only: a lane's identities live on a Neon branch while its app database is local Docker.
   'NEON_AUTH_DATABASE_URL',
   'NEON_BRANCH',
+  // Its placeholder fails the shape too; a laptop has no sink and logs instead.
+  'EMAIL_SINK_ADDRESS',
   'RESEND_WEBHOOK_SECRET',
   // The second Stripe endpoint's key: locally one listener secret covers both streams.
   'STRIPE_CONNECT_WEBHOOK_SECRET',

@@ -42,6 +42,7 @@ import type { Clock } from '../plugins/clock.js';
 
 export const TEST_ENV: ApiEnv = {
   NODE_ENV: 'test',
+  DEPLOY_ENV: 'local',
   PORT: 4000,
   HOST: '127.0.0.1',
   LOG_LEVEL: 'silent',

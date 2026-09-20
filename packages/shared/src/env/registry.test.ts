@@ -361,6 +361,7 @@ describe('registrySchemaShape', () => {
   it('lists the keys the web build reads for a capability', () => {
     expect(registryKeys({ consumer: 'web', capabilities: ['core'] })).toEqual([
       'NODE_ENV',
+      'DEPLOY_ENV',
       'WEB_URL',
       'API_URL',
       'CSP_ENFORCE',
@@ -426,7 +427,7 @@ describe('registrySchemaShape', () => {
      * and every visitor shares one rate-limit address. They are excused only on
      * a laptop, and the test after this one pins that.
      */
-    const EXCUSED_ON_DEPLOYED = ['SENTRY_AUTH_TOKEN', 'SENTRY_WEB_PROJECT'];
+    const EXCUSED_ON_DEPLOYED = ['EMAIL_SINK_ADDRESS', 'SENTRY_AUTH_TOKEN', 'SENTRY_WEB_PROJECT'];
 
     const REQUIRED_FOR_REAL_USERS = [
       'RESEND_WEBHOOK_SECRET',

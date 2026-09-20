@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { createResendGateway } from '../lib/email.js';
+import { createEmailGateway } from '../lib/email.js';
 import type { EmailGateway } from '../lib/email.js';
 
 declare module 'fastify' {
@@ -11,6 +11,9 @@ declare module 'fastify' {
 export interface EmailPluginOptions {
   apiKey: string;
   from: string;
+  /** `DEPLOY_ENV`: outside production the gateway delivers to the sink only. */
+  deployEnv: string;
+  sinkAddress?: string | undefined;
   /** Overridden by the route suites so they never reach Resend's network. */
   gateway?: EmailGateway;
 }
@@ -25,7 +28,7 @@ export interface EmailPluginOptions {
  */
 export const emailPlugin = fp<EmailPluginOptions>(
   async (app, options) => {
-    app.decorate('email', options.gateway ?? createResendGateway(options));
+    app.decorate('email', options.gateway ?? createEmailGateway({ ...options, log: app.log }));
   },
   { name: 'email' },
 );
