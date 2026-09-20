@@ -2,7 +2,7 @@
 #
 #   CI succeeds on a push to main
 #     → gate       the commit is still main's tip
-#     → preflight  every secret and variable is configured, or the run fails
+#     → preflight  nothing configured yet → skipped with a warning; partly configured → fails by name
 #     → migrate    DATABASE_URL_UNPOOLED only, then the idempotent reference seed
 #     → api        deploy the API image
 #     → web        prebuilt Vercel production deploy, source maps to Sentry
@@ -21,7 +21,7 @@
 # The API host is decision D10, reopened when the Railway service was removed;
 # it is chosen by the repository variable API_HOST and implemented by one entry
 # in scripts/deploy.mjs. Until VEN-377 provisions the inputs below, preflight
-# fails every run by name — deliberately red rather than silently skipped.
+# skips every run with a warning; a partly configured deploy fails by name.
 name: Deploy
 
 on:
@@ -58,7 +58,7 @@ jobs:
       SENTRY_RELEASE: ${{ github.event.workflow_run.head_sha }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
@@ -71,7 +71,8 @@ jobs:
         run: node scripts/deploy.mjs gate
 
       # Handed whether each input is set, never its value.
-      - name: Refuse to start unless every deploy input is configured
+      - name: Skip until configured, refuse when partly configured
+        id: preflight
         if: steps.gate.outputs.deploy == 'true'
         env:
           HAS_DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED != '' }}
@@ -86,20 +87,23 @@ jobs:
           HAS_API_URL: ${{ vars.API_URL != '' }}
           HAS_WEB_URL: ${{ vars.WEB_URL != '' }}
           API_HOST: ${{ vars.API_HOST }}
+          # Set to `required` once VEN-377 has provisioned the inputs: an empty
+          # configuration then fails instead of skipping.
+          DEPLOY_GATE: ${{ vars.DEPLOY_GATE }}
         run: node scripts/deploy.mjs preflight
 
-      - uses: pnpm/action-setup@v4
-        if: steps.gate.outputs.deploy == 'true'
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        if: steps.gate.outputs.deploy == 'true' && steps.preflight.outputs.ready == 'true'
 
-      - uses: actions/setup-node@v4
-        if: steps.gate.outputs.deploy == 'true'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.gate.outputs.deploy == 'true' && steps.preflight.outputs.ready == 'true'
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
       # The migrator, the seed and the poll import the workspace packages' builds.
       - name: Install and build the release tooling
-        if: steps.gate.outputs.deploy == 'true'
+        if: steps.gate.outputs.deploy == 'true' && steps.preflight.outputs.ready == 'true'
         run: |
           pnpm install --frozen-lockfile
           pnpm turbo run build --filter=@vendor-marketplace/db --filter=@vendor-marketplace/shared
@@ -107,13 +111,13 @@ jobs:
       # The unpooled URL and nothing else: no DATABASE_URL reaches this step, so
       # DDL cannot route through the pooler.
       - name: Migrate, then seed reference data
-        if: steps.gate.outputs.deploy == 'true'
+        if: steps.gate.outputs.deploy == 'true' && steps.preflight.outputs.ready == 'true'
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: node scripts/deploy.mjs migrate
 
       - name: Deploy the API
-        if: steps.gate.outputs.deploy == 'true'
+        if: steps.gate.outputs.deploy == 'true' && steps.preflight.outputs.ready == 'true'
         env:
           API_HOST: ${{ vars.API_HOST }}
           API_SERVICE: ${{ vars.API_SERVICE }}
@@ -121,7 +125,7 @@ jobs:
         run: node scripts/deploy.mjs api
 
       - name: Deploy the web app
-        if: steps.gate.outputs.deploy == 'true'
+        if: steps.gate.outputs.deploy == 'true' && steps.preflight.outputs.ready == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
@@ -133,7 +137,7 @@ jobs:
       # Bounded: ten minutes covers a cold build on either platform without
       # retrying a dead deployment indefinitely. A timeout fails the run.
       - name: Poll /ready until it names this release
-        if: steps.gate.outputs.deploy == 'true'
+        if: steps.gate.outputs.deploy == 'true' && steps.preflight.outputs.ready == 'true'
         env:
           API_URL: ${{ vars.API_URL }}
           WEB_URL: ${{ vars.WEB_URL }}

@@ -56,7 +56,9 @@
     "overrides": {
       "next>postcss": "8.5.28",
       "cosmiconfig>js-yaml": "4.3.2",
-      "metro>image-size": "2.0.4"
+      "metro>image-size": "2.0.4",
+      "qs": ">=6.16.0",
+      "esbuild": ">=0.25.0"
     }
   }
 }
