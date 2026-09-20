@@ -9,12 +9,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import {
-  authenticated,
-  requireAuth,
-  requireRole,
-  requireRoleBeforeValidation,
-} from '../../lib/guards.js';
+import { authenticated, requireAuth, requireRoleBeforeValidation } from '../../lib/guards.js';
 import type { NotificationEmailDeps } from '../notifications/notification-email.js';
 import {
   createBookingRequest,
@@ -141,7 +136,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
   app.post(
     `${REQUESTS_PATH}/:requestId/quote`,
     {
-      preHandler: requireRole('vendor'),
+      onRequest: requireRoleBeforeValidation('vendor'),
       schema: {
         params: requestParamsSchema,
         body: quoteBookingRequestSchema,

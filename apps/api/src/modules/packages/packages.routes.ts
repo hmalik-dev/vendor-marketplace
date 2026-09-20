@@ -7,7 +7,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { assertRole, requireRole } from '../../lib/guards.js';
+import { assertRole, requireRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import {
   createPackage,
   listOwnPackages,
@@ -23,6 +23,7 @@ const packageListSchema = z.array(servicePackageSchema);
 
 export const packageRoutes: FastifyPluginAsyncZod = async (app) => {
   const vendorOnly = requireRole('vendor');
+  const vendorOnlyBeforeValidation = requireRoleBeforeValidation('vendor');
 
   app.get(
     PACKAGES_PATH,
@@ -33,7 +34,7 @@ export const packageRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     PACKAGES_PATH,
     {
-      preHandler: vendorOnly,
+      onRequest: vendorOnlyBeforeValidation,
       schema: { body: createServicePackageSchema, response: { 201: servicePackageSchema } },
     },
     async (request, reply) => {
@@ -55,7 +56,7 @@ export const packageRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put(
     `${PACKAGES_PATH}/reorder`,
     {
-      preHandler: vendorOnly,
+      onRequest: vendorOnlyBeforeValidation,
       schema: { body: reorderServicePackagesSchema, response: { 200: packageListSchema } },
     },
     async (request) =>
@@ -65,7 +66,7 @@ export const packageRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put(
     `${PACKAGES_PATH}/:packageId`,
     {
-      preHandler: vendorOnly,
+      onRequest: vendorOnlyBeforeValidation,
       schema: {
         params: packageParamsSchema,
         body: updateServicePackageSchema,

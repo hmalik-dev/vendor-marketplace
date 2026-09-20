@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { publicAvailabilitySchema, vendorDashboardSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole } from '../../lib/guards.js';
-import { requireRole } from '../../lib/guards.js';
+import { requireRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import { getVendorDashboard } from './dashboard.service.js';
 import {
   createVendorProfile,
@@ -29,6 +29,7 @@ const OWN_PROFILE_PATH = '/vendor/profile';
 
 export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
   const vendorOnly = requireRole('vendor');
+  const vendorOnlyBeforeValidation = requireRoleBeforeValidation('vendor');
 
   /*
    * The vendor's own figures, on their own private surface — recomputed from
@@ -124,7 +125,7 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     OWN_PROFILE_PATH,
     {
-      preHandler: vendorOnly,
+      onRequest: vendorOnlyBeforeValidation,
       schema: { body: createVendorProfileSchema, response: { 201: vendorProfileDetailSchema } },
     },
     async (request, reply) => {
@@ -141,7 +142,7 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put(
     OWN_PROFILE_PATH,
     {
-      preHandler: vendorOnly,
+      onRequest: vendorOnlyBeforeValidation,
       schema: { body: updateVendorProfileSchema, response: { 200: vendorProfileDetailSchema } },
     },
     async (request) =>
