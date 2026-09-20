@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `apps/web/src/components/errors/error-screen.tsx` marks its root
 `data-error-screen`, and `apps/web/src/app/globals.css` hides
 `[data-slot='site-header']` and `[data-slot='site-footer']` from it. Landed

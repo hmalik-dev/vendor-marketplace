@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 The error handler sends `details: error.validation` verbatim
 (apps/api/src/plugins/error-handler.ts:63-69), and Zod 4's enum message lists
 every allowed value. Because validation precedes `preHandler`, an

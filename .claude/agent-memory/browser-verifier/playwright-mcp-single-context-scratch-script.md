@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 The `mcp__plugin_playwright_playwright__*` tools all operate on a single
 browser context that appears to arrive pre-authenticated (e.g. `vendor.json`
 already loaded before the first `browser_navigate` call). New tabs opened via

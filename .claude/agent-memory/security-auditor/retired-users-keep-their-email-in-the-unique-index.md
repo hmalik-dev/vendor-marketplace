@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `retireUserWhere` (`apps/api/src/modules/users/users.dao.ts`) writes only
 `deleted_at`/`updated_at` on `users` and `is_deleted`/`is_published` on the
 storefront. **It never releases the address**, and

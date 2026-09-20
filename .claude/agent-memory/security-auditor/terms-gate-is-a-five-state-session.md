@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `apps/api/src/plugins/neon-auth.ts` (was `clerk-auth.ts` before VEN-447)
 resolves a bearer token into one of five states and the order is load-bearing:
 retired (`deleted_at`) -> 401, **no local row -> gated**, banned -> 403

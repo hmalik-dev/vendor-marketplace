@@ -5,6 +5,8 @@ metadata:
   type: feedback
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 When a diff calls an "idempotent" upsert — `onConflictDoUpdate({ target: X })` or
 a select-then-insert — open the table's schema file and read **every**
 `uniqueIndex`, partial ones included. The target absorbs one of them; a row that

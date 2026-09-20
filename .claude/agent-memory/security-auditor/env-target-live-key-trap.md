@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 The `target` argument passed to `registrySchemaShape` in `apps/api/src/config/env.ts`
 and `apps/web/src/config/env.ts` must be `baseline`, never `local`. Established
 2026-08-28 in ticket #61, which introduced `baseline` precisely because `local`

@@ -120,7 +120,7 @@ flips. And treat any duration you did not observe a process block for as a guess
 ## A severity is only as good as the trace behind it
 
 A `security-auditor` graded a finding **LOW**: an unhandled 23505 on
-`updateUserByClerkId` leaves `users.email` stale. The lane relayed the rating and
+`updateUserByClerkId` (Clerk-era name, retired by VEN-447) leaves `users.email` stale. The lane relayed the rating and
 so did its report.
 
 The rating was for the **failed request**. What made it P1 lives one hop

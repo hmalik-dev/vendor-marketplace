@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `.auth/<role>.json` is Playwright storage state: live `__session`,
 `__client_uat` and `__clerk_db_jwt` cookies for an E2E account. Since #392 that
 includes an **admin** session on every checkout by default, and

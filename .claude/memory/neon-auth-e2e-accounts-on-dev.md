@@ -18,7 +18,7 @@ impossible headlessly; persistent ones are the only option. The `newcomer` has *
 - Never delete these three from Neon Auth, never accept Terms as the newcomer, never put their passwords in
   Linear, a PR or `.claude/`.
 - The main checkout's `.env.e2e.local` must carry the same values or every new lane's `db:seed:e2e` fails at
-  the Neon sign-in; the admin account is still a Clerk identity until VEN-448.
+  the Neon sign-in; the admin account moved off Clerk with VEN-448 (retired).
 - Neon connection strings: `neon connection-string dev`, **positional**, and assert the host contains the dev
   endpoint `ep-billowing-dream-ax8jhr9i` before any SQL ([[neon-dev-and-staging-are-safe-production-is-not]]).
 - Throwaway sign-ups on dev must be deleted via `neon api /projects/<p>/branches/<b>/auth/users/<id> -X DELETE`.

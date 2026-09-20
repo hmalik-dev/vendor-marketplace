@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 **Audited 2026-09-19 (VEN-447).** Token verification itself is sound and does
 not need re-reading: `apps/api/src/plugins/neon-auth.ts` pins `EdDSA`, pins
 `iss` **and** `aud` to `new URL(baseUrl).origin` (Neon issues the origin, not

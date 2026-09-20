@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `packages/shared/src/env/deployment.ts` is the single answer to "am I deployed?"
 for both apps (added with the `deployed` `ShapeTarget`, 2026-09-04). Audit it as
 a gate that can be _absent_, not one that can be wrong:

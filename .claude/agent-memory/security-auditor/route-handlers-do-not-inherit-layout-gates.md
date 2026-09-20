@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `apps/web/src/app/admin/layout.tsx` calls `requireRole('admin')` and every page
 below it is covered. `apps/web/src/app/admin/vendors/export/route.ts` sits under
 that segment and is **not** covered — layouts do not run for route handlers — so

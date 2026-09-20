@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `declineOpenRequests` (`apps/api/src/modules/admin/admin.dao.ts`) declines
 `pending | quoted` unconditionally and `accepted` **only when no `bookings` row
 sits behind the request** (#444). All three unwind entry points share it:

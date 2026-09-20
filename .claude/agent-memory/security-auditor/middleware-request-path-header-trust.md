@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `apps/web/src/middleware.ts` stamps `x-orla-request-path` with
 `nextUrl.pathname + nextUrl.search` using `headers.set` on a copy of the request
 headers, then `NextResponse.next({ request: { headers } })`. `set` overwrites, so

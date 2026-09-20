@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `apps/web/src/lib/current-user.ts`'s `getCurrentUser` is wrapped in React
 `cache()` (#412). **This does not leak one visitor's `/users/me` to another**,
 and a later audit should not re-open it:
