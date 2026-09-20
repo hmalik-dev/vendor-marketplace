@@ -1154,6 +1154,20 @@ export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
 export const EXPIRY_SWEEP_INTERVAL_MS = 5 * 60_000;
 
 /**
+ * How often each instance sweeps storage for uploads no row references. The
+ * grace period, not this, decides when an object is old enough to go, so the
+ * interval only bounds how long an orphan outlives it.
+ */
+export const UPLOAD_SWEEP_INTERVAL_MS = 60 * 60_000;
+
+/**
+ * How long an uploaded object may sit unreferenced before the sweep removes it
+ * (VEN-485). A day is far longer than any form is left open between the upload
+ * and the save that names its key.
+ */
+export const UPLOAD_ORPHAN_GRACE_MS = 24 * 60 * 60_000;
+
+/**
  * What the vendor's side of a booking can say about its payout, as data.
  *
  * `status` cannot carry this: a booking is `confirmed` both before and after
