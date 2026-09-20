@@ -350,11 +350,11 @@ export const ENV_REGISTRY = [
     audience: 'server',
     consumers: ['api', 'web'],
     environments: 'shared',
-    optionalFor: ['baseline', 'local', 'production', 'deployed'],
+    optionalFor: ['baseline', 'local'],
     shape: /^[A-Za-z0-9_-]{32,}$/,
     placeholder: 'openssl-rand-hex-32-...',
     description:
-      "Shared between the web app and the API so the API can key its rate limit on the visitor the web tier forwards rather than on the web platform's one egress address. Optional: without it the forwarded address is ignored and every call is keyed on its own socket, as before.",
+      "Shared between the web app and the API so the API can key its rate limit on the visitor the web tier forwards rather than on the web platform's one egress address. Required on a deployment: without it every visitor shares one address and the per-IP limit counts them as one. Optional locally.",
     setup: APP_SETUP,
   },
   {
@@ -593,21 +593,21 @@ export const ENV_REGISTRY = [
      * receives `payment_intent.succeeded`. The API accepts a delivery signed
      * with either key.
      *
-     * Optional everywhere: locally one `stripe listen` forwards every stream
-     * under the single listener secret above, and a deployment that has not
-     * created the connected-account endpoint yet must still boot. Absence adds
-     * no permissive path — it only means one signing key is tried, not two.
+     * Optional only off a deployment: locally one `stripe listen` forwards
+     * every stream under the single listener secret above. A deployment
+     * refuses to boot without it, because without the connected-account
+     * endpoint no vendor's onboarding ever completes.
      */
     key: 'STRIPE_CONNECT_WEBHOOK_SECRET',
     capability: 'stripe',
     audience: 'server',
     consumers: ['api'],
     environments: 'per-environment',
-    optionalFor: ['baseline', 'local', 'production', 'deployed'],
+    optionalFor: ['baseline', 'local'],
     shape: /^whsec_[A-Za-z0-9+/=]{16,}$/,
     placeholder: 'whsec_...',
     description:
-      "Signing secret for the second POST /webhooks/stripe endpoint, the one that receives connected accounts' events. Optional: locally the single listener secret covers both streams.",
+      "Signing secret for the second POST /webhooks/stripe endpoint, the one that receives connected accounts' events. Required on a deployment; locally the single listener secret covers both streams.",
     setup: STRIPE_CONNECT_WEBHOOK_SETUP,
   },
   {
@@ -636,32 +636,28 @@ export const ENV_REGISTRY = [
   },
   {
     /*
-     * Signing secret for `POST /webhooks/resend` (#439), and the one row in
-     * this file that is optional in **every** environment — including
-     * production.
+     * Signing secret for `POST /webhooks/resend` (#439). Required on a
+     * deployment: without it a bounce or complaint is never learned, so a real
+     * user's failed invite or booking email is invisible to the operator. A
+     * laptop has no public URL for Resend to call, so it stays optional there.
      *
-     * That is the ticket's requirement rather than a convenience: the delivery
-     * record has to hold what was attempted whether or not the account holder
-     * has configured the webhook, so a deployment that has not must still boot.
-     *
-     * It is safe to leave optional only because **absence is refusal, not
-     * permission**: no handler exists without a verified secret. `server.ts`
-     * registers `POST /webhooks/resend` only when this row has a value, so an
-     * unconfigured deployment has no endpoint at all rather than a permissive
-     * one. That property is what must survive any change here — a fallback that
-     * let an unsigned event through would be an unauthenticated writer on the
-     * delivery record.
+     * The property that must survive any change here is that **absence is
+     * refusal, not permission**: no handler exists without a verified secret.
+     * `server.ts` registers `POST /webhooks/resend` only when this row has a
+     * value, so an unconfigured laptop has no endpoint at all rather than a
+     * permissive one — a fallback that let an unsigned event through would be
+     * an unauthenticated writer on the delivery record.
      */
     key: 'RESEND_WEBHOOK_SECRET',
     capability: 'email',
     audience: 'server',
     consumers: ['api'],
     environments: 'per-environment',
-    optionalFor: ['baseline', 'local', 'production', 'deployed'],
+    optionalFor: ['baseline', 'local'],
     shape: /^whsec_[A-Za-z0-9+/=]{16,}$/,
     placeholder: 'whsec_...',
     description:
-      'svix signing secret for POST /webhooks/resend. Optional: without it delivery events are refused and only send attempts are recorded.',
+      'svix signing secret for POST /webhooks/resend. Required on a deployment; locally, without it delivery events are refused and only send attempts are recorded.',
     setup: RESEND_WEBHOOK_SETUP,
   },
   {

@@ -416,22 +416,35 @@ describe('registrySchemaShape', () => {
      * branch, and an assertion that mirrors the implementation cannot fail for
      * any change made consistently in both.
      *
-     * `RESEND_WEBHOOK_SECRET` is excused on a deployment (#439): the
-     * delivery record has to hold what was attempted whether or not the account
-     * holder configured the webhook, and absence there means the endpoint is
-     * not registered at all rather than a permissive one. The other two are
-     * `tooling` rows that no deployed app reads. The two Sentry upload rows
-     * (VEN-397) are read by the web build, but only the production build
-     * uploads source maps; a preview deployment has none to send, and the
-     * deploy workflow refuses to start without them.
+     * The two Sentry upload rows (VEN-397) are read by the web build, but only
+     * the production build uploads source maps; a preview deployment has none
+     * to send, and the deploy workflow refuses to start without them.
+     *
+     * `RESEND_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET` and
+     * `WEB_TIER_KEY` are **not** here: a deployment serves real users, and
+     * without them a bounce is never learned, no vendor's onboarding completes,
+     * and every visitor shares one rate-limit address. They are excused only on
+     * a laptop, and the test after this one pins that.
      */
-    const EXCUSED_ON_DEPLOYED = [
+    const EXCUSED_ON_DEPLOYED = ['SENTRY_AUTH_TOKEN', 'SENTRY_WEB_PROJECT'];
+
+    const REQUIRED_FOR_REAL_USERS = [
       'RESEND_WEBHOOK_SECRET',
       'STRIPE_CONNECT_WEBHOOK_SECRET',
-      'SENTRY_AUTH_TOKEN',
-      'SENTRY_WEB_PROJECT',
       'WEB_TIER_KEY',
     ];
+
+    it('requires the keys real users depend on on a deployment and in production', () => {
+      for (const key of REQUIRED_FOR_REAL_USERS) {
+        const variable = (ENV_REGISTRY as readonly EnvVariable[]).find((row) => row.key === key);
+
+        expect(variable, key).toBeDefined();
+        expect(requiresExplicitValue(variable as EnvVariable, 'deployed'), key).toBe(true);
+        expect(requiresExplicitValue(variable as EnvVariable, 'production'), key).toBe(true);
+        expect(requiresExplicitValue(variable as EnvVariable, 'local'), key).toBe(false);
+        expect(requiresExplicitValue(variable as EnvVariable, 'baseline'), key).toBe(false);
+      }
+    });
 
     it('requires exactly the per-environment rows, and every one of them', () => {
       for (const variable of ENV_REGISTRY as readonly EnvVariable[]) {
