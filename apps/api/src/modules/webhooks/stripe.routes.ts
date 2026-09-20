@@ -10,6 +10,7 @@ import {
   isUsableRefundStatus,
   PAYMENT_INTENT_SUCCEEDED,
   type StripeEventNotification,
+  type StripeKeyMode,
 } from '../../lib/stripe.js';
 import {
   openChargebackCase,
@@ -213,6 +214,13 @@ export interface StripeWebhookRoutesOptions {
   platformFeeRate: number;
   /** `canonicalWebOrigin(env)` — the origin every emailed link is built from. */
   webOrigin: string;
+  /**
+   * The mode of `STRIPE_SECRET_KEY`. A delivery whose `livemode` disagrees is
+   * acknowledged and ignored: every `retrieve*` would 404 against this key, and
+   * answering 500 makes Stripe retry until it disables the endpoint. `null`
+   * (a key of no recognised mode) skips the check.
+   */
+  keyMode: StripeKeyMode | null;
 }
 
 export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptions> = async (
@@ -315,6 +323,41 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           'Rejected a Stripe webhook with an invalid signature',
         );
         throw unauthorized('Webhook signature verification failed');
+      }
+
+      if (
+        options.keyMode !== null &&
+        event.livemode !== null &&
+        event.livemode !== (options.keyMode === 'live')
+      ) {
+        request.log.warn(
+          {
+            eventType: event.type,
+            eventMode: event.livemode ? 'live' : 'test',
+            keyMode: options.keyMode,
+          },
+          'Ignored a Stripe webhook whose livemode disagrees with the API key',
+        );
+
+        /*
+         * The 2xx feeds no failure window, and Stripe stops redelivering on it.
+         * A live event reaching a test-mode key is real money being dropped
+         * (a deployment holding the wrong key), so somebody is told; the
+         * reverse direction loses nothing real and stays quiet.
+         */
+        if (event.livemode) {
+          app.operatorAlerts.dispatch({
+            kind: 'stripe_webhook_failing',
+            subjectId: 'stripe:livemode-mismatch',
+            summary: 'Live Stripe events are being ignored by a test-mode API key',
+            details: [
+              `POST /webhooks/stripe received a live-mode ${event.type} event but STRIPE_SECRET_KEY is a test-mode key, so it was acknowledged and dropped.`,
+              'Payments, refunds and disputes are not being recorded. Check the deployment’s Stripe key.',
+            ],
+            adminPath: null,
+          });
+        }
+        return reply.status(200).send({ received: true as const, outcome: 'ignored' as const });
       }
 
       const outcome = await applyEvent();

@@ -680,6 +680,23 @@ export interface StripeEventNotification {
    * and the account is reachable only *through* the intent.
    */
   objectId: string | null;
+  /**
+   * The event's own `livemode`, or `null` when the payload carries none. A
+   * signing secret has no mode marker, so this is the only place a delivery
+   * from the other mode can be told apart from one for this key.
+   */
+  livemode: boolean | null;
+}
+
+export type StripeKeyMode = 'live' | 'test';
+
+/**
+ * The mode a Stripe API key operates in: `sk_` and restricted `rk_` keys both
+ * carry it in the second segment. `null` for anything else.
+ */
+export function stripeKeyMode(key: string): StripeKeyMode | null {
+  const match = /^(?:sk|rk)_(live|test)_/.exec(key);
+  return match ? (match[1] as StripeKeyMode) : null;
 }
 
 /**
@@ -731,6 +748,7 @@ export function isMissingPayoutsOnly(status: StripeAccountCapabilities): boolean
 export function describeAccountEvent(verified: unknown): StripeEventNotification {
   const event = (verified ?? {}) as {
     type?: unknown;
+    livemode?: unknown;
     account?: unknown;
     related_object?: { id?: unknown } | null;
     data?: { object?: { id?: unknown } | null } | null;
@@ -740,10 +758,12 @@ export function describeAccountEvent(verified: unknown): StripeEventNotification
 
   const objectId = typeof event.data?.object?.id === 'string' ? event.data.object.id : null;
 
+  const livemode = typeof event.livemode === 'boolean' ? event.livemode : null;
+
   // v2 thin: the affected object is named in `related_object`.
   const relatedId = event.related_object?.id;
   if (typeof relatedId === 'string') {
-    return { type, accountId: relatedId, objectId: objectId ?? relatedId };
+    return { type, accountId: relatedId, objectId: objectId ?? relatedId, livemode };
   }
 
   /*
@@ -752,10 +772,10 @@ export function describeAccountEvent(verified: unknown): StripeEventNotification
    * the payload *is* the account and there is no separate `account` field.
    */
   if (typeof event.account === 'string') {
-    return { type, accountId: event.account, objectId };
+    return { type, accountId: event.account, objectId, livemode };
   }
 
-  return { type, accountId: objectId, objectId };
+  return { type, accountId: objectId, objectId, livemode };
 }
 
 /**

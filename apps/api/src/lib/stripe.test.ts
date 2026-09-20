@@ -438,7 +438,41 @@ describe('describeAccountEvent', () => {
         account: 'acct_live_one',
         data: { object: { id: 'acct_live_one' } },
       }),
-    ).toEqual({ type: 'account.updated', accountId: 'acct_live_one', objectId: 'acct_live_one' });
+    ).toEqual({
+      type: 'account.updated',
+      accountId: 'acct_live_one',
+      objectId: 'acct_live_one',
+      livemode: null,
+    });
+  });
+
+  /**
+   * A signing secret carries no mode, so the event's own `livemode` is what
+   * the webhook compares to the API key's (VEN-491). One case per return branch.
+   */
+  it.each([true, false])('carries livemode %s through every event shape', (livemode) => {
+    const v1 = describeAccountEvent({
+      type: 'account.updated',
+      livemode,
+      account: 'acct_1',
+      data: { object: { id: 'acct_1' } },
+    });
+    const thin = describeAccountEvent({
+      type: 'v2.core.account.updated',
+      livemode,
+      related_object: { id: 'acct_2' },
+    });
+    const fallback = describeAccountEvent({
+      type: 'account.updated',
+      livemode,
+      data: { object: { id: 'acct_3' } },
+    });
+
+    expect([v1.livemode, thin.livemode, fallback.livemode]).toEqual([livemode, livemode, livemode]);
+  });
+
+  it('reports no livemode for a payload whose livemode is not a boolean', () => {
+    expect(describeAccountEvent({ type: 'account.updated', livemode: 'true' }).livemode).toBeNull();
   });
 
   /** `capability.updated` carries a Capability in `data`, so `account` is the only source. */
@@ -450,7 +484,12 @@ describe('describeAccountEvent', () => {
         account: 'acct_live_two',
         data: { object: { id: 'transfers' } },
       }),
-    ).toEqual({ type: 'capability.updated', accountId: 'acct_live_two', objectId: 'transfers' });
+    ).toEqual({
+      type: 'capability.updated',
+      accountId: 'acct_live_two',
+      objectId: 'transfers',
+      livemode: null,
+    });
   });
 
   it('reads it off a v2 thin notification', () => {
@@ -464,6 +503,7 @@ describe('describeAccountEvent', () => {
       type: 'v2.core.account[configuration.recipient].capability_status_updated',
       accountId: 'acct_thin',
       objectId: 'acct_thin',
+      livemode: null,
     });
   });
 
@@ -474,13 +514,18 @@ describe('describeAccountEvent', () => {
         type: 'account.updated',
         data: { object: { id: 'acct_from_data' } },
       }),
-    ).toEqual({ type: 'account.updated', accountId: 'acct_from_data', objectId: 'acct_from_data' });
+    ).toEqual({
+      type: 'account.updated',
+      accountId: 'acct_from_data',
+      objectId: 'acct_from_data',
+      livemode: null,
+    });
   });
 
   it('names no account for an event that is about something else', () => {
     expect(
       describeAccountEvent({ object: 'event', type: 'charge.succeeded', data: { object: {} } }),
-    ).toEqual({ type: 'charge.succeeded', accountId: null, objectId: null });
+    ).toEqual({ type: 'charge.succeeded', accountId: null, objectId: null, livemode: null });
   });
 
   /*
@@ -500,12 +545,14 @@ describe('describeAccountEvent', () => {
       type: 'payment_intent.succeeded',
       accountId: 'pi_live_one',
       objectId: 'pi_live_one',
+      livemode: null,
     });
   });
 
   it('survives a body with nothing in it rather than throwing', () => {
-    expect(describeAccountEvent(null)).toEqual({ type: '', accountId: null, objectId: null });
-    expect(describeAccountEvent({})).toEqual({ type: '', accountId: null, objectId: null });
+    const empty = { type: '', accountId: null, objectId: null, livemode: null };
+    expect(describeAccountEvent(null)).toEqual(empty);
+    expect(describeAccountEvent({})).toEqual(empty);
   });
 });
 
@@ -519,8 +566,13 @@ describe('parseEventNotification', () => {
   const keyNamed = (name: string): string => ['whsec', name].join('_');
   const own = keyNamed('own');
   const joint = keyNamed('joint');
-  const PAYLOAD = JSON.stringify({ id: 'evt_1', type: 'account.updated', account: 'acct_1' });
-  const PARSED = { type: 'account.updated', accountId: 'acct_1', objectId: null };
+  const PAYLOAD = JSON.stringify({
+    id: 'evt_1',
+    type: 'account.updated',
+    account: 'acct_1',
+    livemode: true,
+  });
+  const PARSED = { type: 'account.updated', accountId: 'acct_1', objectId: null, livemode: true };
 
   const gateway = (extra?: string): StripeConnectGateway =>
     createStripeConnectGateway({
