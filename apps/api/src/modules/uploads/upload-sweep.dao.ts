@@ -57,7 +57,7 @@ const KEY_COLUMNS: readonly AnyPgColumn[] = [
  * Read whole rather than queried per key: a query can only find the spellings
  * it thought to ask for, and the sweep's failure is unrecoverable. A spelling
  * that over-matches only keeps an object. The five columns are one row per
- * image, read once per sweep.
+ * image, read once per prefix.
  */
 export async function loadReferencedKeys(db: AppDatabase): Promise<Set<string>> {
   const referenced = new Set<string>();

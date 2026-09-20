@@ -63,6 +63,10 @@ export async function sweepOrphanedUploads(
         break;
       }
 
+      // Once per prefix: every page of it is judged against one read of the rows,
+      // and an object a row started naming in the meantime was already a day old
+      // and unreferenced, which the upload flow does not produce.
+      const referenced = await loadReferencedKeys(tx);
       let token: string | undefined;
 
       do {
@@ -76,9 +80,6 @@ export async function sweepOrphanedUploads(
         const old = page.objects
           .filter((object) => object.lastModified.getTime() < cutoff)
           .map((object) => object.key);
-        // Read per page, after the listing, so the window between "no row names
-        // it" and the delete is one page wide rather than one sweep.
-        const referenced = await loadReferencedKeys(tx);
         const orphans = old.filter(
           (key) =>
             !referenced.has(key) &&

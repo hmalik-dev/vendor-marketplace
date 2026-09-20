@@ -102,6 +102,30 @@ describe('sweepOrphanedUploads', () => {
     await harness.database.db.update(users).set({ avatarUrl: REFERENCED });
   });
 
+  it('reads every page of a listing, not only the first', async () => {
+    seed();
+    const pages: (string | undefined)[] = [];
+    const paged = {
+      ...harness.app.storage,
+      list: async (prefix: string, page?: { limit?: number; token?: string }) => {
+        pages.push(page?.token);
+        return harness.app.storage.list(prefix, {
+          limit: 1,
+          ...(page?.token ? { token: page.token } : {}),
+        });
+      },
+    };
+
+    const result = await sweepOrphanedUploads(
+      { db: harness.database.db, storage: paged, log: harness.app.log },
+      NOW,
+    );
+
+    expect(result).toEqual({ ran: true, scanned: 5, orphaned: 2 });
+    expect(pages.filter((token) => token !== undefined).length).toBeGreaterThan(0);
+    expect(stored()).toEqual([FRESH_ORPHAN, REFERENCED, REFERENCED_THUMB].sort());
+  });
+
   it('under dry run deletes nothing and reports what it would have', async () => {
     seed();
 
