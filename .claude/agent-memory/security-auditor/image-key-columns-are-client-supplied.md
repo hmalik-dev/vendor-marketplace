@@ -144,6 +144,20 @@ Non-issues, verified so we do not re-open them: SVG is refused upstream unless
 `deviceSizes`/`imageSizes`; `..` inside the src normalises before the pattern
 match, so it 400s rather than escaping the base path.
 
+**VEN-485 added a fourth actor: a storage-side GC** (`upload-sweep.*`), and it
+inverts the risk direction. The write guard may be _wide_ (refusing more
+spellings than it must); a reaper must be wide the other way — every spelling
+that _resolves_ to an object must count as a reference, or the live object is
+deleted with no undo and no record of which key went. `findReferencedKeys`
+decides with `value === key || value.endsWith('/' + key)` on the **raw** column,
+while `referencedPathSegments` folds `%2f`, `\`, `.`/`..` and cuts `[?#]` — so
+every spelling the guard accepts for your _own_ key
+(`portfolio/<self>/<uuid>.webp?v=2`, `%2F`-separated, backslash) renders fine
+and reads as unreferenced. **The rule: a reaper normalises the stored value with
+the guard's own normaliser before comparing, and a `LIKE '%/<key>'` prefilter
+cannot be the widening step because it misses exactly the same rows.** The five
+columns are small enough to read whole and normalise in JS.
+
 **How to apply:** treat any new code that _acts on_ one of these columns —
 delete, copy, sign, fetch, move, or **normalise** — as taking an attacker-chosen
 key. VEN-442 deleted `syncCoverFromPortfolio`: the cover is its own upload now

@@ -1,8 +1,8 @@
 import { portfolioItems, users, vendorProfiles } from '@vendor-marketplace/db/schema';
-import { eq, or, sql, type SQL } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { AppDatabase } from '../../lib/database.js';
-import { escapeLikePattern } from '../../lib/like-pattern.js';
+import { referencedPathSegments } from '../../lib/storage.js';
 
 /**
  * Held for the length of one sweep. Arbitrary but fixed: every instance must ask
@@ -45,40 +45,39 @@ const KEY_COLUMNS: readonly AnyPgColumn[] = [
 ];
 
 /**
- * Of `keys`, the ones some row still names — as the bare key **or** as the tail
- * of an absolute URL, which legacy and seeded rows carry.
+ * Every object key some row still names, in the spellings the object resolves
+ * from.
  *
- * Wider than `findUnreferencedKeys`, which compares exact strings and is right
- * for a delete a caller asked for. A sweep that reaped on exact match would
- * delete the object behind every absolute-URL row. The `LIKE` may over-match
- * and the suffix test below is what decides; an over-match only keeps an object.
+ * Each stored value is put through the write guard's own normaliser
+ * (`referencedPathSegments`), because a value the schema accepts — an absolute
+ * URL, `?v=2`, `%2F`, a backslash, a `.` segment — reaches the same object as
+ * the bare key without being equal to it. The raw value and its last two and
+ * three segments are all kept: three is a current key, two a legacy one.
+ *
+ * Read whole rather than queried per key: a query can only find the spellings
+ * it thought to ask for, and the sweep's failure is unrecoverable. A spelling
+ * that over-matches only keeps an object. The five columns are one row per
+ * image, read once per sweep.
  */
-export async function findReferencedKeys(
-  db: AppDatabase,
-  keys: readonly string[],
-): Promise<Set<string>> {
+export async function loadReferencedKeys(db: AppDatabase): Promise<Set<string>> {
   const referenced = new Set<string>();
 
-  if (keys.length === 0) {
-    return referenced;
-  }
-
   for (const column of KEY_COLUMNS) {
-    const matches: SQL[] = keys.flatMap((key) => [
-      eq(column, key),
-      sql`${column} like ${`%/${escapeLikePattern(key)}`}`,
-    ]);
     const rows = await db
       .select({ value: sql<string | null>`${column}` })
       .from(column.table)
-      .where(or(...matches));
+      .where(sql`${column} is not null`);
 
     for (const { value } of rows) {
-      for (const key of keys) {
-        if (value === key || value?.endsWith(`/${key}`)) {
-          referenced.add(key);
-        }
+      if (value === null) {
+        continue;
       }
+
+      const segments = referencedPathSegments(value);
+
+      referenced.add(value);
+      referenced.add(segments.slice(-2).join('/'));
+      referenced.add(segments.slice(-3).join('/'));
     }
   }
 

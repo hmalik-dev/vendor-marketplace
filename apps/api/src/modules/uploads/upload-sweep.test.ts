@@ -86,6 +86,22 @@ describe('sweepOrphanedUploads', () => {
     await harness.database.db.update(users).set({ avatarUrl: REFERENCED });
   });
 
+  it.each([
+    ['a query string', `${BY_URL}?v=2`],
+    ['an escaped slash', BY_URL.replace('/', '%2F')],
+    ['a backslash', BY_URL.replace('/', '\\')],
+    ['a dot segment', BY_URL.replace('/', '/./')],
+  ])('keeps an object a row names with %s', async (_label, spelling) => {
+    seed();
+    put(BY_URL, OLD);
+    await harness.database.db.update(users).set({ avatarUrl: spelling });
+
+    await sweep();
+
+    expect(stored()).toContain(BY_URL);
+    await harness.database.db.update(users).set({ avatarUrl: REFERENCED });
+  });
+
   it('under dry run deletes nothing and reports what it would have', async () => {
     seed();
 

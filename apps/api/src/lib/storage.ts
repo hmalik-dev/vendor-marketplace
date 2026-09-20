@@ -195,7 +195,7 @@ export function ownsObjectKey(key: string, ownerId: string): boolean {
  * anyway. Two characters appended to the string `GET /vendors/:slug` already
  * publishes.
  */
-function referencedPathSegments(ref: string): string[] {
+export function referencedPathSegments(ref: string): string[] {
   const path = normalizeImageRefPath(ref)
     .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, '')
     .replace(/[?#][\s\S]*$/, '')

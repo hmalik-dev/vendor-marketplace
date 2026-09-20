@@ -2,7 +2,7 @@ import { UPLOAD_ORPHAN_GRACE_MS } from '@vendor-marketplace/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
 import { STORAGE_PREFIXES, thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
-import { findReferencedKeys, withUploadSweepLock } from './upload-sweep.dao.js';
+import { loadReferencedKeys, withUploadSweepLock } from './upload-sweep.dao.js';
 
 /** Objects read, checked and deleted per round trip. */
 const SWEEP_PAGE_SIZE = 200;
@@ -59,6 +59,10 @@ export async function sweepOrphanedUploads(
     const totals: UploadSweepResult = { ran: true, scanned: 0, orphaned: 0 };
 
     for (const prefix of STORAGE_PREFIXES) {
+      if (totals.orphaned >= SWEEP_MAX_DELETES) {
+        break;
+      }
+
       let token: string | undefined;
 
       do {
@@ -72,10 +76,9 @@ export async function sweepOrphanedUploads(
         const old = page.objects
           .filter((object) => object.lastModified.getTime() < cutoff)
           .map((object) => object.key);
-        const family = [...new Set(old.flatMap((key) => [key, baseKeyFor(key)]))];
-        const referenced = await findReferencedKeys(tx, [
-          ...new Set([...family, ...family.map(thumbnailKeyFor)]),
-        ]);
+        // Read per page, after the listing, so the window between "no row names
+        // it" and the delete is one page wide rather than one sweep.
+        const referenced = await loadReferencedKeys(tx);
         const orphans = old.filter(
           (key) =>
             !referenced.has(key) &&
