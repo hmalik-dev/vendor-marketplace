@@ -20,6 +20,7 @@
 
 - [Neon Auth cutover boundaries](neon-auth-cutover-boundaries.md) — verification sound, role double-narrowed; the unthrottled `/api/auth` proxy is the new surface
 - [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` is null for a gated account; `requireClerkSubject` (Clerk-era name, retired by VEN-447) is the deliberate exception
+- [The server session cache's key is the whole gate](server-session-cache-key-is-the-cookie.md) — a hit skips the SDK's signature and revocation check; a second `*session_token` cookie keys the victim's JWT
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` renders a booking amount with no `force-dynamic`
 - [Email is a label, the auth id is the key (was `clerk_user_id`, retired)](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial; nothing resolves a person by email
 - [Retired users keep their email in the unique index](retired-users-keep-their-email-in-the-unique-index.md) — re-registering the same address is a permanent opaque 500

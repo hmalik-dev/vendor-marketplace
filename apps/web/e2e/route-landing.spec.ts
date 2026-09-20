@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import type { BrowserContext, Page } from '@playwright/test';
+import type { BrowserContext, ConsoleMessage, Page, Response } from '@playwright/test';
 
 import {
   DASHBOARD_LABEL_BY_ROLE,
@@ -10,8 +10,9 @@ import {
   ROLE_ROUTE_RULES,
   roleCanReach,
 } from '../src/lib/role-routes';
-import { resolveE2EBaseUrl } from './base-url.js';
+import { resolveE2EApiUrl, resolveE2EBaseUrl } from './base-url.js';
 import { AUTH_DIR, expect, storageStatePath, test } from './fixtures.js';
+import { waitForHydration } from './hydration.js';
 import {
   assertLoopbackOrigin,
   deleteNoRowAccount,
@@ -38,7 +39,9 @@ import {
  *
  * Each cell is judged at the **HTTP** level first, redirect chains followed to
  * the end — a loop fails there, where a first-hop assertion would pass it — and
- * then in the page, for a rendered screen and the persona's own chrome. A cell
+ * then in the page, for a rendered screen, the persona's own chrome, and a
+ * clean browser: a 5xx from the app or the API, an uncaught exception or a console error
+ * fails the cell even under a rendered shell (VEN-460). A cell
  * a persona must not reach is asserted as the refusal it gets, never skipped:
  * a skipped cell and a passing cell read the same in a summary.
  *
@@ -92,6 +95,9 @@ function isRoleGated(target: RouteTarget): boolean {
 
 const APP_ORIGIN = new URL(resolveE2EBaseUrl()).origin;
 
+/** The origin the browser's own reads go to — the header bell, the message stream. */
+const API_ORIGIN = new URL(resolveE2EApiUrl()).origin;
+
 const APP_DIR = join(REPO_ROOT, 'apps/web/src/app');
 
 /** A segment's own `page.tsx` or `route.ts` — the first source the enumerator records for it. */
@@ -134,8 +140,9 @@ function isSessionGated(target: RouteTarget): boolean {
 /**
  * Where a route's **own** source may send a reader it admits: the literal
  * destinations its file redirects to, plus the role's two starts when it hands
- * a live session on through a helper or a forwarder — `/sign-in` via
- * `redirectIfSignedIn`, `/accept-terms` via `/after-sign-in`. Any other landing
+ * a live session on through a helper, a forwarder or a role table lookup —
+ * `/sign-in` via `redirectIfSignedIn`, `/accept-terms` via `/after-sign-in`,
+ * `/vendors/apply` sending an existing vendor to `DASHBOARD_PATH_BY_ROLE`. Any other landing
  * is a bounce the source does not explain.
  */
 function ownForwards(target: RouteTarget, role: SignedInRole | null): Set<string> {
@@ -144,6 +151,7 @@ function ownForwards(target: RouteTarget, role: SignedInRole | null): Set<string
   const destinations = new Set(literalRedirectDestinations(code));
   const handsOn =
     /\b(?:redirectIfSignedIn|redirectVendorToDashboard)\(/.test(code) ||
+    /\bredirect\(\s*DASHBOARD_PATH_BY_ROLE\b/.test(code) ||
     [...FORWARDERS].some((forwarder) => destinations.has(forwarder));
 
   if (role !== null && handsOn) {
@@ -204,6 +212,52 @@ function expectationFor(
   }
 
   return { renders: true, refusal: null };
+}
+
+/**
+ * A console `error` the browser prints for a refused fetch. The refusal itself
+ * is judged by the response, so a 401 the signed-out token call earns is not a
+ * fault, and a 5xx is caught there rather than by this line.
+ */
+const RESOURCE_REFUSAL = /^Failed to load resource:/;
+
+/**
+ * What the page did wrong that its HTTP status cannot show: a request to the
+ * app or to the API answered 5xx (a read behind a rendered shell — the browser
+ * calls the API directly, so its origin counts), an uncaught
+ * exception, or a console error. Started before the navigation and stopped
+ * once React owns the route, so a fault raised while it renders is seen.
+ */
+function observeBrowserFaults(page: Page): { faults: string[]; stop: () => void } {
+  const faults: string[] = [];
+
+  const onResponse = (response: Response): void => {
+    const url = new URL(response.url());
+    if ((url.origin === APP_ORIGIN || url.origin === API_ORIGIN) && response.status() >= 500) {
+      faults.push(`a request answered HTTP ${response.status()}: ${describeUrl(url)}`);
+    }
+  };
+  const onPageError = (error: Error): void => {
+    faults.push(`uncaught exception: ${error.message.split('\n')[0]}`);
+  };
+  const onConsole = (message: ConsoleMessage): void => {
+    if (message.type() === 'error' && !RESOURCE_REFUSAL.test(message.text())) {
+      faults.push(`console error: ${message.text().split('\n')[0]}`);
+    }
+  };
+
+  page.on('response', onResponse);
+  page.on('pageerror', onPageError);
+  page.on('console', onConsole);
+
+  return {
+    faults,
+    stop: () => {
+      page.off('response', onResponse);
+      page.off('pageerror', onPageError);
+      page.off('console', onConsole);
+    },
+  };
 }
 
 function describeUrl(url: URL): string {
@@ -298,21 +352,32 @@ async function landCell(
     return failures;
   }
 
-  await page.goto(target.path);
+  /*
+   * Reported from the `finally`, so a route that never renders `<main>` is
+   * named by the exception or the 5xx behind it and not only by its symptom.
+   */
+  const observed = observeBrowserFaults(page);
   try {
-    await page.waitForURL((url) => url.pathname === landed.pathname);
-  } catch {
-    fail(
-      `the browser ended on ${new URL(page.url()).pathname}, where HTTP ended on ${landed.pathname}`,
-    );
-    return failures;
-  }
+    await page.goto(target.path);
+    try {
+      await page.waitForURL((url) => url.pathname === landed.pathname);
+    } catch {
+      fail(
+        `the browser ended on ${new URL(page.url()).pathname}, where HTTP ended on ${landed.pathname}`,
+      );
+      return failures;
+    }
 
-  try {
-    await expect(page.locator('#main')).toBeVisible();
-  } catch {
-    fail('no rendered <main>');
-    return failures;
+    try {
+      await expect(page.locator('#main')).toBeVisible();
+      await waitForHydration(page, '#main');
+    } catch {
+      fail('no rendered <main>');
+      return failures;
+    }
+  } finally {
+    observed.stop();
+    for (const fault of observed.faults) fail(fault);
   }
 
   if ((await page.locator('[data-error-screen]').count()) > 0) {

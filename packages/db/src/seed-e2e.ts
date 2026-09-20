@@ -9,12 +9,14 @@ import {
   legalDocumentSha256,
   type LegalAcceptanceDocument,
   parseDurationHours,
+  SUPPORT_REFERENCE_PREFIX,
   toDateString,
 } from '@vendor-marketplace/shared';
 import { and, eq, gte, inArray, lte, ne, notExists, sql } from 'drizzle-orm';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import {
+  adminActions,
   availability,
   bookingRequests,
   bookings,
@@ -22,7 +24,9 @@ import {
   legalAcceptances,
   reviews,
   servicePackages,
+  supportCases,
   users,
+  vendorApplications,
   vendorCategories,
   vendorInvites,
   vendorProfiles,
@@ -315,6 +319,11 @@ export async function seedE2eFixtures<
       servicePackage,
       now,
     });
+    await ensureConsoleListRows(tx, {
+      customer: input.customer,
+      customerUserId,
+      adminUserId,
+    });
 
     return {
       vendorUserId,
@@ -326,6 +335,68 @@ export async function seedE2eFixtures<
       eventDate: request.eventDate,
     };
   });
+}
+
+/*
+ * Fixed identifiers, so a re-run finds its own rows instead of writing a second
+ * set. The applicant address is under `example.test`, which cannot be
+ * registered, so no invite or sign-up can ever match it.
+ */
+const E2E_APPLICANT_EMAIL = 'e2e-applicant@example.test';
+const E2E_CASE_REFERENCE = `${SUPPORT_REFERENCE_PREFIX}-E2EE-22`;
+const E2E_AUDIT_ROW_ID = '00000000-0000-4000-8000-0000000e2e01';
+const E2E_AUDIT_SUBJECT_ID = '00000000-0000-4000-8000-0000000e2e02';
+
+/**
+ * One row for each console list that would otherwise read empty after the seed
+ * (VEN-460): an open support case, an application waiting on an operator, and
+ * one audit entry. A list that draws nothing renders its empty state cleanly,
+ * so a browser pass over it proves nothing about the rows a real list draws.
+ *
+ * The audit row needs an operator to have taken the action, so it exists only
+ * when the fixture has an admin account. All three insert-if-absent: the audit
+ * log is immutable by trigger, and the other two are the operator's to work on,
+ * so a re-run must not put back what a pass has since changed.
+ */
+async function ensureConsoleListRows(
+  tx: Tx,
+  input: { customer: E2eAccount; customerUserId: string; adminUserId: string | undefined },
+): Promise<void> {
+  await tx
+    .insert(supportCases)
+    .values({
+      reference: E2E_CASE_REFERENCE,
+      origin: 'support_message',
+      topic: 'something-else',
+      senderUserId: input.customerUserId,
+      senderEmail: input.customer.email,
+      message: 'A seeded question, so the console has a case to list. Not a real customer.',
+    })
+    .onConflictDoNothing({ target: supportCases.reference });
+
+  await tx
+    .insert(vendorApplications)
+    .values({
+      email: E2E_APPLICANT_EMAIL,
+      businessName: 'E2E Applicant Bakery',
+      category: 'Catering',
+      city: 'Austin',
+      message: 'A seeded application, so the console has one waiting. Not a real business.',
+    })
+    .onConflictDoNothing({ target: vendorApplications.email });
+
+  if (input.adminUserId !== undefined) {
+    await tx
+      .insert(adminActions)
+      .values({
+        id: E2E_AUDIT_ROW_ID,
+        actorId: input.adminUserId,
+        action: 'tag_updated',
+        subjectType: 'tag',
+        subjectId: E2E_AUDIT_SUBJECT_ID,
+      })
+      .onConflictDoNothing({ target: adminActions.id });
+  }
 }
 
 /**

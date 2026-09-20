@@ -215,6 +215,25 @@ describe('redirectIfSignedIn', () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
+  it('forwards a verified account that has yet to accept the Terms, so it reaches the gate', async () => {
+    userId = 'user_new';
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, 'TERMS_REQUIRED', 'Accept the Terms of Service to continue.'),
+    );
+
+    await expect(redirectIfSignedIn('/bookings')).rejects.toThrow(
+      'NEXT_REDIRECT:/after-sign-in?returnTo=%2Fbookings',
+    );
+  });
+
+  it('keeps a suspended account on the page: only the Terms gate is one tick from usable', async () => {
+    userId = 'user_banned';
+    apiRequest.mockRejectedValue(new ApiClientError(403, 'FORBIDDEN', 'Account suspended'));
+
+    await expect(redirectIfSignedIn()).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
   it('lets a signed-out visitor stay on the authentication page', async () => {
     userId = null;
     getToken.mockResolvedValue(null);

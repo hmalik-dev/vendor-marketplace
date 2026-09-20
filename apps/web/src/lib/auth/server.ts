@@ -1,5 +1,7 @@
 import { createNeonAuth } from '@neondatabase/auth/next/server';
+import { cookies } from 'next/headers';
 import { cache } from 'react';
+import { tokenExpiryMs } from './token-expiry';
 
 /**
  * The web app's one door to Neon Auth on the server: the `/api/auth/*` proxy
@@ -47,6 +49,18 @@ export interface ServerSession {
  */
 export const getServerSession = cache(
   async function getServerSession(): Promise<ServerSession | null> {
+    const cookieValue = await sessionCookieValue();
+
+    if (cookieValue === null) {
+      return null;
+    }
+
+    const remembered = mintedSessions.get(cookieValue);
+
+    if (remembered && remembered.expiresAtMs - Date.now() > REFRESH_WINDOW_MS) {
+      return { userId: remembered.userId, token: remembered.token };
+    }
+
     const auth = neonAuth();
     const { data: session } = await auth.getSession();
 
@@ -56,6 +70,91 @@ export const getServerSession = cache(
 
     const { data } = await auth.token();
 
-    return data?.token ? { userId: session.user.id, token: data.token } : null;
+    if (!data?.token) {
+      return null;
+    }
+
+    const minted: ServerSession = { userId: session.user.id, token: data.token };
+    remember(cookieValue, minted);
+
+    return minted;
   },
 );
+
+/**
+ * Neon Auth rate-limits `/get-session` and `/token` (429
+ * `over_request_rate_limit`) per caller, and every request this server makes
+ * arrives from its one address. Once the SDK's five-minute `session_data`
+ * cookie lapses, each render — the header, the page and the browser's own
+ * `/api/session/token` — asked upstream for both, which spent the budget in a
+ * minute of ordinary browsing; and the refusal read as "signed out", so a live
+ * session bounced to `/sign-in` (VEN-460). A server component cannot set the
+ * cookie that would refresh it, so the answer is kept here instead.
+ *
+ * It is kept for the life of the JWT it holds — the same 15 minutes the API
+ * already honours that token for, so nothing outlives what a token in the
+ * browser could do anyway. Keyed by the session cookie, which is the credential
+ * the caller already holds: a sign-out deletes the cookie, so the entry is
+ * never asked for again.
+ */
+const REFRESH_WINDOW_MS = 60_000;
+const MAX_REMEMBERED_SESSIONS = 5_000;
+
+interface MintedSession extends ServerSession {
+  expiresAtMs: number;
+}
+
+const mintedSessions = new Map<string, MintedSession>();
+
+/**
+ * The two names the SDK writes its session cookie under: `__Secure-` over
+ * HTTPS, bare over plain HTTP. Matched exactly — a suffix match would let a
+ * cookie planted under a lookalike name become the key.
+ */
+const SESSION_COOKIE_NAMES: ReadonlySet<string> = new Set([
+  '__Secure-neon-auth.session_token',
+  'neon-auth.session_token',
+]);
+
+/**
+ * The key a remembered session is filed under: every real session cookie, name
+ * and value, and nothing else. A hit skips the SDK's signature check, so the
+ * key has to be something only the session's holder can present — a planted
+ * cookie only changes the key, and an empty value never makes one.
+ */
+async function sessionCookieValue(): Promise<string | null> {
+  const jar = await cookies();
+  const present = jar
+    .getAll()
+    .filter((cookie) => SESSION_COOKIE_NAMES.has(cookie.name) && cookie.value !== '')
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .sort();
+
+  return present.length === 0 ? null : present.join(';');
+}
+
+function remember(cookieValue: string, session: ServerSession): void {
+  const expiresAtMs = tokenExpiryMs(session.token);
+
+  if (expiresAtMs === null) {
+    return;
+  }
+
+  if (mintedSessions.size >= MAX_REMEMBERED_SESSIONS) {
+    const now = Date.now();
+    for (const [key, minted] of mintedSessions) {
+      if (minted.expiresAtMs <= now) {
+        mintedSessions.delete(key);
+      }
+    }
+  }
+
+  if (mintedSessions.size < MAX_REMEMBERED_SESSIONS) {
+    mintedSessions.set(cookieValue, { ...session, expiresAtMs });
+  }
+}
+
+/** Test seam: forgets every remembered session. */
+export function clearServerSessions(): void {
+  mintedSessions.clear();
+}
