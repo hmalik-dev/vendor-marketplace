@@ -73,6 +73,9 @@ export function renderEnvExample(): string {
  */
 export const TURBO_GLOBAL_ENV_KEYS: readonly string[] = [
   'NODE_ENV',
+  // The web build refuses a live publishable key outside production, so it
+  // changes what the build produces and a cache hit must not skip that check.
+  'DEPLOY_ENV',
   'CSP_ENFORCE',
   ...PLATFORM_ENV_KEYS,
   /*

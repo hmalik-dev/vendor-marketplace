@@ -1,5 +1,9 @@
 import { loadEnv } from '@vendor-marketplace/db';
-import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
+import {
+  isDeployedBuild,
+  isDeployedRuntime,
+  liveKeyOutsideProduction,
+} from '@vendor-marketplace/shared/env';
 import { parseEnv, type ApiEnv } from './env.js';
 
 /**
@@ -35,6 +39,33 @@ export const BOOT_GUARDS: readonly BootGuard[] = [
         ? `STRIPE_SECRET_KEY is live but ${plain.join(', ')} is not https`
         : null;
     },
+  },
+  {
+    // Nothing else ties a live key to *being* production: a staging API or a
+    // laptop holding one moves real money on seeded data.
+    name: 'live Stripe key requires DEPLOY_ENV=production',
+    check: (env) =>
+      liveKeyOutsideProduction('STRIPE_SECRET_KEY', env.STRIPE_SECRET_KEY, env.DEPLOY_ENV),
+  },
+  {
+    // The schema accepts `local`, the development default, on a deployment. On
+    // a platform that announces itself that silently drops every email (no
+    // sink) and tags Sentry `local`, so it refuses like an unset value does. A
+    // local container run sets only NODE_ENV, announces no platform, and is exempt.
+    name: 'a hosted platform cannot declare DEPLOY_ENV=local',
+    check: (env, source) =>
+      isDeployedBuild(source) && env.DEPLOY_ENV === 'local'
+        ? 'this process runs on a hosting platform but DEPLOY_ENV is local'
+        : null,
+  },
+  {
+    // The schema cannot relate two rows; without a sink a staging API has no
+    // safe place to deliver, so it refuses rather than mail real recipients.
+    name: 'staging requires an email sink',
+    check: (env) =>
+      env.DEPLOY_ENV === 'staging' && env.EMAIL_SINK_ADDRESS === undefined
+        ? 'DEPLOY_ENV is staging but EMAIL_SINK_ADDRESS is not set'
+        : null,
   },
 ];
 

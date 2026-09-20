@@ -94,6 +94,38 @@ an upload fails at the storage call. Work that uploads belongs in a lane.
 `node scripts/ci-storage.mjs assert` fails when a `STORAGE_*` or `AWS_*` value
 in the environment names the production branch.
 
+## Which tier am I? `DEPLOY_ENV`
+
+`DEPLOY_ENV` is `local`, `staging` or `production`. It defaults to `local` on a
+laptop and is **required on every deployment** — the API and the web build
+refuse to start without it, because nothing else tells a deployed staging from
+production. Outside production:
+
+- every email is delivered to `EMAIL_SINK_ADDRESS` only, with the intended
+  recipient in the subject (`[to: …]`) and at the top of the body; with no sink
+  address (a laptop) nothing is delivered and the send is logged;
+- `DEPLOY_ENV=staging` refuses to boot without `EMAIL_SINK_ADDRESS`;
+- a live Stripe key (`sk_live_`, `pk_live_`) refuses to boot, in the API and the
+  web build. Production may still run on test keys — the friends beta does — so
+  the guard is one-directional; `pnpm launch:check` is what rejects test keys
+  before real money;
+- Sentry's `environment` is the `DEPLOY_ENV` value.
+
+**Resetting a non-production branch.** Rebuild it from a fresh Neon branch,
+migrate it, run the reference seed and re-create its Neon Auth identities
+([environments.md](environments.md#reset-and-reseed)); locally,
+`pnpm lane:down <id> && pnpm lane:up <id>`. Never run `pnpm db:seed:demo` or
+`pnpm db:seed:e2e` against production.
+
+**Neon Auth mail is outside the sink.** Neon Auth sends its own OTP and
+verification mail from each branch's Auth instance, not through the API's
+gateway, so `EMAIL_SINK_ADDRESS` cannot redirect it: a sign-up on the dev or
+staging instance mails whatever address is typed. Nothing in this repository
+configures that sender, and the per-instance sender (Neon's default or a custom
+one) has not been read from the Neon console; it is for the account holder to
+record under VEN-377. Until then, sign up on dev and staging only with addresses
+you control.
+
 ## Environment variables
 
 `packages/shared/src/env/registry.ts` is the single list of every variable.

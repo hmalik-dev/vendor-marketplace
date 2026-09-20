@@ -36,6 +36,10 @@ services:
       # --- Set here, because none of these are secret ---------------------
       - key: NODE_ENV
         value: production
+      # This is the staging tier: every email goes to EMAIL_SINK_ADDRESS, and a
+      # live Stripe key refuses to boot.
+      - key: DEPLOY_ENV
+        value: staging
       - key: HOST
         value: 0.0.0.0
       # Render injects its own PORT unless the service declares one. The
@@ -70,6 +74,9 @@ services:
       # CORS allow-list, so a wrong value here is a browser-side failure with
       # no server-side symptom.
       - key: WEB_URL
+        sync: false
+      # The one inbox every email is delivered to. Required by DEPLOY_ENV=staging.
+      - key: EMAIL_SINK_ADDRESS
         sync: false
       - key: STORAGE_ENDPOINT
         sync: false

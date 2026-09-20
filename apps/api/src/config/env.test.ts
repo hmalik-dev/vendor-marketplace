@@ -36,6 +36,7 @@ delete REQUIRED.WEBHOOK_SIGNING_FIXTURE;
 
 // Optional, but the key-list test needs it present to see it parsed.
 REQUIRED.WEB_TIER_KEY = 'w'.repeat(40);
+REQUIRED.EMAIL_SINK_ADDRESS = 'sink@orla.test';
 
 /*
  * Resend's key is composed rather than written out, for the same reason and one
@@ -304,6 +305,7 @@ describe('parseEnv storage configuration', () => {
 describe('parseEnv on a deployment', () => {
   /** Every per-environment row the API reads that carries a development default. */
   const DEFAULTED = [
+    'DEPLOY_ENV',
     'WEB_URL',
     'STORAGE_ENDPOINT',
     'STORAGE_ACCESS_KEY_ID',
@@ -345,6 +347,7 @@ describe('parseEnv on a deployment', () => {
   const DEPLOYED: NodeJS.ProcessEnv = {
     ...REQUIRED,
     NODE_ENV: 'production',
+    DEPLOY_ENV: 'production',
     // The fixture's own database is the local Docker one; a deployment reaches
     // Neon over the network, and `deployed` now refuses a loopback host.
     DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
@@ -371,6 +374,14 @@ describe('parseEnv on a deployment', () => {
     delete source[key];
 
     expect(() => parseEnv(source)).toThrow(new RegExp(`${key} is required on a deployment`));
+  });
+
+  it('refuses to boot with DEPLOY_ENV unset, naming it, and rejects a tier that does not exist', () => {
+    const { DEPLOY_ENV: _tier, ...unset } = DEPLOYED;
+
+    expect(() => parseEnv(unset)).toThrow(/DEPLOY_ENV is required on a deployment/);
+    expect(() => parseEnv({ ...DEPLOYED, DEPLOY_ENV: 'prod' })).toThrow(/DEPLOY_ENV/);
+    expect(parseEnv({ ...DEPLOYED, DEPLOY_ENV: 'staging' }).DEPLOY_ENV).toBe('staging');
   });
 
   it('names every one of them at once, so a deploy is fixed in one pass', () => {
@@ -532,6 +543,7 @@ describe('SENTRY_DSN at boot', () => {
   const DEPLOYED: NodeJS.ProcessEnv = {
     ...REQUIRED,
     NODE_ENV: 'production',
+    DEPLOY_ENV: 'production',
     DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
     NEON_AUTH_DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
     WEB_URL: 'https://orla.test',

@@ -26,11 +26,11 @@ function recordingReporter(): ErrorReporter & {
 
 describe('sentryOptions', () => {
   it('turns reporting off when there is no DSN, which only a laptop may have', () => {
-    expect(sentryOptions({ SENTRY_DSN: undefined }, {})).toBeNull();
+    expect(sentryOptions({ SENTRY_DSN: undefined, DEPLOY_ENV: 'local' }, {})).toBeNull();
   });
 
   it('samples explicitly and sends no default PII', () => {
-    const options = sentryOptions({ SENTRY_DSN: DSN }, {})!;
+    const options = sentryOptions({ SENTRY_DSN: DSN, DEPLOY_ENV: 'local' }, {})!;
 
     expect(options.sampleRate).toBe(1);
     expect(options.tracesSampleRate).toBe(0.05);
@@ -44,13 +44,26 @@ describe('sentryOptions', () => {
    */
   it('reports the release identifier the deploy workflow sets', () => {
     const options = sentryOptions(
-      { SENTRY_DSN: DSN },
+      { SENTRY_DSN: DSN, DEPLOY_ENV: 'production' },
       { SENTRY_RELEASE: 'a1b2c3d', RAILWAY_GIT_COMMIT_SHA: 'platform-sha', NODE_ENV: 'production' },
     )!;
 
     expect(options.release).toBe('a1b2c3d');
     expect(options.environment).toBe('production');
   });
+
+  it.each(['local', 'staging', 'production'])(
+    'reports the declared tier %s as the Sentry environment, whatever the platform says',
+    (tier) => {
+      // A deployed staging sees NODE_ENV=production too; only DEPLOY_ENV tells it apart.
+      const options = sentryOptions(
+        { SENTRY_DSN: DSN, DEPLOY_ENV: tier },
+        { NODE_ENV: 'production' },
+      )!;
+
+      expect(options.environment).toBe(tier);
+    },
+  );
 });
 
 describe('what the API scrubs, at beforeSend', () => {
@@ -61,7 +74,7 @@ describe('what the API scrubs, at beforeSend', () => {
   const ACCOUNT = ['acct', '1Fixture0Account'].join('_');
 
   it('leaves no email, phone, credential, cookie or stream ticket in the event', () => {
-    const options = sentryOptions({ SENTRY_DSN: DSN }, {})!;
+    const options = sentryOptions({ SENTRY_DSN: DSN, DEPLOY_ENV: 'local' }, {})!;
     const event: Sentry.ErrorEvent = {
       type: undefined,
       message: `${EMAIL} ${PHONE} ${KEY} ${SIGNING}`,
@@ -91,7 +104,10 @@ describe('what the API scrubs, at beforeSend', () => {
  */
 describe('what the API reports, at the scrubbing hook', () => {
   it('carries the user id and payment tags, the workflow release, and no email or token', async () => {
-    const options = sentryOptions({ SENTRY_DSN: DSN }, { SENTRY_RELEASE: 'a1b2c3d' })!;
+    const options = sentryOptions(
+      { SENTRY_DSN: DSN, DEPLOY_ENV: 'local' },
+      { SENTRY_RELEASE: 'a1b2c3d' },
+    )!;
     const seen: Sentry.ErrorEvent[] = [];
 
     Sentry.init({
@@ -143,7 +159,7 @@ describe('what the API reports, at the scrubbing hook', () => {
   it("withholds a failed statement's bound values, and keeps what says what broke", async () => {
     const typed = 'Ada Lovelace, 10 Downing Street, 555-0100';
     const sql = 'insert into "support_messages" ("body") values ($1)';
-    const options = sentryOptions({ SENTRY_DSN: DSN }, {})!;
+    const options = sentryOptions({ SENTRY_DSN: DSN, DEPLOY_ENV: 'local' }, {})!;
     const seen: Sentry.ErrorEvent[] = [];
 
     Sentry.init({

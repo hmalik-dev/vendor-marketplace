@@ -4,7 +4,7 @@ import {
   PAYMENT_ERROR_TAGS,
   scrubErrorEvent,
 } from '@vendor-marketplace/shared';
-import { isDeployedRuntime, releaseIdentifier } from '@vendor-marketplace/shared/env';
+import { releaseIdentifier } from '@vendor-marketplace/shared/env';
 import type { ApiEnv } from '../config/env.js';
 import { redactErrorValues } from './log-error-serializer.js';
 
@@ -41,7 +41,7 @@ export const silentErrorReporter: ErrorReporter = { capture: () => undefined };
  * is how the release that threw is the release that shipped.
  */
 export function sentryOptions(
-  env: Pick<ApiEnv, 'SENTRY_DSN'>,
+  env: Pick<ApiEnv, 'SENTRY_DSN' | 'DEPLOY_ENV'>,
   source: NodeJS.ProcessEnv = process.env,
 ): Sentry.NodeOptions | null {
   if (env.SENTRY_DSN === undefined) {
@@ -51,7 +51,7 @@ export function sentryOptions(
   return {
     dsn: env.SENTRY_DSN,
     release: releaseIdentifier(source) ?? undefined,
-    environment: isDeployedRuntime(source) ? 'production' : 'development',
+    environment: env.DEPLOY_ENV,
     sendDefaultPii: false,
     ...ERROR_REPORTING_SAMPLING,
     beforeSend: (event) => scrubErrorEvent(event),
@@ -90,7 +90,7 @@ export function sentryErrorReporter(): ErrorReporter {
  * build more than one instance in a process, and a second `init` would replace
  * the client the first instance is already reporting through.
  */
-export function createErrorReporter(env: Pick<ApiEnv, 'SENTRY_DSN'>): ErrorReporter {
+export function createErrorReporter(env: Pick<ApiEnv, 'SENTRY_DSN' | 'DEPLOY_ENV'>): ErrorReporter {
   const options = sentryOptions(env);
 
   if (options === null) {
