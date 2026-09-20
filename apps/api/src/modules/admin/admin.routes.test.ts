@@ -766,7 +766,7 @@ describe('admin routes', () => {
         paymentIntentId: 'pi_test_ban',
         amountCents: 60_000,
         reason: 'requested_by_customer',
-        idempotencyKey: 'cancel_earlier_direct',
+        idempotencyKey: 'cancel_earlier_marked',
         reverseTransfer: false,
         refundApplicationFee: false,
       });
@@ -844,7 +844,7 @@ describe('admin routes', () => {
         paymentIntentId: 'pi_test_ban',
         amountCents: 120_000,
         reason: 'requested_by_customer',
-        idempotencyKey: 'cancel_failed_direct',
+        idempotencyKey: 'cancel_failed_marked',
         reverseTransfer: false,
         refundApplicationFee: false,
         status: 'failed',

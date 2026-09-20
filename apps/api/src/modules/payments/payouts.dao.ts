@@ -113,6 +113,8 @@ export interface ReleasableBookingRow {
   vendorPayoutCents: number;
   /** How many times the transfer has already failed — part of the Stripe key. */
   payoutAttempts: number;
+  /** What the charge to look at for a refund made outside the platform (VEN-469). */
+  stripePaymentIntentId: string | null;
   vendorStripeAccountId: string | null;
   vendorStripeOnboarded: boolean;
   /** An operator is holding this vendor's automatic payouts (VEN-404). */
@@ -215,6 +217,7 @@ export async function claimReleasableBooking(
       eventDate: bookings.eventDate,
       vendorPayoutCents: bookings.vendorPayoutCents,
       payoutAttempts: bookings.payoutAttempts,
+      stripePaymentIntentId: bookings.stripePaymentIntentId,
       vendorStripeAccountId: vendorProfiles.stripeAccountId,
       vendorStripeOnboarded: vendorProfiles.stripeOnboarded,
       vendorPayoutHold: vendorProfiles.payoutHold,
