@@ -17,6 +17,8 @@ import {
 } from '@vendor-marketplace/db/testing/postgres';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { recordSuccessfulPayment, type PaymentContext } from './payments.service.js';
+import { releaseDuePayouts } from './payouts.service.js';
+import { reconcileRefundedIntent } from './refund-reconciliation.js';
 
 /**
  * VEN-471: two paid intents for one request, delivered at the same moment.
@@ -284,6 +286,103 @@ describe('two payment intents succeeding for one request, on real connections', 
     const rows = await bookingsFor(requestId);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.stripePaymentIntentId).toBe(winner.id);
+  });
+
+  /*
+   * VEN-469 acceptance 1. The refund key used to embed the wall-clock hour, so
+   * two deliveries either side of a boundary sent two keys and, with the
+   * `findRefund` read lagging Stripe (both run before either refund exists),
+   * two refunds. The key now comes from a persisted refusal count, which both
+   * deliveries read alike.
+   */
+  it('refunds a second charge once when two deliveries straddle an hour boundary', async () => {
+    const { requestId, firstIntentId } = await checkedOutRequest();
+    const secondIntentId = await secondIntent(requestId);
+    const winner = harness!.stripe.succeed(firstIntentId);
+    const loser = harness!.stripe.succeed(secondIntentId);
+    expect((await recordSuccessfulPayment(context(), winner)).outcome).toBe('booked');
+    harness!.stripe.refunds.length = 0;
+    harness!.stripe.duringNextRefund = undefined;
+
+    const hour = 60 * 60_000;
+    const base = Math.floor(START.getTime() / hour) * hour + hour - 1;
+    let reads = 0;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => base + (reads++ % 2));
+
+    /* Both deliveries read "no refund yet" before either refund exists: Stripe's list lags. */
+    const findRefund = harness!.stripe.findRefund;
+    let arrived = 0;
+    let open!: () => void;
+    const bothRead = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    harness!.stripe.findRefund = async (paymentIntentId) => {
+      const found = await findRefund(paymentIntentId);
+      arrived += 1;
+      if (arrived === 2) {
+        open();
+      }
+      await bothRead;
+
+      return found;
+    };
+
+    try {
+      const results = await Promise.all([
+        recordSuccessfulPayment(context(), loser),
+        recordSuccessfulPayment(context(), loser),
+      ]);
+
+      expect(results.map((result) => result.outcome)).toEqual(['already-booked', 'already-booked']);
+    } finally {
+      clock.mockRestore();
+      harness!.stripe.findRefund = findRefund;
+    }
+
+    expect(harness!.stripe.refunds).toHaveLength(1);
+    expect(harness!.stripe.refunds[0]).toMatchObject({
+      paymentIntentId: loser.id,
+      amountCents: PRICE_CENTS,
+      idempotencyKey: `${loser.id}_duplicate_intent_0`,
+    });
+  });
+
+  /*
+   * VEN-469: the `charge.refunded` reconciliation and the payout sweep both find
+   * the same Dashboard refund and both write the row. Only the row lock in
+   * `recordExternalRefund` lets exactly one of them hold and alert; PGlite runs
+   * the two transactions serially and cannot tell it from its absence.
+   */
+  it('holds a Dashboard-refunded booking once when the webhook and the sweep find it together', async () => {
+    const { requestId, firstIntentId } = await checkedOutRequest();
+    const intent = harness!.stripe.succeed(firstIntentId);
+    expect((await recordSuccessfulPayment(context(), intent)).outcome).toBe('booked');
+    harness!.stripe.refundExternally(intent.id, 10_000);
+    dispatch.mockClear();
+    const [booked] = await bookingsFor(requestId);
+    const due = addDays(new Date(`${booked!.eventDate}T00:00:00Z`), 4);
+
+    await Promise.all([
+      reconcileRefundedIntent(
+        { db: harness!.database.db, stripe: harness!.stripe, alerts: { dispatch } },
+        intent.id,
+      ),
+      releaseDuePayouts(
+        {
+          db: harness!.database.db,
+          stripe: harness!.stripe,
+          log: harness!.app.log,
+          alerts: { dispatch },
+        },
+        due,
+      ),
+    ]);
+
+    const [after] = await bookingsFor(requestId);
+    expect(after).toMatchObject({ status: 'disputed', externalRefundCents: 10_000 });
+    /* The sweep may pay other bookings this file made; this one it must not. */
+    expect(harness!.stripe.transfers.filter((t) => t.bookingId === booked!.id)).toEqual([]);
+    expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
   it('books one intent and refunds the other when both events arrive together', async () => {

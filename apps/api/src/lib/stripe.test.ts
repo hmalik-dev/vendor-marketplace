@@ -64,6 +64,7 @@ describe('refundParams', () => {
       payment_intent: 'pi_platform',
       amount: 72_500,
       reason: undefined,
+      metadata: { orla_refund: '1' },
     });
   });
 
@@ -86,7 +87,17 @@ describe('sumUsableRefunds', () => {
         { id: 're_3', amount: 30_000, status: 'canceled' },
         { id: 're_4', amount: 4_000, status: 'pending' },
       ]),
-    ).toEqual({ refundIds: ['re_1', 're_4'], amountCents: 5_000 });
+    ).toEqual({ refundIds: ['re_1', 're_4'], amountCents: 5_000, platformCents: 0 });
+  });
+
+  it('counts only the refunds carrying the platform marker as its own', () => {
+    expect(
+      sumUsableRefunds([
+        { id: 're_1', amount: 4_000, status: 'succeeded', metadata: { orla_refund: '1' } },
+        { id: 're_2', amount: 1_000, status: 'succeeded', metadata: {} },
+        { id: 're_3', amount: 9_000, status: 'failed', metadata: { orla_refund: '1' } },
+      ]),
+    ).toEqual({ refundIds: ['re_1', 're_2'], amountCents: 5_000, platformCents: 4_000 });
   });
 
   it('is null when no refund is usable', () => {

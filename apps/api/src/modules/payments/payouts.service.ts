@@ -22,6 +22,8 @@ import {
   recordPayoutFailure,
   recordPayoutRelease,
 } from './payouts.dao.js';
+import { announceExternalRefund, externalRefundReason } from './refund-reconciliation.js';
+import { recordExternalRefund, type ExternalRefundFinding } from './refunds.dao.js';
 
 /**
  * How many due payouts one sweep will attempt.
@@ -293,6 +295,8 @@ async function releaseOnePayout(
    */
   let failure: string | null = null;
   let owedCents = 0;
+  /** Refunds made outside the platform that this claim found; told to the operator once the transaction has committed. */
+  const findings: ExternalRefundFinding[] = [];
 
   const outcome = await context.db.transaction(async (tx) => {
     const booking = await claimReleasableBooking(tx, bookingId, dueThroughDate);
@@ -323,6 +327,46 @@ async function releaseOnePayout(
       );
 
       return 'failed';
+    }
+
+    /*
+     * Asked of Stripe before the money moves (VEN-469). The `charge.refunded`
+     * reconciliation is inert until the endpoint subscribes to it and cannot
+     * recover a delivery that never came, so the claim looks for itself: a
+     * booking refunded in the Dashboard would otherwise be paid its full vendor
+     * share. A refund found here is recorded and held under the row lock this
+     * transaction already holds, and the sweep leaves the booking alone.
+     *
+     * A failed read is a failed attempt like any other Stripe error below —
+     * paying out on a refund state nobody could read is the mistake.
+     */
+    let external: ExternalRefundFinding | null = null;
+
+    if (booking.stripePaymentIntentId) {
+      try {
+        const found = await context.stripe.findRefund(booking.stripePaymentIntentId);
+
+        external = found
+          ? await recordExternalRefund(tx, bookingId, found, externalRefundReason)
+          : null;
+      } catch (error) {
+        failure = error instanceof Error ? error.message : String(error);
+        context.log.error({ bookingId, err: error }, 'Could not read the charge before a payout');
+
+        return 'failed';
+      }
+    }
+
+    if (external) {
+      findings.push(external);
+
+      /*
+       * Not transferred on this run whether or not the booking could be held: a
+       * cancelled booking cannot be, but paying the residual in the same
+       * transaction that found the refund would send the money the alert says
+       * is being looked at.
+       */
+      return 'skipped';
     }
 
     const transferGroup = transferGroupFor(booking.requestId);
@@ -402,6 +446,10 @@ async function releaseOnePayout(
       return 'failed';
     }
   });
+
+  for (const finding of findings) {
+    announceExternalRefund(context.alerts, bookingId, finding);
+  }
 
   if (failure !== null) {
     /*

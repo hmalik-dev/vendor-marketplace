@@ -28,12 +28,15 @@ import { AppError, conflict, forbidden, notFound, validationFailed } from '../..
 import {
   PAYMENT_INTENT_CANCELED,
   PAYMENT_INTENT_SUCCEEDED,
+  RefundRefusedError,
   reversalAmountCents,
   transferGroupFor,
+  type CreateRefundInput,
   type PaymentIntentSnapshot,
   type StripeConnectGateway,
 } from '../../lib/stripe.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
+import { readRefundAttempts, recordRefundRefusal } from './refunds.dao.js';
 import {
   findVendorByUserId,
   findVendorContact,
@@ -356,8 +359,44 @@ function toRailPackage(row: PayableRequestRow): CheckoutIntent['servicePackage']
   };
 }
 
-/** How long one refund idempotency key for a declined request's charge stays in use. */
-const REFUND_KEY_WINDOW_MS = 60 * 60_000;
+/**
+ * Creates a refund under a key that changes only when Stripe refuses one
+ * (VEN-469, keeping D36).
+ *
+ * The key is a function of a **persisted** count of refusals for this intent and
+ * scope. Stripe caches a refused idempotent result for 24 hours, so the attempt
+ * after a refusal needs a new key — and every caller racing over one refund
+ * needs the *same* key, which a key built from the wall clock could not promise
+ * across an hour boundary: two deliveries either side of it each sent their own.
+ * The refusal is recorded by compare-and-set, so two callers refused together
+ * move the key once.
+ *
+ * Only a refusal Stripe answered moves it. A dropped connection has no cached
+ * answer, and a retry under a new key would make a refund that may already exist.
+ */
+async function createRefundOnce(
+  context: { db: AppDatabase; stripe: StripeConnectGateway; log: FastifyBaseLogger },
+  input: CreateRefundInput & { scope: string; keyFor: (attempt: number) => string },
+): Promise<{ refundId: string; amountCents: number }> {
+  const { scope, keyFor, ...refund } = input;
+  const attempts = await readRefundAttempts(context.db, refund.paymentIntentId, scope);
+
+  try {
+    return await context.stripe.createRefund({ ...refund, idempotencyKey: keyFor(attempts) });
+  } catch (error) {
+    if (error instanceof RefundRefusedError) {
+      await recordRefundRefusal(context.db, refund.paymentIntentId, scope, attempts).catch(
+        (recordError: unknown) =>
+          context.log.error(
+            { err: recordError, paymentIntentId: refund.paymentIntentId },
+            'Could not record a refused refund; the retry will reuse its key',
+          ),
+      );
+    }
+
+    throw error;
+  }
+}
 
 /** What became of a succeeded intent. `refunded` is a charge that was not booked. */
 export type RecordedPayment =
@@ -544,16 +583,18 @@ async function refuseDeclinedPayment(
     const remainingCents = intent.amountReceivedCents - (alreadyRefunded?.amountCents ?? 0);
 
     if (remainingCents > 0) {
-      await context.stripe.createRefund({
+      await createRefundOnce(context, {
         paymentIntentId: intent.id,
         amountCents: remainingCents,
+        scope: cause,
         /*
-         * Versioned by the hour, not fixed (D36). Stripe replays a *failed*
-         * idempotent result for 24 hours, and this path exists to be retried by
-         * redelivery — a fixed key would answer every retry with the first
-         * refusal. Concurrent deliveries in the same hour still share a key.
+         * Versioned by the refusals recorded so far, not by the clock (D36).
+         * Stripe replays a *failed* idempotent result for 24 hours, and this
+         * path exists to be retried by redelivery — a fixed key would answer
+         * every retry with the first refusal. Concurrent deliveries share the
+         * count, so they share the key, however close to an hour they fall.
          */
-        idempotencyKey: `${intent.id}_${cause}_${Math.floor(Date.now() / REFUND_KEY_WINDOW_MS)}`,
+        keyFor: (attempt) => `${intent.id}_${cause}_${attempt}`,
       });
     }
   } catch (error) {
@@ -1011,37 +1052,41 @@ async function refundAndUnwind(
   const remainingCents = refundCents - alreadyRefundedCents;
   const created =
     remainingCents > 0
-      ? await context.stripe
-          .createRefund({
-            paymentIntentId: booking.stripePaymentIntentId,
-            amountCents: remainingCents,
-            reason: 'requested_by_customer',
-            /*
-             * Keyed on the booking, because the refund is sent *before* the guarded
-             * update that decides who won. That update's status predicate means only
-             * one of two concurrent cancels writes the row — but both reached this
-             * line first, and without a key Stripe would have paid the customer twice
-             * for one cancellation. The key makes the second call return the first
-             * refund instead of creating another. One booking, one cancellation, one
-             * refund. (#399)
-             *
-             * The `_direct` suffix is the request's version, not decoration. Stripe
-             * refuses a key replayed with *different parameters*, so it changes
-             * whenever the request under it does — it was `_unwind` while the refund
-             * carried D31's two flags, and it is `_direct` now that the refund
-             * carries neither (#423).
-             *
-             * Deliberately *not* versioned by what was already returned: this key
-             * is the only thing serialising two concurrent cancels, and a key that
-             * depends on each racer's read would let two racers that read
-             * different states both refund — an over-refund below the full tier,
-             * where the charge cap does not catch it. Same key, different amount
-             * is refused by Stripe instead (VEN-477). Versioning a retry past a
-             * cached failure is VEN-469's half.
-             */
-            idempotencyKey: `${keyPrefix}_${booking.id}_direct`,
-          })
-          .catch(reportRefundFailure)
+      ? await createRefundOnce(context, {
+          paymentIntentId: booking.stripePaymentIntentId,
+          amountCents: remainingCents,
+          reason: 'requested_by_customer',
+          scope: `${keyPrefix}_${booking.id}`,
+          /*
+           * Keyed on the booking, because the refund is sent *before* the guarded
+           * update that decides who won. That update's status predicate means only
+           * one of two concurrent cancels writes the row — but both reached this
+           * line first, and without a key Stripe would have paid the customer twice
+           * for one cancellation. The key makes the second call return the first
+           * refund instead of creating another. One booking, one cancellation, one
+           * refund. (#399)
+           *
+           * The `_marked` suffix is the request's version, not decoration. Stripe
+           * refuses a key replayed with *different parameters*, so it changes
+           * whenever the request under it does — it was `_unwind` while the refund
+           * carried D31's two flags, and it is `_marked` now that the refund
+           * carries neither (#423).
+           *
+           * Deliberately *not* versioned by what was already returned: this key
+           * is the only thing serialising two concurrent cancels, and a key that
+           * depends on each racer's read would let two racers that read
+           * different states both refund — an over-refund below the full tier,
+           * where the charge cap does not catch it. Same key, different amount
+           * is refused by Stripe instead (VEN-477).
+           *
+           * What *does* version it is a refusal Stripe answered, recorded
+           * against this booking: Stripe replays that answer for 24 hours, so
+           * the retry after it needs a new key (VEN-469, D36). Every racer
+           * reads the same count, so they still share one key.
+           */
+          keyFor: (attempt) =>
+            `${keyPrefix}_${booking.id}_marked${attempt === 0 ? '' : `_${attempt}`}`,
+        }).catch(reportRefundFailure)
       : null;
 
   const refund = {

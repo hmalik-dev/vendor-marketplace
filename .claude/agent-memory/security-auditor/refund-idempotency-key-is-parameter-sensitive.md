@@ -1,15 +1,23 @@
 ---
 name: refund-idempotency-key-is-parameter-sensitive
-description: Both refund idempotency keys carry a version suffix; VEN-477 made that suffix the already-refunded total, so dedup now holds only while two racers read the same Stripe state
+description: Refund idempotency keys are parameter-versioned by hand; VEN-469 made the version a persisted refusal counter, so how a Stripe error is classified now decides whether a second refund is sent
 metadata:
   type: project
 ---
 
-`createRefund` keys are `cancel_${bookingId}_direct_${alreadyRefundedCents}`
-(`payments.service.ts` `refundAndUnwind`) and
-`${refundKeyPrefix}:${booking.id}:${alreadyRefundedCents}`
-(`admin/account-unwind.ts`). Stripe caches a response — including a _failure_ —
-for 24h per key and refuses a replay with different parameters.
+`createRefund` keys are `${keyPrefix}_${booking.id}_direct[_${attempt}]`
+(`payments.service.ts` `refundAndUnwind`) and `${refundKeyPrefix}:${booking.id}`
+(`admin/account-unwind.ts`, no counter). Stripe caches a response — including a
+_failure_ — for 24h per key and refuses a replay with different parameters.
+
+**The classifier is the guard (VEN-469).** `createRefundOnce` bumps a persisted
+`refund_attempts` counter — and therefore the key — for anything it calls a
+refusal. Treating every `StripeError` with a `statusCode` as one is wrong three
+ways: a 429 and a 5xx may have executed or may retry safely only under the
+_same_ key, and an `idempotency_error` proves a request under that key already
+ran. Bump on those and the next attempt sends a fresh key while
+`findRefund`'s list still lags — the over-refund the fixed key existed to stop.
+Only a deterministic 4xx (`invalid_request_error`, `card_error`) may move it.
 
 **What VEN-477 changed.** `findRefund` now sums every usable refund on the
 intent (`sumUsableRefunds`, all pages) and both paths refund the _remainder_
@@ -29,9 +37,11 @@ instead of skipping when any refund exists. Consequences to keep in mind:
   above the cutoff and a retry below it share a key with different amounts →
   `idempotency_error`. Unfixed, pre-VEN-477.
 
-**How to apply:** when a refund's parameters change, the key must change with
-them; when the key gains state, check that concurrent callers still derive the
-same one. Related: [[refund-before-row-move-can-double-refund]],
+**How to apply:** when a refund's parameters change, the key literal must change
+with it — VEN-469 added `metadata` to `refundParams` and left `_direct` and the
+unwind key alone, so every key replayed inside the deploy's 24h window answers
+`idempotency_error`. When the key gains state, check that concurrent callers
+still derive the same one. Related: [[refund-before-row-move-can-double-refund]],
 [[refund-proportionality-is-now-ours-to-state]].
 
 **The reversal keys keep the cached-failure half.** Every `reverseTransfer` key

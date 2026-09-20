@@ -449,6 +449,7 @@ describe('the Stripe webhook subscription', () => {
         'account.updated',
         'capability.updated',
         'payment_intent.succeeded',
+        'charge.refunded',
         'charge.dispute.created',
         'charge.dispute.closed',
         'charge.dispute.funds_reinstated',
