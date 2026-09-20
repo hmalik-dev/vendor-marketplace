@@ -385,8 +385,6 @@ export interface FakeStripe extends StripeConnectGateway {
      * back. A suite pushes a `failed` refund here to reach that branch.
      */
     status?: string;
-    /** What the request carried; absent on a refund made outside the platform. */
-    metadata?: Record<string, unknown>;
   }[];
   /**
    * Transfers asked for, in order, so a suite can assert the **call count**
@@ -455,11 +453,24 @@ function createFakeStripe(): FakeStripe {
   const accountStatuses = new Map<string, FakeAccountStatus>();
   const validSignatures = new Set<string>(['valid-signature']);
   const paymentIntents = new Map<string, PaymentIntentSnapshot>();
+  /** What each refund request carried; absent for a refund made outside the platform. */
+  const refundMetadata = new WeakMap<object, Record<string, unknown>>();
   const intentsByKey = new Map<string, string>();
   const refunds: FakeStripe['refunds'] = [];
   const refundsToRefuse = new Set<string>();
   const failedRefundKeys = new Map<string, string>();
   const refundIdsByKey = new Map<string, string>();
+  /*
+   * Stripe's key memory belongs to the intents it was made for. Suites reset the
+   * fake by clearing the intents and mint the same ids again, so a key that
+   * outlived them would replay another test's refund or refusal.
+   */
+  const forgetIntents = paymentIntents.clear.bind(paymentIntents);
+  paymentIntents.clear = () => {
+    forgetIntents();
+    failedRefundKeys.clear();
+    refundIdsByKey.clear();
+  };
   const transfers: FakeStripe['transfers'] = [];
   const reversals: FakeStripe['reversals'] = [];
   const transfersToRefuse = new Set<string>();
@@ -812,8 +823,8 @@ function createFakeStripe(): FakeStripe {
          */
         reverseTransfer: params.reverse_transfer === true,
         refundApplicationFee: params.refund_application_fee === true,
-        metadata: { ...params.metadata },
       });
+      refundMetadata.set(refunds[refunds.length - 1]!, { ...params.metadata });
 
       if (input.idempotencyKey) {
         refundIdsByKey.set(input.idempotencyKey, `re_test_${refunds.length}`);
@@ -853,7 +864,7 @@ function createFakeStripe(): FakeStripe {
             id: `re_test_${index + 1}`,
             amount: refund.amountCents,
             status: refund.status ?? 'succeeded',
-            metadata: refund.metadata,
+            metadata: refundMetadata.get(refund),
             paymentIntentId: refund.paymentIntentId,
           }))
           .filter((refund) => refund.paymentIntentId === paymentIntentId),
