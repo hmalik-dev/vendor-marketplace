@@ -6,6 +6,7 @@ import {
   isMissingPayoutsOnly,
   isOnboarded,
   paymentIntentParams,
+  pickTransfer,
   readAccountStatusFrom,
   refundParams,
   refusedRefundParams,
@@ -605,5 +606,63 @@ describe('parseEventNotification', () => {
     expect(() => gateway().parseEventNotification(PAYLOAD, signedWith(joint))).toThrow(
       /signature/i,
     );
+  });
+});
+
+describe('pickTransfer', () => {
+  const transfer = (
+    id: string,
+    amount: number,
+    amountReversed: number,
+    metadata: Record<string, string> = {},
+  ): Pick<Stripe.Transfer, 'id' | 'amount' | 'amount_reversed' | 'metadata'> => ({
+    id,
+    amount,
+    amount_reversed: amountReversed,
+    metadata,
+  });
+
+  /* VEN-473 acceptance 3. */
+  it('skips a fully reversed transfer and returns the live one behind it', () => {
+    expect(
+      pickTransfer([transfer('tr_reversed', 127_600, 127_600), transfer('tr_live', 127_600, 0)], {
+        live: true,
+      }),
+    ).toEqual({ transferId: 'tr_live', amountCents: 127_600, reversedCents: 0 });
+  });
+
+  it('returns null when only reversed transfers exist, so the sweep creates one', () => {
+    expect(pickTransfer([transfer('tr_reversed', 127_600, 127_600)], { live: true })).toBeNull();
+    expect(pickTransfer([], { live: true })).toBeNull();
+  });
+
+  /* VEN-473 acceptance 4. */
+  it('still returns a partly reversed transfer, with what was reversed', () => {
+    expect(pickTransfer([transfer('tr_half', 127_600, 63_800)], { live: true })).toEqual({
+      transferId: 'tr_half',
+      amountCents: 127_600,
+      reversedCents: 63_800,
+    });
+  });
+
+  /* An unwind finishing a reversal must still see the fully reversed transfer. */
+  it('returns a fully reversed transfer when the caller did not ask for a live one', () => {
+    expect(pickTransfer([transfer('tr_reversed', 127_600, 127_600)])).toEqual({
+      transferId: 'tr_reversed',
+      amountCents: 127_600,
+      reversedCents: 127_600,
+    });
+  });
+
+  it('prefers the transfer the platform made for a booking over a manual one', () => {
+    expect(
+      pickTransfer(
+        [
+          transfer('tr_manual', 50_000, 0),
+          transfer('tr_platform', 127_600, 0, { bookingId: 'bk_1' }),
+        ],
+        { live: true },
+      )?.transferId,
+    ).toBe('tr_platform');
   });
 });

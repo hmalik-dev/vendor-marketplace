@@ -87,8 +87,16 @@ export interface StripeConnectGateway {
    * a *second* transfer of the vendor's whole share, out of the platform's
    * balance, with nothing to say it happened. Asking first turns that from
    * unrecoverable into self-healing.
+   *
+   * By default the newest transfer is returned whatever was reversed off it,
+   * because a reversal that is finishing needs to see one already fully
+   * reversed. `{ live: true }` is for a caller deciding whether the vendor has
+   * been paid (VEN-473); see `pickTransfer`.
    */
-  findTransfer(transferGroup: string): Promise<StripeTransferSnapshot | null>;
+  findTransfer(
+    transferGroup: string,
+    options?: FindTransferOptions,
+  ): Promise<StripeTransferSnapshot | null>;
 
   /**
    * Claws a share of a transfer back out of the vendor's connected account.
@@ -876,6 +884,41 @@ export interface StripeCredentials {
  */
 const STRIPE_REQUEST_TIMEOUT_MS = 10_000;
 
+export interface FindTransferOptions {
+  /** Ignore transfers that have been fully reversed. */
+  live?: boolean;
+}
+
+/**
+ * The transfer `findTransfer` reports for a group (VEN-473).
+ *
+ * With `live`, a fully reversed transfer is skipped, because reading it as the
+ * release would mark the booking paid with the vendor unpaid. Among the live
+ * ones, one carrying a `bookingId` (made by `createTransfer`) wins over a
+ * manual Dashboard transfer. A partly reversed transfer is returned with what
+ * was reversed, because the caller nets that off. `null` means nothing live, so
+ * the sweep makes one. Without `live`, the first transfer is returned as ever.
+ */
+export function pickTransfer(
+  transfers: readonly Pick<Stripe.Transfer, 'id' | 'amount' | 'amount_reversed' | 'metadata'>[],
+  options: FindTransferOptions = {},
+): { transferId: string; amountCents: number; reversedCents: number } | null {
+  const candidates = options.live
+    ? transfers.filter((transfer) => transfer.amount_reversed < transfer.amount)
+    : transfers;
+  const transfer = options.live
+    ? (candidates.find((candidate) => candidate.metadata?.bookingId) ?? candidates[0])
+    : candidates[0];
+
+  return transfer
+    ? {
+        transferId: transfer.id,
+        amountCents: transfer.amount,
+        reversedCents: transfer.amount_reversed,
+      }
+    : null;
+}
+
 export function createStripeConnectGateway(credentials: StripeCredentials): StripeConnectGateway {
   const stripe = new Stripe(credentials.secretKey, { timeout: STRIPE_REQUEST_TIMEOUT_MS });
   const signingSecrets = [credentials.webhookSecret, credentials.connectWebhookSecret].filter(
@@ -1036,17 +1079,10 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
       return { transferId: transfer.id, amountCents: transfer.amount };
     },
 
-    async findTransfer(transferGroup) {
+    async findTransfer(transferGroup, options) {
       const { data } = await stripe.transfers.list({ transfer_group: transferGroup, limit: 10 });
-      const transfer = data[0];
 
-      return transfer
-        ? {
-            transferId: transfer.id,
-            amountCents: transfer.amount,
-            reversedCents: transfer.amount_reversed,
-          }
-        : null;
+      return pickTransfer(data, options);
     },
 
     async reverseTransfer(input) {
