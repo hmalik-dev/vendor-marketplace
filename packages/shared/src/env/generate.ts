@@ -76,12 +76,6 @@ export const TURBO_GLOBAL_ENV_KEYS: readonly string[] = [
   'CSP_ENFORCE',
   ...PLATFORM_ENV_KEYS,
   /*
-   * `next.config.ts` bakes this origin into `img-src` and the bundle inlines it,
-   * and a lane's value changes whenever its storage branch is recreated, so a
-   * pass-through key would replay the deleted branch's host from cache (VEN-468).
-   */
-  'NEXT_PUBLIC_STORAGE_PUBLIC_URL',
-  /*
    * The release identifier is baked into the web bundle and named in its
    * uploaded source maps, so a build for one commit must never be replayed as
    * another's (VEN-397).
