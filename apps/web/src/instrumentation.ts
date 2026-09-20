@@ -11,7 +11,7 @@ export function register(): void {
   const options = webSentryOptions({
     dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
     release: process.env.NEXT_PUBLIC_SENTRY_RELEASE,
-    environment: process.env.VERCEL_ENV,
+    environment: process.env.DEPLOY_ENV,
     deployed: process.env.NODE_ENV === 'production',
   });
 

@@ -78,7 +78,12 @@ const nextConfig: NextConfig = {
    */
   outputFileTracingRoot: path.resolve(process.cwd(), '../..'),
 
-  env: { NEXT_PUBLIC_SENTRY_RELEASE: release ?? '' },
+  /*
+   * `DEPLOY_ENV` is a server-only registry row, so the browser bundle receives
+   * it here: one read of the validated value, inlined, so the client's Sentry
+   * `environment` cannot disagree with the server's or the API's.
+   */
+  env: { NEXT_PUBLIC_SENTRY_RELEASE: release ?? '', NEXT_PUBLIC_DEPLOY_ENV: webEnv.DEPLOY_ENV },
 
   /*
    * The legal copy is read off disk at build time, and file tracing cannot see
