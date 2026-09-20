@@ -192,6 +192,11 @@ export default async function AdminBookingDetailPage({
                   <Money cents={booking.refundAmountCents} />
                 </KeyValue>
               ) : null}
+              {booking.externalRefundCents > 0 ? (
+                <KeyValue label="Refunded outside the app" kind="mono">
+                  <Money cents={booking.externalRefundCents} />
+                </KeyValue>
+              ) : null}
               {booking.cancelledAt ? (
                 <KeyValue label="Cancelled" kind="mono">
                   <Stamp at={booking.cancelledAt} />

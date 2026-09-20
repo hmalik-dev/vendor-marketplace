@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { bookingRequests, bookings, vendorProfiles } from './schema/index.js';
+import { bookingRequests, vendorProfiles } from './schema/index.js';
 import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './testing/test-db.js';
 
 /**
@@ -84,15 +84,11 @@ describe('0052 against accepted requests written before it', () => {
     const paid = await acceptedRequest(customer!.id, vendor!.id, '2026-02-01');
     const farEvent = await acceptedRequest(customer!.id, vendor!.id, '2099-06-01');
     const nearEvent = await acceptedRequest(customer!.id, vendor!.id, '2026-02-02');
-    await testDb.db.insert(bookings).values({
-      requestId: paid,
-      customerId: customer!.id,
-      vendorId: vendor!.id,
-      eventDate: '2026-02-01',
-      totalAmountCents: 145_000,
-      platformFeeCents: 17_400,
-      vendorPayoutCents: 127_600,
-    });
+    // Raw SQL for the same reason: the ORM insert names columns added after 0052.
+    await testDb.db.execute(
+      sql`INSERT INTO bookings (request_id, customer_id, vendor_id, event_date, total_amount_cents, platform_fee_cents, vendor_payout_cents)
+        VALUES (${paid}, ${customer!.id}, ${vendor!.id}, '2026-02-01', 145000, 17400, 127600)`,
+    );
 
     const before = Date.now();
     await applyMigration(THIS_MIGRATION);

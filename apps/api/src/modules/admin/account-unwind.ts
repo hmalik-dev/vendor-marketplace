@@ -352,7 +352,7 @@ export async function unwindAccountBookings(
              * give back. The refund carries neither `reverse_transfer` nor
              * `refund_application_fee` (#423).
              */
-            idempotencyKey: `${copy.refundKeyPrefix}:${booking.id}`,
+            idempotencyKey: `${copy.refundKeyPrefix}:marked:${booking.id}`,
           });
 
           refundedCents += refund.amountCents;

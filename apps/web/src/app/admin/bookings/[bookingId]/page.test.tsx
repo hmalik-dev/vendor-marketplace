@@ -51,6 +51,7 @@ function detail(overrides: Record<string, unknown> = {}): WireAdminBookingDetail
     cancellationReason: null,
     cancelledBy: null,
     refundAmountCents: null,
+    externalRefundCents: 0,
     disputeReason: null,
     createdAt: '2026-09-02T09:58:00.000Z',
     vendor: { id: VENDOR_ID, businessName: 'Fernbank Studio', payoutHold: false },
@@ -151,6 +152,28 @@ describe('AdminBookingDetailPage', () => {
       ['Dispute reason', 'Deposit terms were unclear.'],
     ]);
     expect(screen.getByText('account_closed').className.split(/\s+/)).toContain('text-error-500');
+  });
+
+  it('shows a payout held for a refund made outside the app, with the amount and why', async () => {
+    getAdminBookingDetail.mockResolvedValue(
+      detail({
+        status: 'disputed',
+        payoutStatus: 'held',
+        externalRefundCents: 10_000,
+        disputeReason:
+          '$100 was refunded at Stripe outside the platform, so the payout is on hold until an operator rules',
+      }),
+    );
+
+    await renderPage();
+
+    const rows = moneyRows();
+    expect(rows).toContainEqual(['Refunded outside the app', '$100']);
+    expect(rows).toContainEqual([
+      'Dispute reason',
+      '$100 was refunded at Stripe outside the platform, so the payout is on hold until an operator rules',
+    ]);
+    expect(rows).toContainEqual(['Payout', 'Held']);
   });
 
   it('shows a released payout with its date and transfer', async () => {

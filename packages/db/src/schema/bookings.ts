@@ -238,6 +238,20 @@ export const bookings = pgTable(
      * the one Stripe moved, so it is written down when it moves.
      */
     refundAmountCents: integer('refund_amount_cents'),
+    /**
+     * Refunded at Stripe by someone other than this platform's own routes — the
+     * Dashboard or the API — and noticed by the `charge.refunded` reconciliation
+     * or the payout claim (VEN-469). A **total**, written only by
+     * `recordExternalRefund`, which holds this row's lock and re-reads it first:
+     * two deliveries of the same event, or the webhook racing the sweep, leave
+     * exactly one writer that finds something unaccounted for, and that one holds
+     * the payout and alerts.
+     *
+     * Not folded into `refund_amount_cents`: that column is what the customer is
+     * told a cancellation returned, and a refund the platform did not decide is
+     * not a cancellation's. `0` means none.
+     */
+    externalRefundCents: integer('external_refund_cents').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
