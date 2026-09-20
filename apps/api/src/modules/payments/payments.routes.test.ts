@@ -675,6 +675,39 @@ describe('payments', () => {
       expect(await harness.database.db.select().from(bookings)).toEqual([]);
     });
 
+    /* VEN-477: a smaller refund made elsewhere is not the whole refund owed. */
+    it('refunds only the remainder of a declined payment already partly refunded', async () => {
+      const requestId = await acceptedRequest();
+      const checkout = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      const intentId: string = checkout.json().paymentIntentId;
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ status: 'declined' })
+        .where(eq(bookingRequests.id, requestId));
+      harness.stripe.succeed(intentId);
+      harness.stripe.refunds.push({
+        paymentIntentId: intentId,
+        amountCents: 1_000,
+        reason: undefined,
+        idempotencyKey: undefined,
+        reverseTransfer: false,
+        refundApplicationFee: false,
+      });
+
+      const response = await redeliver(intentId);
+
+      expect(response.statusCode).toBe(200);
+      expect(harness.stripe.refunds).toHaveLength(2);
+      expect(harness.stripe.refunds[1]).toMatchObject({
+        paymentIntentId: intentId,
+        amountCents: PRICE_CENTS - 1_000,
+      });
+    });
+
     it('answers 500 and alerts when the refund of a declined request fails, so Stripe retries', async () => {
       const requestId = await acceptedRequest();
       const checkout = await inject(
@@ -1255,6 +1288,43 @@ describe('payments', () => {
           refundApplicationFee: false,
         },
       ]);
+    });
+
+    /*
+     * VEN-477. A refund made elsewhere (a Dashboard goodwill refund) is not the
+     * cancellation's refund: the customer is topped up to what they are owed,
+     * and the row records the total returned, not the one figure Stripe listed.
+     */
+    it('tops up a cancel to the owed amount after a smaller refund made elsewhere', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      const goodwillCents = 1_000;
+      harness.stripe.refunds.push({
+        paymentIntentId: booking!.stripePaymentIntentId!,
+        amountCents: goodwillCents,
+        reason: undefined,
+        idempotencyKey: undefined,
+        reverseTransfer: false,
+        refundApplicationFee: false,
+      });
+
+      const response = await inject(
+        'PUT',
+        `/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().refundCents).toBe(PRICE_CENTS);
+      expect(harness.stripe.refunds).toHaveLength(2);
+      expect(harness.stripe.refunds[1]).toMatchObject({
+        amountCents: PRICE_CENTS - goodwillCents,
+        idempotencyKey: `cancel_${booking!.id}_direct`,
+      });
+      const [after] = await harness.database.db.select().from(bookings);
+      expect(after).toMatchObject({ status: 'cancelled', refundAmountCents: PRICE_CENTS });
     });
 
     it('frees the date again', async () => {

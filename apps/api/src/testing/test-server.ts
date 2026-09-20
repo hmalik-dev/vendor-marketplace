@@ -17,6 +17,7 @@ import {
   refusedReversalParams,
   refusedTransferParams,
   reversalParams,
+  sumUsableRefunds,
   transferIdempotencyKey,
   transferParams,
 } from '../lib/stripe.js';
@@ -792,16 +793,16 @@ function createFakeStripe(): FakeStripe {
        * reading it as "already refunded" both skips a retry that is owed and
        * writes a figure the screens state as money returned.
        */
-      const index = refunds.findIndex(
-        (refund) =>
-          refund.paymentIntentId === paymentIntentId &&
-          (refund.status ?? 'succeeded') !== 'failed' &&
-          (refund.status ?? 'succeeded') !== 'canceled',
+      return sumUsableRefunds(
+        refunds
+          .map((refund, index) => ({
+            id: `re_test_${index + 1}`,
+            amount: refund.amountCents,
+            status: refund.status ?? 'succeeded',
+            paymentIntentId: refund.paymentIntentId,
+          }))
+          .filter((refund) => refund.paymentIntentId === paymentIntentId),
       );
-
-      return index === -1
-        ? null
-        : { refundId: `re_test_${index + 1}`, amountCents: refunds[index]!.amountCents };
     },
   };
 

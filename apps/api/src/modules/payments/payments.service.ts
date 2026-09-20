@@ -541,11 +541,12 @@ async function refuseDeclinedPayment(
 
   try {
     const alreadyRefunded = await context.stripe.findRefund(intent.id);
+    const remainingCents = intent.amountReceivedCents - (alreadyRefunded?.amountCents ?? 0);
 
-    if (!alreadyRefunded) {
+    if (remainingCents > 0) {
       await context.stripe.createRefund({
         paymentIntentId: intent.id,
-        amountCents: intent.amountReceivedCents,
+        amountCents: remainingCents,
         /*
          * Versioned by the hour, not fixed (D36). Stripe replays a *failed*
          * idempotent result for 24 hours, and this path exists to be retried by
@@ -999,33 +1000,54 @@ async function refundAndUnwind(
     .findRefund(booking.stripePaymentIntentId)
     .catch(reportRefundFailure);
 
-  const refund =
-    alreadyRefunded ??
-    (await context.stripe
-      .createRefund({
-        paymentIntentId: booking.stripePaymentIntentId,
-        amountCents: refundCents,
-        reason: 'requested_by_customer',
-        /*
-         * Keyed on the booking, because the refund is sent *before* the guarded
-         * update that decides who won. That update's status predicate means only
-         * one of two concurrent cancels writes the row — but both reached this
-         * line first, and without a key Stripe would have paid the customer twice
-         * for one cancellation. The key makes the second call return the first
-         * refund instead of creating another. One booking, one cancellation, one
-         * refund. (#399)
-         *
-         * The `_direct` suffix is the request's version, not decoration. Stripe
-         * refuses a key replayed with *different parameters*, so it changes
-         * whenever the request under it does — it was `_unwind` while the refund
-         * carried D31's two flags, and it is `_direct` now that the refund
-         * carries neither (#423). A booking whose cancel was attempted in the
-         * previous 24 hours under the old params would otherwise have its retry
-         * refused with an `idempotency_error` rather than refunded.
-         */
-        idempotencyKey: `${keyPrefix}_${booking.id}_direct`,
-      })
-      .catch(reportRefundFailure));
+  /*
+   * What is owed is topped up, not skipped when *any* refund exists (VEN-477):
+   * a Dashboard goodwill refund of $10 made the old code treat a $500
+   * cancellation as done. The amount the customer got is what was already
+   * returned plus what is sent now, and it is that total the row records and
+   * the vendor's share is computed from.
+   */
+  const alreadyRefundedCents = alreadyRefunded?.amountCents ?? 0;
+  const remainingCents = refundCents - alreadyRefundedCents;
+  const created =
+    remainingCents > 0
+      ? await context.stripe
+          .createRefund({
+            paymentIntentId: booking.stripePaymentIntentId,
+            amountCents: remainingCents,
+            reason: 'requested_by_customer',
+            /*
+             * Keyed on the booking, because the refund is sent *before* the guarded
+             * update that decides who won. That update's status predicate means only
+             * one of two concurrent cancels writes the row — but both reached this
+             * line first, and without a key Stripe would have paid the customer twice
+             * for one cancellation. The key makes the second call return the first
+             * refund instead of creating another. One booking, one cancellation, one
+             * refund. (#399)
+             *
+             * The `_direct` suffix is the request's version, not decoration. Stripe
+             * refuses a key replayed with *different parameters*, so it changes
+             * whenever the request under it does — it was `_unwind` while the refund
+             * carried D31's two flags, and it is `_direct` now that the refund
+             * carries neither (#423).
+             *
+             * Deliberately *not* versioned by what was already returned: this key
+             * is the only thing serialising two concurrent cancels, and a key that
+             * depends on each racer's read would let two racers that read
+             * different states both refund — an over-refund below the full tier,
+             * where the charge cap does not catch it. Same key, different amount
+             * is refused by Stripe instead (VEN-477). Versioning a retry past a
+             * cached failure is VEN-469's half.
+             */
+            idempotencyKey: `${keyPrefix}_${booking.id}_direct`,
+          })
+          .catch(reportRefundFailure)
+      : null;
+
+  const refund = {
+    refundId: created?.refundId ?? alreadyRefunded?.refundIds[0] ?? '',
+    amountCents: alreadyRefundedCents + (created?.amountCents ?? 0),
+  };
 
   /*
    * The share the vendor keeps — the proportion of the total that was *not*
