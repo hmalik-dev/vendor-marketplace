@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
+import { Suspense } from 'react';
 import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
 import { siteOrigin } from '@/config/env';
 import { analyticsEnabled } from '@/lib/analytics-enabled';
@@ -114,7 +115,21 @@ export default async function RootLayout({
                 stacked above it. Same argument as `PublicChrome` below.
               */}
             <OutsideAdmin>
-              <SiteHeader />
+              {/*
+                  Both chrome pieces read the taxonomy from the API and sit above
+                  every segment's `loading.tsx`, so an unanswered read held the
+                  whole document — the segment loader never got to paint (VEN-492,
+                  `/support` 8s under a slow API). A boundary here lets the shell
+                  flush first; the chrome streams in when its read settles. The
+                  fallback is an empty `<header>` of the bar's own height, so the
+                  page does not jump when it lands and the `calc(100dvh -
+                  var(--header-height))` panes are sized right meanwhile. It must
+                  be a `<header>`: `globals.css` hides that element on the auth
+                  screens, and a `<div>` would leave a phantom bar there.
+                */}
+              <Suspense fallback={<header className="box-border h-(--header-height)" />}>
+                <SiteHeader />
+              </Suspense>
             </OutsideAdmin>
             <main id="main" tabIndex={-1} className="flex-1">
               {children}
@@ -126,7 +141,9 @@ export default async function RootLayout({
               what makes the page scroll when only the panes should.
             */}
           <PublicChrome>
-            <SiteFooter />
+            <Suspense fallback={null}>
+              <SiteFooter />
+            </Suspense>
           </PublicChrome>
         </NuqsAdapter>
         {/*

@@ -18,8 +18,8 @@ import type { Page } from '@playwright/test';
  * The signal is React's own bookkeeping: it stamps `__reactFiber$…` and
  * `__reactProps$…` onto every host node it owns, so a node carrying one has
  * been hydrated rather than merely parsed. Pass a selector for an element
- * *inside* the boundary being driven — the header is interactive long before
- * the route's own content is.
+ * *inside* the boundary being driven — the header streams in behind its own
+ * boundary (VEN-492), so on a cold cache it is not ready before the content.
  *
  * **Every** match has to be React's, not merely one of them. Mid-swap the
  * route holds both copies of a control at once, and acting on the first
