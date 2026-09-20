@@ -157,7 +157,7 @@ export const healthRoutes: FastifyPluginAsyncZod = async (app) => {
       if (behind) {
         request.log.error(
           { applied: database.value, expected },
-          'Readiness probe found the database behind this build’s migrations',
+          "Readiness probe found the database behind the build's migrations",
         );
       }
       const databaseState: z.infer<typeof databaseStateSchema> = behind ? 'behind' : database.state;
