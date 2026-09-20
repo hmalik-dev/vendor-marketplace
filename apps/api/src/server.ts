@@ -19,6 +19,7 @@ import {
   OPERATOR_DIGEST_POLL_INTERVAL_MS,
   EXPIRY_SWEEP_INTERVAL_MS,
   PAYOUT_SWEEP_INTERVAL_MS,
+  UPLOAD_SWEEP_INTERVAL_MS,
   VISITOR_IP_HEADER,
   WEB_TIER_KEY_HEADER,
 } from '@vendor-marketplace/shared';
@@ -40,6 +41,7 @@ import { createErrorReporter, type ErrorReporter } from './lib/error-reporting.j
 import { eventsPlugin } from './plugins/events.js';
 import { operatorAlertsPlugin } from './plugins/operator-alerts.js';
 import { expirySweepPlugin } from './plugins/expiry-sweep.js';
+import { uploadSweepPlugin } from './plugins/upload-sweep.js';
 import { payoutReleasePlugin } from './plugins/payout-release.js';
 import { storagePlugin } from './plugins/storage.js';
 import { emailPlugin } from './plugins/email.js';
@@ -122,6 +124,13 @@ export interface BuildServerOptions {
    * On by default for `payoutSweepIntervalMs`'s reason.
    */
   expirySweepIntervalMs?: number;
+  /**
+   * How often unreferenced uploads are swept from storage; `0` disables it. On
+   * by default for `payoutSweepIntervalMs`'s reason.
+   */
+  uploadSweepIntervalMs?: number;
+  /** Log what the upload sweep would delete and delete nothing. */
+  uploadSweepDryRun?: boolean;
   /**
    * How often each instance asks whether the operator digest is due; `0`
    * disables it. On by default for `payoutSweepIntervalMs`'s reason.
@@ -399,6 +408,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   });
   await app.register(payoutReleasePlugin, {
     intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,
+    reporter: errorReporter,
+  });
+  await app.register(uploadSweepPlugin, {
+    intervalMs: options.uploadSweepIntervalMs ?? UPLOAD_SWEEP_INTERVAL_MS,
+    dryRun: options.uploadSweepDryRun ?? false,
     reporter: errorReporter,
   });
   await app.register(expirySweepPlugin, {

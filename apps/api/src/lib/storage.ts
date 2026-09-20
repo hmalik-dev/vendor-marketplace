@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   DeleteObjectsCommand,
   HeadBucketCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -39,6 +40,21 @@ export const STORAGE_PREFIX_ROLES: Record<StoragePrefix, readonly UserRole[]> = 
  */
 const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
+export interface ListPage {
+  limit?: number;
+  token?: string;
+}
+
+export interface StoredObject {
+  key: string;
+  lastModified: Date;
+}
+
+export interface StoredObjectPage {
+  objects: StoredObject[];
+  nextToken?: string;
+}
+
 export interface ObjectStorage {
   /** Stores `body` and returns the public URL it is served from. */
   put(key: string, body: Buffer, contentType: string): Promise<string>;
@@ -48,6 +64,12 @@ export interface ObjectStorage {
    * not care whether a previous attempt already got there.
    */
   remove(keys: readonly string[]): Promise<void>;
+  /**
+   * One page of the objects stored under `prefix`, with each one's
+   * last-modified time — the only record of an upload's age, because there is
+   * no `uploads` table. `nextToken` is present while more pages remain.
+   */
+  list(prefix: string, page?: ListPage): Promise<StoredObjectPage>;
   /**
    * Resolves when the configured bucket is reachable and rejects otherwise.
    * Used by the readiness probe, which has to fail on a missing bucket and not
@@ -173,7 +195,7 @@ export function ownsObjectKey(key: string, ownerId: string): boolean {
  * anyway. Two characters appended to the string `GET /vendors/:slug` already
  * publishes.
  */
-function referencedPathSegments(ref: string): string[] {
+export function referencedPathSegments(ref: string): string[] {
   const path = normalizeImageRefPath(ref)
     .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, '')
     .replace(/[?#][\s\S]*$/, '')
@@ -332,6 +354,31 @@ export function createS3Storage(env: ApiEnv): ObjectStorage {
           `Object store refused ${result.Errors.length} of ${keys.length} deletes: ${result.Errors.map((entry) => entry.Code ?? 'unknown').join(', ')}`,
         );
       }
+    },
+
+    async list(prefix, page) {
+      const result = await client.send(
+        new ListObjectsV2Command({
+          Bucket: env.STORAGE_BUCKET,
+          Prefix: `${prefix}/`,
+          ...(page?.limit ? { MaxKeys: page.limit } : {}),
+          ...(page?.token ? { ContinuationToken: page.token } : {}),
+        }),
+      );
+
+      const objects: StoredObject[] = [];
+      for (const entry of result.Contents ?? []) {
+        if (entry.Key && entry.LastModified) {
+          objects.push({ key: entry.Key, lastModified: entry.LastModified });
+        }
+      }
+
+      return {
+        objects,
+        ...(result.IsTruncated && result.NextContinuationToken
+          ? { nextToken: result.NextContinuationToken }
+          : {}),
+      };
     },
 
     async checkAvailable() {

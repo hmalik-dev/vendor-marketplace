@@ -230,6 +230,8 @@ export interface RecordedObject {
   key: string;
   body: Buffer;
   contentType: string;
+  /** When it was stored; a suite sets it to age an object past the sweep's grace period. */
+  lastModified?: Date;
 }
 
 /**
@@ -899,6 +901,23 @@ export async function createTestHarness(
         }
       }
     },
+    list: async (prefix, page) => {
+      const matching = storedObjects
+        .filter((object) => object.key.startsWith(`${prefix}/`))
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .filter((object) => !page?.token || object.key > page.token);
+      const limit = page?.limit ?? matching.length;
+      const slice = matching.slice(0, limit);
+      const last = slice.at(-1);
+
+      return {
+        objects: slice.map((object) => ({
+          key: object.key,
+          lastModified: object.lastModified ?? new Date(),
+        })),
+        ...(last && matching.length > limit ? { nextToken: last.key } : {}),
+      };
+    },
     checkAvailable: async () => {
       if (!storageAvailable) {
         throw new Error('Test storage bucket is unavailable');
@@ -920,6 +939,8 @@ export async function createTestHarness(
     payoutSweepIntervalMs: 0,
     // Nor does the expiry sweep: suites call `expireLapsedRequests` with a pinned clock.
     expirySweepIntervalMs: 0,
+    // Nor the upload sweep: suites call `sweepOrphanedUploads` with a pinned clock.
+    uploadSweepIntervalMs: 0,
     // The digest likewise: suites call `runOperatorDigest` with a pinned clock.
     operatorDigestIntervalMs: 0,
     // Alert send retries do not wait on a real timer in a suite.
