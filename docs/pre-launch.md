@@ -51,6 +51,37 @@ which is not a launch.
 
 ---
 
+## Migration rehearsal
+
+**Migration rehearsal (VEN-474, 2026-09-20).** Migrations 0010–0056 (47 files)
+were first run on the Neon `dev` branch and then `staging`, over the unpooled
+endpoint, so the production migrate in the deploy is the second run and not the
+first. Both branches were empty of user rows and both held 0000–0009.
+
+| Branch    | Started (UTC) | Duration | Lock waits                  | Result                                          |
+| --------- | ------------- | -------- | --------------------------- | ----------------------------------------------- |
+| `dev`     | 15:44:01      | 11 s     | none (one session, no rows) | 57 rows in `drizzle.__drizzle_migrations`       |
+| `staging` | 15:44:17      | 13 s     | none (one session, no rows) | 57 rows; schema diff against a fresh 0056 empty |
+
+- **The first attempt failed, and would have failed on production.** `0015` adds
+  `'style'` to `tag_category` and `0016` compared against it; drizzle applies
+  every pending migration in one transaction, where Postgres refuses to use an
+  enum value it has just added (`55P04`). `0016` now compares `category::text`,
+  and a test replays 0015–0017 in one transaction. The failed run rolled back and
+  left the branch at 10 rows.
+- After the run, `staging` has `users.auth_user_id` and `users_auth_user_id_key`
+  and no `clerk_user_id` or `users_clerk_user_id_key`; tables, columns,
+  constraints, indexes, enums and triggers match a database built from the
+  journal (27 tables, 273 columns, 249 constraints, 91 indexes, 179 enum labels,
+  6 triggers).
+- The reference seed ran on `staging` (10 categories, 43 tags, 35,618 US cities),
+  and the API built from this tree and started against it answered `/ready` 200
+  with `database` and `storage` up and `commit` set to the commit it ran.
+- **Empty tables prove the DDL, not the data steps.** Production is empty too
+  today; if a real row exists by cutover, the destructive statements in 0003,
+  0008, 0010, 0016 and 0017 (VEN-463) run against it. Take the Neon snapshot
+  first (VEN-408).
+
 ## What only a person can do
 
 - [ ] **Legal wording** (VEN-378). The terms, privacy and cookie pages exist, but

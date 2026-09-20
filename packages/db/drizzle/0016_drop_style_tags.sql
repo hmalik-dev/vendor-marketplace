@@ -9,11 +9,15 @@
 -- remaining group means "the way you work". Every other tag a vendor picked is
 -- untouched, because the delete is scoped through the tag's category rather
 -- than run against the join table wholesale.
+--
+-- `category::text`, not the bare literal: 0015 adds `'style'` and drizzle runs
+-- every pending migration in one transaction, where Postgres refuses to use a
+-- value it has just added (55P04). Comparing as text is the same predicate.
 DELETE FROM "vendor_tags"
- WHERE "tag_id" IN (SELECT "id" FROM "tags" WHERE "category" = 'style');
+ WHERE "tag_id" IN (SELECT "id" FROM "tags" WHERE "category"::text = 'style');
 --> statement-breakpoint
 -- Suggestions carry the same enum on their own column, so a pending style
 -- suggestion would survive the delete above only to fail the cast below.
-DELETE FROM "tag_suggestions" WHERE "category" = 'style';
+DELETE FROM "tag_suggestions" WHERE "category"::text = 'style';
 --> statement-breakpoint
-DELETE FROM "tags" WHERE "category" = 'style';
+DELETE FROM "tags" WHERE "category"::text = 'style';

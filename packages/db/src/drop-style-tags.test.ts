@@ -108,6 +108,55 @@ afterAll(async () => {
   await testDb.close();
 });
 
+/*
+ * Drizzle's migrator applies every pending migration in ONE transaction, and
+ * Postgres refuses to use an enum value in the transaction that added it
+ * (55P04) unless the enum type was itself created in that transaction. The
+ * ordinary suites start from an empty database, so every enum is created
+ * in-transaction and the hazard is invisible; Neon dev and staging held 0000-0009
+ * already committed, which is where 0016 failed. This replays the deployed shape:
+ * 0000-0009 committed, then everything after in one transaction.
+ */
+const DEPLOYED_THROUGH = '0009_';
+
+describe('the pending journal applied in a single transaction, as the migrator does', () => {
+  it('runs from the state Neon held to the head of the journal', async () => {
+    const fresh = await createTestDatabase();
+    try {
+      const split = ENTRIES.findIndex((entry) => entry.idx >= 10);
+      expect(ENTRIES[split - 1]?.tag.startsWith(DEPLOYED_THROUGH)).toBe(true);
+      expect(ENTRIES.length).toBeGreaterThan(split);
+
+      for (const entry of ENTRIES.slice(0, split)) {
+        for (const statement of statementsOf(entry.tag)) {
+          await fresh.db.execute(sql.raw(statement));
+        }
+      }
+      await fresh.db.transaction(async (tx) => {
+        for (const entry of ENTRIES.slice(split)) {
+          for (const statement of statementsOf(entry.tag)) {
+            await tx.execute(sql.raw(statement));
+          }
+        }
+      });
+
+      const labels = await fresh.db.execute(
+        sql.raw(`SELECT enumlabel FROM pg_enum
+                   JOIN pg_type ON pg_type.oid = pg_enum.enumtypid
+                  WHERE pg_type.typname = 'tag_category'
+                  ORDER BY enumsortorder`),
+      );
+      expect(labels.rows.map((row) => (row as { enumlabel: string }).enumlabel)).toEqual([
+        'language',
+        'cultural',
+        'dietary',
+      ]);
+    } finally {
+      await fresh.close();
+    }
+  });
+});
+
 describe('0016_drop_style_tags + 0017_same_khan', () => {
   it('starts from a database that really holds style rows', async () => {
     expect(await countOf(`SELECT count(*) AS count FROM tags WHERE category = 'style'`)).toBe(1);
