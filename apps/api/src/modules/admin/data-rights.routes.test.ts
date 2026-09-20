@@ -574,13 +574,14 @@ describe('data rights', () => {
       expect(account!.deletedAt).not.toBeNull();
 
       const rows = await actionRows();
-      expect(rows).toHaveLength(1);
+      expect(rows).toHaveLength(2);
       expect(rows[0]).toMatchObject({
         actorId,
         action: 'user_closed',
         subjectType: 'user',
         subjectId: customerId,
       });
+      expect(rows[1]).toMatchObject({ action: 'account_unwind_finished', subjectId: customerId });
     });
 
     /**
@@ -817,6 +818,74 @@ describe('data rights', () => {
       expect(audit.filter((row) => row.action === 'user_closed')[0]?.detail).toEqual({
         profileRetired: true,
       });
+      expect(
+        audit.filter((row) => row.action === 'account_unwind_finished')[0]?.detail,
+      ).toMatchObject({
+        refundsFailed: 1,
+      });
+    });
+
+    /**
+     * VEN-478. A closure whose unwind did not finish is finished by re-running
+     * it: the retirement and its intent row are not repeated, the refunds are
+     * made once, and only a finished closure answers 409 again.
+     */
+    it('is finished by re-running the closure, and is unfinished on the read until then', async () => {
+      await signIn(ADMIN, true);
+      await signIn(VENDOR);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile();
+
+      const bookingId = await createBooking(
+        customerId,
+        vendor.profileId,
+        '2099-06-01',
+        'confirmed',
+        'pi_test_close_resume',
+      );
+      harness.stripe.refundsToRefuse.add('pi_test_close_resume');
+
+      const close = () =>
+        harness.app.inject({
+          method: 'POST',
+          url: `/admin/users/${vendor.userId}/close`,
+          headers: bearer(ADMIN),
+        });
+      const pending = async () =>
+        (
+          await harness.app.inject({
+            method: 'GET',
+            url: `/admin/users/${vendor.userId}/data-rights`,
+            headers: bearer(ADMIN),
+          })
+        ).json().unwindPending;
+
+      expect((await close()).json()).toMatchObject({ refundsFailed: 1 });
+      expect(await pending()).toBe(1);
+
+      harness.stripe.refundsToRefuse.clear();
+      harness.stripe.failedRefundKeys.clear();
+
+      const resumed = await close();
+      expect(resumed.statusCode).toBe(200);
+      expect(resumed.json()).toMatchObject({ refundsIssued: 1, bookingsCancelled: 1 });
+      expect(await pending()).toBe(0);
+
+      const [booking] = await harness.database.db
+        .select({ status: bookings.status, refundAmountCents: bookings.refundAmountCents })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+      expect(booking).toMatchObject({ status: 'cancelled', refundAmountCents: 120_000 });
+      expect(
+        harness.stripe.refunds.filter((r) => r.paymentIntentId === 'pi_test_close_resume'),
+      ).toHaveLength(1);
+
+      expect((await close()).statusCode).toBe(409);
+      expect((await actionRows()).map((row) => row.action).sort()).toEqual([
+        'account_unwind_finished',
+        'account_unwind_finished',
+        'user_closed',
+      ]);
     });
 
     it('leaves the legal acceptance record standing, because it never hard-deletes', async () => {
@@ -875,7 +944,7 @@ describe('data rights', () => {
       const audit = await actionRows();
       expect(
         audit.filter((row) => row.subjectId === vendor.userId).map((row) => row.action),
-      ).toEqual(['user_closed']);
+      ).toEqual(['user_closed', 'account_unwind_finished']);
     });
 
     /**
@@ -925,6 +994,7 @@ describe('data rights', () => {
       /* Recorded with the retirement (VEN-463), so it cannot claim what came after. */
       const rows = await actionRows();
       expect(rows[0]?.detail).toEqual({ profileRetired: false });
+      expect(rows[1]?.detail).toMatchObject({ identityDeleted: true });
     });
 
     /**
@@ -1086,6 +1156,7 @@ describe('data rights', () => {
 
       const rows = await actionRows();
       expect(rows[0]?.detail).toEqual({ profileRetired: false });
+      expect(rows[1]?.detail).toMatchObject({ identityDeleted: false });
     });
 
     /**
@@ -1418,7 +1489,12 @@ describe('data rights', () => {
           })
           .from(adminActions)
           .where(eq(adminActions.subjectId, peerId));
-        expect(rows).toEqual([{ actorId, action: 'operator_account_closed', subjectId: peerId }]);
+        expect(rows.find((row) => row.action === 'operator_account_closed')).toEqual({
+          actorId,
+          action: 'operator_account_closed',
+          subjectId: peerId,
+        });
+        expect(rows.some((row) => row.action === 'user_closed')).toBe(false);
       });
 
       it('refuses the last live operator with a 409, even when they are the actor', async () => {
@@ -1467,7 +1543,10 @@ describe('data rights', () => {
           .select({ action: adminActions.action })
           .from(adminActions)
           .where(eq(adminActions.subjectId, customerId));
-        expect(rows).toEqual([{ action: 'user_closed' }]);
+        expect(rows.map((row) => row.action).sort()).toEqual([
+          'account_unwind_finished',
+          'user_closed',
+        ]);
       });
 
       /**

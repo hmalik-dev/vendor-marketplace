@@ -3,6 +3,7 @@ import {
   isLegacyDestinationPayout,
   unwindFloorDate,
 } from '@vendor-marketplace/shared';
+import type { AppDatabase } from '../../lib/database.js';
 import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { refundFailedAlert } from '../operator-alerts/operator-alerts.service.js';
@@ -184,6 +185,18 @@ export interface AccountUnwindResult {
    * them is a decision nobody has made yet. Always `0` for an operator unwind.
    */
   bookingsLeftForReview: number;
+}
+
+/** Whether an unwind changed anything, so a re-run of a finished one writes no audit row. */
+export function unwoundAnything(result: AccountUnwindResult): boolean {
+  return (
+    result.requestsDeclined +
+      result.bookingsCancelled +
+      result.refundsIssued +
+      result.refundsFailed +
+      result.bookingsLeftForReview >
+    0
+  );
 }
 
 /**
@@ -564,6 +577,35 @@ async function unwindBatch(
     refundsFailed,
     bookingsLeftForReview,
   };
+}
+
+/**
+ * Bookings an unwind of this account has not finished: still `confirmed`, still
+ * ahead of the floor, and one this unwind would act on (VEN-478).
+ *
+ * Derived from the bookings themselves rather than stored, so it cannot drift
+ * from what `unwindAccountBookings` would select. An account-holder unwind
+ * leaves the holder's own bookings for review by design, so those never count:
+ * they would keep a finished closure looking unfinished for ever. A booking
+ * whose refund Stripe refuses does count, and stays counted until it is fixed.
+ */
+export async function countUnwindPending(
+  db: AppDatabase,
+  targetId: string,
+  vendorProfileId: string | null,
+  now: Date,
+  copy: AccountUnwindCopy,
+): Promise<number> {
+  const affected = await findConfirmedBookingsToUnwind(
+    db,
+    targetId,
+    vendorProfileId,
+    unwindFloorDate(now),
+  );
+
+  return affected.filter(
+    (booking) => !(copy.initiatedBy === 'account-holder' && booking.customerId === targetId),
+  ).length;
 }
 
 /** An operator suspended the account. */
