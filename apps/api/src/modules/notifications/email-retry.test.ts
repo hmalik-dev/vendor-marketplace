@@ -280,6 +280,24 @@ describe('the email retry sweep', () => {
       expect(harness.email.sent).toHaveLength(1);
     });
 
+    it('answers 502, not 200, when the operator resend fails again, and records the attempt', async () => {
+      const id = await invite(failedAgo(HOUR_MS));
+      harness.email.failNext = true;
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/vendor-invites/${id}/resend`,
+        headers: bearer(adminAuthId),
+      });
+
+      expect(response.statusCode).toBe(502);
+      const [row] = await harness.database.db
+        .select()
+        .from(vendorInvites)
+        .where(eq(vendorInvites.id, id));
+      expect(row).toMatchObject({ emailAttempts: 2, emailSentAt: null });
+    });
+
     it('answers 404 for an unknown invite and refuses a non-admin', async () => {
       const missing = await harness.app.inject({
         method: 'POST',

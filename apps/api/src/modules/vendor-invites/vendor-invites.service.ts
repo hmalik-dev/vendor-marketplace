@@ -290,6 +290,19 @@ export async function resendVendorInvite(
     throw notFound('No invite with that id');
   }
 
+  /*
+   * The attempt is recorded (it committed above), but the operator asked for an
+   * email to go out and it did not: a 200 would read as success in the console.
+   * 502, the provider's failure rather than the operator's.
+   */
+  if (row.emailStatus === 'failed') {
+    throw new AppError(
+      502,
+      ERROR_CODES.INTERNAL_ERROR,
+      'The invite email failed to send again. It stays on the list to retry.',
+    );
+  }
+
   return row;
 }
 

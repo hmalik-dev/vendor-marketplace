@@ -6,8 +6,8 @@ import {
   type VendorApplicationRow,
   type VendorInviteRow,
 } from '@vendor-marketplace/db/schema';
+import { truncateFailureReason } from '../notifications/email-delivery.dao.js';
 import {
-  MAX_EMAIL_FAILURE_REASON_LENGTH,
   type AdminVendorApplicationRow,
   type AdminVendorInviteRow,
   type VendorApplicationInput,
@@ -184,8 +184,9 @@ export interface RetryableInviteQuery {
 
 /**
  * The next unaccepted invite whose email failed and is still inside the retry
- * budget, locked with `SKIP LOCKED` so a second sweep — or an operator's resend
- * — passes over it rather than sending it twice.
+ * budget, locked with `SKIP LOCKED` so a second sweep passes over it rather than
+ * sending it twice. An operator's resend takes `lockInviteById` instead, which
+ * waits for the holder and is then refused because the email already went out.
  */
 export async function lockRetryableInvite(
   tx: AppDatabase,
@@ -223,7 +224,7 @@ export async function recordInviteEmailAttempt(
       emailAttempts: sql`${vendorInvites.emailAttempts} + 1`,
       emailLastAttemptAt: attempt.at,
       emailSentAt: attempt.failureReason === null ? attempt.at : null,
-      emailFailureReason: attempt.failureReason?.slice(0, MAX_EMAIL_FAILURE_REASON_LENGTH) ?? null,
+      emailFailureReason: truncateFailureReason(attempt.failureReason),
     })
     .where(eq(vendorInvites.id, inviteId));
 }

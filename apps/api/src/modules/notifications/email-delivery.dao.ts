@@ -45,7 +45,7 @@ const SUPERSEDABLE: Readonly<Record<EmailDeliveryOutcome, EmailDeliveryOutcome[]
  * Applied here, in the DAO, on both write paths — so no caller has to remember
  * it and the two cannot disagree.
  */
-function truncateFailureReason(reason: string | null | undefined): string | null {
+export function truncateFailureReason(reason: string | null | undefined): string | null {
   if (reason === null || reason === undefined) {
     return null;
   }
@@ -191,19 +191,20 @@ export interface RetryableDeliveryQuery {
  * than `maxAttempts` attempts exist; and the *first* attempt is inside the
  * window, so retries cannot keep a stale message alive by restarting the clock.
  *
- * Only the latest failed row can match, so two rows of one notification cannot be
- * locked by two sweeps at once. The lock is what serialises them; a retry's own
- * new row then makes the old one non-latest.
+ * Only the latest failed row can match, so two sweeps do not lock two rows of
+ * one notification. "Latest" is by `sent_at`, which a transaction's `now()`
+ * makes strictly ordered for attempts written by separate sends. The lock
+ * serialises the sweeps; a retry's own new row then makes the old one non-latest.
  */
 export async function lockRetryableDelivery(
   tx: AppDatabase,
   query: RetryableDeliveryQuery,
-): Promise<{ id: string; notificationId: string } | null> {
+): Promise<{ notificationId: string } | null> {
   const others = alias(emailDeliveries, 'others');
   const cutoff = new Date(query.now.getTime() - query.windowMs);
 
   const rows = await tx
-    .select({ id: emailDeliveries.id, notificationId: emailDeliveries.notificationId })
+    .select({ notificationId: emailDeliveries.notificationId })
     .from(emailDeliveries)
     .where(
       and(

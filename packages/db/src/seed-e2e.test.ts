@@ -1,5 +1,6 @@
 import {
   CURRENT_VENDOR_AGREEMENT_VERSION,
+  EMAIL_RETRY_MAX_ATTEMPTS,
   EVENT_TYPES,
   SUPPORT_REFERENCE_PATTERN,
 } from '@vendor-marketplace/shared';
@@ -191,7 +192,7 @@ describe('seedE2eFixtures', () => {
       .from(vendorInvites)
       .where(eq(vendorInvites.email, 'e2e-failed-invite@example.test'));
     expect(invite).toMatchObject({
-      emailAttempts: 3,
+      emailAttempts: EMAIL_RETRY_MAX_ATTEMPTS,
       emailSentAt: null,
       emailFailureReason: 'Resend refused the send (500)',
     });

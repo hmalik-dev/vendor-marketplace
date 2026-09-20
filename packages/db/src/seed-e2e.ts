@@ -8,6 +8,7 @@ import {
   type EventType,
   legalDocumentSha256,
   type LegalAcceptanceDocument,
+  EMAIL_RETRY_MAX_ATTEMPTS,
   parseDurationHours,
   SUPPORT_REFERENCE_PREFIX,
   toDateString,
@@ -271,7 +272,7 @@ export async function seedE2eFixtures<
      * browser pass; a re-seed puts it back after a resend has healed it.
      */
     const failedInvite = {
-      emailAttempts: 3,
+      emailAttempts: EMAIL_RETRY_MAX_ATTEMPTS,
       emailLastAttemptAt: now,
       emailSentAt: null,
       emailFailureReason: 'Resend refused the send (500)',
