@@ -1082,7 +1082,23 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
     },
 
     async retrieveChargeIntent(chargeId) {
-      const charge = await stripe.charges.retrieve(chargeId);
+      /*
+       * A charge the platform cannot read — one made on a connected account —
+       * is not ours to reconcile, and answering it with a 5xx would have Stripe
+       * redeliver it for three days. `accountId` cannot say so: a snapshot event
+       * with no `account` is reported with the object's own id in that field.
+       */
+      const charge = await stripe.charges.retrieve(chargeId).catch((error: unknown) => {
+        if (error instanceof Stripe.errors.StripeError && error.code === 'resource_missing') {
+          return null;
+        }
+
+        throw error;
+      });
+
+      if (!charge) {
+        return null;
+      }
 
       return typeof charge.payment_intent === 'string'
         ? charge.payment_intent

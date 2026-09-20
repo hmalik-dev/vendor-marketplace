@@ -335,8 +335,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           return applyRefundEvent(event.objectId);
         }
 
-        /* Not a connected account's own charge: the platform client cannot read it, and a 5xx would be redelivered for three days. */
-        if (event.type === CHARGE_REFUNDED_EVENT && event.objectId && !event.accountId) {
+        if (event.type === CHARGE_REFUNDED_EVENT && event.objectId) {
           /* Re-read from Stripe, like every branch here: the charge names the intent, the refunds name the money. */
           const paymentIntentId = await app.stripe.retrieveChargeIntent(event.objectId);
 

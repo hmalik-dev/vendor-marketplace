@@ -293,24 +293,14 @@ describe('a refund made outside the app', () => {
       expect(await refundAlerts()).toEqual([`${paid.id}:${GOODWILL_CENTS}`]);
     });
 
-    it("leaves a connected account's own charge alone", async () => {
+    it('acknowledges a charge the platform cannot read, as a connected account has', async () => {
       const paid = await paidBooking();
       harness.stripe.refundExternally(paid.intentId, GOODWILL_CENTS);
-      harness.stripe.nextEvent = {
-        type: 'charge.refunded',
-        accountId: 'acct_someone_else',
-        objectId: `ch_${paid.intentId}`,
-      };
 
-      const response = await harness.app.inject({
-        method: 'POST',
-        url: '/webhooks/stripe',
-        headers: { 'stripe-signature': 'valid-signature', 'content-type': 'application/json' },
-        payload: { id: 'evt_test', type: 'charge.refunded' },
-      });
+      const response = await webhook('charge.refunded', 'py_on_a_connected_account');
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().outcome).toBe('ignored');
+      expect(response.json().outcome).toBe('refund-unchanged');
       expect((await currentBooking()).status).toBe('confirmed');
     });
 
