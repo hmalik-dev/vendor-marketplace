@@ -74,6 +74,16 @@ describe('passThroughKeys', () => {
   });
 
   /*
+   * A lane's storage origin changes whenever its Neon branch is recreated, and
+   * `next.config.ts` bakes it into `img-src` while the bundle inlines it. Left
+   * in pass-through, a rebuild replays the old origin from cache (VEN-468).
+   */
+  it('hashes the storage origin the web build bakes into img-src', () => {
+    expect(TURBO_GLOBAL_ENV_KEYS).toContain('NEXT_PUBLIC_STORAGE_PUBLIC_URL');
+    expect(passThroughKeys()).not.toContain('NEXT_PUBLIC_STORAGE_PUBLIC_URL');
+  });
+
+  /*
    * `globalEnv` is hand-maintained in `turbo.json` while the pass-through
    * block is generated; the two only stay disjoint if this pins them together.
    * A key present in neither is invisible to the build, one in pass-through
