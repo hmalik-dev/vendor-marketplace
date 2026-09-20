@@ -3,19 +3,19 @@ title: Privacy Policy
 lastUpdated: 2026-09-07
 ---
 
-Short version: we hold the booking. Your card is held by Stripe, your sign-in is held by Neon Auth, and your uploaded files are held by Cloudflare R2. We do not sell anything to anyone, and we run no advertising or analytics trackers.
+Short version: we hold the booking. Your card is held by Stripe, your sign-in is held by Neon Auth, and your uploaded files are held by Neon. We do not sell anything to anyone, and we run no advertising or analytics trackers.
 
 ## Where your data actually lives
 
-Four companies hold something between them, and it is worth knowing which holds what. Nothing in this table is a plan — it is the stack this product actually runs on today.
+Three companies hold something between them, and it is worth knowing which holds what. Nothing in this table is a plan — it is the stack this product actually runs on today.
 
-| What                 | Held by       | Why                                                        |
-| -------------------- | ------------- | ---------------------------------------------------------- |
-| Card details         | Stripe        | Taking the payment. These never reach an {{brand}} server. |
-| Name, email, session | Neon Auth     | Signing you in and keeping you signed in.                  |
-| Photos and files     | Cloudflare R2 | Vendor covers and portfolio images.                        |
-| Bookings, messages   | {{brand}}     | The record of what was agreed, and the thread about it.    |
-| Payout details       | Stripe        | Vendors only. Collected by Stripe Connect, not by us.      |
+| What                 | Held by             | Why                                                        |
+| -------------------- | ------------------- | ---------------------------------------------------------- |
+| Card details         | Stripe              | Taking the payment. These never reach an {{brand}} server. |
+| Name, email, session | Neon Auth           | Signing you in and keeping you signed in.                  |
+| Photos and files     | Neon Object Storage | Vendor covers and portfolio images.                        |
+| Bookings, messages   | {{brand}}           | The record of what was agreed, and the thread about it.    |
+| Payout details       | Stripe              | Vendors only. Collected by Stripe Connect, not by us.      |
 
 ## What we collect from you
 
@@ -29,7 +29,7 @@ Because you asked us to run a booking for you, and a booking cannot be run witho
 
 ## Who else sees it
 
-A vendor sees the requests and bookings addressed to them, and the messages you send them. A customer sees the profile a vendor published. Nobody sees anybody else's. Our processors — Stripe, Neon (which also runs sign-in) and Cloudflare — see what the table above says they hold, and are contractually barred from doing anything else with it.
+A vendor sees the requests and bookings addressed to them, and the messages you send them. A customer sees the profile a vendor published. Nobody sees anybody else's. Our processors — Stripe and Neon (which also runs sign-in and stores uploads) — see what the table above says they hold, and are contractually barred from doing anything else with it.
 
 **One exception, and it is the reason reporting works at all: when a message thread is reported, the people who operate the platform can read it.** They can read that thread, and only that thread, and only while the report is open — a closed report stops being a key to the conversation. Every such read is written to an internal log naming the operator, the thread and the report it was read under. Staff never write into a thread: an operator reads and then acts, and nothing you see in a conversation is from us. We do not otherwise read your messages, and there is no way in the product for anybody to browse conversations they have no report about.
 

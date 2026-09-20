@@ -29,7 +29,7 @@ import type { Page } from '@playwright/test';
  *    collapsed the layout fails here rather than looking like a pass.
  */
 
-/** Fail every image request the page makes, the way an R2 outage would. */
+/** Fail every image request the page makes, the way a storage outage would. */
 async function breakEveryImage(page: Page): Promise<void> {
   await page.route(
     (url) =>

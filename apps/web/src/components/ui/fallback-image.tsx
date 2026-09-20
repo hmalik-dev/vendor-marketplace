@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
  * **An absent image and a failed one look identical to the person reading, so
  * they land in the same place.** The app already handled *absent* — a published
  * vendor with no `coverImageUrl` got the tone block, per D17 — and handled
- * *failure* nowhere: a stored key whose object is gone, an R2 outage, or a
+ * *failure* nowhere: a stored key whose object is gone, a storage outage, or a
  * category photograph that was never shipped all rendered the browser's
  * broken-image glyph on a public page.
  *

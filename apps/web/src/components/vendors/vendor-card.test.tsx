@@ -317,7 +317,7 @@ describe('VendorCard', () => {
   /*
    * #422. The absent case above always worked; a load that *failed* rendered
    * the browser's broken-image glyph on a public card — a 404'd storage key,
-   * an R2 outage, a category file never shipped. An absent cover and a failed
+   * a storage outage, a category file never shipped. An absent cover and a failed
    * one are the same thing to the person reading, so they land in the same
    * block, at the same 3:2 box, with the same hover transform.
    *

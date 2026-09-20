@@ -38,7 +38,7 @@ which is not a launch.
 | Stripe      | `stripe statement descriptor`                            | set, at least 5 characters, not a placeholder — nothing in `apps/api` sets one, so it is configured in the Dashboard                                                                                                                                                                                                                      |
 | Stripe      | `stripe business name`                                   | equals `BRAND_NAME`                                                                                                                                                                                                                                                                                                                       |
 | Resend      | `resend sending domain`                                  | the domain of `EMAIL_FROM` is `verified` (`MANUAL` when a sending-only key cannot list domains)                                                                                                                                                                                                                                           |
-| Storage     | `S3_PUBLIC_URL`                                          | a custom domain, not `*.r2.dev` or a local address                                                                                                                                                                                                                                                                                        |
+| Storage     | `STORAGE_PUBLIC_URL`                                     | a Neon Object Storage bucket URL, not a local address                                                                                                                                                                                                                                                                                     |
 | Database    | `database branch`                                        | `DATABASE_URL` is a Neon endpoint and `NEON_BRANCH` is `production`                                                                                                                                                                                                                                                                       |
 | Database    | `seeded rows`                                            | zero rows carry the marketing, demo or E2E seed markers — fabricated vendors and reviews on a public production site are misrepresentation                                                                                                                                                                                                |
 | Database    | `migrations`                                             | every migration in the repository journal is applied                                                                                                                                                                                                                                                                                      |
@@ -60,8 +60,7 @@ which is not a launch.
       user's private messages — and the legal entity and a monitored support
       destination are named.
 - [ ] **Provider accounts** (VEN-377): the Neon Auth production branch on the real
-      domain, the live Stripe Connect platform, the Resend domain's DNS, the
-      Cloudflare custom domain for the R2 bucket, and the **Neon upgrade from
+      domain, the live Stripe Connect platform, the Resend domain's DNS, and the **Neon upgrade from
       Free to Launch** — on Free, `production` has a 6-hour history window, no
       branch protection and a storage cap whose breach makes writes fail. After
       the upgrade: protect the `production` branch and widen its history
@@ -80,9 +79,10 @@ which is not a launch.
 ## Known limits to revisit before scaling out
 
 - **Image URLs are stored absolute.** `apps/api/src/lib/storage.ts` writes
-  `publicUrlFor(S3_PUBLIC_URL, key)` into rows, so changing `S3_PUBLIC_URL` after
-  vendors upload does not repoint existing images. Put the custom domain in
-  place first — which is why `launch:check` fails `*.r2.dev`.
+  `publicUrlFor(STORAGE_PUBLIC_URL, key)` into rows, so changing `STORAGE_PUBLIC_URL` after
+  vendors upload does not repoint existing images. Set the Neon bucket URL
+  before the first real upload — which is why `launch:check` fails a legacy
+  object-storage host.
 - **Uploaded images bill on Vercel image optimization (VEN-456).** Neon Object
   Storage has no CDN, so every upload is served through `/_next/image`, whose
   cache is the CDN. Cost is one source image and one transformation per upload
