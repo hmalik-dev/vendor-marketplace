@@ -352,7 +352,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
             summary: 'Live Stripe events are being ignored by a test-mode API key',
             details: [
               `POST /webhooks/stripe received a live-mode ${event.type} event but STRIPE_SECRET_KEY is a test-mode key, so it was acknowledged and dropped.`,
-              "Payments, refunds and disputes are not being recorded. Check the deployment's Stripe key.",
+              'Payments, refunds and disputes are not being recorded. Check the Stripe key this deployment uses.',
             ],
             adminPath: null,
           });
