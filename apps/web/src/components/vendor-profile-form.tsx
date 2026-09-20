@@ -712,7 +712,6 @@ export function VendorProfileForm({
                 <Button
                   type="button"
                   variant="secondary"
-                  size="sm"
                   className="mt-2"
                   onClick={() => {
                     setForm(initialState(changedTo));
