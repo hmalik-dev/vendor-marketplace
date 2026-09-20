@@ -21,6 +21,8 @@ export const REQUIRED_SECRETS = [
   ['NEON_AUTH_COOKIE_SECRET', 'E2E_NEON_AUTH_COOKIE_SECRET'],
   ['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'E2E_STRIPE_PUBLISHABLE_KEY'],
   ['STRIPE_SECRET_KEY', 'E2E_STRIPE_SECRET_KEY'],
+  // Creates this run's storage branch (VEN-457); the same secret preview-branch.yml holds.
+  ['NEON_API_KEY', 'NEON_API_KEY'],
   ...[
     'E2E_VENDOR_STRIPE_ACCOUNT_ID',
     'E2E_CUSTOMER_EMAIL',

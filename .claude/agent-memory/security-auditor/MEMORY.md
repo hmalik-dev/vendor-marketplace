@@ -13,6 +13,7 @@
 - [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child output redacted, `workflow_run` gated; only argv-built `PhaseError`s are not
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — traces carry Clerk cookies, stripe-listen.log carries whsec; masking never reaches artifacts
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — live session JWTs; `FORBIDDEN_PATHS` covers the path, no content rule will
+- [A storage branch per lane, CI run and PR](neon-storage-branch-per-runner.md) — `NEON_API_KEY` is production-capable; keep it step-scoped and away from `npm install`
 - [Backup integrity is not authenticity](backup-integrity-is-not-authenticity.md) — a bucket-token holder forges a dump the drill pg_restores as superuser
 
 ## Auth, identity and tenancy

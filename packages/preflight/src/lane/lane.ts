@@ -28,6 +28,15 @@ import {
   laneDatabaseUrl,
 } from './database.js';
 import { allocateOffset, API_BASE, type PortProbe, WEB_BASE } from './ports.js';
+import {
+  defaultNeonRunner,
+  dropLaneStorage,
+  ensureLaneStorage,
+  LANE_STORAGE_KEYS,
+  type LaneStorageEnv,
+  laneStorageBranch,
+  requireNeonAccess,
+} from './storage.js';
 
 /*
  * Each member carries a single literal `kind`. A shared `'up' | 'down'` member
@@ -168,6 +177,9 @@ export function baseDatabaseUrl(worktreePath: string): string {
  * that was deleted *and* one left stale by an earlier allocation, without
  * touching the mtime of a lane that is already correct.
  *
+ * `resolveStorage` is a thunk for the same reason, and because it reaches the
+ * network: a lane whose file already agrees must resume offline.
+ *
  * `resolveDatabaseUrl` is a thunk because resolving it can throw: it reads the
  * worktree's own `.env`, and `git clean -xdf` takes `.env` and `.env.lane` in
  * the same pass. Calling it eagerly made resuming a perfectly good lane fail
@@ -180,15 +192,19 @@ export function baseDatabaseUrl(worktreePath: string): string {
  * connection string, so on a shared machine that is every local account's to
  * read.
  */
-function ensureLaneEnv(
+async function ensureLaneEnv(
   worktreePath: string,
   manifest: LaneManifest,
   resolveDatabaseUrl: () => string,
-): void {
+  resolveStorage: () => Promise<LaneStorageEnv>,
+): Promise<void> {
   const file = path.join(worktreePath, LANE_ENV_FILE);
 
   if (!laneEnvAgreesWith(file, manifest)) {
-    writeFileSync(file, renderLaneEnv(manifest, resolveDatabaseUrl()));
+    // Created owner-only: the file holds a bucket credential from its first byte.
+    writeFileSync(file, renderLaneEnv(manifest, resolveDatabaseUrl(), await resolveStorage()), {
+      mode: LANE_ENV_MODE,
+    });
   }
 
   chmodSync(file, LANE_ENV_MODE);
@@ -223,7 +239,31 @@ function laneEnvAgreesWith(file: string, manifest: LaneManifest): boolean {
     values.WEB_URL === `http://localhost:${manifest.webPort}` &&
     values.SENTRY_DSN === '' &&
     values.NEXT_PUBLIC_SENTRY_DSN === '' &&
-    (values.DATABASE_URL ?? '').endsWith(`/${manifest.database}`)
+    (values.DATABASE_URL ?? '').endsWith(`/${manifest.database}`) &&
+    laneStorageAgrees(values)
+  );
+}
+
+/**
+ * Whether the file's storage rows are a lane's own: every one present, the two
+ * public URLs the same, and the public URL under the endpoint.
+ *
+ * The values themselves cannot be compared with anything at rest — the branch
+ * credential is read from Neon — so this rejects the shapes an older or hand
+ * written file takes. A file from before storage moved to Neon carries none of
+ * these rows, or the local emulator's `localhost:9000`, and is rewritten.
+ */
+function laneStorageAgrees(values: Record<string, string>): boolean {
+  if (LANE_STORAGE_KEYS.some((key) => !values[key])) {
+    return false;
+  }
+
+  const endpoint = values.STORAGE_ENDPOINT ?? '';
+
+  return (
+    !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(endpoint) &&
+    values.STORAGE_PUBLIC_URL === values.NEXT_PUBLIC_STORAGE_PUBLIC_URL &&
+    (values.STORAGE_PUBLIC_URL ?? '').startsWith(endpoint)
   );
 }
 
@@ -240,6 +280,12 @@ export interface LaneUpDeps {
    * collaborator is faked.
    */
   readonly createDatabase: (ticket: string, worktreePath: string) => Promise<string>;
+  /**
+   * The lane's storage branch and its `STORAGE_*` values. Runs before the
+   * database is created, so a machine that cannot reach Neon fails with nothing
+   * stranded, and never falls back to a shared bucket.
+   */
+  readonly prepareStorage: (ticket: string, worktreePath: string) => Promise<LaneStorageEnv>;
   readonly probe?: PortProbe;
   /** The branch the worktree is really on — see `currentBranch`. */
   readonly branchOf: (worktreePath: string) => string;
@@ -295,6 +341,11 @@ export const LANE_SEEDS = ['db:seed', 'db:seed:marketing'] as const;
 const defaultUpDeps: LaneUpDeps = {
   createDatabase: (ticket, worktreePath) =>
     createLaneDatabase(ticket, baseDatabaseUrl(worktreePath)),
+  prepareStorage: async (ticket, worktreePath) => {
+    await requireNeonAccess();
+
+    return ensureLaneStorage(ticket, defaultNeonRunner, { workdir: worktreePath });
+  },
   branchOf: currentBranch,
   install: (worktreePath) => pnpmInLane(worktreePath, ['install']),
   /*
@@ -415,7 +466,12 @@ export async function laneUp(
         ? alreadyUp
         : updateManifest(mainCheckout, ticket, { worktreePath, branch });
 
-    ensureLaneEnv(worktreePath, resumed, () => laneUrl(worktreePath, resumed));
+    await ensureLaneEnv(
+      worktreePath,
+      resumed,
+      () => laneUrl(worktreePath, resumed),
+      () => deps.prepareStorage(ticket, worktreePath),
+    );
 
     return resumed;
   }
@@ -461,16 +517,28 @@ export async function laneUp(
   if (!provisionHere) {
     // Lost the race: another caller owns the setup below, but this one still
     // has to leave with a usable lane.
-    ensureLaneEnv(worktreePath, manifest, () => laneUrl(worktreePath, manifest));
+    await ensureLaneEnv(
+      worktreePath,
+      manifest,
+      () => laneUrl(worktreePath, manifest),
+      () => deps.prepareStorage(ticket, worktreePath),
+    );
 
     return manifest;
   }
 
+  // First, so a lane that cannot reach Neon fails before it holds a database.
+  const storage = await deps.prepareStorage(ticket, worktreePath);
   const databaseUrl = await deps.createDatabase(ticket, worktreePath);
 
   // The env file must exist before install and migrate, so both run against
   // this lane's own database rather than the developer's shared one.
-  ensureLaneEnv(worktreePath, manifest, () => databaseUrl);
+  await ensureLaneEnv(
+    worktreePath,
+    manifest,
+    () => databaseUrl,
+    () => Promise.resolve(storage),
+  );
 
   // Before the install, never after: the whole failure is `pnpm` following an
   // inherited link and writing into the tree this lane's peers are reading.
@@ -501,9 +569,31 @@ export function laneEnqueued(mainCheckout: string, ticket: string, prUrl: string
 
 export interface LaneDownDeps {
   readonly dropDatabase: (ticket: string) => Promise<void>;
+  readonly dropStorage: (ticket: string) => Promise<void>;
 }
 
-const defaultDownDeps: LaneDownDeps = { dropDatabase: (ticket) => dropLaneDatabase(ticket) };
+const defaultDownDeps: LaneDownDeps = {
+  dropDatabase: (ticket) => dropLaneDatabase(ticket),
+  dropStorage: async (ticket) => {
+    try {
+      await requireNeonAccess();
+    } catch (error: unknown) {
+      /*
+       * Not fatal: a lane older than its storage branch never had one, and a
+       * lane that did was created by a machine with access. The branch expires
+       * on its own seven days after creation, which is what bounds a leak here.
+       */
+      process.stderr.write(
+        `Lane down: storage branch ${laneStorageBranch(ticket)} was not deleted — ` +
+          `${error instanceof Error ? error.message : String(error)}\n` +
+          '  It expires on its own; delete it with `neon branches delete` once Neon is reachable.\n',
+      );
+      return;
+    }
+
+    await dropLaneStorage(ticket, defaultNeonRunner);
+  },
+};
 
 /** Idempotent: tearing down a lane that is already gone is the desired end state. */
 export async function laneDown(
@@ -512,6 +602,13 @@ export async function laneDown(
   ticket: string,
   deps: LaneDownDeps = defaultDownDeps,
 ): Promise<void> {
+  /*
+   * Storage first: it is the step Neon can refuse. Dropping the database first
+   * left a manifest marked active for a lane whose database was gone, which a
+   * later `lane:up` resumed without noticing. Both are idempotent, so a re-run
+   * finishes whichever did not.
+   */
+  await deps.dropStorage(ticket);
   await deps.dropDatabase(ticket);
   rmSync(path.join(worktreePath, LANE_ENV_FILE), { force: true });
   removeManifest(mainCheckout, ticket);

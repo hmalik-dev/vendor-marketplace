@@ -206,6 +206,8 @@ jobs:
     # No journey signs a webhook.
     env:
       E2E_GATE: ${{ vars.E2E_GATE }}
+      # Where the run's storage branch is made; also named in preview-branch.yml.
+      NEON_PROJECT_ID: dark-surf-79137727
       # The stack's own origins, which the E2E harness refuses to guess.
       PORT: '4000'
       WEB_PORT: '3000'
@@ -234,6 +236,8 @@ jobs:
 
       - name: Check the E2E secrets are configured
         id: secrets
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: node scripts/e2e-ci.mjs secrets
 
       - uses: pnpm/action-setup@v4
@@ -248,26 +252,44 @@ jobs:
       - if: steps.secrets.outputs.run == 'true'
         run: pnpm install --frozen-lockfile
 
-      # Not a service container: MinIO needs `server /data` as its command, which
-      # `services:` cannot pass. Same images, root user and development password
-      # as docker-compose.yml — which are also the registry's `S3_*` defaults the
-      # API falls back to — and the same object-read-only policy `storage-init`
-      # applies. A container that lives for this job and holds nothing.
-      - name: Start MinIO and create the uploads bucket
+      # Uploads go to Neon Object Storage, which has no emulator, so this run
+      # gets a storage-only branch of its own (`ci-<run>-<attempt>`, cut from
+      # `dev`, no compute) and its STORAGE_* values reach the later steps through
+      # the job environment, masked. It is deleted by the `always()` step at the
+      # end; the one-day expiry is the backstop for a run that never gets there.
+      # The pull file is created owner-only first: the CLI keeps an existing
+      # file's mode, and it would otherwise be written world-readable.
+      # Its own step, with no credential in scope and no install scripts: a
+      # global install resolves unpinned transitive dependencies afresh.
+      - name: Install the Neon CLI
         if: steps.secrets.outputs.run == 'true'
+        run: npm install --global --ignore-scripts neonctl@4.11.0
+
+      - name: Create this run's storage branch
+        id: storage
+        if: steps.secrets.outputs.run == 'true'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
-          read -r MINIO_ROOT_PASSWORD <<< vendor_marketplace_dev
-          export MINIO_ROOT_PASSWORD
-          docker run -d --name storage --network host \
-            -e MINIO_ROOT_USER=vendor-marketplace -e MINIO_ROOT_PASSWORD \
-            minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
-          scripts/wait-http.sh --timeout 60 http://localhost:9000/minio/health/ready
-          echo '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::vendor-marketplace-uploads/*"]}]}' > "$RUNNER_TEMP/uploads-policy.json"
-          docker run --rm --network host -v "$RUNNER_TEMP:/policy" --entrypoint /bin/sh \
-            minio/mc:RELEASE.2025-04-16T18-13-26Z -c "
-            mc alias set local http://localhost:9000 vendor-marketplace vendor_marketplace_dev &&
-            mc mb --ignore-existing local/vendor-marketplace-uploads &&
-            mc anonymous set-json /policy/uploads-policy.json local/vendor-marketplace-uploads"
+          branch="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          neon branches create --project-id "$NEON_PROJECT_ID" --name "$branch" --parent dev \
+            --no-compute --no-secrets -o json \
+            --expires-at "$(date -u -d '+1 day' +%Y-%m-%dT%H:%M:%SZ)"
+          # Cut from `dev`, so the bucket normally came across; create it if not.
+          neon buckets list --project-id "$NEON_PROJECT_ID" --branch "$branch" -o json | grep -q '"uploads"' \
+            || neon buckets create uploads --project-id "$NEON_PROJECT_ID" --branch "$branch" --access-level public_read >/dev/null
+          trap 'rm -f .env.ci-storage' EXIT
+          (umask 077 && : > .env.ci-storage)
+          neon env pull --project-id "$NEON_PROJECT_ID" --branch "$branch" \
+            --file .env.ci-storage -s object-storage
+          node scripts/ci-storage.mjs map .env.ci-storage
+
+      # The mutation that proves this step: inject a STORAGE_ value naming the
+      # production branch's endpoint and it fails (`scripts/ci-storage.test.mjs`).
+      - name: Assert no production storage value is present
+        if: steps.secrets.outputs.run == 'true'
+        run: node scripts/ci-storage.mjs assert
 
       # The file `seed:e2e` and `pnpm e2e:auth` read the accounts from. Values
       # come from masked secrets and are written, never echoed.
@@ -364,6 +386,18 @@ jobs:
             ${{ runner.temp }}/api.log
             ${{ runner.temp }}/web.log
           retention-days: 14
+
+      # Always: a run that fails or is cancelled must not strand a branch against
+      # the plan's ceiling. Only a `ci-` branch is ever deleted here.
+      - name: Delete this run's storage branch
+        if: always() && steps.storage.outputs.branch != ''
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          STORAGE_BRANCH: ${{ steps.storage.outputs.branch }}
+        run: |
+          case "$STORAGE_BRANCH" in ci-*) ;; *) echo "::error::refusing to delete $STORAGE_BRANCH"; exit 1 ;; esac
+          neon branches delete "$STORAGE_BRANCH" --project-id "$NEON_PROJECT_ID" \
+            || echo "::warning::could not delete $STORAGE_BRANCH; it expires on its own within a day"
 
 # Migrations are not CI's job. `deploy.yml` runs them after this workflow
 # succeeds on main, over DATABASE_URL_UNPOOLED, before either service deploys

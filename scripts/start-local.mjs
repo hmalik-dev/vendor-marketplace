@@ -10,7 +10,9 @@
  *   1. Node is at least `engines.node` from `package.json`.
  *   2. `docker info` answers, which it only does once Docker Desktop is running.
  *   3. `.env` exists. A missing one is created from `.env.example` with the
- *      compose Postgres URL filled in; the storage rows already carry the MinIO
+ *      compose Postgres URL filled in. Storage rows are left as the example has
+ *      them: uploads live on Neon Object Storage, which has no local emulator,
+ *      so a lane's `pnpm lane:up` supplies its own (docs/development.md).
  *      values there. An existing `.env` is only ever read.
  *   4. No key the apps refuse to boot without still holds its placeholder.
  *
@@ -184,7 +186,7 @@ export function startLocal({ root, nodeVersion, dockerInfo, write }) {
 
   if (!existsSync(envPath)) {
     writeFileSync(envPath, createEnv(exampleText, read('docker-compose.yml')), { mode: 0o600 });
-    write('Created .env with the local database and file storage settings.\n');
+    write('Created .env with the local database settings.\n');
   }
 
   const env = parseEnv(readFileSync(envPath, 'utf8'));
