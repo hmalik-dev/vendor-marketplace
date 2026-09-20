@@ -90,5 +90,16 @@ conflict, a new `vendor-publish.contention.test.ts`, and stripped user-supplied
 `businessName`/`name` out of the audit `detail`, all of which changed findings I
 had already drafted.
 
+**The line you are about to cite can be rewritten mid-review (VEN-495).** The
+`git diff HEAD` from my first call showed `const expected =
+expectedMigrationCount()` — a per-request `readFileSync` on an unthrottled
+probe, which was going to be finding #1. Four minutes later the file on disk
+read `EXPECTED_MIGRATIONS`, hoisted to module load, because a peer
+security-auditor had filed it and the lane had fixed it. **Read the actual file
+before quoting any line as a finding**; `git diff` is a snapshot, and on an
+uncommitted review it is the _only_ record of a revision that no longer exists.
+Hoisting also moves the failure: an unreadable journal now crash-loops the boot
+instead of degrading one probe, so re-judge the finding, do not just drop it.
+
 Related: [[review-checklist-source-grep-substring-collisions]],
 [[review-checklist-controlled-index-drops-the-selection-seed]]
