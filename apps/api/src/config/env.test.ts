@@ -578,3 +578,17 @@ describe('SENTRY_DSN at boot', () => {
     expect(parseEnv({ ...REQUIRED, SENTRY_DSN: '' }).SENTRY_DSN).toBeUndefined();
   });
 });
+
+describe('per-account limits (VEN-484)', () => {
+  it('defaults to the ticket numbers', () => {
+    const env = parseEnv(REQUIRED);
+
+    expect({
+      uploads: env.UPLOAD_RATE_LIMIT_MAX,
+      messages: env.MESSAGE_RATE_LIMIT_MAX,
+      conversations: env.CONVERSATION_RATE_LIMIT_MAX,
+      bookingRequests: env.BOOKING_REQUEST_RATE_LIMIT_MAX,
+      images: env.UPLOAD_OBJECT_LIMIT,
+    }).toEqual({ uploads: 10, messages: 60, conversations: 20, bookingRequests: 20, images: 200 });
+  });
+});

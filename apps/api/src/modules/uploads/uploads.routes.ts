@@ -1,11 +1,13 @@
 import { MAX_UPLOAD_BYTES, uploadedImageSchema } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { validationFailed } from '../../lib/errors.js';
+import { conflict, validationFailed } from '../../lib/errors.js';
 import { assertRole, requireAuthBeforeValidation } from '../../lib/guards.js';
 import { processUploadedImage } from '../../lib/images.js';
+import { perAccountRateLimit } from '../../lib/rate-limit.js';
 import {
   buildObjectKey,
+  countOwnedImages,
   STORAGE_PREFIXES,
   STORAGE_PREFIX_ROLES,
   thumbnailKeyFor,
@@ -28,6 +30,13 @@ function isFileTooLarge(error: unknown): boolean {
   );
 }
 
+export interface UploadRoutesOptions {
+  /** Uploads one account may make per minute. */
+  rateLimitMax: number;
+  /** Images one account may hold in storage. */
+  objectLimit: number;
+}
+
 /**
  * Accepts one image, normalises it, and stores both variants. The bytes are
  * decoded and re-encoded before they ever reach storage, so what is served is
@@ -39,7 +48,7 @@ function isFileTooLarge(error: unknown): boolean {
  * validate, then authorize — so nothing about the namespace reaches a caller
  * who has not proved who they are.
  */
-export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
+export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (app, options) => {
   app.post(
     '/upload/image',
     {
@@ -50,6 +59,7 @@ export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
        * read the whole storage namespace out of a validation error.
        */
       onRequest: requireAuthBeforeValidation,
+      config: { rateLimit: perAccountRateLimit(options.rateLimitMax, '1 minute') },
       schema: {
         querystring: uploadQuerySchema,
         response: { 201: uploadedImageSchema },
@@ -63,6 +73,19 @@ export const uploadRoutes: FastifyPluginAsyncZod = async (app) => {
        * the time a handler runs, so the lookup cannot miss.
        */
       const uploader = assertRole(request.auth, STORAGE_PREFIX_ROLES[request.query.prefix]);
+
+      /*
+       * The account's storage cap, checked before a byte is read for the same
+       * reason as the role: a refused upload costs no parse and no decode. The
+       * count is of images, not objects, so a thumbnail does not spend a slot.
+       */
+      const heldImages = await countOwnedImages(app.storage, uploader.id, options.objectLimit);
+
+      if (heldImages >= options.objectLimit) {
+        throw conflict(
+          `You have reached the limit of ${options.objectLimit} uploaded images. Delete one to upload another.`,
+        );
+      }
 
       const part = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
 

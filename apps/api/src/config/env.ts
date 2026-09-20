@@ -36,6 +36,14 @@ function buildSchema(target: ShapeTarget) {
       .default('info'),
     /** Requests per minute, per IP, before the limiter replies 429. */
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(120),
+    /** Per signed-in account: uploads and messages per minute. */
+    UPLOAD_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
+    MESSAGE_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(60),
+    /** Per signed-in account: conversations and booking requests per hour. */
+    CONVERSATION_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(20),
+    BOOKING_REQUEST_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(20),
+    /** Uploaded images one account may hold in storage. */
+    UPLOAD_OBJECT_LIMIT: z.coerce.number().int().min(1).default(200),
     /**
      * Public base URL objects are served from, with no trailing slash.
      *
@@ -113,6 +121,11 @@ export const OVERRIDDEN_KEYS = [
   'PORT',
   'LOG_LEVEL',
   'RATE_LIMIT_MAX',
+  'UPLOAD_RATE_LIMIT_MAX',
+  'MESSAGE_RATE_LIMIT_MAX',
+  'CONVERSATION_RATE_LIMIT_MAX',
+  'BOOKING_REQUEST_RATE_LIMIT_MAX',
+  'UPLOAD_OBJECT_LIMIT',
   'STORAGE_PUBLIC_URL',
   'STORAGE_FORCE_PATH_STYLE',
   'STRIPE_PLATFORM_FEE_RATE',
