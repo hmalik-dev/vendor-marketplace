@@ -6,7 +6,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuth, requireRole } from '../../lib/guards.js';
+import { authenticated, requireAuth, requireRoleBeforeValidation } from '../../lib/guards.js';
 import {
   getCustomerProfileForVendor,
   listCustomerReviews,
@@ -24,7 +24,7 @@ export const customerRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/customers/me/reviews',
     {
-      preHandler: requireRole('customer'),
+      onRequest: requireRoleBeforeValidation('customer'),
       schema: { querystring: historyPageQuerySchema, response: { 200: reviewListSchema } },
     },
     async (request) => listOwnReviews(app.db, authenticated(request.auth), request.query),
