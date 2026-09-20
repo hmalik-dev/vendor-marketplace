@@ -71,7 +71,7 @@ describe('the legal reading layout', () => {
   it('draws the privacy data map as a table over the real stack', () => {
     render(<LegalPage document={legalDocument('privacy')} />);
 
-    expect(screen.getByText('Cloudflare R2')).toBeTruthy();
+    expect(screen.getByText('Neon Object Storage')).toBeTruthy();
     expect(screen.getAllByText('Stripe').length).toBe(2);
   });
 

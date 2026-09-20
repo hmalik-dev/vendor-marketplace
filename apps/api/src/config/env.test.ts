@@ -294,7 +294,7 @@ describe('parseEnv storage configuration', () => {
 /*
  * The law: *a development default must never be able to reach production*. The
  * API used to boot on every one of them — localhost as its CORS allow-list,
- * MinIO as its object store — answer 200 on
+ * a local S3 endpoint as its object store — answer 200 on
  * `/health`, log nothing, and fail every real request.
  *
  * `NODE_ENV=production` is the signal here in a way it never is at build time:

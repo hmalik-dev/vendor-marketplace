@@ -224,6 +224,8 @@ These are documented with full rationale in the project plan (Section 3). Summar
 ### D10: Runtime Split — Web on Vercel, API on Railway — *2026-08-27*
 
 > **Superseded 2026-09-19 by VEN-444/446/447/448** for the identity provider in the stack table under D9 (sign-in and webhooks now run on Neon Auth). Public images stay on Cloudflare R2 (VEN-446 hybrid). The entries are history and are not rewritten.
+>
+> **Superseded 2026-09-20 by VEN-455**: uploaded images now live on Neon Object Storage, not Cloudflare R2.
 
 **Decision:** `apps/web` (Next.js 15) deploys to **Vercel**. `apps/api` (Fastify 5)
 deploys to **Railway** as the Docker image `apps/api/Dockerfile` already builds.

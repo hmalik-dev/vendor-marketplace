@@ -4,15 +4,19 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * VEN-449: the repo describes the system that exists. The identity provider
- * was replaced by Neon Auth, so its name may not come back. The needles
- * are built from fragments so this file does not match its own scan, and every
- * exception below names the reason it exists.
- *
- * Cloudflare R2 and MinIO are current infrastructure (VEN-446 hybrid: public
- * images stay on R2, MinIO is the local stand-in), so they are not forbidden.
+ * VEN-449, VEN-458: the repo describes the system that exists. The identity
+ * provider was replaced by Neon Auth and object storage by Neon Object Storage
+ * (VEN-455), so none of their old names may come back. The needles are built
+ * from fragments so this file does not match its own scan, and every exception
+ * below names the reason it exists.
  */
-const NEEDLES = [['cl', 'erk'].join(''), ['sv', 'ix'].join('')];
+const NEEDLES: readonly RegExp[] = [
+  new RegExp(['cl', 'erk'].join('')),
+  new RegExp(['sv', 'ix'].join('')),
+  new RegExp(['cloudflare', ' ', 'r', '2'].join('')),
+  new RegExp(['mi', 'nio'].join('')),
+  new RegExp(String.raw`\b${['r', '2'].join('')}\b`),
+];
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 
@@ -22,6 +26,7 @@ const ALLOWED_PREFIXES: readonly (readonly [prefix: string, reason: string])[] =
   ['packages/db/drizzle/', 'generated migrations and snapshots; history is never hand-edited'],
   ['.claude/agent-memory/', 'dated reviewer notes, a record of what was true when written'],
   ['.claude/memory/', 'dated project notes, a record of what was true when written'],
+  ['design/delta-legal/', 'imported legal design bundle; design re-imports are merges'],
 ];
 
 /** Individual files, each with the reason its match is legitimate. */
@@ -33,6 +38,13 @@ const ALLOWED_FILES: Readonly<Record<string, string>> = {
   'design/delta-legal/Orla-Legal-Surfaces.html': 'compiled design export, left as imported',
   '.gitleaks.toml':
     'CI scans every commit in history, so the allow-lists for values older commits carried must stay',
+  'packages/preflight/src/launch/config.ts':
+    'launch:check fails an object-storage host left on the retired provider',
+  'packages/preflight/src/launch/launch.test.ts': 'pins that failure',
+  'packages/shared/src/utils/index.ts':
+    'repoints image URLs stored under the retired provider to the configured base',
+  'packages/shared/src/utils/image-url.test.ts': 'pins that repointing',
+  'packages/db/src/scripts/keys-from-urls.test.ts': 'normalises retired-provider URLs to keys',
   'pnpm-lock.yaml': 'the resolved graph of the webhook-signature package Resend uses',
   'packages/preflight/src/secrets/patterns.ts':
     'the secret scanner still recognises the retired providers key shapes until they are revoked (VEN-377)',
@@ -90,7 +102,7 @@ function isAllowed(path: string): boolean {
 
 function matches(file: TrackedFile): string[] {
   const haystack = `${file.path}\n${file.text}`.toLowerCase();
-  return NEEDLES.filter((needle) => haystack.includes(needle));
+  return NEEDLES.filter((needle) => needle.test(haystack));
 }
 
 /** Every tracked file outside the allow-list that names a forbidden token. */
@@ -105,7 +117,9 @@ function trackedFiles(): TrackedFile[] {
     .filter(Boolean)
     .map((path) => {
       try {
-        return { path, text: readFileSync(resolve(ROOT, path), 'utf8') };
+        const bytes = readFileSync(resolve(ROOT, path));
+        // Binary files (images) hold arbitrary bytes; only text can name a provider.
+        return { path, text: bytes.includes(0) ? '' : bytes.toString('utf8') };
       } catch {
         // A tracked path deleted in the working tree; nothing to scan.
         return { path, text: '' };
@@ -133,8 +147,25 @@ describe('the repo names no retired provider', () => {
     expect(violations([...files, planted])).toEqual(['apps/web/src/example.ts']);
   });
 
+  it('flags the retired object-storage names under apps/ and docs/', () => {
+    const local: TrackedFile = {
+      path: 'apps/api/src/example.ts',
+      text: `// ${['Mi', 'nIO'].join('')} bucket\n`,
+    };
+    const bucket: TrackedFile = {
+      path: 'docs/example.md',
+      text: `${['Cloudflare', ' ', 'R', '2'].join('')} bucket\n`,
+    };
+    const bare: TrackedFile = { path: 'docs/bare.md', text: `${['R', '2'].join('')} outage\n` };
+    const clean: TrackedFile = { path: 'docs/clean.md', text: 'a r25 bucket, an hr2x\n' };
+    expect(violations([local, bucket, bare, clean])).toEqual([local.path, bucket.path, bare.path]);
+  });
+
   it('flags a forbidden token in a file name', () => {
-    const planted: TrackedFile = { path: `apps/api/src/${NEEDLES[0]}-webhook.ts`, text: '' };
+    const planted: TrackedFile = {
+      path: `apps/api/src/${['cl', 'erk'].join('')}-webhook.ts`,
+      text: '',
+    };
     expect(violations([planted])).toEqual([planted.path]);
   });
 

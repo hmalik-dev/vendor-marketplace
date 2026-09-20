@@ -32,7 +32,7 @@ export const BASELINE_CAPABILITIES: readonly Capability[] = ['core', 'e2e'];
 export const CAPABILITY_LABELS: Readonly<Record<Capability, string>> = {
   core: 'App + Database',
   auth: 'Auth (Neon Auth)',
-  storage: 'Object storage (Neon Object Storage / local S3 emulator)',
+  storage: 'Object storage (Neon Object Storage)',
   stripe: 'Payments (Stripe Connect)',
   email: 'Email (Resend)',
   sentry: 'Error tracking (Sentry)',

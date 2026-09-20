@@ -30,16 +30,16 @@ monorepo; repo and packages are named `vendor-marketplace`, the product is
 
 ## Commands (repo root; turbo fans out per package)
 
-| Task                              | Command                                                                                                                                                         |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Verify a change (once, scoped)    | `node ~/.claude/scripts/verify.mjs --lane <id> --ticket <id>`                                                                                                   |
-| Lane up / run in / enqueue / down | `pnpm lane:up <id>` · `pnpm lane:exec <id> -- <cmd>` · `pnpm lane:pr <id> <url>` · `pnpm lane:down <id>`                                                        |
-| Full suites (what CI runs)        | `pnpm format:check && pnpm typecheck && pnpm lint && pnpm build && pnpm test && pnpm test:contention && pnpm test:agents`                                       |
-| Preflight gate for a ticket       | `pnpm preflight --capabilities <a,b>` — the issue's `cap:*` labels without the prefix; `--all` for everything                                                   |
-| Dev servers                       | `pnpm dev` — web 3000, API 4000 (lanes get their own ports)                                                                                                     |
-| Database                          | `docker compose up -d` (Postgres + MinIO) · `pnpm db:generate` after editing `packages/db/src/schema` · `pnpm db:migrate` · `pnpm db:seed` · `pnpm db:seed:e2e` |
-| Env registry                      | `pnpm env:example` regenerates `.env.example` and `turbo.json` passthrough; never hand-edit them                                                                |
-| Secret scan                       | `pnpm secrets:scan` (staged) · `pnpm secrets:scan:all`                                                                                                          |
+| Task                              | Command                                                                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Verify a change (once, scoped)    | `node ~/.claude/scripts/verify.mjs --lane <id> --ticket <id>`                                                                                           |
+| Lane up / run in / enqueue / down | `pnpm lane:up <id>` · `pnpm lane:exec <id> -- <cmd>` · `pnpm lane:pr <id> <url>` · `pnpm lane:down <id>`                                                |
+| Full suites (what CI runs)        | `pnpm format:check && pnpm typecheck && pnpm lint && pnpm build && pnpm test && pnpm test:contention && pnpm test:agents`                               |
+| Preflight gate for a ticket       | `pnpm preflight --capabilities <a,b>` — the issue's `cap:*` labels without the prefix; `--all` for everything                                           |
+| Dev servers                       | `pnpm dev` — web 3000, API 4000 (lanes get their own ports)                                                                                             |
+| Database                          | `docker compose up -d` (Postgres) · `pnpm db:generate` after editing `packages/db/src/schema` · `pnpm db:migrate` · `pnpm db:seed` · `pnpm db:seed:e2e` |
+| Env registry                      | `pnpm env:example` regenerates `.env.example` and `turbo.json` passthrough; never hand-edit them                                                        |
+| Secret scan                       | `pnpm secrets:scan` (staged) · `pnpm secrets:scan:all`                                                                                                  |
 
 `pnpm db:seed:e2e` (after `db:seed`) is what makes vendor and admin surfaces
 reachable: it gives the E2E vendor a published storefront, a package, a live
@@ -103,4 +103,4 @@ edits ride on `main` directly, never inside a code PR.
 ## Stack
 
 Next.js 15 · Fastify 5 · Drizzle · PostgreSQL 18 (Neon; Docker locally) · Neon Auth ·
-Stripe Connect · Cloudflare R2 · Resend · Tailwind 4 + shadcn/ui · Zod · Vitest · Playwright
+Stripe Connect · Neon Object Storage · Resend · Tailwind 4 + shadcn/ui · Zod · Vitest · Playwright

@@ -91,7 +91,7 @@ function schemaFor(variable: EnvVariable, target: ShapeTarget): z.ZodTypeAny {
    * Requiring a value to be *stated* is not the whole law: a deployment that
    * sets `STORAGE_ENDPOINT=http://localhost:9000` by hand satisfies presence and is
    * still the development default reaching production. A loopback host is
-   * never a public deployment's own — the app talks to Neon, R2 and the auth provider over
+   * never a public deployment's own — the app talks to Neon and the auth provider over
    * the network — so refusing one closes the half that absence does not. Per
    * *entry*, because `WEB_URL` is a comma-separated allow-list and its first
    * entry is the origin handed to Stripe.

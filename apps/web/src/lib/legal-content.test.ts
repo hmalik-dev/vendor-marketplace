@@ -132,7 +132,7 @@ describe('legal content', () => {
     expect(table?.rows.map((row) => row[1].map((span) => span.text).join(''))).toEqual([
       'Stripe',
       'Neon Auth',
-      'Cloudflare R2',
+      'Neon Object Storage',
       BRAND_NAME,
       'Stripe',
     ]);

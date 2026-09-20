@@ -38,7 +38,7 @@ serving rather than billing.
 | Database      | Neon Free, `staging` branch | $0 — 191.9 CU-hours/month, 0.5 GB, scale-to-zero after 5 min |
 | Auth          | Neon Auth, `staging` branch | $0 — part of the Neon Free branch                            |
 | Payments      | Stripe test mode            | $0 — no live charges exist                                   |
-| Images        | Cloudflare R2 free tier     | $0 — the bucket is effectively empty                         |
+| Images        | Neon Object Storage         | $0 — the bucket is effectively empty                         |
 
 The Neon project used ~11.7 of its 191.9 CU-hours in the month to 2026-08-31,
 so a demo's browsing is not close to the ceiling. The one historical way this
@@ -111,7 +111,7 @@ environment:
 | `WEB_URL`                            | this project's own `*.vercel.app` origin |
 | `NEON_AUTH_BASE_URL`                 | the `staging` branch's Neon Auth URL     |
 | `NEON_AUTH_COOKIE_SECRET`            | `openssl rand -base64 32`                |
-| `NEXT_PUBLIC_S3_PUBLIC_URL`          | the R2 public base URL                   |
+| `NEXT_PUBLIC_STORAGE_PUBLIC_URL`     | the Neon bucket public base URL          |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | the `pk_test_` key                       |
 
 The last two are not in the web app's validated capability set — it checks
