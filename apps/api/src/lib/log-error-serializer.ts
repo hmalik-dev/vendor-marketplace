@@ -161,9 +161,20 @@ const VALUE_BEARING = ['detail', 'where', 'hint', 'internalQuery', 'internal_que
 function cloneError(error: ErrorLike, overrides: Record<string, unknown>): ErrorLike {
   const clone = Object.create(Object.getPrototypeOf(error) as object) as ErrorLike;
 
-  Object.defineProperties(clone, Object.getOwnPropertyDescriptors(error));
+  const replaced = { stack: error.stack, ...overrides };
 
-  for (const [key, value] of Object.entries({ stack: error.stack, ...overrides })) {
+  // A property being replaced is not copied first: redefining one the driver
+  // made non-configurable (`postgres` does this to `parameters`) throws, and
+  // the throw would replace the error being logged.
+  const kept = Object.getOwnPropertyDescriptors(error);
+
+  for (const key of Object.keys(replaced)) {
+    delete kept[key];
+  }
+
+  Object.defineProperties(clone, kept);
+
+  for (const [key, value] of Object.entries(replaced)) {
     Object.defineProperty(clone, key, {
       value,
       writable: true,
@@ -395,7 +406,38 @@ function sanitize(value: unknown, seen: Set<unknown>, depth: number): unknown {
  * type, the frames, and the driver's `SQLSTATE`.
  */
 export function serializeError(error: Error): ReturnType<typeof stdSerializers.err> {
-  return stdSerializers.err(sanitize(error, new Set(), 0) as Error);
+  try {
+    return stdSerializers.err(sanitize(error, new Set(), 0) as Error);
+  } catch {
+    return bareRecord(error);
+  }
+}
+
+/**
+ * What survives when redaction itself failed: the type, the message without its
+ * bound values, the frames, and the code. Never throws, and never carries
+ * `params`.
+ */
+function bareRecord(error: Error): ReturnType<typeof stdSerializers.err> {
+  const read = (key: string): unknown => {
+    try {
+      return (error as unknown as Record<string, unknown>)[key];
+    } catch {
+      return undefined;
+    }
+  };
+  const rawMessage = read('message');
+  const original = typeof rawMessage === 'string' ? rawMessage : '';
+  const message = withoutParams(original);
+  const code = read('code');
+  const name = read('name');
+
+  return {
+    type: typeof name === 'string' ? name : 'Error',
+    message,
+    stack: withoutParamsInStack(read('stack'), original, message),
+    ...(typeof code === 'string' ? { code } : {}),
+  } as ReturnType<typeof stdSerializers.err>;
 }
 
 /**
@@ -421,7 +463,12 @@ export function serializeError(error: Error): ReturnType<typeof stdSerializers.e
  * strip.
  */
 export function redactErrorValues(error: unknown): unknown {
-  return sanitize(error, new Set(), 0);
+  try {
+    return sanitize(error, new Set(), 0);
+  } catch {
+    // Never let a redaction failure replace the error being reported.
+    return isErrorLike(error) ? bareRecord(error as unknown as Error) : error;
+  }
 }
 
 /**
@@ -447,7 +494,13 @@ export function redactLogRecord(record: Record<string, unknown>): Record<string,
       continue;
     }
 
-    const sanitized = sanitize(value, new Set(), 0);
+    let sanitized: unknown;
+
+    try {
+      sanitized = sanitize(value, new Set(), 0);
+    } catch {
+      sanitized = bareRecord(value as unknown as Error);
+    }
 
     if (sanitized !== value) {
       redacted ??= { ...record };
