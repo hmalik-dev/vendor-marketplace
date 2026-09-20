@@ -10,6 +10,7 @@ import {
   type VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import { updatedAtIs } from '../../lib/edit-version.js';
 import { OWNER_NOT_BANNED } from './vendor-visibility.js';
 
 /** A soft-deleted profile is invisible to every read path. */
@@ -110,6 +111,51 @@ export async function updateVendorProfileById(
           : undefined,
       ),
     )
+    .returning();
+
+  return updated?.[0] ?? null;
+}
+
+/**
+ * Locks the profile row and says whether it is still at the version a form was
+ * opened on (VEN-481). The lock is what makes the answer hold until the
+ * transaction ends, so the write that follows cannot land on a row that moved.
+ */
+export async function lockVendorProfileAtVersion(
+  db: AppDatabase,
+  id: string,
+  expectedUpdatedAt: Date,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: vendorProfiles.id })
+    .from(vendorProfiles)
+    .where(
+      and(
+        eq(vendorProfiles.id, id),
+        live,
+        updatedAtIs(vendorProfiles.updatedAt, expectedUpdatedAt),
+      ),
+    )
+    .for('no key update')
+    .limit(1);
+
+  return rows.length > 0;
+}
+
+/**
+ * Moves `updated_at` without changing a column, for a versioned save that only
+ * replaced the category or tag rows: those live in other tables, and a save that
+ * left the version where it was would let a second one from the same version
+ * through (VEN-481).
+ */
+export async function touchVendorProfile(
+  db: AppDatabase,
+  id: string,
+): Promise<VendorProfileRow | null> {
+  const updated = await db
+    .update(vendorProfiles)
+    .set({ updatedAt: sql`now()` })
+    .where(and(eq(vendorProfiles.id, id), live))
     .returning();
 
   return updated?.[0] ?? null;

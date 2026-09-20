@@ -633,14 +633,28 @@ export const createVendorProfileSchema = z.object({
 export type CreateVendorProfileInput = z.infer<typeof createVendorProfileSchema>;
 
 /**
+ * The `updatedAt` an edit form was opened on, sent back with the save. The API
+ * refuses the save with a 409 when the row has moved since (VEN-481). Optional,
+ * because the publish toggle and other one-field writers do not hold a form.
+ */
+export const editVersionSchema = z.iso
+  .datetime()
+  .transform((value) => new Date(value))
+  .optional();
+
+function hasFieldBesidesEditVersion(value: { updatedAt?: Date | undefined }): boolean {
+  return Object.keys(value).some((key) => key !== 'updatedAt');
+}
+
+/**
  * Every create field is optional on update, plus the publish toggle. Derived
  * fields (`avgRating`, `reviewCount`) and Stripe fields are deliberately absent
  * — they are only ever written by their owning service.
  */
 export const updateVendorProfileSchema = createVendorProfileSchema
   .partial()
-  .extend({ isPublished: z.boolean().optional() })
-  .refine((value) => Object.keys(value).length > 0, {
+  .extend({ isPublished: z.boolean().optional(), updatedAt: editVersionSchema })
+  .refine(hasFieldBesidesEditVersion, {
     message: 'Provide at least one field to update',
   });
 export type UpdateVendorProfileInput = z.infer<typeof updateVendorProfileSchema>;
@@ -713,8 +727,8 @@ export type CreateServicePackageInput = z.infer<typeof createServicePackageSchem
 
 export const updateServicePackageSchema = servicePackageFieldsSchema
   .partial()
-  .extend({ isActive: z.boolean().optional() })
-  .refine((value) => Object.keys(value).length > 0, {
+  .extend({ isActive: z.boolean().optional(), updatedAt: editVersionSchema })
+  .refine(hasFieldBesidesEditVersion, {
     message: 'Provide at least one field to update',
   });
 export type UpdateServicePackageInput = z.infer<typeof updateServicePackageSchema>;

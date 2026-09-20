@@ -25,6 +25,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { STALE_EDIT_NOTICE, currentFromStaleEdit } from '@/lib/stale-edit';
 import { userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { useUnsavedChangesGuard } from '@/lib/use-unsaved-changes-guard';
@@ -357,6 +358,8 @@ export function VendorProfileForm({
   const [openSelect, setOpenSelect] = useState<string | null>(null);
   const [serverProblem, setServerProblem] = useState<ProfileSaveProblem>(NO_PROBLEM);
   const [justSaved, setJustSaved] = useState(false);
+  /** The profile as another save left it, set when this one was refused (VEN-481). */
+  const [changedTo, setChangedTo] = useState<WireVendorProfile | null>(null);
   const [publishBlockers, setPublishBlockers] = useState<readonly PublishBlockerKey[]>(
     profile?.publishBlockers ?? [],
   );
@@ -558,7 +561,8 @@ export function VendorProfileForm({
     try {
       const saved = await request('/vendor/profile', {
         method: isNew ? 'POST' : 'PUT',
-        body: toPayload(sent),
+        // A new profile has no version; an existing one sends the one it was opened on.
+        body: isNew ? toPayload(sent) : { ...toPayload(sent), updatedAt: lastSavedAt },
         // The wire variant: `tagSchema.createdAt` is a `Date`, and JSON carries
         // an ISO string.
         schema: wireVendorProfileSchema,
@@ -594,9 +598,18 @@ export function VendorProfileForm({
 
       setJustSaved(true);
       setServerProblem(NO_PROBLEM);
+      setChangedTo(null);
       toast.success(isNew ? 'Profile created.' : 'Changes saved.');
       router.refresh();
     } catch (error) {
+      const current = currentFromStaleEdit(error, wireVendorProfileSchema);
+      if (current !== null) {
+        /* Typed text stays; only the version moves, so the next save is a deliberate one. */
+        setLastSavedAt(current.updatedAt);
+        setChangedTo(current);
+        return;
+      }
+
       /*
        * #222: this used to be a toast and nothing else, so a 400 naming a
        * field the vendor could not see read as a dead button — the agent that
@@ -635,6 +648,8 @@ export function VendorProfileForm({
       setIsPublished(saved.isPublished);
       setPublishBlockers(saved.publishBlockers);
       setModerationHold(saved.moderationHold);
+      // The toggle moves `updatedAt` too, and the next save is judged against it.
+      setLastSavedAt(saved.updatedAt);
       toast.success(saved.isPublished ? 'Your profile is live.' : 'Your profile is hidden.');
       router.refresh();
     } catch (error) {
@@ -689,6 +704,27 @@ export function VendorProfileForm({
           </div>
 
           {showSummary ? <FormErrorSummary blockers={validation.blockers} /> : null}
+
+          {changedTo !== null ? (
+            <FormErrorCard>
+              <div className="text-base text-stone-900">
+                <p>{STALE_EDIT_NOTICE}</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => {
+                    setForm(initialState(changedTo));
+                    setSavedSnapshot(JSON.stringify(initialState(changedTo)));
+                    setChangedTo(null);
+                  }}
+                >
+                  Load the current values
+                </Button>
+              </div>
+            </FormErrorCard>
+          ) : null}
 
           {formMessage !== null ? (
             <FormErrorCard>

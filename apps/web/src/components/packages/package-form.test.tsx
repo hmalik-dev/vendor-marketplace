@@ -277,3 +277,94 @@ describe('PackageForm — clearing an optional number', () => {
     });
   });
 });
+
+describe('PackageForm — the version a save is judged against (VEN-481)', () => {
+  const OPENED: WireServicePackage = {
+    id: '55555555-5555-4555-8555-555555555555',
+    vendorId: '66666666-6666-4666-8666-666666666666',
+    name: 'Half-day coverage',
+    description: 'Four hours of documentary coverage and an online gallery.',
+    priceCents: 120_000,
+    priceType: 'fixed',
+    durationHours: 4,
+    maxGuests: null,
+    inclusions: ['Online gallery'],
+    isActive: true,
+    displayOrder: 0,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+  };
+  const MOVED: WireServicePackage = {
+    ...OPENED,
+    name: 'Renamed elsewhere',
+    updatedAt: new Date('2026-01-05T00:00:00.000Z'),
+  };
+
+  function putBody(call: number): Record<string, unknown> {
+    return (requestMock.mock.calls[call]?.[1] as { body: Record<string, unknown> }).body;
+  }
+
+  it('sends the version it was opened on, and the manager’s newer row on the next save', async () => {
+    const user = userEvent.setup();
+    const later = new Date('2026-01-03T00:00:00.000Z');
+    requestMock.mockResolvedValue({ ...OPENED, updatedAt: later });
+    const { rerender } = render(
+      <PackageForm servicePackage={OPENED} onSaved={vi.fn()} onCancel={vi.fn()} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save package' }));
+    await waitFor(() => expect(requestMock).toHaveBeenCalledTimes(1));
+    expect(putBody(0).updatedAt).toEqual(OPENED.updatedAt);
+
+    // What the manager does with `onSaved`: replaces its row; the form stays mounted.
+    rerender(
+      <PackageForm
+        servicePackage={{ ...OPENED, updatedAt: later }}
+        onSaved={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Save package' }));
+
+    await waitFor(() => expect(requestMock).toHaveBeenCalledTimes(2));
+    expect(putBody(1).updatedAt).toEqual(later);
+  });
+
+  it('keeps the typed text on a refusal, says so, and saves against the moved version', async () => {
+    const user = userEvent.setup();
+    const { ApiClientError } = await import('@/lib/api-client');
+    requestMock.mockRejectedValueOnce(
+      new ApiClientError(409, 'CONFLICT', 'changed', { current: MOVED }),
+    );
+    requestMock.mockResolvedValueOnce(MOVED);
+    render(<PackageForm servicePackage={OPENED} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    const name = screen.getByLabelText<HTMLInputElement>('Package name');
+    await user.clear(name);
+    await user.type(name, 'My typed name');
+    await user.click(screen.getByRole('button', { name: 'Save package' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('changed since you opened it');
+    expect(name.value).toBe('My typed name');
+
+    await user.click(screen.getByRole('button', { name: 'Save package' }));
+    await waitFor(() => expect(requestMock).toHaveBeenCalledTimes(2));
+    expect(putBody(1).updatedAt).toEqual(MOVED.updatedAt);
+    expect(putBody(1).name).toBe('My typed name');
+  });
+
+  it('loads the current values on request', async () => {
+    const user = userEvent.setup();
+    const { ApiClientError } = await import('@/lib/api-client');
+    requestMock.mockRejectedValueOnce(
+      new ApiClientError(409, 'CONFLICT', 'changed', { current: MOVED }),
+    );
+    render(<PackageForm servicePackage={OPENED} onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Save package' }));
+    await user.click(await screen.findByRole('button', { name: 'Load the current values' }));
+
+    expect(screen.getByLabelText<HTMLInputElement>('Package name').value).toBe('Renamed elsewhere');
+  });
+});
