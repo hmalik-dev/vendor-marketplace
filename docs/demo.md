@@ -5,12 +5,9 @@ launch path, and nothing built here should ever be pointed at by anything that
 matters.** It exists for one reason: so Orla can be shown to a person over a URL
 instead of over a screen share.
 
-> **Status: not stood up, deferred by decision on 2026-08-31.** The account
-> holder chose to wait until the ticket queue and the MVP feature set are
-> complete rather than show a half-built product to friends. Nothing below is
-> stale — the blueprint and the steps are current against `main` — it simply
-> has not been run. Two things will have moved by the time it is, and both are
-> recorded under **Before you run this** below.
+> **Status: lifted 2026-09-19.** The demo runs for the account holder and a few
+> friends who sign up as real customers and vendors. Vendors join by admin invite
+> or approved application, so promote your own account to admin first.
 
 Concretely, what that means:
 
@@ -147,7 +144,7 @@ environment:
 ```
 pnpm db:migrate      # the 10 pending migrations
 pnpm db:seed         # reference data — categories and tags
-pnpm db:seed:demo    # the marketplace itself
+pnpm db:seed:demo    # optional: fabricated vendors; skip it for a real-sign-up beta
 ```
 
 The demo seed is additive and disjoint from the reference and marketing seeds,
@@ -160,17 +157,11 @@ deterministic. `pnpm db:seed:demo -- --clear` removes exactly the rows it owns.
 
 ## Before you run this
 
-Two things were true on 2026-08-31 and will need re-checking, because deferring
-the work is what makes them stale rather than wrong.
-
-**`RESEND_API_KEY` becomes required.** Ticket #11 adds `'email'` to
-`API_CAPABILITIES`, which makes that key required at API boot. It carries a
-shape — `/^re_[A-Za-z0-9_]{16,}$/` — so the `re_...` placeholder does not
-satisfy it and a real Resend account is needed before the API will start at all.
-`render.yaml` declares the 19 variables the four current capabilities require;
-once #11 lands it needs a twentieth. `EMAIL_FROM` needs nothing, having a
-default. Note also that Resend delivers only to the account's own address until
-a sending domain is verified, so notification email will not reach a friend.
+**`RESEND_API_KEY` is required at API boot** with the shape
+`/^re_[A-Za-z0-9_]{16,}$/`, so a real Resend account is needed. Resend delivers only
+to the account's own address until a sending domain is verified, so notification
+email will not reach a friend. `SUPPORT_EMAIL_TO` and `OPERATOR_ALERT_EMAIL` are
+also required.
 
 **The web project still builds from `production`.** That git branch was 26
 commits behind `main` on 2026-08-31. Whichever Vercel project serves the demo

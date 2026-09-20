@@ -274,9 +274,6 @@ importers:
       '@vendor-marketplace/shared':
         specifier: workspace:*
         version: link:../shared
-      age-encryption:
-        specifier: 0.3.1
-        version: 0.3.1
       dotenv:
         specifier: 17.4.2
         version: 17.4.2
@@ -1842,24 +1839,8 @@ packages:
     resolution: {integrity: sha512-AnjFn0Jv92laAkvMrghlFZq4qQCIN/4DxFV/eooqtC2YTjB7kBeLMS2T9KJX4Dn+ZVXLOwK0lSgqDtx9gvxtiw==}
     engines: {node: '>= 20.19.0'}
 
-  '@noble/curves@2.0.1':
-    resolution: {integrity: sha512-vs1Az2OOTBiP4q0pwjW5aF0xp9n4MxVrmkFBxc6EKZc6ddYx5gaZiAsZoq0uRRXWbi3AT/sBqn05eRPtn1JCPw==}
-    engines: {node: '>= 20.19.0'}
-
-  '@noble/curves@2.3.0':
-    resolution: {integrity: sha512-v7cY+4oWYPQszRj6ZFGzTVL7uP2TaLo1xMhWHzYC5wj0ZhOXQ5x+sBre8rF3hi8cAoi0bh1qXoovoOkdFtvqEg==}
-    engines: {node: '>= 20.19.0'}
-
-  '@noble/hashes@2.0.1':
-    resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
-    engines: {node: '>= 20.19.0'}
-
   '@noble/hashes@2.3.0':
     resolution: {integrity: sha512-oN+QwyX7VSHotibwubG3kpzbwKrfnyR6OOO+3Nk/53ADL7FmgHHz4TgrbaYKvvOw09u6QTx0oiH1cNCIOuN0CQ==}
-    engines: {node: '>= 20.19.0'}
-
-  '@noble/post-quantum@0.5.4':
-    resolution: {integrity: sha512-leww0zzIirrvwaYMPI9fj6aRIlA/c6Y0/lifQQ1YOOyHEr0MNH3yYpjXeiVG+tWdPps4XxGclFWX2INPO3Yo5w==}
     engines: {node: '>= 20.19.0'}
 
   '@nodelib/fs.scandir@2.1.5':
@@ -3123,9 +3104,6 @@ packages:
   '@rushstack/eslint-patch@1.16.1':
     resolution: {integrity: sha512-TvZbIpeKqGQQ7X0zSCvPH9riMSFQFSggnfBjFZ1mEoILW+UuXCKwOoPcgjMwiUtRqFZ8jWhPJc4um14vC6I4ag==}
 
-  '@scure/base@2.4.0':
-    resolution: {integrity: sha512-thZ1TuJwFwBblOhgsjDKvvGirBxNp+wSvY/DR6tJBJOTDhdAAcHJ8Vbr2eFnqaxeca4+t0i9KBf+uHYGWwZORg==}
-
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
 
@@ -3920,9 +3898,6 @@ packages:
     resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
     engines: {node: '>=0.4.0'}
     hasBin: true
-
-  age-encryption@0.3.1:
-    resolution: {integrity: sha512-bYgd7lxM7tEANmb9bXf7xTFB3Qpq+JGKinVSdFh5MV+t2fJJZSTdKhWkvXTFJQGysZd+K9Dt3F+n+4DKazXlnQ==}
 
   agent-base@6.0.2:
     resolution: {integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==}
@@ -8778,22 +8753,7 @@ snapshots:
 
   '@noble/ciphers@2.4.0': {}
 
-  '@noble/curves@2.0.1':
-    dependencies:
-      '@noble/hashes': 2.0.1
-
-  '@noble/curves@2.3.0':
-    dependencies:
-      '@noble/hashes': 2.3.0
-
-  '@noble/hashes@2.0.1': {}
-
   '@noble/hashes@2.3.0': {}
-
-  '@noble/post-quantum@0.5.4':
-    dependencies:
-      '@noble/curves': 2.0.1
-      '@noble/hashes': 2.0.1
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -9989,8 +9949,6 @@ snapshots:
 
   '@rushstack/eslint-patch@1.16.1': {}
 
-  '@scure/base@2.4.0': {}
-
   '@sec-ant/readable-stream@0.4.1': {}
 
   '@selderee/plugin-htmlparser2@0.11.0':
@@ -10868,14 +10826,6 @@ snapshots:
       acorn: 8.18.0
 
   acorn@8.18.0: {}
-
-  age-encryption@0.3.1:
-    dependencies:
-      '@noble/ciphers': 2.4.0
-      '@noble/curves': 2.3.0
-      '@noble/hashes': 2.3.0
-      '@noble/post-quantum': 0.5.4
-      '@scure/base': 2.4.0
 
   agent-base@6.0.2:
     dependencies:
