@@ -15,11 +15,13 @@ import {
 } from '../auth-sync/identity.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import { hasAnotherLiveOperator, retireOperatorById, retireUserById } from '../users/users.dao.js';
-import { findConfirmedBookingsToUnwind } from './admin.dao.js';
+import { findConfirmedBookingsToUnwind, insertAdminAction } from './admin.dao.js';
 import { fullName, recordAdminActionBestEffort } from './admin.service.js';
 import {
   bestEffortNotice,
   CLOSURE_UNWIND,
+  countUnwindPending,
+  SUSPENSION_UNWIND,
   unwindAccountBookings,
   type AdminContext,
 } from './account-unwind.js';
@@ -569,12 +571,24 @@ export async function closeAccount(
     throw forbidden('You cannot close your own account');
   }
 
-  if (user.deletedAt) {
+  const profile = await findVendorProfileRecord(context.db, userId);
+
+  /*
+   * A closure re-run on a closed account is the **resume** (VEN-478), where the
+   * unwind was interrupted after the retirement committed: it skips the
+   * retirement and its intent row and finishes the unwind. Only while something
+   * is still pending; a finished closure is still a 409.
+   */
+  const resuming = user.deletedAt !== null;
+
+  if (
+    resuming &&
+    (await countUnwindPending(context.db, userId, profile?.id ?? null, now, CLOSURE_UNWIND)) === 0
+  ) {
     throw conflict('That account is already closed');
   }
 
-  const profile = await findVendorProfileRecord(context.db, userId);
-  const blockers = await closeBlockers(context.db, userId, now);
+  const blockers = resuming ? [] : await closeBlockers(context.db, userId, now);
 
   if (blockers.length > 0) {
     throw conflict(
@@ -585,18 +599,37 @@ export async function closeAccount(
     );
   }
 
-  const retired = operatorTarget
-    ? await retireOperatorById(context.db, userId)
-    : await retireUserById(context.db, userId);
+  /*
+   * The retirement and the intent row commit together (VEN-478), so the trail
+   * starts with the attempt. `retireUserById` and `retireOperatorById` open a
+   * transaction of their own; passed this one, theirs is a savepoint inside it.
+   */
+  const retired = resuming
+    ? { user, profileRetired: false }
+    : await context.db.transaction(async (tx) => {
+        const result = operatorTarget
+          ? await retireOperatorById(tx, userId)
+          : await retireUserById(tx, userId);
 
-  if (retired === 'last-operator') {
-    throw conflict(LAST_OPERATOR_REFUSAL);
-  }
+        if (result === 'last-operator') {
+          throw conflict(LAST_OPERATOR_REFUSAL);
+        }
 
-  if (!retired) {
-    // Another closure took the claim between the read above and this update.
-    throw conflict('That account is already closed');
-  }
+        if (!result) {
+          // Another closure took the claim between the read above and this update.
+          throw conflict('That account is already closed');
+        }
+
+        await insertAdminAction(tx, {
+          actorId,
+          action: operatorTarget ? 'operator_account_closed' : 'user_closed',
+          subjectType: 'user',
+          subjectId: userId,
+          detail: { profileRetired: result.profileRetired },
+        });
+
+        return result;
+      });
 
   /*
    * After the retirement, and deliberately.
@@ -655,9 +688,14 @@ export async function closeAccount(
       ? false
       : await deleteAndConfirm(context, userId, user.authUserId, deleteIdentity);
 
+  /*
+   * What the closure then did, as a row of its own: the intent row above
+   * cannot be updated. Always written, because `identityDeleted` is the fact
+   * about an irreversible act that the trail must hold.
+   */
   await recordAdminActionBestEffort(context, {
     actorId,
-    action: operatorTarget ? 'operator_account_closed' : 'user_closed',
+    action: 'account_unwind_finished',
     subjectType: 'user',
     subjectId: userId,
     detail: {
@@ -666,7 +704,6 @@ export async function closeAccount(
       bookingsLeftForReview: unwound.bookingsLeftForReview,
       refundsIssued: unwound.refundsIssued,
       refundsFailed: unwound.refundsFailed,
-      profileRetired: retired.profileRetired,
       identityDeleted,
     },
   });
@@ -730,6 +767,16 @@ export async function readUserDataRights(
       legalAcceptances: record.acceptances.length,
     },
     closeBlockers: blockers,
+    unwindPending:
+      user.deletedAt || user.isBanned
+        ? await countUnwindPending(
+            db,
+            userId,
+            record.profile?.id ?? null,
+            now,
+            user.deletedAt ? CLOSURE_UNWIND : SUSPENSION_UNWIND,
+          )
+        : 0,
     bookingsRefundedOnClose,
     legalAcceptances: record.acceptances.map(toAcceptanceRecord),
   };
