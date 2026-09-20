@@ -22,16 +22,23 @@ const laneEnv = {
   DATABASE_URL: 'postgresql://localhost:5432/vendor_marketplace_lane_448',
 };
 
-const policy = (apiOrigin: string): string =>
+const IMAGE_ORIGIN = 'https://br-current.storage.example.com';
+
+const policy = (apiOrigin: string, imageOrigin = IMAGE_ORIGIN): string =>
   [
     `default-src 'self'`,
     `script-src 'self' 'unsafe-inline'`,
+    `img-src 'self' data: blob: ${imageOrigin}`,
     `connect-src 'self' ${apiOrigin} https://auth.example.com`,
     `frame-src 'self'`,
   ].join('; ');
 
 /** The shape `next build` writes, trimmed to the parts this check reads. */
-const manifest = (apiOrigin: string, key = 'Content-Security-Policy'): string =>
+const manifest = (
+  apiOrigin: string,
+  key = 'Content-Security-Policy',
+  imageOrigin = IMAGE_ORIGIN,
+): string =>
   JSON.stringify({
     version: 3,
     headers: [
@@ -39,7 +46,7 @@ const manifest = (apiOrigin: string, key = 'Content-Security-Policy'): string =>
         source: '/:path*',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
-          { key, value: policy(apiOrigin) },
+          { key, value: policy(apiOrigin, imageOrigin) },
         ],
       },
     ],
@@ -231,6 +238,63 @@ describe('evaluateLaneBuild', () => {
 
     expect(result.ok).toBe(false);
     expect(result.detail).toContain(WEB_BUILD_MANIFESTS[1]);
+  });
+
+  /*
+   * A lane's storage origin changes whenever its Neon branch is recreated, and
+   * a build replayed from before names the deleted branch, so every uploaded
+   * image is CSP-blocked while the API check above still passes (VEN-468).
+   */
+  describe('storage origin', () => {
+    const storageEnv = {
+      ...laneEnv,
+      NEXT_PUBLIC_STORAGE_PUBLIC_URL: `${IMAGE_ORIGIN}/uploads`,
+    };
+
+    it('passes a build whose img-src names the lane storage origin', () => {
+      const result = evaluateLaneBuild(storageEnv, built('http://localhost:4007'));
+
+      expect(result.ok).toBe(true);
+    });
+
+    it('fails a build whose img-src names a previous storage branch', () => {
+      const stale = [
+        {
+          label: WEB_BUILD_MANIFESTS[0],
+          manifest: manifest(
+            'http://localhost:4007',
+            'Content-Security-Policy',
+            'https://br-deleted.storage.example.com',
+          ),
+        },
+      ];
+      const result = evaluateLaneBuild(storageEnv, stale);
+
+      expect(result.ok).toBe(false);
+      expect(result.detail).toContain('br-deleted.storage.example.com');
+      expect(result.detail).toContain(IMAGE_ORIGIN);
+      expect(result.fix).toBe('pnpm lane:exec 448 -- pnpm build --filter=./apps/web');
+    });
+
+    it('fails a build that bakes no img-src at all', () => {
+      const bare = JSON.stringify({
+        version: 3,
+        headers: [
+          {
+            source: '/:path*',
+            headers: [
+              { key: 'Content-Security-Policy', value: "connect-src 'self' http://localhost:4007" },
+            ],
+          },
+        ],
+      });
+      const result = evaluateLaneBuild(storageEnv, [
+        { label: WEB_BUILD_MANIFESTS[0], manifest: bare },
+      ]);
+
+      expect(result.ok).toBe(false);
+      expect(result.detail).toContain('img-src');
+    });
   });
 
   it('fails a build that bakes no policy at all', () => {
