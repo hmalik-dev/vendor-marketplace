@@ -10,11 +10,11 @@ const REQUIRED: NodeJS.ProcessEnv = {
   NEON_AUTH_BASE_URL: 'https://ep-x.neonauth.example.invalid/neondb/auth',
   STRIPE_SECRET_KEY: 'sk_test_51ABCdefGHIjklMNOpqr',
   WEBHOOK_SIGNING_FIXTURE: 'whsec_MfKQ9r8sTuVwXyZ0123456789',
-  S3_ENDPOINT: 'http://localhost:9000',
-  S3_ACCESS_KEY_ID: 'vendor-marketplace',
-  S3_SECRET_ACCESS_KEY: 'vendor_marketplace_dev',
-  S3_BUCKET: 'vendor-marketplace-uploads',
-  S3_PUBLIC_URL: 'http://localhost:9000/vendor-marketplace-uploads',
+  STORAGE_ENDPOINT: 'http://localhost:9000',
+  STORAGE_ACCESS_KEY_ID: 'vendor-marketplace',
+  STORAGE_SECRET_ACCESS_KEY: 'vendor_marketplace_dev',
+  STORAGE_BUCKET: 'vendor-marketplace-uploads',
+  STORAGE_PUBLIC_URL: 'http://localhost:9000/vendor-marketplace-uploads',
   OPERATOR_ALERT_EMAIL: 'operator@example.com',
 };
 
@@ -274,18 +274,20 @@ describe('parseEnv storage configuration', () => {
   it('strips trailing slashes from the public object URL', () => {
     const env = parseEnv({
       ...REQUIRED,
-      S3_PUBLIC_URL: 'http://localhost:9000/vendor-marketplace-uploads//',
+      STORAGE_PUBLIC_URL: 'http://localhost:9000/vendor-marketplace-uploads//',
     });
 
-    expect(env.S3_PUBLIC_URL).toBe('http://localhost:9000/vendor-marketplace-uploads');
+    expect(env.STORAGE_PUBLIC_URL).toBe('http://localhost:9000/vendor-marketplace-uploads');
   });
 
   it('defaults to path-style bucket addressing', () => {
-    expect(parseEnv(REQUIRED).S3_FORCE_PATH_STYLE).toBe(true);
+    expect(parseEnv(REQUIRED).STORAGE_FORCE_PATH_STYLE).toBe(true);
   });
 
   it('reads path-style addressing off as a string', () => {
-    expect(parseEnv({ ...REQUIRED, S3_FORCE_PATH_STYLE: 'false' }).S3_FORCE_PATH_STYLE).toBe(false);
+    expect(
+      parseEnv({ ...REQUIRED, STORAGE_FORCE_PATH_STYLE: 'false' }).STORAGE_FORCE_PATH_STYLE,
+    ).toBe(false);
   });
 });
 
@@ -303,11 +305,12 @@ describe('parseEnv on a deployment', () => {
   /** Every per-environment row the API reads that carries a development default. */
   const DEFAULTED = [
     'WEB_URL',
-    'S3_ENDPOINT',
-    'S3_ACCESS_KEY_ID',
-    'S3_SECRET_ACCESS_KEY',
-    'S3_BUCKET',
-    'S3_PUBLIC_URL',
+    'STORAGE_ENDPOINT',
+    'STORAGE_ACCESS_KEY_ID',
+    'STORAGE_SECRET_ACCESS_KEY',
+    'STORAGE_BUCKET',
+    'STORAGE_REGION',
+    'STORAGE_PUBLIC_URL',
     'SUPPORT_EMAIL_TO',
   ] as const;
 
@@ -347,8 +350,9 @@ describe('parseEnv on a deployment', () => {
     DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
     NEON_AUTH_DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
     WEB_URL: 'https://orla.test',
-    S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
-    S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+    STORAGE_ENDPOINT: 'https://br-x.storage.c-4.us-east-2.aws.neon.tech',
+    STORAGE_REGION: 'us-east-2',
+    STORAGE_PUBLIC_URL: 'https://cdn.orla.test/uploads',
     SUPPORT_EMAIL_TO: 'support@orla.test',
     SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',
   };
@@ -394,7 +398,7 @@ describe('parseEnv on a deployment', () => {
 
     expect(allowedOrigins(env)).toEqual(['https://orla.test']);
     expect(canonicalWebOrigin(env)).toBe('https://orla.test');
-    expect(env.S3_PUBLIC_URL).toBe('https://cdn.orla.test/uploads');
+    expect(env.STORAGE_PUBLIC_URL).toBe('https://cdn.orla.test/uploads');
   });
 
   it('still accepts a test-mode credential, because staging is a deployment too', () => {
@@ -406,7 +410,7 @@ describe('parseEnv on a deployment', () => {
 
   /*
    * `buildSchema` spreads the registry rows and then overwrites some by key.
-   * `S3_PUBLIC_URL` was overwritten with a bare `z.string()`, which silently
+   * `STORAGE_PUBLIC_URL` was overwritten with a bare `z.string()`, which silently
    * dropped both its default and its per-environment requirement — the one
    * hole in this gate. This is the guard against the next such override, which
    * `OVERRIDDEN_KEYS` alone cannot catch: it only asserts the key exists.
@@ -432,7 +436,7 @@ describe('parseEnv on a deployment', () => {
    */
   const LOCALHOST: Record<string, string> = {
     WEB_URL: 'http://localhost:3000',
-    S3_ENDPOINT: 'http://localhost:9000',
+    STORAGE_ENDPOINT: 'http://localhost:9000',
     // Composed from the fixture rather than written out: a connection string
     // with an inline password is exactly what the credential hook stops.
     DATABASE_URL: REQUIRED.DATABASE_URL!,
@@ -531,8 +535,9 @@ describe('SENTRY_DSN at boot', () => {
     DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
     NEON_AUTH_DATABASE_URL: REQUIRED.DATABASE_URL!.replace('@localhost:5432', '@db.neon.tech'),
     WEB_URL: 'https://orla.test',
-    S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
-    S3_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+    STORAGE_ENDPOINT: 'https://br-x.storage.c-4.us-east-2.aws.neon.tech',
+    STORAGE_REGION: 'us-east-2',
+    STORAGE_PUBLIC_URL: 'https://cdn.orla.test/uploads',
     SUPPORT_EMAIL_TO: 'support@orla.test',
     SENTRY_DSN: DSN,
   };

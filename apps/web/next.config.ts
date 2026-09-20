@@ -24,14 +24,14 @@ const webEnv = assertWebEnv();
  * The origin uploads are served from. Public image URLs are absolute and
  * environment-specific, so the CSP's `img-src` is read from the same value
  * rather than guessed — and from the *browser-facing* row rather than the API's
- * `S3_PUBLIC_URL`, because the CSP governs what the browser may load and that
+ * `STORAGE_PUBLIC_URL`, because the CSP governs what the browser may load and that
  * is the value the image `src` is built from.
  *
  * Neither of these carries a fallback: `assertWebEnv` has already supplied the
  * development default off a deployment and refused it on one. A `??` here would
  * put `http://localhost:4000` into a deployed bundle's `connect-src`.
  */
-const imageOrigin = new URL(webEnv.NEXT_PUBLIC_S3_PUBLIC_URL).origin;
+const imageOrigin = new URL(webEnv.NEXT_PUBLIC_STORAGE_PUBLIC_URL).origin;
 const apiOrigin = webEnv.NEXT_PUBLIC_API_URL;
 
 /*

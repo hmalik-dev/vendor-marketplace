@@ -110,11 +110,11 @@ const NEON_AUTH_SETUP: EnvSetup = {
   ],
 };
 
-const MINIO_SETUP: EnvSetup = {
-  url: 'https://developers.cloudflare.com/r2/api/s3/tokens/',
+const STORAGE_SETUP: EnvSetup = {
+  url: 'https://neon.com/docs/storage/overview',
   steps: [
-    'docker compose up -d storage',
-    'Production: Cloudflare dashboard → R2 → Manage API tokens',
+    'Locally: docker compose up -d storage',
+    'Deployed: declare the `uploads` bucket (public_read) in neon.ts, run `neon deploy` on the branch, and map its injected AWS_ENDPOINT_URL_S3, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_REGION onto the STORAGE_* keys',
   ],
 };
 
@@ -440,7 +440,7 @@ export const ENV_REGISTRY = [
 
   // --- storage -------------------------------------------------------------
   {
-    key: 'S3_ENDPOINT',
+    key: 'STORAGE_ENDPOINT',
     capability: 'storage',
     audience: 'server',
     consumers: ['api'],
@@ -448,33 +448,34 @@ export const ENV_REGISTRY = [
     shape: HTTP_URL,
     productionShape: HTTPS_URL,
     defaultValue: 'http://localhost:9000',
-    description: 'S3 API endpoint — the MinIO compose service locally, R2 in production.',
-    setup: MINIO_SETUP,
+    description:
+      "S3 API endpoint — the local S3 emulator in development, the branch's Neon Object Storage endpoint when deployed.",
+    setup: STORAGE_SETUP,
   },
   {
-    key: 'S3_ACCESS_KEY_ID',
+    key: 'STORAGE_ACCESS_KEY_ID',
     capability: 'storage',
     audience: 'server',
     consumers: ['api'],
     environments: 'per-environment',
     shape: /^[A-Za-z0-9_-]{4,}$/,
     defaultValue: 'vendor-marketplace',
-    description: 'S3 access key id.',
-    setup: MINIO_SETUP,
+    description: 'S3 access key id for the uploads bucket.',
+    setup: STORAGE_SETUP,
   },
   {
-    key: 'S3_SECRET_ACCESS_KEY',
+    key: 'STORAGE_SECRET_ACCESS_KEY',
     capability: 'storage',
     audience: 'server',
     consumers: ['api'],
     environments: 'per-environment',
     shape: /^[A-Za-z0-9_+/=-]{8,}$/,
     defaultValue: 'vendor_marketplace_dev',
-    description: 'S3 secret access key.',
-    setup: MINIO_SETUP,
+    description: 'S3 secret access key for the uploads bucket.',
+    setup: STORAGE_SETUP,
   },
   {
-    key: 'S3_BUCKET',
+    key: 'STORAGE_BUCKET',
     capability: 'storage',
     audience: 'server',
     consumers: ['api', 'tooling'],
@@ -482,10 +483,10 @@ export const ENV_REGISTRY = [
     shape: /^[a-z0-9][a-z0-9.-]{2,62}$/,
     defaultValue: 'vendor-marketplace-uploads',
     description: 'Bucket uploads are written to.',
-    setup: MINIO_SETUP,
+    setup: STORAGE_SETUP,
   },
   {
-    key: 'S3_PUBLIC_URL',
+    key: 'STORAGE_PUBLIC_URL',
     capability: 'storage',
     audience: 'server',
     consumers: ['api'],
@@ -494,7 +495,7 @@ export const ENV_REGISTRY = [
     productionShape: HTTPS_URL,
     defaultValue: 'http://localhost:9000/vendor-marketplace-uploads',
     description: 'Public base URL uploaded objects are served from, with no trailing slash.',
-    setup: MINIO_SETUP,
+    setup: STORAGE_SETUP,
   },
   {
     /*
@@ -503,11 +504,11 @@ export const ENV_REGISTRY = [
      * The database stores object keys, so a URL is built at the render
      * boundary — and some of those renders happen in client components (the
      * upload preview, the message avatars). Both halves must resolve to the
-     * same host, which is why this mirrors `S3_PUBLIC_URL` rather than being a
+     * same host, which is why this mirrors `STORAGE_PUBLIC_URL` rather than being a
      * second setting: a mismatch would split the images across two hosts,
      * which is exactly what storing keys exists to prevent.
      */
-    key: 'NEXT_PUBLIC_S3_PUBLIC_URL',
+    key: 'NEXT_PUBLIC_STORAGE_PUBLIC_URL',
     capability: 'storage',
     audience: 'browser',
     consumers: ['web'],
@@ -515,19 +516,32 @@ export const ENV_REGISTRY = [
     shape: HTTP_URL,
     productionShape: HTTPS_URL,
     defaultValue: 'http://localhost:9000/vendor-marketplace-uploads',
-    description: 'Public base URL for images, mirroring S3_PUBLIC_URL for the browser.',
-    setup: MINIO_SETUP,
+    description: 'Public base URL for images, mirroring STORAGE_PUBLIC_URL for the browser.',
+    setup: STORAGE_SETUP,
   },
   {
-    key: 'S3_FORCE_PATH_STYLE',
+    key: 'STORAGE_REGION',
+    capability: 'storage',
+    audience: 'server',
+    consumers: ['api', 'tooling'],
+    environments: 'per-environment',
+    shape: /^[a-z0-9-]{3,32}$/,
+    defaultValue: 'auto',
+    description:
+      "Signing region: Neon's injected AWS_REGION (the region of the branch's storage host); the local emulator accepts any value.",
+    setup: STORAGE_SETUP,
+  },
+  {
+    key: 'STORAGE_FORCE_PATH_STYLE',
     capability: 'storage',
     audience: 'server',
     consumers: ['api', 'tooling'],
     environments: 'shared',
     shape: /^(true|false)$/,
     defaultValue: 'true',
-    description: 'R2 and MinIO both address buckets by path rather than by subdomain.',
-    setup: MINIO_SETUP,
+    description:
+      'Neon Object Storage and the local emulator address buckets by path, not by subdomain.',
+    setup: STORAGE_SETUP,
   },
 
   // --- stripe --------------------------------------------------------------

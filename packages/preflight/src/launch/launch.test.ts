@@ -10,6 +10,7 @@ import type { LaunchResult } from './types.js';
 
 const API = 'https://api.orla.test';
 const WEB = 'https://orla.test';
+const NEON_UPLOADS = 'https://br-x.storage.c-4.us-east-2.aws.neon.tech/uploads';
 const AUTH_HOST = 'ep-x.neonauth.orla.test';
 const HANDLED = ['account.updated', 'payment_intent.succeeded', 'charge.dispute.created'];
 
@@ -47,7 +48,7 @@ function envFor(mode: Mode): NodeJS.ProcessEnv {
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: live ? LIVE_PUBLISHABLE : TEST_PUBLISHABLE,
     RESEND_API_KEY: RESEND,
     EMAIL_FROM: `${BRAND_NAME} <noreply@orla.test>`,
-    S3_PUBLIC_URL: live ? 'https://cdn.orla.test' : 'https://pub-x.r2.dev',
+    STORAGE_PUBLIC_URL: live ? NEON_UPLOADS : 'https://pub-x.r2.dev',
     DATABASE_URL: 'postgresql://ep-x.us-east-2.aws.neon.tech/db',
     NEON_BRANCH: live ? 'production' : 'dev',
     SENTRY_DSN: live ? 'https://abc123@o1.ingest.sentry.io/42' : 'https://...@sentry.io/...',
@@ -197,12 +198,36 @@ describe('launch:check against test-mode doubles', () => {
     expect(report.lines).toContain('  FAIL    stripe key: sk_test_…9004 (expected sk_live_)');
   });
 
-  it('fails a public r2.dev image host', async () => {
+  it('fails a loopback image host', async () => {
+    const env = { ...envFor('live'), STORAGE_PUBLIC_URL: 'http://localhost:9000/uploads' };
+    const results = await runLaunchChecks(options('live', { env }));
+
+    expect(find(results, 'STORAGE_PUBLIC_URL')).toMatchObject({
+      status: 'FAIL',
+      detail: 'http://localhost:9000/uploads is a local address (expected the Neon storage host)',
+    });
+  });
+
+  it('fails a storage endpoint that is still on R2', async () => {
+    const env = {
+      ...envFor('live'),
+      STORAGE_ENDPOINT: 'https://acct.r2.cloudflarestorage.com',
+    };
+    const results = await runLaunchChecks(options('live', { env }));
+
+    expect(find(results, 'STORAGE_PUBLIC_URL')).toMatchObject({
+      status: 'FAIL',
+      detail:
+        'STORAGE_ENDPOINT https://acct.r2.cloudflarestorage.com is an R2 host (writes would miss the Neon bucket)',
+    });
+  });
+
+  it('fails an image host that is still on R2', async () => {
     const results = await runLaunchChecks(options('test'));
 
-    expect(find(results, 'S3_PUBLIC_URL')).toMatchObject({
+    expect(find(results, 'STORAGE_PUBLIC_URL')).toMatchObject({
       status: 'FAIL',
-      detail: 'https://pub-x.r2.dev is the rate-limited r2.dev URL (expected a custom domain)',
+      detail: 'https://pub-x.r2.dev is an R2 host (uploads are stored on Neon Object Storage)',
     });
   });
 });

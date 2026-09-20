@@ -46,13 +46,13 @@ function buildSchema(target: ShapeTarget) {
      *
      * The trade is deliberate and runs the other way off a deployment: the
      * restatement made this required on every boot, and inheriting the registry
-     * row means a development process now falls back to the MinIO default
+     * row means a development process now falls back to the local emulator default
      * instead of refusing to start. That is the registry's declared answer for
      * this row, and `pnpm preflight` is what checks a laptop.
      */
-    S3_PUBLIC_URL: rows.S3_PUBLIC_URL.transform((value) => value.replace(/\/+$/, '')),
-    /** R2 and MinIO both address buckets by path rather than by subdomain. */
-    S3_FORCE_PATH_STYLE: z
+    STORAGE_PUBLIC_URL: rows.STORAGE_PUBLIC_URL.transform((value) => value.replace(/\/+$/, '')),
+    /** Neon Object Storage and the local emulator both address buckets by path. */
+    STORAGE_FORCE_PATH_STYLE: z
       .enum(['true', 'false'])
       .default('true')
       .transform((value) => value === 'true'),
@@ -113,8 +113,8 @@ export const OVERRIDDEN_KEYS = [
   'PORT',
   'LOG_LEVEL',
   'RATE_LIMIT_MAX',
-  'S3_PUBLIC_URL',
-  'S3_FORCE_PATH_STYLE',
+  'STORAGE_PUBLIC_URL',
+  'STORAGE_FORCE_PATH_STYLE',
   'STRIPE_PLATFORM_FEE_RATE',
 ] as const;
 

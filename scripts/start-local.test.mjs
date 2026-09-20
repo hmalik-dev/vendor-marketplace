@@ -103,9 +103,9 @@ test('a clone with no .env gets one with the local database and storage filled i
 
   assert.equal(code, 1);
   assert.equal(envValue(created, 'DATABASE_URL'), localDatabaseUrl(COMPOSE));
-  assert.equal(envValue(created, 'S3_ENDPOINT'), 'http://localhost:9000');
-  assert.equal(envValue(created, 'S3_ACCESS_KEY_ID'), composeValue('MINIO_ROOT_USER'));
-  assert.equal(envValue(created, 'S3_SECRET_ACCESS_KEY'), composeValue('MINIO_ROOT_PASSWORD'));
+  assert.equal(envValue(created, 'STORAGE_ENDPOINT'), 'http://localhost:9000');
+  assert.equal(envValue(created, 'STORAGE_ACCESS_KEY_ID'), composeValue('MINIO_ROOT_USER'));
+  assert.equal(envValue(created, 'STORAGE_SECRET_ACCESS_KEY'), composeValue('MINIO_ROOT_PASSWORD'));
 
   /*
    * Rows that are absent-able locally are emptied, because their placeholders
@@ -148,7 +148,7 @@ test('a clone with no .env gets one with the local database and storage filled i
   for (const key of OPTIONAL_PLACEHOLDER_KEYS) {
     assert.doesNotMatch(output, new RegExp(`^  - ${key} `, 'm'), key);
   }
-  assert.doesNotMatch(output, /DATABASE_URL|S3_/);
+  assert.doesNotMatch(output, /DATABASE_URL|STORAGE_/);
 });
 
 test('an existing, complete .env is never modified and lets the start continue', () => {

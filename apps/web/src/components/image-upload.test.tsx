@@ -25,8 +25,8 @@ vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: vi.fn() } }));
 /*
  * Two different bases, on purpose.
  *
- * The API builds the URL it returns from `S3_PUBLIC_URL`; the browser builds
- * one from `NEXT_PUBLIC_S3_PUBLIC_URL`. Nothing makes them agree, and
+ * The API builds the URL it returns from `STORAGE_PUBLIC_URL`; the browser builds
+ * one from `NEXT_PUBLIC_STORAGE_PUBLIC_URL`. Nothing makes them agree, and
  * `assertWebEnv` does not validate the public one — so a build can ship where
  * they differ or where it is missing entirely. Giving them different values
  * here is what makes "the preview keeps the URL the upload returned" a real
@@ -34,7 +34,7 @@ vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: vi.fn() } }));
  */
 const WEB_BASE = 'http://cdn.test';
 const API_BASE = 'http://localhost:9000/vendor-marketplace-uploads';
-vi.stubEnv('NEXT_PUBLIC_S3_PUBLIC_URL', WEB_BASE);
+vi.stubEnv('NEXT_PUBLIC_STORAGE_PUBLIC_URL', WEB_BASE);
 
 // Imported after the mocks and the stub so the module graph picks them up,
 // matching `use-upload-queue.test.tsx`.

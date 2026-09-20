@@ -16,11 +16,12 @@ const LISTING_PROBE_TIMEOUT_MS = 5_000;
  * portfolio photo, profile picture and cover for every user — to an
  * unauthenticated `curl`. Verified by resetting the policy and probing it.
  *
- * **Probed at `S3_PUBLIC_URL`, not `S3_ENDPOINT`.** They coincide locally, and
- * on R2 they are different hosts: the endpoint is
- * `<account>.r2.cloudflarestorage.com`, which refuses every anonymous request
- * by construction and would make this check pass unconditionally in exactly
- * the environment it matters in. What is at stake is what a stranger holding
+ * **Probed at `STORAGE_PUBLIC_URL`, not `STORAGE_ENDPOINT`.** They coincide locally, and
+ * on Neon Object Storage the public base is the bucket path under the branch's
+ * storage host, which a `public_read` bucket serves to anyone, while the signed
+ * API surface is a separate question. Probing only the endpoint could pass
+ * unconditionally in exactly the environment it matters in. Measured on the
+ * staging bucket: an unsigned `?list-type=2` answers 403 AccessDenied. What is at stake is what a stranger holding
  * an image URL can do with it, and that host is the public one.
  *
  * Unsigned on purpose. Signing would prove the *account* can list, which it
@@ -48,7 +49,7 @@ export async function checkAnonymousListing(publicUrl: string): Promise<CheckRes
       'storage',
       name,
       `${url} enumerates its keys to an unauthenticated caller`,
-      'Replace `mc anonymous set download` with a `set-json` policy granting only s3:GetObject — see docker-compose.yml. On R2, remove the bucket-level list permission.',
+      'Replace `mc anonymous set download` with a `set-json` policy granting only s3:GetObject — see docker-compose.yml. On Neon, declare the bucket `access: "public_read"` in neon.ts rather than a broader policy.',
     );
   }
 
@@ -68,44 +69,59 @@ export const storageCheck: Check = {
     }
 
     const name = 'Upload bucket is reachable';
-    const { S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET, S3_PUBLIC_URL } =
-      context.env;
+    const {
+      STORAGE_ENDPOINT,
+      STORAGE_ACCESS_KEY_ID,
+      STORAGE_SECRET_ACCESS_KEY,
+      STORAGE_BUCKET,
+      STORAGE_PUBLIC_URL,
+    } = context.env;
 
-    if (!S3_ENDPOINT || !S3_ACCESS_KEY_ID || !S3_SECRET_ACCESS_KEY || !S3_BUCKET) {
+    if (
+      !STORAGE_ENDPOINT ||
+      !STORAGE_ACCESS_KEY_ID ||
+      !STORAGE_SECRET_ACCESS_KEY ||
+      !STORAGE_BUCKET
+    ) {
       return [
         fail(
           'storage',
           name,
-          'not checked — the S3_* variables are incomplete',
+          'not checked — the STORAGE_* variables are incomplete',
           'Fix the storage variables above first',
         ),
       ];
     }
 
     const client = new S3Client({
-      region: 'auto',
-      endpoint: S3_ENDPOINT,
-      forcePathStyle: context.env.S3_FORCE_PATH_STYLE !== 'false',
-      credentials: { accessKeyId: S3_ACCESS_KEY_ID, secretAccessKey: S3_SECRET_ACCESS_KEY },
+      region: context.env.STORAGE_REGION || 'auto',
+      endpoint: STORAGE_ENDPOINT,
+      forcePathStyle: context.env.STORAGE_FORCE_PATH_STYLE !== 'false',
+      credentials: {
+        accessKeyId: STORAGE_ACCESS_KEY_ID,
+        secretAccessKey: STORAGE_SECRET_ACCESS_KEY,
+      },
     });
 
     try {
-      await client.send(new HeadBucketCommand({ Bucket: S3_BUCKET }));
-      const reachable = pass('storage', name, `${S3_BUCKET} at ${S3_ENDPOINT}`);
+      await client.send(new HeadBucketCommand({ Bucket: STORAGE_BUCKET }));
+      const reachable = pass('storage', name, `${STORAGE_BUCKET} at ${STORAGE_ENDPOINT}`);
 
       /*
        * Without a public URL there is no host to probe — and no public host is
        * itself the safe state, so this is not a finding.
        */
-      return S3_PUBLIC_URL ? [reachable, await checkAnonymousListing(S3_PUBLIC_URL)] : [reachable];
+      return STORAGE_PUBLIC_URL
+        ? [reachable, await checkAnonymousListing(STORAGE_PUBLIC_URL)]
+        : [reachable];
     } catch (error: unknown) {
       const reason = error instanceof Error ? error.message : 'HeadBucket failed';
       const fix =
         context.target === 'production'
-          ? 'Create the R2 bucket and token: https://developers.cloudflare.com/r2/buckets/create-buckets/'
+          ? 'Declare the `uploads` bucket in neon.ts and run `neon deploy` on this branch: https://neon.com/docs/storage/overview'
           : 'docker compose up -d storage storage-init';
 
-      return [fail('storage', name, `${S3_BUCKET} at ${S3_ENDPOINT}: ${reason}`, fix)];
+      return [fail('storage', name, `${STORAGE_BUCKET} at ${STORAGE_ENDPOINT}: ${reason}`, fix)];
     } finally {
       client.destroy();
     }

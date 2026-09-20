@@ -832,6 +832,44 @@ export function isBeyondBookingHorizon(value: string, now: Date = new Date()): b
 
 // --- Image URLs ------------------------------------------------------------
 
+const LEGACY_R2_HOST = /\.r2\.(dev|cloudflarestorage\.com)$/i;
+/**
+ * The namespaces uploaded objects live under. The API's `STORAGE_PREFIXES` is
+ * this list, so the legacy-URL rewrite below and the write guard cannot drift.
+ */
+export const UPLOAD_PREFIXES = [
+  'vendor-profile',
+  'vendor-cover',
+  'portfolio',
+  'customer-profile',
+] as const;
+
+const LEGACY_R2_KEY = new RegExp(`^(?:[^/]+/)?((?:${UPLOAD_PREFIXES.join('|')})/.+)$`);
+
+/**
+ * The object key inside an absolute URL that points at the Cloudflare R2 host
+ * uploads were served from before they moved to Neon Object Storage, or null
+ * for any other URL. The bucket segment `r2.cloudflarestorage.com` adds is
+ * skipped; the key must start with a known upload prefix.
+ */
+function legacyR2ObjectKey(absolute: string): string | null {
+  let url: URL;
+
+  try {
+    url = new URL(absolute);
+  } catch {
+    return null;
+  }
+
+  if (!LEGACY_R2_HOST.test(url.hostname)) {
+    return null;
+  }
+
+  const path = url.pathname.replace(/^\/+/, '');
+
+  return LEGACY_R2_KEY.exec(path)?.[1] ?? null;
+}
+
 /**
  * Turns a stored image value into a URL a browser can fetch.
  *
@@ -839,7 +877,7 @@ export function isBeyondBookingHorizon(value: string, now: Date = new Date()): b
  * column couples every row to the CDN it was uploaded under, so moving the CDN
  * stops being a config change and becomes a migration plus a window where the
  * data is split across two hosts. Storing the key and resolving here removes
- * that coupling permanently: changing `S3_PUBLIC_URL` repoints every image with
+ * that coupling permanently: changing `STORAGE_PUBLIC_URL` repoints every image with
  * no data change at all.
  *
  * Two kinds of value are deliberately passed through rather than prefixed,
@@ -862,11 +900,17 @@ export function resolveImageUrl(
     return null;
   }
 
-  if (/^https?:\/\//i.test(value) || value.startsWith('/')) {
-    return value;
+  const base = publicBaseUrl?.replace(/\/+$/, '');
+
+  if (/^https?:\/\//i.test(value)) {
+    const legacyKey = base ? legacyR2ObjectKey(value) : null;
+
+    return legacyKey ? `${base}/${legacyKey}` : value;
   }
 
-  const base = publicBaseUrl?.replace(/\/+$/, '');
+  if (value.startsWith('/')) {
+    return value;
+  }
 
   // Without a base there is no URL to build. A bare key would 404, and a bare
   // host would render the bucket root, so the honest answer is "no image".

@@ -5,7 +5,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { normalizeImageRefPath, type UserRole } from '@vendor-marketplace/shared';
+import { normalizeImageRefPath, UPLOAD_PREFIXES, type UserRole } from '@vendor-marketplace/shared';
 import type { ApiEnv } from '../config/env.js';
 import { forbidden } from './errors.js';
 
@@ -15,12 +15,7 @@ import { forbidden } from './errors.js';
  * becomes part of the object key and an open one would let a caller write
  * anywhere in the bucket. `customer-profile` is a customer's own avatar.
  */
-export const STORAGE_PREFIXES = [
-  'vendor-profile',
-  'vendor-cover',
-  'portfolio',
-  'customer-profile',
-] as const;
+export const STORAGE_PREFIXES = UPLOAD_PREFIXES;
 export type StoragePrefix = (typeof STORAGE_PREFIXES)[number];
 
 /**
@@ -205,8 +200,8 @@ function referencedPathSegments(ref: string): string[] {
  * The account a reference names an object of, found **wherever the key sits in
  * the path** rather than only at its start.
  *
- * `S3_PUBLIC_URL` is an origin *and a path*: locally it is
- * `http://localhost:9000/vendor-marketplace-uploads`, and R2 buckets are
+ * `STORAGE_PUBLIC_URL` is an origin *and a path*: locally it is
+ * `http://localhost:9000/vendor-marketplace-uploads`, and a Neon bucket is
  * addressed the same way. So the absolute form of a key is
  * `<origin>/<bucket>/<prefix>/<owner>/<name>` — the prefix is not the first
  * segment, and a guard that assumed it was read no owner and allowed the write.
@@ -220,7 +215,7 @@ function referencedPathSegments(ref: string): string[] {
  * The shape is still exact — a known prefix with exactly two segments after it —
  * so a path merely *containing* the word `portfolio` names no owner.
  *
- * Deliberately not `toObjectKey(env.S3_PUBLIC_URL, …)`: that strips only *the*
+ * Deliberately not `toObjectKey(env.STORAGE_PUBLIC_URL, …)`: that strips only *the*
  * configured base, so the same key wrapped in any other origin would sail past,
  * and it would put an environment lookup inside a pure ownership predicate.
  */
@@ -282,18 +277,20 @@ export function publicUrlFor(publicBaseUrl: string, key: string): string {
 }
 
 /**
- * The production storage adapter. Cloudflare R2 and the local MinIO service
- * both speak the S3 API, so the only difference between them is configuration.
+ * The production storage adapter. Neon Object Storage and the local S3
+ * emulator both speak the S3 API, so the only difference between them is
+ * configuration.
  */
 export function createS3Storage(env: ApiEnv): ObjectStorage {
   const client = new S3Client({
-    // R2 is region-less but the SDK requires the field to be set.
-    region: 'auto',
-    endpoint: env.S3_ENDPOINT,
-    forcePathStyle: env.S3_FORCE_PATH_STYLE,
+    // Neon signs with the region of the branch's storage host; the emulator
+    // accepts any value.
+    region: env.STORAGE_REGION,
+    endpoint: env.STORAGE_ENDPOINT,
+    forcePathStyle: env.STORAGE_FORCE_PATH_STYLE,
     credentials: {
-      accessKeyId: env.S3_ACCESS_KEY_ID,
-      secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+      accessKeyId: env.STORAGE_ACCESS_KEY_ID,
+      secretAccessKey: env.STORAGE_SECRET_ACCESS_KEY,
     },
   });
 
@@ -301,7 +298,7 @@ export function createS3Storage(env: ApiEnv): ObjectStorage {
     async put(key, body, contentType) {
       await client.send(
         new PutObjectCommand({
-          Bucket: env.S3_BUCKET,
+          Bucket: env.STORAGE_BUCKET,
           Key: key,
           Body: body,
           ContentType: contentType,
@@ -309,7 +306,7 @@ export function createS3Storage(env: ApiEnv): ObjectStorage {
         }),
       );
 
-      return publicUrlFor(env.S3_PUBLIC_URL, key);
+      return publicUrlFor(env.STORAGE_PUBLIC_URL, key);
     },
 
     async remove(keys) {
@@ -319,7 +316,7 @@ export function createS3Storage(env: ApiEnv): ObjectStorage {
 
       const result = await client.send(
         new DeleteObjectsCommand({
-          Bucket: env.S3_BUCKET,
+          Bucket: env.STORAGE_BUCKET,
           Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
         }),
       );
@@ -338,7 +335,7 @@ export function createS3Storage(env: ApiEnv): ObjectStorage {
     },
 
     async checkAvailable() {
-      await client.send(new HeadBucketCommand({ Bucket: env.S3_BUCKET }));
+      await client.send(new HeadBucketCommand({ Bucket: env.STORAGE_BUCKET }));
     },
   };
 }

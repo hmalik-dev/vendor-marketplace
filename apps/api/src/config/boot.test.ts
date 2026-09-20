@@ -20,17 +20,18 @@ const CREDENTIAL_ROWS: ReadonlyArray<readonly [string, string]> = [
   ['RESEND_API_KEY', fake('re', 'FAKEabcdefghijklmnop9005')],
   ['DATABASE_URL', databaseUrl()],
   ['NEON_AUTH_DATABASE_URL', databaseUrl()],
-  ['S3_ACCESS_KEY_ID', fake('access', 'id', 'filler')],
-  ['S3_SECRET_ACCESS_KEY', fake('access', 'material', 'filler')],
+  ['STORAGE_ACCESS_KEY_ID', fake('access', 'id', 'filler')],
+  ['STORAGE_SECRET_ACCESS_KEY', fake('access', 'material', 'filler')],
 ];
 
 const DEPLOYED: Record<string, string> = {
   NODE_ENV: 'production',
   NEON_AUTH_BASE_URL: 'https://ep-x.neonauth.example.invalid/neondb/auth',
   EMAIL_FROM: 'Orla <noreply@orla.example.invalid>',
-  S3_ENDPOINT: 'https://acct.r2.cloudflarestorage.com',
-  S3_BUCKET: 'orla-uploads',
-  S3_PUBLIC_URL: 'https://cdn.orla.example.invalid',
+  STORAGE_ENDPOINT: 'https://br-x.storage.c-4.us-east-2.aws.neon.tech',
+  STORAGE_REGION: 'us-east-2',
+  STORAGE_BUCKET: 'orla-uploads',
+  STORAGE_PUBLIC_URL: 'https://cdn.orla.example.invalid',
   OPERATOR_ALERT_EMAIL: 'ops@orla.example.invalid',
   SUPPORT_EMAIL_TO: 'help@orla.example.invalid',
   SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',

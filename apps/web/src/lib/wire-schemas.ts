@@ -79,7 +79,7 @@ import { z } from 'zod';
  * in, so no component has to remember to do it. A second resolution site would
  * be a second source of truth, which is the coupling this exists to remove.
  *
- * `NEXT_PUBLIC_S3_PUBLIC_URL` is read as a literal property access because
+ * `NEXT_PUBLIC_STORAGE_PUBLIC_URL` is read as a literal property access because
  * Next inlines these only when it can see one statically.
  *
  * A bare read rather than `publicEnv`, deliberately: this module is imported by
@@ -89,7 +89,7 @@ import { z } from 'zod';
  * closed at the build instead: `assertWebEnv` now validates the `storage`
  * capability and refuses to ship a deployment without this row.
  */
-const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_S3_PUBLIC_URL;
+const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_STORAGE_PUBLIC_URL;
 
 /**
  * The same resolution, for a value that did not arrive over the wire.

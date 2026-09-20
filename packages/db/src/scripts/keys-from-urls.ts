@@ -116,10 +116,10 @@ export async function convertUrlsToKeys<
 if (process.argv[1]?.endsWith('keys-from-urls.ts')) {
   loadEnv();
 
-  const base = process.env.S3_PUBLIC_URL;
+  const base = process.env.STORAGE_PUBLIC_URL;
 
   if (!base) {
-    console.error('S3_PUBLIC_URL is not set; there is no base to strip.');
+    console.error('STORAGE_PUBLIC_URL is not set; there is no base to strip.');
     process.exit(1);
   }
 

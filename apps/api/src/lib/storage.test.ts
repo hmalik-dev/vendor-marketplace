@@ -74,7 +74,7 @@ describe('assertOwnedImageRefs', () => {
   /** The origin `resolveImageUrl` would build these references against. */
   const CDN_BASE = 'https://cdn.test';
   /**
-   * `S3_PUBLIC_URL` is an origin **and a path** — locally
+   * `STORAGE_PUBLIC_URL` is an origin **and a path** — locally
    * `http://localhost:9000/vendor-marketplace-uploads`, and an R2 bucket is
    * addressed the same way. The absolute form of a key therefore carries a
    * bucket segment before the prefix, which is the shape a browser pass found
