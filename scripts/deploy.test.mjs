@@ -20,6 +20,7 @@ import { parse } from 'yaml';
 import {
   API_HOSTS,
   PHASES,
+  PhaseError,
   REQUIRED_INPUTS,
   gateVerdict,
   missingInputs,
@@ -61,11 +62,27 @@ function recordingIo() {
 
 // --- gate -------------------------------------------------------------------
 
-test('gate: a successful push CI run for the tip of main deploys', () => {
-  assert.deepEqual(
-    gateVerdict({ conclusion: 'success', event: 'push', headSha: SHA, tipSha: SHA }),
-    { deploy: true, fail: false, message: 'Deploying a1b2c3d.' },
-  );
+test('gate: a successful push CI run for the tip of an environment branch deploys it', () => {
+  for (const branch of ['staging', 'production']) {
+    assert.deepEqual(
+      gateVerdict({ conclusion: 'success', event: 'push', branch, headSha: SHA, tipSha: SHA }),
+      { deploy: true, fail: false, message: `Deploying a1b2c3d to ${branch}.` },
+    );
+  }
+});
+
+test('gate: main, a lane branch or no branch at all never deploys, and fails the run', () => {
+  for (const branch of ['main', 'worktree-ven-494', 'staging-2', '', undefined]) {
+    const verdict = gateVerdict({
+      conclusion: 'success',
+      event: 'push',
+      branch,
+      headSha: SHA,
+      tipSha: SHA,
+    });
+    assert.deepEqual([verdict.deploy, verdict.fail], [false, true], String(branch));
+    assert.match(verdict.message, /which is not one of staging, production/);
+  }
 });
 
 test('gate: skipped, cancelled and every other conclusion are not passing, and fail the run', () => {
@@ -78,7 +95,13 @@ test('gate: skipped, cancelled and every other conclusion are not passing, and f
     'neutral',
     undefined,
   ]) {
-    const verdict = gateVerdict({ conclusion, event: 'push', headSha: SHA, tipSha: SHA });
+    const verdict = gateVerdict({
+      conclusion,
+      event: 'push',
+      branch: 'production',
+      headSha: SHA,
+      tipSha: SHA,
+    });
     assert.deepEqual([verdict.deploy, verdict.fail], [false, true], String(conclusion));
   }
 });
@@ -87,6 +110,7 @@ test('gate: a pull request CI run never deploys', () => {
   const verdict = gateVerdict({
     conclusion: 'success',
     event: 'pull_request',
+    branch: 'production',
     headSha: SHA,
     tipSha: SHA,
   });
@@ -97,11 +121,12 @@ test('gate: a superseded commit does not deploy over a newer one, and does not f
   const verdict = gateVerdict({
     conclusion: 'success',
     event: 'push',
+    branch: 'staging',
     headSha: SHA,
     tipSha: 'f'.repeat(40),
   });
   assert.deepEqual([verdict.deploy, verdict.fail], [false, false]);
-  assert.match(verdict.message, /no longer main's tip/);
+  assert.match(verdict.message, /no longer staging's tip/);
 });
 
 // --- preflight --------------------------------------------------------------
@@ -171,6 +196,13 @@ test('preflight: an API host with no adapter fails rather than deploying nowhere
 
 // --- migrate ----------------------------------------------------------------
 
+/** The two variables that say which environment a run deploys and which Neon branch it was given. */
+const TARGET = (target, branch = target) => ({
+  DEPLOY_TARGET: target,
+  NEON_BRANCH: branch,
+  NEON_HOST: new URL(UNPOOLED).hostname,
+});
+
 test('migrate: refuses to run without the unpooled URL', async () => {
   const { io, calls } = recordingIo();
   await assert.rejects(PHASES.migrate({ PATH: '/bin' }, io), /Missing DATABASE_URL_UNPOOLED/);
@@ -181,7 +213,11 @@ test('migrate: refuses a step that was also handed the pooled URL', async () => 
   const { io, calls } = recordingIo();
   await assert.rejects(
     PHASES.migrate(
-      { DATABASE_URL_UNPOOLED: UNPOOLED, DATABASE_URL: 'postgresql://pooled.example/orla' },
+      {
+        ...TARGET('production'),
+        DATABASE_URL_UNPOOLED: UNPOOLED,
+        DATABASE_URL: 'postgresql://pooled.example/orla',
+      },
       io,
     ),
     /migrations take DATABASE_URL_UNPOOLED only/,
@@ -189,10 +225,58 @@ test('migrate: refuses a step that was also handed the pooled URL', async () => 
   assert.equal(calls.length, 0);
 });
 
+test('migrate: refuses when NEON_BRANCH names a different environment than the one deploying', async () => {
+  for (const [target, branch] of [
+    ['staging', 'production'],
+    ['production', 'staging'],
+    ['production', 'dev'],
+    ['staging', 'Staging'],
+  ]) {
+    const { io, calls } = recordingIo();
+    await assert.rejects(
+      PHASES.migrate({ ...TARGET(target, branch), DATABASE_URL_UNPOOLED: UNPOOLED }, io),
+      new PhaseError(
+        `NEON_BRANCH "${branch}" is not the ${target} environment's Neon branch (expected "${target}"); refusing to migrate.`,
+      ),
+    );
+    assert.equal(calls.length, 0, `${target} against ${branch}`);
+  }
+});
+
+test('migrate: refuses a secret from another environment even when NEON_BRANCH is right', async () => {
+  const { io, calls } = recordingIo();
+  const otherTier = ['postgresql://deploy:', fake('other'), '@ep-production.neon.test/orla'].join(
+    '',
+  );
+  await assert.rejects(
+    PHASES.migrate({ ...TARGET('staging'), DATABASE_URL_UNPOOLED: otherTier }, io),
+    new PhaseError(
+      "DATABASE_URL_UNPOOLED is not on NEON_HOST, the staging environment's Neon endpoint; refusing to migrate.",
+    ),
+  );
+  assert.equal(calls.length, 0);
+});
+
+test('migrate: refuses without a Neon branch, or when the target is not an environment', async () => {
+  const { io, calls } = recordingIo();
+  await assert.rejects(
+    PHASES.migrate({ DEPLOY_TARGET: 'staging', DATABASE_URL_UNPOOLED: UNPOOLED }, io),
+    /Missing NEON_BRANCH/,
+  );
+  await assert.rejects(
+    PHASES.migrate({ ...TARGET('main'), DATABASE_URL_UNPOOLED: UNPOOLED }, io),
+    /DEPLOY_TARGET "main" is not one of staging, production; refusing to migrate\./,
+  );
+  assert.equal(calls.length, 0);
+});
+
 test('migrate: migrations receive only DATABASE_URL_UNPOOLED, then the reference seed runs over it', async () => {
   const { io, calls } = recordingIo();
   const unrelated = { VERCEL_TOKEN: fake('vercel') };
-  await PHASES.migrate({ PATH: '/bin', DATABASE_URL_UNPOOLED: UNPOOLED, ...unrelated }, io);
+  await PHASES.migrate(
+    { PATH: '/bin', ...TARGET('staging'), DATABASE_URL_UNPOOLED: UNPOOLED, ...unrelated },
+    io,
+  );
 
   assert.deepEqual(
     calls.map(({ command, args }) => [command, ...args].join(' ')),
@@ -253,6 +337,7 @@ test('web: builds under the release and upload credential, and deploys without t
   await PHASES.web(
     {
       PATH: '/bin',
+      DEPLOY_TARGET: 'production',
       VERCEL_ORG_ID: 'org',
       VERCEL_PROJECT_ID: 'prj',
       SENTRY_WEB_PROJECT: 'orla-web',
@@ -337,7 +422,12 @@ test('run: a child that prints a secret has it redacted, on stdout and stderr', 
 test('migrate: a failed migration exits non-zero, runs no seed and prints no part of the URL', () => {
   const result = spawnSync(process.execPath, ['scripts/deploy.mjs', 'migrate'], {
     cwd: ROOT,
-    env: { PATH: process.env.PATH, HOME: process.env.HOME, DATABASE_URL_UNPOOLED: UNPOOLED },
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      DATABASE_URL_UNPOOLED: UNPOOLED,
+      ...TARGET('staging'),
+    },
     encoding: 'utf8',
     timeout: 120_000,
   });
@@ -351,20 +441,36 @@ test('migrate: a failed migration exits non-zero, runs no seed and prints no par
 
 // --- the workflow file ----------------------------------------------------------
 
-test('workflow: runs after CI completes on main, and CI is the workflow it names', () => {
+test('workflow: runs after CI completes on staging or production only, never on main', () => {
   assert.equal(CI.name, 'CI');
   assert.deepEqual(WORKFLOW.on, {
-    workflow_run: { workflows: ['CI'], types: ['completed'], branches: ['main'] },
+    workflow_run: {
+      workflows: ['CI'],
+      types: ['completed'],
+      branches: ['staging', 'production'],
+    },
   });
+  assert.ok(!JSON.stringify(WORKFLOW.on).includes('main'));
+  // CI must run on the branches the deploy waits for, or it never fires.
+  for (const branch of ['staging', 'production']) {
+    assert.ok(CI.on.push.branches.includes(branch), branch);
+  }
   assert.equal(
     JOB.if,
-    "github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'",
+    "github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && (github.event.workflow_run.head_branch == 'staging' || github.event.workflow_run.head_branch == 'production')",
   );
 });
 
-test('workflow: serialises deploys and never cancels one in flight', () => {
+test('workflow: the branch is the environment, so each has its own secrets and variables', () => {
+  assert.equal(JOB.environment, '${{ github.event.workflow_run.head_branch }}');
+  assert.equal(JOB.env.DEPLOY_TARGET, '${{ github.event.workflow_run.head_branch }}');
+});
+
+test('workflow: serialises deploys per environment and never cancels one in flight', () => {
   assert.deepEqual(WORKFLOW.concurrency, {
-    group: 'deploy-production',
+    // The head repository is in the key so a fork's branch of the same name cannot queue in front of a real deploy.
+    group:
+      'deploy-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}',
     'cancel-in-progress': false,
   });
   assert.equal(JOB.concurrency, undefined);
@@ -411,7 +517,11 @@ test('workflow: only the migrate step is handed a database URL, and only the unp
   );
 
   assert.deepEqual(holders, [migrate]);
-  assert.deepEqual(migrate.env, { DATABASE_URL_UNPOOLED: '${{ secrets.DATABASE_URL_UNPOOLED }}' });
+  assert.deepEqual(migrate.env, {
+    DATABASE_URL_UNPOOLED: '${{ secrets.DATABASE_URL_UNPOOLED }}',
+    NEON_BRANCH: '${{ vars.NEON_BRANCH }}',
+    NEON_HOST: '${{ vars.NEON_HOST }}',
+  });
   assert.ok(!Object.keys(JOB.env).some((key) => key.startsWith('DATABASE_URL')));
 });
 
@@ -453,9 +563,13 @@ here=$(dirname "$0")
 call="$(basename "$0") $*"
 printf '%s\\n' "$call" >> "$here/invocations.log"
 case "$call" in
-  "git ls-remote"*) printf '%s\\trefs/heads/main\\n' "$(cat "$here/tip")" ;;
+  "git ls-remote"*)
+    # Answers only for the ref of the branch under test, so a gate that asks for any other sees no tip.
+    [ "$3" = "refs/heads/$(cat "$here/branch")" ] && printf '%s\\t%s\\n' "$(cat "$here/tip")" "$3" ;;
   *) env ;;
 esac
+# \`vercel deploy\` prints the deployment's URL as its last line.
+case "$call" in "npx"*" deploy "*) echo "https://orla-stub.vercel.app" ;; esac
 fail=$(cat "$here/fail")
 if [ -n "$fail" ]; then
   case "$call" in *"$fail"*) echo "stub failure for $fail" >&2; exit 1 ;; esac
@@ -482,7 +596,7 @@ function expand(value, context) {
 }
 
 /** Executes the job's `run` steps as Actions does: in order, stopping at the first failure. */
-function dryRun({ secrets, vars, tip = SHA, fail = '' }) {
+function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '' }) {
   const dir = mkdtempSync(path.join(tmpdir(), 'deploy-dry-run-'));
   try {
     for (const tool of ['git', 'pnpm', 'npx']) {
@@ -494,12 +608,13 @@ function dryRun({ secrets, vars, tip = SHA, fail = '' }) {
     writeFileSync(log, '');
     writeFileSync(output, '');
     writeFileSync(path.join(dir, 'tip'), tip);
+    writeFileSync(path.join(dir, 'branch'), branch);
     writeFileSync(path.join(dir, 'fail'), fail);
 
     const context = {
       secrets,
       vars,
-      workflowRun: { conclusion: 'success', event: 'push', head_sha: SHA },
+      workflowRun: { conclusion: 'success', event: 'push', head_sha: SHA, head_branch: branch },
     };
     const printed = [];
     const ran = [];
@@ -558,6 +673,8 @@ const SECRETS = Object.fromEntries(
   ]),
 );
 const VARS = {
+  NEON_BRANCH: 'production',
+  NEON_HOST: new URL(UNPOOLED).hostname,
   API_HOST: 'railway',
   API_SERVICE: 'orla-api',
   VERCEL_ORG_ID: 'team_x',
@@ -632,6 +749,7 @@ test('dry run: a readiness poll that fails fails the release', () => {
   assertNoSecretPrinted(result.printed);
 });
 
+const GATE_STEP = "Gate on CI success and on still being the branch's tip";
 const PREFLIGHT_STEP = 'Skip until configured, refuse when partly configured';
 
 test('dry run: with nothing configured the run skips green before touching anything', () => {
@@ -656,6 +774,159 @@ test('dry run: a superseded commit deploys nothing and does not fail', () => {
   const result = dryRun({ secrets: SECRETS, vars: VARS, tip: 'f'.repeat(40) });
 
   assert.equal(result.failedAt, null);
-  assert.deepEqual(result.ran, ["Gate on CI success and on still being main's tip"]);
+  assert.deepEqual(result.ran, [GATE_STEP]);
   assert.deepEqual(result.invocations, ['git ls-remote origin']);
+});
+
+test("dry run: a staging push migrates staging first, then deploys, and looks up staging's tip", () => {
+  const result = dryRun({
+    secrets: SECRETS,
+    vars: { ...VARS, NEON_BRANCH: 'staging', WEB_URL: 'https://orla-staging.test' },
+    branch: 'staging',
+  });
+
+  assert.equal(result.failedAt, null, result.printed);
+  assert.match(result.printed, /Deploying a1b2c3d to staging\./);
+  assert.deepEqual(result.invocations.slice(0, 5), [
+    'git ls-remote origin',
+    'pnpm install --frozen-lockfile',
+    'pnpm turbo run',
+    'pnpm db:migrate',
+    'pnpm db:seed',
+  ]);
+  assert.ok(
+    result.invocations.indexOf('pnpm db:migrate') <
+      result.invocations.indexOf('npx --yes @railway/cli@5.57.2'),
+  );
+  assert.equal(result.invocations.at(-1), 'pnpm smoke');
+  assertNoSecretPrinted(result.printed);
+});
+
+test("dry run: staging run handed production's Neon branch refuses before anything is migrated or deployed", () => {
+  const result = dryRun({ secrets: SECRETS, vars: VARS, branch: 'staging' });
+
+  assert.equal(result.failedAt, 'Migrate, then seed reference data');
+  assert.match(
+    result.printed,
+    /NEON_BRANCH "production" is not the staging environment's Neon branch \(expected "staging"\); refusing to migrate\./,
+  );
+  assert.ok(!result.invocations.includes('pnpm db:migrate'), result.invocations.join('\n'));
+  assert.ok(!result.invocations.some((line) => line.startsWith('npx')));
+});
+
+test('dry run: a run for main is refused at the gate and touches nothing', () => {
+  const result = dryRun({ secrets: SECRETS, vars: VARS, branch: 'main' });
+
+  assert.equal(result.failedAt, GATE_STEP);
+  assert.deepEqual(result.invocations, []);
+  assert.match(result.printed, /CI ran on "main", which is not one of staging, production/);
+});
+
+test('web: staging deploys a preview and aliases it to the staging host', async () => {
+  const calls = [];
+  const url = 'https://orla-abc123-team.vercel.app';
+  const io = {
+    run: async (_command, args, options) => {
+      calls.push(args.slice(2).join(' '));
+      if (args[2] === 'deploy') {
+        // Progress lines can follow the URL: it is the last line that is one, not the last line.
+        options.write(`Inspect: https://vercel.com/x\n${url}\nPreview: ${url} [3s]\n`);
+      }
+    },
+    write: () => {},
+  };
+  await PHASES.web(
+    {
+      PATH: '/bin',
+      DEPLOY_TARGET: 'staging',
+      VERCEL_TOKEN: fake('vercel'),
+      VERCEL_ORG_ID: 'org',
+      VERCEL_PROJECT_ID: 'prj',
+      SENTRY_AUTH_TOKEN: fake('sentry'),
+      SENTRY_WEB_PROJECT: 'orla-web',
+      SENTRY_RELEASE: SHA,
+      // An allow-list: the first entry is the alias host.
+      WEB_URL: 'https://orla-staging.vercel.app,https://staging.orla.test',
+    },
+    io,
+  );
+
+  assert.deepEqual(calls, [
+    'pull --yes --environment=preview',
+    'build',
+    `deploy --prebuilt --env SENTRY_RELEASE=${SHA}`,
+    `alias set ${url} orla-staging.vercel.app`,
+  ]);
+});
+
+test('web: staging refuses to alias a host that is not its own, before building anything', async () => {
+  const { io, calls } = recordingIo();
+  for (const WEB_URL of ['https://orla.example', 'orla-staging.vercel.app', '']) {
+    await assert.rejects(
+      PHASES.web(
+        {
+          DEPLOY_TARGET: 'staging',
+          VERCEL_TOKEN: fake('vercel'),
+          VERCEL_ORG_ID: 'org',
+          VERCEL_PROJECT_ID: 'prj',
+          SENTRY_AUTH_TOKEN: fake('sentry'),
+          SENTRY_WEB_PROJECT: 'orla-web',
+          SENTRY_RELEASE: SHA,
+          WEB_URL,
+        },
+        io,
+      ),
+      /WEB_URL/,
+    );
+  }
+  assert.equal(calls.length, 0);
+});
+
+test('web: staging refuses to alias a host that is not its own, before building anything', async () => {
+  const { io, calls } = recordingIo();
+  for (const WEB_URL of ['https://orla.example', 'orla-staging.vercel.app', '']) {
+    await assert.rejects(
+      PHASES.web(
+        {
+          DEPLOY_TARGET: 'staging',
+          VERCEL_TOKEN: fake('vercel'),
+          VERCEL_ORG_ID: 'org',
+          VERCEL_PROJECT_ID: 'prj',
+          SENTRY_AUTH_TOKEN: fake('sentry'),
+          SENTRY_WEB_PROJECT: 'orla-web',
+          SENTRY_RELEASE: SHA,
+          WEB_URL,
+        },
+        io,
+      ),
+      /WEB_URL/,
+    );
+  }
+  assert.equal(calls.length, 0);
+});
+
+test('web: production stays a production deployment and is not aliased', async () => {
+  const { io, calls } = recordingIo();
+  await PHASES.web(
+    {
+      PATH: '/bin',
+      DEPLOY_TARGET: 'production',
+      VERCEL_TOKEN: fake('vercel'),
+      VERCEL_ORG_ID: 'org',
+      VERCEL_PROJECT_ID: 'prj',
+      SENTRY_AUTH_TOKEN: fake('sentry'),
+      SENTRY_WEB_PROJECT: 'orla-web',
+      SENTRY_RELEASE: SHA,
+    },
+    io,
+  );
+
+  assert.deepEqual(
+    calls.map(({ args }) => args.slice(2).join(' ')),
+    [
+      'pull --yes --environment=production',
+      'build --prod',
+      `deploy --prebuilt --prod --env SENTRY_RELEASE=${SHA}`,
+    ],
+  );
 });
