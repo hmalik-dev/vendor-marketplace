@@ -333,6 +333,8 @@ export interface AdminBookingDetailRow {
   cancellationReason: string | null;
   cancelledBy: BookingCancelledBy | null;
   refundAmountCents: number | null;
+  /** Refunded at Stripe outside the platform (VEN-469); `0` when none. */
+  externalRefundCents: number;
   disputeReason: string | null;
   createdAt: Date;
   vendorId: string;
@@ -373,6 +375,7 @@ export async function findAdminBookingDetail(
       cancellationReason: bookings.cancellationReason,
       cancelledBy: bookings.cancelledBy,
       refundAmountCents: bookings.refundAmountCents,
+      externalRefundCents: bookings.externalRefundCents,
       disputeReason: bookings.disputeReason,
       createdAt: bookings.createdAt,
       vendorId: vendorProfiles.id,

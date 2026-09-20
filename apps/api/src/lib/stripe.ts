@@ -155,6 +155,12 @@ export interface StripeConnectGateway {
    * not trusted.
    */
   retrieveRefund(refundId: string): Promise<StripeRefundSnapshot>;
+
+  /**
+   * The payment intent a charge belongs to (VEN-469). `charge.refunded` names a
+   * charge, and the platform keys everything on the intent.
+   */
+  retrieveChargeIntent(chargeId: string): Promise<string | null>;
 }
 
 /**
@@ -167,7 +173,29 @@ export interface StripeConnectGateway {
 export interface FoundRefunds {
   refundIds: string[];
   amountCents: number;
+  /**
+   * The part of `amountCents` this platform's own `createRefund` made, told
+   * apart by the marker in `refundParams`. What is left is a refund somebody
+   * made at Stripe (VEN-469), and it is the only part the payout has to
+   * account for: our own refund is written to the row right after it is made,
+   * so between the two a reader would otherwise call it foreign.
+   */
+  platformCents: number;
 }
+
+/** Marks a refund as the platform's own, on the refund itself. */
+export const PLATFORM_REFUND_METADATA = { orla_refund: '1' } as const;
+
+/**
+ * Stripe answered a refund with a refusal, or with a refund that returns nothing.
+ *
+ * Distinct from a connection failure on purpose: Stripe caches the answer to a
+ * request it executed under its idempotency key for 24 hours, so only this kind
+ * of failure needs the next attempt to use a new key (D36). A dropped
+ * connection has no cached answer and the retry must reuse the key, or the
+ * refund that may already have been made is made again.
+ */
+export class RefundRefusedError extends Error {}
 
 export interface StripeRefundSnapshot {
   refundId: string;
@@ -360,6 +388,7 @@ export function refundParams(input: CreateRefundInput): Stripe.RefundCreateParam
     payment_intent: input.paymentIntentId,
     amount: input.amountCents,
     reason: input.reason,
+    metadata: PLATFORM_REFUND_METADATA,
   };
 }
 
@@ -583,7 +612,9 @@ export function isUsableRefundStatus(status: string | null | undefined): boolean
  */
 export function assertUsableRefund(refundId: string, status: string | null | undefined): void {
   if (!isUsableRefundStatus(status)) {
-    throw new Error(`Stripe answered refund ${refundId} with status ${status ?? 'unknown'}`);
+    throw new RefundRefusedError(
+      `Stripe answered refund ${refundId} with status ${status ?? 'unknown'}`,
+    );
   }
 }
 
@@ -1009,10 +1040,27 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
     },
 
     async createRefund(input) {
-      const refund = await stripe.refunds.create(
-        refundParams(input),
-        input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
-      );
+      const refund = await stripe.refunds
+        .create(
+          refundParams(input),
+          input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
+        )
+        .catch((error: unknown) => {
+          /*
+           * Only a refusal that is deterministic and was executed. A 5xx may have
+           * made the refund, a 429 never ran, and `idempotency_error` proves a
+           * request already ran under this key — the very thing that stops two
+           * racers refunding twice — so none of them may move the key.
+           */
+          if (
+            error instanceof Stripe.errors.StripeError &&
+            (error.rawType === 'invalid_request_error' || error.rawType === 'card_error')
+          ) {
+            throw new RefundRefusedError(error.message, { cause: error });
+          }
+
+          throw error;
+        });
 
       assertUsableRefund(refund.id, refund.status);
 
@@ -1031,6 +1079,30 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
             : (refund.payment_intent?.id ?? null),
         amountCents: refund.amount,
       };
+    },
+
+    async retrieveChargeIntent(chargeId) {
+      /*
+       * A charge the platform cannot read — one made on a connected account —
+       * is not ours to reconcile, and answering it with a 5xx would have Stripe
+       * redeliver it for three days. `accountId` cannot say so: a snapshot event
+       * with no `account` is reported with the object's own id in that field.
+       */
+      const charge = await stripe.charges.retrieve(chargeId).catch((error: unknown) => {
+        if (error instanceof Stripe.errors.StripeError && error.code === 'resource_missing') {
+          return null;
+        }
+
+        throw error;
+      });
+
+      if (!charge) {
+        return null;
+      }
+
+      return typeof charge.payment_intent === 'string'
+        ? charge.payment_intent
+        : (charge.payment_intent?.id ?? null);
     },
 
     async findRefund(paymentIntentId) {
@@ -1059,15 +1131,27 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
  * `bookings.refund_amount_cents` and shown to both parties as money returned.
  */
 export function sumUsableRefunds(
-  refunds: readonly { id: string; amount: number; status: string | null }[],
+  refunds: readonly {
+    id: string;
+    amount: number;
+    status: string | null;
+    metadata?: Record<string, unknown> | null;
+  }[],
 ): FoundRefunds | null {
   const usable = refunds.filter((candidate) => isUsableRefundStatus(candidate.status));
+  const total = (list: typeof usable): number =>
+    list.reduce((sum, refund) => sum + refund.amount, 0);
 
   return usable.length === 0
     ? null
     : {
         refundIds: usable.map((refund) => refund.id),
-        amountCents: usable.reduce((total, refund) => total + refund.amount, 0),
+        amountCents: total(usable),
+        platformCents: total(
+          usable.filter(
+            (refund) => refund.metadata?.orla_refund === PLATFORM_REFUND_METADATA.orla_refund,
+          ),
+        ),
       };
 }
 

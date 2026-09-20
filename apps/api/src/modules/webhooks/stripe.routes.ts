@@ -27,6 +27,7 @@ import {
 } from '../operator-alerts/operator-alerts.service.js';
 import { findBookingIdByPaymentIntent } from '../operator-alerts/operator-alerts.dao.js';
 import { bookingContextFor, recordSuccessfulPayment } from '../payments/payments.service.js';
+import { reconcileRefundedIntent } from '../payments/refund-reconciliation.js';
 import { generateSupportReference } from '../support/support.service.js';
 import {
   accountUpdateOutcomeSchema,
@@ -73,7 +74,13 @@ const disputeOutcomeSchema = z.enum([
  * accepted and later moved to `failed` or `canceled`; `refund-unchanged` is
  * every other update, acknowledged and left alone.
  */
-const refundOutcomeSchema = z.enum(['refund-failed', 'refund-unchanged']);
+const refundOutcomeSchema = z.enum([
+  'refund-failed',
+  'refund-unchanged',
+  /* `charge.refunded` found a refund made outside the platform (VEN-469). */
+  'refund-held',
+  'refund-recorded',
+]);
 
 const webhookResponseSchema = z.object({
   received: z.literal(true),
@@ -124,11 +131,16 @@ const SNAPSHOT_ACCOUNT_EVENTS = new Set(['account.updated', 'capability.updated'
  * booking they were paying for is untouched. Recording a row for it would
  * describe a state the customer can already see and is about to leave.
  *
- * `charge.refunded` is absent for the same reason in the other direction:
- * refunds here are only ever started by our own cancellation route, which has
- * already written the row by the time Stripe echoes the event back.
+ * `charge.refunded` used to be absent on the premise that refunds are only ever
+ * started by our own cancellation route. An operator can refund from the Stripe
+ * Dashboard, which leaves the booking `confirmed` and its payout releasable, so
+ * it is handled (VEN-469) — and what it compares is what Stripe holds against
+ * what the row records, which is what makes our own echo change nothing.
  */
 const PAYMENT_SUCCEEDED_EVENT = `payment_intent.${PAYMENT_INTENT_SUCCEEDED}`;
+
+/** A refund landed on a charge, whoever made it. */
+const CHARGE_REFUNDED_EVENT = 'charge.refunded';
 
 /**
  * The chargeback that opens a case and freezes the payout (#431).
@@ -188,6 +200,7 @@ function isAccountEvent(type: string): boolean {
 export const HANDLED_STRIPE_EVENT_TYPES: readonly string[] = [
   ...SNAPSHOT_ACCOUNT_EVENTS,
   PAYMENT_SUCCEEDED_EVENT,
+  CHARGE_REFUNDED_EVENT,
   DISPUTE_CREATED_EVENT,
   ...DISPUTE_CLOSED_EVENTS,
   ...REFUND_EVENTS,
@@ -320,6 +333,18 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
 
         if (REFUND_EVENTS.has(event.type) && event.objectId) {
           return applyRefundEvent(event.objectId);
+        }
+
+        if (event.type === CHARGE_REFUNDED_EVENT && event.objectId) {
+          /* Re-read from Stripe, like every branch here: the charge names the intent, the refunds name the money. */
+          const paymentIntentId = await app.stripe.retrieveChargeIntent(event.objectId);
+
+          return paymentIntentId
+            ? reconcileRefundedIntent(
+                { db: app.db, stripe: app.stripe, alerts: app.operatorAlerts },
+                paymentIntentId,
+              )
+            : 'refund-unchanged';
         }
 
         if (event.type !== PAYMENT_SUCCEEDED_EVENT || !event.objectId) {

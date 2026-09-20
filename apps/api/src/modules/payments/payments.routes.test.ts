@@ -1137,7 +1137,7 @@ describe('payments', () => {
           paymentIntentId: booking!.stripePaymentIntentId,
           amountCents: PRICE_CENTS,
           reason: 'requested_by_customer',
-          idempotencyKey: `cancel_${booking!.id}_direct`,
+          idempotencyKey: `cancel_${booking!.id}_marked`,
           reverseTransfer: false,
           refundApplicationFee: false,
         },
@@ -1283,7 +1283,7 @@ describe('payments', () => {
           paymentIntentId: booking!.stripePaymentIntentId,
           amountCents: PRICE_CENTS / 2,
           reason: 'requested_by_customer',
-          idempotencyKey: `cancel_${booking!.id}_direct`,
+          idempotencyKey: `cancel_${booking!.id}_marked`,
           reverseTransfer: false,
           refundApplicationFee: false,
         },
@@ -1321,7 +1321,7 @@ describe('payments', () => {
       expect(harness.stripe.refunds).toHaveLength(2);
       expect(harness.stripe.refunds[1]).toMatchObject({
         amountCents: PRICE_CENTS - goodwillCents,
-        idempotencyKey: `cancel_${booking!.id}_direct`,
+        idempotencyKey: `cancel_${booking!.id}_marked`,
       });
       const [after] = await harness.database.db.select().from(bookings);
       expect(after).toMatchObject({ status: 'cancelled', refundAmountCents: PRICE_CENTS });

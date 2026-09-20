@@ -193,6 +193,7 @@ describe('admin booking detail and requests', () => {
       cancellationReason: 'The couple moved the wedding abroad.',
       cancelledBy: 'customer',
       refundAmountCents: 60_000,
+      externalRefundCents: 0,
       disputeReason: 'Deposit terms were unclear.',
       createdAt: expect.any(String),
       vendor: { id: vendorId, businessName: 'Fernbank Studio', payoutHold: true },

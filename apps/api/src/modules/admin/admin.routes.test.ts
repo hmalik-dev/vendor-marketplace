@@ -766,7 +766,7 @@ describe('admin routes', () => {
         paymentIntentId: 'pi_test_ban',
         amountCents: 60_000,
         reason: 'requested_by_customer',
-        idempotencyKey: 'cancel_earlier_direct',
+        idempotencyKey: 'cancel_earlier_marked',
         reverseTransfer: false,
         refundApplicationFee: false,
       });
@@ -844,7 +844,7 @@ describe('admin routes', () => {
         paymentIntentId: 'pi_test_ban',
         amountCents: 120_000,
         reason: 'requested_by_customer',
-        idempotencyKey: 'cancel_failed_direct',
+        idempotencyKey: 'cancel_failed_marked',
         reverseTransfer: false,
         refundApplicationFee: false,
         status: 'failed',
@@ -861,7 +861,7 @@ describe('admin routes', () => {
       const [booking] = await harness.database.db.select().from(bookings);
       expect(booking).toMatchObject({ status: 'cancelled', refundAmountCents: 120_000 });
       expect(harness.stripe.refunds[1]).toMatchObject({
-        idempotencyKey: 'ban-refund:direct:' + booking!.id,
+        idempotencyKey: 'ban-refund:direct:marked:' + booking!.id,
       });
     });
 
@@ -2200,7 +2200,9 @@ describe('admin routes', () => {
       });
 
       expect(harness.stripe.refunds).toHaveLength(1);
-      expect(harness.stripe.refunds[0]?.idempotencyKey).toBe(`ban-refund:direct:${bookingId}`);
+      expect(harness.stripe.refunds[0]?.idempotencyKey).toBe(
+        `ban-refund:direct:marked:${bookingId}`,
+      );
     });
   });
 

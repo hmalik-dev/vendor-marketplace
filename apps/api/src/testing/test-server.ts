@@ -16,6 +16,7 @@ import {
   refusedRefundParams,
   refusedReversalParams,
   refusedTransferParams,
+  RefundRefusedError,
   reversalParams,
   sumUsableRefunds,
   transferIdempotencyKey,
@@ -342,6 +343,13 @@ export interface FakeStripe extends StripeConnectGateway {
    * with nobody told (#400). There is no other way to reach it from a test.
    */
   refundsToRefuse: Set<string>;
+  /**
+   * Refunds made outside the platform — the Dashboard or the API (VEN-469). Not
+   * marked as ours, so a reader sees them as foreign, exactly as Stripe reports one.
+   */
+  refundExternally: (paymentIntentId: string, amountCents: number) => string;
+  /** Idempotency keys whose refund was refused, replayed as Stripe replays them for 24 hours. */
+  failedRefundKeys: Map<string, string>;
   /** The status Stripe answers the next `createRefund` with; unset means `succeeded`. */
   nextRefundStatus: string | undefined;
   /** Runs inside the next `createRefund`, once: the interleave a race test needs (VEN-425). */
@@ -445,9 +453,24 @@ function createFakeStripe(): FakeStripe {
   const accountStatuses = new Map<string, FakeAccountStatus>();
   const validSignatures = new Set<string>(['valid-signature']);
   const paymentIntents = new Map<string, PaymentIntentSnapshot>();
+  /** What each refund request carried; absent for a refund made outside the platform. */
+  const refundMetadata = new WeakMap<object, Record<string, unknown>>();
   const intentsByKey = new Map<string, string>();
   const refunds: FakeStripe['refunds'] = [];
   const refundsToRefuse = new Set<string>();
+  const failedRefundKeys = new Map<string, string>();
+  const refundIdsByKey = new Map<string, string>();
+  /*
+   * Stripe's key memory belongs to the intents it was made for. Suites reset the
+   * fake by clearing the intents and mint the same ids again, so a key that
+   * outlived them would replay another test's refund or refusal.
+   */
+  const forgetIntents = paymentIntents.clear.bind(paymentIntents);
+  paymentIntents.clear = () => {
+    forgetIntents();
+    failedRefundKeys.clear();
+    refundIdsByKey.clear();
+  };
   const transfers: FakeStripe['transfers'] = [];
   const reversals: FakeStripe['reversals'] = [];
   const transfersToRefuse = new Set<string>();
@@ -464,6 +487,19 @@ function createFakeStripe(): FakeStripe {
     intentsByKey,
     refunds,
     refundsToRefuse,
+    failedRefundKeys,
+    refundExternally: (paymentIntentId, amountCents) => {
+      refunds.push({
+        paymentIntentId,
+        amountCents,
+        reason: undefined,
+        idempotencyKey: undefined,
+        reverseTransfer: false,
+        refundApplicationFee: false,
+      });
+
+      return `re_test_${refunds.length}`;
+    },
     nextRefundStatus: undefined,
     duringNextRefund: undefined,
     transfers,
@@ -736,8 +772,27 @@ function createFakeStripe(): FakeStripe {
       fake.duringNextRefund = undefined;
       await interleave?.();
 
+      /* Stripe answers a replayed key with what the first request got, refusal included. */
+      const replayedFailure = input.idempotencyKey && failedRefundKeys.get(input.idempotencyKey);
+      const replayedRefund = input.idempotencyKey && refundIdsByKey.get(input.idempotencyKey);
+
+      if (replayedFailure) {
+        throw new RefundRefusedError(replayedFailure);
+      }
+
+      if (replayedRefund) {
+        const first = refunds[Number(replayedRefund.replace('re_test_', '')) - 1]!;
+
+        return { refundId: replayedRefund, amountCents: first.amountCents };
+      }
+
       if (refundsToRefuse.has(input.paymentIntentId)) {
-        throw new Error(`Fake Stripe refused a refund for ${input.paymentIntentId}`);
+        const message = `Fake Stripe refused a refund for ${input.paymentIntentId}`;
+
+        if (input.idempotencyKey) {
+          failedRefundKeys.set(input.idempotencyKey, message);
+        }
+        throw new RefundRefusedError(message);
       }
 
       /*
@@ -769,6 +824,11 @@ function createFakeStripe(): FakeStripe {
         reverseTransfer: params.reverse_transfer === true,
         refundApplicationFee: params.refund_application_fee === true,
       });
+      refundMetadata.set(refunds[refunds.length - 1]!, { ...params.metadata });
+
+      if (input.idempotencyKey) {
+        refundIdsByKey.set(input.idempotencyKey, `re_test_${refunds.length}`);
+      }
 
       return { refundId: `re_test_${refunds.length}`, amountCents: input.amountCents };
     },
@@ -788,6 +848,9 @@ function createFakeStripe(): FakeStripe {
       };
     },
 
+    retrieveChargeIntent: async (chargeId) =>
+      chargeId.startsWith('ch_') ? chargeId.slice('ch_'.length) : null,
+
     findRefund: async (paymentIntentId) => {
       /*
        * The same status filter the real adapter applies. A `failed` refund put
@@ -801,6 +864,7 @@ function createFakeStripe(): FakeStripe {
             id: `re_test_${index + 1}`,
             amount: refund.amountCents,
             status: refund.status ?? 'succeeded',
+            metadata: refundMetadata.get(refund),
             paymentIntentId: refund.paymentIntentId,
           }))
           .filter((refund) => refund.paymentIntentId === paymentIntentId),

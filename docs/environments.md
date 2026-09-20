@@ -85,7 +85,7 @@ Each of staging and production has two endpoints at
 `https://<api host>/webhooks/stripe`, each with its own signing secret:
 
 - **Your account**: the Charge, Payment intent and Refund event groups. The API
-  handles `payment_intent.succeeded`, `charge.dispute.created`,
+  handles `payment_intent.succeeded`, `charge.refunded`, `charge.dispute.created`,
   `charge.dispute.closed`, `charge.dispute.funds_reinstated`, `refund.failed`,
   `refund.updated` and `charge.refund.updated`, and answers `200` to the rest.
 - **Connected accounts** (not Accounts v2): `account.updated` and

@@ -3330,6 +3330,8 @@ export const adminBookingDetailSchema = z.object({
   cancellationReason: z.string().nullable(),
   cancelledBy: bookingCancelledBySchema.nullable(),
   refundAmountCents: z.int().nullable(),
+  /** Refunded at Stripe outside the platform (VEN-469); `0` when none. */
+  externalRefundCents: z.int(),
   disputeReason: z.string().nullable(),
   createdAt: z.date(),
   vendor: z.object({

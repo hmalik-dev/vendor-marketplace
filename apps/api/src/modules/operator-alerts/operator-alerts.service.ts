@@ -347,6 +347,35 @@ export function refundFailedAlert(input: { bookingId: string; during: string }):
   };
 }
 
+/**
+ * Money was refunded at Stripe by someone other than the platform's own routes
+ * (VEN-469) — the Dashboard or the API. Keyed on the booking and the total, so a
+ * redelivered event and the payout claim finding the same refund send one email,
+ * and a further refund on the same booking sends another.
+ */
+export function externalRefundAlert(input: {
+  bookingId: string;
+  externalCents: number;
+  outcome: 'held' | 'recorded';
+  payoutReleased: boolean;
+}): OperatorAlert {
+  return {
+    kind: 'refund_unrecorded',
+    subjectId: `${input.bookingId}:${input.externalCents}`,
+    summary: `${formatPrice(input.externalCents)} refunded outside the app on booking ${input.bookingId}`,
+    details: [
+      `Stripe shows ${formatPrice(input.externalCents)} refunded on this booking's charge that the platform did not make.`,
+      input.outcome === 'held'
+        ? "The vendor's payout is on hold. Rule on it from the booking: uphold the refund or release the payout."
+        : input.payoutReleased
+          ? 'The payout had already been released, so nothing was held. Recovering it from the vendor is a decision for you.'
+          : "The booking could not be put on hold in its current state, so the payout was not sent on this run. The next sweep will send it unless you hold the vendor's payouts from their page first.",
+      `Booking: ${input.bookingId}`,
+    ],
+    adminPath: `/admin/bookings/${input.bookingId}`,
+  };
+}
+
 /** Why a succeeded charge was given back rather than booked. */
 export type RefusedPaymentCause = 'declined_request' | 'duplicate_intent';
 
