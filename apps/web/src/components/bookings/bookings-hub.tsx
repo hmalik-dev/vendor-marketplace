@@ -72,6 +72,7 @@ function BookingCard({ entry }: BookingCardProps): React.ReactElement {
         <FallbackImage
           src={entry.vendorImageUrl}
           alt=""
+          width={38}
           className="size-9.5 rounded-[9px]"
           imageClassName="object-cover"
           fallback={

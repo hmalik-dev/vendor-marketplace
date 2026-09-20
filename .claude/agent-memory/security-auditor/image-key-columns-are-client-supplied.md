@@ -120,6 +120,30 @@ your storefront needs no trick at all — see
 "not only theft of the image", which overstates what the guard does; the half it
 really closes is the reap-blocking one.
 
+**A third reader arrived with VEN-456: Next's image optimizer.**
+`apps/web/src/config/image-optimizer.ts` allow-lists hosts for `/_next/image`,
+which is an **anonymous, unauthenticated fetcher on our own origin** — the
+allow-list is the whole guard, and the client helper `optimizedImageProps` is
+not: anyone can hand `/_next/image?url=…` whatever the patterns accept.
+Measured against `next@15.5.24`'s own `matchRemotePattern` (it compiles the
+hostname with picomatch, so `*` crosses dots and the port is unconstrained when
+`port` is omitted): `*.storage.*.aws.neon.tech` admits **every Neon tenant's**
+bucket, not ours. Two rules for this file:
+
+- A remote pattern must be **derived from `NEXT_PUBLIC_STORAGE_PUBLIC_URL`**
+  (hostname + port + base path + `/**`), never a shape that a third party can
+  also obtain an endpoint under. A vendor-branded wildcard is a vendor-wide
+  allow-list.
+- `images.qualities` must pin the one quality the app emits. Next only checks
+  `q` when `qualities` is configured, so `1..100` x 16 widths is 1,600 cached
+  transforms per source URL, held for `minimumCacheTTL` (a year here) — and
+  every public vendor image URL is published by `GET /vendors/:slug`.
+
+Non-issues, verified so we do not re-open them: SVG is refused upstream unless
+`dangerouslyAllowSVG` (image-optimizer.js:981); `w` must be in
+`deviceSizes`/`imageSizes`; `..` inside the src normalises before the pattern
+match, so it 400s rather than escaping the base path.
+
 **How to apply:** treat any new code that _acts on_ one of these columns —
 delete, copy, sign, fetch, move, or **normalise** — as taking an attacker-chosen
 key. VEN-442 deleted `syncCoverFromPortfolio`: the cover is its own upload now

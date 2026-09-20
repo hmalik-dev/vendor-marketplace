@@ -250,6 +250,7 @@ export function VendorCard({
           <FallbackImage
             src={vendor.coverImageUrl}
             alt=""
+            width={400}
             className="size-full transition-transform duration-(--duration-slow) motion-safe:group-hover/card:scale-[1.03]"
             imageClassName="object-cover"
           />

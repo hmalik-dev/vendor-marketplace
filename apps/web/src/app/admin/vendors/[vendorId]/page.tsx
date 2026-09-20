@@ -271,6 +271,7 @@ export default async function AdminVendorDetailPage({
                     <FallbackImage
                       src={item.thumbnailUrl ?? item.imageUrl}
                       alt={item.caption ?? `Portfolio photo ${index + 1}`}
+                      width={104}
                       className="h-full w-full overflow-hidden rounded-lg"
                       imageClassName="h-full w-full bg-stone-200 object-cover"
                       fallbackClassName="h-full w-full"

@@ -243,6 +243,7 @@ export function ProfileHeader({
             <FallbackImage
               src={coverImageUrl}
               alt=""
+              width={1200}
               className="block size-full"
               imageClassName="object-cover"
             />

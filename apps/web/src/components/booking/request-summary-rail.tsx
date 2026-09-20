@@ -116,6 +116,7 @@ export function RequestSummaryRail({
         <FallbackImage
           src={vendor.avatarUrl}
           alt=""
+          width={58}
           className="size-14.5 shrink-0 rounded-xl"
           imageClassName="object-cover"
           fallback={

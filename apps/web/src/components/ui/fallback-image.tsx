@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState, type CSSProperties, type ReactNode } from 'react';
+import { optimizedImageProps } from '@/config/image-optimizer';
 import { cn } from '@/lib/utils';
 
 /**
@@ -140,11 +141,19 @@ export interface FallbackImageProps {
   style?: CSSProperties;
   draggable?: boolean;
   onClick?: React.MouseEventHandler<HTMLImageElement>;
+  /**
+   * The rendered width in CSS pixels. An upload on the storage host is served
+   * through `/_next/image` at twice this width (VEN-456), so the host is fetched
+   * once per image rather than once per view.
+   */
+  width?: number;
 }
 
 /**
- * The plain-`<img>` adapter: bucket content on a host `next/image` has no
- * per-environment remote pattern for.
+ * The plain-`<img>` adapter for bucket content. The element stays a plain
+ * `<img>` so layout and the failure ref are unchanged, but an image on the
+ * configured https storage host is pointed at `/_next/image` (see
+ * `config/image-optimizer.ts`); anything else is served as given.
  */
 export function FallbackImage({
   src,
@@ -156,6 +165,7 @@ export function FallbackImage({
   style,
   draggable,
   onClick,
+  width = 640,
 }: FallbackImageProps): React.ReactElement {
   const failure = useImageFailure(src);
 
@@ -167,11 +177,14 @@ export function FallbackImage({
     );
   }
 
+  // Read per render: Next inlines the literal at build time, so it is never a lookup.
+  const optimized = optimizedImageProps(src, process.env.NEXT_PUBLIC_STORAGE_PUBLIC_URL, width);
+
   return (
     // eslint-disable-next-line @next/next/no-img-element -- see the file docblock
     <img
       ref={failure.ref}
-      src={src}
+      src={optimized ?? src}
       alt={alt}
       onError={failure.onError}
       onClick={onClick}

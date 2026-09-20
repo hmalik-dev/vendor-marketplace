@@ -204,6 +204,7 @@ export function PortfolioPane({
               <FallbackImage
                 src={item.thumbnailUrl ?? item.imageUrl}
                 alt={item.caption ?? ''}
+                width={320}
                 className="w-full transition-transform duration-(--duration-base) motion-safe:hover:scale-[1.02]"
                 /* `bg-stone-200` is the *photograph's* ground while it loads;
                    the block has its own, ruled at `stone-250`. */
@@ -290,6 +291,7 @@ export function PortfolioPane({
             src={open.imageUrl}
             alt={open.caption ?? ''}
             onClick={(event) => event.stopPropagation()}
+            width={800}
             className="max-h-full max-w-full rounded-lg"
             imageClassName="object-contain"
             fallbackClassName="aspect-[4/3] w-full max-w-[640px]"
