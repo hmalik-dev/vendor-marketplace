@@ -118,8 +118,27 @@ describe('assertWebEnv', () => {
         NEXT_PUBLIC_API_URL: 'https://api.orla.test',
         NEXT_PUBLIC_STORAGE_PUBLIC_URL: 'https://cdn.orla.test/uploads',
         NEXT_PUBLIC_SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',
+        WEB_TIER_KEY: 'k'.repeat(40),
       }).NEXT_PUBLIC_SENTRY_DSN,
     ).toBe('https://abc123@o1.ingest.sentry.io/42');
+  });
+
+  it('refuses a deployed build with no WEB_TIER_KEY, and builds locally without one', () => {
+    const deployed = {
+      ...VALID,
+      VERCEL: '1',
+      WEB_URL: 'https://orla.test',
+      API_URL: 'https://api.orla.test',
+      NEXT_PUBLIC_API_URL: 'https://api.orla.test',
+      NEXT_PUBLIC_STORAGE_PUBLIC_URL: 'https://cdn.orla.test/uploads',
+      NEXT_PUBLIC_SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',
+    };
+
+    expect(() => assertWebEnv(deployed)).toThrow(/WEB_TIER_KEY/);
+    expect(assertWebEnv({ ...deployed, WEB_TIER_KEY: 'k'.repeat(40) }).WEB_TIER_KEY).toBe(
+      'k'.repeat(40),
+    );
+    expect(assertWebEnv({ ...VALID }).WEB_TIER_KEY).toBeUndefined();
   });
 
   /*
