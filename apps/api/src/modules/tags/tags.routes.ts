@@ -5,14 +5,13 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { assertRole, requireRole, requireRoleBeforeValidation } from '../../lib/guards.js';
+import { assertRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import { listActiveTags, suggestTag } from './tags.service.js';
 
 /** A vendor may propose this many new tags per hour. */
 const SUGGESTION_RATE_LIMIT = { max: 10, timeWindow: '1 hour' } as const;
 
 export const tagRoutes: FastifyPluginAsyncZod = async (app) => {
-  const vendorOnly = requireRole('vendor');
   const vendorOnlyBeforeValidation = requireRoleBeforeValidation('vendor');
 
   app.get('/tags', { schema: { response: { 200: z.array(tagSchema) } } }, async () =>
