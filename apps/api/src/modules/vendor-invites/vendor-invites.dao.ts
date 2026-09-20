@@ -1,4 +1,4 @@
-import { count, desc, eq, isNull, and, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, isNull, lt, notInArray, sql, type SQL } from 'drizzle-orm';
 import {
   users,
   vendorApplications,
@@ -7,6 +7,7 @@ import {
   type VendorInviteRow,
 } from '@vendor-marketplace/db/schema';
 import {
+  MAX_EMAIL_FAILURE_REASON_LENGTH,
   type AdminVendorApplicationRow,
   type AdminVendorInviteRow,
   type VendorApplicationInput,
@@ -93,10 +94,28 @@ export async function deleteUnusedInvite(tx: AppDatabase, inviteId: string): Pro
   return rows.length > 0;
 }
 
-export async function findAdminInvites(
+export async function findAdminInviteById(
+  db: AppDatabase,
+  inviteId: string,
+): Promise<AdminVendorInviteRow | null> {
+  const rows = await queryAdminInvites(db, 1, 0, eq(vendorInvites.id, inviteId));
+
+  return rows[0] ?? null;
+}
+
+export function findAdminInvites(
   db: AppDatabase,
   limit: number,
   offset: number,
+): Promise<AdminVendorInviteRow[]> {
+  return queryAdminInvites(db, limit, offset, undefined);
+}
+
+async function queryAdminInvites(
+  db: AppDatabase,
+  limit: number,
+  offset: number,
+  where: SQL | undefined,
 ): Promise<AdminVendorInviteRow[]> {
   const rows = await db
     .select({
@@ -106,18 +125,107 @@ export async function findAdminInvites(
       lastName: users.lastName,
       createdAt: vendorInvites.createdAt,
       acceptedAt: vendorInvites.acceptedAt,
+      emailAttempts: vendorInvites.emailAttempts,
+      emailSentAt: vendorInvites.emailSentAt,
+      emailFailureReason: vendorInvites.emailFailureReason,
     })
     .from(vendorInvites)
     .leftJoin(users, eq(vendorInvites.invitedBy, users.id))
+    .where(where)
     .orderBy(desc(vendorInvites.createdAt), desc(vendorInvites.id))
     .limit(limit)
     .offset(offset);
 
-  return rows.map(({ firstName, lastName, ...row }) => ({
-    ...row,
-    invitedByName:
-      firstName === null || lastName === null ? null : `${firstName} ${lastName}`.trim() || null,
-  }));
+  return rows.map(
+    ({ firstName, lastName, emailAttempts, emailSentAt, emailFailureReason, ...row }) => ({
+      ...row,
+      ...inviteEmailState({ emailAttempts, emailSentAt, emailFailureReason }),
+      invitedByName:
+        firstName === null || lastName === null ? null : `${firstName} ${lastName}`.trim() || null,
+    }),
+  );
+}
+
+/** What the console shows of an invite's email; see `vendor_invites.email_attempts`. */
+export function inviteEmailState(
+  invite: Pick<VendorInviteRow, 'emailAttempts' | 'emailSentAt' | 'emailFailureReason'>,
+): Pick<AdminVendorInviteRow, 'emailStatus' | 'emailFailureReason'> {
+  if (invite.emailSentAt !== null) {
+    return { emailStatus: 'sent', emailFailureReason: null };
+  }
+
+  return invite.emailAttempts > 0
+    ? { emailStatus: 'failed', emailFailureReason: invite.emailFailureReason }
+    : { emailStatus: 'pending', emailFailureReason: null };
+}
+
+/** The invite row, locked for the caller's transaction and **waiting** for a holder. */
+export async function lockInviteById(
+  tx: AppDatabase,
+  inviteId: string,
+): Promise<VendorInviteRow | null> {
+  const rows = await tx
+    .select()
+    .from(vendorInvites)
+    .where(eq(vendorInvites.id, inviteId))
+    .for('update')
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+export interface RetryableInviteQuery {
+  now: Date;
+  maxAttempts: number;
+  windowMs: number;
+  /** Invites already tried this tick, so a failed retry is not retried again in the same sweep. */
+  exclude: readonly string[];
+}
+
+/**
+ * The next unaccepted invite whose email failed and is still inside the retry
+ * budget, locked with `SKIP LOCKED` so a second sweep — or an operator's resend
+ * — passes over it rather than sending it twice.
+ */
+export async function lockRetryableInvite(
+  tx: AppDatabase,
+  query: RetryableInviteQuery,
+): Promise<VendorInviteRow | null> {
+  const rows = await tx
+    .select()
+    .from(vendorInvites)
+    .where(
+      and(
+        isNull(vendorInvites.acceptedAt),
+        isNull(vendorInvites.emailSentAt),
+        gt(vendorInvites.emailAttempts, 0),
+        lt(vendorInvites.emailAttempts, query.maxAttempts),
+        gt(vendorInvites.emailLastAttemptAt, new Date(query.now.getTime() - query.windowMs)),
+        query.exclude.length > 0 ? notInArray(vendorInvites.id, [...query.exclude]) : undefined,
+      ),
+    )
+    .orderBy(vendorInvites.emailLastAttemptAt)
+    .for('update', { skipLocked: true })
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+/** Records one send attempt on the invite the caller holds locked. */
+export async function recordInviteEmailAttempt(
+  tx: AppDatabase,
+  inviteId: string,
+  attempt: { at: Date; failureReason: string | null },
+): Promise<void> {
+  await tx
+    .update(vendorInvites)
+    .set({
+      emailAttempts: sql`${vendorInvites.emailAttempts} + 1`,
+      emailLastAttemptAt: attempt.at,
+      emailSentAt: attempt.failureReason === null ? attempt.at : null,
+      emailFailureReason: attempt.failureReason?.slice(0, MAX_EMAIL_FAILURE_REASON_LENGTH) ?? null,
+    })
+    .where(eq(vendorInvites.id, inviteId));
 }
 
 /**

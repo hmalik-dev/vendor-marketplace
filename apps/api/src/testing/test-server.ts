@@ -1006,6 +1006,8 @@ export async function createTestHarness(
     payoutSweepIntervalMs: 0,
     // Nor does the expiry sweep: suites call `expireLapsedRequests` with a pinned clock.
     expirySweepIntervalMs: 0,
+    // Nor the email retry: suites call `retryFailedEmails` with a pinned clock.
+    emailRetryIntervalMs: 0,
     // Nor the upload sweep: suites call `sweepOrphanedUploads` with a pinned clock.
     uploadSweepIntervalMs: 0,
     // The digest likewise: suites call `runOperatorDigest` with a pinned clock.

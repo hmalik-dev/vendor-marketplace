@@ -169,11 +169,32 @@ describe('seedE2eFixtures', () => {
     await seedE2eFixtures(database.db, INPUT);
     await seedE2eFixtures(database.db, INPUT);
 
-    const invites = await database.db.select().from(vendorInvites);
+    const invites = await database.db.select().from(vendorInvites).orderBy(vendorInvites.email);
 
     expect(invites.map((invite) => [invite.email, invite.acceptedAt instanceof Date])).toEqual([
+      ['e2e-failed-invite@example.test', false],
       ['vendor+auth_test@example.com', true],
     ]);
+  });
+
+  it('seeds an invite whose email failed, and puts it back after a resend healed it', async () => {
+    await seedE2eFixtures(database.db, INPUT);
+    await database.db
+      .update(vendorInvites)
+      .set({ emailSentAt: new Date(), emailFailureReason: null })
+      .where(eq(vendorInvites.email, 'e2e-failed-invite@example.test'));
+
+    await seedE2eFixtures(database.db, INPUT);
+
+    const [invite] = await database.db
+      .select()
+      .from(vendorInvites)
+      .where(eq(vendorInvites.email, 'e2e-failed-invite@example.test'));
+    expect(invite).toMatchObject({
+      emailAttempts: 3,
+      emailSentAt: null,
+      emailFailureReason: 'Resend refused the send (500)',
+    });
   });
 
   it('grants the admin account the operations role', async () => {

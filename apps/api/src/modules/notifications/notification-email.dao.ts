@@ -1,6 +1,7 @@
-import { users } from '@vendor-marketplace/db';
+import { notifications, users } from '@vendor-marketplace/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { AppDatabase } from '../../lib/database.js';
+import type { NotificationEmailRow } from './notification-email.js';
 
 /**
  * The address stored for a live account, for mail about the person's **own**
@@ -57,4 +58,37 @@ export async function findNotificationRecipient(
   }
 
   return row.pendingEmail === null ? { email: row.email } : { emailDiverged: true };
+}
+
+/**
+ * A notification as the email retry re-renders it, with the side of the product
+ * its recipient reads it on. The recipient's role is the audience: a vendor's
+ * `request_declined` and a customer's are different emails for one type.
+ */
+export async function findNotificationForRetry(
+  db: AppDatabase,
+  notificationId: string,
+): Promise<{ row: NotificationEmailRow; audience: 'customer' | 'vendor' } | null> {
+  const [found] = await db
+    .select({
+      id: notifications.id,
+      userId: notifications.userId,
+      type: notifications.type,
+      title: notifications.title,
+      body: notifications.body,
+      data: notifications.data,
+      role: users.role,
+    })
+    .from(notifications)
+    .innerJoin(users, eq(users.id, notifications.userId))
+    .where(eq(notifications.id, notificationId))
+    .limit(1);
+
+  if (!found) {
+    return null;
+  }
+
+  const { role, ...row } = found;
+
+  return { row, audience: role === 'vendor' ? 'vendor' : 'customer' };
 }

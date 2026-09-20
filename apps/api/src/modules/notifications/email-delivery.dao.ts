@@ -6,7 +6,8 @@ import {
   MAX_EMAIL_FAILURE_REASON_LENGTH,
   type EmailDeliveryOutcome,
 } from '@vendor-marketplace/shared';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, ne, notExists, notInArray, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { AppDatabase } from '../../lib/database.js';
 
 /**
@@ -168,4 +169,67 @@ export async function applyDeliveryEvent(
     .limit(1);
 
   return existing ? 'superseded' : 'unknown';
+}
+
+export interface RetryableDeliveryQuery {
+  now: Date;
+  maxAttempts: number;
+  windowMs: number;
+  /** Notifications already tried this tick, so a failed retry waits for the next one. */
+  exclude: readonly string[];
+}
+
+/**
+ * The next notification whose email never left, still worth re-sending, with the
+ * latest `failed` attempt row **locked `SKIP LOCKED`** — so a second sweep passes
+ * over it instead of sending it again.
+ *
+ * "Worth re-sending" is all of: the latest attempt failed **before Resend gave
+ * it an id** (a `failed` a provider event wrote later names a message Resend
+ * already holds, and replaying its idempotency key delivers nothing); no attempt
+ * for the notification is `sent`, `delivered`, `bounced` or `complained`; fewer
+ * than `maxAttempts` attempts exist; and the *first* attempt is inside the
+ * window, so retries cannot keep a stale message alive by restarting the clock.
+ *
+ * Only the latest failed row can match, so two rows of one notification cannot be
+ * locked by two sweeps at once. The lock is what serialises them; a retry's own
+ * new row then makes the old one non-latest.
+ */
+export async function lockRetryableDelivery(
+  tx: AppDatabase,
+  query: RetryableDeliveryQuery,
+): Promise<{ id: string; notificationId: string } | null> {
+  const others = alias(emailDeliveries, 'others');
+  const cutoff = new Date(query.now.getTime() - query.windowMs);
+
+  const rows = await tx
+    .select({ id: emailDeliveries.id, notificationId: emailDeliveries.notificationId })
+    .from(emailDeliveries)
+    .where(
+      and(
+        eq(emailDeliveries.outcome, 'failed'),
+        isNull(emailDeliveries.providerMessageId),
+        query.exclude.length > 0
+          ? notInArray(emailDeliveries.notificationId, [...query.exclude])
+          : undefined,
+        notExists(
+          tx
+            .select({ one: sql`1` })
+            .from(others)
+            .where(
+              and(
+                eq(others.notificationId, emailDeliveries.notificationId),
+                or(gt(others.sentAt, emailDeliveries.sentAt), ne(others.outcome, 'failed')),
+              ),
+            ),
+        ),
+        sql`(select count(*) from email_deliveries a where a.notification_id = ${emailDeliveries.notificationId}) < ${query.maxAttempts}::int`,
+        sql`(select min(a.sent_at) from email_deliveries a where a.notification_id = ${emailDeliveries.notificationId}) > ${cutoff.toISOString()}::timestamptz`,
+      ),
+    )
+    .orderBy(emailDeliveries.sentAt)
+    .for('update', { skipLocked: true, of: emailDeliveries })
+    .limit(1);
+
+  return rows[0] ?? null;
 }

@@ -265,6 +265,22 @@ export async function seedE2eFixtures<
       .values({ email: input.vendor.email.toLowerCase(), acceptedAt: now })
       .onConflictDoNothing({ target: vendorInvites.email });
 
+    /*
+     * An invite whose email failed (VEN-465), for the operator's resend control.
+     * Already at the attempt cap, so the retry sweep leaves it failed for the
+     * browser pass; a re-seed puts it back after a resend has healed it.
+     */
+    const failedInvite = {
+      emailAttempts: 3,
+      emailLastAttemptAt: now,
+      emailSentAt: null,
+      emailFailureReason: 'Resend refused the send (500)',
+    };
+    await tx
+      .insert(vendorInvites)
+      .values({ email: E2E_FAILED_INVITE_EMAIL, ...failedInvite })
+      .onConflictDoUpdate({ target: vendorInvites.email, set: failedInvite });
+
     const vendorProfileId = await ensureProfile(tx, vendorUserId, {
       stripeAccountId,
       payoutsReady,
@@ -343,6 +359,7 @@ export async function seedE2eFixtures<
  * registered, so no invite or sign-up can ever match it.
  */
 const E2E_APPLICANT_EMAIL = 'e2e-applicant@example.test';
+const E2E_FAILED_INVITE_EMAIL = 'e2e-failed-invite@example.test';
 const E2E_CASE_REFERENCE = `${SUPPORT_REFERENCE_PREFIX}-E2EE-22`;
 const E2E_AUDIT_ROW_ID = '00000000-0000-4000-8000-0000000e2e01';
 const E2E_AUDIT_SUBJECT_ID = '00000000-0000-4000-8000-0000000e2e02';

@@ -3162,6 +3162,10 @@ export const adminVendorInviteRowSchema = z.object({
   createdAt: z.date(),
   /** When the invited address opened its vendor account; null until then. */
   acceptedAt: z.date().nullable(),
+  /** `failed` is what the operator can act on; `pending` covers in flight and invites sent before this was recorded. */
+  emailStatus: z.enum(['sent', 'failed', 'pending']),
+  /** Why the last send failed; null unless `emailStatus` is `failed`. */
+  emailFailureReason: z.string().nullable(),
 });
 export type AdminVendorInviteRow = z.infer<typeof adminVendorInviteRowSchema>;
 

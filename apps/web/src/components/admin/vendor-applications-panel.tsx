@@ -114,6 +114,17 @@ export function VendorApplicationsPanel({
     }
   }
 
+  function resend(invite: WireAdminVendorInviteRow): Promise<boolean> {
+    return run(
+      () =>
+        call(`/admin/vendor-invites/${invite.id}/resend`, {
+          method: 'POST',
+          schema: wireAdminVendorInviteRowSchema,
+        }),
+      'That invite email did not send.',
+    );
+  }
+
   function revoke(invite: WireAdminVendorInviteRow): Promise<boolean> {
     return run(
       () =>
@@ -293,22 +304,51 @@ export function VendorApplicationsPanel({
                 ),
             },
             {
+              key: 'email',
+              width: '.9fr',
+              header: 'Email',
+              cell: (invite) =>
+                invite.emailStatus === 'failed' ? (
+                  <span title={invite.emailFailureReason ?? undefined}>
+                    <StatusPill tone="failed">Email failed</StatusPill>
+                  </span>
+                ) : invite.emailStatus === 'sent' ? (
+                  <StatusPill tone="inert">Sent</StatusPill>
+                ) : (
+                  '—'
+                ),
+            },
+            {
               key: 'actions',
-              width: '120px',
+              width: '220px',
               header: '',
-              className: 'flex justify-end',
+              className: 'flex justify-end gap-2',
               cell: (invite) =>
                 invite.acceptedAt ? null : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={pending}
-                    aria-label={`Revoke the invite for ${invite.email}`}
-                    onClick={() => void revoke(invite)}
-                  >
-                    Revoke
-                  </Button>
+                  <>
+                    {invite.emailStatus === 'failed' ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={pending}
+                        aria-label={`Resend the invite email to ${invite.email}`}
+                        onClick={() => void resend(invite)}
+                      >
+                        Resend
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={pending}
+                      aria-label={`Revoke the invite for ${invite.email}`}
+                      onClick={() => void revoke(invite)}
+                    >
+                      Revoke
+                    </Button>
+                  </>
                 ),
             },
           ]}

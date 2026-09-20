@@ -1,5 +1,7 @@
 import {
   BRAND_NAME,
+  EMAIL_RETRY_MAX_ATTEMPTS,
+  EMAIL_RETRY_WINDOW_MS,
   ERROR_CODES,
   VENDOR_SIGN_UP_PATH,
   type AdminVendorApplicationList,
@@ -24,19 +26,25 @@ import {
   readPlatformSwitches,
   readPlatformSwitchesUncached,
 } from '../platform-settings/platform-settings.service.js';
+import type { Clock } from '../../plugins/clock.js';
 import {
   deleteUnusedInvite,
   countAdminApplications,
   countAdminInvites,
   findAdminApplications,
+  findAdminInviteById,
   findAdminInvites,
   findInviteByEmail,
   findInviteById,
   hasLiveAccount,
   insertInviteIfAbsent,
+  inviteEmailState,
   inviteKey,
   lockApplication,
   lockInviteByEmail,
+  lockInviteById,
+  lockRetryableInvite,
+  recordInviteEmailAttempt,
   markApplicationInvited,
   markInviteAccepted,
   restoreApplicationStatus,
@@ -60,6 +68,7 @@ export interface VendorInviteMailDeps {
   log: FastifyBaseLogger;
   /** `canonicalWebOrigin(env)`, which the sign-up link is built on. */
   webOrigin: string;
+  now: Clock;
 }
 
 const ACCOUNT_EXISTS_MESSAGE =
@@ -206,19 +215,122 @@ export function renderVendorInviteEmail(webOrigin: string): {
   };
 }
 
-/** Sends the invite off the request path; a failed send is logged, never the operator's error. */
+/**
+ * Sends one invite email and records the attempt on the invite, on the handle
+ * the caller holds (`tx` when it holds the row's lock). **Never throws for a
+ * failed send** — that is recorded, which is what the operator's list shows and
+ * what the sweep retries; only a failed write of the record itself propagates.
+ * The idempotency key is the same on every attempt, so a retry cannot deliver
+ * twice.
+ */
+async function sendInviteEmail(
+  deps: VendorInviteMailDeps,
+  handle: AppDatabase,
+  invite: { id: string; email: string },
+): Promise<void> {
+  let failureReason: string | null = null;
+
+  try {
+    await deps.email.send({
+      to: invite.email,
+      ...renderVendorInviteEmail(deps.webOrigin),
+      idempotencyKey: `vendor-invite-${invite.id}`,
+    });
+  } catch (error) {
+    // The gateway's message is status-only, so it is safe to store.
+    failureReason = error instanceof Error ? error.message : 'The email transport failed';
+    deps.log.error({ inviteId: invite.id, err: error }, 'Could not send a vendor invite email');
+  }
+
+  await recordInviteEmailAttempt(handle, invite.id, { at: deps.now(), failureReason });
+}
+
+/** Sends the invite off the request path; a failed send is recorded, never the operator's error. */
 function queueInviteEmail(deps: VendorInviteMailDeps, inviteId: string, to: string): void {
   deps.background.run(async () => {
     try {
-      await deps.email.send({
-        to,
-        ...renderVendorInviteEmail(deps.webOrigin),
-        idempotencyKey: `vendor-invite-${inviteId}`,
-      });
+      await sendInviteEmail(deps, deps.db, { id: inviteId, email: to });
     } catch (error) {
-      deps.log.error({ inviteId, err: error }, 'Could not send a vendor invite email');
+      deps.log.error({ inviteId, err: error }, 'Could not record a vendor invite email attempt');
     }
   });
+}
+
+/**
+ * `POST /admin/vendor-invites/:inviteId/resend`: the operator's retry of an
+ * invite whose email did not go out. The same send the sweep makes, under the
+ * same row lock — so it waits for a sweep mid-send and then finds the email
+ * already sent, rather than sending twice.
+ */
+export async function resendVendorInvite(
+  deps: VendorInviteMailDeps,
+  inviteId: string,
+): Promise<AdminVendorInviteRow> {
+  await deps.db.transaction(async (tx) => {
+    const invite = await lockInviteById(tx, inviteId);
+
+    if (!invite) {
+      throw notFound('No invite with that id');
+    }
+
+    if (invite.acceptedAt) {
+      throw conflict('That invite has been used: the vendor account already exists');
+    }
+
+    if (invite.emailSentAt) {
+      throw conflict('That invite email already went out');
+    }
+
+    await sendInviteEmail(deps, tx, invite);
+  });
+
+  const row = await findAdminInviteById(deps.db, inviteId);
+
+  if (!row) {
+    throw notFound('No invite with that id');
+  }
+
+  return row;
+}
+
+/** How many invites one sweep tick may try, so a Resend outage cannot make a tick unbounded. */
+const INVITE_RETRY_BATCH = 25;
+
+/**
+ * The sweep's half for invites: re-sends unaccepted invites whose email failed,
+ * up to `EMAIL_RETRY_MAX_ATTEMPTS` total attempts and only inside
+ * `EMAIL_RETRY_WINDOW_MS`, each claimed `FOR UPDATE SKIP LOCKED` so overlapping
+ * sweeps send a row once. Returns how many it tried.
+ */
+export async function retryFailedInviteEmails(deps: VendorInviteMailDeps): Promise<number> {
+  const tried: string[] = [];
+
+  while (tried.length < INVITE_RETRY_BATCH) {
+    const id = await deps.db.transaction(async (tx) => {
+      const invite = await lockRetryableInvite(tx, {
+        now: deps.now(),
+        maxAttempts: EMAIL_RETRY_MAX_ATTEMPTS,
+        windowMs: EMAIL_RETRY_WINDOW_MS,
+        exclude: tried,
+      });
+
+      if (!invite) {
+        return null;
+      }
+
+      await sendInviteEmail(deps, tx, invite);
+
+      return invite.id;
+    });
+
+    if (id === null) {
+      break;
+    }
+
+    tried.push(id);
+  }
+
+  return tried.length;
 }
 
 /**
@@ -253,6 +365,7 @@ async function inviteAddress(
     invitedByName: null,
     createdAt: invite.createdAt,
     acceptedAt: invite.acceptedAt,
+    ...inviteEmailState(invite),
   };
 }
 

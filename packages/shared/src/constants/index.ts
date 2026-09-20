@@ -1154,6 +1154,19 @@ export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
 export const EXPIRY_SWEEP_INTERVAL_MS = 5 * 60_000;
 
 /**
+ * How often each instance re-sends transactional email that failed to leave
+ * (VEN-465). A Resend blip clears in minutes, so a short loop recovers it while
+ * the message is still news; the attempt cap and the age window bound the cost.
+ */
+export const EMAIL_RETRY_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+/** Total send attempts per email, the first included: a row is re-sent until it has this many. */
+export const EMAIL_RETRY_MAX_ATTEMPTS = 3;
+
+/** A failed email older than this is not re-sent: a quote from yesterday is no longer the message. */
+export const EMAIL_RETRY_WINDOW_MS = 24 * 60 * 60_000;
+
+/**
  * How often each instance sweeps storage for uploads no row references. The
  * grace period, not this, decides when an object is old enough to go, so the
  * interval only bounds how long an orphan outlives it.
