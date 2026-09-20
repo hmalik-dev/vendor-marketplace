@@ -8,6 +8,8 @@
  * costs one round trip.
  */
 
+import { tokenExpiryMs } from './token-expiry';
+
 /** Refetch when the cached token has this long or less left. */
 export const REFRESH_WINDOW_MS = 60_000;
 
@@ -20,25 +22,6 @@ interface CachedToken {
 
 let cached: CachedToken | null = null;
 let inflight: Promise<string | null> | null = null;
-
-/**
- * Reads `exp` from the JWT payload. Not verified — the API verifies; this only
- * decides when to ask again. A token with no readable `exp` is never cached.
- */
-function expiryOf(token: string): number | null {
-  const payload = token.split('.')[1];
-  if (!payload) {
-    return null;
-  }
-
-  try {
-    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-    const exp = (JSON.parse(json) as { exp?: unknown }).exp;
-    return typeof exp === 'number' ? exp * 1000 : null;
-  } catch {
-    return null;
-  }
-}
 
 async function fetchToken(): Promise<string | null> {
   const response = await fetch(SESSION_TOKEN_PATH, {
@@ -61,7 +44,7 @@ async function fetchToken(): Promise<string | null> {
     return null;
   }
 
-  const expiresAtMs = expiryOf(body.token);
+  const expiresAtMs = tokenExpiryMs(body.token);
   cached = expiresAtMs === null ? null : { token: body.token, expiresAtMs };
 
   return body.token;

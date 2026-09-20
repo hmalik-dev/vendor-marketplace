@@ -1,4 +1,8 @@
-import { CURRENT_VENDOR_AGREEMENT_VERSION, EVENT_TYPES } from '@vendor-marketplace/shared';
+import {
+  CURRENT_VENDOR_AGREEMENT_VERSION,
+  EVENT_TYPES,
+  SUPPORT_REFERENCE_PATTERN,
+} from '@vendor-marketplace/shared';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { seedReferenceData } from './seed.js';
@@ -9,13 +13,16 @@ import {
   type E2eSeedResult,
 } from './seed-e2e.js';
 import {
+  adminActions,
   availability,
   bookingRequests,
   bookings,
   legalAcceptances,
   reviews,
   servicePackages,
+  supportCases,
   users,
+  vendorApplications,
   vendorCategories,
   vendorInvites,
   vendorProfiles,
@@ -416,6 +423,65 @@ describe('seedE2eFixtures', () => {
     // The reviewed booking is adopted too, not written again with its reviews.
     expect(await database.db.select().from(bookings)).toHaveLength(1);
     expect(await database.db.select().from(reviews)).toHaveLength(2);
+  });
+
+  /*
+   * VEN-460. Three console lists read empty after the seed, so a browser pass
+   * over them could pass by finding nothing — an empty state renders cleanly
+   * and proves nothing about the rows a real list draws.
+   */
+  describe('the console list fixtures', () => {
+    const WITH_ADMIN: E2eSeedInput = {
+      ...INPUT,
+      admin: {
+        authUserId: 'user_e2e_admin',
+        email: 'admin+auth_test@example.com',
+        firstName: 'Ada',
+        lastName: 'Admin',
+      },
+    };
+
+    it('leaves one open case, one waiting application and one audit row to list', async () => {
+      const result = await seedE2eFixtures(database.db, WITH_ADMIN);
+
+      const cases = await database.db.select().from(supportCases);
+      expect(cases).toHaveLength(1);
+      // The console's response schema refuses any other shape, and the page 500s.
+      expect(cases[0]?.reference).toMatch(SUPPORT_REFERENCE_PATTERN);
+      expect(cases[0]?.status).toBe('open');
+      expect(cases[0]?.origin).toBe('support_message');
+      expect(cases[0]?.senderUserId).toBe(result.customerUserId);
+
+      const applications = await database.db.select().from(vendorApplications);
+      expect(applications).toHaveLength(1);
+      expect(applications[0]?.status).toBe('new');
+
+      const actions = await database.db.select().from(adminActions);
+      expect(actions).toHaveLength(1);
+      expect(actions[0]?.actorId).toBe(result.adminUserId);
+    });
+
+    it('writes each once however often it runs', async () => {
+      await seedE2eFixtures(database.db, WITH_ADMIN);
+      await seedE2eFixtures(database.db, WITH_ADMIN);
+
+      expect(await database.db.select().from(supportCases)).toHaveLength(1);
+      expect(await database.db.select().from(vendorApplications)).toHaveLength(1);
+      expect(await database.db.select().from(adminActions)).toHaveLength(1);
+    });
+
+    it('seeds no audit row without an operator to have taken the action', async () => {
+      await seedE2eFixtures(database.db, INPUT);
+
+      expect(await database.db.select().from(adminActions)).toHaveLength(0);
+      expect(await database.db.select().from(supportCases)).toHaveLength(1);
+    });
+
+    it('does not create them for the draft storefront, which is an empty-state fixture', async () => {
+      await seedE2eFixtures(database.db, { ...WITH_ADMIN, storefront: 'draft' });
+
+      expect(await database.db.select().from(supportCases)).toHaveLength(0);
+    });
   });
 
   /*

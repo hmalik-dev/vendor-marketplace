@@ -7,7 +7,7 @@ import { ApiClientError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { requestedPath } from './requested-path';
 import { RETURN_PATH_PARAM, safeReturnPath, signInPathReturningTo } from './return-path';
-import { redirectIfTermsRequired } from './terms-gate';
+import { isTermsRequired, redirectIfTermsRequired } from './terms-gate';
 /*
  * The role→route tables live in `role-routes.ts`, beside the table saying which
  * roles each route renders for: one place computes a role's destination, and a
@@ -156,7 +156,7 @@ export async function redirectIfSignedIn(returnTo?: string | null): Promise<void
    * a redirect loop with no sign-out control to break it. Only a caller the
    * API resolves has somewhere to be sent.
    */
-  if ((await readUserForChrome()) === null) {
+  if (!(await isHeldByAccount())) {
     return;
   }
 
@@ -165,6 +165,26 @@ export async function redirectIfSignedIn(returnTo?: string | null): Promise<void
   redirect(
     safe ? `/after-sign-in?${RETURN_PATH_PARAM}=${encodeURIComponent(safe)}` : '/after-sign-in',
   );
+}
+
+/**
+ * Whether the session belongs to an account `/after-sign-in` can place: one the
+ * API resolves, or one it holds at the Terms gate — a verified sign-up with no
+ * `users` row yet answers `TERMS_REQUIRED`, and the interstitial is where
+ * `/after-sign-in` sends it. Leaving that account on the sign-in form was a
+ * dead end with a live session behind it (VEN-460). Suspended, closed and
+ * unreachable accounts are not placed, so they stay where they cannot loop.
+ */
+async function isHeldByAccount(): Promise<boolean> {
+  try {
+    return (await getCurrentUser()) !== null;
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+
+    return isTermsRequired(error);
+  }
 }
 
 /**
