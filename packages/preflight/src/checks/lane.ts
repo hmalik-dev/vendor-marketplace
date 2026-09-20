@@ -61,34 +61,53 @@ export function laneTicketFrom(values: Record<string, string>): string {
   return LANE_DATABASE.exec(values.DATABASE_URL ?? '')?.[1] ?? '<ticket>';
 }
 
-/** The origins on a policy's `connect-src`, or nothing when it has none. */
-export function connectSrc(policy: string): readonly string[] {
+/** The sources on one directive of a policy, or nothing when it has none. */
+function directiveSources(policy: string, name: string): readonly string[] {
   const directive = policy
     .split(';')
     .map((part) => part.trim())
-    .find((part) => part.startsWith('connect-src '));
+    .find((part) => part.startsWith(`${name} `));
 
-  return directive === undefined ? [] : directive.slice('connect-src '.length).split(/\s+/);
+  return directive === undefined ? [] : directive.slice(name.length + 1).split(/\s+/);
+}
+
+/** The origins on a policy's `connect-src`, or nothing when it has none. */
+export function connectSrc(policy: string): readonly string[] {
+  return directiveSources(policy, 'connect-src');
 }
 
 /**
- * The `connect-src` a build baked into its response headers, or `null` when the
- * manifest carries no policy at all. Report-only counts: development emits the
- * header under that name and builds it from the same value.
+ * The policy a build baked into its response headers, or `null` when the
+ * manifest carries none. Report-only counts: development emits the header under
+ * that name and builds it from the same value.
  */
-export function connectSrcFromManifest(manifest: string): readonly string[] | null {
+function bakedPolicy(manifest: string): string | null {
   const parsed: unknown = JSON.parse(manifest);
   const rules = (parsed as { headers?: { headers?: { key: string; value: string }[] }[] }).headers;
 
   for (const rule of rules ?? []) {
     for (const header of rule.headers ?? []) {
       if (/^content-security-policy(-report-only)?$/i.test(header.key)) {
-        return connectSrc(header.value);
+        return header.value;
       }
     }
   }
 
   return null;
+}
+
+/** The `connect-src` a build baked into its response headers, or `null` without a policy. */
+export function connectSrcFromManifest(manifest: string): readonly string[] | null {
+  const policy = bakedPolicy(manifest);
+
+  return policy === null ? null : connectSrc(policy);
+}
+
+/** The `img-src` a build baked into its response headers, or `null` without a policy. */
+export function imgSrcFromManifest(manifest: string): readonly string[] | null {
+  const policy = bakedPolicy(manifest);
+
+  return policy === null ? null : directiveSources(policy, 'img-src');
 }
 
 export function evaluateLaneEnvFile(values: Record<string, string>): CheckResult {
@@ -165,6 +184,8 @@ export function evaluateLaneBuild(
   }
 
   const api = `http://localhost:${values.PORT}`;
+  const storageUrl = values.NEXT_PUBLIC_STORAGE_PUBLIC_URL;
+  const storageOrigin = storageUrl && URL.canParse(storageUrl) ? new URL(storageUrl).origin : null;
 
   for (const { label, manifest } of builds) {
     const origins = connectSrcFromManifest(manifest);
@@ -180,6 +201,25 @@ export function evaluateLaneBuild(
         `${label} bakes connect-src ${origins.join(' ')}, which does not name ${api} — it was built outside the lane`,
         fix,
       );
+    }
+
+    /*
+     * The storage origin is baked the same way and is per lane branch, so a
+     * build replayed from before the branch was recreated (the root `.env` is
+     * read by `next.config.ts` outside turbo's cache key) names a deleted host
+     * and CSP-blocks every uploaded image (VEN-468).
+     */
+    if (storageOrigin !== null) {
+      const images = imgSrcFromManifest(manifest) ?? [];
+
+      if (!images.includes(storageOrigin)) {
+        return fail(
+          'core',
+          name,
+          `${label} bakes img-src ${images.join(' ') || '(none)'}, which does not name ${storageOrigin} — it is a stale build`,
+          fix,
+        );
+      }
     }
   }
 
