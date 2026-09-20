@@ -4,7 +4,8 @@
  * `git`, `pnpm` and `npx` replaced by stubs that record what they were asked to
  * do. That is what "tested, not assumed" means here without a production
  * account: the order, the abort on a failed migration, the failed poll, the
- * refusal to start unconfigured, and no secret in any log. Runs under plain
+ * skip while nothing is configured (and the failure once DEPLOY_GATE is set or
+ * the configuration is partial), and no secret in any log. Runs under plain
  * `node` via `pnpm test:agents`.
  */
 import assert from 'node:assert/strict';
@@ -133,8 +134,24 @@ test('preflight: partly configured fails naming what is missing and where it is 
   const { io } = recordingIo();
   await assert.rejects(
     PHASES.preflight({ ...allPresent(), HAS_SENTRY_AUTH_TOKEN: 'false' }, io),
-    /partly configured; missing: SENTRY_AUTH_TOKEN \(secret\).*VEN-377/,
+    /not fully configured.*missing: SENTRY_AUTH_TOKEN \(secret\).*VEN-377/,
   );
+});
+
+test('preflight: DEPLOY_GATE=required makes an empty configuration fail, not skip', async () => {
+  const { io } = recordingIo();
+  await assert.rejects(PHASES.preflight({ DEPLOY_GATE: 'required' }, io), /not fully configured/);
+});
+
+test('workflows: smoke is gated on its URL, ci and smoke read-only, every deploy action SHA-pinned', () => {
+  const SMOKE = parse(readFileSync(path.join(ROOT, '.github/workflows/smoke.yml'), 'utf8'));
+  assert.equal(SMOKE.jobs.smoke.if, "vars.SMOKE_API_URL != ''");
+  assert.doesNotMatch(JSON.stringify(SMOKE), /railway\.app/);
+  assert.deepEqual(SMOKE.permissions, { contents: 'read' });
+  assert.deepEqual(CI.permissions, { contents: 'read' });
+  for (const step of JOB.steps.filter((candidate) => candidate.uses)) {
+    assert.match(step.uses, /^[\w./-]+@[0-9a-f]{40}$/, step.uses);
+  }
 });
 
 test('preflight: one missing input still fails, by name', () => {

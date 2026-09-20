@@ -15,6 +15,9 @@ on:
   # So a deployment can be re-checked by hand without an empty commit.
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   # Never cancelled in flight: a superseded run still tells us whether the
   # deployment it was checking came up, and that is worth knowing.

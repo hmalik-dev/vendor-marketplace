@@ -10,9 +10,11 @@
  * what lets `deploy.test.mjs` run the real phases, and dry-run the real workflow
  * file, under plain `node`.
  *
- * **Fail closed.** A phase with a missing input exits non-zero naming the input,
- * never skips: a deploy workflow that goes green while deploying nothing is the
- * silent failure this ticket exists to remove.
+ * **Fail closed once provisioned.** A phase with a missing input exits non-zero
+ * naming the input. The one skip is preflight finding *nothing* configured, and
+ * only until the repository variable `DEPLOY_GATE=required` is set (as
+ * `E2E_GATE` does for the e2e job); after that, an empty configuration fails
+ * too, so a deleted environment cannot turn into a green run that deploys nothing.
  *
  * **Nothing secret is printed.** A phase names variables, never values, and every
  * line a child process writes passes through `redactor` before it reaches the
@@ -301,7 +303,7 @@ export const PHASES = {
      * that broke: it is skipped with a warning so a red run means a failure. A
      * *partly* configured deploy is the broken case and still fails by name.
      */
-    if (missing.length === REQUIRED_INPUTS.length) {
+    if (missing.length === REQUIRED_INPUTS.length && env.DEPLOY_GATE?.trim() !== 'required') {
       ready(false);
       io.error(
         `::warning::Deploy skipped: no deploy input is configured (${missing.join(', ')}). ` +
@@ -312,7 +314,7 @@ export const PHASES = {
 
     if (missing.length > 0) {
       throw new PhaseError(
-        `The deploy is partly configured; missing: ${missing.join(', ')}. ` +
+        `The deploy is not fully configured (DEPLOY_GATE=required fails an empty configuration too); missing: ${missing.join(', ')}. ` +
           'These are provisioned on VEN-377, and the API host itself is decision D10, still open there.',
       );
     }
