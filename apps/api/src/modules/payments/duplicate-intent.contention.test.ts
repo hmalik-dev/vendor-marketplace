@@ -357,7 +357,6 @@ describe('two payment intents succeeding for one request, on real connections', 
     const { requestId, firstIntentId } = await checkedOutRequest();
     const intent = harness!.stripe.succeed(firstIntentId);
     expect((await recordSuccessfulPayment(context(), intent)).outcome).toBe('booked');
-    harness!.stripe.transfers.length = 0;
     harness!.stripe.refundExternally(intent.id, 10_000);
     dispatch.mockClear();
     const [booked] = await bookingsFor(requestId);
@@ -381,7 +380,8 @@ describe('two payment intents succeeding for one request, on real connections', 
 
     const [after] = await bookingsFor(requestId);
     expect(after).toMatchObject({ status: 'disputed', externalRefundCents: 10_000 });
-    expect(harness!.stripe.transfers).toEqual([]);
+    /* The sweep may pay other bookings this file made; this one it must not. */
+    expect(harness!.stripe.transfers.filter((t) => t.bookingId === booked!.id)).toEqual([]);
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
