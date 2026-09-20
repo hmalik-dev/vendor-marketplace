@@ -49,7 +49,7 @@ export async function checkAnonymousListing(publicUrl: string): Promise<CheckRes
       'storage',
       name,
       `${url} enumerates its keys to an unauthenticated caller`,
-      'Replace `mc anonymous set download` with a `set-json` policy granting only s3:GetObject — see docker-compose.yml. On Neon, declare the bucket `access: "public_read"` in neon.ts rather than a broader policy.',
+      'Declare the bucket `access: "public_read"` in neon.ts and `neon deploy` it, rather than granting a broader policy.',
     );
   }
 
@@ -119,7 +119,7 @@ export const storageCheck: Check = {
       const fix =
         context.target === 'production'
           ? 'Declare the `uploads` bucket in neon.ts and run `neon deploy` on this branch: https://neon.com/docs/storage/overview'
-          : 'docker compose up -d storage storage-init';
+          : 'Run `pnpm lane:up <ticket>` (a lane gets its own Neon storage branch), or point the STORAGE_* variables at a non-production Neon branch with `neon env pull --branch dev -s object-storage`';
 
       return [fail('storage', name, `${STORAGE_BUCKET} at ${STORAGE_ENDPOINT}: ${reason}`, fix)];
     } finally {

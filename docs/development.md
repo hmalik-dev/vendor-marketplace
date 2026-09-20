@@ -31,9 +31,9 @@ still holds its placeholder (Neon Auth, Stripe, Resend) and exits non-zero befor
 
 `pnpm start` is idempotent, so it is also the right command after a `git pull`
 or whenever you just want the servers back. Web runs on
-http://localhost:3000, the API on http://localhost:4000, and the MinIO console
-on http://localhost:9001 (`vendor-marketplace` / `vendor_marketplace_dev`).
-Ctrl-C stops the dev servers; Docker keeps running until `docker compose down`.
+http://localhost:3000 and the API on http://localhost:4000. Ctrl-C stops the
+dev servers; Docker keeps running until `docker compose down`. Docker holds
+Postgres only: uploads are not served from a container (see Object storage).
 
 Individual steps are available as `pnpm install`, `docker compose up -d`,
 `pnpm db:migrate`, `pnpm db:seed`, and `pnpm dev`. Parallel ticket work runs in
@@ -68,8 +68,31 @@ branch deliberately.
 `preflight` refuses to start a ticket while `DATABASE_URL` points at a
 `production`, `main` or `master` branch.
 
-MinIO runs on every local run as the stand-in for Cloudflare R2 — that container
-_is_ required.
+## Object storage
+
+Uploaded images live on Neon Object Storage, which has no local emulator, so
+nothing in `docker-compose.yml` serves them. Every place that runs the app
+uploads to a Neon branch that is **not** `production`:
+
+| Where           | Storage branch                                                   |
+| --------------- | ---------------------------------------------------------------- |
+| A lane          | `lane-<id>`, made by `pnpm lane:up`, deleted by `pnpm lane:down` |
+| A pull request  | `preview/pr-<n>`, from `.github/workflows/preview-branch.yml`    |
+| A CI end-to-end | `ci-<run>-<attempt>`, deleted by an `always()` step in `ci.yml`  |
+| Staging, prod   | their own branch, provisioned per `neon.ts` (not this document)  |
+
+`pnpm lane:up <id>` creates `lane-<id>` with no compute, cut from `dev` (so it
+starts with `dev`'s `uploads` bucket, copy-on-write), reads the branch's own
+credential and writes the `STORAGE_*` rows into `.env.lane` (owner-only). It is
+idempotent, and a branch expires on its own after seven days if a lane dies
+before `lane:down`. It needs `NEON_API_KEY`, or a logged-in `neon` CLI; without
+either it fails naming what is missing, and never falls back to a shared
+bucket. A Neon refusal (the plan's branch ceiling) fails it the same way.
+
+A plain `pnpm start` has no lane and so no storage branch: the API boots, and
+an upload fails at the storage call. Work that uploads belongs in a lane.
+`node scripts/ci-storage.mjs assert` fails when a `STORAGE_*` or `AWS_*` value
+in the environment names the production branch.
 
 ## Environment variables
 

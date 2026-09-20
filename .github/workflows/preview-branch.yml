@@ -4,6 +4,11 @@
 # against a full-fidelity copy in isolation and the branch is dropped when the
 # PR closes. Copy-on-write means this costs no storage until the PR writes.
 #
+# The branch carries the uploads bucket too (Neon copies buckets with the
+# branch), so the PR's storage is its own and never `production`'s: the
+# branch's STORAGE_* values reach the later steps through the job environment,
+# masked, and a step fails the job if any of them names production (VEN-457).
+#
 # Inert until NEON_API_KEY and the NEON_PREVIEW_BRANCHES variable exist — see
 # ticket #205.
 #
@@ -65,6 +70,29 @@ jobs:
       # `dist`. Without this the run dies on ERR_MODULE_NOT_FOUND before it
       # reaches the database.
       - run: pnpm build --filter=@vendor-marketplace/db...
+
+      # The bucket comes with the branch; create it (public_read, as neon.ts
+      # declares) only if `staging` had none. Not `neon deploy`: the pinned CLI
+      # rejects neon.ts's `buckets` key. The pull file is created owner-only
+      # first, because the CLI keeps an existing file's mode.
+      - name: Read the branch's storage credential
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PREVIEW_BRANCH: preview/pr-${{ github.event.pull_request.number }}
+        run: |
+          npm install --global neonctl@4.11.0
+          neon buckets list --project-id "$NEON_PROJECT_ID" --branch "$PREVIEW_BRANCH" -o json | grep -q '"uploads"' \
+            || neon buckets create uploads --project-id "$NEON_PROJECT_ID" --branch "$PREVIEW_BRANCH" --access-level public_read
+          (umask 077 && : > .env.preview-storage)
+          neon env pull --project-id "$NEON_PROJECT_ID" --branch "$PREVIEW_BRANCH" \
+            --file .env.preview-storage -s object-storage
+          node scripts/ci-storage.mjs map .env.preview-storage
+          rm -f .env.preview-storage
+
+      # Mutation-tested in `scripts/ci-storage.test.mjs`: a STORAGE_ value naming
+      # the production branch's endpoint fails this step.
+      - name: Assert no production storage value is present
+        run: node scripts/ci-storage.mjs assert
 
       # The point of the branch: prove this PR's migrations apply cleanly to a
       # copy of staging before they are ever pointed at staging itself.

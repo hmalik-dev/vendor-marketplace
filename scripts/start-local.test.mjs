@@ -95,7 +95,7 @@ test('the compose Postgres service yields a complete local DATABASE_URL', () => 
   assert.equal(url.pathname, `/${composeValue('POSTGRES_DB')}`);
 });
 
-test('a clone with no .env gets one with the local database and storage filled in', () => {
+test('a clone with no .env gets one with the local database filled in and storage left alone', () => {
   const dir = cloneRoot();
   const { code, output } = run(dir);
   const example = readFileSync(path.join(dir, '.env.example'), 'utf8');
@@ -103,9 +103,10 @@ test('a clone with no .env gets one with the local database and storage filled i
 
   assert.equal(code, 1);
   assert.equal(envValue(created, 'DATABASE_URL'), localDatabaseUrl(COMPOSE));
-  assert.equal(envValue(created, 'STORAGE_ENDPOINT'), 'http://localhost:9000');
-  assert.equal(envValue(created, 'STORAGE_ACCESS_KEY_ID'), composeValue('MINIO_ROOT_USER'));
-  assert.equal(envValue(created, 'STORAGE_SECRET_ACCESS_KEY'), composeValue('MINIO_ROOT_PASSWORD'));
+  // No storage container exists to fill these from; they stay exactly as the example has them.
+  for (const key of ['STORAGE_ENDPOINT', 'STORAGE_ACCESS_KEY_ID', 'STORAGE_SECRET_ACCESS_KEY']) {
+    assert.equal(envValue(created, key), envValue(example, key), key);
+  }
 
   /*
    * Rows that are absent-able locally are emptied, because their placeholders

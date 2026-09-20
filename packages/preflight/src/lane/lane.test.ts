@@ -28,6 +28,8 @@ import {
   seedLane,
 } from './lane.js';
 import { readManifest } from './manifest.js';
+import { LANE_STORAGE_KEYS } from './storage.js';
+import { laneStorageFixture } from './storage.fixture.js';
 
 let root: string;
 let worktree: string;
@@ -36,6 +38,7 @@ const databaseUrl = 'postgresql://localhost:5432/vendor_marketplace_lane_42';
 
 const deps = (): LaneUpDeps => ({
   createDatabase: vi.fn().mockResolvedValue(databaseUrl),
+  prepareStorage: vi.fn().mockResolvedValue(laneStorageFixture),
   probe: vi.fn().mockResolvedValue(true),
   branchOf: vi.fn().mockReturnValue('worktree-42'),
   install: vi.fn().mockResolvedValue(undefined),
@@ -173,6 +176,7 @@ describe('laneUp', () => {
 
     await laneUp(root, worktree, '42', {
       createDatabase: vi.fn().mockResolvedValue(databaseUrl),
+      prepareStorage: vi.fn().mockResolvedValue(laneStorageFixture),
       probe: vi.fn().mockResolvedValue(true),
       branchOf: vi.fn().mockReturnValue('worktree-42'),
       install: record('install'),
@@ -372,6 +376,99 @@ describe('laneUp', () => {
     expect(retry.migrate).toHaveBeenCalledTimes(1);
   });
 
+  describe('storage', () => {
+    it("writes the lane's own storage branch into its env file", async () => {
+      vi.stubEnv('DATABASE_URL', databaseUrl);
+      const d = deps();
+
+      await laneUp(root, worktree, '42', d);
+
+      const parsed = parseLaneEnv(readFileSync(path.join(worktree, '.env.lane'), 'utf8'));
+
+      for (const key of LANE_STORAGE_KEYS) {
+        expect(parsed[key]).toBe(laneStorageFixture[key]);
+      }
+
+      expect(d.prepareStorage).toHaveBeenCalledWith('42', worktree);
+    });
+
+    it('keeps the lane env file owner-only now that it holds a bucket credential', async () => {
+      await laneUp(root, worktree, '42', deps());
+
+      expect(statSync(path.join(worktree, '.env.lane')).mode & 0o777).toBe(0o600);
+    });
+
+    it('prepares storage before it creates the database, so a lane without Neon strands nothing', async () => {
+      const d: LaneUpDeps = {
+        ...deps(),
+        prepareStorage: vi.fn().mockRejectedValue(new Error('NEON_API_KEY is not set')),
+      };
+
+      await expect(laneUp(root, worktree, '42', d)).rejects.toThrow(/NEON_API_KEY/);
+
+      expect(d.createDatabase).not.toHaveBeenCalled();
+      expect(d.install).not.toHaveBeenCalled();
+      expect(existsSync(path.join(worktree, '.env.lane'))).toBe(false);
+      expect(readManifest(root, '42')?.state).toBe('provisioning');
+    });
+
+    it('resumes a lane whose file already agrees without going back to Neon', async () => {
+      vi.stubEnv('DATABASE_URL', databaseUrl);
+      await laneUp(root, worktree, '42', deps());
+
+      const resumed = deps();
+      await laneUp(root, worktree, '42', resumed);
+
+      expect(resumed.prepareStorage).not.toHaveBeenCalled();
+    });
+
+    it('re-reads storage when the file predates it, rather than keeping the emulator', async () => {
+      vi.stubEnv('DATABASE_URL', databaseUrl);
+      await laneUp(root, worktree, '42', deps());
+
+      const file = path.join(worktree, '.env.lane');
+      const stale = readFileSync(file, 'utf8')
+        .split('\n')
+        .filter((line) => !/^(NEXT_PUBLIC_)?STORAGE_/.test(line))
+        .concat(['STORAGE_ENDPOINT=http://localhost:9000', ''])
+        .join('\n');
+      writeFileSync(file, stale);
+
+      const resumed = deps();
+      await laneUp(root, worktree, '42', resumed);
+
+      expect(resumed.prepareStorage).toHaveBeenCalledTimes(1);
+
+      const parsed = parseLaneEnv(readFileSync(file, 'utf8'));
+      expect(parsed.STORAGE_ENDPOINT).toBe(laneStorageFixture.STORAGE_ENDPOINT);
+    });
+
+    it.each(['STORAGE_BUCKET', 'STORAGE_REGION', 'NEXT_PUBLIC_STORAGE_PUBLIC_URL'])(
+      'rewrites a file that lost only %s',
+      async (dropped) => {
+        vi.stubEnv('DATABASE_URL', databaseUrl);
+        await laneUp(root, worktree, '42', deps());
+
+        const file = path.join(worktree, '.env.lane');
+        writeFileSync(
+          file,
+          readFileSync(file, 'utf8')
+            .split('\n')
+            .filter((line) => !line.startsWith(`${dropped}=`))
+            .join('\n'),
+        );
+
+        const resumed = deps();
+        await laneUp(root, worktree, '42', resumed);
+
+        expect(resumed.prepareStorage).toHaveBeenCalledTimes(1);
+        expect(parseLaneEnv(readFileSync(file, 'utf8'))[dropped]).toBe(
+          laneStorageFixture[dropped as keyof typeof laneStorageFixture],
+        );
+      },
+    );
+  });
+
   it('never hands two lanes the same ports', async () => {
     const first = await laneUp(root, worktree, '42', deps());
     const second = await laneUp(root, worktree, '43', deps());
@@ -394,16 +491,35 @@ describe('laneDown', () => {
     await laneUp(root, worktree, '42', deps());
 
     const dropDatabase = vi.fn().mockResolvedValue(undefined);
-    await laneDown(root, worktree, '42', { dropDatabase });
+    const dropStorage = vi.fn().mockResolvedValue(undefined);
+    await laneDown(root, worktree, '42', { dropDatabase, dropStorage });
 
     expect(dropDatabase).toHaveBeenCalledWith('42');
+    expect(dropStorage).toHaveBeenCalledWith('42');
     expect(existsSync(path.join(worktree, '.env.lane'))).toBe(false);
     expect(readManifest(root, '42')).toBeNull();
   });
 
   it('is idempotent for a lane that was never up', async () => {
     const dropDatabase = vi.fn().mockResolvedValue(undefined);
-    await expect(laneDown(root, worktree, 'ghost', { dropDatabase })).resolves.toBeUndefined();
+    const dropStorage = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      laneDown(root, worktree, 'ghost', { dropDatabase, dropStorage }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('keeps the manifest when the storage branch cannot be deleted, so down can be re-run', async () => {
+    await laneUp(root, worktree, '42', deps());
+
+    const dropDatabase = vi.fn().mockResolvedValue(undefined);
+    const dropStorage = vi.fn().mockRejectedValue(new Error('403 forbidden'));
+
+    await expect(laneDown(root, worktree, '42', { dropDatabase, dropStorage })).rejects.toThrow(
+      /403/,
+    );
+
+    expect(readManifest(root, '42')).not.toBeNull();
+    expect(existsSync(path.join(worktree, '.env.lane'))).toBe(true);
   });
 });
 

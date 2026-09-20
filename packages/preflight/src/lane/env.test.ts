@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { childEnv, laneChildEnv, parseLaneEnv, renderLaneEnv } from './env.js';
+import { LANE_STORAGE_KEYS } from './storage.js';
+import { laneStorageFixture } from './storage.fixture.js';
 import type { LaneManifest } from './manifest.js';
 
 const manifest: LaneManifest = {
@@ -17,8 +19,18 @@ const manifest: LaneManifest = {
 const databaseUrl = 'postgresql://localhost:5432/vendor_marketplace_lane_42';
 
 describe('renderLaneEnv', () => {
+  it('writes every storage row from the lane storage branch, never a local default', () => {
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl, laneStorageFixture));
+
+    for (const key of LANE_STORAGE_KEYS) {
+      expect(parsed[key]).toBe(laneStorageFixture[key]);
+    }
+
+    expect(parsed.STORAGE_ENDPOINT).not.toContain('localhost');
+  });
+
   it('points the web app at this lane own API port', () => {
-    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl, laneStorageFixture));
     expect(parsed.NEXT_PUBLIC_API_URL).toBe('http://localhost:4007');
     expect(parsed.PORT).toBe('4007');
     expect(parsed.WEB_PORT).toBe('3007');
@@ -35,27 +47,27 @@ describe('renderLaneEnv', () => {
    * 432 and read as a defect in the change under test.
    */
   it('points server-side fetches at this lane own API too, not just the browser', () => {
-    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl, laneStorageFixture));
     expect(parsed.API_URL).toBe('http://localhost:4007');
     expect(parsed.API_URL).toBe(parsed.NEXT_PUBLIC_API_URL);
   });
 
   it('lets the API accept this lane own web origin, so a browser can drive it', () => {
-    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl, laneStorageFixture));
     // `allowedOrigins()` splits WEB_URL; without it the lane refuses its own
     // web app and every client-side call fails CORS.
     expect(parsed.WEB_URL).toBe('http://localhost:3007');
   });
 
   it('points the database at this lane own database', () => {
-    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl, laneStorageFixture));
     expect(parsed.DATABASE_URL).toBe(databaseUrl);
   });
 
   it('never writes the Neon-only variables, which must stay unset locally', () => {
     // The env registry marks both optional for `local`; setting them against
     // the Docker container fails `pnpm preflight` on a correct configuration.
-    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl, laneStorageFixture));
     expect(parsed.DATABASE_URL_UNPOOLED).toBeUndefined();
     expect(parsed.NEON_BRANCH).toBeUndefined();
   });
@@ -71,20 +83,25 @@ describe('a lane runs with Sentry off', () => {
   const placeholder = 'https://...@sentry.io/...';
 
   it('blanks both DSN rows so the root .env placeholder cannot reach the lane', () => {
-    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl));
+    const parsed = parseLaneEnv(renderLaneEnv(manifest, databaseUrl, laneStorageFixture));
     expect(parsed.SENTRY_DSN).toBe('');
     expect(parsed.NEXT_PUBLIC_SENTRY_DSN).toBe('');
   });
 
   it('overrides an inherited placeholder in the child environment', () => {
     const base = { SENTRY_DSN: placeholder, NEXT_PUBLIC_SENTRY_DSN: placeholder };
-    const env = laneChildEnv(base, renderLaneEnv(manifest, databaseUrl), ['pnpm', 'dev']);
+    const env = laneChildEnv(base, renderLaneEnv(manifest, databaseUrl, laneStorageFixture), [
+      'pnpm',
+      'dev',
+    ]);
     expect(env.SENTRY_DSN).toBe('');
     expect(env.NEXT_PUBLIC_SENTRY_DSN).toBe('');
   });
 
   it('leaves the upload token to the root .env, which only a production build reads', () => {
-    expect(parseLaneEnv(renderLaneEnv(manifest, databaseUrl)).SENTRY_AUTH_TOKEN).toBeUndefined();
+    expect(
+      parseLaneEnv(renderLaneEnv(manifest, databaseUrl, laneStorageFixture)).SENTRY_AUTH_TOKEN,
+    ).toBeUndefined();
   });
 });
 
@@ -120,7 +137,7 @@ describe('childEnv', () => {
  * rather than of the lane.
  */
 describe('laneChildEnv', () => {
-  const contents = renderLaneEnv(manifest, databaseUrl);
+  const contents = renderLaneEnv(manifest, databaseUrl, laneStorageFixture);
 
   it('gives a command that serves the web app the lane web port', () => {
     const web = ['pnpm', '--filter', '@vendor-marketplace/web', 'start'];

@@ -4,6 +4,7 @@ import { findVariable } from '@vendor-marketplace/shared/env';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../context.js';
 import { parseLaneEnv, renderLaneEnv } from './env.js';
+import { laneStorageFixture } from './storage.fixture.js';
 import type { LaneManifest } from './manifest.js';
 
 /*
@@ -31,7 +32,11 @@ const manifest: LaneManifest = {
 };
 
 const laneEnv = parseLaneEnv(
-  renderLaneEnv(manifest, 'postgresql://localhost:5432/vendor_marketplace_lane_231'),
+  renderLaneEnv(
+    manifest,
+    'postgresql://localhost:5432/vendor_marketplace_lane_231',
+    laneStorageFixture,
+  ),
 );
 
 function webDevScript(): string {
