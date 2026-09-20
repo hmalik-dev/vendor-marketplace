@@ -1,44 +1,34 @@
 ---
 name: review-checklist-build-time-output-keyed-on-passthrough-env
-description: A diff that makes next.config headers()/build output depend on WEB_URL moves it off turbo's cache key — same hash, FULL TURBO replays the stale artifact
+description: Before accepting or filing a turbo globalEnv/passThrough cache-key finding, check framework inference and the dotenv file next.config loads — both decide the hash independently of the two lists
 metadata:
   type: feedback
 ---
 
-When a diff makes **build-time-baked output** depend on a new environment
-variable, check which turbo list that variable is in before anything else.
+When a diff makes **build-time-baked output** depend on an env var, check three
+things, not one. `globalEnv` is hashed; `globalPassThroughEnv` (generated from
+`packages/shared/src/env/registry.ts`) reaches the task unhashed.
 
-`next.config.ts`'s `headers()` runs at build time and is frozen into
-`apps/web/.next/routes-manifest.json`. `turbo.json` has two lists and they are
-not interchangeable:
+1. **Framework inference.** turbo 2 infers `NEXT_PUBLIC_*` into
+   `web#build`'s hash because `apps/web` is Next.js, **even for keys sitting in
+   `globalPassThroughEnv`** — measured 2026-09-19 (VEN-468): a dry run with
+   `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_SENTRY_DSN` set lists both under
+   `tasks[].environmentVariables.inferred`. So "a pass-through `NEXT_PUBLIC_*`
+   replays from cache" is false for `web#build`, and moving one to `globalEnv`
+   buys nothing there while busting **every** package's hash on each change.
+   Non-`NEXT_PUBLIC_` keys (`WEB_URL`, #452's HSTS) are the real shape.
+2. **The dotenv file.** `apps/web/next.config.ts:21` loads the repo-root `.env`
+   itself. It is gitignored, turbo 2 hashes no dotenv (`globalCacheInputs.files`
+   is empty), and neither list sees a value that never enters `process.env` — so
+   editing `.env` and rebuilding still hits the cache. `lane:exec` injects
+   `.env.lane` into the child env, so lanes and CI are keyed; a laptop is not.
+3. **The drift test.** `globalEnv` is hand-maintained in `turbo.json` and
+   `generate.test.ts` compares it **sorted** to `TURBO_GLOBAL_ENV_KEYS`, so
+   order is free; the pass-through block is generated — never hand-edit it.
 
-- `globalEnv` — part of the cache key. `NODE_ENV`, `CSP_ENFORCE`, and every
-  `PLATFORM_ENV_KEYS` entry (`VERCEL*`, `RENDER*`, `RAILWAY*`,
-  `DEPLOYMENT_PLATFORM`, `DEPLOYMENT_ORIGIN`) are here.
-- `globalPassThroughEnv` — **generated from `packages/shared/src/env/registry.ts`**
-  by `pnpm env:example`, passed to the task but _excluded_ from the hash.
-  `WEB_URL`, `API_URL`, every `NEXT_PUBLIC_*` row is here.
+**How to apply:** two dry runs
+(`NEXT_PUBLIC_X=<a|b> npx turbo run build --filter=./apps/web --dry=json`),
+compare `tasks[].hash` _and_ read `inferred`. A list-membership test
+(`expect(TURBO_GLOBAL_ENV_KEYS).toContain(...)`) proves nothing about the hash.
 
-**Why:** #452 replaced `https: NODE_ENV === 'production'` with a flag derived
-from `WEB_URL`/the platform origin. That moved HSTS and
-`upgrade-insecure-requests` from a cache-keyed input to a non-keyed one. The
-build output genuinely changes with the value and the hash does not, so a warm
-cache replays the wrong headers in both directions — including re-shipping the
-very bug the ticket fixed.
-
-**How to apply:** two cheap commands, no full build needed first.
-
-1. `WEB_URL=<a> npx turbo run build --filter=<pkg> --dry=json` and again with
-   `<b>`; compare `tasks[].hash`. Identical hash + different intended output =
-   finding. `globalCacheInputs.passthrough` lists the variable with a hash
-   beside it, which _looks_ like keying and is not.
-2. Prove it end to end: build with `<a>`, read the artifact
-   (`routes-manifest.json` for headers), build with `<b>` — look for `FULL
-TURBO` — read the artifact again, then `--force` to show the value really
-   does change it.
-
-The generated-ness matters for the fix: you cannot just hand-edit `turbo.json`,
-a drift test in `packages/shared` fails. Say so rather than proposing the edit.
-
-Related: [[review-checklist-unpinned-safety-constants]] (mutate the inputs of a
-derived value, not the value).
+Related: [[review-checklist-unpinned-safety-constants]].

@@ -23,7 +23,13 @@ Chromium exempts the _initial_ request to a trustworthy host but upgrades a
    So the **build** environment decides these headers, not the runtime one.
    Turbo caches `.next/**`, so a restored cache entry restores its manifest —
    and `WEB_URL` is `globalPassThroughEnv` (unhashed), while the `VERCEL_*` /
-   `DEPLOYMENT_*` markers are `globalEnv` (hashed).
+   `DEPLOYMENT_*` markers are `globalEnv` (hashed). `CSP_ENFORCE` (#396),
+   `SENTRY_RELEASE` (VEN-397) and `NEXT_PUBLIC_STORAGE_PUBLIC_URL` (VEN-468,
+   `img-src` + `images.remotePatterns`) each moved to `globalEnv` for exactly
+   this reason. **`WEB_URL` is the one left unhashed** while still deciding a
+   baked header — the same replay, not yet closed. Audit rule: any registry key
+   `next.config.ts` reads belongs in `TURBO_GLOBAL_ENV_KEYS`, and
+   `generate.test.ts` keeps `globalEnv` and the generated pass-through disjoint.
 
 2. `deploymentOrigin()` is **not** always `https://`, whatever `servesOverTls`'s
    docstring says. `httpsOrigin` in `packages/shared/src/env/deployment.ts`
