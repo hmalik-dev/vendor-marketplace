@@ -76,6 +76,8 @@ Create Stripe Refund for `refundAmount`. If vendor already received a Transfer, 
 
 ### D4: User Roles — Single Role Per Account
 
+> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+
 **Decision:** Each user has exactly one role (`customer`, `vendor`, or `admin`), set at registration. No role switching.
 
 **Rationale:** Dual roles add significant complexity: role-switcher UI, context-aware dashboards, "which role am I in?" confusion, dual notification streams, auth middleware that checks active role not just assigned role. For MVP, a vendor who wants to book another vendor creates a second Clerk account with a different email.
@@ -199,6 +201,8 @@ blurbs, which are commentary and go stale — and diffs them against the live DO
 ---
 
 ## Technology Decisions (Settled)
+
+> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
 
 These are documented with full rationale in the project plan (Section 3). Summarized here for quick reference:
 
@@ -407,6 +411,8 @@ accepted one.
 ---
 
 ### D12: The Eight Human Decisions — *2026-08-30*
+
+> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
 
 **What this is.** Every ticket sitting in `Deferred — needs a human` or
 `Blocked — needs a human` was put to the account holder in one pass and answered.
@@ -639,6 +645,8 @@ same constant and the same component; separate lanes would have collided on both
 
 ### D16: The #335 Ruling Round — Chips, the Hero, Sort and Sign-up — *2026-08-30*
 
+> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+
 **What this is.** #335 put four questions to the account holder; #339 and #313 added
 three more. All seven are answered here, and **every one is written into
 `design-plan/` in the same pass** — which is the part D12 skipped and the reason two of
@@ -738,6 +746,8 @@ redirect.
 ---
 
 ### D17: Three More Design Rulings — Avatar Tint, Missing Covers, the 500 CTA — *2026-08-30*
+
+> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
 
 **What this is.** Lanes 302 and 305 landed while D16 was being written and filed three
 more `[DESIGN] … needs a human` rows — #342, #348, #350. All three are answered here and
@@ -975,6 +985,8 @@ up until the moment someone writes one.
 ---
 
 ### D27: The Admin Account Is Human-Provisioned, and Preflight Does Not Check It — *2026-08-31*
+
+> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
 
 **Ruled by the account holder**, when the E2E admin account was created: *"Admin account is
 only provisioned by me so it doesn't need preflight checks necessarily since that should be
@@ -1597,6 +1609,8 @@ primitive disagree everywhere, not on checkout, so it belongs to whichever ticke
 
 ### D34: The Focus Ring Has One Owner and One Escape Hatch — *2026-09-06*
 
+> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk widget styling below is the historical record; the focus-ring rule itself stands.
+
 **Ruled for #383**, whose acceptance asked which of the two plan files had to move on the
 unbordered ring's opacity. **Neither.** `03-components.md:124` and `04-laws.md:166` both say
 `ring-2 ring-clay-400/40`, and have since the three treatments replaced the single one. The
@@ -1835,6 +1849,8 @@ never existed.
 
 ### D38: The Acceptance Gate Is an API Refusal, and an Account Is Created by Accepting — *2026-09-07*
 
+> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+
 **#429.** `legal_acceptances` (#427) recorded only vendors, only a version
 string, and only a `Continue` press. Closing all three moved the row's anchor
 from the vendor profile to the **user**, and that move forced four rulings that
@@ -2023,6 +2039,8 @@ provisioned" is not a fact that survives the test that established it — memois
 it broke 20 suites and was reverted.
 
 ### D39: An Account With Live Bookings Cannot Be Closed — *2026-09-07*
+
+> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
 
 **Closure is refused while the account holds a future confirmed booking.** The
 account holder ruled it directly, choosing refusal over both alternatives:

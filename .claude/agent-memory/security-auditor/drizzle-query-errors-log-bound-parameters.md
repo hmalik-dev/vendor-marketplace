@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 Verified in `node_modules/.pnpm/drizzle-orm@0.45.2/.../drizzle-orm/errors.js`:
 
 ```

@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 On lane 307 (2026-08-30), after the vendor-profile fixture gap ([[e2e-vendor-account-has-no-seeded-profile]]) was fixed and the E2E vendor account was linked to the seeded "June Harlow" profile, the Decline flow worked end-to-end (POST .../decline → 200, row leaves queue), but clicking **Accept** on a pending request fired `POST /booking-requests/:id/accept` → **402 Payment Required**, surfaced in the UI as an inline alert: "Finish your payout setup before accepting bookings." There is no reachable payout-setup surface in the vendor nav (`Dashboard, Bookings, Business profile, Packages, Portfolio, Availability` — no `Payouts`/`Settings` item), so the gate cannot be cleared through the UI as this account is currently seeded.
 
 **Why:** Accept is gated behind a Stripe Connect payout account being fully onboarded, and the seed/E2E-account wiring evidently didn't include marking June Harlow's Stripe status as complete (unlike the 16 unrelated `*@orla-demo.example` demo vendors, which do have `BOOKED` past events with real emails — see the pre-existing "Past events" list at `/vendor/bookings`).

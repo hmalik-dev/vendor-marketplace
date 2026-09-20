@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 **Corrected twice by measurement against `packages/shared/dist`, most recently
 2026-09-04 on the #414 worktree.** Everything this file used to call live is
 now rejected. Do not re-report any of it:

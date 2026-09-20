@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `unwindAccountBookings` (`apps/api/src/modules/admin/account-unwind.ts`) refunds
 `booking.totalAmountCents` — the **full** amount, never D3's tiers — and writes
 `vendorPayoutCents: 0`. Its own doc comment states why: _"the platform is

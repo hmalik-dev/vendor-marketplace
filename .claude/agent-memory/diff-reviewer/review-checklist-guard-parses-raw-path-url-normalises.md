@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 An authorization guard that parses a **stored path string** (`key.split('/')`,
 `segments.length !== 3`, `segments[1] === ownerId`) is checked against a
 spelling nobody serves. The value is later concatenated into a URL, and the URL

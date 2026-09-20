@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 VEN-406 review (2026-09-15): `assertVendorMayJoin` in `acceptTerms`' no-row path
 judges `normalizeRole(snapshot.roleHint)`, then `syncUserFromClerk` ->
 `insertUserIfAbsent` returns the **held** row on conflict. A `user.created`

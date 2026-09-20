@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 **Status: FIXED (VEN-385, audited 2026-09-14).** `violatesConstraint` was deleted.
 `apps/api/src/lib/constraint-violation.ts` now exports only
 `violatesUniqueConstraint`: `code === '23505'` AND `named(link) === constraint`,

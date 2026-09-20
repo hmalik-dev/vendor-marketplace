@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `support_cases` (#431, `packages/db/src/schema/support-cases.ts`) is the first
 place a support message body is stored rather than only emailed. Three writers,
 and only one of them is an admin operation:

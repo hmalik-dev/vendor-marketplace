@@ -15,8 +15,8 @@ intent — never delete it.** `pnpm db:seed:e2e` upserts its `users` row at
 optional, so a checkout without it still seeds.
 
 **Why:** `role = 'admin'` cannot be reached from inside the product — it is read
-from Clerk's `unsafeMetadata` at first sign-in, falls back to `customer`, and is
-immutable afterwards. `seed-demo.ts` gives its admin a synthetic `clerk_user_id`
+from the sign-up role hint at first sign-in (Clerk's `unsafeMetadata` before VEN-447; Clerk is retired), falls back to `customer`, and is
+immutable afterwards. `seed-demo.ts` gives its admin a synthetic auth id (`clerk_user_id` before VEN-447)
 that cannot authenticate. Before this account, the only route to `/admin` was
 promoting a customer in the database by hand, which the permission classifier
 refused as an unreviewed privileged write.

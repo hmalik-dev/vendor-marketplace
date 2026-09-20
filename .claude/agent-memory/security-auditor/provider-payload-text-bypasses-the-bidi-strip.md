@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `packages/shared/src/schemas/index.ts` makes `freeText()` — `z.string()
 .overwrite(stripBidiControls).trim()` — the one boundary every stored free-text
 field crosses, and `apps/api/src/request-body-free-text.test.ts` enforces it by

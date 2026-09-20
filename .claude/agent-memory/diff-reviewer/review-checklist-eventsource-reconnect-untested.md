@@ -5,6 +5,8 @@ metadata:
   type: feedback
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `apps/web/src/lib/use-event-stream.ts` owns the app's only `EventSource`. Any
 diff that changes what travels in its URL (#215 swapped the Clerk session JWT
 for a single-use stream ticket) has exactly two behaviours that matter and

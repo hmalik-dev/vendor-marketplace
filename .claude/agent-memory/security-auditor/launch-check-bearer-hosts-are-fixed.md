@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `packages/preflight/src/launch/` was audited 2026-09-14 and passed. `bearer()` is called only with the
 `CLERK_API`/`STRIPE_API`/`RESEND_API` constants. The Frontend API host decoded from the publishable
 key is hostname-regex-checked and fetched with no headers. `repo-modules.ts` imports three

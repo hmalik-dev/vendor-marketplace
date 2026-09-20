@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `apps/api/src/server.ts` redacts signature headers by path
 (`req.headers["stripe-signature"]`). Redaction is path-based, so it protects only
 the `req` branch of the log record. A webhook route that answers a failed

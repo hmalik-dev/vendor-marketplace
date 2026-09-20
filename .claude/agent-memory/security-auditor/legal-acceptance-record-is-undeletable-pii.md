@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+
 `legal_acceptances` stores `ip` and `user_agent` per acceptance. Since #429 the
 row's subject is the **user**, so every account gets one at first sign-in — not
 just vendors — and `document_sha256` + `acceptance_method` were added beside
