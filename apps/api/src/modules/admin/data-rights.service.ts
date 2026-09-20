@@ -724,7 +724,12 @@ export async function closeAccount(
       bookingsLeftForReview: unwound.bookingsLeftForReview,
       refundsIssued: unwound.refundsIssued,
       refundsFailed: unwound.refundsFailed,
-      identityDeleted,
+      /*
+       * A resume records only a deletion it made: it cannot tell "the first run
+       * already deleted it" from "never could", and a `false` here would put an
+       * uncorrectable falsehood in the log.
+       */
+      ...(resuming && !identityDeleted ? {} : { identityDeleted }),
     },
   });
 
