@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { useApi } from '@/lib/use-api';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import {
+  wireAdminBanResultSchema,
   wireAdminCloseAccountResultSchema,
   wireAdminUserExportSchema,
   type WireAdminCloseAccountResult,
@@ -43,6 +44,13 @@ export interface DataRightsActionsProps {
   email: string;
   /** `true` where the account is another operator's (VEN-391). */
   isOperator: boolean;
+  /** `true` while the account is suspended. */
+  isBanned: boolean;
+  /**
+   * Confirmed bookings a ban or closure has not finished unwinding (VEN-478).
+   * Non-zero draws the unfinished state and the **Finish** control.
+   */
+  unwindPending: number;
 }
 
 /** The one line under each action naming what it does — `11.5px` `stone-600`, per Pattern B. */
@@ -99,6 +107,8 @@ export function DataRightsActions({
   isSelf,
   email,
   isOperator,
+  isBanned,
+  unwindPending,
 }: DataRightsActionsProps): React.ReactElement {
   const call = useApi();
   const router = useRouter();
@@ -174,6 +184,45 @@ export function DataRightsActions({
   }
 
   /*
+   * Finishes an unwind the API did not complete (VEN-478): the ban or closure is
+   * re-run through its own endpoint, which skips what already committed and
+   * refunds each remaining booking once.
+   */
+  async function finishUnwind(): Promise<void> {
+    setBusy(true);
+    setError(null);
+
+    try {
+      let refundsFailed: number;
+
+      if (closedAt) {
+        const closed = await call(`/admin/users/${userId}/close`, {
+          method: 'POST',
+          schema: wireAdminCloseAccountResultSchema,
+        });
+        refundsFailed = closed.refundsFailed;
+      } else {
+        const banned = await call(`/admin/users/${userId}/ban`, {
+          method: 'PUT',
+          schema: wireAdminBanResultSchema,
+        });
+        refundsFailed = banned.refundsFailed;
+      }
+
+      setError(
+        refundsFailed > 0
+          ? 'Some bookings are still confirmed: Stripe refused a refund. This needs a person.'
+          : null,
+      );
+      router.refresh();
+    } catch (failure) {
+      setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /*
    * Pattern B's Actions card body (#393): tiers ordered least to most severe,
    * a hairline between them, and one line under each naming its consequence
    * before it is pressed. The card and its band belong to the page.
@@ -196,6 +245,38 @@ export function DataRightsActions({
           Nothing on the account changes.
         </p>
       </div>
+
+      {unwindPending > 0 && (isBanned || closedAt) ? (
+        <>
+          <div aria-hidden="true" className="my-1.5 h-px bg-stone-150" />
+          <div data-action-tier className="flex flex-col gap-2">
+            {/* Gold: waiting on someone, nothing has failed (`40-states.md`). */}
+            <div
+              data-testid="unwind-unfinished"
+              className="rounded-lg border border-gold-200 bg-gold-50 px-3.5 py-3 text-sm leading-prose text-stone-900"
+            >
+              <strong className="font-semibold">Unwind unfinished.</strong> The account is{' '}
+              {closedAt ? 'closed' : 'suspended'}, but {unwindPending} confirmed{' '}
+              {unwindPending === 1 ? 'booking is' : 'bookings are'} still standing and the customer
+              has not been refunded.
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-full"
+              disabled={busy}
+              onClick={() => void finishUnwind()}
+            >
+              {busy ? 'Working…' : 'Finish'}
+            </Button>
+            <p className={CONSEQUENCE}>
+              Refunds each remaining booking in full, once, and cancels it. Nothing already done is
+              repeated.
+            </p>
+          </div>
+        </>
+      ) : null}
 
       <div aria-hidden="true" className="my-1.5 h-px bg-stone-150" />
 

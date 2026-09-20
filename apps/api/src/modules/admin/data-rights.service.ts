@@ -22,6 +22,8 @@ import { fullName, recordAdminActionBestEffort } from './admin.service.js';
 import {
   bestEffortNotice,
   CLOSURE_UNWIND,
+  countUnwindPending,
+  SUSPENSION_UNWIND,
   unwindAccountBookings,
   type AdminContext,
 } from './account-unwind.js';
@@ -572,11 +574,22 @@ export async function closeAccount(
     throw forbidden('You cannot close your own account');
   }
 
-  if (user.deletedAt) {
+  const profile = await findVendorProfileRecord(context.db, userId);
+
+  /*
+   * A closure re-run on a closed account is the **resume** (VEN-478), where the
+   * unwind was interrupted after the retirement committed: it skips the
+   * retirement and its intent row and finishes the unwind. Only while something
+   * is still pending; a finished closure is still a 409.
+   */
+  const resuming = user.deletedAt !== null;
+
+  if (
+    resuming &&
+    (await countUnwindPending(context.db, userId, profile?.id ?? null, now, CLOSURE_UNWIND)) === 0
+  ) {
     throw conflict('That account is already closed');
   }
-
-  const profile = await findVendorProfileRecord(context.db, userId);
 
   /*
    * The blockers are read **inside** the retirement, under the account's row
@@ -587,11 +600,12 @@ export async function closeAccount(
   function blockersOf(tx: AppDatabase): Promise<AdminCloseBlocker[]> {
     return closeBlockers(tx, userId, now);
   }
+
   /*
    * The audit row commits with the retirement or not at all (VEN-463): a closure
    * that cannot be recorded does not happen, and the operator simply repeats it.
-   * It records the retirement itself; what the unwind then did is returned to the
-   * console and logged, because a row that is never updated cannot wait for it.
+   * It is the intent row (VEN-478): the trail starts with the attempt, and what
+   * the unwind then did is a row of its own, because rows cannot be updated.
    */
   const audit: RetirementAudit = (tx, { profileRetired }) =>
     insertAdminAction(tx, {
@@ -601,26 +615,35 @@ export async function closeAccount(
       subjectId: userId,
       detail: { profileRetired },
     });
-  const retired = operatorTarget
-    ? await retireOperatorById(context.db, userId, blockersOf, audit)
-    : await retireUserById(context.db, userId, blockersOf, audit);
 
-  if (retired === 'last-operator') {
-    throw conflict(LAST_OPERATOR_REFUSAL);
-  }
+  let retired: { user: UserRow; profileRetired: boolean };
 
-  if (retired && 'blocked' in retired) {
-    throw conflict(
-      `This account holds ${retired.blocked.length} upcoming confirmed ${
-        retired.blocked.length === 1 ? 'booking' : 'bookings'
-      }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
-      { bookings: retired.blocked },
-    );
-  }
+  if (resuming) {
+    retired = { user, profileRetired: false };
+  } else {
+    const result = operatorTarget
+      ? await retireOperatorById(context.db, userId, blockersOf, audit)
+      : await retireUserById(context.db, userId, blockersOf, audit);
 
-  if (!retired) {
-    // Another closure took the claim between the read above and this update.
-    throw conflict('That account is already closed');
+    if (result === 'last-operator') {
+      throw conflict(LAST_OPERATOR_REFUSAL);
+    }
+
+    if (result && 'blocked' in result) {
+      throw conflict(
+        `This account holds ${result.blocked.length} upcoming confirmed ${
+          result.blocked.length === 1 ? 'booking' : 'bookings'
+        }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
+        { bookings: result.blocked },
+      );
+    }
+
+    if (!result) {
+      // Another closure took the claim between the read above and this update.
+      throw conflict('That account is already closed');
+    }
+
+    retired = result;
   }
 
   /*
@@ -685,6 +708,26 @@ export async function closeAccount(
     'An account closure finished unwinding',
   );
 
+  /*
+   * What the closure then did, as a row of its own: the intent row above
+   * cannot be updated. Always written, because `identityDeleted` is the fact
+   * about an irreversible act that the trail must hold.
+   */
+  await recordAdminActionBestEffort(context, {
+    actorId,
+    action: 'account_unwind_finished',
+    subjectType: 'user',
+    subjectId: userId,
+    detail: {
+      requestsDeclined: unwound.requestsDeclined,
+      bookingsCancelled: unwound.bookingsCancelled,
+      bookingsLeftForReview: unwound.bookingsLeftForReview,
+      refundsIssued: unwound.refundsIssued,
+      refundsFailed: unwound.refundsFailed,
+      identityDeleted,
+    },
+  });
+
   return {
     userId,
     closedAt: retired.user.deletedAt ?? now,
@@ -745,6 +788,16 @@ export async function readUserDataRights(
       legalAcceptances: record.acceptances.length,
     },
     closeBlockers: blockers,
+    unwindPending:
+      user.deletedAt || user.isBanned
+        ? await countUnwindPending(
+            db,
+            userId,
+            record.profile?.id ?? null,
+            now,
+            user.deletedAt ? CLOSURE_UNWIND : SUSPENSION_UNWIND,
+          )
+        : 0,
     bookingsRefundedOnClose,
     legalAcceptances: record.acceptances.map(toAcceptanceRecord),
   };

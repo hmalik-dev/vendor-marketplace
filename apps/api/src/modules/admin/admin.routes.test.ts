@@ -8,6 +8,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { eq, notInArray } from 'drizzle-orm';
 import {
+  adminActions,
   bookingRequests,
   bookings,
   categories,
@@ -1076,7 +1077,7 @@ describe('admin routes', () => {
       expect(rows.filter((row) => row.status === 'cancelled')).toHaveLength(1);
     });
 
-    it('refuses a second ban on an account already banned', async () => {
+    it('answers 200 to a second ban on an account already banned, changing nothing', async () => {
       await signIn(ADMIN, true);
       const target = await signIn(CUSTOMER);
 
@@ -1092,7 +1093,115 @@ describe('admin routes', () => {
         url: `/admin/users/${target}/ban`,
         headers: bearer(ADMIN),
       });
-      expect(second.statusCode).toBe(409);
+      expect(second.statusCode).toBe(200);
+      expect(second.json()).toMatchObject({ isBanned: true, bookingsCancelled: 0 });
+    });
+
+    /**
+     * VEN-478. Stripe is unreachable for the last two of three refunds — the same
+     * state a killed process leaves: banned, an intent row, two `confirmed`
+     * bookings with paid customers. Re-running the ban finishes it.
+     */
+    describe('an interrupted unwind', () => {
+      async function threeBookings(): Promise<{ vendorUserId: string; intents: string[] }> {
+        await signIn(ADMIN, true);
+        const customerId = await signIn(CUSTOMER);
+        const vendor = await createVendorProfile({ isPublished: true });
+        const intents = ['pi_resume_1', 'pi_resume_2', 'pi_resume_3'];
+
+        for (const [index, intent] of intents.entries()) {
+          await createFutureBooking(customerId, vendor.profileId, {
+            eventDate: `2099-08-0${index + 1}`,
+            stripePaymentIntentId: intent,
+          });
+        }
+
+        return { vendorUserId: vendor.userId, intents };
+      }
+
+      const ban = (userId: string, actor = ADMIN) =>
+        harness.app.inject({
+          method: 'PUT',
+          url: `/admin/users/${userId}/ban`,
+          headers: bearer(actor),
+        });
+
+      async function statuses(): Promise<string[]> {
+        const rows = await harness.database.db
+          .select({ status: bookings.status })
+          .from(bookings)
+          .orderBy(bookings.eventDate);
+        return rows.map((row) => row.status);
+      }
+
+      async function actions(): Promise<string[]> {
+        const rows = await harness.database.db
+          .select({ action: adminActions.action })
+          .from(adminActions);
+        return rows.map((row) => row.action).sort();
+      }
+
+      it('is finished by re-running the ban, refunding the rest exactly once', async () => {
+        const { vendorUserId, intents } = await threeBookings();
+        harness.stripe.refundsToRefuse.add(intents[1]!);
+        harness.stripe.refundsToRefuse.add(intents[2]!);
+
+        const first = await ban(vendorUserId);
+        expect(first.json()).toMatchObject({ isBanned: true, refundsIssued: 1, refundsFailed: 2 });
+        expect(await statuses()).toEqual(['cancelled', 'confirmed', 'confirmed']);
+        expect(await actions()).toEqual(['account_unwind_finished', 'user_banned']);
+
+        // Stripe is back; a refusal is not replayed for a key that never reached it.
+        harness.stripe.refundsToRefuse.clear();
+        harness.stripe.failedRefundKeys.clear();
+
+        const resumed = await ban(vendorUserId);
+        expect(resumed.statusCode).toBe(200);
+        expect(resumed.json()).toMatchObject({
+          isBanned: true,
+          bookingsCancelled: 2,
+          refundsIssued: 2,
+          refundsFailed: 0,
+        });
+        expect(await statuses()).toEqual(['cancelled', 'cancelled', 'cancelled']);
+        expect(harness.stripe.refunds.map((refund) => refund.paymentIntentId).sort()).toEqual(
+          [...intents].sort(),
+        );
+        // One intent row for the whole ban, and one outcome row per run that did something.
+        expect(await actions()).toEqual([
+          'account_unwind_finished',
+          'account_unwind_finished',
+          'user_banned',
+        ]);
+      });
+
+      it('refunds nothing further and writes no row when a finished ban is re-run', async () => {
+        const { vendorUserId } = await threeBookings();
+        expect((await ban(vendorUserId)).statusCode).toBe(200);
+        const refundsBefore = harness.stripe.refunds.length;
+        const actionsBefore = await actions();
+        expect(refundsBefore).toBe(3);
+
+        const again = await ban(vendorUserId);
+
+        expect(again.statusCode).toBe(200);
+        expect(again.json()).toMatchObject({ bookingsCancelled: 0, refundsIssued: 0 });
+        expect(harness.stripe.refunds).toHaveLength(refundsBefore);
+        expect(await actions()).toEqual(actionsBefore);
+      });
+
+      it('cannot be re-run by anyone but an operator', async () => {
+        const { vendorUserId, intents } = await threeBookings();
+        harness.stripe.refundsToRefuse.add(intents[1]!);
+        await ban(vendorUserId);
+        harness.stripe.refundsToRefuse.clear();
+        harness.stripe.failedRefundKeys.clear();
+        const refundsBefore = harness.stripe.refunds.length;
+
+        expect((await ban(vendorUserId, CUSTOMER)).statusCode).toBe(403);
+        expect((await ban(vendorUserId, VENDOR)).statusCode).toBe(403);
+        expect(harness.stripe.refunds).toHaveLength(refundsBefore);
+      });
     });
 
     it('answers 404 for an id that is not an account', async () => {

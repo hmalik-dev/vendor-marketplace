@@ -1394,6 +1394,14 @@ export const ADMIN_ACTIONS = [
    */
   'operator_granted',
   'operator_revoked',
+  /**
+   * An interrupted ban or closure was run to the end (VEN-478).
+   *
+   * The ban and closure rows are the **intent**, written in the transaction that
+   * sets the flag, so the trail starts with the attempt. Rows cannot be
+   * updated, so the outcome — what the unwind then did — is a row of its own.
+   */
+  'account_unwind_finished',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 

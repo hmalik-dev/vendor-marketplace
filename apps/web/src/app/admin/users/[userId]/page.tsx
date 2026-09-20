@@ -267,6 +267,8 @@ export default async function AdminUserDataRightsPage({
                 isSelf={viewer?.id === rights.userId}
                 email={rights.email}
                 isOperator={rights.role === 'admin'}
+                isBanned={rights.isBanned}
+                unwindPending={rights.unwindPending}
               />
             </AdminCard>
           </>
