@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 /**
- * VEN-397. The phases `.github/workflows/deploy.yml` runs, one per step:
+ * VEN-397, VEN-494. The phases `.github/workflows/deploy.yml` runs, one per step:
  *
  *   gate → preflight → migrate → api → web → ready
+ *
+ * Each run targets one environment, `staging` or `production`, named by the
+ * branch CI ran on (`DEPLOY_TARGET`); nothing else deploys, and `main` never does.
  *
  * The workflow owns the order and the stop-on-failure — every step runs only if
  * the one before it succeeded, and nothing is `if: always()` — while this file
@@ -24,6 +27,9 @@
 import { spawn } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+
+/** The environments that deploy, each from the branch of the same name. */
+export const ENVIRONMENTS = ['staging', 'production'];
 
 const RAILWAY_CLI = '@railway/cli@5.57.2';
 const VERCEL_CLI = 'vercel@59.17.0';
@@ -70,6 +76,7 @@ export const API_HOSTS = {
  */
 export const REQUIRED_INPUTS = [
   { name: 'DATABASE_URL_UNPOOLED', kind: 'secret' },
+  { name: 'NEON_BRANCH', kind: 'variable' },
   { name: 'API_HOST', kind: 'variable' },
   { name: 'API_SERVICE', kind: 'variable' },
   { name: 'API_HOST_TOKEN', kind: 'secret' },
@@ -206,12 +213,13 @@ export function run(command, args, { env, redact, write }) {
  *
  * The job's own `if:` already requires CI to have *succeeded* — `skipped` and
  * `cancelled` are not success — and this repeats it, because a condition that
- * lives only in YAML is untested. Then it checks the commit is still `main`'s
- * tip: two merges whose CI runs finish out of order would otherwise deploy the
- * newer release and then roll it back to the older one. A superseded run exits
+ * lives only in YAML is untested. It also refuses any branch that is not an
+ * environment, then checks the commit is still that branch's tip: two pushes
+ * whose CI runs finish out of order would otherwise deploy the newer release
+ * and then roll it back to the older one. A superseded run exits
  * 0 without deploying, because the run for the tip carries both commits.
  */
-export function gateVerdict({ conclusion, event, headSha, tipSha }) {
+export function gateVerdict({ conclusion, event, branch, headSha, tipSha }) {
   if (conclusion !== 'success') {
     return {
       deploy: false,
@@ -224,7 +232,15 @@ export function gateVerdict({ conclusion, event, headSha, tipSha }) {
     return {
       deploy: false,
       fail: true,
-      message: `CI ran for "${event}", not a push to main; not deploying.`,
+      message: `CI ran for "${event}", not a push to ${ENVIRONMENTS.join(' or ')}; not deploying.`,
+    };
+  }
+
+  if (!ENVIRONMENTS.includes(branch)) {
+    return {
+      deploy: false,
+      fail: true,
+      message: `CI ran on "${branch}", which is not one of ${ENVIRONMENTS.join(', ')}; not deploying.`,
     };
   }
 
@@ -240,11 +256,11 @@ export function gateVerdict({ conclusion, event, headSha, tipSha }) {
     return {
       deploy: false,
       fail: false,
-      message: `${headSha.slice(0, 7)} is no longer main's tip (${tipSha.slice(0, 7)}); the run for the tip deploys both.`,
+      message: `${headSha.slice(0, 7)} is no longer ${branch}'s tip (${tipSha.slice(0, 7)}); the run for the tip deploys both.`,
     };
   }
 
-  return { deploy: true, fail: false, message: `Deploying ${headSha.slice(0, 7)}.` };
+  return { deploy: true, fail: false, message: `Deploying ${headSha.slice(0, 7)} to ${branch}.` };
 }
 
 /** Which required inputs preflight was told are missing, with where each is set. */
@@ -256,18 +272,23 @@ export function missingInputs(env) {
 
 export const PHASES = {
   async gate(env, io) {
+    const branch = env.DEPLOY_TARGET;
     let listing = '';
-    await io.run('git', ['ls-remote', 'origin', 'refs/heads/main'], {
-      env: pick(env, TOOL_ENV),
-      redact: redactor([]),
-      write: (text) => {
-        listing += text;
-      },
-    });
+    // Only an environment's own ref is looked up; any other branch is refused by the verdict.
+    if (ENVIRONMENTS.includes(branch)) {
+      await io.run('git', ['ls-remote', 'origin', `refs/heads/${branch}`], {
+        env: pick(env, TOOL_ENV),
+        redact: redactor([]),
+        write: (text) => {
+          listing += text;
+        },
+      });
+    }
 
     const verdict = gateVerdict({
       conclusion: env.CI_CONCLUSION,
       event: env.CI_EVENT,
+      branch,
       headSha: env.RELEASE_SHA,
       tipSha: listing.trim().split(/\s+/)[0] ?? '',
     });
@@ -336,9 +357,25 @@ export const PHASES = {
    * step handed the pooled URL cannot quietly fall back to it, as
    * `resolveMigrationUrl` would. The reference seed follows and is idempotent, so
    * a first deploy against an empty database comes up usable, not ready-but-empty.
+   *
+   * The Neon branch behind the URL is declared per environment as `NEON_BRANCH`
+   * and must be the environment's own name, so staging's run can never migrate
+   * production's database, nor the reverse, whatever a mis-scoped secret says.
    */
   async migrate(env, io) {
-    need(env, ['DATABASE_URL_UNPOOLED']);
+    need(env, ['DATABASE_URL_UNPOOLED', 'DEPLOY_TARGET', 'NEON_BRANCH']);
+
+    if (!ENVIRONMENTS.includes(env.DEPLOY_TARGET)) {
+      throw new PhaseError(
+        `DEPLOY_TARGET "${env.DEPLOY_TARGET}" is not one of ${ENVIRONMENTS.join(', ')}; refusing to migrate.`,
+      );
+    }
+
+    if (env.NEON_BRANCH.trim() !== env.DEPLOY_TARGET) {
+      throw new PhaseError(
+        `NEON_BRANCH "${env.NEON_BRANCH}" is not the ${env.DEPLOY_TARGET} environment's Neon branch (expected "${env.DEPLOY_TARGET}"); refusing to migrate.`,
+      );
+    }
 
     if (!blank(env.DATABASE_URL)) {
       throw new PhaseError(
@@ -378,35 +415,69 @@ export const PHASES = {
   },
 
   /*
-   * A prebuilt production deploy: `vercel build` runs here, under the release
-   * and the source-map credential, so the bundle names the release this
-   * workflow is shipping and its maps are uploaded under that name.
+   * A prebuilt deploy: `vercel build` runs here, under the release and the
+   * source-map credential, so the bundle names the release this workflow is
+   * shipping and its maps are uploaded under that name.
+   *
+   * Production is a production deployment. Staging is a preview deployment
+   * built from the Preview environment's variables (Hobby has no custom
+   * environments), then aliased to the host of `WEB_URL` so the readiness poll
+   * and people have one stable address; `vercel deploy` prints the deployment's
+   * URL as its last stdout line, which is what the alias names.
    */
   async web(env, io) {
     const vercel = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
     const upload = ['SENTRY_AUTH_TOKEN', 'SENTRY_WEB_PROJECT', 'SENTRY_RELEASE'];
-    need(env, [...vercel, ...upload]);
+    need(env, [...vercel, ...upload, 'DEPLOY_TARGET']);
+
+    const production = env.DEPLOY_TARGET === 'production';
+    if (!production && env.DEPLOY_TARGET !== 'staging') {
+      throw new PhaseError(
+        `DEPLOY_TARGET "${env.DEPLOY_TARGET}" is not one of ${ENVIRONMENTS.join(', ')}.`,
+      );
+    }
+    if (!production) {
+      need(env, ['WEB_URL']);
+    }
 
     const redact = redactor([env.VERCEL_TOKEN, env.SENTRY_AUTH_TOKEN]);
     const child = pick(env, [...TOOL_ENV, ...vercel]);
     const build = pick(env, [...TOOL_ENV, ...vercel, ...upload]);
     const cli = ['--yes', VERCEL_CLI];
+    const target = production ? ['--prod'] : [];
 
-    await io.run('npx', [...cli, 'pull', '--yes', '--environment=production'], {
-      env: child,
-      redact,
-      write: io.write,
-    });
-    await io.run('npx', [...cli, 'build', '--prod'], { env: build, redact, write: io.write });
     await io.run(
       'npx',
-      [...cli, 'deploy', '--prebuilt', '--prod', '--env', `SENTRY_RELEASE=${env.SENTRY_RELEASE}`],
+      [...cli, 'pull', '--yes', `--environment=${production ? 'production' : 'preview'}`],
+      { env: child, redact, write: io.write },
+    );
+    await io.run('npx', [...cli, 'build', ...target], { env: build, redact, write: io.write });
+
+    let printed = '';
+    await io.run(
+      'npx',
+      [...cli, 'deploy', '--prebuilt', ...target, '--env', `SENTRY_RELEASE=${env.SENTRY_RELEASE}`],
       {
         env: child,
         redact,
-        write: io.write,
+        write: (text) => {
+          printed += text;
+          io.write(text);
+        },
       },
     );
+
+    if (!production) {
+      const deployment = printed.trim().split('\n').at(-1)?.trim() ?? '';
+      if (!/^https:\/\/[\w.-]+$/.test(deployment)) {
+        throw new PhaseError('vercel deploy did not print a deployment URL to alias.');
+      }
+      await io.run('npx', [...cli, 'alias', 'set', deployment, new URL(env.WEB_URL).hostname], {
+        env: child,
+        redact,
+        write: io.write,
+      });
+    }
   },
 
   /*

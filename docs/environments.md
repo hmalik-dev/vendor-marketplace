@@ -4,12 +4,12 @@ Three tiers, each with its own database, auth users, storage, Stripe endpoints,
 Sentry project and secrets. Nothing is shared between them: a value in one
 environment must never be a fallback for another.
 
-| Tier             | Git branch                | Runs on                                              | Data                                                                    |
-| ---------------- | ------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
-| Local and lanes  | `main` (integration)      | your machine, not deployed                           | Docker Postgres (app DB); Neon `dev` (Neon Auth, storage, E2E accounts) |
-| Staging          | `staging`, moved by hand  | Railway `staging` (+ Vercel preview for web)         | Neon `staging`, Stripe sandbox                                          |
-| Production       | `production`, moved after | Railway `production` (+ Vercel production for web)   | Neon `production`, Stripe sandbox until live keys                       |
-| Preview (per-PR) | the PR branch             | Vercel preview, Neon `preview/pr-<n>` (storage only) | throwaway, expires in 7 days                                            |
+| Tier             | Git branch                | Runs on                                            | Data                                                                    |
+| ---------------- | ------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
+| Local and lanes  | `main` (integration)      | your machine, not deployed                         | Docker Postgres (app DB); Neon `dev` (Neon Auth, storage, E2E accounts) |
+| Staging          | `staging`, moved by hand  | Railway `staging` (+ Vercel preview for web)       | Neon `staging`, Stripe sandbox                                          |
+| Production       | `production`, moved after | Railway `production` (+ Vercel production for web) | Neon `production`, Stripe sandbox until live keys                       |
+| Preview (per-PR) | the PR branch             | Neon `preview/pr-<n>` (storage only); no Vercel    | throwaway, expires in 7 days                                            |
 
 `main` is where merges land and CI runs. It is not deployed. Pre-merge testing
 is the lane (`pnpm lane:up <id>`): a full isolated stack per ticket.
@@ -30,17 +30,42 @@ git push origin staging:production    # promote what passed on staging
 - Production only receives a commit that is already on `staging`.
 - Nobody commits to `staging` or `production` directly; protect both branches
   so only fast-forward pushes are allowed.
-- Railway `staging` follows the `staging` branch and `production` follows
-  `production`, both with **Wait for CI** on.
-- A merge that adds a migration must be migrated first. The release workflow
-  (`.github/workflows/deploy.yml`) migrates production; staging has no such step
-  yet, so run `pnpm db:migrate` against staging's `DATABASE_URL_UNPOOLED` before
-  pushing to `staging`. Every migration stays backwards-compatible with the
-  release still serving.
 
-Staging's Railway service was first deployed with `railway up` from a clean
-export of `origin/main`, because it had no GitHub source. With the repo
-connected, pushes to `staging` deploy it.
+### What a push does
+
+`.github/workflows/deploy.yml` runs after CI succeeds on a push to `staging` or
+`production`, and only those: a push to `main` deploys nothing. The branch names
+the environment, and the job runs in the GitHub environment of the same name, so
+each has its own secrets and variables.
+
+1. **Gate**: the commit is still the branch's tip (a superseded run exits
+   green without deploying; the run for the tip carries it).
+2. **Preflight**: every input below is set, or the run fails by name.
+3. **Migrate** the environment's database over its `DATABASE_URL_UNPOOLED`, then
+   the idempotent reference seed. `NEON_BRANCH` must equal the environment
+   name; staging can never migrate production's database, nor the reverse.
+4. **API**: `railway up` with the environment's token. Railway's own branch
+   auto-deploy must stay **off**, since it cannot be ordered after a GitHub job
+   and would ship code before its migration.
+5. **Web**: a prebuilt Vercel deploy: production as a production deployment,
+   staging as a preview deployment aliased to `WEB_URL`'s host.
+6. **Ready**: `/ready` on the API must name the pushed commit within ten
+   minutes, or the run fails.
+
+Every step runs only if the one before it succeeded, so a failed migration
+stops the release before either service moves. Migrations therefore run against
+the previous release's code and must stay backwards-compatible with it.
+
+Per GitHub environment (`staging`, `production`), set by the account holder
+(VEN-377): secrets `DATABASE_URL_UNPOOLED`, `API_HOST_TOKEN` (a Railway project
+token scoped to that environment), `VERCEL_TOKEN`, `SENTRY_AUTH_TOKEN`;
+variables `NEON_BRANCH` (`staging` or `production`), `API_HOST`, `API_SERVICE`,
+`API_URL`, `WEB_URL`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SENTRY_WEB_PROJECT`;
+and the repository variable `DEPLOY_GATE=required` once all are set.
+
+Vercel builds only `staging` and `production` from git (`vercel.json`); every
+other branch's deployment is skipped, so pull requests and lanes get no Vercel
+preview.
 
 ## What each environment holds
 

@@ -1,11 +1,16 @@
-# The production release path (VEN-397).
+# The release path (VEN-397, VEN-494), one run per environment.
 #
-#   CI succeeds on a push to main
-#     → gate       the commit is still main's tip
+#   CI succeeds on a push to `staging` or `production` (never `main`, which is
+#   integration only); the branch names the environment and its GitHub
+#   environment, so each has its own secrets and variables
+#     → gate       the commit is still that branch's tip
 #     → preflight  nothing configured yet → skipped with a warning; partly configured → fails by name
-#     → migrate    DATABASE_URL_UNPOOLED only, then the idempotent reference seed
-#     → api        deploy the API image
-#     → web        prebuilt Vercel production deploy, source maps to Sentry
+#     → migrate    DATABASE_URL_UNPOOLED only (NEON_BRANCH must name the
+#                  environment), then the idempotent reference seed
+#     → api        deploy the API image; the host's own branch auto-deploy is
+#                  off, so this is the only thing that ever ships the API and
+#                  it always follows the migration
+#     → web        prebuilt Vercel deploy, source maps to Sentry
 #     → ready      GET /ready names this commit before the deadline, or the run fails
 #
 # Every step runs only if the one before it succeeded; nothing here is
@@ -28,13 +33,14 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-    branches: [main]
+    branches: [staging, production]
 
-# One deploy at a time, and never one cancelled mid-migration. A newer run
-# waits for the running one; GitHub keeps only the newest waiting run, which is
-# correct, since it carries every commit the discarded one would have shipped.
+# One deploy per environment at a time, and never one cancelled mid-migration. A
+# newer run waits for the running one; GitHub keeps only the newest waiting run,
+# which is correct, since it carries every commit the discarded one would have
+# shipped.
 concurrency:
-  group: deploy-production
+  group: deploy-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: false
 
 permissions:
@@ -45,13 +51,20 @@ jobs:
     name: Migrate, deploy, prove ready
     # Success only. `skipped`, `cancelled`, `failure`, `timed_out` and
     # `action_required` are all not passing, and a pull request's CI run never
-    # deploys. The gate step checks the same again, where it is tested.
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    # deploys. The `on:` filter already limits the branches; the two names are
+    # repeated because the branch becomes the environment below. The gate step
+    # checks all of it again, where it is tested.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      (github.event.workflow_run.head_branch == 'staging' || github.event.workflow_run.head_branch == 'production')
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: production
+    environment: ${{ github.event.workflow_run.head_branch }}
     env:
       TURBO_TELEMETRY_DISABLED: 1
+      # The environment this run deploys: `staging` or `production`.
+      DEPLOY_TARGET: ${{ github.event.workflow_run.head_branch }}
       # The release identifier, end to end: the API reports it to Sentry and
       # names it on /ready, the web bundle inlines it and uploads its source
       # maps under it, and the poll waits for /ready to say it.
@@ -62,7 +75,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Gate on CI success and on still being main's tip
+      - name: Gate on CI success and on still being the branch's tip
         id: gate
         env:
           CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
@@ -76,6 +89,7 @@ jobs:
         if: steps.gate.outputs.deploy == 'true'
         env:
           HAS_DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED != '' }}
+          HAS_NEON_BRANCH: ${{ vars.NEON_BRANCH != '' }}
           HAS_API_HOST: ${{ vars.API_HOST != '' }}
           HAS_API_SERVICE: ${{ vars.API_SERVICE != '' }}
           HAS_API_HOST_TOKEN: ${{ secrets.API_HOST_TOKEN != '' }}
@@ -109,11 +123,14 @@ jobs:
           pnpm turbo run build --filter=@vendor-marketplace/db --filter=@vendor-marketplace/shared
 
       # The unpooled URL and nothing else: no DATABASE_URL reaches this step, so
-      # DDL cannot route through the pooler.
+      # DDL cannot route through the pooler. NEON_BRANCH is not a secret: it
+      # names the branch the URL belongs to, and the phase refuses unless that
+      # is this environment's own.
       - name: Migrate, then seed reference data
         if: steps.gate.outputs.deploy == 'true' && steps.preflight.outputs.ready == 'true'
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          NEON_BRANCH: ${{ vars.NEON_BRANCH }}
         run: node scripts/deploy.mjs migrate
 
       - name: Deploy the API
@@ -132,6 +149,8 @@ jobs:
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_WEB_PROJECT: ${{ vars.SENTRY_WEB_PROJECT }}
+          # Staging aliases its preview deployment to this host.
+          WEB_URL: ${{ vars.WEB_URL }}
         run: node scripts/deploy.mjs web
 
       # Bounded: ten minutes covers a cold build on either platform without
