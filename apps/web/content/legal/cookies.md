@@ -1,6 +1,6 @@
 ---
 title: Cookie notice
-lastUpdated: 2026-06-04
+lastUpdated: 2026-09-20
 ---
 
 {{brand}} uses one cookie. It keeps you signed in. That is the whole notice.
@@ -9,4 +9,4 @@ lastUpdated: 2026-06-04
 | ---------------------------------- | --------- | ---------------------------------- |
 | `__Secure-neon-auth.session_token` | Neon Auth | Strictly necessary — your sign-in. |
 
-We set no cookies of our own and load no analytics, advertising or session-recording scripts. A strictly necessary cookie needs no consent, so you will not see a banner. If we ever add anything measuring behaviour, this page changes first and the banner arrives with it.
+We set no cookies of our own and load no advertising or session-recording scripts. We load Vercel Web Analytics, which sets no cookies. A strictly necessary cookie needs no consent, so you will not see a banner. If we ever add anything measuring behaviour, this page changes first and the banner arrives with it.

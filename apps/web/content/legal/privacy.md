@@ -1,6 +1,6 @@
 ---
 title: Privacy Policy
-lastUpdated: 2026-09-07
+lastUpdated: 2026-09-20
 ---
 
 Short version: we hold the booking. Your card is held by Stripe, your sign-in is held by Neon Auth, and your uploaded files are held by Neon. We do not sell anything to anyone, and we run no advertising or analytics trackers.
@@ -54,5 +54,5 @@ Traffic is encrypted, card details never touch our servers, and access to the da
 The date at the top of this page is the date of the version you are reading. Questions go through Contact support, which reaches a person.
 
 :::note
-No advertising networks, no analytics vendors, no data brokers. If that ever changes we will say so here and ask you first.
+We measure page views with Vercel Web Analytics, which sets no cookies and does not follow you across sites. There are still no advertising networks and no data brokers.
 :::

@@ -6738,7 +6738,6 @@ packages:
   svix@2.1.0:
     resolution: {integrity: sha512-ZhZ33DLseN3yBRZxKR6GPIut52kVv5xiCCWiO2AzabhgVZwyitcmw+rRsDsGwDJIw9vCUfAiHt9iZTmlxRDk8Q==}
     engines: {node: '>=22'}
-    deprecated: Incorrect verify function signature.
 
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}

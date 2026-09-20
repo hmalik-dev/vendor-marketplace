@@ -33,8 +33,8 @@ describe('legal content', () => {
   it('loads all three documents with their own frontmatter date', () => {
     const dates: Record<(typeof LEGAL_DOCUMENT_SLUGS)[number], string> = {
       terms: '2026-06-04',
-      privacy: '2026-09-07',
-      cookies: '2026-06-04',
+      privacy: '2026-09-20',
+      cookies: '2026-09-20',
     };
 
     for (const slug of LEGAL_DOCUMENT_SLUGS) {
@@ -136,6 +136,31 @@ describe('legal content', () => {
       BRAND_NAME,
       'Stripe',
     ]);
+  });
+
+  /**
+   * VEN-496. Web Analytics is loaded in production, so both documents say so in
+   * the account holder's approved words — pinned whole, since a substring of
+   * the surrounding prose would survive a reworded sentence.
+   */
+  it('names Vercel Web Analytics in the approved wording, and drops the "no analytics" clauses', () => {
+    const note = legalDocument('privacy')
+      .sections.at(-1)
+      ?.blocks.find((block) => block.kind === 'note');
+    const noteText = (note?.kind === 'note' ? note.paragraphs.flat() : [])
+      .map((span) => span.text)
+      .join('');
+
+    expect(noteText).toBe(
+      'We measure page views with Vercel Web Analytics, which sets no cookies and does not follow you across sites. There are still no advertising networks and no data brokers.',
+    );
+    expect(legalMarkdownSource('cookies')).toContain(
+      'We set no cookies of our own and load no advertising or session-recording scripts. We load Vercel Web Analytics, which sets no cookies.',
+    );
+
+    for (const slug of ['privacy', 'cookies'] as const) {
+      expect([slug, legalMarkdownSource(slug).includes('no analytics')]).toEqual([slug, false]);
+    }
   });
 
   it('ends the privacy page on a sage note', () => {

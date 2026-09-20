@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
-import { Analytics } from '@vercel/analytics/next';
 import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
 import { siteOrigin } from '@/config/env';
+import { analyticsEnabled } from '@/lib/analytics-enabled';
 import { getServerSession } from '@/lib/auth/server';
 import { ErrorReportingUser } from '@/components/errors/error-reporting-user';
 import { OutsideAdmin, PublicChrome } from '@/components/public-chrome';
@@ -12,6 +12,7 @@ import { SearchStatusProvider } from '@/components/search/search-status';
 import { SiteHeader } from '@/components/site-header';
 import { Toaster } from '@/components/ui/sonner';
 import { TOAST_BOTTOM_OFFSET } from '@/components/ui/toast-offset';
+import { WebAnalytics } from '@/components/web-analytics';
 import './globals.css';
 
 /**
@@ -155,7 +156,7 @@ export default async function RootLayout({
           offset={{ bottom: TOAST_BOTTOM_OFFSET }}
           mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
         />
-        <Analytics />
+        {analyticsEnabled(process.env.VERCEL_ENV) ? <WebAnalytics /> : null}
       </body>
     </html>
   );
