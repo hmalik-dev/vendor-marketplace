@@ -11,6 +11,8 @@ import {
   PAYMENT_INTENT_SUCCEEDED,
   type StripeEventNotification,
   type StripeKeyMode,
+  isForeignEnvIntent,
+  isForeignEnvPaymentIntent,
 } from '../../lib/stripe.js';
 import {
   openChargebackCase,
@@ -221,6 +223,12 @@ export interface StripeWebhookRoutesOptions {
    * (a key of no recognised mode) skips the check.
    */
   keyMode: StripeKeyMode | null;
+  /**
+   * `DEPLOY_ENV`. Staging and production share one Stripe test account, so an
+   * intent, dispute or refund tagged for the other tier is acknowledged and
+   * ignored rather than retried or paged (VEN-529).
+   */
+  deployEnv: string;
 }
 
 export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptions> = async (
@@ -407,6 +415,14 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           return 'ignored';
         }
 
+        if (isForeignEnvIntent(intent, options.deployEnv)) {
+          request.log.info(
+            { paymentIntentId: intent.id, intentEnv: intent.metadata.env, env: options.deployEnv },
+            'Ignored a succeeded payment intent created by another deployment',
+          );
+          return 'ignored';
+        }
+
         /*
          * A succeeded intent that names no booking request was not created by
          * this platform — `stripe trigger`, a Dashboard test payment, another
@@ -458,6 +474,17 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
         const refund = await app.stripe.retrieveRefund(refundId);
 
         if (isUsableRefundStatus(refund.status) || !refund.paymentIntentId) {
+          return 'refund-unchanged';
+        }
+
+        /* Before the lookup: a database branched from the other tier holds its intent ids too (VEN-529). */
+        if (
+          await isForeignEnvPaymentIntent(app.stripe, refund.paymentIntentId, options.deployEnv)
+        ) {
+          request.log.info(
+            { refundId: refund.refundId, paymentIntentId: refund.paymentIntentId },
+            'Ignored a failed refund on a payment intent created by another deployment',
+          );
           return 'refund-unchanged';
         }
 
@@ -518,6 +545,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
             log: request.log,
             bookings: bookingContextFor(app, request.log, options.webOrigin),
             alerts: app.operatorAlerts,
+            deployEnv: options.deployEnv,
           },
           disputeId,
           () => app.stripe.retrieveDispute(disputeId),

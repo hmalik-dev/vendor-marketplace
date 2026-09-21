@@ -462,7 +462,7 @@ export interface FakeStripe extends StripeConnectGateway {
   cancel: (paymentIntentId: string) => PaymentIntentSnapshot;
 }
 
-function createFakeStripe(): FakeStripe {
+function createFakeStripe(deployEnv: string): FakeStripe {
   const createdAccounts: FakeStripe['createdAccounts'] = [];
   const createdLinks: FakeStripe['createdLinks'] = [];
   const accountStatuses = new Map<string, FakeAccountStatus>();
@@ -612,7 +612,7 @@ function createFakeStripe(): FakeStripe {
        * back is shaped by the code that would post it — the metadata below is
        * the very object Stripe would be sent, not a paraphrase of it.
        */
-      const params = paymentIntentParams(input);
+      const params = paymentIntentParams(input, deployEnv);
       const intent: PaymentIntentSnapshot = {
         id,
         status: 'requires_payment_method',
@@ -960,7 +960,7 @@ export async function createTestHarness(
   const authUsers = new Map<string, AuthUserSnapshot>();
   const acceptTerms = options.acceptTerms ?? true;
   const validWebhookSignatures = new Set<string>(['valid-signature']);
-  const stripe = createFakeStripe();
+  const stripe = createFakeStripe({ ...TEST_ENV, ...options.env }.DEPLOY_ENV);
   const email = createFakeEmail();
   const storedObjects: RecordedObject[] = [];
 

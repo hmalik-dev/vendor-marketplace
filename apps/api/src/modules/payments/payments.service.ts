@@ -401,7 +401,7 @@ async function createRefundOnce(
 /** What became of a succeeded intent. `refunded` is a charge that was not booked. */
 export type RecordedPayment =
   | { outcome: 'booked' | 'already-booked'; booking: BookingRow }
-  | { outcome: 'refunded'; booking: null };
+  | { outcome: 'refunded' | 'ignored'; booking: null };
 
 /**
  * Turns a succeeded intent into a booking. Called by the webhook, and by the
@@ -444,6 +444,20 @@ export async function recordSuccessfulPayment(
   const row = await findPayableRequest(context.db, requestId);
 
   if (!row) {
+    /*
+     * An untagged intent with no request here came from outside this platform
+     * or another deployment predating the `env` tag; a 404 would have Stripe
+     * retry it for three days (VEN-529). One of ours (tagged) that has lost its
+     * request is a real fault and still refuses.
+     */
+    if (intent.metadata.env === undefined) {
+      context.log.warn(
+        { requestId, paymentIntentId: intent.id },
+        'Ignored a succeeded payment intent whose request is unknown and which carries no environment tag',
+      );
+      return { outcome: 'ignored', booking: null };
+    }
+
     throw notFound('That request does not exist');
   }
 
