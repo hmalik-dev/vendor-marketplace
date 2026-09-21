@@ -1,6 +1,6 @@
 import { setUserRole } from '../../testing/set-user-role.js';
 import { readFileSync } from 'node:fs';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import {
   adminActions,
   bookingRequests,
@@ -39,16 +39,12 @@ import { bookingContextFor } from '../payments/payments.service.js';
  * Its own file rather than another block in `admin.routes.test.ts`, which is
  * already 1,500 lines and held by two other lanes.
  *
- * **The corrected fact this suite is written around.** The ticket asserted that
- * a hard `DELETE FROM users` carrying a `legal_acceptances` row is refused by
- * `0029`'s triggers. It is not, and `legal-acceptance-immutability.test.ts`
- * proves the opposite on `main`: the guard is `BEFORE DELETE FOR EACH ROW` and
- * returns `OLD` once the accepting user is gone, and `RETURN OLD` from a
- * `BEFORE DELETE` trigger means *proceed*. The evidence survives because the
- * closure path **never hard-deletes** — the account is retired with
- * `deleted_at` — not because the database would stop one. So every assertion
- * here reads the rows that survive a closure, and none of them expects a caught
- * exception.
+ * **The fact this suite is written around.** The closure path **never
+ * hard-deletes** — the account is retired with `deleted_at` — so every assertion
+ * here reads the rows that survive a closure. Since VEN-463 the database would
+ * also refuse a hard delete (`RESTRICT` foreign keys,
+ * `legal-acceptance-immutability.test.ts`), which this suite's teardown gets
+ * around only through the harness's throwaway-database triggers.
  */
 const ADMIN = 'user_rights_admin';
 const VENDOR = 'user_rights_vendor';
@@ -587,6 +583,49 @@ describe('data rights', () => {
       });
     });
 
+    /**
+     * VEN-463, AC2. The audit row rides the retirement's transaction, so an
+     * insert that fails takes the retirement with it: the operator sees an error
+     * and the account is still live, rather than closed with nothing on record.
+     * The failure is forced by a trigger, which is the one place a test can make
+     * the insert itself raise without mocking the DAO.
+     */
+    it('rolls the closure back when its audit row cannot be written', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+
+      await harness.database.db.execute(
+        sql.raw(`CREATE FUNCTION refuse_audit() RETURNS trigger AS $$
+          BEGIN RAISE EXCEPTION 'audit insert refused'; END;
+          $$ LANGUAGE plpgsql`),
+      );
+      await harness.database.db.execute(
+        sql.raw(`CREATE TRIGGER refuse_audit BEFORE INSERT ON admin_actions
+          FOR EACH ROW EXECUTE FUNCTION refuse_audit()`),
+      );
+
+      try {
+        const response = await harness.app.inject({
+          method: 'POST',
+          url: `/admin/users/${customerId}/close`,
+          headers: bearer(ADMIN),
+        });
+
+        expect(response.statusCode).toBe(500);
+      } finally {
+        await harness.database.db.execute(sql.raw('DROP TRIGGER refuse_audit ON admin_actions'));
+        await harness.database.db.execute(sql.raw('DROP FUNCTION refuse_audit()'));
+      }
+
+      const [account] = await harness.database.db
+        .select({ deletedAt: users.deletedAt })
+        .from(users)
+        .where(eq(users.id, customerId));
+      expect(account!.deletedAt).toBeNull();
+      expect(await actionRows()).toHaveLength(0);
+      expect(harness.deletedAuthUsers).toEqual([]);
+    });
+
     it("retires a vendor's storefront, and their slug 404s", async () => {
       await signIn(ADMIN, true);
       await signIn(VENDOR);
@@ -773,10 +812,10 @@ describe('data rights', () => {
         .where(eq(users.id, vendor.userId));
       expect(account!.deletedAt).not.toBeNull();
 
-      /* And the audit row carries the count an operator has to act on. */
+      /* The audit row rides the retirement, so it records that and not the unwind's outcome. */
       const audit = await actionRows();
-      expect(audit.filter((row) => row.action === 'user_closed')[0]?.detail).toMatchObject({
-        refundsFailed: 1,
+      expect(audit.filter((row) => row.action === 'user_closed')[0]?.detail).toEqual({
+        profileRetired: true,
       });
     });
 
@@ -883,8 +922,9 @@ describe('data rights', () => {
       expect(after.statusCode).toBe(401);
       expect(after.json().message).toBe('Session token is invalid or expired');
 
+      /* Recorded with the retirement (VEN-463), so it cannot claim what came after. */
       const rows = await actionRows();
-      expect(rows[0]?.detail).toMatchObject({ identityDeleted: true });
+      expect(rows[0]?.detail).toEqual({ profileRetired: false });
     });
 
     /**
@@ -1045,7 +1085,7 @@ describe('data rights', () => {
       expect(account!.deletedAt).not.toBeNull();
 
       const rows = await actionRows();
-      expect(rows[0]?.detail).toMatchObject({ identityDeleted: false });
+      expect(rows[0]?.detail).toEqual({ profileRetired: false });
     });
 
     /**
@@ -1194,7 +1234,7 @@ describe('data rights', () => {
     /*
      * A lane's API has no connection to the identity store (`NEON_AUTH_DATABASE_URL`
      * is unset there on purpose). It cannot end an identity and must not say it
-     * did: a false `identityDeleted` in `admin_actions` cannot be corrected.
+     * did: a false `identityDeleted` in the response is what the console acts on.
      */
     it('reports the identity as not deleted when there is no store to delete from', async () => {
       await signIn(ADMIN, true);

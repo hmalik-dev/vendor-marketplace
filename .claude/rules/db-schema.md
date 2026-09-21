@@ -17,7 +17,10 @@ the major version Neon runs, and a drift test enforces it.
 
 Edit `packages/db/src/schema`, then generate the migration with `pnpm db:generate`
 and commit the two together. **Never hand-edit a file in `packages/db/drizzle/`** —
-it is generated output and the next generate will fight you.
+it is generated output and the next generate will fight you. The one
+exception is a `-- allow-destructive: <reason>` comment, which `pnpm
+migrations:check` requires on a destructive statement and which `db:generate`
+never rewrites.
 
 Multi-statement mutations run in one transaction.
 

@@ -6,7 +6,7 @@ import {
 import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { refundFailedAlert } from '../operator-alerts/operator-alerts.service.js';
-import { cancelBookingAndFreeDate } from '../payments/payments.dao.js';
+import { cancelBookingAndFreeDate, zeroUnreleasedVendorPayout } from '../payments/payments.dao.js';
 import { createRefundOnce, type BookingContext } from '../payments/payments.service.js';
 import {
   declineOpenRequests,
@@ -325,6 +325,7 @@ async function unwindBatch(
      * refund the loop below is about to fail on.
      */
     let refundedCents: number | null = null;
+    let refundId: string | undefined;
 
     /*
      * A pre-#423 destination charge is refused here for the same reason
@@ -368,6 +369,7 @@ async function unwindBatch(
          * refund" left $490 unreturned on a booking then closed as refunded.
          */
         refundedCents = alreadyRefundedCents;
+        refundId = alreadyRefunded?.refundIds[0];
 
         if (remainingCents > 0) {
           const refund = await createRefundOnce(context, {
@@ -400,9 +402,8 @@ async function unwindBatch(
           });
 
           refundedCents += refund.amountCents;
+          refundId = refund.refundId;
         }
-
-        refundsIssued += 1;
       } catch (error) {
         /*
          * One failed refund must not abandon the rest of the unwind. The
@@ -456,7 +457,30 @@ async function unwindBatch(
     });
 
     if (!cancelled) {
+      if (booking.stripePaymentIntentId) {
+        /*
+         * The refund is out and the row would not cancel: status moved under
+         * the loop (a Dashboard refund holding it `disputed`, the customer's own
+         * cancel). Left alone the booking is refunded in full with its payout
+         * intact, and the sweep pays the vendor after an unban (VEN-546). So the
+         * payout is zeroed here, the operator is told, and the refund is not
+         * counted as a clean one.
+         */
+        context.log.error(
+          { bookingId: booking.id, operation: copy.operation, refundId },
+          'Refunded a booking during an account unwind whose row could not be cancelled',
+        );
+        await zeroUnreleasedVendorPayout(context.db, booking.id);
+        context.alerts?.dispatch(
+          refundFailedAlert({ bookingId: booking.id, during: copy.operation, refundId }),
+        );
+        refundsFailed += 1;
+      }
       continue;
+    }
+
+    if (booking.stripePaymentIntentId) {
+      refundsIssued += 1;
     }
 
     bookingsCancelled += 1;

@@ -13,6 +13,7 @@
     "lane:exec": "tsx packages/preflight/src/lane/cli.ts exec",
     "lane:pr": "tsx packages/preflight/src/lane/cli.ts pr",
     "lane:down": "tsx packages/preflight/src/lane/cli.ts down",
+    "migrations:check": "pnpm --filter @vendor-marketplace/preflight run migrations:check",
     "secrets:scan": "pnpm --filter @vendor-marketplace/preflight run secrets:scan",
     "secrets:scan:all": "pnpm --filter @vendor-marketplace/preflight run secrets:scan -- --tracked",
     "smoke": "pnpm --filter @vendor-marketplace/preflight run smoke",

@@ -109,8 +109,8 @@ export interface CeilingDeps {
  * Runs a ban or closure only while the operator is under the hourly ceiling
  * (VEN-500), and tells the operator when it is not.
  *
- * The audit row lands **last** on a ban, after the refunds, so the count alone
- * would let concurrent requests all read "under" — `inFlight` closes that
+ * The audit row lands **last** on a ban, after the refunds (a closure's rides its
+ * retirement, first), so the count alone would let concurrent requests all read "under" — `inFlight` closes that
  * within an instance. Across replicas it can overshoot by the concurrency, and
  * the step-up store already makes this a single-instance control.
  *

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, integer, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, index, integer, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { PLATFORM_SETTINGS_ID } from '@vendor-marketplace/shared';
 import { users } from './users.js';
 
@@ -43,6 +43,8 @@ export const platformSettings = pgTable(
       'platform_settings_max_booking_cents_positive',
       sql`${table.maxBookingCents} IS NULL OR ${table.maxBookingCents} > 0`,
     ),
+    /* A user delete finds the rows naming it through this, not a scan (VEN-463). */
+    index('platform_settings_updated_by_idx').on(table.updatedBy),
   ],
 ).enableRLS();
 
