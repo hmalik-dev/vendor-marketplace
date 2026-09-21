@@ -233,10 +233,11 @@ describe('free text on a request body', () => {
     // whose business name, category, city and message are a stranger's free
     // text, plus `decideVendorApplicationSchema` and `createVendorInviteSchema`,
     // an enum and an email.
+    // 35 since VEN-500 added `adminStepUpVerifySchema`, a six-digit code.
     //
     // A merge is where this number goes wrong: two lanes each add to 23 and a
     // both-sides union keeps one of the answers rather than the sum.
-    expect(names).toHaveLength(34);
+    expect(names).toHaveLength(35);
     expect(names).toContain('reorderCategoriesSchema');
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
@@ -284,6 +285,8 @@ describe('free text on a request body', () => {
        */
       'acceptTermsSchema.version',
       'acceptVendorAgreementSchema.version',
+      // VEN-500's emailed step-up code: six digits by pattern, not prose.
+      'adminStepUpVerifySchema.code',
       'createBookingRequestSchema.eventDate',
       'createBookingRequestSchema.eventStartTime',
       /*
