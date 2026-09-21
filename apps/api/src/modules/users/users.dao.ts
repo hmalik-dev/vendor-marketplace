@@ -18,6 +18,15 @@ export type RetireOutcome<B> = { user: UserRow; profileRetired: boolean } | { bl
 /** Read inside the retirement's transaction, under the row lock, so it cannot go stale. */
 export type RetirementBlockers<B> = (tx: AppDatabase) => Promise<B[]>;
 
+/**
+ * Written inside the retirement's transaction once the row is retired, so a
+ * failure rolls the retirement back (VEN-463). Receives what the retirement did.
+ */
+export type RetirementAudit = (
+  tx: AppDatabase,
+  outcome: { profileRetired: boolean },
+) => Promise<void>;
+
 interface RetirementGuard<B> {
   userId: string;
   blockersOf: RetirementBlockers<B>;
@@ -554,6 +563,7 @@ export async function retireUserById<B>(
   db: AppDatabase,
   userId: string,
   blockersOf?: RetirementBlockers<B>,
+  audit?: RetirementAudit,
 ): Promise<RetireOutcome<B> | null> {
   if (!userId) {
     return null;
@@ -564,6 +574,7 @@ export async function retireUserById<B>(
     and(eq(users.id, userId), notDeleted),
     undefined,
     blockersOf && { userId, blockersOf },
+    audit,
   );
 }
 
@@ -613,6 +624,7 @@ export async function retireOperatorById<B>(
   db: AppDatabase,
   userId: string,
   blockersOf?: RetirementBlockers<B>,
+  audit?: RetirementAudit,
 ): Promise<RetireOutcome<B> | 'last-operator' | null> {
   const other = alias(users, 'other_operator');
   const retired = await retireUserWhere(
@@ -629,6 +641,7 @@ export async function retireOperatorById<B>(
     ),
     OPERATOR_RETIREMENT_LOCK,
     blockersOf && { userId, blockersOf },
+    audit,
   );
 
   if (retired) {
@@ -717,8 +730,9 @@ async function retireUserWhere<B>(
   where: SQL | undefined,
   lock?: SQL,
   guard?: RetirementGuard<B>,
+  audit?: RetirementAudit,
 ): Promise<RetireOutcome<B> | null> {
-  const retired = await retireUserInTransaction(db, where, lock, guard);
+  const retired = await retireUserInTransaction(db, where, lock, guard, audit);
 
   /*
    * A retired row's address leaves `users_email_key`, so it is released as
@@ -739,6 +753,7 @@ async function retireUserInTransaction<B>(
   where: SQL | undefined,
   lock?: SQL,
   guard?: RetirementGuard<B>,
+  audit?: RetirementAudit,
 ): Promise<RetireOutcome<B> | null> {
   return db.transaction(async (tx) => {
     if (lock) {
@@ -785,7 +800,11 @@ async function retireUserInTransaction<B>(
       .where(eq(vendorProfiles.userId, row.id))
       .returning({ id: vendorProfiles.id });
 
-    return { user: row, profileRetired: profiles.length > 0 };
+    const profileRetired = profiles.length > 0;
+
+    await audit?.(tx, { profileRetired });
+
+    return { user: row, profileRetired };
   });
 }
 

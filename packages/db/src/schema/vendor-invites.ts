@@ -67,6 +67,8 @@ export const vendorInvites = pgTable(
   },
   (table) => [
     uniqueIndex('vendor_invites_email_key').on(table.email),
+    /* A user delete finds the invites naming it through this, not a scan (VEN-463). */
+    index('vendor_invites_invited_by_idx').on(table.invitedBy),
     check('vendor_invites_email_lowercase', sql`${table.email} = lower(${table.email})`),
   ],
 ).enableRLS();
