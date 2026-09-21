@@ -7,7 +7,7 @@ import {
 import { users } from '@vendor-marketplace/db/schema';
 import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
 import { eq } from 'drizzle-orm';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, RouteOptions } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
 import type { AppDatabase } from '../lib/database.js';
 import type { EmailGateway, EmailMessage } from '../lib/email.js';
@@ -128,6 +128,8 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
   env?: Partial<ApiEnv>;
   /** A short request timeout, for the suite that watches a stalled upload get cut off. */
   requestTimeoutMs?: number;
+  /** Sees every route the server registers, for the suite that walks the route table. */
+  onRoute?: (route: RouteOptions) => void;
   /**
    * The real Neon Auth token verifier and loader (over a local key set), in
    * place of the fakes that read the literal `token-<id>` — for the suite whose
@@ -1057,6 +1059,7 @@ export async function createTestHarness(
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.requestTimeoutMs ? { requestTimeoutMs: options.requestTimeoutMs } : {}),
+    ...(options.onRoute ? { onRoute: options.onRoute } : {}),
     ...(options.errorReporter ? { errorReporter: options.errorReporter } : {}),
     auth: {
       // Tokens in the suites are literally the auth user id they stand for.

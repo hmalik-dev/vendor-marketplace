@@ -8,7 +8,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuth } from '../../lib/guards.js';
+import { authenticated, requireAuthBeforeValidation } from '../../lib/guards.js';
 import { createReview, getVendorReviews } from './reviews.service.js';
 
 const bookingParamsSchema = z.object({ bookingId: uuidSchema });
@@ -66,7 +66,7 @@ export const reviewRoutes: FastifyPluginAsyncZod<ReviewRoutesOptions> = async (a
   app.post(
     '/bookings/:bookingId/reviews',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: {
         params: bookingParamsSchema,
         body: createReviewSchema,

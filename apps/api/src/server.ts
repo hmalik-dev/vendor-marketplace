@@ -5,7 +5,11 @@ import rateLimit from '@fastify/rate-limit';
 import { timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
+import Fastify, {
+  type FastifyInstance,
+  type FastifyPluginOptions,
+  type RouteOptions,
+} from 'fastify';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -158,6 +162,11 @@ export interface BuildServerOptions {
    * deployment, so a production API cannot be built without reporting.
    */
   errorReporter?: ErrorReporter;
+  /**
+   * Called with every route the server registers, from a root `onRoute` hook
+   * added before any plugin, so the suites can walk the real route table.
+   */
+  onRoute?: (route: RouteOptions) => void;
 }
 
 /**
@@ -363,6 +372,10 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  if (options.onRoute) {
+    app.addHook('onRoute', options.onRoute);
+  }
 
   await app.register(errorHandlerPlugin, { reporter: errorReporter, paymentRoutes: moneyRoutes });
   // The API serves JSON and nothing a browser renders, so a response that is ever
