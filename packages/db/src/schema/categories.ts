@@ -30,7 +30,7 @@ export const categories = pgTable(
     uniqueIndex('categories_name_key').on(table.name),
     uniqueIndex('categories_slug_key').on(table.slug),
   ],
-);
+).enableRLS();
 
 export type CategoryRow = typeof categories.$inferSelect;
 export type NewCategoryRow = typeof categories.$inferInsert;
@@ -51,7 +51,7 @@ export const vendorCategories = pgTable(
     // (browse by category) needs its own index.
     index('vendor_categories_category_id_idx').on(table.categoryId),
   ],
-);
+).enableRLS();
 
 export type VendorCategoryRow = typeof vendorCategories.$inferSelect;
 export type NewVendorCategoryRow = typeof vendorCategories.$inferInsert;

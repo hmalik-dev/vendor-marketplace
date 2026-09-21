@@ -116,3 +116,4 @@
 - [Admin booking detail + requests funnel](admin-booking-detail-and-requests-reads.md) — PASS; reopen if the funnel ages rows or lists contact
 - [Admin vendor detail is a gated aggregate](admin-vendor-detail-is-a-gated-aggregate.md) — widening notifications to `body` bypasses the case-row read grant
 - [Admin category writes](admin-category-writes.md) — PASS; the toggle can double-write its audit row under a concurrent repeat
+- [RLS is enabled, never forced](rls-is-enabled-not-forced-owner-bypasses.md) — VEN-504: the owner bypasses, so a future non-owner role reads zero rows silently; the guard is `relkind='r'` in `public`

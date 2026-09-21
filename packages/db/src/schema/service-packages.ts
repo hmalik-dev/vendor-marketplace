@@ -57,7 +57,7 @@ export const servicePackages = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('service_packages_vendor_active_idx').on(table.vendorId, table.isActive)],
-);
+).enableRLS();
 
 export type ServicePackageRow = typeof servicePackages.$inferSelect;
 export type NewServicePackageRow = typeof servicePackages.$inferInsert;

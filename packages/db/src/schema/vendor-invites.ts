@@ -68,7 +68,7 @@ export const vendorInvites = pgTable(
     uniqueIndex('vendor_invites_email_key').on(table.email),
     check('vendor_invites_email_lowercase', sql`${table.email} = lower(${table.email})`),
   ],
-);
+).enableRLS();
 
 export type VendorInviteRow = typeof vendorInvites.$inferSelect;
 
@@ -98,6 +98,6 @@ export const vendorApplications = pgTable(
     index('vendor_applications_created_at_idx').on(table.createdAt),
     check('vendor_applications_email_lowercase', sql`${table.email} = lower(${table.email})`),
   ],
-);
+).enableRLS();
 
 export type VendorApplicationRow = typeof vendorApplications.$inferSelect;

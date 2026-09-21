@@ -80,7 +80,7 @@ export const usCities = pgTable(
       table.searchName.op('text_pattern_ops'),
     ),
   ],
-);
+).enableRLS();
 
 export type UsCityRow = typeof usCities.$inferSelect;
 export type NewUsCityRow = typeof usCities.$inferInsert;

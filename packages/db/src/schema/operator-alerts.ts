@@ -40,7 +40,7 @@ export const operatorAlerts = pgTable(
       .on(table.subjectId)
       .where(sql`${table.kind} = 'daily_digest'`),
   ],
-);
+).enableRLS();
 
 export type OperatorAlertRow = typeof operatorAlerts.$inferSelect;
 
@@ -63,4 +63,4 @@ export const stripeWebhookFailures = pgTable(
   (table) => [
     index('stripe_webhook_failures_failure_failed_at_idx').on(table.failure, table.failedAt),
   ],
-);
+).enableRLS();

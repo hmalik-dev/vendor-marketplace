@@ -155,7 +155,7 @@ export const users = pgTable(
       .on(table.id)
       .where(sql`${table.isBanned} = true`),
   ],
-);
+).enableRLS();
 
 export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;

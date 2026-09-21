@@ -30,7 +30,7 @@ export const notifications = pgTable(
     // Serves both the unread badge count and the paginated notification list.
     index('notifications_user_read_idx').on(table.userId, table.readAt, table.createdAt),
   ],
-);
+).enableRLS();
 
 export type NotificationRow = typeof notifications.$inferSelect;
 export type NewNotificationRow = typeof notifications.$inferInsert;

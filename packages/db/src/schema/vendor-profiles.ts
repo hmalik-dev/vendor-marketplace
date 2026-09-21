@@ -198,7 +198,7 @@ export const vendorProfiles = pgTable(
       sql`${table.stripeOnboarded} = false OR ${table.stripeAccountId} IS NOT NULL`,
     ),
   ],
-);
+).enableRLS();
 
 export type VendorProfileRow = typeof vendorProfiles.$inferSelect;
 export type NewVendorProfileRow = typeof vendorProfiles.$inferInsert;

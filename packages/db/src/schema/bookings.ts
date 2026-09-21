@@ -118,7 +118,7 @@ export const bookingRequests = pgTable(
       .on(table.customerId, table.vendorId, table.eventDate)
       .where(sql`${table.status} in ('pending', 'quoted') and ${table.packageId} is null`),
   ],
-);
+).enableRLS();
 
 export type BookingRequestRow = typeof bookingRequests.$inferSelect;
 export type NewBookingRequestRow = typeof bookingRequests.$inferInsert;
@@ -325,7 +325,7 @@ export const bookings = pgTable(
         sql`${table.paidAt} is not null and ${table.payoutReleasedAt} is null and ${table.payoutAttempts} > 0`,
       ),
   ],
-);
+).enableRLS();
 
 export type BookingRow = typeof bookings.$inferSelect;
 export type NewBookingRow = typeof bookings.$inferInsert;

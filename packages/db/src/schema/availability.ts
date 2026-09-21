@@ -21,7 +21,7 @@ export const availability = pgTable(
     note: varchar('note', { length: 500 }),
   },
   (table) => [uniqueIndex('availability_vendor_date_key').on(table.vendorId, table.date)],
-);
+).enableRLS();
 
 export type AvailabilityRow = typeof availability.$inferSelect;
 export type NewAvailabilityRow = typeof availability.$inferInsert;

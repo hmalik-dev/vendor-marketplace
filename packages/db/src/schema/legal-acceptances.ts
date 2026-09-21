@@ -200,7 +200,7 @@ export const legalAcceptances = pgTable(
       table.version,
     ),
   ],
-);
+).enableRLS();
 
 export type LegalAcceptanceRow = typeof legalAcceptances.$inferSelect;
 export type NewLegalAcceptanceRow = typeof legalAcceptances.$inferInsert;

@@ -18,7 +18,7 @@ export const portfolioItems = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('portfolio_items_vendor_order_idx').on(table.vendorId, table.displayOrder)],
-);
+).enableRLS();
 
 export type PortfolioItemRow = typeof portfolioItems.$inferSelect;
 export type NewPortfolioItemRow = typeof portfolioItems.$inferInsert;

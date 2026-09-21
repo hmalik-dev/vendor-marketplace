@@ -44,6 +44,6 @@ export const platformSettings = pgTable(
       sql`${table.maxBookingCents} IS NULL OR ${table.maxBookingCents} > 0`,
     ),
   ],
-);
+).enableRLS();
 
 export type PlatformSettingsRow = typeof platformSettings.$inferSelect;

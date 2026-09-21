@@ -54,7 +54,7 @@ export const tags = pgTable(
       .on(table.category, table.displayOrder)
       .where(sql`${table.isActive} = true`),
   ],
-);
+).enableRLS();
 
 export type TagRow = typeof tags.$inferSelect;
 export type NewTagRow = typeof tags.$inferInsert;
@@ -75,7 +75,7 @@ export const vendorTags = pgTable(
     // tag needs the reverse direction.
     index('vendor_tags_tag_id_idx').on(table.tagId),
   ],
-);
+).enableRLS();
 
 export type VendorTagRow = typeof vendorTags.$inferSelect;
 export type NewVendorTagRow = typeof vendorTags.$inferInsert;
@@ -131,7 +131,7 @@ export const tagSuggestions = pgTable(
       .on(table.category, sql`lower(${table.suggestedName})`)
       .where(sql`${table.status} = 'pending'`),
   ],
-);
+).enableRLS();
 
 export type TagSuggestionRow = typeof tagSuggestions.$inferSelect;
 export type NewTagSuggestionRow = typeof tagSuggestions.$inferInsert;
