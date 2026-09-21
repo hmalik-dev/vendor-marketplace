@@ -3,7 +3,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadEnv } from './load-env.js';
 import { withRequestIdentity, type RequestIdentity } from './request-identity.js';
-import * as schema from './schema/index.js';
+import type * as schema from './schema/index.js';
 import { conversations, messages, users, vendorProfiles } from './schema/index.js';
 import {
   createPostgresTestDatabase,
@@ -262,9 +262,12 @@ describe('as app_api, writing messages', () => {
 describe('the identity on a shared connection', () => {
   async function userIdSeenBy(identity: RequestIdentity): Promise<string | undefined> {
     return withRequestIdentity(api, identity, async (tx) => {
-      const [row] = await tx.execute<{ id: string }>(sql`select app_user_id() as id`);
+      // The transaction type is driver-agnostic, so its rows come back `unknown`; postgres-js returns an array.
+      const rows = (await tx.execute(sql`select app_user_id() as id`)) as unknown as {
+        id: string;
+      }[];
 
-      return row?.id;
+      return rows[0]?.id;
     });
   }
 
