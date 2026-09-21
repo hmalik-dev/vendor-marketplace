@@ -1,0 +1,2 @@
+DROP INDEX "booking_requests_expires_at_idx";--> statement-breakpoint
+CREATE INDEX "booking_requests_expires_at_idx" ON "booking_requests" USING btree ("expires_at") WHERE "booking_requests"."status" in ('pending', 'quoted', 'accepted');
