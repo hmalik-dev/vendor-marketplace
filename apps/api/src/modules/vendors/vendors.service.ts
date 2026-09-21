@@ -18,7 +18,12 @@ import type { AppDatabase } from '../../lib/database.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
-import { assertOwnedImageRefs, thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
+import {
+  assertOwnedImageRefs,
+  assertStorageOriginRefs,
+  thumbnailKeyFor,
+  type ObjectStorage,
+} from '../../lib/storage.js';
 import { reapObjects } from '../portfolio/portfolio.service.js';
 import { replaceVendorTags } from '../tags/tags.dao.js';
 import { resolveVendorTagSelection } from '../tags/tags.service.js';
@@ -348,8 +353,10 @@ export async function createVendorProfile(
   db: AppDatabase,
   userId: string,
   input: CreateVendorProfileInput,
+  publicBaseUrl: string,
 ): Promise<VendorProfileDetail> {
   assertOwnedImageRefs([input.profileImageUrl, input.coverImageUrl], userId);
+  assertStorageOriginRefs([input.profileImageUrl, input.coverImageUrl], publicBaseUrl);
 
   const existing = await findVendorProfileByUserId(db, userId);
   if (existing) {
@@ -421,9 +428,11 @@ export async function updateVendorProfile(
   storage: ObjectStorage,
   userId: string,
   input: UpdateVendorProfileInput,
+  publicBaseUrl: string,
   log?: { warn: (details: unknown, message: string) => void },
 ): Promise<VendorProfileDetail> {
   assertOwnedImageRefs([input.profileImageUrl, input.coverImageUrl], userId);
+  assertStorageOriginRefs([input.profileImageUrl, input.coverImageUrl], publicBaseUrl);
 
   const existing = await findVendorProfileByUserId(db, userId);
   if (!existing) {

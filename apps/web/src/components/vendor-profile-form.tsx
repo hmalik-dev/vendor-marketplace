@@ -45,6 +45,7 @@ import { cn } from '@/lib/utils';
 import { US_STATE_OPTIONS, usStateName } from '@/lib/us-states';
 import {
   toImageSrc,
+  toStoredImage,
   wireVendorProfileSchema,
   type WireTag,
   type WireVendorProfile,
@@ -206,8 +207,10 @@ function toPayload(form: FormState): Record<string, unknown> {
     serviceRadiusKm: milesToKm(form.serviceRadiusMiles),
     responseTimeHours:
       form.responseTimeHours === NO_RESPONSE_TIME ? null : Number(form.responseTimeHours),
-    profileImageUrl: form.profileImageUrl ?? undefined,
-    coverImageUrl: form.coverImageUrl ?? undefined,
+    // Stored keys, not the resolved URLs the form was seeded with: the API only accepts our own
+    // storage origin, and the web and API rows can name different hosts (VEN-537).
+    profileImageUrl: toStoredImage(form.profileImageUrl) ?? undefined,
+    coverImageUrl: toStoredImage(form.coverImageUrl) ?? undefined,
     categoryIds: form.categoryIds,
     // Tags ride with the profile rather than a second request, so a refused
     // selection cannot leave a profile edit standing on its own (#405).

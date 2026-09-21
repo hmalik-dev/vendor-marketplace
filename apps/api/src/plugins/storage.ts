@@ -4,11 +4,14 @@ import type { ObjectStorage } from '../lib/storage.js';
 declare module 'fastify' {
   interface FastifyInstance {
     storage: ObjectStorage;
+    /** The configured public base of stored objects; the only origin an absolute image URL may name. */
+    storagePublicUrl: string;
   }
 }
 
 export interface StoragePluginOptions {
   storage: ObjectStorage;
+  publicUrl: string;
 }
 
 /**
@@ -19,6 +22,7 @@ export interface StoragePluginOptions {
 export const storagePlugin = fp<StoragePluginOptions>(
   async (app, options) => {
     app.decorate('storage', options.storage);
+    app.decorate('storagePublicUrl', options.publicUrl);
   },
   { name: 'storage' },
 );

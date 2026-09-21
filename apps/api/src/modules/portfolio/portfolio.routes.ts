@@ -43,6 +43,7 @@ export const portfolioRoutes: FastifyPluginAsyncZod = async (app) => {
         app.db,
         assertRole(request.auth, ['vendor']).id,
         request.body,
+        app.storagePublicUrl,
       );
 
       return reply.status(201).header('location', `${PORTFOLIO_PATH}/${created.id}`).send(created);

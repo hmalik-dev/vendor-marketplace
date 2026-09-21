@@ -168,6 +168,13 @@ export const imageRefSchema = z
         return false;
       }
 
+      /* An escape can hide one from the test above, so it is asked again once decoded (VEN-537). */
+      const decoded = normalizeImageRefPath(value);
+
+      if (FORBIDDEN_IN_IMAGE_REF.test(decoded)) {
+        return false;
+      }
+
       /*
        * An absolute URL, but only over http(s): a `javascript:` or `data:`
        * value reaching an `img src` is the reason this is an allowlist. The
@@ -186,6 +193,10 @@ export const imageRefSchema = z
          * stepping-around this ticket is about. Nothing legitimate puts
          * credentials in an image URL.
          */
+        if (value.includes('\\')) {
+          return false;
+        }
+
         try {
           const parsed = new URL(value);
 
@@ -203,17 +214,24 @@ export const imageRefSchema = z
        * path and is then fetched as `//evil.com/x.png`, which is a vendor
        * pointing their public storefront photo at a host they control.
        *
-       * `%2e` is folded back to `.` for the same reason: the parser decodes it
-       * before it resolves the path, so `a/%2e%2e/b.webp` traverses exactly as
-       * `a/../b.webp` does and a guard that reads the stored spelling misses
-       * it.
+       * The value is decoded until stable for the same reason: the parser
+       * decodes `%2e` before it resolves the path, so `a/%2e%2e/b.webp`
+       * traverses exactly as `a/../b.webp` does, and a second layer of
+       * encoding does the same once a host decodes twice.
        */
-      const path = normalizeImageRefPath(value);
-
-      return !path.startsWith('//') && !path.split('/').includes('..');
+      return !decoded.startsWith('//') && !decoded.split('/').includes('..');
     },
     { message: 'Must be an image URL, a site path, or a stored key' },
   );
+
+/**
+ * An image reference as a **response** says it: whatever is stored. Validated
+ * again on the way out, a row written before `imageRefSchema` tightened (a
+ * doubly encoded key, an encoded control character) makes the Zod serializer
+ * answer 500 for a value the reader cannot fix — the reason `storedEmailSchema`
+ * exists. Input keeps `imageRefSchema`.
+ */
+export const storedImageRefSchema = z.string().max(MAX_URL_LENGTH);
 
 /** E.164-ish; permissive because the auth provider owns phone verification. */
 export const phoneSchema = z
@@ -323,7 +341,7 @@ export const userSchema = z.object({
    * `vendorProfile`'s images already use. This was missed by that migration,
    * which is why a customer's uploaded avatar could not be saved or read back.
    */
-  avatarUrl: imageRefSchema.nullable(),
+  avatarUrl: storedImageRefSchema.nullable(),
   bio: z.string().max(MAX_CUSTOMER_BIO_LENGTH).nullable(),
   city: z.string().max(MAX_NAME_LENGTH).nullable(),
   state: z.string().max(MAX_NAME_LENGTH).nullable(),
@@ -508,7 +526,7 @@ export const fullCustomerProfileSchema = z.object({
   lastName: trimmedString(MAX_NAME_LENGTH, 0),
   email: storedEmailSchema,
   phone: phoneSchema.nullable(),
-  avatarUrl: imageRefSchema.nullable(),
+  avatarUrl: storedImageRefSchema.nullable(),
 });
 
 export const customerProfileSchema = z.discriminatedUnion('visibility', [
@@ -553,8 +571,8 @@ export const vendorProfileSchema = z.object({
   bio: z.string().nullable(),
   tagline: z.string().max(MAX_TAGLINE_LENGTH).nullable(),
   yearsInBusiness: z.int().nullable(),
-  profileImageUrl: imageRefSchema.nullable(),
-  coverImageUrl: imageRefSchema.nullable(),
+  profileImageUrl: storedImageRefSchema.nullable(),
+  coverImageUrl: storedImageRefSchema.nullable(),
   address: z.string().max(MAX_ADDRESS_LENGTH).nullable(),
   city: z.string().max(MAX_NAME_LENGTH).nullable(),
   state: z.string().max(MAX_NAME_LENGTH).nullable(),
@@ -744,8 +762,8 @@ export type ReorderServicePackagesInput = z.infer<typeof reorderServicePackagesS
 export const portfolioItemSchema = z.object({
   id: uuidSchema,
   vendorId: uuidSchema,
-  imageUrl: imageRefSchema,
-  thumbnailUrl: imageRefSchema.nullable(),
+  imageUrl: storedImageRefSchema,
+  thumbnailUrl: storedImageRefSchema.nullable(),
   caption: z.string().max(MAX_CAPTION_LENGTH).nullable(),
   displayOrder: z.int(),
   createdAt: z.date(),
@@ -872,7 +890,7 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
     city: z.string().max(MAX_NAME_LENGTH).nullable(),
     state: z.string().max(MAX_NAME_LENGTH).nullable(),
     /** Read from `vendorProfile.profileImageUrl`, which is already a key. */
-    avatarUrl: imageRefSchema.nullable(),
+    avatarUrl: storedImageRefSchema.nullable(),
     /**
      * The vendor's primary category, by `categories.displayOrder` — the
      * "Photography" half of the "Photography · Wedding" line this schema's own
@@ -1175,7 +1193,7 @@ export const checkoutIntentSchema = z.object({
   vendor: z.object({
     slug: slugSchema,
     businessName: z.string().max(MAX_BUSINESS_NAME_LENGTH),
-    avatarUrl: imageRefSchema.nullable(),
+    avatarUrl: storedImageRefSchema.nullable(),
   }),
   /**
    * The package being bought, for the rail's sub-line — frame `05` line 907
@@ -1760,7 +1778,7 @@ export const conversationSummarySchema = z.object({
    * refusal there is an opaque 500. Left as a URL, one customer uploading a
    * photo would 500 the conversations list of every vendor they had messaged.
    */
-  otherPartyAvatarUrl: imageRefSchema.nullable(),
+  otherPartyAvatarUrl: storedImageRefSchema.nullable(),
   /** `null` until somebody says something. */
   lastMessagePreview: z.string().nullable(),
   lastMessageAt: z.date().nullable(),

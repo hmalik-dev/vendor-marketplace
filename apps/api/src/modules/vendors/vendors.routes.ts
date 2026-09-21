@@ -133,6 +133,7 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
         app.db,
         assertRole(request.auth, ['vendor']).id,
         request.body,
+        app.storagePublicUrl,
       );
 
       return reply.status(201).header('location', OWN_PROFILE_PATH).send(profile);
@@ -151,6 +152,7 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
         app.storage,
         assertRole(request.auth, ['vendor']).id,
         request.body,
+        app.storagePublicUrl,
         request.log,
       ),
   );
