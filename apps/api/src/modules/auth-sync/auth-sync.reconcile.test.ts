@@ -352,8 +352,61 @@ describe('reconcileAuthUsers', () => {
 
     await reconcileAuthUsers(context(), source);
 
-    expect(source.lookup).toHaveBeenCalledTimes(1);
+    // One batch of five, then a confirming lookup, with a control, for each of the four that came back short.
+    expect(source.lookup).toHaveBeenCalledTimes(5);
     expect(source.lookup.mock.calls[0]?.[0]).toHaveLength(5);
+    // Each confirming lookup names the id and a control that answered a moment ago.
+    expect(source.lookup.mock.calls.slice(1).map(([ids]) => ids)).toEqual([
+      ['user_1', 'user_0'],
+      ['user_2', 'user_0'],
+      ['user_3', 'user_0'],
+      ['user_4', 'user_0'],
+    ]);
+  });
+
+  /*
+   * VEN-480 acceptance 3. A lookup that comes back short is not a deletion: the
+   * retirement refunds bookings and cannot be taken back, so the id is asked for
+   * again, alone, and only an id absent both times is closed.
+   */
+  it('does not close an account the confirming lookup finds', async () => {
+    await seed('user_a', { email: 'katherine@example.com' });
+    await seed('user_b', { email: 'b@example.com' });
+    const source = sourceHolding(
+      identity('user_a'),
+      identity('user_b', { email: 'b@example.com' }),
+    );
+    // The first answer omits user_b, as a partial read under load would.
+    source.lookup.mockImplementationOnce(async () => [identity('user_a')]);
+
+    const summary = await reconcileAuthUsers(context(), source);
+
+    expect(summary).toMatchObject({ examined: 2, deleted: 0, flagged: 0, unchanged: 2 });
+    expect((await read('user_b'))[0]?.deletedAt).toBeNull();
+  });
+
+  it('closes nothing when the confirming lookup loses an identity known to exist', async () => {
+    await seed('user_a', { email: 'katherine@example.com' });
+    await seed('user_gone');
+    const source = sourceHolding(identity('user_a'));
+    // The source answers the batch, then answers nothing: a reset branch, not two deletions.
+    source.lookup.mockImplementationOnce(async () => [identity('user_a')]);
+    source.lookup.mockImplementationOnce(async () => []);
+
+    await expect(reconcileAuthUsers(context(), source)).rejects.toThrow(
+      'Neon Auth does not know the identity being synced',
+    );
+    expect((await read('user_gone'))[0]?.deletedAt).toBeNull();
+  });
+
+  it('closes an account absent from both lookups', async () => {
+    await seed('user_a', { email: 'katherine@example.com' });
+    await seed('user_gone');
+
+    const summary = await reconcileAuthUsers(context(), sourceHolding(identity('user_a')));
+
+    expect(summary).toMatchObject({ examined: 2, deleted: 1, flagged: 0 });
+    expect((await read('user_gone'))[0]?.deletedAt).not.toBeNull();
   });
 
   it('reports what would change without writing, under --dry-run', async () => {
@@ -378,6 +431,7 @@ describe('reconcileAuthUsers', () => {
       examined: 0,
       updated: 0,
       deleted: 0,
+      flagged: 0,
       unchanged: 0,
       diverged: 0,
       skipped: 0,

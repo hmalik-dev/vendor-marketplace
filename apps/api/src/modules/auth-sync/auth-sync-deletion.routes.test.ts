@@ -9,10 +9,11 @@ import {
   vendorCategories,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { bookingContextFor } from '../payments/payments.service.js';
 import { reconcileAuthUsers } from './auth-sync.reconcile.js';
+import { applyAuthSyncEvent } from './auth-sync.service.js';
 
 /* Inside the booking horizon, so a rejection here is the vendor and not the date. */
 const REQUEST_EVENT_DATE = toDateString(addDays(new Date(), 30));
@@ -48,6 +49,24 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
       harness.app.authDirectory!,
       {},
       new Date(),
+    );
+  }
+
+  /**
+   * The unwind itself, entered as the operator's closure enters it (VEN-480).
+   *
+   * The scheduled pass never runs it for an account holding confirmed bookings —
+   * it alerts instead — so the refund behaviour is driven at the handler.
+   */
+  async function unwindDeletedIdentity(authUserId: string) {
+    await signIn(CONTROL);
+    harness.authUsers.delete(authUserId);
+
+    return applyAuthSyncEvent(
+      bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+      { type: 'deleted', authUserId },
+      new Date(),
+      harness.app.authDirectory!,
     );
   }
 
@@ -250,7 +269,7 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
       })
       .returning({ id: bookingRequests.id });
 
-    await deleteIdentityAndReconcile(VENDOR);
+    await unwindDeletedIdentity(VENDOR);
 
     expect(harness.stripe.refunds).toHaveLength(1);
     expect(harness.stripe.refunds[0]).toMatchObject({
@@ -289,7 +308,7 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
     });
     harness.stripe.refundsToRefuse.add('pi_test_refused');
 
-    await deleteIdentityAndReconcile(VENDOR);
+    await unwindDeletedIdentity(VENDOR);
 
     const refusedRow = await harness.database.db
       .select()
@@ -317,11 +336,85 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
     const vendor = await createPublishedVendor();
     await createFutureBooking(customerId, vendor.profileId);
 
-    await deleteIdentityAndReconcile(VENDOR);
-    const replay = await deleteIdentityAndReconcile(VENDOR);
+    await unwindDeletedIdentity(VENDOR);
+    const replay = await unwindDeletedIdentity(VENDOR);
 
-    expect(replay).toMatchObject({ deleted: 0, updated: 0 });
+    expect(replay).toBe('ignored');
     expect(harness.stripe.refunds).toHaveLength(1);
+  });
+
+  /*
+   * VEN-480 acceptance 4. Confirmed gone, holding confirmed bookings: the pass
+   * tells the operator and closes nothing, so no refund moves on an automatic
+   * read. The account is then closed through the existing unwind.
+   */
+  it('alerts the operator, and closes nothing, for a deleted vendor holding confirmed bookings', async () => {
+    const customerId = await signIn(CUSTOMER);
+    const vendor = await createPublishedVendor();
+    const bookingId = await createFutureBooking(customerId, vendor.profileId);
+    await signIn(CONTROL);
+    harness.authUsers.delete(VENDOR);
+    const dispatch = vi.fn();
+
+    const summary = await reconcileAuthUsers(
+      {
+        ...bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+        alerts: { dispatch },
+      },
+      harness.app.authDirectory!,
+      {},
+      new Date(),
+    );
+
+    expect(summary).toMatchObject({ deleted: 0, flagged: 1 });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch.mock.calls[0]?.[0]).toMatchObject({
+      kind: 'auth_identity_deleted',
+      subjectId: vendor.userId,
+      adminPath: `/admin/users/${vendor.userId}`,
+    });
+    expect(harness.stripe.refunds).toEqual([]);
+
+    const rows = await harness.database.db.select().from(users).where(eq(users.id, vendor.userId));
+    expect(rows[0]?.deletedAt).toBeNull();
+    const booked = await harness.database.db
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId));
+    expect(booked[0]?.status).toBe('confirmed');
+
+    // The operator's closure is the existing unwind, and it still refunds in full.
+    expect(await unwindDeletedIdentity(VENDOR)).toBe('deleted');
+    expect(harness.stripe.refunds).toHaveLength(1);
+  });
+
+  it('retires a deleted customer holding a confirmed booking without alerting or refunding', async () => {
+    const customerId = await signIn(CUSTOMER);
+    const vendor = await createPublishedVendor();
+    const bookingId = await createFutureBooking(customerId, vendor.profileId);
+    await signIn(CONTROL);
+    harness.authUsers.delete(CUSTOMER);
+    const dispatch = vi.fn();
+
+    const summary = await reconcileAuthUsers(
+      {
+        ...bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+        alerts: { dispatch },
+      },
+      harness.app.authDirectory!,
+      {},
+      new Date(),
+    );
+
+    expect(summary).toMatchObject({ deleted: 1, flagged: 0 });
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(harness.stripe.refunds).toEqual([]);
+
+    const booked = await harness.database.db
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId));
+    expect(booked[0]?.status).toBe('confirmed');
   });
 
   it('hides a storefront whose retirement failed but whose owner is deleted', async () => {
@@ -382,8 +475,7 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
     const vendor = await createPublishedVendor();
     const bookingId = await createFutureBooking(customerId, vendor.profileId);
 
-    const summary = await deleteIdentityAndReconcile(CUSTOMER);
-    expect(summary).toMatchObject({ deleted: 1 });
+    expect(await unwindDeletedIdentity(CUSTOMER)).toBe('deleted');
 
     // No money moved, and the row is untouched — still confirmed, still payable.
     expect(harness.stripe.refunds).toEqual([]);
@@ -404,7 +496,7 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
     const vendor = await createPublishedVendor();
     const bookingId = await createFutureBooking(customerId, vendor.profileId);
 
-    await deleteIdentityAndReconcile(VENDOR);
+    await unwindDeletedIdentity(VENDOR);
 
     expect(harness.stripe.refunds).toHaveLength(1);
     expect(harness.stripe.refunds[0]).toMatchObject({ amountCents: 120_000 });
