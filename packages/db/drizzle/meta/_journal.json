@@ -463,6 +463,13 @@
       "when": 1789973127691,
       "tag": "0065_kind_silver_fox",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1789980833934,
+      "tag": "0066_brave_quicksilver",
+      "breakpoints": true
     }
   ]
 }

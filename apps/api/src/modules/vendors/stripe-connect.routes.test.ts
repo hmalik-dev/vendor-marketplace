@@ -1,6 +1,7 @@
 import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { CURRENT_VENDOR_AGREEMENT_VERSION } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { RecipientAccountRefusedError } from '../../lib/stripe.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
 /**
@@ -95,6 +96,7 @@ describe('vendor Stripe Connect onboarding', () => {
     await harness.database.db.delete(vendorProfiles);
     await harness.database.db.delete(users);
     harness.stripe.createdAccounts.length = 0;
+    harness.stripe.recipientAccountKeys.length = 0;
     harness.stripe.createdLinks.length = 0;
     harness.stripe.accountStatuses.clear();
   });
@@ -192,6 +194,60 @@ describe('vendor Stripe Connect onboarding', () => {
       for (const link of harness.stripe.createdLinks) {
         expect(link.accountId).toBe(stored);
       }
+    });
+
+    /*
+     * D36: Stripe caches a refused idempotent result for 24 hours, so a key
+     * built from the vendor alone would answer every retry with the first
+     * refusal and lock the vendor out of onboarding for a day. The key moves
+     * once a refusal is recorded; a failure that is not a refusal (a dropped
+     * connection) leaves it alone, because that request may have made the
+     * account.
+     */
+    it('retries under a new key after Stripe refuses, and still ends with one account', async () => {
+      await seedVendorProfile('vendor_a');
+      const create = harness.stripe.createRecipientAccount;
+      harness.stripe.createRecipientAccount = async (input) => {
+        harness.stripe.recipientAccountKeys.push(input.idempotencyKey);
+        throw new RecipientAccountRefusedError('Stripe refused the account');
+      };
+
+      const refused = await connect('vendor_a');
+      harness.stripe.createRecipientAccount = create;
+      const retried = await connect('vendor_a');
+      const again = await connect('vendor_a');
+
+      expect(refused.statusCode).toBe(500);
+      expect(retried.statusCode).toBe(200);
+      expect(again.statusCode).toBe(200);
+
+      const [vendor] = await harness.database.db.select().from(vendorProfiles);
+      expect(harness.stripe.recipientAccountKeys).toEqual([
+        `recipient-account:${vendor!.id}:0`,
+        `recipient-account:${vendor!.id}:1`,
+      ]);
+      expect(harness.stripe.createdAccounts).toHaveLength(1);
+      expect(vendor!.stripeAccountId).toBe('acct_test_1');
+    });
+
+    it('keeps the key when Stripe was unreachable, so the retry cannot make a second account', async () => {
+      await seedVendorProfile('vendor_a');
+      const create = harness.stripe.createRecipientAccount;
+      harness.stripe.createRecipientAccount = async (input) => {
+        harness.stripe.recipientAccountKeys.push(input.idempotencyKey);
+        throw new Error('socket hang up');
+      };
+
+      await connect('vendor_a');
+      harness.stripe.createRecipientAccount = create;
+      const retried = await connect('vendor_a');
+
+      const [vendor] = await harness.database.db.select().from(vendorProfiles);
+      expect(retried.statusCode).toBe(200);
+      expect(harness.stripe.recipientAccountKeys).toEqual([
+        `recipient-account:${vendor!.id}:0`,
+        `recipient-account:${vendor!.id}:0`,
+      ]);
     });
 
     it('sends Stripe back to the payments return and resume paths', async () => {

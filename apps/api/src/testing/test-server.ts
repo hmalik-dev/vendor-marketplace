@@ -325,7 +325,17 @@ export type FakeAccountStatus = StripeAccountCapabilities &
  */
 export interface FakeStripe extends StripeConnectGateway {
   /** Accounts the fake has minted, in creation order. */
-  createdAccounts: { accountId: string; vendorId: string; contactEmail: string }[];
+  createdAccounts: {
+    accountId: string;
+    vendorId: string;
+    contactEmail: string;
+    idempotencyKey: string | undefined;
+  }[];
+  /**
+   * The idempotency key of every `createRecipientAccount` call, including the
+   * ones Stripe collapsed onto an account it had already made.
+   */
+  recipientAccountKeys: (string | undefined)[];
   /** Every onboarding link minted, so a suite can assert on the URLs sent. */
   createdLinks: { accountId: string; returnUrl: string; refreshUrl: string }[];
   /**
@@ -469,6 +479,8 @@ export interface FakeStripe extends StripeConnectGateway {
 function createFakeStripe(deployEnv: string): FakeStripe {
   const createdAccounts: FakeStripe['createdAccounts'] = [];
   const createdLinks: FakeStripe['createdLinks'] = [];
+  const recipientAccountKeys: FakeStripe['recipientAccountKeys'] = [];
+  const accountsByKey = new Map<string, string>();
   const accountStatuses = new Map<string, FakeAccountStatus>();
   const validSignatures = new Set<string>(['valid-signature']);
   const paymentIntents = new Map<string, PaymentIntentSnapshot>();
@@ -501,6 +513,7 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   const fake: FakeStripe = {
     cancelRequests,
     createdAccounts,
+    recipientAccountKeys,
     createdLinks,
     accountStatuses,
     validSignatures,
@@ -566,12 +579,24 @@ function createFakeStripe(deployEnv: string): FakeStripe {
     },
 
     createRecipientAccount: async (input) => {
+      recipientAccountKeys.push(input.idempotencyKey);
+
+      // Stripe answers a repeated key with the account it already made.
+      const replayed = input.idempotencyKey ? accountsByKey.get(input.idempotencyKey) : undefined;
+      if (replayed) {
+        return { accountId: replayed };
+      }
+
       const accountId = `acct_test_${createdAccounts.length + 1}`;
       createdAccounts.push({
         accountId,
         vendorId: input.vendorId,
         contactEmail: input.contactEmail,
+        idempotencyKey: input.idempotencyKey,
       });
+      if (input.idempotencyKey) {
+        accountsByKey.set(input.idempotencyKey, accountId);
+      }
       return { accountId };
     },
 
