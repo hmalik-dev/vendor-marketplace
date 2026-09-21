@@ -1,6 +1,6 @@
 ---
 name: sentry-is-a-second-log-sink
-description: VEN-397 added Sentry beside pino; the bound-param bypass is now closed (redactErrorValues), but scrubErrorEvent still keeps request.url with its query string
+description: Sentry is the second egress for an error; scrubErrorEvent is the only gate — request.url is now path-only, and what escapes it is a name the header list misses or a shape no regex knows
 metadata:
   type: project
 ---
@@ -8,34 +8,40 @@ metadata:
 VEN-397 gave both apps a second egress for an error object. Audit every new
 capture against **both** sinks, not just pino.
 
-**Why:** `apps/api/src/plugins/error-handler.ts` now calls `report(error, …)`
-next to each `request.log.error({ err })`. The log line goes through
-`apps/api/src/lib/log-error-serializer.ts` (`serializeError`, #445) which strips
-`DrizzleQueryError`'s `Failed query: … params: <bound values>` from `message`,
-`stack` and `params`. **Closed since (verified 2026-09-20):**
-`apps/api/src/lib/error-reporting.ts` `sentryErrorReporter.capture` calls
-`Sentry.captureException(redactErrorValues(error))`, so the bound values are
-stripped before the SDK reads `exception.values[0].value`, the frames, or walks
-`cause` via `linkedErrorsIntegration`. Re-check that call, not just pino, when a
-new capture site appears — a `Sentry.*` call made directly, outside
-`ErrorReporter`, is the regression.
+**Why:** `apps/api/src/plugins/error-handler.ts` calls `report(error, …)` beside
+each `request.log.error({ err })`. The log line is stripped by
+`apps/api/src/lib/log-error-serializer.ts`; the Sentry path is closed too —
+`sentryErrorReporter.capture` wraps the error in `redactErrorValues` before
+`captureException`, so bound query values never reach `exception.values` or a
+`cause` walked by `linkedErrorsIntegration`. **A `Sentry.*` call made directly,
+outside `ErrorReporter`, is the regression.**
 
-Still open in the event body: `scrubErrorEvent` only knows email / JWT /
-`Bearer` / `sk_|rk_|whsec_|re_` shapes, so names, phones, addresses and free text
-in anything else the capture carries pass whole — and a stranger can still
-choose the moment a failure ships, via the public unauthenticated
-`POST /support/messages` plus a caller-chosen `U+0000`
-([[free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand]]).
+**Closed (VEN-522, verified 2026-09-21):** `scrubErrorEvent` now cuts
+`request.url` to its path (`pathOf`), drops `request.env`, withholds a value
+under a token/secret/ticket/pass/auth-named or whole-query key, and redacts
+IPv4/IPv6 and `/invites?|tickets?/<segment>` in every string. The SSE stream
+ticket was probed through `request.url`, breadcrumb and span `url.full`,
+`http.query`, `url.query`, `transaction`, `exception.values[].value` and nested
+`extra` — no surviving path.
 
-**Second gap, same file:** `packages/shared/src/utils/error-reporting.ts`
-deletes `request.cookies`, `.data` and `.query_string` but spreads `url` back.
-Verified against `@sentry/core@10.74.0` `utils/request.js` — `url` is the
-absolute URL _including_ the search, in both the Node and the WinterCG builders,
-and is `location.href` in the browser. So the query-borne SSE stream ticket the
-comment names as the reason is retained.
+**How to apply — what the scrubber still cannot do, in order of reach:**
 
-**How to apply:** settled and not to re-report — `beforeSendTransaction` **is**
-registered beside `beforeSend` in both apps, so the 5% traces sample is scrubbed;
-`redactDeep` redacts strings above `MAX_DEPTH`; `sendDefaultPii: false`
-everywhere. `x-forwarded-for` and `proxy-authorization` are **not** in
-`CREDENTIAL_HEADER`.
+- **A header is caught by _name_ or not at all when its value is not
+  address-shaped.** `^x-vercel-ip-` covers Vercel; `cf-ipcountry` and `cf-ray`
+  are not listed, and the API sits behind Cloudflare (`cf-connecting-ip` is).
+- `IPV6`'s captured boundary `[^\w:]` cannot match a preceding colon, so
+  `remoteAddress:2001:db8::1` passes whole. `[^\w]` fixes it and still leaves
+  `12:30:45` and `file.ts:12:30` alone.
+- `CREDENTIAL_PATH` redacts one segment: `/invites/accept/<tok>` keeps `<tok>`.
+- An **object** at `depth >= MAX_DEPTH` is returned whole — strings inside it are
+  never scanned. `normalizeDepth: 3` collapses that first in practice.
+- `sdkProcessingMetadata.normalizedRequest.headers` holds the raw cookie and
+  `authorization` (`WITHHELD_KEY`'s `auth(?!or)` excludes the word). Harmless
+  only because `@sentry/core@10.74.0` `envelope.js:44` deletes the field.
+- **The only hang in `beforeSend` is `EMAIL`**, quadratic: 5.8 s on a 120 KB
+  dotted-digit string, 0.94 s on 50 KB of letters, and `extra`/span strings are
+  not capped by `maxValueLength`. The IP and path regexes cost <20 ms there.
+
+Settled, do not re-report: `beforeSendTransaction` is registered beside
+`beforeSend` in both apps; `sendDefaultPii: false` everywhere; `user` is reduced
+to a bare id.
