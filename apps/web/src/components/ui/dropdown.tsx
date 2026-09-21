@@ -630,7 +630,7 @@ function DropdownCheckbox({ checked }: { checked: boolean }): React.ReactElement
       aria-hidden="true"
       className={cn(
         'relative box-border size-[15px] flex-none rounded-[4px]',
-        checked ? 'bg-clay-400' : 'border-[1.5px] border-stone-400',
+        checked ? 'bg-clay-400' : 'border-[1.5px] border-stone-560',
       )}
     >
       {checked ? (

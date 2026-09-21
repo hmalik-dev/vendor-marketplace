@@ -275,7 +275,7 @@ describe('shadcn slot bindings', () => {
     ['--accent-foreground', '--color-sage-600'],
     ['--destructive', '--color-error-500'],
     ['--border', '--color-stone-300'],
-    ['--input', '--color-stone-300'],
+    ['--input', '--color-stone-560'],
     ['--ring', '--color-clay-400'],
     ['--radius', '--radius-lg'],
   ])('binds %s to %s', (slot, token) => {

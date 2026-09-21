@@ -75,7 +75,7 @@
   --destructive: var(--color-error-500);
 
   --border: var(--color-stone-300);
-  --input: var(--color-stone-300);
+  --input: var(--color-stone-560);
   --ring: var(--color-clay-400);
 
   --chart-1: var(--color-clay-400);
@@ -187,7 +187,7 @@ body:has([data-auth-screen]) > footer {
    * indicator without it.
    */
   :focus-visible:not([data-focus-own]) {
-    @apply ring-2 ring-clay-400/40 ring-offset-2 ring-offset-stone-50 outline-none;
+    @apply ring-2 ring-clay-400 ring-offset-2 ring-offset-stone-50 outline-none;
   }
   /*
    * Opting out of the ring is not opting into Chrome's blue. A component that

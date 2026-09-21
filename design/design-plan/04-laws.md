@@ -163,8 +163,8 @@ Framer Motion for component animation; CSS transitions for hover and focus.
 
 - Focus ring: **three mechanisms by element type — see `03-components.md` § Inputs.**
   Bordered field: `border-clay-400 + ring-3 ring-clay-400/15`, no offset. Bar or
-  panel segment: `bg-stone-200` fill + clay label, no outline. Unbordered control:
-  `ring-2 ring-clay-400/40 ring-offset-2 ring-offset-stone-50`. `:focus-visible`
+  panel segment: `bg-stone-200` fill + clay label + inset `ring-2 ring-clay-400` (3:1, VEN-541). Unbordered control:
+  `ring-2 ring-clay-400 ring-offset-2 ring-offset-stone-50`. `:focus-visible`
   only, and an indicator never has a radius the element doesn't have.
 - Icon-only controls carry `aria-label` and a 44×44 hit area
 - Status is never colour alone — pill text always present
@@ -215,3 +215,17 @@ contrast is not made lawful by adding `aria-hidden` — that hides the text from
 assistive technology while leaving it just as unreadable on screen, which is
 worse than the original defect. If removing the element would lose information,
 it is not decorative.
+
+### Non-text contrast (VEN-541, WCAG 1.4.11 / 2.4.7)
+
+The frames are static `.dc.html` files and stay untouched; this plan is where
+the contract is edited, and these are deliberate deviations from them.
+
+- Every focus indicator, form-field border, unchecked-control border and rating star measures at least 3:1 on `stone-50`
+  and `stone-0`, asserted by `apps/web/src/app/contrast.test.ts` over the token
+  file.
+- Field border (`--input`, unchecked controls, drop zone): `stone-560`, not
+  `stone-300`/`stone-400`. Card and divider hairlines (`--border`) stay
+  `stone-300`; they bound no form control. Buttons, pills and cards keep their
+  `stone-300` edge — their label, not the edge, identifies them.
+- Rating stars: unselected `stone-560`, selected `gold-600` (`gold-400` is 2.54:1).

@@ -84,7 +84,7 @@ describe('VendorCard', () => {
     // Driven by the link's focus, but drawn by the element that does the
     // clipping — `overflow:hidden` clips descendants, not its own shadow.
     expect(card?.className).toContain('has-[a:focus-visible]:ring-2');
-    expect(card?.className).toContain('has-[a:focus-visible]:ring-clay-400/40');
+    expect(card?.className).toContain('has-[a:focus-visible]:ring-clay-400');
     expect(card?.className).toContain('has-[a:focus-visible]:ring-offset-2');
     expect(card?.className).toContain('has-[a:focus-visible]:ring-offset-stone-50');
 

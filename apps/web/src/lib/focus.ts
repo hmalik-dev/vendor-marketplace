@@ -8,8 +8,8 @@
  * | Element                              | Treatment                                      |
  * | ------------------------------------ | ---------------------------------------------- |
  * | Standalone bordered field            | `border-clay-400` + `ring-3 ring-clay-400/15`  |
- * | Segment inside a joined bar or panel | `bg-stone-200` fill + clay label, nothing else |
- * | Unbordered control                   | `ring-2 ring-clay-400/40 ring-offset-2`        |
+ * | Segment inside a joined bar or panel | `bg-stone-200` fill + clay label + inset `ring-2 ring-clay-400` |
+ * | Unbordered control                   | `ring-2 ring-clay-400 ring-offset-2` |
  *
  * **The unbordered one has no constant here on purpose** — it is the base rule
  * in `app/globals.css`, so an unbordered control writes nothing at all and
@@ -44,4 +44,5 @@ export const FIELD_FOCUS =
  * no edge, no outline — an outward ring around one segment of a pill breaks
  * past the pill's own edge and reads as a second, misaligned box.
  */
-export const SEGMENT_FOCUS = 'has-[:focus-visible]:bg-stone-200';
+export const SEGMENT_FOCUS =
+  'has-[:focus-visible]:bg-stone-200 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-clay-400';

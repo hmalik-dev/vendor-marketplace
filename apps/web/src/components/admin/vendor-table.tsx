@@ -390,7 +390,7 @@ export function VendorTable({
                   type="checkbox"
                   checked={selected.has(row.userId)}
                   onChange={(event) => toggle(row.userId, event.currentTarget.checked)}
-                  className="size-3.5 appearance-none rounded-[4px] border-[1.3px] border-stone-400 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[9px] checked:after:leading-[12px] checked:after:text-stone-0 checked:after:content-['✓']"
+                  className="size-3.5 appearance-none rounded-[4px] border-[1.3px] border-stone-560 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[9px] checked:after:leading-[12px] checked:after:text-stone-0 checked:after:content-['✓']"
                 />
               </label>
             ),

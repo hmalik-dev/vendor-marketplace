@@ -71,7 +71,7 @@ function CommandInput({
         search icon in the addon and clipping against the popover's rounded
         edge.
       */}
-      <InputGroup className="h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! has-[[data-slot=command-input]:focus-visible]:border-clay-400 has-[[data-slot=command-input]:focus-visible]:ring-3 has-[[data-slot=command-input]:focus-visible]:ring-clay-400/15 *:data-[slot=input-group-addon]:pl-2!">
+      <InputGroup className="h-8! rounded-lg! border-stone-300/30 bg-stone-300/30 shadow-none! has-[[data-slot=command-input]:focus-visible]:border-clay-400 has-[[data-slot=command-input]:focus-visible]:ring-3 has-[[data-slot=command-input]:focus-visible]:ring-clay-400/15 *:data-[slot=input-group-addon]:pl-2!">
         <CommandPrimitive.Input
           data-slot="command-input"
           // The group above paints for this input; a hand-rolled
