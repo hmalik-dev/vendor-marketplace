@@ -347,7 +347,14 @@ export async function openCheckout(
   });
 
   if (replaced) {
-    await recordReplacementIntent(context.db, requestId, replaced, intent.id);
+    /*
+     * A caller that read the row several replacements ago is answered the
+     * intent its key replays, which may itself be canceled by now. It is not
+     * handed to the customer; the retry reads the current row.
+     */
+    if (!(await recordReplacementIntent(context.db, requestId, replaced, intent.id))) {
+      throw conflict('That checkout was replaced while it was opening; try again');
+    }
   } else {
     await recordPaymentIntent(context.db, requestId, intent.id);
   }

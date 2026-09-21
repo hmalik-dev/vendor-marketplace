@@ -29,6 +29,7 @@ import {
   type TestHarness,
 } from '../../testing/test-server.js';
 import { expireLapsedRequests } from '../booking-requests/booking-requests.service.js';
+import { recordReplacementIntent } from './payments.dao.js';
 import { bookingContextFor, expiryGuardFor } from './payments.service.js';
 
 const VENDOR = 'user_vendor';
@@ -757,6 +758,31 @@ describe('payments', () => {
         .from(bookingRequests)
         .where(eq(bookingRequests.id, requestId));
       expect(row).toEqual({ intent: 'pi_test_3', replacements: 2 });
+    });
+
+    it('records a replacement only against the canceled intent it read', async () => {
+      const requestId = await acceptedRequest();
+      const first = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      const firstId: string = first.json().paymentIntentId;
+
+      const stale = await recordReplacementIntent(
+        harness.database.db,
+        requestId,
+        { intentId: 'pi_not_stored', replacements: 0 },
+        'pi_late',
+      );
+      const current = await recordReplacementIntent(
+        harness.database.db,
+        requestId,
+        { intentId: firstId, replacements: 0 },
+        'pi_replacement',
+      );
+
+      expect({ stale, current }).toEqual({ stale: false, current: true });
     });
 
     /*

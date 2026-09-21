@@ -231,14 +231,15 @@ export async function recordPaymentIntent(
  * exactly one write lands. The count and the id move in one statement, so a
  * caller that reads between the two writes never sees a live id beside a stale
  * count and never bumps the key for an intent that is already the replacement.
+ * `false` when the row moved first.
  */
 export async function recordReplacementIntent(
   db: AppDatabase,
   requestId: string,
   replaced: { intentId: string; replacements: number },
   paymentIntentId: string,
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const updated = await db
     .update(bookingRequests)
     .set({
       stripePaymentIntentId: paymentIntentId,
@@ -252,7 +253,10 @@ export async function recordReplacementIntent(
         eq(bookingRequests.stripePaymentIntentId, replaced.intentId),
         eq(bookingRequests.paymentIntentReplacements, replaced.replacements),
       ),
-    );
+    )
+    .returning({ id: bookingRequests.id });
+
+  return updated.length > 0;
 }
 
 /** What a successful charge writes, as one row. */
