@@ -36,6 +36,7 @@ import {
   adminCaseDetailSchema,
   adminConversationMessagesSchema,
   adminCaseRowSchema,
+  adminBanResultSchema,
   adminCloseAccountResultSchema,
   adminUserDataRightsSchema,
   adminUserExportSchema,
@@ -723,5 +724,6 @@ export type WireAdminCloseBlocker = WireAdminUserDataRights['closeBlockers'][num
 export const wireAdminUserExportSchema = adminUserExportSchema;
 export type WireAdminUserExport = z.infer<typeof wireAdminUserExportSchema>;
 
+export const wireAdminBanResultSchema = adminBanResultSchema;
 export const wireAdminCloseAccountResultSchema = adminCloseAccountResultSchema;
 export type WireAdminCloseAccountResult = z.infer<typeof wireAdminCloseAccountResultSchema>;
