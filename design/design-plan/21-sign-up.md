@@ -197,6 +197,24 @@ appearance: { theme: shadcn, elements: { card: { boxShadow: 'none', border: 'non
 Never hand-write brand hexes into an auth appearance object — that's a second
 source of truth and it drifts.
 
+## Vendor waitlist — while the invite gate is on (VEN-512)
+
+Drawn in `design/delta-waitlist/Orla-Vendor-Waitlist.html` (frames 35, 35b, 36,
+36b, 37, 38) with build notes in `WAITLIST-PROMPT.md`; this section records only
+what changes on this screen.
+
+- **Invitation notice**, above the submit button, only when the vendor role is
+  chosen **and the gate is on**: "Vendors join {BRAND_NAME} by invitation for now.
+  Sign up and we'll add you to the waitlist." Plain body copy above a 1px rule, not
+  a banner. It never shows for the customer role or while sign-up is open.
+- **Legal small print**, below the submit button, for every role and state:
+  "By signing up, you agree to the [Terms of Service] and [Privacy Policy]." Links
+  go to `/terms` and `/privacy`. It is a notice; the versioned acceptance is still
+  recorded on the Terms screen when the account is created.
+- **After the emailed code**, an uninvited vendor goes to `/sign-up/vendor-details`
+  (frame 36), then `/waitlist` (frame 37). They never see the Terms screen; they
+  accept it when they are invited.
+
 ## Acceptance
 
 - [ ] Role cards side by side, chosen role visible with a Change affordance after selection
