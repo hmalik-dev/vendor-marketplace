@@ -6,8 +6,12 @@ matters.** It exists for one reason: so Orla can be shown to a person over a URL
 instead of over a screen share.
 
 > **Status: lifted 2026-09-19.** The demo runs for the account holder and a few
-> friends who sign up as real customers and vendors. Vendors join by admin invite
-> or approved application, so promote your own account to admin first.
+> friends who sign up as real customers and vendors. Vendor sign-up is open by
+> default; an admin can switch it to invite-only in the console (`vendorInviteOnly`),
+> and then a vendor needs an invite or an approved application. Whichever role
+> someone picks, they confirm it on the first screen after verifying, and it
+> cannot be changed afterwards: to switch, close the account and register again.
+> Promote your own account to admin first if you want the console.
 
 Concretely, what that means:
 

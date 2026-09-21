@@ -29,6 +29,9 @@ import { renderVendorInviteEmail, vendorNotInvited } from './vendor-invites.serv
  */
 const ADMIN = 'user_gate_admin';
 
+/** Passed to `accept` to send a body with no `role` at all. */
+const NO_ROLE = Symbol('no role');
+
 let identities = 0;
 let visitors = 0;
 
@@ -73,10 +76,15 @@ describe('the vendor gate', () => {
     });
   }
 
-  function accept(actor: string): Promise<Response> {
+  /** The screen's submit: `role` defaults to the one the identity signed up as. */
+  function accept(
+    actor: string,
+    role: unknown = harness.authUsers.get(actor)?.roleHint,
+  ): Promise<Response> {
     return inject('POST', '/legal/terms/accept', actor, {
       version: CURRENT_TERMS_VERSION,
       accepted: true,
+      ...(role === NO_ROLE ? {} : { role }),
     });
   }
 
@@ -190,15 +198,23 @@ describe('the vendor gate', () => {
       expect(stamped!.acceptedAt).toBeInstanceOf(Date);
     });
 
-    it('opens a vendor account for an invited address that signs in with no remembered role', async () => {
+    it('preselects vendor for an invited address with no remembered role, and still needs the choice', async () => {
       await setGate(true);
       await invite('signed-in-later@example.com');
       const later = freshIdentity('customer', 'signed-in-later@example.com');
-      const snapshot = harness.authUsers.get(later)!;
-      harness.authUsers.set(later, { ...snapshot, roleHint: undefined });
+      const before = await counts();
 
-      expect((await accept(later)).statusCode).toBe(200);
+      const status = await inject('GET', '/legal/terms', later);
+      expect(status.json()).toMatchObject({
+        account: { exists: false, role: null },
+        suggestedRole: 'vendor',
+      });
 
+      const unchosen = await accept(later, NO_ROLE);
+      expect(unchosen.statusCode).toBe(400);
+      expect(await counts()).toEqual(before);
+
+      expect((await accept(later, 'vendor')).statusCode).toBe(200);
       const [row] = await harness.database.db
         .select({ role: users.role })
         .from(users)
@@ -206,6 +222,33 @@ describe('the vendor gate', () => {
       expect(row).toEqual({ role: 'vendor' });
       const [stamped] = await harness.database.db.select().from(vendorInvites);
       expect(stamped!.acceptedAt).toBeInstanceOf(Date);
+    });
+
+    it('makes an invited address that chooses customer a customer and leaves the invite unused', async () => {
+      await setGate(true);
+      await invite('invited-customer@example.com');
+      const person = freshIdentity('customer', 'invited-customer@example.com');
+
+      const response = await accept(person, 'customer');
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ account: { exists: true, role: 'customer' } });
+      const [row] = await harness.database.db
+        .select({ role: users.role })
+        .from(users)
+        .where(eq(users.authUserId, person));
+      expect(row).toEqual({ role: 'customer' });
+      const [stamped] = await harness.database.db.select().from(vendorInvites);
+      expect(stamped!.acceptedAt).toBeNull();
+    });
+
+    it('never suggests vendor for an address with no invite', async () => {
+      await setGate(true);
+      const person = freshIdentity('vendor');
+
+      const status = await inject('GET', '/legal/terms', person);
+
+      expect(status.json()).toMatchObject({ suggestedRole: null });
     });
 
     it('lets an un-invited vendor in while the gate is off', async () => {

@@ -202,7 +202,13 @@ async function ensureAcceptedAccount(
     return;
   }
 
-  const user = await syncUserFromAuth(db, snapshot);
+  /*
+   * A fixture that names no sign-up role (an admin, or one that never said) is
+   * a customer here, as it always was: the product path refuses that instead,
+   * and the acceptance suites exercise the refusal against the real route.
+   */
+  const fixtureRole = snapshot.roleHint === 'vendor' ? 'vendor' : 'customer';
+  const user = await syncUserFromAuth(db, { ...snapshot, roleHint: fixtureRole });
 
   if (
     !user ||

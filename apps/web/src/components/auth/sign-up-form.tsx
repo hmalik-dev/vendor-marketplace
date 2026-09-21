@@ -93,8 +93,8 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
 
-    /* A sign-up with no role would be narrowed to `customer` by the API, which
-       would put a vendor on the wrong side with no way back. */
+    /* Asked here so the accept-terms screen can preselect it; that screen
+       confirms it, and the server stores what that screen submits. */
     if (role === null) {
       setRoleMissing(true);
       return;
