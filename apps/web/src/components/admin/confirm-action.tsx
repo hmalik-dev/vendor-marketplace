@@ -1,9 +1,12 @@
 'use client';
 
+import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { AlertDialog } from 'radix-ui';
 import { useId, useState, type ReactNode } from 'react';
+import { StepUpPanel } from '@/components/admin/step-up-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ApiClientError } from '@/lib/api-client';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 
 export interface ConfirmActionProps {
@@ -103,6 +106,7 @@ export function ConfirmAction({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
+  const [stepUpNeeded, setStepUpNeeded] = useState(false);
   const typedId = useId();
   const open = controlledOpen ?? uncontrolledOpen;
   const typedMatches = !typedConfirmation || typed === typedConfirmation.phrase;
@@ -130,10 +134,20 @@ export function ConfirmAction({
 
     try {
       await onConfirm();
+      setStepUpNeeded(false);
       setOpen(false);
       // `setOpen` bypasses Radix's `onOpenChange`, which is where a cancel clears it.
       setTyped('');
     } catch (failure) {
+      /*
+       * An irreversible action the API wants confirmed (VEN-500): the dialog
+       * stays and grows the code step, and a verified code retries this press.
+       */
+      if (failure instanceof ApiClientError && failure.code === ERROR_CODES.STEP_UP_REQUIRED) {
+        setStepUpNeeded(true);
+        return;
+      }
+
       /*
        * The dialog stays open on failure. Closing it would leave the operator
        * looking at an unchanged table with no explanation, which reads as the
@@ -159,6 +173,7 @@ export function ConfirmAction({
         if (!next) {
           setError(null);
           setTyped('');
+          setStepUpNeeded(false);
         }
       }}
     >
@@ -218,6 +233,8 @@ export function ConfirmAction({
               </p>
             </div>
           ) : null}
+
+          {stepUpNeeded ? <StepUpPanel onVerified={confirm} /> : null}
 
           {error ? (
             <p role="alert" className="mt-3 text-sm text-error-500">

@@ -210,6 +210,8 @@ describe('admin routes', () => {
      */
     const routes = [
       { method: 'GET', url: '/admin/vendors' },
+      { method: 'POST', url: '/admin/step-up/challenge' },
+      { method: 'POST', url: '/admin/step-up/verify' },
       { method: 'GET', url: '/admin/vendors/facets' },
       { method: 'GET', url: '/admin/metrics' },
       { method: 'GET', url: '/admin/customers' },

@@ -485,4 +485,34 @@ describe('bulk Suspend selected', () => {
       '/admin/users/22222222-2222-4222-8222-222222222222/ban',
     ]);
   });
+
+  /**
+   * VEN-500. A missing step-up is not a row's refusal: swallowing it into the
+   * banner left the operator with no field to type a code into. The run stops
+   * at the first call and the dialog offers the code step.
+   */
+  it('stops at a missing step-up and offers the code instead of a banner', async () => {
+    const rows = ['Alpha', 'Bravo'].map((businessName, index) => ({
+      ...vendorRow('live'),
+      id: `11111111-1111-4111-8111-11111111111${index}`,
+      userId: `22222222-2222-4222-8222-22222222222${index}`,
+      businessName,
+      slug: businessName.toLowerCase(),
+    }));
+    callMock.mockRejectedValue(
+      new ApiClientError(403, ERROR_CODES.STEP_UP_REQUIRED, 'Confirm it is you'),
+    );
+
+    render(<VendorTable filtered={false} rows={rows} />);
+    for (const { businessName } of rows) {
+      fireEvent.click(screen.getByRole('checkbox', { name: `Select ${businessName}` }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Suspend selected' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend vendors' }));
+
+    expect(await within(dialog).findByRole('button', { name: 'Email me a code' })).not.toBeNull();
+    expect(callMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/were not suspended/)).toBeNull();
+  });
 });
