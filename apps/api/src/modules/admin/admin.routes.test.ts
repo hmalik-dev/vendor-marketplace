@@ -287,6 +287,10 @@ describe('admin routes', () => {
       { method: 'GET', url: `/admin/customers/${NIL}` },
       /* VEN-475. The web tier reports each CSV export here. */
       { method: 'POST', url: '/admin/exports' },
+      /* VEN-506. Whoever holds the console: granting and revoking it is privilege escalation. */
+      { method: 'GET', url: '/admin/operators' },
+      { method: 'POST', url: '/admin/operators' },
+      { method: 'DELETE', url: `/admin/operators/${NIL}` },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {

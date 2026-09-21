@@ -1386,6 +1386,14 @@ export const ADMIN_ACTIONS = [
    */
   'admin_exported',
   'admin_data_read',
+  /**
+   * An operator gave another account operator access, or took it away (VEN-506).
+   *
+   * The detail carries the role the account held before the grant, which is
+   * what a revoke restores; never the address, which the ids resolve to.
+   */
+  'operator_granted',
+  'operator_revoked',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
