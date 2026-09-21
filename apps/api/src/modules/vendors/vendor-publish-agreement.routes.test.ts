@@ -19,7 +19,7 @@ import * as agreement from './legal-agreement.service.js';
  * like from the request's side.
  */
 vi.mock('./legal-agreement.service.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./legal-agreement.service.js')>();
+  const actual = await importOriginal<typeof agreement>();
 
   return { ...actual, holdsCurrentAgreement: vi.fn(actual.holdsCurrentAgreement) };
 });
