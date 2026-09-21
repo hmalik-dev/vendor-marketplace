@@ -642,6 +642,8 @@ export type PayoutStatusSubject = Pick<PayoutSubject, 'status' | 'payoutReleased
      */
     payoutModel?: PayoutModel;
     vendorPayoutCents?: number;
+    /** A cancelled residual frozen by a foreign refund or an open chargeback (VEN-543). */
+    residualHeld?: boolean;
   };
 
 export function payoutStatusOf(booking: PayoutStatusSubject): PayoutStatus {
@@ -654,7 +656,7 @@ export function payoutStatusOf(booking: PayoutStatusSubject): PayoutStatus {
    * what the vendor dashboard selects on too, so a hold status added to one and
    * not the other cannot happen.
    */
-  if (HELD_PAYOUT_STATUSES.some((held) => held === booking.status)) {
+  if (booking.residualHeld || HELD_PAYOUT_STATUSES.some((held) => held === booking.status)) {
     return 'held';
   }
 

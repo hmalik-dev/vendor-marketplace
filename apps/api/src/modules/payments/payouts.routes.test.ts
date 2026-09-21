@@ -7,6 +7,7 @@ import {
   conversations,
   notifications,
   operatorAlerts,
+  supportCases,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
@@ -300,6 +301,7 @@ describe('payouts', () => {
     harness.stripe.failedTransferKeys.clear();
     harness.email.sent.length = 0;
     await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(supportCases);
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -1695,6 +1697,92 @@ describe('payouts', () => {
       const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
       expect(payouts.next).toBeNull();
       expect(payouts.pendingCents).toBe(0);
+    });
+  });
+
+  /**
+   * VEN-543. A late cancellation leaves the vendor a residual, and `cancelled`
+   * is a status neither hold can move, so a refund made outside the platform or
+   * an open chargeback used to be skipped once and paid on the next tick.
+   */
+  describe('a cancelled booking whose residual is contested', () => {
+    const RETAINED_CENTS = EXPECTED_PAYOUT_CENTS / 2;
+    const FOREIGN_REFUND_CENTS = 30_000;
+
+    async function lateCancelledBooking(): Promise<typeof bookings.$inferSelect> {
+      const paid = await paidBooking();
+      clockNow = addDays(new Date(`${EVENT_DATE}T12:00:00Z`), -2);
+      expect(
+        (await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {})).statusCode,
+      ).toBe(200);
+      clockNow = AFTER_RELEASE;
+
+      const cancelled = await currentBooking();
+      expect(cancelled.vendorPayoutCents).toBe(RETAINED_CENTS);
+
+      return cancelled;
+    }
+
+    async function openChargebackCase(bookingId: string): Promise<string> {
+      const [row] = await harness.database.db
+        .insert(supportCases)
+        .values({
+          reference: 'ORL-TEST-543',
+          origin: 'chargeback',
+          message: 'The card network opened a chargeback.',
+          bookingId,
+        })
+        .returning({ id: supportCases.id });
+
+      return row!.id;
+    }
+
+    it('makes no transfer on two consecutive sweeps after a foreign refund is recorded', async () => {
+      const cancelled = await lateCancelledBooking();
+      harness.stripe.refundExternally(cancelled.stripePaymentIntentId!, FOREIGN_REFUND_CENTS);
+
+      // The first run finds and records the refund; the second used to pay.
+      expect(await sweep()).toEqual({ released: 0, skipped: 1, failed: 0 });
+      expect((await currentBooking()).externalRefundCents).toBe(FOREIGN_REFUND_CENTS);
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toEqual([]);
+    });
+
+    it('holds while a chargeback case is open, and pays the residual once it is resolved', async () => {
+      const cancelled = await lateCancelledBooking();
+      const caseId = await openChargebackCase(cancelled.id);
+
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toEqual([]);
+
+      await harness.database.db
+        .update(supportCases)
+        .set({ status: 'resolved' })
+        .where(eq(supportCases.id, caseId));
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toHaveLength(1);
+      expect(harness.stripe.transfers[0]?.amountCents).toBe(RETAINED_CENTS);
+    });
+
+    it('reports the row as held on the vendor dashboard while the sweep leaves it', async () => {
+      const cancelled = await lateCancelledBooking();
+      await openChargebackCase(cancelled.id);
+
+      const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
+
+      expect(payouts.heldCents).toBe(RETAINED_CENTS);
+      expect(payouts.heldCount).toBe(1);
+      expect(payouts.pendingCents).toBe(0);
+      expect(payouts.next).toBeNull();
+    });
+
+    it('still pays an uncontested cancelled residual and reports it pending', async () => {
+      await lateCancelledBooking();
+
+      const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
+      expect(payouts.pendingCents).toBe(RETAINED_CENTS);
+      expect(payouts.heldCents).toBe(0);
     });
   });
 });

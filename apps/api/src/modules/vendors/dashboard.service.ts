@@ -223,6 +223,7 @@ function toPayoutSummary(
   for (const row of rows) {
     const state = payoutStatusOf({
       status: row.status,
+      residualHeld: row.residualHeld,
       payoutReleasedAt: null,
       stripeTransferId: null,
     });

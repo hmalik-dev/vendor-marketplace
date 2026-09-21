@@ -597,6 +597,19 @@ describe('payoutStatusOf', () => {
     payoutReleasedAt: null,
   } as const;
 
+  it('reads a frozen cancelled residual as held, and a released one as released', () => {
+    const cancelled = { ...PENDING, status: 'cancelled' as const };
+
+    expect(payoutStatusOf({ ...cancelled, residualHeld: true })).toBe('held');
+    expect(payoutStatusOf({ ...cancelled, residualHeld: false })).toBe('pending');
+    expect(
+      payoutStatusOf({
+        ...cancelled,
+        residualHeld: true,
+        payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
+      }),
+    ).toBe('released');
+  });
   it('is pending before the transfer and released after it', () => {
     expect(payoutStatusOf(PENDING)).toBe('pending');
     expect(payoutStatusOf({ ...PENDING, payoutReleasedAt: new Date('2026-06-18T00:00:00Z') })).toBe(
