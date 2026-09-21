@@ -185,6 +185,22 @@ export async function findBookingById(
 }
 
 /**
+ * The booking, read under a row lock that lasts until `tx` commits.
+ *
+ * For a caller that must decide from the row and then move money on the strength
+ * of it (VEN-545): a competing writer queues behind the lock instead of changing
+ * the row between the decision and the write.
+ */
+export async function lockBookingById(
+  tx: AppDatabase,
+  bookingId: string,
+): Promise<BookingRow | null> {
+  const rows = await tx.select().from(bookings).where(eq(bookings.id, bookingId)).for('update');
+
+  return rows?.[0] ?? null;
+}
+
+/**
  * Records the intent on the request so a webhook that never arrives can still
  * be reconciled: without this, a paid customer and an unpaid-looking request
  * are indistinguishable from a customer who opened checkout and walked away.
