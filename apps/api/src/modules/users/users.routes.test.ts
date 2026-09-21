@@ -231,7 +231,7 @@ describe('/users/me', () => {
       });
 
       expect(response.statusCode).toBe(403);
-      expect(response.json().error).toBe('FORBIDDEN');
+      expect(response.json().error).toBe('ACCOUNT_SUSPENDED');
     });
   });
 

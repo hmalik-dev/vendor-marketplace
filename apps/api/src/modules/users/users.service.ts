@@ -7,7 +7,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
-import { accountSuspended, forbidden, notFound, unauthorized } from '../../lib/errors.js';
+import { accountSuspended, notFound, unauthorized } from '../../lib/errors.js';
 import { assertOwnedImageRefs } from '../../lib/storage.js';
 import { findUserById, insertUserIfAbsent, updateUserById } from './users.dao.js';
 
