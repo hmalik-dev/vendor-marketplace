@@ -62,7 +62,7 @@ import { containsInsensitive } from '../../lib/like-pattern.js';
  * the same rows the transfer names, or the number an operator acts on describes
  * a set the sweep does not work.
  */
-import { payoutFailingClauses } from '../payments/payouts.dao.js';
+import { payoutFailingClauses, payoutResidualHeld } from '../payments/payouts.dao.js';
 
 /**
  * Every read and write the admin portal makes. Policy lives in the service; this
@@ -1026,6 +1026,7 @@ function bookingSelection() {
     payoutReleasedAt: bookings.payoutReleasedAt,
     payoutAttempts: bookings.payoutAttempts,
     payoutFailureReason: bookings.payoutFailureReason,
+    residualHeld: payoutResidualHeld(),
     vendorUnpayable: sql<boolean>`(${vendorOwner.isBanned} or ${vendorOwner.deletedAt} is not null)`,
     paidAt: bookings.paidAt,
     customerFirstName: users.firstName,

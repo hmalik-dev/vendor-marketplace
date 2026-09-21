@@ -48,6 +48,22 @@ past event is now claimed by nothing, `payout_attempts` never increments so
 `payoutFailingClauses` cannot see it, and the console still prints
 "Awaiting release".
 
+**VEN-543 added `payoutResidualHeld()` — a fifth predicate, and the first with a
+TS twin nobody feeds.** It is `status = 'cancelled' and (external_refund_cents >
+0 or exists an open `origin='chargeback'` support case)`, hand-qualified with
+`sql.identifier` (safe: static schema names, literal constants, whole expression
+parenthesised so `not()` binds right, both columns `NOT NULL` so no three-valued
+gap) and negated in `payoutFailingClauses`, `findDuePayoutBookingIds`,
+`claimReleasableBooking` and `findNextPendingPayout`. It **requires `bookings`
+and `support_cases` to stay unaliased** at every call site — an `alias()` and the
+EXISTS silently stops correlating. Arming it needs a real Stripe dispute
+(`origin='chargeback'` is written only by the webhook) and only an operator
+resolves it, so the subject cannot lift its own hold. The gap: `residualHeld` is
+**optional** on `PayoutStatusSubject`, so `payoutStatusOf`/`isPayoutFailing` at
+`cases.service.ts:716`, `admin-detail.service.ts:252`, `admin.service.ts:783` and
+`booking-report.ts:62` still answer `pending`/`failing` for a row the SQL twin
+excludes.
+
 **#432 added a second shared predicate and a third money mover.**
 `payoutFailingClauses()` (same file) is `payoutReleasedAt is null` +
 `payout_attempts > 0` and is spread into the admin Payments filter and the
