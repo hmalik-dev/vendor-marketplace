@@ -11,9 +11,10 @@ import {
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
+import { ContinueNotice } from '@/components/legal/continue-notice';
 import { ExpandableDocumentCard } from '@/components/legal/expandable-document-card';
 import { ApiClientError } from '@/lib/api-client';
 import { signOut } from '@/lib/auth/auth-requests';
@@ -29,30 +30,27 @@ import { terminalRefusal } from '@/lib/terms-gate-paths';
 import { useApi } from '@/lib/use-api';
 
 /**
- * The first-sign-in acceptance gate — an unticked box the person ticks.
+ * The first screen after verification — two screens under one route.
  *
- * **This is clickwrap, and the distinction is the whole point of the screen.**
- * Before it, accepting the Terms was a `Continue` press under a link nobody
- * opened — browsewrap, which is the form courts decline to enforce. A record
- * saying somebody accepted is worth nothing if the act it records is arriving.
+ * **First acceptance (VEN-507): confirm the role, continue under a notice.**
+ * The choice made at sign-up is only a hint, so this screen asks again —
+ * preselecting the hint, or the invite's `vendor`, and otherwise nothing — and
+ * the server stores what is submitted here, with the account and the acceptance
+ * in one transaction. There is **no checkbox**: "By continuing you agree to the
+ * Terms and Privacy Policy" sits under the submit, and the row is recorded as a
+ * `continue_notice`, never as a ticked box. An account that already exists shows
+ * its stored role read-only: nothing here can change it.
  *
- * **It is also where the role is confirmed (VEN-507).** The choice made at
- * sign-up is only a hint, so this screen asks again — preselecting the hint,
- * or the invite's `vendor`, and otherwise nothing — and the server stores
- * what is submitted here. An account that already exists shows its stored role
- * read-only: nothing on this screen can change it.
+ * **A new Terms version (`explicitTickRequired`) is the one tick.** An account
+ * that accepted an earlier version is asked again with an unticked box, and that
+ * is clickwrap:
  *
- * Three properties, each of which a shortcut would lose:
- *
- * - **The box starts unticked.** A pre-ticked box is not an affirmative act and
- *   is the single most common way a clickwrap record is thrown out. `useState`
- *   is seeded `false` and nothing else writes it.
+ * - **The box starts unticked.** A pre-ticked box is not an affirmative act.
+ *   `useState` is seeded `false` and nothing else writes it.
  * - **The document is reachable from beside the box** — expanded in place here,
- *   and linked at `/terms` for a reader who wants it in its own tab. Neither
- *   leaves the screen or resets what has been ticked.
+ *   and linked at `/terms` for a reader who wants it in its own tab.
  * - **The submit carries the tick**, so the server refuses a submission that
- *   does not. The disabled button below is a courtesy to the reader; the rule
- *   is on the route.
+ *   does not. The disabled button is a courtesy; the rule is on the route.
  */
 export interface AcceptTermsScreenProps {
   status: TermsAcceptanceStatus;
@@ -68,13 +66,34 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'an operator',
 };
 
-const ROLE_OPTIONS: readonly { role: SignUpRole; title: string; description: string }[] = [
+/*
+ * The same two cards the sign-up form draws (`ROLE_CHOICES`), so the choice
+ * looks the same one step apart: clay for the customer, sage for the vendor.
+ */
+const ROLE_OPTIONS: readonly {
+  role: SignUpRole;
+  title: string;
+  description: string;
+  glyph: 'square' | 'circle';
+  selectedCard: string;
+  selectedGlyph: string;
+}[] = [
   {
     role: 'customer',
     title: "I'm planning an event",
     description: 'Find and book vendors near you.',
+    glyph: 'square',
+    selectedCard: 'border-2 border-clay-400 bg-clay-100',
+    selectedGlyph: 'border-clay-500',
   },
-  { role: 'vendor', title: "I'm a vendor", description: 'List your services and take bookings.' },
+  {
+    role: 'vendor',
+    title: "I'm a vendor",
+    description: 'List your services and take bookings.',
+    glyph: 'circle',
+    selectedCard: 'border-2 border-sage-400 bg-sage-50',
+    selectedGlyph: 'border-sage-600',
+  },
 ];
 
 export function AcceptTermsScreen({
@@ -85,7 +104,10 @@ export function AcceptTermsScreen({
   const request = useApi();
   const router = useRouter();
 
-  const storedRole = status.account.exists ? status.account.role : null;
+  /* A new version asks for the tick; a first acceptance asks for the role and continues under a notice. */
+  const tickMode = status.explicitTickRequired;
+  const storedRole = !tickMode && status.account.exists ? status.account.role : null;
+  const inFlight = useRef(false);
 
   const [role, setRole] = useState<SignUpRole | null>(null);
   const [agreed, setAgreed] = useState(false);
@@ -103,10 +125,10 @@ export function AcceptTermsScreen({
    * nothing — never a default. A choice the person already made is kept.
    */
   useEffect(() => {
-    if (storedRole === null) {
+    if (!tickMode && storedRole === null) {
       setRole((chosen) => chosen ?? readSignUpRole() ?? status.suggestedRole);
     }
-  }, [storedRole, status.suggestedRole]);
+  }, [tickMode, storedRole, status.suggestedRole]);
 
   function choose(next: SignUpRole): void {
     setRole(next);
@@ -128,15 +150,17 @@ export function AcceptTermsScreen({
     );
   }
 
-  const roleSettled = storedRole !== null || role !== null;
+  const ready = tickMode ? agreed : storedRole !== null || role !== null;
 
   async function accept(event: React.FormEvent): Promise<void> {
     event.preventDefault();
 
-    if (!agreed || !roleSettled || saving) {
+    /* A ref, not the `saving` state: a double-click lands before the re-render. */
+    if (!ready || saving || inFlight.current) {
       return;
     }
 
+    inFlight.current = true;
     setSaving(true);
     setFailed(null);
     setNotInvited(false);
@@ -145,15 +169,16 @@ export function AcceptTermsScreen({
       const result = await request('/legal/terms/accept', {
         method: 'POST',
         /*
-         * The role confirmed on this screen. Left out for an account that
-         * already exists: the server ignores it there, and the screen shows the
-         * stored one.
+         * The tick for a new version; otherwise the role confirmed on this
+         * screen, left out for an account that already exists (the server
+         * ignores it there, and the screen shows the stored one).
          */
-        body: {
-          version: status.current,
-          accepted: true,
-          ...(storedRole === null && role !== null ? { role } : {}),
-        },
+        body: tickMode
+          ? { version: status.current, accepted: true }
+          : {
+              version: status.current,
+              ...(storedRole === null && role !== null ? { role } : {}),
+            },
         schema: termsAcceptanceStatusSchema,
       });
 
@@ -168,7 +193,8 @@ export function AcceptTermsScreen({
        */
       const stored = result.account.role;
 
-      if (storedRole === null && role !== null && stored !== null && stored !== role) {
+      if (!tickMode && storedRole === null && role !== null && stored !== null && stored !== role) {
+        inFlight.current = false;
         setSaving(false);
         setLandedAs(stored);
         return;
@@ -182,6 +208,8 @@ export function AcceptTermsScreen({
        * customer instead or to apply. Neither the session nor the hint is
        * cleared: doing so would let a return visit quietly choose for them.
        */
+      inFlight.current = false;
+
       if (error instanceof ApiClientError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
         setSaving(false);
         setNotInvited(true);
@@ -230,14 +258,27 @@ export function AcceptTermsScreen({
 
   return (
     <div className="mx-auto max-w-[700px] px-6 py-13">
-      <p className="text-label font-semibold tracking-label text-stone-600 uppercase">Legal</p>
-      <h1 className="display-heading mt-2 text-display-md text-stone-900">
-        Before you start, the Terms
-      </h1>
-      <p className="mt-2 text-sm leading-prose text-stone-600">
-        Everyone using {BRAND_NAME} accepts these once. We record that you did — the version, the
-        moment, and this browser — so both sides can say what was agreed.
-      </p>
+      {tickMode ? (
+        <>
+          <p className="text-label font-semibold tracking-label text-stone-600 uppercase">Legal</p>
+          <h1 className="display-heading mt-2 text-display-md text-stone-900">
+            The Terms have changed
+          </h1>
+          <p className="mt-2 text-sm leading-prose text-stone-600">
+            Everyone using {BRAND_NAME} accepts the current Terms. We record that you did — the
+            version, the moment, and this browser — so both sides can say what was agreed.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="text-label font-semibold tracking-label text-stone-600 uppercase">
+            One last step
+          </p>
+          <h1 className="display-heading mt-2 text-display-md text-stone-900">
+            Confirm how you&apos;re joining
+          </h1>
+        </>
+      )}
 
       {failed ? (
         <Banner status="failed" title="That did not save" className="mt-5">
@@ -255,7 +296,7 @@ export function AcceptTermsScreen({
         </Banner>
       ) : null}
 
-      {storedRole !== null ? (
+      {tickMode ? null : storedRole !== null ? (
         <p className="mt-6 text-base leading-prose text-stone-800" data-testid="stored-role">
           You&apos;re joining as {ROLE_LABELS[storedRole]}. This can&apos;t be changed later. To
           switch, close the account and register again.
@@ -276,7 +317,7 @@ export function AcceptTermsScreen({
                     'cursor-pointer rounded-xl px-3.5 py-4 transition-colors duration-(--duration-fast)',
                     'has-focus-visible:ring-2 has-focus-visible:ring-clay-400/40 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-stone-50',
                     selected
-                      ? 'border-2 border-clay-400 bg-clay-100'
+                      ? option.selectedCard
                       : 'border border-stone-300 bg-stone-0 hover:border-stone-400',
                   )}
                 >
@@ -289,6 +330,21 @@ export function AcceptTermsScreen({
                     data-focus-own
                     className="sr-only"
                   />
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'mb-2.5 flex size-8.5 items-center justify-center rounded-full',
+                      selected ? 'bg-stone-0' : 'bg-stone-150',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'block size-3.25 border-[1.6px]',
+                        option.glyph === 'circle' ? 'rounded-full' : 'rounded-[3px]',
+                        selected ? option.selectedGlyph : 'border-stone-600',
+                      )}
+                    />
+                  </span>
                   <span className="block text-[14.5px] font-semibold text-stone-900">
                     {option.title}
                   </span>
@@ -302,30 +358,32 @@ export function AcceptTermsScreen({
           <p className="mt-3 text-helper text-stone-600" aria-live="polite">
             {role
               ? `You're joining as ${ROLE_LABELS[role]}. This can't be changed later. To switch, close the account and register again.`
-              : 'Choose one to continue. This can’t be changed later.'}
+              : "Choose one to continue. This can't be changed later."}
           </p>
         </fieldset>
       )}
 
-      {/*
-        The document, clipped and expanded **in place**. Not a navigation and
-        not a modal: a reader who opens the Terms must not lose the tick they
-        have already made, and must not be dropped somewhere the gate then
-        bounces them back from.
-      */}
-      <ExpandableDocumentCard
-        document={terms}
-        heading={terms.title}
-        headingId="terms-heading"
-        bodyId="terms-body"
-        meta={
-          <>
-            {terms.sections.length} sections &middot; {status.current}
-          </>
-        }
-        collapseLabel="Collapse the Terms"
-        helper="Opens here — you don't lose your place."
-      />
+      {tickMode ? (
+        /*
+          The document, clipped and expanded **in place**. Not a navigation and
+          not a modal: a reader who opens the Terms must not lose the tick they
+          have already made, and must not be dropped somewhere the gate then
+          bounces them back from.
+        */
+        <ExpandableDocumentCard
+          document={terms}
+          heading={terms.title}
+          headingId="terms-heading"
+          bodyId="terms-body"
+          meta={
+            <>
+              {terms.sections.length} sections &middot; {status.current}
+            </>
+          }
+          collapseLabel="Collapse the Terms"
+          helper="Opens here — you don't lose your place."
+        />
+      ) : null}
 
       {/*
         `noValidate`, because this form owns its own submit: the browser's
@@ -333,26 +391,28 @@ export function AcceptTermsScreen({
         `accept` would never fire. #388, and the guard that keeps it true.
       */}
       <form onSubmit={accept} noValidate className="mt-6">
-        <label className="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
-            checked={agreed}
-            onChange={(event) => setAgreed(event.currentTarget.checked)}
-            className="mt-1 size-4 flex-none appearance-none rounded-[4px] border-[1.3px] border-stone-560 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[10px] checked:after:leading-[14px] checked:after:text-stone-0 checked:after:content-['✓']"
-          />
-          <span className="text-base leading-prose text-stone-800">
-            I have read and I accept the{' '}
-            <a
-              href={LEGAL_PATHS.terms}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-semibold text-clay-500 underline underline-offset-4"
-            >
-              Terms of Service
-            </a>{' '}
-            {status.current}.
-          </span>
-        </label>
+        {tickMode ? (
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(event) => setAgreed(event.currentTarget.checked)}
+              className="mt-1 size-4 flex-none appearance-none rounded-[4px] border-[1.3px] border-stone-400 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[10px] checked:after:leading-[14px] checked:after:text-stone-0 checked:after:content-['✓']"
+            />
+            <span className="text-base leading-prose text-stone-800">
+              I have read and I accept the{' '}
+              <a
+                href={LEGAL_PATHS.terms}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-clay-500 underline underline-offset-4"
+              >
+                Terms of Service
+              </a>{' '}
+              {status.current}.
+            </span>
+          </label>
+        ) : null}
 
         <div className="mt-5">
           {/*
@@ -364,12 +424,13 @@ export function AcceptTermsScreen({
             type="submit"
             variant="primary"
             size="lg"
-            disabled={!agreed || !roleSettled || saving}
+            disabled={!ready || saving}
             loading={saving}
             className="disabled:bg-clay-300 disabled:opacity-100"
           >
-            {saving ? 'Recording…' : 'Accept and continue'}
+            {saving ? 'Recording…' : tickMode ? 'Accept and continue' : 'Continue'}
           </Button>
+          {tickMode ? null : <ContinueNotice className="mt-3 text-left" />}
           <p className="mt-2 text-helper text-stone-600">
             We record the moment, this browser and its address, so the record means something later.
           </p>

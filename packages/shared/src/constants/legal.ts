@@ -217,13 +217,22 @@ export const CURRENT_TERMS_VERSION = 'v1.0';
  * question asked of a clickwrap record that is challenged.
  *
  * - `clickwrap_checkbox` — an unticked box the person ticked, with the document
- *   named and linked beside it. Both real writers use this.
+ *   named and linked beside it: every acceptance of a new version, and the
+ *   vendor agreement.
+ * - `continue_notice` — a submit under a notice that continuing means agreeing,
+ *   with the Terms and the Privacy Policy linked beside it: the first acceptance,
+ *   made together with the account (VEN-507). No box was ticked, and the row must
+ *   not say one was.
  * - `seed_fixture` — written by `db:seed:e2e` so an automated pass can reach the
  *   surfaces behind the gate. It is **not** a claim that a person accepted
  *   anything, and labelling it as one would put a fabricated act in the one
  *   table whose whole value is that it is true.
  */
-export const LEGAL_ACCEPTANCE_METHODS = ['clickwrap_checkbox', 'seed_fixture'] as const;
+export const LEGAL_ACCEPTANCE_METHODS = [
+  'clickwrap_checkbox',
+  'continue_notice',
+  'seed_fixture',
+] as const;
 export type LegalAcceptanceMethod = (typeof LEGAL_ACCEPTANCE_METHODS)[number];
 
 /**
