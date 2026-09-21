@@ -359,6 +359,16 @@ jobs:
           pnpm --filter @vendor-marketplace/web exec playwright install --with-deps chromium
           pnpm e2e:auth
 
+      # `e2e-auth.mjs` masks the form's inputs; no trace, for the reason below.
+      - name: Upload the sign-in diagnostics
+        if: failure() && steps.secrets.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sign-in-diagnostics
+          path: .auth/diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Run the journeys
         if: steps.secrets.outputs.run == 'true'
         run: pnpm --filter @vendor-marketplace/web test:e2e
