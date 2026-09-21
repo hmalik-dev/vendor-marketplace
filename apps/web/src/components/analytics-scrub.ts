@@ -1,5 +1,4 @@
 import type { BeforeSendEvent } from '@vercel/analytics';
-import { isAdminRoute } from './public-chrome';
 
 /**
  * How Web Analytics may report each dynamic route under `apps/web/src/app`:
@@ -23,6 +22,9 @@ export const DYNAMIC_ROUTE_POLICY: Readonly<Record<string, DynamicRoutePolicy>> 
   '/admin/users/[userId]': 'dropped',
   '/api/auth/[...path]': 'dropped',
 };
+
+// `public-chrome.tsx` is a client module, which this plain one may not call.
+const ADMIN_SEGMENT = 'admin';
 
 const PLACEHOLDER_ORIGIN = 'http://analytics.invalid';
 
@@ -64,7 +66,7 @@ export function scrubAnalyticsEvent(event: BeforeSendEvent): BeforeSendEvent | n
   // `/ADMIN` must not slip past a literal prefix match.
   const segments = parsed.pathname.split('/').filter(Boolean);
   const folded = segments.map((segment) => segment.toLowerCase());
-  if (isAdminRoute(`/${folded.join('/')}`) || DROPPED_PATTERNS.some((p) => matches(p, folded))) {
+  if (folded[0] === ADMIN_SEGMENT || DROPPED_PATTERNS.some((p) => matches(p, folded))) {
     return null;
   }
   const path = normalisePath(segments);
