@@ -285,6 +285,8 @@ describe('admin routes', () => {
       { method: 'GET', url: '/admin/requests' },
       /* VEN-400. One customer's contact details, bookings, reviews and notifications. */
       { method: 'GET', url: `/admin/customers/${NIL}` },
+      /* VEN-475. The web tier reports each CSV export here. */
+      { method: 'POST', url: '/admin/exports' },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {

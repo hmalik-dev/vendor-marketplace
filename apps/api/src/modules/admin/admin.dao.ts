@@ -1853,6 +1853,33 @@ export interface AdminActionRecord {
    * people. `admin-actions.ts` carries the full rule.
    */
   detail: AdminActionDetail;
+  /** The application clock's instant, for a caller whose dedupe window reads it. */
+  createdAt?: Date;
+}
+
+/**
+ * Whether this operator already has a read row for the subject and surface
+ * since `since` (VEN-475).
+ */
+export async function hasRecentAdminRead(
+  db: AppDatabase,
+  read: { actorId: string; subjectId: string; surface: string; since: Date },
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: adminActions.id })
+    .from(adminActions)
+    .where(
+      and(
+        eq(adminActions.actorId, read.actorId),
+        eq(adminActions.action, 'admin_data_read'),
+        eq(adminActions.subjectId, read.subjectId),
+        sql`${adminActions.detail}->>'surface' = ${read.surface}`,
+        gte(adminActions.createdAt, read.since),
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
 }
 
 /**

@@ -1,5 +1,6 @@
-import { MAX_PAGE_SIZE, toDateString } from '@vendor-marketplace/shared';
+import { MAX_PAGE_SIZE, toDateString, type AdminExport } from '@vendor-marketplace/shared';
 import type { NextRequest } from 'next/server';
+import { recordAdminExport } from '@/lib/admin-data';
 import { ApiClientError } from '@/lib/api-client';
 import { getCurrentUser } from '@/lib/current-user';
 import { isTermsRequired, termsAcceptancePath } from '@/lib/terms-gate';
@@ -100,8 +101,8 @@ export async function refuseUnlessAdmin(request: NextRequest): Promise<Response 
 }
 
 export interface CsvExport<T> {
-  /** File name stem — `vendors` becomes `vendors-2026-09-15.csv`. */
-  name: string;
+  /** File name stem — `vendors` becomes `vendors-2026-09-15.csv` — and the audited export. */
+  name: AdminExport;
   columns: readonly string[];
   /** The narrowed filters, as a query string with its `?` (from `adminQueryString`). */
   query: string;
@@ -153,6 +154,8 @@ export async function csvExport<T>({
     page += 1;
   } while ((page - 1) * MAX_PAGE_SIZE < total && page <= MAX_PAGES);
 
+  const rowCount = lines.length - 1;
+
   /*
    * Say so when the walk stopped short. A file that quietly ends at 5,000 rows
    * is worse than one that says where it stopped — an operator reconciling
@@ -173,6 +176,12 @@ export async function csvExport<T>({
       ),
     );
   }
+
+  /*
+   * Logged before the file leaves (VEN-475): the API writes the row, and a
+   * failure here throws, so no CSV is handed over unrecorded.
+   */
+  await recordAdminExport({ export: name, filters: query, rowCount });
 
   return new Response(`${lines.join('\r\n')}\r\n`, {
     headers: {

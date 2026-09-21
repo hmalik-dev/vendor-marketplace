@@ -2,6 +2,9 @@ import { MAX_PAGE_SIZE } from '@vendor-marketplace/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/current-user', () => ({ getCurrentUser: vi.fn() }));
+vi.mock('@/lib/admin-data', () => ({ recordAdminExport: vi.fn() }));
+
+import { recordAdminExport } from '@/lib/admin-data';
 
 import { csvExport, csvField } from './admin-export';
 import { activityParams, caseParams } from './admin-list-params';
@@ -86,6 +89,41 @@ describe('csvExport', () => {
     });
 
     expect((await response.text()).trimEnd().split('\r\n')).toEqual(['"Reference"', '"a"', '"b"']);
+  });
+
+  it.each(['vendors', 'activity', 'cases'] as const)(
+    'reports the %s export and its row count before handing the file over',
+    async (name) => {
+      vi.mocked(recordAdminExport).mockClear();
+
+      await csvExport({
+        name,
+        columns: ['Reference'],
+        query: '?status=live',
+        readPage: async () => ({ items: ['a', 'b'], total: 2 }),
+        row: (row) => [row],
+      });
+
+      expect(recordAdminExport).toHaveBeenCalledExactlyOnceWith({
+        export: name,
+        filters: '?status=live',
+        rowCount: 2,
+      });
+    },
+  );
+
+  it('withholds the file when the export cannot be recorded', async () => {
+    vi.mocked(recordAdminExport).mockRejectedValueOnce(new Error('audit down'));
+
+    await expect(
+      csvExport({
+        name: 'vendors',
+        columns: ['Reference'],
+        query: '',
+        readPage: async () => ({ items: ['a'], total: 1 }),
+        row: (row) => [row],
+      }),
+    ).rejects.toThrow('audit down');
   });
 
   it('neutralises a formula and doubles an embedded quote', () => {
