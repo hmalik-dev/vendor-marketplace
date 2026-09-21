@@ -11,7 +11,7 @@ vi.mock('next/headers', () => ({ cookies: async () => ({ getAll }) }));
 // `cache()` memoises per request; each call here stands for a fresh request.
 vi.mock('react', () => ({ cache: <T>(fn: T): T => fn }));
 
-import { clearServerSessions, getServerSession } from './server';
+import { clearServerSessions, forgetSessionsFor, getServerSession } from './server';
 
 const NOW = Date.UTC(2026, 8, 20, 12, 0, 0);
 
@@ -58,6 +58,26 @@ describe('getServerSession', () => {
       { userId: 'user-1', token: minted },
       { userId: 'user-1', token: minted },
     ]);
+  });
+
+  it('forgets one user’s remembered sessions and no one else’s (VEN-518)', async () => {
+    token.mockResolvedValue({ data: { token: jwt(NOW / 1000 + 900) }, error: null });
+    signedInAs('user-1', 'cookie-a');
+    await getServerSession();
+    signedInAs('user-2', 'cookie-b');
+    await getServerSession();
+    expect(getSession).toHaveBeenCalledTimes(2);
+
+    forgetSessionsFor('user-1');
+
+    getSession.mockResolvedValue({ data: null, error: null });
+    getAll.mockReturnValue([{ name: '__Secure-neon-auth.session_token', value: 'cookie-a' }]);
+    expect(await getServerSession()).toBeNull();
+    expect(getSession).toHaveBeenCalledTimes(3);
+
+    getAll.mockReturnValue([{ name: '__Secure-neon-auth.session_token', value: 'cookie-b' }]);
+    expect((await getServerSession())?.userId).toBe('user-2');
+    expect(getSession).toHaveBeenCalledTimes(3);
   });
 
   it('asks again once the remembered token is inside the refresh window', async () => {

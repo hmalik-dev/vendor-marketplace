@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs';
 import type { NextRequest } from 'next/server';
 import { after, NextResponse } from 'next/server';
-import { neonAuth } from '@/lib/auth/server';
+import { forgetSessionsFor, neonAuth } from '@/lib/auth/server';
 import { isProxiedAuthCall } from '@/lib/auth/proxy-allowlist';
 import {
   addressLimit,
@@ -130,6 +130,89 @@ async function forwardBudgeted(
   return response;
 }
 
+function authCall(request: NextRequest, path: string[], headers: Headers, body: string): Request {
+  return new Request(new URL(`/api/auth/${path.join('/')}`, request.url), {
+    method: 'POST',
+    headers,
+    body,
+  });
+}
+
+/**
+ * A reset is often done because the account may be compromised, and Better Auth
+ * leaves other sessions alive after one unless the project setting
+ * `revokeSessionsOnPasswordReset` is on — a console value this repo cannot see
+ * (VEN-518). So the proxy ends them itself, as defence in depth: it signs in
+ * with the password just set, which yields the one session `revoke-sessions`
+ * needs a caller for, and that call ends every session the account holds,
+ * the throwaway one included. The caller is signed out either way and signs in
+ * again; the reset has already succeeded, so a failure here is reported, never
+ * turned into a failed reset.
+ */
+async function endEverySession(request: NextRequest, email: string, body: string): Promise<void> {
+  try {
+    const password = (JSON.parse(body) as { password?: unknown }).password;
+    const headers = new Headers(request.headers);
+    headers.delete('content-length');
+    headers.delete('content-encoding');
+    headers.delete('cookie');
+    headers.delete('authorization');
+    headers.set('content-type', 'application/json');
+
+    const signIn = segments('sign-in/email');
+    const signedIn = await neonAuth()
+      .handler()
+      .POST(
+        authCall(request, signIn, headers, JSON.stringify({ email, password })) as NextRequest,
+        { params: Promise.resolve({ path: signIn }) },
+      );
+    const userId = await userIdIn(signedIn);
+    const cookie = signedIn.headers
+      .getSetCookie()
+      .map((line) => line.split(';')[0])
+      .join('; ');
+
+    if (!signedIn.ok) {
+      throw new Error(`Could not open a session to end the others (${signedIn.status})`);
+    }
+
+    if (cookie === '') {
+      throw new Error('Signing in to end the other sessions set no session cookie');
+    }
+
+    headers.set('cookie', cookie);
+    const revoke = segments('revoke-sessions');
+    const revoked = await neonAuth()
+      .handler()
+      .POST(authCall(request, revoke, headers, '{}') as NextRequest, {
+        params: Promise.resolve({ path: revoke }),
+      });
+
+    if (!revoked.ok) {
+      throw new Error(`Other sessions were not ended (${revoked.status})`);
+    }
+
+    if (userId !== undefined) {
+      forgetSessionsFor(userId);
+    }
+  } catch (error) {
+    Sentry.captureException(error);
+  }
+}
+
+/** The account's id from a sign-in answer, or `undefined` when the body says none. */
+async function userIdIn(response: Response): Promise<string | undefined> {
+  try {
+    const id = ((await response.clone().json()) as { user?: { id?: unknown } } | null)?.user?.id;
+    return typeof id === 'string' ? id : undefined;
+  } catch {
+    // Only the cache eviction needs it; the revoke below does not.
+    return undefined;
+  }
+}
+
+const segments = (joined: string): string[] => joined.split('/');
+
 async function forwardReset(
   request: NextRequest,
   context: RouteContext,
@@ -172,6 +255,11 @@ async function forwardReset(
     // One refusal for every 4xx, so a code check cannot tell "no such account"
     // from "wrong code" even if the provider words them differently.
     const response = await call();
+
+    if (response.ok) {
+      await endEverySession(request, email, body);
+    }
+
     return response.status >= 400 && response.status < 500
       ? NextResponse.json({ message: 'Invalid' }, { status: 400 })
       : response;
