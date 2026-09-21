@@ -389,6 +389,16 @@ async function landCell(
    * draw their own, and the auth screens cover it. The auth provider's signed-in and
    * signed-out branches render on the client, so these wait rather than read.
    */
+  /*
+   * The header streams behind its own boundary (VEN-492). React sends the real
+   * one in a hidden `S:` container beside the `B:` placeholder and swaps it in
+   * afterwards, so mid-swap there are two `site-header` nodes and `isVisible()`
+   * fails strict mode. Nothing here is decidable until no boundary is pending.
+   */
+  await page.waitForFunction(
+    () => document.querySelector('template[id^="B:"], [id^="S:"]') === null,
+  );
+
   const siteHeader = page.locator('[data-slot="site-header"]');
   if (!(await siteHeader.isVisible())) {
     return failures;

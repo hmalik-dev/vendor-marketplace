@@ -161,10 +161,27 @@ test.describe('the console lists', () => {
 
       const trigger = adminPage.getByRole('button', { name: list.dropdown, exact: true });
       await waitForHydration(adminPage, 'form button[aria-haspopup="listbox"]');
-      await trigger.click();
-      await adminPage.getByRole('option').filter({ hasNotText: /^Any / }).first().click();
 
-      await expect(adminPage).not.toHaveURL(/page=2/);
+      /*
+       * Choosing an option is idempotent, so it is re-applied until it takes.
+       * On CI's `next start` the first choice on `?page=2` was intermittently
+       * swallowed while the results region was still settling — the URL kept
+       * `page=2` and no filter for the whole timeout, then passed on retry in
+       * under a second. Each attempt reopens the list only if it is closed, so
+       * a slow navigation from an earlier attempt is not toggled shut.
+       */
+      await expect(async () => {
+        if ((await trigger.getAttribute('aria-expanded')) !== 'true') {
+          await trigger.click({ timeout: 5_000 });
+        }
+        await adminPage
+          .getByRole('option')
+          .filter({ hasNotText: /^Any / })
+          .first()
+          .click({ timeout: 5_000 });
+        await expect(adminPage).not.toHaveURL(/page=2/, { timeout: 5_000 });
+      }).toPass({ timeout: 30_000 });
+
       const landed = new URL(adminPage.url()).searchParams;
 
       expect(landed.get('page')).toBeNull();

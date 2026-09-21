@@ -237,6 +237,11 @@ jobs:
       E2E_VENDOR_PASSWORD: ${{ secrets.E2E_VENDOR_PASSWORD }}
       E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
       E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      # The persistent no-row newcomer (VEN-379): an identity nothing may accept
+      # the Terms for. Optional here, so a repository without the two secrets
+      # still runs everything else; the two specs that need it fail by name.
+      E2E_NEWCOMER_EMAIL: ${{ secrets.E2E_NEWCOMER_EMAIL }}
+      E2E_NEWCOMER_PASSWORD: ${{ secrets.E2E_NEWCOMER_PASSWORD }}
 
     steps:
       - uses: actions/checkout@v4
@@ -307,6 +312,11 @@ jobs:
                       E2E_ADMIN_EMAIL E2E_ADMIN_PASSWORD E2E_VENDOR_STRIPE_ACCOUNT_ID STRIPE_SECRET_KEY; do
             printf '%s=%s\n' "$name" "${!name}"
           done > .env.e2e.local
+          # Written only when the secret exists, so an absent one is reported by
+          # the spec as "not in .env.e2e.local" rather than read as an empty login.
+          for name in E2E_NEWCOMER_EMAIL E2E_NEWCOMER_PASSWORD; do
+            if [ -n "${!name}" ]; then printf '%s=%s\n' "$name" "${!name}" >> .env.e2e.local; fi
+          done
 
       - name: Build
         if: steps.secrets.outputs.run == 'true'

@@ -148,9 +148,14 @@ test.describe('image fallback', () => {
      */
     await waitForHydration(vendorPage, 'input[aria-label="Add portfolio photos"]');
 
-    const tile = vendorPage
-      .locator('img[src*="/uploads/"], img[src*="vendor-marketplace"]')
-      .first();
+    /*
+     * By where a tile sits, not by what its `src` says. An upload on an https
+     * storage host is served through `/_next/image?url=<encoded>` (VEN-456), so
+     * the bucket name is percent-encoded there and a `src*=` match on it holds
+     * only on the http emulator, where the URL is used as given — which is why
+     * this passed on a lane and never on CI's Neon storage branch.
+     */
+    const tile = vendorPage.locator('main li img').first();
 
     if ((await tile.count()) === 0) {
       await vendorPage.getByLabel('Add portfolio photos').setInputFiles(SAMPLE_PHOTOGRAPH);
