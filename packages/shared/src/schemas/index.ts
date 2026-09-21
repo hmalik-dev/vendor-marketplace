@@ -73,6 +73,7 @@ import {
   REVIEW_TYPES,
   TAG_CATEGORIES,
   TAG_SUGGESTION_STATUSES,
+  SIGN_UP_ROLES,
   USER_ROLES,
   US_STATE_CODES,
   VENDOR_SETTABLE_AVAILABILITY_STATUSES,
@@ -323,6 +324,7 @@ export const longitudeSchema = z.number().min(-180).max(180);
 // --- Enums -----------------------------------------------------------------
 
 export const userRoleSchema = z.enum(USER_ROLES);
+export const signUpRoleSchema = z.enum(SIGN_UP_ROLES);
 export const priceTypeSchema = z.enum(PRICE_TYPES);
 export const availabilityStatusSchema = z.enum(AVAILABILITY_STATUSES);
 export const vendorSettableAvailabilityStatusSchema = z.enum(VENDOR_SETTABLE_AVAILABILITY_STATUSES);
@@ -1369,6 +1371,14 @@ export const termsAcceptanceStatusSchema = z.object({
   accepted: z.boolean(),
   /** When they accepted `current`, or `null` while they have not. */
   acceptedAt: z.coerce.date().nullable(),
+  /**
+   * The account behind this session, as the server holds it: the **stored** role
+   * once a row exists, `null` before. The screen reads it to show the role
+   * read-only and to report what a request actually produced (VEN-507).
+   */
+  account: z.object({ exists: z.boolean(), role: userRoleSchema.nullable() }),
+  /** `vendor` for an address holding an unused invite, else `null`; only ever a preselection. */
+  suggestedRole: signUpRoleSchema.nullable(),
 });
 export type TermsAcceptanceStatus = z.infer<typeof termsAcceptanceStatusSchema>;
 
@@ -1385,11 +1395,12 @@ export const acceptTermsSchema = z.object({
   version: legalVersionSchema,
   accepted: z.boolean(),
   /**
-   * The role the person chose at sign-up: a **hint**. Neon Auth has no field to
-   * carry it, so it rides here, and the service narrows it (`admin` is never
-   * reachable) and gates `vendor` on an invite before any row is written.
+   * The role the person confirmed on this screen. **Required when the request
+   * creates the account** (the service answers 400 without it), ignored for an
+   * account that already exists, and never anything but `customer` or `vendor`:
+   * `admin`, another casing, `null` and an object are all refused here (VEN-507).
    */
-  role: z.enum(['customer', 'vendor']).optional(),
+  role: signUpRoleSchema.optional(),
 });
 export type AcceptTerms = z.infer<typeof acceptTermsSchema>;
 

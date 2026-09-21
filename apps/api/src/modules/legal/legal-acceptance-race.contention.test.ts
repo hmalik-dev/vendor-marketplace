@@ -52,12 +52,12 @@ describe('several acceptances of one document at once, against a real Postgres',
   let harness!: TestHarness<PostgresTestDatabase>;
   let photographyId: string;
 
-  function acceptTermsRequest() {
+  function acceptTermsRequest(role: 'customer' | 'vendor' = 'customer', as = CUSTOMER) {
     return harness.app.inject({
       method: 'POST',
       url: '/legal/terms/accept',
-      headers: bearer(CUSTOMER),
-      payload: { version: CURRENT_TERMS_VERSION, accepted: true },
+      headers: bearer(as),
+      payload: { version: CURRENT_TERMS_VERSION, accepted: true, role },
     });
   }
 
@@ -186,13 +186,38 @@ describe('several acceptances of one document at once, against a real Postgres',
    * the defect, and it is unrepairable — nothing can delete either of them.
    */
   it('writes one Terms row however many acceptances arrive at once, and answers them all', async () => {
-    const answers = await Promise.all(Array.from({ length: CONCURRENT }, acceptTermsRequest));
+    const answers = await Promise.all(
+      Array.from({ length: CONCURRENT }, () => acceptTermsRequest()),
+    );
 
     expect(answers.map((answer) => answer.statusCode)).toEqual(Array(CONCURRENT).fill(200));
     expect(answers.map((answer) => answer.json().accepted)).toEqual(Array(CONCURRENT).fill(true));
     expect(await rowsOf('terms_of_service')).toHaveLength(1);
     // Exactly one account, too: this path creates the `users` row as it writes.
     expect(await harness.database.db.select().from(users)).toHaveLength(1);
+  });
+
+  /**
+   * VEN-507 acceptance 4: two tabs for one new identity, one choosing
+   * `customer` and one `vendor`. Whichever insert commits first stores its role
+   * and the other reads it back: one `users` row, one acceptance, both answers
+   * naming the **same** stored role, and no 500 from the loser's conflict.
+   * Alternated so neither role is favoured by the request order.
+   */
+  it('stores one role when two tabs choose different ones, and both answers report it', async () => {
+    const answers = await Promise.all(
+      Array.from({ length: CONCURRENT }, (_, i) =>
+        acceptTermsRequest(i % 2 ? 'vendor' : 'customer'),
+      ),
+    );
+
+    expect(answers.map((answer) => answer.statusCode)).toEqual(Array(CONCURRENT).fill(200));
+    const accounts = await harness.database.db.select().from(users);
+    expect(accounts).toHaveLength(1);
+    expect(await rowsOf('terms_of_service')).toHaveLength(1);
+    expect(answers.map((answer) => answer.json().account)).toEqual(
+      Array(CONCURRENT).fill({ exists: true, role: accounts[0]!.role }),
+    );
   });
 
   /**

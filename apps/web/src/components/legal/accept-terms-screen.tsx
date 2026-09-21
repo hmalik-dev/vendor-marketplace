@@ -7,15 +7,23 @@ import {
   VENDOR_APPLY_PATH,
   termsAcceptanceStatusSchema,
   type TermsAcceptanceStatus,
+  type UserRole,
 } from '@vendor-marketplace/shared';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { ExpandableDocumentCard } from '@/components/legal/expandable-document-card';
 import { ApiClientError } from '@/lib/api-client';
 import { signOut } from '@/lib/auth/auth-requests';
-import { clearSignUpRole, readSignUpRole } from '@/lib/auth/signup-role';
+import {
+  clearSignUpRole,
+  readSignUpRole,
+  rememberSignUpRole,
+  type SignUpRole,
+} from '@/lib/auth/signup-role';
+import { cn } from '@/lib/utils';
 import type { LegalDocument } from '@/lib/legal-markdown';
 import { terminalRefusal } from '@/lib/terms-gate-paths';
 import { useApi } from '@/lib/use-api';
@@ -27,6 +35,12 @@ import { useApi } from '@/lib/use-api';
  * Before it, accepting the Terms was a `Continue` press under a link nobody
  * opened — browsewrap, which is the form courts decline to enforce. A record
  * saying somebody accepted is worth nothing if the act it records is arriving.
+ *
+ * **It is also where the role is confirmed (VEN-507).** The choice made at
+ * sign-up is only a hint, so this screen asks again — preselecting the hint,
+ * or the invite's `vendor`, and otherwise nothing — and the server stores
+ * what is submitted here. An account that already exists shows its stored role
+ * read-only: nothing on this screen can change it.
  *
  * Three properties, each of which a shortcut would lose:
  *
@@ -48,6 +62,21 @@ export interface AcceptTermsScreenProps {
   returnTo: string | null;
 }
 
+const ROLE_LABELS: Record<UserRole, string> = {
+  customer: 'a customer',
+  vendor: 'a vendor',
+  admin: 'an operator',
+};
+
+const ROLE_OPTIONS: readonly { role: SignUpRole; title: string; description: string }[] = [
+  {
+    role: 'customer',
+    title: "I'm planning an event",
+    description: 'Find and book vendors near you.',
+  },
+  { role: 'vendor', title: "I'm a vendor", description: 'List your services and take bookings.' },
+];
+
 export function AcceptTermsScreen({
   status,
   terms,
@@ -56,53 +85,106 @@ export function AcceptTermsScreen({
   const request = useApi();
   const router = useRouter();
 
+  const storedRole = status.account.exists ? status.account.role : null;
+
+  const [role, setRole] = useState<SignUpRole | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const [notInvited, setNotInvited] = useState(false);
+  /* The role the server stored when it differs from the one chosen: shown before continuing. */
+  const [landedAs, setLandedAs] = useState<UserRole | null>(null);
+
+  /*
+   * Preselection is read after mount, never during render: `localStorage` does
+   * not exist on the server, so reading it in the initial state would render
+   * one thing there and another on hydration. Order: the browser hint (under a
+   * day old, validated by `readSignUpRole`), then the invite's `vendor`, then
+   * nothing — never a default. A choice the person already made is kept.
+   */
+  useEffect(() => {
+    if (storedRole === null) {
+      setRole((chosen) => chosen ?? readSignUpRole() ?? status.suggestedRole);
+    }
+  }, [storedRole, status.suggestedRole]);
+
+  function choose(next: SignUpRole): void {
+    setRole(next);
+    setNotInvited(false);
+    /* Kept as the hint, so a reload lands on the same choice. It is still only a hint. */
+    rememberSignUpRole(next);
+  }
+
+  function continueOn(): void {
+    /*
+     * Back through `/after-sign-in` rather than straight to `returnTo`: the
+     * account row exists only now, so this is the first moment its role can
+     * be resolved, and that handler is the one place that knows where each
+     * role starts and re-validates the destination before sending anybody to
+     * it. `replace`, so Back does not return to a gate already cleared.
+     */
+    router.replace(
+      returnTo ? `/after-sign-in?returnTo=${encodeURIComponent(returnTo)}` : '/after-sign-in',
+    );
+  }
+
+  const roleSettled = storedRole !== null || role !== null;
 
   async function accept(event: React.FormEvent): Promise<void> {
     event.preventDefault();
 
-    if (!agreed || saving) {
+    if (!agreed || !roleSettled || saving) {
       return;
     }
 
     setSaving(true);
     setFailed(null);
+    setNotInvited(false);
 
     try {
-      await request('/legal/terms/accept', {
+      const result = await request('/legal/terms/accept', {
         method: 'POST',
         /*
-         * The role chosen at sign-up, which Neon Auth has no field to carry.
-         * Read fresh and validated here; the API narrows it again, so a
-         * tampered stored value can at worst pick between the two public roles.
+         * The role confirmed on this screen. Left out for an account that
+         * already exists: the server ignores it there, and the screen shows the
+         * stored one.
          */
-        body: { version: status.current, accepted: true, role: readSignUpRole() ?? undefined },
+        body: {
+          version: status.current,
+          accepted: true,
+          ...(storedRole === null && role !== null ? { role } : {}),
+        },
         schema: termsAcceptanceStatusSchema,
       });
 
+      /* Accepted: the hint has done its job, and only now. */
       clearSignUpRole();
 
       /*
-       * Back through `/after-sign-in` rather than straight to `returnTo`: the
-       * account row exists only now, so this is the first moment its role can
-       * be resolved, and that handler is the one place that knows where each
-       * role starts and re-validates the destination before sending anybody to
-       * it. `replace`, so Back does not return to a gate already cleared.
+       * What the server stored is what counts. When it is not what was chosen
+       * (another tab won the race), say so before moving on: the choice cannot
+       * be changed later, and continuing silently would hide which side of the
+       * product this account is on.
        */
-      router.replace(
-        returnTo ? `/after-sign-in?returnTo=${encodeURIComponent(returnTo)}` : '/after-sign-in',
-      );
+      const stored = result.account.role;
+
+      if (storedRole === null && role !== null && stored !== null && stored !== role) {
+        setSaving(false);
+        setLandedAs(stored);
+        return;
+      }
+
+      continueOn();
     } catch (error) {
       /*
        * The vendor gate (VEN-406): no account was created for this address, so
-       * the next step is the application form rather than a retry. The stored
-       * choice stays: clearing it would let a return visit here quietly make
-       * them a customer, after a screen that said the choice cannot change.
+       * the person stays here, signed in and with the choice intact, to pick
+       * customer instead or to apply. Neither the session nor the hint is
+       * cleared: doing so would let a return visit quietly choose for them.
        */
       if (error instanceof ApiClientError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
-        router.replace(VENDOR_APPLY_PATH);
+        setSaving(false);
+        setNotInvited(true);
         return;
       }
 
@@ -129,6 +211,23 @@ export function AcceptTermsScreen({
     }
   }
 
+  if (landedAs !== null) {
+    return (
+      <div className="mx-auto max-w-[700px] px-6 py-13">
+        <h1 className="display-heading text-display-md text-stone-900">
+          This account is {ROLE_LABELS[landedAs]}
+        </h1>
+        <p className="mt-2 text-sm leading-prose text-stone-600">
+          Another tab set this account up as {ROLE_LABELS[landedAs]} a moment before this one, and
+          that can&apos;t be changed later. To switch, close the account and register again.
+        </p>
+        <Button variant="primary" size="lg" className="mt-6" onClick={continueOn}>
+          Continue
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-[700px] px-6 py-13">
       <p className="text-label font-semibold tracking-label text-stone-600 uppercase">Legal</p>
@@ -145,6 +244,68 @@ export function AcceptTermsScreen({
           {failed}
         </Banner>
       ) : null}
+
+      {notInvited ? (
+        <Banner status="failed" title="Vendor accounts are by invitation for now" className="mt-5">
+          Nothing was created. Choose customer to continue, or{' '}
+          <Link href={VENDOR_APPLY_PATH} className="font-semibold underline underline-offset-4">
+            apply to become a vendor
+          </Link>
+          .
+        </Banner>
+      ) : null}
+
+      {storedRole !== null ? (
+        <p className="mt-6 text-base leading-prose text-stone-800" data-testid="stored-role">
+          You&apos;re joining as {ROLE_LABELS[storedRole]}. This can&apos;t be changed later. To
+          switch, close the account and register again.
+        </p>
+      ) : (
+        <fieldset className="mt-6">
+          <legend className="text-label font-semibold tracking-label text-stone-600 uppercase">
+            How are you joining?
+          </legend>
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {ROLE_OPTIONS.map((option) => {
+              const selected = role === option.role;
+
+              return (
+                <label
+                  key={option.role}
+                  className={cn(
+                    'cursor-pointer rounded-xl px-3.5 py-4 transition-colors duration-(--duration-fast)',
+                    'has-focus-visible:ring-2 has-focus-visible:ring-clay-400/40 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-stone-50',
+                    selected
+                      ? 'border-2 border-clay-400 bg-clay-100'
+                      : 'border border-stone-300 bg-stone-0 hover:border-stone-400',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="role"
+                    value={option.role}
+                    checked={selected}
+                    onChange={() => choose(option.role)}
+                    data-focus-own
+                    className="sr-only"
+                  />
+                  <span className="block text-[14.5px] font-semibold text-stone-900">
+                    {option.title}
+                  </span>
+                  <span className="mt-1 block text-[12px] leading-normal text-stone-700">
+                    {option.description}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-helper text-stone-600" aria-live="polite">
+            {role
+              ? `You're joining as ${ROLE_LABELS[role]}. This can't be changed later. To switch, close the account and register again.`
+              : 'Choose one to continue. This can’t be changed later.'}
+          </p>
+        </fieldset>
+      )}
 
       {/*
         The document, clipped and expanded **in place**. Not a navigation and
@@ -203,7 +364,7 @@ export function AcceptTermsScreen({
             type="submit"
             variant="primary"
             size="lg"
-            disabled={!agreed || saving}
+            disabled={!agreed || !roleSettled || saving}
             loading={saving}
             className="disabled:bg-clay-300 disabled:opacity-100"
           >

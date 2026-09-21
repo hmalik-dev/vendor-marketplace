@@ -10,6 +10,10 @@
 export const USER_ROLES = ['customer', 'vendor', 'admin'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+/** The two roles a person can choose at sign-up. `admin` is never one of them. */
+export const SIGN_UP_ROLES = ['customer', 'vendor'] as const;
+export type SignUpRole = (typeof SIGN_UP_ROLES)[number];
+
 /**
  * Which identity provider issued `users.auth_user_id`, recorded when the row is
  * written and never inferred from the shape of the id (VEN-450). `neon_auth` is

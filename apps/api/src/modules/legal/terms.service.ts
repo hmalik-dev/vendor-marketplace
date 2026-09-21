@@ -1,13 +1,14 @@
 import {
   CURRENT_TERMS_VERSION,
   legalDocumentSha256,
+  type SignUpRole,
   type TermsAcceptanceStatus,
 } from '@vendor-marketplace/shared';
 import type { UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, unauthorized, validationFailed } from '../../lib/errors.js';
-import { findUserByAuthIdIncludingRetired } from '../users/users.dao.js';
-import { displayName, syncUserFromAuth } from '../users/users.service.js';
+import { findUserByAuthId, findUserByAuthIdIncludingRetired } from '../users/users.dao.js';
+import { displayName, normalizeRole, syncUserFromAuth } from '../users/users.service.js';
 import { admitVendor, invitedRoleHint } from '../vendor-invites/vendor-invites.service.js';
 import type { AuthUserSnapshot } from '../users/users.service.js';
 import {
@@ -36,29 +37,60 @@ export interface AcceptanceContext {
   userAgent: string | null;
 }
 
+/**
+ * What the interstitial reads.
+ *
+ * An account row answers from the database — the acceptance it holds and the
+ * **stored** role, which is what the screen shows read-only. A session with no
+ * row yet (every first sign-in) holds nothing, and the one thing worth asking
+ * is whether its address carries an unused invite, which preselects `vendor`
+ * and nothing more: the person still confirms it.
+ */
 export async function readTermsStatus(
   db: AppDatabase,
-  userId: string,
+  authUserId: string,
+  loadSnapshot: () => Promise<AuthUserSnapshot>,
 ): Promise<TermsAcceptanceStatus> {
-  const held = await findAcceptanceOfVersion(db, userId, 'terms_of_service', CURRENT_TERMS_VERSION);
+  const user = await findUserByAuthId(db, authUserId);
+
+  if (user) {
+    return termsStatusOf(db, user);
+  }
+
+  const { email } = await loadSnapshot();
+
+  return {
+    ...unacceptedTermsStatus(),
+    suggestedRole: (await invitedRoleHint(db, email)) ?? null,
+  };
+}
+
+/** The status of an account that exists: its acceptance and the role the server stored. */
+async function termsStatusOf(db: AppDatabase, user: UserRow): Promise<TermsAcceptanceStatus> {
+  const held = await findAcceptanceOfVersion(
+    db,
+    user.id,
+    'terms_of_service',
+    CURRENT_TERMS_VERSION,
+  );
 
   return {
     ...unacceptedTermsStatus(),
     accepted: held !== null,
     acceptedAt: held?.acceptedAt ?? null,
+    account: { exists: true, role: user.role },
   };
 }
 
-/**
- * What the interstitial reads for a session with no account row yet — which is
- * every first sign-in, and needs no query to answer.
- */
-export function unacceptedTermsStatus(): TermsAcceptanceStatus {
+/** A session with no account row: nothing accepted, no role stored, nothing suggested. */
+function unacceptedTermsStatus(): TermsAcceptanceStatus {
   return {
     current: CURRENT_TERMS_VERSION,
     documentSha256: legalDocumentSha256('terms_of_service'),
     accepted: false,
     acceptedAt: null,
+    account: { exists: false, role: null },
+    suggestedRole: null,
   };
 }
 
@@ -109,7 +141,7 @@ export async function acceptTerms(
   db: AppDatabase,
   authUserId: string,
   loadSnapshot: () => Promise<AuthUserSnapshot>,
-  input: { version: string; accepted: boolean; role?: 'customer' | 'vendor' | undefined },
+  input: { version: string; accepted: boolean; role?: SignUpRole | undefined },
   context: AcceptanceContext,
 ): Promise<TermsAcceptanceStatus> {
   if (!input.accepted) {
@@ -137,7 +169,7 @@ export async function acceptTerms(
   }
 
   if (existing) {
-    const status = await readTermsStatus(db, existing.id);
+    const status = await termsStatusOf(db, existing);
 
     /*
      * Already held: answer, do not write.
@@ -172,41 +204,46 @@ export async function acceptTerms(
       await insertAcceptance(tx, termsAcceptanceRow(existing, context));
     });
 
-    return readTermsStatus(db, existing.id);
+    return termsStatusOf(db, existing);
   }
+
+  /*
+   * **A role is required, and nothing supplies one.** The account is created
+   * with what the person confirmed on this screen, never with a browser hint
+   * that may be gone, an invite that may not be theirs, or a default: a vendor
+   * who verified on another device would otherwise become a customer for good
+   * (VEN-507). Refused before the identity read, so nothing is fetched or
+   * written for a request that cannot succeed.
+   */
+  const role = normalizeRole(input.role);
 
   /*
    * The identity read stays outside the transaction: it is a network call, and
    * holding a database transaction open across one is how a slow upstream
    * becomes a held connection.
    */
-  const loaded = await loadSnapshot();
-  const chosenRole = input.role ?? loaded.roleHint;
-  const snapshot = {
-    ...loaded,
-    roleHint: chosenRole ?? (await invitedRoleHint(db, loaded.email)),
-  };
+  const snapshot = { ...(await loadSnapshot()), roleHint: role };
 
-  const userId = await db.transaction(async (tx) => {
-    const user = await syncUserFromAuth(tx, snapshot);
+  const user = await db.transaction(async (tx) => {
+    const row = await syncUserFromAuth(tx, snapshot);
 
-    if (!user) {
+    if (!row) {
       throw new Error('legal acceptance: the account row could not be resolved');
     }
 
     /*
-     * The vendor gate (VEN-406), on the row as saved rather than the snapshot:
-     * a `user.created` webhook landing mid-request can make that row the one
-     * `syncUserFromAuth` returns, with the role the sign-up first chose. A
-     * refusal rolls the whole transaction back, so no account this path wrote
-     * and no acceptance survives it.
+     * The vendor gate (VEN-406), on the row as saved rather than the choice:
+     * a concurrent accept for this identity can win the insert, and then the
+     * row returned carries **its** role — first commit wins, and this request
+     * reports it. A refusal rolls the whole transaction back, so no account this
+     * path wrote and no acceptance survives it.
      */
-    await admitVendor(tx, user.role, user.email);
+    await admitVendor(tx, row.role, row.email);
 
-    await insertAcceptance(tx, termsAcceptanceRow(user, context));
+    await insertAcceptance(tx, termsAcceptanceRow(row, context));
 
-    return user.id;
+    return row;
   });
 
-  return readTermsStatus(db, userId);
+  return termsStatusOf(db, user);
 }
