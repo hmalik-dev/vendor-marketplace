@@ -2005,3 +2005,28 @@ export async function findAdminActionActors(
     .innerJoin(users, eq(users.id, adminActions.actorId))
     .orderBy(asc(users.firstName), asc(users.lastName), asc(users.id));
 }
+
+/**
+ * Bans and closures one operator has completed since `since`, for the hourly
+ * ceiling (VEN-500). Reads the audit log, so the count is the record itself
+ * rather than a second counter that could drift from it.
+ */
+export async function countAdminActionsSince(
+  db: AppDatabase,
+  actorId: string,
+  actions: readonly (typeof adminActions.$inferSelect.action)[],
+  since: Date,
+): Promise<number> {
+  const rows = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(adminActions)
+    .where(
+      and(
+        eq(adminActions.actorId, actorId),
+        inArray(adminActions.action, [...actions]),
+        gte(adminActions.createdAt, since),
+      ),
+    );
+
+  return rows?.[0]?.total ?? 0;
+}

@@ -4066,3 +4066,16 @@ export const adminConversationMessagesSchema = z.object({
   messages: paginatedSchema(adminConversationMessageSchema),
 });
 export type AdminConversationMessages = z.infer<typeof adminConversationMessagesSchema>;
+
+/*
+ * The step-up (VEN-500). The code is emailed and typed, so it is digits only:
+ * a body that is not six of them is refused before it can cost an attempt.
+ */
+export const adminStepUpVerifySchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'Enter the six-digit code'),
+});
+export type AdminStepUpVerify = z.infer<typeof adminStepUpVerifySchema>;
+
+/** When the code, or the grant it buys, lapses. Never the code itself. */
+export const adminStepUpResultSchema = z.object({ expiresAt: z.coerce.date() });
+export type AdminStepUpResult = z.infer<typeof adminStepUpResultSchema>;

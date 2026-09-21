@@ -1792,6 +1792,13 @@ export const ERROR_CODES = {
    * as a plain 403 put every un-accepted account on the suspended screen.
    */
   TERMS_REQUIRED: 'TERMS_REQUIRED',
+  /**
+   * An irreversible admin route was reached without a fresh step-up (VEN-500).
+   * Its own code so the console opens the code prompt instead of `/suspended`.
+   */
+  STEP_UP_REQUIRED: 'STEP_UP_REQUIRED',
+  /** One operator has ended as many accounts this hour as the ceiling allows. */
+  ADMIN_CEILING_REACHED: 'ADMIN_CEILING_REACHED',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
   RATE_LIMITED: 'RATE_LIMITED',

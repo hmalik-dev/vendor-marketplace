@@ -47,6 +47,8 @@ import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { createErrorReporter, type ErrorReporter } from './lib/error-reporting.js';
 import { eventsPlugin } from './plugins/events.js';
 import { operatorAlertsPlugin } from './plugins/operator-alerts.js';
+import { stepUpPlugin } from './plugins/step-up.js';
+import type { StepUpStore } from './lib/step-up.js';
 import { emailRetryPlugin } from './plugins/email-retry.js';
 import { expirySweepPlugin } from './plugins/expiry-sweep.js';
 import { uploadSweepPlugin } from './plugins/upload-sweep.js';
@@ -163,6 +165,8 @@ export interface BuildServerOptions {
   operatorDigestIntervalMs?: number;
   /** Pause between operator alert send retries; defaults to a real timer. */
   operatorAlertWait?: (ms: number) => Promise<void>;
+  /** Step-up seam; the suites pass a store that is always fresh unless the suite is about step-up. */
+  stepUp?: StepUpStore;
   /**
    * The error tracker seam. Defaults to Sentry when `SENTRY_DSN` is set and to
    * silence when it is not — which the env registry allows only off a
@@ -505,6 +509,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     digestIntervalMs: options.operatorDigestIntervalMs ?? OPERATOR_DIGEST_POLL_INTERVAL_MS,
     ...(options.operatorAlertWait ? { wait: options.operatorAlertWait } : {}),
   });
+  await app.register(stepUpPlugin, { ...(options.stepUp ? { store: options.stepUp } : {}) });
   await app.register(payoutReleasePlugin, {
     intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,
     reporter: errorReporter,
