@@ -1101,6 +1101,8 @@ export async function createTestHarness(
      */
     payoutSweepIntervalMs: 0,
     // Nor does the expiry sweep: suites call `expireLapsedRequests` with a pinned clock.
+    // Nor the Neon Auth reconcile: it would retire rows the fake directory never heard of.
+    authReconcileIntervalMs: 0,
     expirySweepIntervalMs: 0,
     // Nor the email retry: suites call `retryFailedEmails` with a pinned clock.
     emailRetryIntervalMs: 0,

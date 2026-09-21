@@ -23,6 +23,7 @@ import {
   OPERATOR_DIGEST_POLL_INTERVAL_MS,
   EMAIL_RETRY_SWEEP_INTERVAL_MS,
   EXPIRY_SWEEP_INTERVAL_MS,
+  AUTH_RECONCILE_INTERVAL_MS,
   PAYOUT_SWEEP_INTERVAL_MS,
   UPLOAD_SWEEP_INTERVAL_MS,
   VISITOR_IP_HEADER,
@@ -49,6 +50,7 @@ import { operatorAlertsPlugin } from './plugins/operator-alerts.js';
 import { emailRetryPlugin } from './plugins/email-retry.js';
 import { expirySweepPlugin } from './plugins/expiry-sweep.js';
 import { uploadSweepPlugin } from './plugins/upload-sweep.js';
+import { authReconcilePlugin } from './plugins/auth-reconcile.js';
 import { payoutReleasePlugin } from './plugins/payout-release.js';
 import { storagePlugin } from './plugins/storage.js';
 import { emailPlugin } from './plugins/email.js';
@@ -126,6 +128,11 @@ export interface BuildServerOptions {
    * go red, which is a failure that reports itself.
    */
   payoutSweepIntervalMs?: number;
+  /**
+   * How often accounts are reconciled against Neon Auth; `0` disables it. On by
+   * default for `payoutSweepIntervalMs`'s reason.
+   */
+  authReconcileIntervalMs?: number;
   /**
    * How often lapsed booking requests are aged and announced; `0` disables it.
    * On by default for `payoutSweepIntervalMs`'s reason.
@@ -500,6 +507,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   });
   await app.register(payoutReleasePlugin, {
     intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,
+    reporter: errorReporter,
+    webOrigin: canonicalWebOrigin(env),
+  });
+  await app.register(authReconcilePlugin, {
+    intervalMs: options.authReconcileIntervalMs ?? AUTH_RECONCILE_INTERVAL_MS,
     reporter: errorReporter,
     webOrigin: canonicalWebOrigin(env),
   });
