@@ -236,7 +236,9 @@ describe('sign-in through the auth proxy', () => {
 
     const statuses: number[] = [];
     for (let i = 0; i < 12; i++) {
-      statuses.push((await call(SIGN_IN, { email: 'down@example.com', password: 'p' })).status);
+      statuses.push(
+        (await call(SIGN_IN, { email: 'down@example.com', password: 'p' }, `4.4.4.${i}`)).status,
+      );
     }
 
     expect(statuses).toEqual(Array(12).fill(503));
