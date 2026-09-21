@@ -330,6 +330,26 @@ describe('POST /upload/image', () => {
     expect(harness.storedObjects).toHaveLength(0);
   });
 
+  it('refuses a request carrying more than one file part', async () => {
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/upload/image?prefix=portfolio',
+      headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
+      payload: Buffer.concat([
+        multipartBody('a.jpg', 'image/jpeg', await jpegBytes()).subarray(
+          0,
+          -Buffer.byteLength(`--${BOUNDARY}--\r\n`),
+        ),
+        multipartBody('b.jpg', 'image/jpeg', await jpegBytes()),
+      ]),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('VALIDATION_ERROR');
+    expect(response.json().message).toMatch(/too many/i);
+    expect(harness.storedObjects).toHaveLength(0);
+  });
+
   it('never reuses an object key across uploads', async () => {
     for (let i = 0; i < 2; i += 1) {
       await harness.app.inject({
