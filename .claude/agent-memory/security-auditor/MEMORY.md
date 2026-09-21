@@ -116,3 +116,5 @@
 - [Admin booking detail + requests funnel](admin-booking-detail-and-requests-reads.md) — PASS; reopen if the funnel ages rows or lists contact
 - [Admin vendor detail is a gated aggregate](admin-vendor-detail-is-a-gated-aggregate.md) — widening notifications to `body` bypasses the case-row read grant
 - [Admin category writes](admin-category-writes.md) — PASS; the toggle can double-write its audit row under a concurrent repeat
+
+- [Auth proxy parser differential](auth-proxy-parser-differential.md) — a body-derived rate-limit key must fail closed; an unparseable body must not be forwarded unbudgeted
