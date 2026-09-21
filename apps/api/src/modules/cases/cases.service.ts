@@ -16,6 +16,7 @@ import {
   type ReportSubject,
   type SupportTopic,
 } from '@vendor-marketplace/shared';
+import { withRequestIdentity } from '@vendor-marketplace/db';
 import type { BookingRow, SupportCaseRow } from '@vendor-marketplace/db/schema';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
@@ -910,10 +911,16 @@ export async function readCaseConversation(
       },
     });
 
-    const [found, counted] = await Promise.all([
-      findMessages(tx, conversationId, pageSize, (page - 1) * pageSize, bounds),
-      countMessages(tx, conversationId, bounds),
-    ]);
+    // The audit row stays in this transaction; the thread is read under the operator's identity.
+    const [found, counted] = await withRequestIdentity(
+      tx,
+      { userId: actorId, role: 'admin', operator: true },
+      (scoped) =>
+        Promise.all([
+          findMessages(scoped, conversationId, pageSize, (page - 1) * pageSize, bounds),
+          countMessages(scoped, conversationId, bounds),
+        ]),
+    );
 
     return { rows: found, total: counted };
   });

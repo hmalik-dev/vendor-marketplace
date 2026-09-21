@@ -7,9 +7,10 @@ import {
   type Paginated,
   type SendMessageResult,
 } from '@vendor-marketplace/shared';
+import { withRequestIdentity } from '@vendor-marketplace/db';
 import type { FastifyBaseLogger } from 'fastify';
 import type { MessageRow, NotificationRow } from '@vendor-marketplace/db/schema';
-import type { AppDatabase } from '../../lib/database.js';
+import { identityOf, type AppDatabase } from '../../lib/database.js';
 import type { EventHub } from '../../lib/event-stream.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
@@ -189,18 +190,13 @@ export async function listConversations(
     return [];
   }
 
-  const [previews, unread] = await Promise.all([
-    findLastMessagePreviews(
-      db,
-      rows.map((row) => row.id),
-      PREVIEW_LENGTH,
-    ),
-    countUnreadPerConversation(
-      db,
-      user.id,
-      rows.map((row) => row.id),
-    ),
-  ]);
+  const conversationIds = rows.map((row) => row.id);
+  const [previews, unread] = await withRequestIdentity(db, identityOf(user), (tx) =>
+    Promise.all([
+      findLastMessagePreviews(tx, conversationIds, PREVIEW_LENGTH),
+      countUnreadPerConversation(tx, user.id, conversationIds),
+    ]),
+  );
 
   return rows.map((row) => {
     const side = sideOf(row, user.id);
@@ -297,10 +293,12 @@ export async function listMessages(
 ): Promise<Paginated<SendMessageResult>> {
   await requireParticipant(db, user, conversationId);
 
-  const [rows, total] = await Promise.all([
-    findMessages(db, conversationId, pageSize, (page - 1) * pageSize),
-    countMessages(db, conversationId),
-  ]);
+  const [rows, total] = await withRequestIdentity(db, identityOf(user), (tx) =>
+    Promise.all([
+      findMessages(tx, conversationId, pageSize, (page - 1) * pageSize),
+      countMessages(tx, conversationId),
+    ]),
+  );
 
   return { items: rows.map(toMessage), total, page, pageSize };
 }
@@ -342,11 +340,9 @@ export async function sendMessage(
     throw conflict('That person can no longer receive messages');
   }
 
-  const inserted = await insertMessage(db, {
-    conversationId,
-    senderId: user.id,
-    content,
-  });
+  const inserted = await withRequestIdentity(db, identityOf(user), (tx) =>
+    insertMessage(tx, { conversationId, senderId: user.id, content }),
+  );
 
   const message = toMessage(inserted);
 
@@ -367,7 +363,7 @@ export async function sendMessage(
    * The notification is the part that may be lost; the message is not (#408).
    */
   try {
-    await notifyRecipient(db, hub, row, side, inserted);
+    await notifyRecipient(db, hub, user, row, side, inserted);
   } catch (error) {
     log.error(
       { conversationId, messageId: inserted.id, err: error },
@@ -393,12 +389,15 @@ export async function sendMessage(
 async function notifyRecipient(
   db: AppDatabase,
   hub: EventHub,
+  user: AuthenticatedUser,
   row: ConversationParties,
   side: 'customer' | 'vendor',
   sent: MessageRow,
 ): Promise<void> {
   const recipientId = side === 'customer' ? row.vendorUserId : row.customerId;
-  const alreadyWaiting = await countUnreadInConversation(db, row.id, recipientId, sent.id);
+  const alreadyWaiting = await withRequestIdentity(db, identityOf(user), (tx) =>
+    countUnreadInConversation(tx, row.id, recipientId, sent.id),
+  );
 
   if (alreadyWaiting > 0) {
     return;
@@ -423,7 +422,9 @@ export async function readConversation(
   conversationId: string,
 ): Promise<void> {
   await requireParticipant(db, user, conversationId);
-  await markConversationRead(db, conversationId, user.id);
+  await withRequestIdentity(db, identityOf(user), (tx) =>
+    markConversationRead(tx, conversationId, user.id),
+  );
 }
 
 export async function listNotifications(

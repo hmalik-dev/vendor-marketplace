@@ -195,7 +195,13 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       onRequest: adminOnly,
       schema: { params: userParamsSchema, response: { 200: adminUserDataRightsSchema } },
     },
-    async (request) => readUserDataRights(app.db, request.params.userId, app.clock()),
+    async (request) =>
+      readUserDataRights(
+        app.db,
+        assertRole(request.auth, ['admin']).id,
+        request.params.userId,
+        app.clock(),
+      ),
   );
 
   /**

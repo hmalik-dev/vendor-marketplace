@@ -1,3 +1,4 @@
+import { withRequestIdentity } from '@vendor-marketplace/db';
 import { unwindFloorDate } from '@vendor-marketplace/shared';
 import type {
   AdminCloseAccountResult,
@@ -127,7 +128,7 @@ interface GatheredRecord {
  * and the drift would show up as the console under-reporting a category the
  * export contains.
  */
-async function gather(db: AppDatabase, user: UserRow): Promise<GatheredRecord> {
+async function gather(db: AppDatabase, user: UserRow, actorId: string): Promise<GatheredRecord> {
   const profile = await findVendorProfileRecord(db, user.id);
   const profileId = profile?.id ?? null;
 
@@ -136,7 +137,9 @@ async function gather(db: AppDatabase, user: UserRow): Promise<GatheredRecord> {
       findExportBookingRequests(db, user.id, profileId),
       findExportBookings(db, user.id, profileId),
       findExportReviews(db, user.id, profileId),
-      findExportMessages(db, user.id, profileId),
+      withRequestIdentity(db, { userId: actorId, role: 'admin', operator: true }, (tx) =>
+        findExportMessages(tx, user.id, profileId),
+      ),
       findExportNotifications(db, user.id),
       findLegalAcceptancesForUser(db, user.id),
     ]);
@@ -191,7 +194,7 @@ export async function exportUserData(
     throw notFound('No account with that id');
   }
 
-  const record = await gather(context.db, user);
+  const record = await gather(context.db, user, actorId);
   const { written, received } = splitReviews(record);
 
   const counterpartyIds = new Set<string>();
@@ -689,6 +692,7 @@ export async function closeAccount(
  */
 export async function readUserDataRights(
   db: AppDatabase,
+  actorId: string,
   userId: string,
   now: Date,
 ): Promise<AdminUserDataRights> {
@@ -698,7 +702,7 @@ export async function readUserDataRights(
     throw notFound('No account with that id');
   }
 
-  const record = await gather(db, user);
+  const record = await gather(db, user, actorId);
   const { written, received } = splitReviews(record);
   const blockers = user.deletedAt ? [] : await closeBlockers(db, userId, now);
   const bookingsRefundedOnClose = user.deletedAt
