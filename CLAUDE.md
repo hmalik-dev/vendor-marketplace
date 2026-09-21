@@ -84,13 +84,12 @@ Dependency direction is one-way: `apps -> packages`.
 
 ## Releasing
 
-`.github/workflows/deploy.yml` (VEN-397) runs after `CI` succeeds on `main`:
-gate (still `main`'s tip) → preflight (every input configured, or red by name)
+`.github/workflows/deploy.yml` (VEN-397) runs after `CI` succeeds on a push to
+`staging` or `production`: gate (still that branch's tip) → preflight (every input configured, or red by name)
 → migrate over `DATABASE_URL_UNPOOLED` + reference seed → API → web (prebuilt
 Vercel, source maps to Sentry) → `/ready` must name the commit within ten
-minutes. `SENTRY_RELEASE` is that commit end to end. **Inert until VEN-377**
-provisions its secrets and decides the API host (`vars.API_HOST`, D10), so it
-fails at preflight on every merge — expected, like the smoke check. Every
+minutes. `SENTRY_RELEASE` is that commit end to end. Railway is the API host
+(D10); a missing input fails preflight by name and never skips. Every
 migration must stay backwards-compatible with the release still serving.
 
 ## Merging
