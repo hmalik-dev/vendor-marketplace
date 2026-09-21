@@ -64,8 +64,8 @@ token scoped to that environment), `VERCEL_TOKEN`, `SENTRY_AUTH_TOKEN`;
 variables `NEON_BRANCH` (`staging` or `production`), `NEON_HOST` (that
 branch's direct endpoint host), `API_HOST`, `API_SERVICE`, `API_URL`, `WEB_URL`
 (staging's first entry must be a host containing `staging`, since it is the
-alias target), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SENTRY_WEB_PROJECT`; and
-the repository variable `DEPLOY_GATE=required` once all are set.
+alias target), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SENTRY_WEB_PROJECT`. A push to
+`staging` or `production` with any of them unset fails at preflight, naming it.
 
 Never set any of these at the repository level: GitHub falls back from an
 environment to the repository, and the names are the same on both tiers, so a

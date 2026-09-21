@@ -26,8 +26,8 @@ concurrency:
 jobs:
   smoke:
     name: Does the deployment actually serve?
-    # Skipped until an API URL is chosen (VEN-377, D10). The old default named
-    # the removed Railway host and failed every push to main for ten minutes.
+    # Skipped until SMOKE_API_URL is set. A hard-coded default once failed every
+    # push to main for ten minutes while the Railway service behind it was down.
     if: vars.SMOKE_API_URL != ''
     runs-on: ubuntu-latest
     # Comfortably above the check's own deadline, so the job's ceiling never

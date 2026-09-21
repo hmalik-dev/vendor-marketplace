@@ -2,8 +2,8 @@
 
 `.github/workflows/deploy.yml` never rolls back on its own. A failed readiness
 poll stops the release and says so, and a person decides whether to **revert** or
-**fix forward**. The deploy is inert until VEN-377 provisions its inputs, so this
-applies from the first real release.
+**fix forward**. A push to `staging` or `production` with an input unset fails at
+preflight, before anything moves, so this applies to a release that started.
 
 ## 0. Decide: roll back or fix forward
 

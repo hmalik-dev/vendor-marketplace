@@ -13,11 +13,10 @@
  * what lets `deploy.test.mjs` run the real phases, and dry-run the real workflow
  * file, under plain `node`.
  *
- * **Fail closed once provisioned.** A phase with a missing input exits non-zero
- * naming the input. The one skip is preflight finding *nothing* configured, and
- * only until the repository variable `DEPLOY_GATE=required` is set (as
- * `E2E_GATE` does for the e2e job); after that, an empty configuration fails
- * too, so a deleted environment cannot turn into a green run that deploys nothing.
+ * **Fail closed.** A phase with a missing input exits non-zero naming the input,
+ * and that includes preflight finding *nothing* configured: a run exists only
+ * because someone pushed `staging` or `production`, so a release that deployed
+ * nothing must never read green.
  *
  * **Nothing secret is printed.** A phase names variables, never values, and every
  * line a child process writes passes through `redactor` before it reaches the
@@ -43,9 +42,9 @@ const VERCEL_CLI = 'vercel@59.17.0';
  */
 export const API_HOSTS = {
   /*
-   * D10 as it stands: the Docker image `apps/api/Dockerfile` builds, on Railway.
-   * The service was removed on purpose and whether to re-provision it is open on
-   * VEN-377, so nothing selects this until an operator sets `API_HOST`. Choosing
+   * D10, confirmed: the Docker image `apps/api/Dockerfile` builds, on Railway,
+   * which runs the staging and production APIs. It is selected by the variable
+   * `API_HOST` on each GitHub environment. Choosing
    * a different host is an entry in this table and that one variable — nothing
    * else in the workflow names the platform.
    */
@@ -333,28 +332,11 @@ export const PHASES = {
 
   async preflight(env, io) {
     const missing = missingInputs(env);
-    const ready = (value) => {
-      if (!blank(env.GITHUB_OUTPUT)) appendFileSync(env.GITHUB_OUTPUT, `ready=${value}\n`);
-    };
-
-    /*
-     * Nothing provisioned yet (VEN-377) is a release that is not set up, not one
-     * that broke: it is skipped with a warning so a red run means a failure. A
-     * *partly* configured deploy is the broken case and still fails by name.
-     */
-    if (missing.length === REQUIRED_INPUTS.length && env.DEPLOY_GATE?.trim() !== 'required') {
-      ready(false);
-      io.error(
-        `::warning::Deploy skipped: no deploy input is configured (${missing.join(', ')}). ` +
-          'These are provisioned on VEN-377, and the API host itself is decision D10, still open there.\n',
-      );
-      return;
-    }
 
     if (missing.length > 0) {
       throw new PhaseError(
-        `The deploy is not fully configured (DEPLOY_GATE=required fails an empty configuration too); missing: ${missing.join(', ')}. ` +
-          'These are provisioned on VEN-377, and the API host itself is decision D10, still open there.',
+        `The deploy is not fully configured; missing: ${missing.join(', ')}. ` +
+          'Set them on the GitHub environment named for the pushed branch (docs/environments.md); Railway is the API host.',
       );
     }
 
@@ -364,7 +346,7 @@ export const PHASES = {
       );
     }
 
-    ready(true);
+    if (!blank(env.GITHUB_OUTPUT)) appendFileSync(env.GITHUB_OUTPUT, 'ready=true\n');
     io.write('Every deploy input is configured.\n');
   },
 
