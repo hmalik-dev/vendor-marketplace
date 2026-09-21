@@ -453,11 +453,13 @@ async function adoptUnbackedRow(tx: Tx, account: E2eAccount): Promise<void> {
  * Ensures the local row for a Neon Auth identity, and that it holds the role the
  * fixture needs.
  *
- * The role is forced rather than left alone: it comes from the sign-up choice
- * at first acceptance, falls back to `customer` for anything
- * unrecognised, and is immutable afterwards — so an end-to-end vendor account
- * that signed up without the hint has a `customer` row that nothing in the
- * application can correct, and every vendor guard refuses it.
+ * The role is written on insert and never on conflict. It comes from the
+ * sign-up choice at first acceptance, and the database refuses to change it
+ * outside the operator-grant path (VEN-533), whose setting this seed must not
+ * set: a re-run of a fixture seed that could promote an existing account to
+ * admin is the hole that trigger closes. An existing row holding another role
+ * therefore fails loudly, naming the account, rather than seeding a fixture
+ * every guard would refuse.
  */
 async function upsertAccount(
   tx: Tx,
@@ -479,17 +481,22 @@ async function upsertAccount(
       target: users.authUserId,
       set: {
         email: sql`excluded.email`,
-        role: sql`excluded.role`,
         firstName: sql`excluded.first_name`,
         lastName: sql`excluded.last_name`,
         deletedAt: sql`null`,
         updatedAt: sql`now()`,
       },
     })
-    .returning({ id: users.id });
+    .returning({ id: users.id, role: users.role });
 
   if (!row) {
     throw new Error(`seedE2eFixtures: could not upsert the ${role} account`);
+  }
+
+  if (row.role !== role) {
+    throw new Error(
+      `seedE2eFixtures: ${account.email} already exists with role ${row.role}, not ${role}, and the database only changes a role through the operator grant path. Delete that row (a lane database: pnpm lane:down then lane:up) and seed again.`,
+    );
   }
 
   return row.id;

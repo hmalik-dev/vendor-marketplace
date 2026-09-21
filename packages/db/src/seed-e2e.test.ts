@@ -240,12 +240,12 @@ describe('seedE2eFixtures', () => {
   });
 
   /*
-   * The role is *forced*, like the vendor's. An account that signed up without
-   * the metadata hint has a `customer` row nothing in the application can
-   * correct, so adopting it rather than overwriting would leave `/admin`
-   * unreachable with a green seed.
+   * The seed never promotes: an account that signed up as a customer stays one
+   * (VEN-533), because a re-run that could make an existing account an admin
+   * with no `admin_actions` row is the hole the role trigger closes. It fails
+   * by name instead of leaving `/admin` unreachable behind a green seed.
    */
-  it('promotes an account the auth provider had already created as a customer to admin', async () => {
+  it('refuses to promote an account the auth provider had already created as a customer', async () => {
     await database.db.insert(users).values({
       authUserId: 'user_e2e_admin',
       email: 'admin+auth_test@example.com',
@@ -254,22 +254,24 @@ describe('seedE2eFixtures', () => {
       lastName: 'Admin',
     });
 
-    const result = await seedE2eFixtures(database.db, {
-      ...INPUT,
-      admin: {
-        authUserId: 'user_e2e_admin',
-        email: 'admin+auth_test@example.com',
-        firstName: 'Ada',
-        lastName: 'Admin',
-      },
-    });
+    await expect(
+      seedE2eFixtures(database.db, {
+        ...INPUT,
+        admin: {
+          authUserId: 'user_e2e_admin',
+          email: 'admin+auth_test@example.com',
+          firstName: 'Ada',
+          lastName: 'Admin',
+        },
+      }),
+    ).rejects.toThrow('admin+auth_test@example.com already exists with role customer, not admin');
 
     const [row] = await database.db
       .select({ role: users.role })
       .from(users)
-      .where(eq(users.id, result.adminUserId as string));
+      .where(eq(users.authUserId, 'user_e2e_admin'));
 
-    expect(row?.role).toBe('admin');
+    expect(row?.role).toBe('customer');
   });
 
   /**
@@ -415,7 +417,7 @@ describe('seedE2eFixtures', () => {
    * signed up without the hint has a `customer` row and every vendor guard
    * refuses it. The fixture has to correct that, not assume it.
    */
-  it('promotes an account the auth provider had already created as a customer', async () => {
+  it('refuses, and leaves the role alone, for an account created as a customer', async () => {
     await database.db.insert(users).values({
       authUserId: INPUT.vendor.authUserId,
       email: INPUT.vendor.email,
@@ -424,10 +426,15 @@ describe('seedE2eFixtures', () => {
       lastName: 'Vendor',
     });
 
-    const result = published(await seedE2eFixtures(database.db, INPUT));
+    await expect(seedE2eFixtures(database.db, INPUT)).rejects.toThrow(
+      `${INPUT.vendor.email} already exists with role customer, not vendor`,
+    );
 
-    const [row] = await database.db.select().from(users).where(eq(users.id, result.vendorUserId));
-    expect(row?.role).toBe('vendor');
+    const [row] = await database.db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.authUserId, INPUT.vendor.authUserId));
+    expect(row?.role).toBe('customer');
   });
 
   it('is idempotent — a second run adopts its own rows rather than duplicating them', async () => {
