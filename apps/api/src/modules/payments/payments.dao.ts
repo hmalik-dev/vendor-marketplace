@@ -17,6 +17,7 @@ import {
   type LegalAcceptanceDocument,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { VENDOR_SELLABLE } from '../vendors/vendor-visibility.js';
 
 /**
  * Typed rather than written into the SQL as a bare string, so a rename of the
@@ -76,6 +77,11 @@ export interface PayableRequestRow {
    * reason as the flags above: the refusal and the read must not disagree.
    */
   vendorUserUnavailable: boolean;
+  /**
+   * The vendor was unpublished or put on a moderation hold (VEN-556). Read with
+   * the row for the same reason as the flag above.
+   */
+  vendorPulled: boolean;
 }
 
 export async function findPayableRequest(
@@ -106,6 +112,7 @@ export async function findPayableRequest(
       vendorStripeAccountId: vendorProfiles.stripeAccountId,
       vendorStripeOnboarded: vendorProfiles.stripeOnboarded,
       vendorUserUnavailable: sql<boolean>`(${users.isBanned} OR ${users.deletedAt} IS NOT NULL)`,
+      vendorPulled: sql<boolean>`NOT (${VENDOR_SELLABLE})`,
       vendorHoldsCurrentAgreement: sql<boolean>`EXISTS (
         SELECT 1 FROM ${legalAcceptances}
         WHERE ${legalAcceptances.vendorId} = ${vendorProfiles.id}

@@ -54,6 +54,7 @@ import {
   findRequests,
   findBookableVendorById,
   findVendorById,
+  isVendorSellable,
   findVendorByUserId,
   findVendorUserId,
   findCustomerNames,
@@ -1139,6 +1140,21 @@ async function prepareTransition({
   }
   if (row.status === 'quoted' && party !== 'customer') {
     throw forbidden('The customer accepts the quote');
+  }
+
+  /*
+   * Create refuses an invisible vendor; accept has to as well, or a storefront
+   * an operator pulled after the quote still takes the booking (VEN-556). The
+   * request stays as it was: unpublishing is reversible, so nothing is declined.
+   */
+  if (!(await isVendorSellable(db, row.vendorId))) {
+    throw new AppError(
+      409,
+      ERROR_CODES.VENDOR_UNAVAILABLE,
+      party === 'vendor'
+        ? 'Publish your storefront again before accepting bookings'
+        : `${vendor.businessName} is no longer taking bookings`,
+    );
   }
 
   if (!vendor.stripeOnboarded) {

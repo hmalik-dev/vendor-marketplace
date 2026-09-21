@@ -716,6 +716,41 @@ describe('payments', () => {
       expect(harness.stripe.paymentIntents.size).toBe(0);
     });
 
+    /* VEN-556: a vendor pulled from the marketplace after accepting takes no charge. */
+    it.each([
+      ['unpublished', { isPublished: false }],
+      ['on a moderation hold', { isPublished: false, moderationHold: true }],
+      ['held while still published', { moderationHold: true }],
+    ] as const)('refuses to open checkout for a vendor %s with 409', async (_label, change) => {
+      const requestId = await acceptedRequest();
+      await harness.database.db.update(vendorProfiles).set(change);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
+      expect(harness.stripe.paymentIntents.size).toBe(0);
+    });
+
+    it('keeps answering succeeded for a paid request whose vendor was pulled since', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      await harness.database.db.update(vendorProfiles).set({ moderationHold: true });
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('succeeded');
+    });
+
     it('refuses a request nobody has accepted', async () => {
       const { vendorId, packageId } = await createVendor();
       const request = await inject('POST', '/booking-requests', CUSTOMER, {

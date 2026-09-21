@@ -1408,6 +1408,49 @@ describe('/booking-requests', () => {
       expect(response.json().message).toContain('has passed');
     });
 
+    /* VEN-556: create refuses an invisible vendor; accept must not book one pulled since. */
+    it.each([
+      ['unpublished', { isPublished: false }],
+      ['on a moderation hold', { isPublished: false, moderationHold: true }],
+      ['held while still published', { moderationHold: true }],
+    ] as const)('refuses to accept a quote from a vendor %s', async (_label, change) => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId: string = created.json().id;
+      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await harness.database.db.update(vendorProfiles).set(change);
+
+      const response = await post(CUSTOMER, `/booking-requests/${requestId}/accept`);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
+      const [row] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests);
+      expect(row?.status).toBe('quoted');
+    });
+
+    it('tells a vendor whose storefront is unpublished to publish it before accepting', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const requestId: string = created.json().id;
+      await harness.database.db.update(vendorProfiles).set({ isPublished: false });
+
+      const response = await post(VENDOR, `/booking-requests/${requestId}/accept`);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
+      expect(response.json().message).toBe(
+        'Publish your storefront again before accepting bookings',
+      );
+      const [row] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests);
+      expect(row?.status).toBe('pending');
+    });
+
     it('pending -> quoted -> accepted locks the quoted price', async () => {
       const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, {
