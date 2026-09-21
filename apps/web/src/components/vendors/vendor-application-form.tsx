@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  MAX_BUSINESS_NAME_LENGTH,
   MAX_EMAIL_LENGTH,
   MAX_NAME_LENGTH,
   MAX_VENDOR_APPLICATION_MESSAGE_LENGTH,
@@ -128,7 +129,7 @@ export function VendorApplicationForm({
           <Input
             id={`${fieldId}-${field.name}`}
             autoComplete={field.autoComplete}
-            maxLength={MAX_NAME_LENGTH}
+            maxLength={field.name === 'businessName' ? MAX_BUSINESS_NAME_LENGTH : MAX_NAME_LENGTH}
             value={values[field.name]}
             onChange={(event) => set(field.name, event.target.value)}
           />

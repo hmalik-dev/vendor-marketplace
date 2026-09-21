@@ -612,6 +612,17 @@ export async function createBookingRequest(
     if (!servicePackage) {
       throw notFound('That package is no longer offered');
     }
+
+    // The screen refuses this first; a direct call has to meet the same cap (VEN-544).
+    if (
+      servicePackage.maxGuests !== null &&
+      input.guestCount !== undefined &&
+      input.guestCount > servicePackage.maxGuests
+    ) {
+      throw validationFailed(
+        `${vendor.businessName} covers events up to ${servicePackage.maxGuests} guests. Enter ${servicePackage.maxGuests} or fewer, or pick a larger package.`,
+      );
+    }
   }
 
   // The launch switches (VEN-404): a paused platform or a price over the beta cap.

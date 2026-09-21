@@ -25,6 +25,7 @@ import {
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { failInsertsInto } from '../../testing/insert-failure.js';
 import {
   bearer,
   createTestHarness,
@@ -633,13 +634,14 @@ describe('reporting and message visibility (#436)', () => {
     const fixture = await seed();
 
     /*
-     * `freeText()` strips bidi controls and trims; neither removes `U+0000`,
-     * and Postgres refuses a null byte with `22021`. So this is a real insert
-     * failure a caller can cause, not a mock standing in for one.
+     * A real insert failure, made in the database (`22021`, as a null byte
+     * gets) because the request schema now refuses `U+0000` itself (VEN-544).
      */
+    const restore = await failInsertsInto(harness.database.db, 'support_cases');
     const response = await report(CUSTOMER, 'vendor_profile', fixture.vendorProfileId, {
-      detail: `They asked for a bank transfer.\u0000`,
+      detail: 'They asked for a bank transfer.',
     });
+    await restore();
 
     expect(response.statusCode).toBe(502);
     expect(response.json().details).toBeUndefined();

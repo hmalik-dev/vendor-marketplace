@@ -6,6 +6,10 @@ import {
   bookingRequestSchema,
   createBookingRequestSchema,
   createReviewSchema,
+  phoneSchema,
+  reorderPortfolioSchema,
+  reorderServicePackagesSchema,
+  vendorApplicationInputSchema,
   createServicePackageSchema,
   updateServicePackageSchema,
   createTagSuggestionSchema,
@@ -33,6 +37,7 @@ import {
   MAX_CUSTOMER_BIO_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
+  MAX_REORDER_IDS,
   MAX_TAGLINE_LENGTH,
   MAX_TAGS_PER_CATEGORY,
   MAX_YEARS_IN_BUSINESS,
@@ -1173,5 +1178,58 @@ describe('free text drops the bidi controls that reorder it', () => {
         state: 'TX',
       }).businessName,
     ).toBe('Barr Mansion');
+  });
+});
+
+describe('VEN-544 input rules', () => {
+  const id = UUID;
+
+  it('lets a 150-character business name apply', () => {
+    const name = 'n'.repeat(150);
+
+    expect(
+      vendorApplicationInputSchema.safeParse({
+        email: 'a@example.com',
+        businessName: name,
+        category: 'Catering',
+        city: 'Austin',
+        message: 'Hello there',
+      }).success,
+    ).toBe(true);
+    expect(
+      createVendorProfileSchema.safeParse({
+        businessName: name,
+        categoryIds: [id],
+        city: 'Austin',
+        state: 'TX',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('refuses a review headline that is only whitespace', () => {
+    const content = 'x'.repeat(200);
+
+    expect(createReviewSchema.safeParse({ rating: 5, title: '   ', content }).success).toBe(false);
+    expect(createReviewSchema.safeParse({ rating: 5, content }).success).toBe(true);
+  });
+
+  it('needs a digit in a phone number', () => {
+    expect(phoneSchema.safeParse('()()()()').success).toBe(false);
+    expect(phoneSchema.safeParse('.......').success).toBe(false);
+    expect(phoneSchema.safeParse('+1 (555) 123-4567').success).toBe(true);
+  });
+
+  it('caps a reorder list', () => {
+    const ids = (n: number): string[] => Array.from({ length: n }, () => id);
+
+    expect(
+      reorderServicePackagesSchema.safeParse({ packageIds: ids(MAX_REORDER_IDS) }).success,
+    ).toBe(true);
+    expect(
+      reorderServicePackagesSchema.safeParse({ packageIds: ids(MAX_REORDER_IDS + 1) }).success,
+    ).toBe(false);
+    expect(reorderPortfolioSchema.safeParse({ itemIds: ids(MAX_REORDER_IDS + 1) }).success).toBe(
+      false,
+    );
   });
 });

@@ -6,6 +6,7 @@ import {
   conversations,
   notifications,
   platformSettings,
+  servicePackages,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
@@ -874,6 +875,46 @@ describe('/booking-requests', () => {
       const response = await createRequest(vendorId, { packageId: other.packageId });
 
       expect(response.statusCode).toBe(404);
+    });
+
+    describe('a package guest cap (VEN-544)', () => {
+      async function capPackage(packageId: string, maxGuests: number): Promise<void> {
+        await harness.database.db
+          .update(servicePackages)
+          .set({ maxGuests })
+          .where(eq(servicePackages.id, packageId));
+      }
+
+      it('accepts a guest count equal to the cap', async () => {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+        await capPackage(packageId, 50);
+
+        const response = await createRequest(vendorId, { packageId, guestCount: 50 });
+
+        expect(response.statusCode).toBe(201);
+      });
+
+      it('refuses one guest over the cap, naming the limit', async () => {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+        await capPackage(packageId, 50);
+
+        const response = await createRequest(vendorId, { packageId, guestCount: 51 });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toMatchObject({
+          error: ERROR_CODES.VALIDATION_ERROR,
+          message:
+            'Sunlit Studio covers events up to 50 guests. Enter 50 or fewer, or pick a larger package.',
+        });
+      });
+
+      it('leaves an uncapped package alone', async () => {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+
+        const response = await createRequest(vendorId, { packageId, guestCount: 5000 });
+
+        expect(response.statusCode).toBe(201);
+      });
     });
 
     it('refuses an occasion outside the vocabulary', async () => {

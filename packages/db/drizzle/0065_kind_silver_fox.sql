@@ -1,0 +1,1 @@
+ALTER TABLE "vendor_applications" ALTER COLUMN "business_name" SET DATA TYPE varchar(200);

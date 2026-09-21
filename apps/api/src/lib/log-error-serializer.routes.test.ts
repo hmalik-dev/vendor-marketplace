@@ -2,6 +2,7 @@ import { categories } from '@vendor-marketplace/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { Writable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { failInsertsInto } from '../testing/insert-failure.js';
 import { bearer, createTestHarness, type TestHarness } from '../testing/test-server.js';
 
 /**
@@ -20,10 +21,7 @@ import { bearer, createTestHarness, type TestHarness } from '../testing/test-ser
  */
 const VENDOR = 'user_vendor_serialiser';
 
-/**
- * A caller-chosen failure. `freeText()` strips bidi controls and trims; neither
- * removes `U+0000`, and Postgres refuses a null byte with `22021`.
- */
+/** A statement Postgres refuses with `22021`; the request schemas now refuse it first. */
 const NULL_BYTE = '\u0000';
 
 /** Bound into the failing statement, and searched for across the whole record. */
@@ -64,6 +62,7 @@ describe('a query failure that reaches the logger unguarded', () => {
       .limit(1);
 
     captured.length = 0;
+    const restore = await failInsertsInto(harness.database.db, 'vendor_profiles');
 
     const created = await harness.app.inject({
       method: 'POST',
@@ -74,9 +73,10 @@ describe('a query failure that reaches the logger unguarded', () => {
         categoryIds: [category!.id],
         city: 'Austin',
         state: 'TX',
-        bio: `${SENTINEL_BIO}${NULL_BYTE}`,
+        bio: SENTINEL_BIO,
       },
     });
+    await restore();
 
     // The write really failed — otherwise this test proves nothing about the log.
     expect(created.statusCode).toBe(500);
