@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import sharp from 'sharp';
 import { users } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
@@ -105,10 +106,7 @@ describe('POST /upload/image', () => {
     await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CALLERS[role]) });
 
     if (role === 'admin') {
-      await harness.database.db
-        .update(users)
-        .set({ role: 'admin' })
-        .where(eq(users.authUserId, ADMIN));
+      await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
     }
   }
 

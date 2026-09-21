@@ -453,7 +453,6 @@ export async function seedDemoData<
       set: {
         authUserId: sql`excluded.auth_user_id`,
         email: sql`excluded.email`,
-        role: sql`excluded.role`,
         firstName: sql`excluded.first_name`,
         lastName: sql`excluded.last_name`,
         city: sql`excluded.city`,
