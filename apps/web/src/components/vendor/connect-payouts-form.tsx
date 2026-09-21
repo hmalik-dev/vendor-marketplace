@@ -1,7 +1,7 @@
 'use client';
 
 import { stripeOnboardingLinkSchema } from '@vendor-marketplace/shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { useApi } from '@/lib/use-api';
@@ -24,6 +24,22 @@ export function ConnectPayoutsForm({ isResuming }: ConnectPayoutsFormProps): Rea
   const request = useApi();
   const [isOpening, setIsOpening] = useState(false);
   const [failed, setFailed] = useState(false);
+
+  /*
+   * Back from Stripe restores this page from the back/forward cache with the
+   * button still on "Opening Stripe…" — the page was frozen, not reloaded, so
+   * no state reset ran. `pageshow` with `persisted` is the one signal for it.
+   */
+  useEffect(() => {
+    function onPageShow(event: PageTransitionEvent): void {
+      if (event.persisted) {
+        setIsOpening(false);
+      }
+    }
+
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   async function openStripe(): Promise<void> {
     setFailed(false);
@@ -60,7 +76,7 @@ export function ConnectPayoutsForm({ isResuming }: ConnectPayoutsFormProps): Rea
         label says what it is doing. Leaving for Stripe is slow and visible, and
         a button that still looks idle invites a second click. It stays busy
         through the redirect rather than resetting, because the page is going
-        away.
+        away — and is reset by `pageshow` if Back restores it.
       */}
       <Button type="button" variant="primary" size="lg" loading={isOpening} onClick={openStripe}>
         {isOpening ? 'Opening Stripe…' : isResuming ? 'Continue setup' : 'Set up payouts'}

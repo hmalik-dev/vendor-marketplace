@@ -220,7 +220,11 @@ describe('a vendor whose owner is banned', () => {
       updateVendorProfile(harness.database.db, harness.app.storage, owner!.id, {
         isPublished: true,
       }),
-    ).rejects.toMatchObject({ statusCode: 403, message: 'This account has been suspended' });
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'ACCOUNT_SUSPENDED',
+      message: 'This account has been suspended',
+    });
 
     const [row] = await harness.database.db
       .select({ isPublished: vendorProfiles.isPublished })
