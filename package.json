@@ -26,6 +26,7 @@
     "test": "turbo run test",
     "test:contention": "turbo run test:contention",
     "e2e:auth": "node scripts/e2e-auth.mjs",
+    "e2e:mail-code": "pnpm --silent --filter @vendor-marketplace/db e2e:mail-code",
     "test:agents": "for f in .claude/workflows/*.test.mjs .claude/hooks/*.test.mjs scripts/*.test.mjs; do echo \"== $f\"; node \"$f\" || exit 1; done",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
