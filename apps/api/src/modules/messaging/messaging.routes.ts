@@ -14,7 +14,12 @@ import {
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { unauthorized } from '../../lib/errors.js';
-import { authenticated, requireAuth, requireRoleBeforeValidation } from '../../lib/guards.js';
+import {
+  authenticated,
+  requireAuth,
+  requireAuthBeforeValidation,
+  requireRoleBeforeValidation,
+} from '../../lib/guards.js';
 import { perAccountRateLimit } from '../../lib/rate-limit.js';
 import { resolveStreamSubject } from '../users/users.service.js';
 import {
@@ -128,7 +133,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
   app.get(
     '/conversations/:conversationId/messages',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: {
         params: conversationParamsSchema,
         querystring: paginationQuerySchema,
@@ -148,7 +153,11 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
   app.post(
     '/conversations/:conversationId/messages',
     {
-      preHandler: requireAuth,
+      // `preParsing`, not `onRequest`: the route's own limiter is appended to
+      // `onRequest`, so a guard there would refuse anonymous callers before
+      // they were counted. `preParsing` runs after the limiter and still ahead
+      // of the body parser and of validation.
+      preParsing: requireAuthBeforeValidation,
       config: { rateLimit: perAccountRateLimit(options.messageRateLimitMax, '1 minute') },
       schema: {
         params: conversationParamsSchema,
@@ -173,7 +182,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
   app.put(
     '/conversations/:conversationId/read',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { params: conversationParamsSchema, response: { 204: z.null() } },
     },
     async (request, reply) => {
@@ -186,7 +195,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
   app.get(
     '/notifications',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: {
         querystring: paginationQuerySchema,
         response: { 200: paginatedSchema(notificationItemSchema) },
@@ -219,7 +228,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
   app.put(
     '/notifications/:notificationId/read',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { params: notificationParamsSchema, response: { 204: z.null() } },
     },
     async (request, reply) => {

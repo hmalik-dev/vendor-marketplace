@@ -6,7 +6,11 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuth, requireRoleBeforeValidation } from '../../lib/guards.js';
+import {
+  authenticated,
+  requireAuthBeforeValidation,
+  requireRoleBeforeValidation,
+} from '../../lib/guards.js';
 import {
   getCustomerProfileForVendor,
   listCustomerReviews,
@@ -37,7 +41,7 @@ export const customerRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/customers/:customerId/profile',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { params: customerParamsSchema, response: { 200: customerProfileSchema } },
     },
     async (request) =>
@@ -47,7 +51,7 @@ export const customerRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/customers/:customerId/reviews',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: {
         params: customerParamsSchema,
         querystring: historyPageQuerySchema,

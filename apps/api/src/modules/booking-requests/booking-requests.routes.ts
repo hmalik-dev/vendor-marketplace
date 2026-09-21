@@ -9,7 +9,11 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuth, requireRoleBeforeValidation } from '../../lib/guards.js';
+import {
+  authenticated,
+  requireAuthBeforeValidation,
+  requireRoleBeforeValidation,
+} from '../../lib/guards.js';
 import { perAccountRateLimit } from '../../lib/rate-limit.js';
 import type { NotificationEmailDeps } from '../notifications/notification-email.js';
 import {
@@ -118,7 +122,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
   app.get(
     REQUESTS_PATH,
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { querystring: bookingRequestListQuerySchema, response: { 200: requestListSchema } },
     },
     async (request) =>
@@ -135,7 +139,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
   app.get(
     `${REQUESTS_PATH}/:requestId`,
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { params: requestParamsSchema, response: { 200: bookingRequestDetailSchema } },
     },
     async (request) =>
@@ -178,7 +182,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
     app.post(
       `${REQUESTS_PATH}/:requestId/${action}`,
       {
-        preHandler: requireAuth,
+        onRequest: requireAuthBeforeValidation,
         schema: { params: requestParamsSchema, response: { 200: bookingRequestDetailSchema } },
       },
       async (request) =>
@@ -194,7 +198,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
   app.get(
     '/bookings',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: {
         querystring: historyPageQuerySchema,
         response: { 200: z.array(bookingWithContextSchema) },
