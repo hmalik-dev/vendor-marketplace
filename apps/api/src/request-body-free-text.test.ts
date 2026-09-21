@@ -233,12 +233,13 @@ describe('free text on a request body', () => {
     // whose business name, category, city and message are a stranger's free
     // text, plus `decideVendorApplicationSchema` and `createVendorInviteSchema`,
     // an enum and an email.
-    // 35 since VEN-500 added `adminStepUpVerifySchema`, a six-digit code; 36 since
-    // VEN-475 added `adminExportAuditSchema`.
+    // 35 since VEN-500 added `adminStepUpVerifySchema`, a six-digit code.
+    // 36 since VEN-462 added `throttleChargeSchema`, an opaque printable-ASCII key and two numbers.
+    // 37 since VEN-475 added `adminExportAuditSchema`.
     //
     // A merge is where this number goes wrong: two lanes each add to 23 and a
     // both-sides union keeps one of the answers rather than the sum.
-    expect(names).toHaveLength(36);
+    expect(names).toHaveLength(37);
     expect(names).toContain('reorderCategoriesSchema');
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
@@ -299,6 +300,8 @@ describe('free text on a request body', () => {
        */
       'supportMessageSchema.errorContext.route',
       'supportMessageSchema.errorContext.occurredAt',
+      // VEN-462's throttle bucket: an opaque key by pattern, printable ASCII only.
+      'throttleChargeSchema.bucket',
     ]);
   });
 

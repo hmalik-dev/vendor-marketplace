@@ -1,6 +1,6 @@
 import { setUserRole } from '../../testing/set-user-role.js';
-import { users } from '@vendor-marketplace/db/schema';
-import { eq } from 'drizzle-orm';
+import { streamTickets, users } from '@vendor-marketplace/db/schema';
+import { count, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Writable } from 'node:stream';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -54,6 +54,12 @@ describe('the event stream authenticates with a ticket, not the session', () => 
   afterAll(async () => {
     await harness.close();
   });
+
+  async function heldTickets(): Promise<number> {
+    const [row] = await harness.database.db.select({ n: count() }).from(streamTickets);
+
+    return row?.n ?? 0;
+  }
 
   async function issueTicket(): Promise<string> {
     const response = await harness.app.inject({
@@ -139,7 +145,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
   it('refuses a ticket that has already opened a stream', async () => {
     const ticket = await issueTicket();
 
-    const heldBefore = harness.app.streamTickets.size;
+    const heldBefore = await heldTickets();
 
     // The stream never ends, so the connection is abandoned rather than
     // awaited — spending the ticket is what this asserts, not the body.
@@ -150,7 +156,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
      * I/O would break that assumption, and the failure mode would be this test
      * hanging on a stream that never resolves instead of failing an assertion.
      */
-    await vi.waitFor(() => expect(harness.app.streamTickets.size).toBe(heldBefore - 1));
+    await vi.waitFor(async () => expect(await heldTickets()).toBe(heldBefore - 1));
 
     const replay = await harness.app.inject({
       method: 'GET',

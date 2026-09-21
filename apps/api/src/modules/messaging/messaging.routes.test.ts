@@ -1130,7 +1130,7 @@ describe('messaging', () => {
       const stop = harness.app.events.subscribe('user-1', fake);
       expect(harness.app.events.countFor('user-1')).toBe(1);
 
-      stop();
+      stop?.();
       expect(harness.app.events.countFor('user-1')).toBe(0);
     });
   });

@@ -1,5 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { callerAddress, isAddressThrottled, isThrottled, resetThrottle } from './proxy-throttle';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  callerAddress,
+  chargeAddress,
+  chargeCaller,
+  isAddressThrottled,
+  isThrottled,
+  resetThrottle,
+} from './proxy-throttle';
 
 const VERIFY = ['email-otp', 'verify-email'];
 
@@ -104,5 +111,114 @@ describe('isAddressThrottled', () => {
     for (let i = 0; i < 6; i++) isAddressThrottled('a@x.test', REQUEST, 1_000);
 
     expect(isAddressThrottled('a@x.test', REQUEST, 601_001)).toBe(false);
+  });
+});
+
+/** A stand-in for the API's `/internal/throttle`: one shared count per bucket, whoever asks. */
+function fakeSharedCounter(): {
+  calls: Array<{ bucket: string; limit: number }>;
+  headers: string[];
+} {
+  const counts = new Map<string, number>();
+  const seen = { calls: [] as Array<{ bucket: string; limit: number }>, headers: [] as string[] };
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init: RequestInit) => {
+      const { bucket, limit } = JSON.parse(String(init.body)) as { bucket: string; limit: number };
+      const count = (counts.get(bucket) ?? 0) + 1;
+      counts.set(bucket, count);
+      seen.calls.push({ bucket, limit });
+      seen.headers.push(String((init.headers as Record<string, string>)['x-web-tier-key']));
+
+      return Response.json({ throttled: count > limit });
+    }),
+  );
+
+  return seen;
+}
+
+describe('the shared counter', () => {
+  beforeEach(() => {
+    resetThrottle();
+    vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('refuses the tenth sign-in for one email across two addresses, and past a fresh module instance', async () => {
+    fakeSharedCounter();
+    const path = ['sign-in', 'email'];
+
+    for (let i = 0; i < 9; i++) {
+      expect(await chargeAddress('v@example.com', path)).toBe(false);
+    }
+    expect(await chargeAddress('v@example.com', path)).toBe(false);
+
+    // A cold start: the module, and so its local map, is new. The count is not.
+    vi.resetModules();
+    const fresh = await import('./proxy-throttle');
+
+    expect(await fresh.chargeAddress(' V@Example.com ', path)).toBe(true);
+  });
+
+  it('stores an opaque bucket, never the address', async () => {
+    const seen = fakeSharedCounter();
+
+    await chargeAddress('Someone@Example.com', ['sign-in', 'email']);
+
+    expect(seen.calls[0]?.bucket).toMatch(/^addr\|sign-in\/email\|[0-9a-f]{64}$/);
+    expect(JSON.stringify(seen.calls)).not.toContain('example.com');
+  });
+
+  it('names the web tier to the API and charges a per-caller tight call by path', async () => {
+    const seen = fakeSharedCounter();
+
+    await chargeCaller('1.2.3.4', ['email-otp', 'verify-email']);
+
+    expect(seen.headers).toEqual(['k'.repeat(40)]);
+    expect(seen.calls).toEqual([{ bucket: '1.2.3.4|email-otp/verify-email', limit: 10 }]);
+  });
+
+  it('keeps loose calls in-process, so a page view costs no round trip', async () => {
+    const seen = fakeSharedCounter();
+
+    await chargeCaller('1.2.3.4', ['get-session']);
+
+    expect(seen.calls).toEqual([]);
+  });
+
+  it('counts in-process when the API cannot be reached, rather than opening the door', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('unreachable')));
+
+    const results: boolean[] = [];
+    for (let i = 0; i < 11; i++) {
+      results.push(await chargeCaller('1.2.3.4', ['email-otp', 'verify-email'], 1_000));
+    }
+
+    expect(results.slice(0, 10)).toEqual(Array(10).fill(false));
+    expect(results[10]).toBe(true);
+  });
+
+  it('counts in-process when the API refuses the key', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({}, { status: 401 })));
+
+    const results: boolean[] = [];
+    for (let i = 0; i < 6; i++) {
+      results.push(await chargeAddress('a@x.test', ['email-otp', 'verify-email'], 1_000));
+    }
+
+    expect(results[5]).toBe(true);
+  });
+
+  it('never calls the API without a web tier key', async () => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    const seen = fakeSharedCounter();
+
+    await chargeCaller('1.2.3.4', ['email-otp', 'verify-email']);
+
+    expect(seen.calls).toEqual([]);
   });
 });

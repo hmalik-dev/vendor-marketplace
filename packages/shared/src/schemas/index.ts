@@ -4089,3 +4089,20 @@ export type AdminStepUpVerify = z.infer<typeof adminStepUpVerifySchema>;
 /** When the code, or the grant it buys, lapses. Never the code itself. */
 export const adminStepUpResultSchema = z.object({ expiresAt: z.coerce.date() });
 export type AdminStepUpResult = z.infer<typeof adminStepUpResultSchema>;
+
+/*
+ * One charge to the API's shared throttle counter (VEN-462), sent by the web
+ * tier. The bucket is an opaque key made of printable ASCII, so it carries no
+ * prose and no address; `record: false` reads the count without adding a hit.
+ */
+export const throttleChargeSchema = z.object({
+  bucket: z
+    .string()
+    .min(1)
+    .max(300)
+    .regex(/^[\x21-\x7e]+$/),
+  windowMs: z.number().int().min(1_000).max(86_400_000),
+  limit: z.number().int().min(1).max(1_000),
+  record: z.boolean().default(true),
+});
+export type ThrottleCharge = z.infer<typeof throttleChargeSchema>;

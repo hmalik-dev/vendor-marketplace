@@ -56,3 +56,8 @@ export function conflict(message: string, details?: unknown): AppError {
 export function validationFailed(message: string, details?: unknown): AppError {
   return new AppError(400, ERROR_CODES.VALIDATION_ERROR, message, details);
 }
+
+/** The caller is over a cap this API holds itself; the client backs off. */
+export function tooManyRequests(message: string): AppError {
+  return new AppError(429, ERROR_CODES.RATE_LIMITED, message);
+}

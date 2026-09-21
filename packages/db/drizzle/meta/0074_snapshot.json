@@ -1,6 +1,6 @@
 {
-  "id": "7284f0d8-a9b5-47a3-a196-729bcd361ecd",
-  "prevId": "8f3ae37b-9841-4b09-9dc7-b81fe8a4c0b6",
+  "id": "dd0e1f2c-5666-4960-965a-2b55096a8840",
+  "prevId": "7284f0d8-a9b5-47a3-a196-729bcd361ecd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4598,7 +4598,9 @@
         "category_reordered",
         "vendor_invited",
         "vendor_invite_revoked",
-        "vendor_application_declined"
+        "vendor_application_declined",
+        "admin_exported",
+        "admin_data_read"
       ]
     },
     "public.admin_action_subject": {

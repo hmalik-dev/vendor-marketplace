@@ -3,7 +3,12 @@ import type { NextRequest } from 'next/server';
 import { after, NextResponse } from 'next/server';
 import { neonAuth } from '@/lib/auth/server';
 import { isProxiedAuthCall } from '@/lib/auth/proxy-allowlist';
-import { callerAddress, isAddressThrottled, isThrottled } from '@/lib/auth/proxy-throttle';
+import {
+  addressLimit,
+  callerAddress,
+  chargeAddress,
+  chargeCaller,
+} from '@/lib/auth/proxy-throttle';
 
 /**
  * Same-origin proxy to Neon Auth. The browser talks to this, never to the
@@ -25,7 +30,7 @@ import { callerAddress, isAddressThrottled, isThrottled } from '@/lib/auth/proxy
  * longer doing it, so the browser gets a fixed 200 at once and the call to Neon
  * finishes after the response. Status, body and timing then say nothing about
  * whether the address has an account. That call and the code check are also
- * budgeted per address (`isAddressThrottled`).
+ * budgeted per address (`chargeAddress`).
  *
  * Built per request, because `neonAuth()` reads the environment on first use
  * and a module-level `auth.handler()` would read it at build.
@@ -41,7 +46,7 @@ const forward =
       return NextResponse.json({ message: 'Not found' }, { status: 404 });
     }
 
-    if (isThrottled(callerAddress(request.headers), path)) {
+    if (await chargeCaller(callerAddress(request.headers), path)) {
       return NextResponse.json(
         { message: 'Too many attempts' },
         { status: 429, headers: { 'Retry-After': '60' } },
@@ -51,6 +56,10 @@ const forward =
     const joined = path.join('/');
     if (method === 'POST' && RESET_PATHS.has(joined)) {
       return forwardReset(request, context, path);
+    }
+
+    if (method === 'POST' && addressLimit(path) !== null) {
+      return forwardBudgeted(request, context, path);
     }
 
     return neonAuth().handler()[method](request, context);
@@ -67,6 +76,58 @@ function emailIn(body: string): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * A sign-in, sign-up or code call: budgeted per account address whoever sends
+ * it (VEN-462), so rotating addresses does not buy a fresh budget. The body is
+ * read to find the address and handed on re-encoded; what the provider answers
+ * is passed back unchanged.
+ */
+async function forwardBudgeted(
+  request: NextRequest,
+  context: RouteContext,
+  path: string[],
+): Promise<Response> {
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  const body = await request.text();
+  const email = emailIn(body);
+
+  if (email === '') {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  /*
+   * A password sign-in is charged for its failures only: the budget is shared
+   * and durable, so charging every attempt would let anyone lock an account out
+   * by naming its address. Codes and mail are charged as they are asked for.
+   */
+  const failuresOnly = path.join('/') === 'sign-in/email';
+
+  if (await chargeAddress(email, path, Date.now(), !failuresOnly)) {
+    return NextResponse.json(
+      { message: 'Too many attempts' },
+      { status: 429, headers: { 'Retry-After': '600' } },
+    );
+  }
+
+  const headers = new Headers(request.headers);
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  const upstream = new Request(request.url, { method: 'POST', headers, body });
+  const response = await neonAuth()
+    .handler()
+    .POST(upstream as NextRequest, context);
+
+  // Only the provider's refusal of the credential counts; its outage must not spend anyone's budget.
+  if (failuresOnly && (response.status === 401 || response.status === 403)) {
+    await chargeAddress(email, path);
+  }
+
+  return response;
 }
 
 async function forwardReset(
@@ -87,7 +148,7 @@ async function forwardReset(
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
   }
 
-  const overBudget = isAddressThrottled(email, path);
+  const overBudget = await chargeAddress(email, path);
   const isRequest = path.join('/') === REQUEST_RESET;
 
   if (overBudget && !isRequest) {

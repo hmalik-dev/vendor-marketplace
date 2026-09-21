@@ -1,5 +1,6 @@
 import fp from 'fastify-plugin';
 import type { ErrorReporter } from '../lib/error-reporting.js';
+import { purgeThrottleHits } from '../lib/throttle.js';
 import { expireLapsedRequests } from '../modules/booking-requests/booking-requests.service.js';
 import { bookingContextFor, expiryGuardFor } from '../modules/payments/payments.service.js';
 
@@ -38,6 +39,14 @@ export const expirySweepPlugin = fp<ExpirySweepPluginOptions>(
       running = true;
 
       try {
+        try {
+          await app.streamTickets.sweep();
+          await purgeThrottleHits(app.db, app.clock());
+        } catch (error) {
+          app.log.error({ err: error }, 'Stream ticket and throttle sweep failed');
+          options.reporter.capture(error);
+        }
+
         const context = {
           ...bookingContextFor(app, app.log, options.webOrigin),
           platformFeeRate: options.platformFeeRate,
