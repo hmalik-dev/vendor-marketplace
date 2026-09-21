@@ -1,4 +1,4 @@
-import { bookings, categories, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { bookings, categories, supportCases, vendorProfiles } from '@vendor-marketplace/db/schema';
 import {
   addDays,
   CURRENT_VENDOR_AGREEMENT_VERSION,
@@ -13,6 +13,7 @@ import {
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { placeDisputeHold, resolveDispute, type BookingContext } from './payments.service.js';
+import { releaseDuePayouts } from './payouts.service.js';
 
 /**
  * VEN-545, on a real Postgres: two operators ruling on one dispute at once.
@@ -80,13 +81,31 @@ describe('a customer ruling racing a vendor ruling on one disputed booking', () 
     return row!;
   }
 
-  /** True once some backend is queued behind another's row lock. */
+  /** True once a backend of *this* database is queued behind another's row lock. */
   async function someoneWaitsOnALock(): Promise<boolean> {
     const result = await harness!.database.db.execute(
-      sql`select 1 from pg_stat_activity where wait_event_type = 'Lock'`,
+      sql`select 1 from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`,
     );
 
     return Array.from(result as Iterable<unknown>).length > 0;
+  }
+
+  const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 10));
+
+  /** Holds the booking if it is not held already. */
+  async function ensureHeld(): Promise<void> {
+    if ((await currentBooking()).status === 'disputed') {
+      return;
+    }
+
+    await placeDisputeHold(
+      context(),
+      customer((await currentBooking()).customerId),
+      bookingId,
+      'The photographer never arrived.',
+      clockNow,
+      'customer',
+    );
   }
 
   beforeAll(async () => {
@@ -202,17 +221,55 @@ describe('a customer ruling racing a vendor ruling on one disputed booking', () 
     }
   });
 
+  /*
+   * A chargeback does not move `status`, so the lock's own re-check cannot see
+   * one arrive. The ruling queues behind a held lock, a case opens while it
+   * waits, and it must refuse rather than refund a charge under network dispute.
+   */
+  it('refuses a customer ruling when a chargeback opens while it waits for the lock', async () => {
+    const stripe = harness!.stripe;
+    await ensureHeld();
+
+    let ruling: Promise<{ ok: boolean }> | undefined;
+
+    await harness!.database.db.transaction(async (tx) => {
+      await tx.select().from(bookings).where(eq(bookings.id, bookingId)).for('update');
+
+      ruling = resolveDispute(context(), bookingId, 'customer', clockNow).then(
+        () => ({ ok: true }),
+        () => ({ ok: false }),
+      );
+
+      let queued = false;
+      for (let attempt = 0; attempt < 500 && !queued; attempt += 1) {
+        queued = await someoneWaitsOnALock();
+        if (!queued) {
+          await tick();
+        }
+      }
+      expect(queued).toBe(true);
+
+      // On `tx`: the foreign key wants a share lock the held row lock would refuse anyone else.
+      await tx.insert(supportCases).values({
+        reference: 'ORL-TEST-CB',
+        origin: 'chargeback',
+        message: 'The card network opened a chargeback.',
+        bookingId,
+        stripeDisputeId: 'dp_test_race',
+      });
+    });
+
+    expect(await ruling).toEqual({ ok: false });
+    expect(stripe.refunds).toHaveLength(0);
+    expect((await currentBooking()).status).toBe('disputed');
+
+    await harness!.database.db.delete(supportCases).where(eq(supportCases.bookingId, bookingId));
+  });
+
   it('lets exactly one win, refunds the total once and leaves the vendor nothing to be paid', async () => {
     const stripe = harness!.stripe;
-    const held = await placeDisputeHold(
-      context(),
-      customer((await currentBooking()).customerId),
-      bookingId,
-      'The photographer never arrived.',
-      clockNow,
-      'customer',
-    );
-    expect(held.status).toBe('disputed');
+    await ensureHeld();
+    expect((await currentBooking()).status).toBe('disputed');
 
     /* Park the customer ruling at its first Stripe call. */
     const realFindRefund = stripe.findRefund;
@@ -252,11 +309,14 @@ describe('a customer ruling racing a vendor ruling on one disputed booking', () 
       void vendorRuling.then(() => {
         vendorSettled = true;
       });
-      for (let attempt = 0; attempt < 500 && !vendorSettled; attempt += 1) {
-        if (await someoneWaitsOnALock()) {
-          break;
+      let queued = false;
+      for (let attempt = 0; attempt < 500 && !vendorSettled && !queued; attempt += 1) {
+        queued = await someoneWaitsOnALock();
+        if (!queued) {
+          await tick();
         }
       }
+      expect(vendorSettled || queued).toBe(true);
 
       release();
       const [customerResult, vendorResult] = await Promise.all([customerRuling, vendorRuling]);
@@ -275,6 +335,12 @@ describe('a customer ruling racing a vendor ruling on one disputed booking', () 
       vendorPayoutCents: 0,
     });
     expect(stripe.refunds.map((refund) => refund.amountCents)).toEqual([PRICE_CENTS]);
+
+    /* The sweep, well past the release window: a cancelled booking owes nothing. */
+    await releaseDuePayouts(
+      { db: harness!.database.db, stripe, log: harness!.app.log },
+      addDays(clockNow, 30),
+    );
     expect(stripe.transfers).toHaveLength(0);
   });
 });
