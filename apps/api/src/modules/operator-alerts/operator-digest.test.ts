@@ -128,6 +128,7 @@ describe('the operator digest (VEN-405)', () => {
     await booking(
       await request({ eventDate: '2026-10-02', status: 'accepted', createdAt: LONG_AGO }),
       {
+        eventDate: '2026-10-02',
         totalAmountCents: 45_050,
         vendorPayoutCents: 39_644,
         paidAt: ago(6),

@@ -62,6 +62,7 @@ import {
   setHeldDate,
   statusesOnDate,
   hasRivalAcceptanceOn,
+  isAcceptedDateTaken,
   lockHeldDate,
   vendorHoldsCurrentAgreement,
 } from './booking-requests.dao.js';
@@ -81,6 +82,9 @@ function invalidTransition(from: BookingRequestStatus, to: BookingRequestStatus)
     `A ${from} request cannot become ${to}`,
   );
 }
+
+/** What an accept is told when another request holds the vendor's date. */
+const DATE_BOOKED_MESSAGE = 'That date was booked while this request was open';
 
 const NOTIFICATION_DATE = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -899,11 +903,17 @@ export async function transitionRequest(
       await lockHeldDate(tx, row.vendorId, row.eventDate);
 
       if (await hasRivalAcceptanceOn(tx, row.vendorId, row.eventDate, row.id)) {
-        throw conflict('That date was booked while this request was open');
+        throw conflict(DATE_BOOKED_MESSAGE);
       }
     }
 
-    const written = await applyTransition(tx, row.id, row.status, { ...patch, status: target });
+    // The index is the backstop for a rival the read above could not see.
+    const written = await applyTransition(tx, row.id, row.status, {
+      ...patch,
+      status: target,
+    }).catch((error: unknown) => {
+      throw isAcceptedDateTaken(error) ? conflict(DATE_BOOKED_MESSAGE) : error;
+    });
 
     if (!written) {
       // The status moved under us between the read and the write.
@@ -1084,7 +1094,7 @@ async function prepareTransition({
 
   const calendar = await findAvailabilityOn(db, row.vendorId, row.eventDate);
   if (calendar?.status === 'booked') {
-    throw conflict('That date was booked while this request was open');
+    throw conflict(DATE_BOOKED_MESSAGE);
   }
 
   /*
