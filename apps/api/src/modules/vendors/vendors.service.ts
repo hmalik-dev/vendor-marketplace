@@ -121,6 +121,17 @@ export function toVendorProfileDetail(
   };
 }
 
+/** What a vendor calls each blocker, for the refusal of an edit to a live storefront. */
+const LIVE_EDIT_FIELD_LABELS: Record<PublishBlockerKey, string> = {
+  businessName: 'the business name',
+  location: 'the location',
+  categories: 'the categories',
+  bio: 'the bio',
+  responseTime: 'the reply window',
+  packages: 'the packages',
+  agreement: 'the agreement',
+};
+
 /**
  * Everything still standing between this profile and a public listing. Returned
  * rather than thrown so the dashboard can show the list before the vendor tries
@@ -570,7 +581,7 @@ export async function updateVendorProfile(
       throw validationFailed(
         publishing
           ? 'Complete your profile before publishing it.'
-          : 'Your storefront is live, so these fields cannot be left empty.',
+          : `Your storefront is live, so ${introduced.map((key) => LIVE_EDIT_FIELD_LABELS[key]).join(' and ')} cannot be left empty.`,
         { blockers: introduced },
       );
     }

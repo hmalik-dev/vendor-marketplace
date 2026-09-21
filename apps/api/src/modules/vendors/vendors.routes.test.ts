@@ -533,6 +533,7 @@ describe('/vendor/profile', () => {
 
         const [row] = await harness.database.db.select().from(vendorProfiles);
         expect(row?.responseTimeHours).toBe(24);
+        expect(row?.isPublished).toBe(true);
       });
 
       it('saves a complete edit', async () => {
@@ -562,6 +563,16 @@ describe('/vendor/profile', () => {
 
         expect(response.statusCode).toBe(200);
         expect(response.json().isPublished).toBe(false);
+        expect(response.json().bio).toBeNull();
+      });
+
+      it('names every blocker one edit introduces, and only those', async () => {
+        await goLive();
+
+        const response = await put({ bio: '', responseTimeHours: null, tagline: 'Still here' });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().details.blockers).toEqual(['bio', 'responseTime']);
       });
     });
 
