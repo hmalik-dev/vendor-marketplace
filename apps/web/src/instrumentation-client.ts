@@ -1,3 +1,4 @@
+import './config/zod-jitless-init';
 import * as Sentry from '@sentry/nextjs';
 import { webSentryOptions } from './config/error-reporting';
 

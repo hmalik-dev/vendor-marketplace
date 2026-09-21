@@ -56,6 +56,20 @@ describe('structured data written straight into the DOM', () => {
     expect(offenders).toEqual([]);
   });
 
+  /*
+   * VEN-523: script-src has no `unsafe-inline`, so a JSON-LD block without the
+   * request's nonce is blocked in production and the page loses its structured
+   * data. A JSX attribute check: the rendered result is a browser check.
+   */
+  it('stamps every JSON-LD block with the request nonce', () => {
+    const offenders = files
+      .filter(([, code]) => code.includes('application/ld+json'))
+      .filter(([, code]) => !/type="application\/ld\+json"\s+nonce=\{nonce\}/.test(code))
+      .map(([file]) => file);
+
+    expect(offenders).toEqual([]);
+  });
+
   it('serialises every JSON-LD block through the escaping helper', () => {
     const offenders = files
       .filter(([, code]) => code.includes('application/ld+json'))

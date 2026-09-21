@@ -9,6 +9,7 @@ import {
   type Category,
 } from '@vendor-marketplace/shared';
 import { ShieldCheck, Star, Tag, type LucideIcon } from 'lucide-react';
+import { cspNonce } from '@/lib/csp-nonce';
 import { HeroSearch } from '@/components/landing/hero-search';
 import { PhotoCluster } from '@/components/landing/photo-cluster';
 import { Button } from '@/components/ui/button';
@@ -271,6 +272,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function HomePage(): Promise<React.ReactElement> {
   await redirectVendorToDashboard();
+  const nonce = await cspNonce();
 
   /*
    * A vendor never reaches this line — the redirect above sends them to their
@@ -317,6 +319,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
     <>
       <script
         type="application/ld+json"
+        nonce={nonce}
         /*
           A literal above, so nothing untrusted reaches it — but it goes through
           the same serialiser as the vendor page's so that the two JSON-LD sites
