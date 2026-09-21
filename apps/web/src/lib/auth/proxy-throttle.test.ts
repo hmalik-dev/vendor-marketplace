@@ -36,8 +36,23 @@ describe('isThrottled', () => {
 });
 
 describe('callerAddress', () => {
-  it('takes the first hop of x-forwarded-for', () => {
-    expect(callerAddress(new Headers({ 'x-forwarded-for': '9.9.9.9, 10.0.0.1' }))).toBe('9.9.9.9');
+  beforeEach(resetThrottle);
+
+  it('takes the last hop of x-forwarded-for, the one a proxy appended', () => {
+    expect(callerAddress(new Headers({ 'x-forwarded-for': '9.9.9.9, 10.0.0.1' }))).toBe('10.0.0.1');
+  });
+
+  it('does not reset the budget when only the leftmost entry changes', () => {
+    const results = Array.from({ length: 11 }, (_, i) =>
+      isThrottled(
+        callerAddress(new Headers({ 'x-forwarded-for': `6.6.6.${i}, 203.0.113.7` })),
+        VERIFY,
+        1_000,
+      ),
+    );
+
+    expect(results.slice(0, 10)).toEqual(Array(10).fill(false));
+    expect(results[10]).toBe(true);
   });
 
   it('falls back to one shared bucket when the header is absent', () => {
