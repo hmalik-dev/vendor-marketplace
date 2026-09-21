@@ -87,6 +87,8 @@ describe('the rail', () => {
       // VEN-406's vendor waitlist and VEN-404's launch switches: no frame draws
       // them, so the rows are appended.
       'Vendor applications',
+      // VEN-506: who can sign in to the console, also unframed.
+      'Operators',
       'Settings',
     ]);
   });
@@ -127,7 +129,7 @@ describe('the rail', () => {
    * both appended after the nine the delta draws.
    */
   it('is the nine drawn rows plus the unframed two, because the move was an order change', () => {
-    const unframed = ['Vendor applications', 'Settings'];
+    const unframed = ['Vendor applications', 'Operators', 'Settings'];
     expect(railLabels().filter((label) => !unframed.includes(label))).toHaveLength(9);
   });
 

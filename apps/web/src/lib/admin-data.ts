@@ -2,8 +2,10 @@ import { getServerSession } from './auth/server';
 import {
   adminActivityActorListSchema,
   adminCategoryListSchema,
+  adminOperatorListSchema,
   type AdminActivityActorList,
   type AdminCategoryList,
+  type AdminOperatorList,
 } from '@vendor-marketplace/shared';
 import { redirect } from 'next/navigation';
 import type { z } from 'zod';
@@ -275,6 +277,11 @@ export async function getAdminActivityActors(): Promise<AdminActivityActorList> 
 /** The launch switches and the vendors whose payouts are held (VEN-404). */
 export async function getAdminPlatformSettings(): Promise<WireAdminPlatformSettings> {
   return adminRead('/admin/settings', wireAdminPlatformSettingsSchema);
+}
+
+/** Every operator who can be seen in the console, with who granted them (VEN-506). */
+export async function getAdminOperators(): Promise<AdminOperatorList> {
+  return adminRead('/admin/operators', adminOperatorListSchema);
 }
 
 /** The vendor waitlist, newest first (VEN-406). */

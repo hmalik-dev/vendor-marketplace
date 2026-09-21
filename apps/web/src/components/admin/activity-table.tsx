@@ -60,6 +60,8 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   admin_data_read: 'Read customer data',
   user_closed: 'Closed an account',
   operator_account_closed: 'Closed an operator account',
+  operator_granted: 'Granted operator access',
+  operator_revoked: 'Revoked operator access',
   /*
    * Graduated moderation (#435). Written in the same register as the seven above
    * — what the operator did, past tense — and deliberately **not** using the

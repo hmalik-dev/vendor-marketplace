@@ -29,6 +29,8 @@ import {
   adminReviewPageSchema,
   adminReviewQuerySchema,
   adminReviewVisibilityResultSchema,
+  adminOperatorChangeResultSchema,
+  adminOperatorListSchema,
   adminStepUpResultSchema,
   adminStepUpVerifySchema,
   adminTagListSchema,
@@ -45,6 +47,7 @@ import {
   adminVendorPublishResultSchema,
   adminVendorQuerySchema,
   bookingSchema,
+  grantOperatorSchema,
   resolveDisputeSchema,
   resolveTagSuggestionSchema,
   setPackageActiveSchema,
@@ -58,6 +61,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import { perAccountRateLimit } from '../../lib/rate-limit.js';
 import { requireStepUp } from '../../lib/step-up.js';
+import { grantOperator, listOperators, revokeOperator } from './admin-operators.service.js';
 import { completeStepUp, startStepUp, withinDestructiveCeiling } from './admin-step-up.service.js';
 import { listCases, readCase, readCaseConversation, resolveCase } from '../cases/cases.service.js';
 import {
@@ -185,6 +189,47 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
         app.stepUp,
         assertRole(request.auth, ['admin']).id,
         request.body.code,
+        app.clock(),
+      ),
+  );
+
+  /**
+   * Operator access (VEN-506): the only way after launch to add or remove an
+   * operator, so no admin change needs the database. Both writes take the
+   * step-up; `users.role` stays the single authority.
+   */
+  app.get(
+    '/admin/operators',
+    { onRequest: adminOnly, schema: { response: { 200: adminOperatorListSchema } } },
+    async () => listOperators(app.db),
+  );
+
+  app.post(
+    '/admin/operators',
+    {
+      onRequest: irreversible,
+      schema: { body: grantOperatorSchema, response: { 200: adminOperatorChangeResultSchema } },
+    },
+    async (request) =>
+      grantOperator(
+        app.db,
+        assertRole(request.auth, ['admin']).id,
+        request.body.email,
+        app.clock(),
+      ),
+  );
+
+  app.delete(
+    '/admin/operators/:userId',
+    {
+      onRequest: irreversible,
+      schema: { params: userParamsSchema, response: { 200: adminOperatorChangeResultSchema } },
+    },
+    async (request) =>
+      revokeOperator(
+        app.db,
+        assertRole(request.auth, ['admin']).id,
+        request.params.userId,
         app.clock(),
       ),
   );

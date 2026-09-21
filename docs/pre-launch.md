@@ -128,8 +128,14 @@ COMMIT;
 
 It must report `UPDATE 1`; roll back on anything else. The setting is
 transaction-local and reserved for this step and the in-app operator grant
-(VEN-506): nothing else sets it, and the fixture seeds never do. Once VEN-506
-lands, later operators are granted in the app, not here.
+(VEN-506): nothing else sets it, and the fixture seeds never do.
+
+**This is the single pre-launch exception, not a routine.** Every later operator
+is granted and revoked in the console at `/admin/operators` (step-up, audit row,
+never the last live operator). An operator created by the transaction above has
+no recorded earlier role, so the console will not revoke them: that is
+deliberate, and it is why the first operator is the founder who keeps the
+account.
 
 ## Deploy constraints
 
