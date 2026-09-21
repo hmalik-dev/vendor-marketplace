@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   CURRENT_TERMS_VERSION,
@@ -306,7 +306,16 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     rememberSignUpRole('customer');
     render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
 
-    await user.dblClick(submit());
+    /*
+     * Two submits inside one act, so React has not re-rendered `saving` between
+     * them: only the ref decides that the second is ignored.
+     */
+    const form = submit().closest('form') as HTMLFormElement;
+    act(() => {
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+    });
+    void user;
     release(status({ accepted: true, account: { exists: true, role: 'customer' } }));
 
     await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));

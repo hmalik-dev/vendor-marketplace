@@ -57,11 +57,19 @@ export async function readTermsStatus(
     return termsStatusOf(db, user);
   }
 
-  const { email } = await loadSnapshot();
+  /*
+   * Best effort: the suggestion only preselects a choice the person confirms,
+   * so an identity provider that is briefly down must not take this screen —
+   * the only one that can create the account — down with it.
+   */
+  const email = await loadSnapshot().then(
+    (snapshot) => snapshot.email,
+    () => null,
+  );
 
   return {
     ...unacceptedTermsStatus(),
-    suggestedRole: (await invitedRoleHint(db, email)) ?? null,
+    suggestedRole: email === null ? null : ((await invitedRoleHint(db, email)) ?? null),
   };
 }
 
