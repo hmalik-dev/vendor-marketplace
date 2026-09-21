@@ -105,6 +105,23 @@ describe('applyAuthSyncEvent, when an update meets a stale holder', () => {
     expect(claimant?.emailSyncFailedAt).toBeNull();
   });
 
+  it.each([
+    ['javascript:x', null],
+    [`https://cdn.example.com/${'a'.repeat(2000)}`, null],
+    ['https://cdn.example.com/bea.png', 'https://cdn.example.com/bea.png'],
+  ])('mirrors the provider avatar %j as %j (VEN-538)', async (avatarUrl, stored) => {
+    const event = claimAddress();
+    const outcome = await applyAuthSyncEvent(
+      context(),
+      { ...event, identity: { ...event.identity, email: null, avatarUrl } },
+      NOW,
+      directoryHolding(),
+    );
+
+    expect(outcome).toBe('updated');
+    expect((await rowFor(CLAIMANT))?.avatarUrl).toBe(stored);
+  });
+
   it('mirrors a holder Neon Auth has moved, and lands the address', async () => {
     const directory = directoryHolding(
       neonIdentity(CLAIMANT, CONTESTED),

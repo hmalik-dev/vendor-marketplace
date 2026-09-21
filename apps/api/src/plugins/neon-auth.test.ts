@@ -225,6 +225,29 @@ describe('the Neon Auth trust boundary', () => {
     expect((await get('/users/me', token)).statusCode).toBe(200);
   });
 
+  it.each([
+    ['javascript:x', null],
+    [`https://cdn.example.com/${'a'.repeat(2000)}`, null],
+    ['https://cdn.example.com/ada.png', 'https://cdn.example.com/ada.png'],
+  ])('stores the token image %j as %j (VEN-538)', async (image, stored) => {
+    const authUserId = `neon-user-image-${image.length}`;
+    const token = await sign(
+      claims({ sub: authUserId, email: `${authUserId}@example.com`, image }),
+    );
+
+    const accepted = await harness.app.inject({
+      method: 'POST',
+      url: '/legal/terms/accept',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { version: CURRENT_TERMS_VERSION, accepted: true },
+    });
+
+    expect(accepted.statusCode).toBe(200);
+    const rows = await harness.database.db.select().from(users);
+    expect(rows.find((row) => row.authUserId === authUserId)?.avatarUrl).toBe(stored);
+    expect((await get('/users/me', token)).statusCode).toBe(200);
+  });
+
   it('refuses a vendor sign-up with no invite and creates no account', async () => {
     await harness.database.db
       .insert(platformSettings)

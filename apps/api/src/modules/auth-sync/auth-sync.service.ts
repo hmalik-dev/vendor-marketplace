@@ -16,6 +16,7 @@ import {
   isProviderAvatar,
   isUnbackedIdentity,
   mirroredIdentity,
+  providerAvatarUrl,
   type AuthIdentitySource,
   type MirroredIdentity,
 } from './identity.js';
@@ -83,13 +84,12 @@ export async function applyAuthSyncEvent(
    * picture (VEN-427): a row whose avatar is an object key or a site path
    * belongs to its holder, so only an absent or provider-hosted one is mirrored.
    */
+  const avatarUrl = providerAvatarUrl(identity.avatarUrl);
   const patch = {
     ...(identity.email === null ? {} : { email: identity.email }),
     ...(identity.firstName === null ? {} : { firstName: mirroredAuthName(identity.firstName) }),
     ...(identity.lastName === null ? {} : { lastName: mirroredAuthName(identity.lastName) }),
-    ...(identity.avatarUrl === null || !isProviderAvatar(current.avatarUrl)
-      ? {}
-      : { avatarUrl: identity.avatarUrl }),
+    ...(avatarUrl === null || !isProviderAvatar(current.avatarUrl) ? {} : { avatarUrl }),
   };
 
   let mirrored = await updateUserByAuthId(db, authUserId, patch);

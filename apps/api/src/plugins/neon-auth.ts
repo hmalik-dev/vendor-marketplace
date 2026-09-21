@@ -2,6 +2,7 @@ import fp from 'fastify-plugin';
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { CURRENT_TERMS_VERSION, type UserRole } from '@vendor-marketplace/shared';
 import { accountSuspended, unauthorized } from '../lib/errors.js';
+import { providerAvatarUrl } from '../modules/auth-sync/identity.js';
 import { findSessionSubject } from '../modules/users/users.dao.js';
 import { splitAuthName, type AuthUserSnapshot } from '../modules/users/users.service.js';
 
@@ -143,7 +144,7 @@ export function createNeonUserLoader(baseUrl: string, jwks?: JWTVerifyGetKey): A
       ...splitAuthName(stringClaim(claims['name'])),
       // Set by the acceptance gate from the sign-up choice, never by the token.
       roleHint: undefined,
-      avatarUrl: stringClaim(claims['image']) || null,
+      avatarUrl: providerAvatarUrl(claims['image']),
     };
   };
 }
