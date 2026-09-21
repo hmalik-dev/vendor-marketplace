@@ -1,6 +1,6 @@
 ---
 name: sentry-is-a-second-log-sink
-description: VEN-397 added Sentry beside pino; captureException bypasses log-error-serializer, and scrubErrorEvent keeps request.url with its query string
+description: VEN-397 added Sentry beside pino; the bound-param bypass is now closed (redactErrorValues), but scrubErrorEvent still keeps request.url with its query string
 metadata:
   type: project
 ---
@@ -12,14 +12,20 @@ capture against **both** sinks, not just pino.
 next to each `request.log.error({ err })`. The log line goes through
 `apps/api/src/lib/log-error-serializer.ts` (`serializeError`, #445) which strips
 `DrizzleQueryError`'s `Failed query: … params: <bound values>` from `message`,
-`stack` and `params`. `Sentry.captureException` is handed the **raw** error, so
-`exception.values[0].value` and the frames carry those bound values, and
-`linkedErrorsIntegration` (a default) walks `cause` too. The public
-unauthenticated `POST /support/messages` + a caller-chosen `U+0000`
-([[free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand]]) makes a
-stranger the one who decides when that ships. `scrubErrorEvent` only knows
-email / JWT / `Bearer` / `sk_|rk_|whsec_|re_` shapes — names, phones, addresses
-and free text pass whole.
+`stack` and `params`. **Closed since (verified 2026-09-20):**
+`apps/api/src/lib/error-reporting.ts` `sentryErrorReporter.capture` calls
+`Sentry.captureException(redactErrorValues(error))`, so the bound values are
+stripped before the SDK reads `exception.values[0].value`, the frames, or walks
+`cause` via `linkedErrorsIntegration`. Re-check that call, not just pino, when a
+new capture site appears — a `Sentry.*` call made directly, outside
+`ErrorReporter`, is the regression.
+
+Still open in the event body: `scrubErrorEvent` only knows email / JWT /
+`Bearer` / `sk_|rk_|whsec_|re_` shapes, so names, phones, addresses and free text
+in anything else the capture carries pass whole — and a stranger can still
+choose the moment a failure ships, via the public unauthenticated
+`POST /support/messages` plus a caller-chosen `U+0000`
+([[free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand]]).
 
 **Second gap, same file:** `packages/shared/src/utils/error-reporting.ts`
 deletes `request.cookies`, `.data` and `.query_string` but spreads `url` back.
