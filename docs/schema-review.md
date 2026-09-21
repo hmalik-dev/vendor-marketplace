@@ -46,9 +46,21 @@ Abbreviations: PK primary key, FK foreign key, NN not null, UQ unique index, par
 
 ## Differences from what the code assumes
 
-- **Package price range is enforced only in code.** `service_packages.price_cents` is `integer NOT NULL` with no check (`packages/db/src/schema/service-packages.ts:33`); the range lives in `priceCentsSchema` (`packages/shared/src/schemas/index.ts:265-273`, used at 688 and 713). Any other writer (admin, script) can store zero or negative. Verdict: file against packages/db (a check needs a generated migration, not a one-line schema change).
-- **Typical guest count ordering is enforced only in code.** `users.typical_guest_count_min` and `_max` are independent nullable integers (`packages/db/src/schema/users.ts:51-52`) while the Zod refinement requires min <= max (`packages/shared/src/schemas/index.ts:424-431`). Verdict: file against packages/db.
-- **Foreign keys with no supporting index**, so deleting the parent row scans the child table: `booking_requests.package_id` (`bookings.ts:43`, set null), `messages.sender_id` (`messaging.ts:70`, cascade), `reviews.reviewer_id` (`reviews.ts:30`; the unique index leads with booking_id, `reviews.ts:47`), `review_tombstones.reviewer_id` (`reviews.ts:83`; PK leads with booking_id, `reviews.ts:88`), `support_cases.sender_user_id` (`support-cases.ts:72`), `support_cases.resolved_by` (`support-cases.ts:156`), `vendor_invites.invited_by` (`vendor-invites.ts:46`), `platform_settings.updated_by` (`platform-settings.ts:34`), `tag_suggestions.resolved_tag_id` (`tags.ts:97`). Verdict: file against packages/db (each needs an index and a migration; the user-delete path makes `messages.sender_id` and `reviews.reviewer_id` the ones that matter).
+- **Package price range** (fixed, VEN-508). `service_packages_price_cents_range` checks `price_cents` between `MIN_BOOKING_AMOUNT_CENTS` and `MAX_PACKAGE_PRICE_CENTS`, the band `priceCentsSchema` enforces, so a writer that skips the schema cannot store zero or a negative.
+- **Typical guest count ordering** (fixed, VEN-508). `users_typical_guest_count_order` checks `typical_guest_count_min <= typical_guest_count_max`; a NULL on either side passes, as the Zod refinement allows.
+- **Foreign keys with no supporting index**, so deleting the parent row scans the child table (VEN-508). Six are indexed, three are deliberately not:
+
+  | Column                            | Decision                         | Why                                                                                                                     |
+  | --------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+  | `booking_requests.package_id`     | `booking_requests_package_idx`   | A vendor's packages are cascade-deleted with it and each one triggers the `SET NULL` scan of the largest request table. |
+  | `messages.sender_id`              | `messages_sender_idx`            | User erasure cascades here; messages grow without bound.                                                                |
+  | `reviews.reviewer_id`             | `reviews_reviewer_idx`           | The unique index leads with `booking_id`, so a user delete scanned the table.                                           |
+  | `review_tombstones.reviewer_id`   | `review_tombstones_reviewer_idx` | The primary key leads with `booking_id`; same user-delete scan.                                                         |
+  | `support_cases.sender_user_id`    | `support_cases_sender_user_idx`  | User erasure sets it null; cases accumulate per user.                                                                   |
+  | `support_cases.resolved_by`       | `support_cases_resolved_by_idx`  | Same, for the resolving operator.                                                                                       |
+  | `vendor_invites.invited_by`       | skipped                          | Invite-only beta table with a handful of rows, never joined or filtered on this column.                                 |
+  | `platform_settings.updated_by`    | skipped                          | A single-row table (`PLATFORM_SETTINGS_ID`); a scan of one row is free.                                                 |
+  | `tag_suggestions.resolved_tag_id` | skipped                          | Tiny moderation table and tags are never deleted in normal operation.                                                   |
 
 ## Checking RLS on a live database
 

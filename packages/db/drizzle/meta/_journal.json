@@ -428,6 +428,13 @@
       "when": 1789952661173,
       "tag": "0060_silent_nick_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1789958065479,
+      "tag": "0061_clever_hulk",
+      "breakpoints": true
     }
   ]
 }
