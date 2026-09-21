@@ -237,8 +237,8 @@ async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerIden
 /**
  * How many expiry chains a single list read may have open at once.
  *
- * `Promise.all` over the rows started all of them together, and each chain is
- * four statements and a notification write — so a vendor with a long history
+ * `Promise.all` over the rows started all of them together, and each chain is a
+ * transaction holding one connection throughout — so a vendor with a long history
  * opened one connection per expired request against a pool sized for a handful.
  * The page window bounds how many rows arrive; this bounds how many are worked
  * at a time, which is the half that decides whether the read starves everything
@@ -273,6 +273,13 @@ async function ageIfExpired(
    * tick or read does the whole job.
    */
   const outcome = await db.transaction(async (tx) => {
+    /*
+     * The date first, the request second: the order an accept takes them in
+     * (`lockHeldDate`, then `applyTransition`). Reversed, an accept and an
+     * expiry of the same request could each hold one lock and wait on the other.
+     */
+    await lockHeldDate(tx, row.vendorId, row.eventDate);
+
     const moved = await applyExpiry(tx, row.id, row.status);
     if (!moved) {
       return null;
@@ -463,7 +470,10 @@ async function deliverNotification(
 /**
  * Runs the announcement, and never lets it undo the thing it announces.
  *
- * **Everything this guards has already committed.** `applyTransition` and
+ * **Everything this guards has already committed** — except in `ageIfExpired`,
+ * which calls it inside the expiry transaction and wraps the write in a
+ * savepoint. Swallowing a statement error there without one leaves the
+ * transaction aborted, and its COMMIT then rolls back without raising. `applyTransition` and
  * `syncHeldDate` are the transaction; `announce` runs after it, and a throw
  * there used to surface as an opaque 500 on a request that was already
  * `quoted` or `declined` — so the vendor saw a failure, the customer got no

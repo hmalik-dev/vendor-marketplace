@@ -15,6 +15,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import type * as MessagingDao from '../messaging/messaging.dao.js';
 import type * as BookingRequestsDao from './booking-requests.dao.js';
 import { expireLapsedRequests } from './booking-requests.service.js';
 
@@ -38,8 +39,21 @@ vi.mock('./booking-requests.dao.js', async () => {
   };
 });
 
-/** Flipped per test; the mock above reads it on every call. */
+vi.mock('../messaging/messaging.dao.js', async () => {
+  const actual = await vi.importActual<typeof MessagingDao>('../messaging/messaging.dao.js');
+
+  return {
+    ...actual,
+    insertNotification: async (...args: Parameters<typeof actual.insertNotification>) =>
+      failNotificationWrites
+        ? Promise.reject(new Error('value too long for type character varying'))
+        : actual.insertNotification(...args),
+  };
+});
+
+/** Flipped per test; the mocks above read them on every call. */
 let failHeldDateWrites = false;
+let failNotificationWrites = false;
 
 describe('expiring an accepted request', () => {
   let harness: TestHarness;
@@ -186,6 +200,7 @@ describe('expiring an accepted request', () => {
 
   afterEach(async () => {
     failHeldDateWrites = false;
+    failNotificationWrites = false;
     harness.email.sent.length = 0;
     harness.email.messageIdsByKey.clear();
     await harness.database.db.delete(conversations);
@@ -219,6 +234,17 @@ describe('expiring an accepted request', () => {
     expect(await statusOf(requestId)).toBe('expired');
     expect(await heldDateStatus(vendorId)).toBeNull();
     expect(await expiredNotificationCount()).toBe(2);
+  });
+
+  it('still expires the request and frees the date when a notification cannot be written', async () => {
+    const { vendorId, requestId } = await lapsedAcceptedRequest();
+
+    failNotificationWrites = true;
+    expect(await expireLapsedRequests(harness.app.db, new Date(), mailDeps())).toBe(1);
+
+    expect(await statusOf(requestId)).toBe('expired');
+    expect(await heldDateStatus(vendorId)).toBeNull();
+    expect(await expiredNotificationCount()).toBe(0);
   });
 
   it('announces once when two sweeps race for the same request', async () => {
