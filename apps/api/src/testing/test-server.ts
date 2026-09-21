@@ -7,7 +7,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { users } from '@vendor-marketplace/db/schema';
 import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { FastifyInstance, RouteOptions } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
 import type { AppDatabase } from '../lib/database.js';
@@ -256,6 +256,48 @@ async function bootTestDatabase(): Promise<TestDatabase> {
   await database.runMigrations();
 
   return database;
+}
+
+/**
+ * Lets a suite's teardown do what production can never do: hard-delete a user or
+ * a vendor profile that has audit or consent rows behind it.
+ *
+ * Those foreign keys are `RESTRICT` (VEN-463), so a suite that signs people in
+ * and then `delete(users)` between tests would otherwise fail on its first
+ * acceptance row. Each trigger below clears the referencing rows with triggers
+ * and constraints switched off for that one statement, and only in the harness's
+ * own throwaway database. The behaviour they stand in for is proved where it
+ * belongs, against a database without them: `admin-action-immutability.test.ts`
+ * and `legal-acceptance-immutability.test.ts` in `packages/db`.
+ */
+async function allowTeardownOfRecords(db: AppDatabase): Promise<void> {
+  const statements = [
+    `CREATE OR REPLACE FUNCTION test_teardown_user_records() RETURNS trigger AS $$
+      BEGIN
+        PERFORM set_config('session_replication_role', 'replica', true);
+        DELETE FROM admin_actions WHERE actor_id = OLD.id;
+        DELETE FROM legal_acceptances WHERE accepted_by_user_id = OLD.id;
+        PERFORM set_config('session_replication_role', 'origin', true);
+        RETURN OLD;
+      END $$ LANGUAGE plpgsql`,
+    `CREATE OR REPLACE FUNCTION test_teardown_vendor_records() RETURNS trigger AS $$
+      BEGIN
+        PERFORM set_config('session_replication_role', 'replica', true);
+        DELETE FROM legal_acceptances WHERE vendor_id = OLD.id;
+        PERFORM set_config('session_replication_role', 'origin', true);
+        RETURN OLD;
+      END $$ LANGUAGE plpgsql`,
+    'DROP TRIGGER IF EXISTS test_teardown_user_records ON users',
+    `CREATE TRIGGER test_teardown_user_records BEFORE DELETE ON users
+      FOR EACH ROW EXECUTE FUNCTION test_teardown_user_records()`,
+    'DROP TRIGGER IF EXISTS test_teardown_vendor_records ON vendor_profiles',
+    `CREATE TRIGGER test_teardown_vendor_records BEFORE DELETE ON vendor_profiles
+      FOR EACH ROW EXECUTE FUNCTION test_teardown_vendor_records()`,
+  ];
+
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
 }
 
 /** Records what a route stored instead of reaching S3. */
@@ -1049,6 +1091,7 @@ export async function createTestHarness(
   options: TestHarnessOptions<HarnessDatabase> = {},
 ): Promise<TestHarness<HarnessDatabase>> {
   const database = options.database ?? (await bootTestDatabase());
+  await allowTeardownOfRecords(database.db);
   // Categories and tags are reference data every deployment starts with, so
   // the suites see the same rows the running application does.
   await seedReferenceData(database.db);

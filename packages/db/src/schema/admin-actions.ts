@@ -31,13 +31,12 @@ export const adminActionSubjectEnum = pgEnum('admin_action_subject', ADMIN_ACTIO
  *
  * Three deliberate consequences of that:
  *
- * - `actor_id` cascades, and that is the one delete the trigger allows —
- *   erasing an operator's whole account takes their rows with it, because a
- *   recorded action with nobody behind it names nobody. It is not a way to
- *   launder the log: `users` rows in this product are **retired, never
- *   removed** (`deleted_at`), so no product path reaches that cascade at all.
- *   What is made impossible is tampering — an edit, or a row quietly dropped
- *   out from under a serving operator.
+ * - `actor_id` is `restrict` (VEN-463): a `users` row an operator's log points
+ *   at cannot be hard-deleted at all. It used to cascade, which made erasing the
+ *   operator the one way to erase their history; `users` rows are **retired,
+ *   never removed** (`deleted_at`), and now the database says so too. The
+ *   trigger's delete allowance for an absent actor is what remains of that
+ *   design, and no foreign-key path reaches it.
  * - `subject_id` carries **no foreign key at all**, which is why
  *   `subject_type` has to be stored beside it. A review deletion whose row
  *   cascaded away with the review would erase the only evidence the deletion
@@ -59,10 +58,10 @@ export const adminActions = pgTable(
     id: uuid('id')
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    /** The operator. The one cascade the trigger lets through — see above. */
+    /** The operator. `restrict`: a user row with a log behind it cannot be deleted. */
     actorId: uuid('actor_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'restrict' }),
     action: adminActionEnum('action').notNull(),
     subjectType: adminActionSubjectEnum('subject_type').notNull(),
     /** Intentionally unconstrained — see the note on outliving its subject. */

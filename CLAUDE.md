@@ -69,8 +69,12 @@ Dependency direction is one-way: `apps -> packages`.
   A value that fired the scan is rotated, not deleted.
 - **Local development and every lane run on the Docker Postgres.** Staging and
   production are Neon branches; never point local work at them.
-- **Never commit generated output**: `packages/db/drizzle/`, `.env.example`,
-  `turbo.json` passthrough — edit the source and regenerate.
+- **Generated output is regenerated, never hand-edited.** `packages/db/drizzle/`
+  (migrations and snapshots) **is committed** — the deploy runs it — and comes
+  from `pnpm db:generate` after editing the schema. `.env.example` and the
+  `turbo.json` passthrough are generated and **not** edited by hand either.
+  `pnpm migrations:check` fails a migration after the recorded baseline that
+  drops, deletes, retypes or `SET NOT NULL`s without `-- allow-destructive: <reason>`.
 - **A development default must never reach production**: derive it from what the
   platform sets, or throw; assert the production branch in a test.
 - **One ticket per worktree.** The commit hook refuses a dirty tree, so two

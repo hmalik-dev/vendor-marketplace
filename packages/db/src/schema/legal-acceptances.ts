@@ -47,13 +47,13 @@ export const legalAcceptanceMethodEnum = pgEnum(
  * outlive the writers it has today.
  *
  * The invariant is exact: **a row can never be altered, and can never be
- * removed while the person it is about still exists.** Erasing the account does
- * take their acceptances with it — the foreign key cascades — and that is the
- * delete the trigger allows, because an acceptance with nobody behind it
- * records nothing. A vendor-agreement row is additionally removable when the
- * vendor profile it names is erased, which is the cascade #427 built for and
- * the one this table has always allowed. What is made impossible is tampering:
- * an edit, or a row quietly dropped out from under a live account.
+ * removed while the person it is about still exists.** Since VEN-463 both
+ * foreign keys (`accepted_by_user_id`, `vendor_id`) are `restrict`: a user or a
+ * vendor profile with an acceptance behind it cannot be hard-deleted, so the
+ * consent trail outlives the account instead of going with it. `set null` on
+ * `vendor_id` was rejected because it is an `UPDATE`, which the trigger refuses.
+ * What is made impossible is tampering: an edit, or a row dropped out from under
+ * an account.
  *
  * **The anchor moved to the user in #429, and the rule had to move with it.**
  * The old discriminator was the vendor's absence alone, which on a Terms row
@@ -76,7 +76,7 @@ export const legalAcceptances = pgTable(
      * of this product makes, and the one that had nowhere to go while this
      * column was `NOT NULL` (#429). `accepted_by_user_id` is the anchor.
      */
-    vendorId: uuid('vendor_id').references(() => vendorProfiles.id, { onDelete: 'cascade' }),
+    vendorId: uuid('vendor_id').references(() => vendorProfiles.id, { onDelete: 'restrict' }),
     document: legalDocumentEnum('document').notNull(),
     /** The version string as it stood when this was accepted — `v1.0`. */
     version: varchar('version', { length: 20 }).notNull(),
@@ -105,7 +105,7 @@ export const legalAcceptances = pgTable(
     /** The subject of the row: the person who accepted. */
     acceptedByUserId: uuid('accepted_by_user_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'restrict' }),
     /** The person's name at the moment of acceptance, copied and frozen. */
     acceptedByName: varchar('accepted_by_name', { length: 200 }).notNull(),
     /**

@@ -10,8 +10,8 @@ import { legalAcceptances } from './schema/index.js';
  *
  * Inspecting the schema would only prove that somebody wrote a trigger. What
  * has to hold is that an UPDATE and a DELETE actually fail against the engine
- * this ships on — and that the deletes that are legitimate, the cascades from
- * erasing an account or a vendor profile, still get through.
+ * this ships on — and, since VEN-463, that erasing an account or a vendor
+ * profile that an acceptance names is refused rather than cascaded.
  *
  * **#429 moved the anchor from the vendor to the user, and the rule with it.**
  * A Terms acceptance carries `vendor_id IS NULL`, and the old discriminator —
@@ -305,47 +305,36 @@ describe('legal_acceptances is append-only', () => {
   });
 
   /**
-   * Branch 2 of the rule, unchanged from `0029` in behaviour: erasing the
-   * vendor profile takes the acceptances made on its behalf, because an
-   * agreement with no vendor behind it records nothing about anybody.
-   *
-   * The vendor's own **Terms** acceptance is a different row about a person who
-   * is still here, so it survives — which is the whole reason the two branches
-   * ask different questions.
+   * VEN-463 overturned the cascade this used to prove. A vendor profile with an
+   * acceptance made on its behalf cannot be hard-deleted: `vendor_id` is
+   * `RESTRICT`, so the agreement outlives the storefront instead of going with
+   * it.
    */
-  it('lets the cascade through when the vendor profile is erased, and keeps that person’s Terms row', async () => {
-    await testDb.db.insert(legalAcceptances).values({
-      vendorId: null,
-      document: 'terms_of_service',
-      version: 'v1.0',
-      documentSha256: TERMS_SHA,
-      acceptanceMethod: 'clickwrap_checkbox',
-      acceptedByUserId: VENDOR_USER,
-      acceptedByName: 'June Harlow',
-      businessName: null,
-    });
-
-    expect(await acceptanceCount()).toBe(4);
-
-    await testDb.db.execute(sql.raw(`DELETE FROM vendor_profiles WHERE id = '${VENDOR}'`));
-
-    const remaining = await testDb.db.select().from(legalAcceptances);
-
-    expect(remaining.map((row) => `${row.document}:${row.acceptedByUserId}`).sort()).toEqual(
-      [`terms_of_service:${VENDOR_USER}`, `terms_of_service:${CUSTOMER_USER}`].sort(),
+  it('refuses to erase a vendor profile that an agreement was accepted for', async () => {
+    const message = await refusalOf(
+      testDb.db,
+      `DELETE FROM vendor_profiles WHERE id = '${VENDOR}'`,
     );
+
+    expect(message).toContain('legal_acceptances_vendor_id_vendor_profiles_id_fk');
+    expect(message).toContain('RESTRICT');
   });
 
   /**
-   * Branch 1: the person is erased. `accepted_by_user_id` is `ON DELETE
-   * CASCADE`, so this is the delete the rule has to *permit* rather than one it
-   * merely tolerates — refusing it would make erasing an account impossible
-   * instead of making the record safer.
+   * VEN-463, AC1: hard-deleting a person who has accepted anything is refused by
+   * the database. `accepted_by_user_id` used to cascade, so erasing the account
+   * was the one way to erase the consent trail.
    */
-  it('lets the cascade through when the person is erased', async () => {
-    await testDb.db.execute(sql.raw(`DELETE FROM users WHERE id = '${CUSTOMER_USER}'`));
-    await testDb.db.execute(sql.raw(`DELETE FROM users WHERE id = '${VENDOR_USER}'`));
+  it.each([
+    ['the customer', CUSTOMER_USER],
+    ['the vendor', VENDOR_USER],
+  ])('refuses to erase %s who holds an acceptance', async (_who, userId) => {
+    const before = await acceptanceCount();
 
-    expect(await acceptanceCount()).toBe(0);
+    const message = await refusalOf(testDb.db, `DELETE FROM users WHERE id = '${userId}'`);
+
+    expect(message).toContain('legal_acceptances_accepted_by_user_id_users_id_fk');
+    expect(message).toContain('RESTRICT');
+    expect(await acceptanceCount()).toBe(before);
   });
 });
