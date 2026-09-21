@@ -506,23 +506,34 @@ describe('the live booking request indexes', () => {
 
     it('is the index the lapsed-request query plans on, over more than 10k mixed-status rows', async () => {
       const actors = await seedBookingActors(testDb.db, 'expiry-plan');
-      // Mostly settled rows the sweep must skip, a thin band of expirable ones.
+      // 12k rows, almost all settled: the sweep must skip them, so a scan reads them all.
       await testDb.db.execute(sql`
         INSERT INTO booking_requests
           (customer_id, vendor_id, package_id, event_date, status, expires_at)
         SELECT ${actors.customerId}::uuid, ${actors.vendorId}::uuid, ${actors.packageId}::uuid,
                DATE '2040-01-01' + g,
-               (ARRAY['declined','expired','cancelled','pending','quoted','accepted'])[1 + g % 6]::booking_request_status,
+               (CASE WHEN g % 200 < 3
+                     THEN (ARRAY['pending','quoted','accepted'])[1 + g % 3]
+                     ELSE (ARRAY['declined','expired','cancelled'])[1 + g % 3]
+                END)::booking_request_status,
                TIMESTAMPTZ '2040-01-01' + (g || ' minutes')::interval
-        FROM generate_series(1, 12000) g
-        WHERE g % 6 NOT IN (3, 4, 5) OR g % 200 < 3`);
+        FROM generate_series(1, 12000) g`);
       await testDb.db.execute(sql`ANALYZE booking_requests`);
 
+      const counted = await testDb.db.execute<{ total: number }>(
+        sql`SELECT count(*)::int AS total FROM booking_requests`,
+      );
+      expect(counted.rows[0]!.total).toBeGreaterThan(10_000);
+
+      // The predicate of `hasLapsed` in booking-requests.dao.ts, bound at mid-range.
+      const expirable = sql.raw(EXPIRABLE_BOOKING_REQUEST_STATUSES.map((s) => `'${s}'`).join(', '));
       const plan = await testDb.db.execute<{ 'QUERY PLAN': string }>(
-        sql`EXPLAIN SELECT * FROM booking_requests
-            WHERE status IN ('pending', 'quoted', 'accepted')
-              AND expires_at IS NOT NULL AND expires_at <= TIMESTAMPTZ '2040-01-10'
-            ORDER BY expires_at ASC LIMIT 50`,
+        sql`EXPLAIN SELECT * FROM booking_requests r
+            WHERE r.status IN (${expirable})
+              AND r.expires_at IS NOT NULL AND r.expires_at <= TIMESTAMPTZ '2040-01-05'
+              AND (r.status <> 'accepted'
+                   OR NOT EXISTS (SELECT 1 FROM bookings b WHERE b.request_id = r.id))
+            ORDER BY r.expires_at ASC LIMIT 50`,
       );
       const text = plan.rows.map((row) => row['QUERY PLAN']).join('\n');
 
