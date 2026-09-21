@@ -76,7 +76,7 @@ export interface UploadRoutesOptions {
  * decoded and re-encoded before they ever reach storage, so what is served is
  * always a WebP this process produced rather than whatever the client sent.
  *
- * Authorization is **per prefix**: the `onRequest` guard settles only that
+ * Authorization is **per prefix**: the `preParsing` guard settles only that
  * there is a caller, and `STORAGE_PREFIX_ROLES` decides who may write to the
  * namespace. The two run in that order on purpose — authenticate, then
  * validate, then authorize — so nothing about the namespace reaches a caller
@@ -87,12 +87,14 @@ export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (a
     '/upload/image',
     {
       /*
-       * `onRequest`, not `preHandler`. Fastify validates the querystring before
+       * `preParsing`, not `preHandler`. Fastify validates the querystring before
        * `preHandler` runs, and `uploadQuerySchema`'s `z.enum` puts every
        * allowed prefix into the 400's `details` — so a signed-out caller could
-       * read the whole storage namespace out of a validation error.
+       * read the whole storage namespace out of a validation error. Not
+       * `onRequest` either: that runs ahead of this route's limiter, so a
+       * signed-out flood would be refused uncounted.
        */
-      onRequest: requireAuthBeforeValidation,
+      preParsing: requireAuthBeforeValidation,
       config: { rateLimit: perAccountRateLimit(options.rateLimitMax, '1 minute') },
       schema: {
         querystring: uploadQuerySchema,

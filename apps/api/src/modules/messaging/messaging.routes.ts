@@ -105,7 +105,8 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
   app.post(
     '/conversations',
     {
-      onRequest: requireRoleBeforeValidation('customer'),
+      // `preParsing`, not `onRequest`: see the messages route below.
+      preParsing: requireRoleBeforeValidation('customer'),
       config: { rateLimit: perAccountRateLimit(options.conversationRateLimitMax, '1 hour') },
       schema: {
         body: openConversationSchema,

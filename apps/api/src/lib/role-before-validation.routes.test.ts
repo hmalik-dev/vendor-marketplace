@@ -195,6 +195,48 @@ describe('role guards run before body validation', () => {
 });
 
 /**
+ * The same holds for the POSTs that carry a limiter keyed by account: a signed-out flood is counted, so the last request is 429, not a
+ * free 401. The limits are small so the flood is cheap.
+ */
+describe('a signed-out flood of a rate-limited role-guarded POST is counted', () => {
+  const LIMIT = 3;
+  let harness: TestHarness;
+
+  beforeAll(async () => {
+    harness = await createTestHarness({
+      env: {
+        BOOKING_REQUEST_RATE_LIMIT_MAX: LIMIT,
+        CONVERSATION_RATE_LIMIT_MAX: LIMIT,
+        UPLOAD_RATE_LIMIT_MAX: LIMIT,
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  it.each(['/booking-requests', '/conversations', '/upload/image'])(
+    'POST %s answers 401 up to the limit, then 429',
+    async (url) => {
+      const statuses: number[] = [];
+      for (let attempt = 0; attempt <= LIMIT; attempt += 1) {
+        const response = await harness.app.inject({
+          method: 'POST',
+          url,
+          headers: { 'content-type': 'application/json' },
+          payload: [],
+          remoteAddress: '203.0.113.10',
+        });
+        statuses.push(response.statusCode);
+      }
+
+      expect(statuses).toEqual([...Array<number>(LIMIT).fill(401), 429]);
+    },
+  );
+});
+
+/**
  * The table above pins the routes somebody remembered. This walks the routes
  * the server actually registers, so a new one cannot be forgotten: any route
  * that declares a params, querystring or body schema and also has a
@@ -237,6 +279,44 @@ describe('a route with an input schema does not guard in preHandler', () => {
       .map((route) => `${String(route.method)} ${route.url}`)
       .sort();
 
+    expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * A route's own limiter is appended to `onRequest` after any guard declared
+ * there, so a guard in `onRequest` refuses a signed-out caller before it is
+ * counted. On a rate-limited route the guard belongs in `preParsing`.
+ */
+describe('a route with its own rate limit does not guard in onRequest', () => {
+  const routes: RouteOptions[] = [];
+  let harness: TestHarness;
+
+  beforeAll(async () => {
+    harness = await createTestHarness({ onRoute: (route) => routes.push(route) });
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  /** The limiter plugin appends its own hook to `onRequest`; any other one is a guard. */
+  function hooks(value: unknown): unknown[] {
+    if (value === undefined) return [];
+    return Array.isArray(value) ? value : [value];
+  }
+
+  it('finds no route with an object rateLimit that declares an onRequest guard', () => {
+    const limited = routes.filter((route) => {
+      const limit = (route.config as { rateLimit?: unknown } | undefined)?.rateLimit;
+      return typeof limit === 'object' && limit !== null;
+    });
+    const offenders = limited
+      .filter((route) => route.method !== 'HEAD' && hooks(route.onRequest).length > 1)
+      .map((route) => `${String(route.method)} ${route.url}`)
+      .sort();
+
+    expect(limited.length).toBeGreaterThan(3);
     expect(offenders).toEqual([]);
   });
 });
