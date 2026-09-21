@@ -314,10 +314,10 @@ describe('the bell announcements (VEN-542)', () => {
     render(<NotificationBell />);
 
     const region = await screen.findByRole('status');
-    await waitFor(() => expect(region.textContent).toBe('1 unread notifications'));
+    await waitFor(() => expect(region.textContent).toBe('1 unread notification'));
 
     const button = screen.getByRole('button', { name: /Notifications/ });
-    expect(button.getAttribute('aria-haspopup')).toBe('true');
+    expect(button.getAttribute('aria-haspopup')).toBe('dialog');
 
     await userEvent.click(button);
 

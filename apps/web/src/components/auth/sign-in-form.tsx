@@ -56,6 +56,9 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
     setFailure(outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.signInFailed);
   }
 
+  // A network failure says nothing about what the reader typed, so only a refusal marks the fields.
+  const credentialsRefused = failure !== null && failure !== AUTH_COPY.unreachable;
+
   if (verifying) {
     return (
       <VerifyEmailStep
@@ -81,7 +84,7 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
         placeholder="you@example.com"
         name="email"
         autoComplete="email"
-        aria-invalid={failure ? true : undefined}
+        aria-invalid={credentialsRefused ? true : undefined}
         required
         value={email}
         onChange={(event) => setEmail(event.target.value)}
@@ -92,7 +95,7 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
         placeholder="••••••••••"
         name="password"
         autoComplete="current-password"
-        aria-invalid={failure ? true : undefined}
+        aria-invalid={credentialsRefused ? true : undefined}
         required
         value={password}
         onChange={(event) => setPassword(event.target.value)}

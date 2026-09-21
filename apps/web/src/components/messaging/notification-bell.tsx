@@ -204,7 +204,7 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
         onClick={() => setOpen((current) => !current)}
         aria-label={unread === 0 ? 'Notifications' : `Notifications, ${unread} unread`}
         aria-expanded={open}
-        aria-haspopup="true"
+        aria-haspopup="dialog"
         aria-controls={open ? panelId : undefined}
         className="relative flex size-11 items-center justify-center rounded-full text-stone-700 hover:bg-stone-150 hover:text-stone-900"
       >
@@ -216,12 +216,14 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
         ) : null}
       </button>
       <span role="status" className="sr-only">
-        {unread === 0 ? '' : `${unread} unread notifications`}
+        {unread === 0 ? '' : `${unread} unread ${unread === 1 ? 'notification' : 'notifications'}`}
       </span>
 
       {open ? (
         <div
-          id={panelId} /* Inside the header's own stacking context, so a local z is enough. */
+          id={panelId}
+          role="dialog"
+          aria-label="Notifications" /* Inside the header's own stacking context, so a local z is enough. */
           /*
            * 360px, bounded by the space actually to the panel's left.
            *

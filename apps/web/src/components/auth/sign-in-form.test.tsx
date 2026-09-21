@@ -101,7 +101,20 @@ describe('SignInForm', () => {
     render(<SignInForm destination="/after-sign-in" />);
 
     // jsdom has no layout, so the class-level fact is what can be asserted.
-    expect(screen.getByRole('link', { name: 'Forgot password?' }).className).toContain('min-h-11');
+    expect(screen.getByRole('link', { name: 'Forgot password?' }).className.split(/\s+/)).toContain(
+      'min-h-11',
+    );
+  });
+
+  it('does not mark the fields invalid when the service is unreachable', async () => {
+    signInWithEmail.mockResolvedValue('unreachable');
+    const user = userEvent.setup();
+    render(<SignInForm destination="/after-sign-in" />);
+
+    await submit(user);
+
+    await screen.findByRole('alert');
+    expect(screen.getByLabelText('Email').getAttribute('aria-invalid')).toBeNull();
   });
 
   it('says the service is unreachable, not that the password is wrong, on a network failure', async () => {

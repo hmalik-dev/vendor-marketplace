@@ -291,7 +291,7 @@ describe('ImageUpload, when the server refuses the upload', () => {
     const file = new File([new Uint8Array(2048)], 'photo.jpg', { type: 'image/jpeg' });
     await userEvent.upload(screen.getByLabelText('Profile photo'), file);
 
-    const status = await screen.findByRole('status');
+    const status = await screen.findByRole('alert');
     return status.textContent ?? '';
   }
 

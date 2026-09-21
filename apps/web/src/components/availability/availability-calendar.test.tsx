@@ -252,6 +252,16 @@ describe('AvailabilityCalendar', () => {
     expect(cell('2026-06-18')).toHaveProperty('disabled', false);
   });
 
+  it('does not select a locked date when a keyboard activates it', async () => {
+    renderCalendar([entry('2026-06-15', 'booked')]);
+
+    cell('2026-06-15').focus();
+    expect(document.activeElement).toBe(cell('2026-06-15'));
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.queryByRole('button', { name: 'Block these' })).toBeNull();
+  });
+
   /*
    * Pending and completed are not vendor-settable either, but they are not
    * inert: `19-availability.md` gives one "opens the request" and the other
