@@ -108,7 +108,7 @@ describe('the operator digest (VEN-405)', () => {
         customerId: customer!.id,
         vendorId: vendor!.id,
         eventDate: '2026-10-01',
-        totalAmountCents: 0,
+        totalAmountCents: 10_000,
         platformFeeCents: 0,
         vendorPayoutCents: 0,
         ...values,
