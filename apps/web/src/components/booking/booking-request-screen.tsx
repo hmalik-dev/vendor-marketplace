@@ -554,7 +554,7 @@ export function BookingRequestScreen({
   const primaryLabel = step === 1 ? 'Continue to review' : 'Send request';
 
   return (
-    <div className="mx-auto grid w-full max-w-[1360px] gap-8.5 px-6 pt-6.5 pb-8 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_400px] xl:px-10">
+    <div className="mx-auto grid w-full max-w-[1440px] gap-8.5 px-6 pt-6.5 pb-8 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_400px] xl:px-10">
       <div className="min-w-0">
         <RequestStepper current={step} />
 
@@ -563,7 +563,7 @@ export function BookingRequestScreen({
             ? `Tell ${vendor.businessName} about your event`
             : 'Check this over before it goes'}
         </h1>
-        <p className="mb-5 text-md leading-prose text-stone-700">
+        <p className="mb-5 text-cta leading-prose text-stone-700">
           {step === 1
             ? 'The more they know now, the fewer messages it takes to lock the date.'
             : 'Nothing is sent yet. Edit anything that is not right.'}
@@ -680,6 +680,7 @@ export function BookingRequestScreen({
                     <button
                       {...props}
                       type="button"
+                      data-focus-own
                       aria-haspopup="listbox"
                       aria-expanded={eventTypeOpen}
                       className={cn(

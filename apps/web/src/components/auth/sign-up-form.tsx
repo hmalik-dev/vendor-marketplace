@@ -259,6 +259,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
 
           <Button
             type="submit"
+            className="py-3.25"
             loading={busy}
             aria-disabled={role === null ? true : undefined}
             disabled={email.trim() === '' || password.length < 10}
@@ -277,7 +278,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             </p>
           ) : null}
 
-          <p className="mt-5 text-center text-cta text-stone-700">
+          <p className="mt-5 text-center text-action text-stone-700">
             {AUTH_COPY.signUpAlt}{' '}
             <Link href="/sign-in" className="font-semibold text-clay-500 hover:underline">
               Sign in

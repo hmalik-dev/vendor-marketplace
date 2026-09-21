@@ -846,7 +846,7 @@ export function VendorProfileForm({
                     onChange={(event) => update('bio', event.target.value)}
                     placeholder="What you do, who you do it for, and what makes a day with you feel different."
                     maxLength={MAX_VENDOR_BIO_LENGTH}
-                    className="mt-1.5 min-h-[140px] bg-stone-0"
+                    className="mt-1.5 min-h-[140px] bg-stone-0 px-3.25 py-2.5"
                     {...errorProps(validation.issueFor('bio'))}
                   />
                   <FieldMessage issue={validation.issueFor('bio')} />

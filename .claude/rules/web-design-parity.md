@@ -394,6 +394,29 @@ Zero visible resizes on every other ledger route, including `28` open, `22`
 submitted and `23` offline. A pass measuring any number above is reading this
 ruling; a width in `ch` or `em` on an unsized block is the class to look for.
 
+**Four input screens, ruled on VEN-558 (2026-09-21).** Frames `12`, `04` and `09`
+were measured against the app after VEN-541. Fixed: the auth submit's 13px
+vertical padding, the 13px alternate-route line, `Payment held until the event is
+complete` (`12`, `12b` and `21-sign-up.md` all agree), the booking container's
+1440px cap (content inset 40, not 80), the 14px booking subtitle, the occasion
+trigger's `data-focus-own`, the cover zone's 14px radius, the selected chip's
+1.5px border, the About textarea's 10/13 padding, the rail's `stone-150` and its
+12px toggle. Three are decisions, not drift:
+
+- **The request rail does not promise `48 hours`.** Frame `04` and `13-booking-request.md`
+  draw it; the app states what the vendor can do and no duration, because the
+  window is capped at the event date (#401) and a fixed number is false. The
+  comment in `request-summary-rail.tsx` records it.
+- **The vendor header draws no `Preview as customer`.** Frame `09` alone draws
+  it; frames `08`, `10`, `11` and the 768 view of `09` draw the same vendor header
+  without it, so it is D30 transcription drift. The editor's footer `Preview`
+  button is the route to the public profile.
+- **The preview rail is `stone-150` (`#F1ECE4`).** Both `09` at 1440 and its 768
+  view draw it; `17-vendor-profile-editor.md` says `stone-100`, and the plan is
+  what is stale.
+
+The darker field border VEN-541 set stands; nothing here touches it.
+
 ## A one-shot read is a sample, not a measurement
 
 An animated property has no single computed value. Read it once, in the same
