@@ -472,7 +472,8 @@ describe('retiredCategorySuccessor', () => {
 
 describe('publish blockers', () => {
   /*
-   * The list is six, and it is the *only* list. Ruled 2026-09-04 (D30, #385):
+   * The list is seven (VEN-509 added `agreement`, an acceptance rather than a
+   * profile field), and it is the *only* list. Ruled 2026-09-04 (D30, #385):
    * three artefacts held three different lists agreeing on a count by accident,
    * and frames `20` and `27 Vendor dashboard — empty · 1024` drew a seventh row
    * (a starting price) beside portfolio and availability rows that never gated
@@ -484,7 +485,7 @@ describe('publish blockers', () => {
    * a key added here appears on three surfaces at once and a reordering moves
    * which row reads "Finish →".
    */
-  it('is the six keys the publish gate holds, in the order the checklist renders', () => {
+  it('is the seven keys the publish gate holds, in the order the checklist renders', () => {
     expect(PUBLISH_BLOCKER_KEYS).toEqual([
       'businessName',
       'location',
@@ -492,7 +493,16 @@ describe('publish blockers', () => {
       'bio',
       'responseTime',
       'packages',
+      'agreement',
     ]);
+  });
+
+  it('words the agreement blocker for the checklist, the save bar and the banner', () => {
+    expect(PUBLISH_BLOCKERS.agreement).toEqual({
+      section: 'agreement',
+      short: 'the vendor agreement',
+      message: 'Accept the vendor agreement',
+    });
   });
 
   it('does not carry payouts, which is Connect state and not a publish gate', () => {
