@@ -77,6 +77,8 @@ describe('swallowed errors', () => {
       // explains a failure into the 500 boundary — so it falls back to the
       // vaguer of the two variants and logs why.
       'src/app/bookings/[requestId]/checkout/page.tsx',
+      // VEN-540: a rejected `confirmPayment` shows its own banner; the cause is reported.
+      'src/components/checkout/checkout-screen.tsx',
       'src/components/messaging/messages-screen.tsx',
       'src/components/messaging/notification-bell.tsx',
       'src/components/search/nearby-dates-band.tsx',

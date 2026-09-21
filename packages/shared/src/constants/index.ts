@@ -1744,6 +1744,13 @@ export const ERROR_CODES = {
   UNAUTHORIZED: 'UNAUTHORIZED',
   FORBIDDEN: 'FORBIDDEN',
   /**
+   * The account is banned. A 403 like `FORBIDDEN`, and its own code because the
+   * browser must tell it from an ordinary refusal (a stale tab, a moderation
+   * hold, a foreign row) before sending anyone to `/suspended`, which is
+   * terminal.
+   */
+  ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
+  /**
    * The session is genuine and the account has not accepted the current Terms
    * of Service, so nothing it could ask for may be answered yet.
    *
