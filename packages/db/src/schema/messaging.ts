@@ -75,7 +75,11 @@ export const messages = pgTable(
     readAt: timestamp('read_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('messages_conversation_created_idx').on(table.conversationId, table.createdAt)],
+  (table) => [
+    index('messages_conversation_created_idx').on(table.conversationId, table.createdAt),
+    // The `ON DELETE CASCADE` scan when a user is erased.
+    index('messages_sender_idx').on(table.senderId),
+  ],
 ).enableRLS();
 
 export type MessageRow = typeof messages.$inferSelect;
