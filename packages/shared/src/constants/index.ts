@@ -1704,6 +1704,9 @@ export const MAX_TITLE_LENGTH = 200;
  */
 export const MAX_DISPLAY_ORDER = 2_147_483_647;
 
+/** The most ids a reorder request may carry: a vendor's packages or portfolio. */
+export const MAX_REORDER_IDS = 500;
+
 /**
  * `notifications.title`, which is **not** `MAX_TITLE_LENGTH`.
  *

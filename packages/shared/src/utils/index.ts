@@ -1031,6 +1031,24 @@ export function stripBidiControls(value: string): string {
 }
 
 /**
+ * What free text refuses rather than strips, so the stored value is the typed
+ * value (VEN-544): C0 and C1 controls other than tab, line feed and carriage
+ * return (U+0000 is a Postgres 22021, a 500 for the caller), the line and
+ * paragraph separators, and the zero-width space, word joiner and byte-order
+ * mark, which no one types on purpose.
+ */
+// eslint-disable-next-line no-control-regex
+export const REFUSED_TEXT_CHARACTERS =
+  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u0080-\u009f\u200b\u2028\u2029\u2060\ufeff]/;
+
+const REFUSED_TEXT_CHARACTERS_GLOBAL = new RegExp(REFUSED_TEXT_CHARACTERS.source, 'g');
+
+/** Removes what `REFUSED_TEXT_CHARACTERS` refuses, for text that did not arrive on a request body. */
+export function stripRefusedText(value: string): string {
+  return value.replace(REFUSED_TEXT_CHARACTERS_GLOBAL, '');
+}
+
+/**
  * Joins a list the way a person would: `a`, `a and b`, `a, b and c`.
  *
  * The same sentence is spoken in four places — the publish bar's blockers, the
