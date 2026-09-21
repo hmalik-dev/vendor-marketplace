@@ -1,7 +1,12 @@
 import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { addDays } from '@vendor-marketplace/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  type TestHarness,
+  acceptVendorAgreementAs,
+} from '../../testing/test-server.js';
 import { NEW_VENDOR_WINDOW_DAYS } from './vendor-recency.js';
 
 /**
@@ -78,6 +83,7 @@ describe('GET /vendors — the New badge reads the instance clock', () => {
     });
     expect(pkg.statusCode).toBe(201);
 
+    await acceptVendorAgreementAs(harness, 'user_a');
     const published = await harness.app.inject({
       method: 'PUT',
       url: '/vendor/profile',

@@ -11,9 +11,12 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { bookings, users, vendorProfiles } from '@vendor-marketplace/db/schema';
-import { HELD_PAYOUT_STATUSES } from '@vendor-marketplace/shared';
+import { bookings, legalAcceptances, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { HELD_PAYOUT_STATUSES, type LegalAcceptanceDocument } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+
+/** Typed so a renamed enum member is a compile error, not an `EXISTS` that matches nothing. */
+const VENDOR_AGREEMENT: LegalAcceptanceDocument = 'vendor_agreement';
 
 /**
  * Statuses a payout may be released from.
@@ -131,6 +134,8 @@ export interface ReleasableBookingRow {
   vendorStripeOnboarded: boolean;
   /** An operator is holding this vendor's automatic payouts (VEN-404). */
   vendorPayoutHold: boolean;
+  /** Whether the vendor has accepted any version of the vendor agreement (VEN-509). */
+  vendorHasAcceptedAgreement: boolean;
 }
 
 /**
@@ -247,6 +252,11 @@ export async function claimReleasableBooking(
       vendorStripeAccountId: vendorProfiles.stripeAccountId,
       vendorStripeOnboarded: vendorProfiles.stripeOnboarded,
       vendorPayoutHold: vendorProfiles.payoutHold,
+      vendorHasAcceptedAgreement: sql<boolean>`EXISTS (
+        SELECT 1 FROM ${legalAcceptances}
+        WHERE ${legalAcceptances.acceptedByUserId} = ${vendorProfiles.userId}
+          AND ${legalAcceptances.document} = ${VENDOR_AGREEMENT}
+      )`,
     })
     .from(bookings)
     .innerJoin(vendorProfiles, eq(bookings.vendorId, vendorProfiles.id))

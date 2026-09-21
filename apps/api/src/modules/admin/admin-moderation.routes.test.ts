@@ -17,6 +17,7 @@ import {
   createTestHarness,
   signInAs,
   type TestHarness,
+  acceptVendorAgreementAs,
 } from '../../testing/test-server.js';
 import {
   SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE,
@@ -81,6 +82,7 @@ describe('admin graduated moderation', () => {
       packageIds.push(pkg.json().id as string);
     }
 
+    await acceptVendorAgreementAs(harness, VENDOR);
     const published = await harness.app.inject({
       method: 'PUT',
       url: '/vendor/profile',

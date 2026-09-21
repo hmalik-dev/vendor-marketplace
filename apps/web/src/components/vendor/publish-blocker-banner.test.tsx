@@ -72,6 +72,23 @@ describe('PublishBlockerBanner', () => {
     );
   });
 
+  it('sends a vendor whose only blocker is the agreement to accept it', () => {
+    render(<PublishBlockerBanner blockers={['agreement']} isPublished={false} />);
+
+    expect(screen.getByRole('link', { name: 'Accept agreement' }).getAttribute('href')).toBe(
+      '/vendor/agreement',
+    );
+    expect(screen.queryByRole('link', { name: 'Finish profile' })).toBeNull();
+  });
+
+  it('keeps the profile editor when the agreement is one of several blockers', () => {
+    render(<PublishBlockerBanner blockers={['bio', 'agreement']} isPublished={false} />);
+
+    expect(screen.getByRole('link', { name: 'Finish profile' }).getAttribute('href')).toBe(
+      '/vendor/profile/edit',
+    );
+  });
+
   /*
    * Payouts are not a publish blocker (#360, restated in D30), so the banner
    * cannot be asked to name them — there is no key for it to render.
@@ -79,7 +96,7 @@ describe('PublishBlockerBanner', () => {
   it('can only ever name a real gate key', () => {
     render(<PublishBlockerBanner blockers={PUBLISH_BLOCKER_KEYS} isPublished={false} />);
 
-    expect(screen.getByText(/6 things left/)).toBeTruthy();
+    expect(screen.getByText(/7 things left/)).toBeTruthy();
     expect(screen.queryByText(/payout/i)).toBeNull();
   });
 });

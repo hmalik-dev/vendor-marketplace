@@ -14,6 +14,7 @@ import {
   MIN_YEARS_IN_BUSINESS,
   milesToKm,
   PUBLISH_BLOCKERS,
+  VENDOR_AGREEMENT_PATH,
   RESPONSE_TIME_HOURS_OPTIONS,
   shortTimeAgo,
   updateVendorProfileSchema,
@@ -22,6 +23,7 @@ import {
   type VendorCard as VendorCardData,
   type PublishBlockerKey,
 } from '@vendor-marketplace/shared';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -1181,6 +1183,17 @@ export function VendorProfileForm({
                     {blockers.length} thing{blockers.length === 1 ? '' : 's'}
                   </strong>{' '}
                   left before you can publish — {describeBlockers(blockers)}
+                  {blockers.includes('agreement') ? (
+                    <>
+                      {' '}
+                      <Link
+                        href={VENDOR_AGREEMENT_PATH}
+                        className="font-semibold text-clay-500 hover:underline"
+                      >
+                        Accept the agreement
+                      </Link>
+                    </>
+                  ) : null}
                 </span>
               </p>
             ) : (

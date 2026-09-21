@@ -2,7 +2,12 @@ import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema
 import { addDays, toDateString } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterEach, afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  type TestHarness,
+  acceptVendorAgreementAs,
+} from '../../testing/test-server.js';
 import { updateVendorProfileById } from './vendors.dao.js';
 import { updateVendorProfile } from './vendors.service.js';
 
@@ -61,6 +66,7 @@ describe('a vendor whose owner is banned', () => {
     });
     expect(blocked.statusCode).toBe(200);
 
+    await acceptVendorAgreementAs(harness, VENDOR);
     const published = await harness.app.inject({
       method: 'PUT',
       url: '/vendor/profile',

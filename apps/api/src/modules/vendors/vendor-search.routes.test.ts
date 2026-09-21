@@ -9,7 +9,12 @@ import {
 import { addDays, ERROR_CODES, MAX_PAGE } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  type TestHarness,
+  acceptVendorAgreementAs,
+} from '../../testing/test-server.js';
 import { NEW_VENDOR_WINDOW_DAYS } from './vendor-recency.js';
 
 /**
@@ -102,6 +107,7 @@ describe('GET /vendors', () => {
     }
 
     if (spec.publish !== false) {
+      await acceptVendorAgreementAs(harness, spec.user);
       const published = await harness.app.inject({
         method: 'PUT',
         url: '/vendor/profile',

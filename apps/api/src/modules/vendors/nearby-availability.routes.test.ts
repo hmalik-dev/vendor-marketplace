@@ -1,6 +1,11 @@
 import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  type TestHarness,
+  acceptVendorAgreementAs,
+} from '../../testing/test-server.js';
 
 /**
  * The band that closes frame `18`: who is free **near** a date that came back
@@ -83,6 +88,7 @@ describe('GET /vendors/availability/nearby', () => {
       expect(blocked.statusCode).toBe(200);
     }
 
+    await acceptVendorAgreementAs(harness, spec.user);
     const published = await harness.app.inject({
       method: 'PUT',
       url: '/vendor/profile',

@@ -637,6 +637,21 @@ describe('the Payouts rail entry (#360)', () => {
     expect(screen.getByText(/before you can publish/i)).toBeTruthy();
   });
 
+  it('names the vendor agreement and links to it while it is unaccepted (VEN-509)', () => {
+    renderSaved({ isPublished: false, stripeOnboarded: true, publishBlockers: ['agreement'] });
+
+    expect(screen.getByText(/left before you can publish — the vendor agreement/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Accept the agreement' }).getAttribute('href')).toBe(
+      '/vendor/agreement',
+    );
+  });
+
+  it('offers no agreement link when the agreement is not what is left', () => {
+    renderSaved({ isPublished: false, stripeOnboarded: true, publishBlockers: ['packages'] });
+
+    expect(screen.queryByRole('link', { name: 'Accept the agreement' })).toBeNull();
+  });
+
   it('does not count payouts as a publish blocker', () => {
     renderSaved({ isPublished: false, stripeOnboarded: false, publishBlockers: [] });
 

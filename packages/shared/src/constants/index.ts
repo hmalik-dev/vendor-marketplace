@@ -136,6 +136,11 @@ export const PUBLISH_BLOCKERS = {
     short: 'a bookable package',
     message: 'Publish at least one service package',
   },
+  agreement: {
+    section: 'agreement',
+    short: 'the vendor agreement',
+    message: 'Accept the vendor agreement',
+  },
 } as const;
 
 export const PUBLISH_BLOCKER_KEYS = Object.keys(PUBLISH_BLOCKERS) as ReadonlyArray<
