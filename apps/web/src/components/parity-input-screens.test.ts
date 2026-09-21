@@ -40,6 +40,10 @@ describe('booking request (frame 04)', () => {
     expect(screen).not.toContain('max-w-[1360px]');
   });
 
+  it('sets the notes helper and counter at 11.5px', () => {
+    expect(screen).toContain('mt-1.25 flex justify-between text-helper text-stone-600');
+  });
+
   it('sets the subtitle at 14px', () => {
     expect(screen).toContain('mb-5 text-cta leading-prose text-stone-700');
   });

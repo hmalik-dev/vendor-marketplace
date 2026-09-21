@@ -755,7 +755,7 @@ export function BookingRequestScreen({
               issue={validation.issueFor(`${fieldId}-notes`)}
               className="sm:col-span-2"
               footer={
-                <div className="mt-1.25 flex justify-between text-xs text-stone-600">
+                <div className="mt-1.25 flex justify-between text-helper text-stone-600">
                   <span>Optional, but it speeds up the quote</span>
                   <span>
                     {form.notes.length} / {BOOKING_REQUEST_NOTES_MAX_LENGTH}
