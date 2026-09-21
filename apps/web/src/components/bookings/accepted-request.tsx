@@ -24,6 +24,22 @@ export interface AcceptedRequestProps {
   booking: WireBooking | null;
 }
 
+function pulledVendorMessage(request: WireBookingRequest): string | null {
+  const { availability, businessName } = request.vendor;
+
+  if (availability === 'closed') {
+    return `${businessName} is no longer taking bookings, so this can't be paid for.`;
+  }
+  if (availability !== 'paused') {
+    return null;
+  }
+
+  const deadline = expiryCountdown(request.expiresAt, new Date());
+  const deadlineSentence = deadline && deadline !== 'expired' ? ` Your booking ${deadline}.` : '';
+
+  return `${businessName} isn't taking bookings right now. This is temporary — check back a little later.${deadlineSentence}`;
+}
+
 /**
  * An accepted request, and the two things a customer does with one: pay for it,
  * or cancel it.
@@ -99,16 +115,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
    * left for the customer to learn by clicking through to a refusal. A pause
    * names the running deadline; a closure is permanent and says so.
    */
-  const availability = request.vendor.availability;
-  const deadline = expiryCountdown(request.expiresAt, new Date());
-  const pulled =
-    booking !== null
-      ? null
-      : availability === 'paused'
-        ? `${request.vendor.businessName} isn't taking bookings right now. This is temporary — check back a little later.${deadline && deadline !== 'expired' ? ` Your booking ${deadline}.` : ''}`
-        : availability === 'closed'
-          ? `${request.vendor.businessName} is no longer taking bookings, so this can't be paid for.`
-          : null;
+  const pulled = booking === null ? pulledVendorMessage(request) : null;
 
   return (
     <section

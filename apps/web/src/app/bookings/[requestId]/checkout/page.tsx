@@ -72,6 +72,12 @@ export default async function CheckoutPage({ params }: PageProps): Promise<React
   );
 }
 
+function paymentDeadlineWords(expiresAt: Date | null): string | null {
+  const words = expiryCountdown(expiresAt);
+
+  return words === 'expired' ? null : words;
+}
+
 /**
  * The screen for a checkout that would not open.
  *
@@ -85,12 +91,6 @@ export default async function CheckoutPage({ params }: PageProps): Promise<React
  * A request that cannot be read falls back to `closed`, which is the safer of
  * the two: it promises the customer nothing.
  */
-function paymentDeadlineWords(expiresAt: Date | null): string | null {
-  const words = expiryCountdown(expiresAt);
-
-  return words === 'expired' ? null : words;
-}
-
 async function unavailableScreen(
   state:
     | 'not-payable'
