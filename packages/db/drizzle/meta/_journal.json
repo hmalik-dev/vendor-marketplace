@@ -470,6 +470,13 @@
       "when": 1789979881857,
       "tag": "0066_omniscient_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1789982877182,
+      "tag": "0067_fat_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

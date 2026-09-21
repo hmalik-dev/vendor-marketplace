@@ -1161,6 +1161,22 @@ export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
 export const EXPIRY_SWEEP_INTERVAL_MS = 5 * 60_000;
 
 /**
+ * How many consecutive ticks the expiry of an accepted request is held while its
+ * payment intent is still processing or Stripe cannot return it (VEN-551). The
+ * tick after the last one expires the request and tells the operator, because a
+ * date held forever costs the vendor bookings; the intent is left as it is and
+ * never refunded automatically.
+ */
+export const EXPIRY_HOLD_MAX_ATTEMPTS = 5;
+
+/**
+ * The least time between two counted holds of one request. Under a tick, so
+ * every sweep counts, and far over a burst of reads: a customer refreshing their
+ * booking page must not spend the bound in seconds.
+ */
+export const EXPIRY_HOLD_SPACING_MS = 4 * 60_000;
+
+/**
  * How often each instance re-sends transactional email that failed to leave
  * (VEN-465). A Resend blip clears in minutes, so a short loop recovers it while
  * the message is still news; the attempt cap and the age window bound the cost.

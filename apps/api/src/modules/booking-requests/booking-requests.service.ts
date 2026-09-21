@@ -260,7 +260,7 @@ export type ExpirySettlement = 'release' | 'booked' | 'hold';
  * not import it. Absent for a caller that cannot reach Stripe.
  */
 export interface ExpiryPaymentGuard {
-  settleBeforeExpiry(row: BookingRequestRow): Promise<ExpirySettlement>;
+  settleBeforeExpiry(row: BookingRequestRow, now: Date): Promise<ExpirySettlement>;
 }
 
 /**
@@ -287,7 +287,7 @@ export async function ageIfExpired(
   const wasAccepted = row.status === 'accepted';
 
   if (wasAccepted && row.stripePaymentIntentId && guard) {
-    const settlement = await guard.settleBeforeExpiry(row);
+    const settlement = await guard.settleBeforeExpiry(row, now);
 
     if (settlement !== 'release') {
       return (await findRequestById(db, row.id)) ?? row;

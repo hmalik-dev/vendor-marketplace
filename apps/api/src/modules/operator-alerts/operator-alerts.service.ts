@@ -460,6 +460,31 @@ export function paymentRefusedAlert(input: {
   };
 }
 
+/**
+ * An accepted request lapsed while Stripe could not settle its payment intent
+ * (VEN-551): the hold reached its bound, so the request expired and the vendor's
+ * date was freed. The intent is untouched and **not refunded** — a person looks
+ * at it in Stripe and decides.
+ */
+export function expiryPaymentUnsettledAlert(input: {
+  requestId: string;
+  paymentIntentId: string;
+  attempts: number;
+}): OperatorAlert {
+  return {
+    kind: 'expiry_payment_unsettled',
+    subjectId: input.requestId,
+    summary: `Request ${input.requestId} expired with a payment intent Stripe would not settle`,
+    details: [
+      `The payment window closed and Stripe could not say whether the payment succeeded, or still reported it processing, for ${input.attempts} checks in a row. The request expired and the vendor's date is open again.`,
+      'The payment intent has not been cancelled or refunded. If it succeeds later it is refunded by the usual path; check it in Stripe.',
+      `Request: ${input.requestId}`,
+      `Payment intent: ${input.paymentIntentId}`,
+    ],
+    adminPath: '/admin/payments',
+  };
+}
+
 /** A signed-in account filed an in-product report. */
 export function reportFiledAlert(input: {
   caseId: string;
