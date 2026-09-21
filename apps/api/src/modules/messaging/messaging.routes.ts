@@ -13,7 +13,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { unauthorized } from '../../lib/errors.js';
+import { AppError, tooManyRequests, unauthorized } from '../../lib/errors.js';
 import {
   authenticated,
   requireAuth,
@@ -62,6 +62,8 @@ const NOTIFICATION_PAGE_SIZE = 20;
 const HEARTBEAT_MS = 30_000;
 
 export interface MessagingRoutesOptions {
+  /** How often an open stream is kept alive and its account re-read. Defaults to {@link HEARTBEAT_MS}. */
+  heartbeatMs?: number;
   /** Conversations one account may open per hour. */
   conversationRateLimitMax: number;
   /** Messages one account may send per minute. */
@@ -276,7 +278,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
    */
   app.get('/events/stream', async (request, reply) => {
     const ticket = readStreamTicket(request.url);
-    const userId = ticket ? app.streamTickets.consume(ticket) : null;
+    const userId = ticket ? await app.streamTickets.consume(ticket) : null;
 
     if (!userId) {
       throw unauthorized('This stream ticket is missing, spent, or expired');
@@ -304,26 +306,37 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
     const origin = request.headers.origin;
     const allowed = origin && options.allowedOrigins.includes(origin) ? origin : null;
 
-    reply.raw.writeHead(200, {
-      'content-type': 'text/event-stream',
-      'cache-control': 'no-store, no-transform',
-      connection: 'keep-alive',
-      // Nginx and friends buffer by default, which holds every frame back.
-      'x-accel-buffering': 'no',
-      ...(allowed
-        ? {
-            'access-control-allow-origin': allowed,
-            'access-control-allow-credentials': 'true',
-            vary: 'Origin',
-          }
-        : {}),
-    });
-
-    // An immediate comment flushes the headers, so the client's `onopen`
-    // fires now rather than whenever the first real event happens to arrive.
-    reply.raw.write(': connected\n\n');
-
+    // Before the headers, so the refusal is a plain 429 the client backs off from.
     const unsubscribe = app.events.subscribe(user.id, reply.raw);
+
+    if (!unsubscribe) {
+      throw tooManyRequests('Too many live streams are open for this account');
+    }
+
+    try {
+      reply.raw.writeHead(200, {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-store, no-transform',
+        connection: 'keep-alive',
+        // Nginx and friends buffer by default, which holds every frame back.
+        'x-accel-buffering': 'no',
+        ...(allowed
+          ? {
+              'access-control-allow-origin': allowed,
+              'access-control-allow-credentials': 'true',
+              vary: 'Origin',
+            }
+          : {}),
+      });
+
+      // An immediate comment flushes the headers, so the client's `onopen`
+      // fires now rather than whenever the first real event happens to arrive.
+      reply.raw.write(': connected\n\n');
+    } catch (error) {
+      // The close handler below is not attached yet: free the slot here.
+      unsubscribe();
+      throw error;
+    }
 
     const heartbeat = setInterval(() => {
       try {
@@ -331,8 +344,23 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
       } catch {
         clearInterval(heartbeat);
         unsubscribe();
+        return;
       }
-    }, HEARTBEAT_MS);
+
+      /*
+       * The account is re-read every beat, so a ban or deletion made through
+       * another API instance — which `closeFor` cannot reach — still ends this
+       * stream within one heartbeat. Only a refusal ends it: a database that
+       * blinks must not drop every open tab.
+       */
+      resolveStreamSubject(app.db, user.id).catch((error: unknown) => {
+        if (error instanceof AppError) {
+          clearInterval(heartbeat);
+          unsubscribe();
+          reply.raw.end();
+        }
+      });
+    }, options.heartbeatMs ?? HEARTBEAT_MS);
 
     request.raw.on('close', () => {
       clearInterval(heartbeat);

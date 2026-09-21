@@ -22,11 +22,13 @@ export const eventsPlugin = fp(
     app.decorate('events', hub);
 
     /*
-     * Beside the hub because it shares the hub's lifetime and its scope: a
-     * ticket is only ever spent on the instance that issued it, which is the
-     * same instance that holds the subscriber it names (#215).
+     * In Postgres, so a ticket issued by one instance is spent by any other —
+     * a rolling deploy runs two (VEN-462). The hub above stays process-local.
      */
-    app.decorate('streamTickets', new StreamTicketStore());
+    app.decorate(
+      'streamTickets',
+      new StreamTicketStore(app.db, { now: () => app.clock().getTime() }),
+    );
 
     /*
      * Streams are held open deliberately, so they have to be let go
@@ -39,5 +41,5 @@ export const eventsPlugin = fp(
      */
     app.addHook('preClose', async () => hub.closeAll());
   },
-  { name: 'events' },
+  { name: 'events', dependencies: ['database', 'clock'] },
 );
