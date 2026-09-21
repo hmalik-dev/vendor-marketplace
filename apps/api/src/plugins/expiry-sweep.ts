@@ -39,14 +39,14 @@ export const expirySweepPlugin = fp<ExpirySweepPluginOptions>(
       running = true;
 
       try {
-        await app.streamTickets.sweep();
-        await purgeThrottleHits(app.db, app.clock());
-      } catch (error) {
-        app.log.error({ err: error }, 'Stream ticket and throttle sweep failed');
-        options.reporter.capture(error);
-      }
+        try {
+          await app.streamTickets.sweep();
+          await purgeThrottleHits(app.db, app.clock());
+        } catch (error) {
+          app.log.error({ err: error }, 'Stream ticket and throttle sweep failed');
+          options.reporter.capture(error);
+        }
 
-      try {
         const context = {
           ...bookingContextFor(app, app.log, options.webOrigin),
           platformFeeRate: options.platformFeeRate,

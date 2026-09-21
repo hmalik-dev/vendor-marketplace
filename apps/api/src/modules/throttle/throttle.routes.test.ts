@@ -47,6 +47,35 @@ describe('POST /internal/throttle', () => {
     expect((await charge('x', 3, 'w'.repeat(40))).statusCode).toBe(401);
   });
 
+  it('reads the count without adding a hit when record is false', async () => {
+    const peek = () =>
+      harness.app.inject({
+        method: 'POST',
+        url: '/internal/throttle',
+        headers: { [WEB_TIER_KEY_HEADER]: KEY },
+        payload: { bucket: 'peek', windowMs: 60_000, limit: 1, record: false },
+      });
+
+    expect((await peek()).json()).toEqual({ throttled: false });
+    await charge('peek', 1);
+    // One hit spends a budget of one; a second peek must not have added any.
+    expect((await peek()).json()).toEqual({ throttled: true });
+    expect((await peek()).json()).toEqual({ throttled: true });
+    expect((await charge('peek', 2)).json()).toEqual({ throttled: false });
+  });
+
+  it('refuses a keyless caller before reading its body', async () => {
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/internal/throttle',
+      headers: { 'content-type': 'application/json' },
+      payload: 'x'.repeat(4_000),
+    });
+
+    // 401, not the 400 or 413 its body would earn: the key is checked first.
+    expect(response.statusCode).toBe(401);
+  });
+
   it('rejects a body outside the bounds', async () => {
     const response = await harness.app.inject({
       method: 'POST',

@@ -313,24 +313,30 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
       throw tooManyRequests('Too many live streams are open for this account');
     }
 
-    reply.raw.writeHead(200, {
-      'content-type': 'text/event-stream',
-      'cache-control': 'no-store, no-transform',
-      connection: 'keep-alive',
-      // Nginx and friends buffer by default, which holds every frame back.
-      'x-accel-buffering': 'no',
-      ...(allowed
-        ? {
-            'access-control-allow-origin': allowed,
-            'access-control-allow-credentials': 'true',
-            vary: 'Origin',
-          }
-        : {}),
-    });
+    try {
+      reply.raw.writeHead(200, {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-store, no-transform',
+        connection: 'keep-alive',
+        // Nginx and friends buffer by default, which holds every frame back.
+        'x-accel-buffering': 'no',
+        ...(allowed
+          ? {
+              'access-control-allow-origin': allowed,
+              'access-control-allow-credentials': 'true',
+              vary: 'Origin',
+            }
+          : {}),
+      });
 
-    // An immediate comment flushes the headers, so the client's `onopen`
-    // fires now rather than whenever the first real event happens to arrive.
-    reply.raw.write(': connected\n\n');
+      // An immediate comment flushes the headers, so the client's `onopen`
+      // fires now rather than whenever the first real event happens to arrive.
+      reply.raw.write(': connected\n\n');
+    } catch (error) {
+      // The close handler below is not attached yet: free the slot here.
+      unsubscribe();
+      throw error;
+    }
 
     const heartbeat = setInterval(() => {
       try {

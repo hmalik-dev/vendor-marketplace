@@ -14,6 +14,8 @@ const chargeSchema = z.object({
   bucket: z.string().min(1).max(300),
   windowMs: z.number().int().min(1_000).max(86_400_000),
   limit: z.number().int().min(1).max(1_000),
+  /** False reads the count without adding a hit: a check before the outcome is known. */
+  record: z.boolean().default(true),
 });
 
 function keyMatches(presented: unknown, secret: string): boolean {
@@ -45,20 +47,28 @@ export const throttleRoutes: FastifyPluginAsyncZod<ThrottleRoutesOptions> = asyn
     '/internal/throttle',
     {
       config: { rateLimit: false },
+      bodyLimit: 1_024,
+      /*
+       * Before the body is parsed: the route is exempt from the limiter, so the
+       * key must be checked ahead of any work an anonymous caller could cause.
+       */
+      onRequest: async (request) => {
+        if (options.webTierKey === undefined) {
+          throw notFound();
+        }
+
+        if (!keyMatches(request.headers[WEB_TIER_KEY_HEADER], options.webTierKey)) {
+          throw unauthorized();
+        }
+      },
       schema: { body: chargeSchema, response: { 200: z.object({ throttled: z.boolean() }) } },
     },
     async (request) => {
-      if (options.webTierKey === undefined) {
-        throw notFound();
-      }
+      const { bucket, windowMs, limit, record } = request.body;
 
-      if (!keyMatches(request.headers[WEB_TIER_KEY_HEADER], options.webTierKey)) {
-        throw unauthorized();
-      }
-
-      const { bucket, windowMs, limit } = request.body;
-
-      return { throttled: await chargeThrottle(app.db, bucket, windowMs, limit) };
+      return {
+        throttled: await chargeThrottle(app.db, bucket, windowMs, limit, app.clock(), record),
+      };
     },
   );
 };

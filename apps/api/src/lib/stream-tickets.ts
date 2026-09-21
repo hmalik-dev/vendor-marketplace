@@ -67,10 +67,6 @@ export class StreamTicketStore {
   async issue(userId: string): Promise<IssuedStreamTicket> {
     const now = new Date(this.#now());
 
-    // Every authenticated page load issues one and a ticket never spent has
-    // nothing else to remove it.
-    await this.sweep();
-
     const [held] = await this.#db
       .select({ n: count() })
       .from(streamTickets)
@@ -107,7 +103,11 @@ export class StreamTicketStore {
     return spent && spent.expiresAt.getTime() > this.#now() ? spent.userId : null;
   }
 
-  /** Drops what has expired. Also run by the expiry timer, for a quiet system. */
+  /**
+   * Drops what has expired. Run by the expiry timer rather than on every issue:
+   * an unindexed delete per page load would scan the table each time, and the
+   * cap below already ignores expired rows.
+   */
   async sweep(): Promise<void> {
     await this.#db.delete(streamTickets).where(lte(streamTickets.expiresAt, new Date(this.#now())));
   }

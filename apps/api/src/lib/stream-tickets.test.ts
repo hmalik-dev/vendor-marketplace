@@ -137,7 +137,7 @@ describe('StreamTicketStore', () => {
    * Every authenticated page load issues one, and an unconsumed ticket has no
    * other reason to be dropped — without the sweep the table is a slow leak.
    */
-  it('drops expired tickets rather than holding them forever', async () => {
+  it('drops expired tickets when swept, and does not count them against the cap', async () => {
     await database.db.delete(streamTickets);
     const { store, advance } = storeAt(0);
 
@@ -147,9 +147,9 @@ describe('StreamTicketStore', () => {
     expect(await heldRows()).toBe(5);
 
     advance(STREAM_TICKET_TTL_MS + 1);
-    await store.issue(OTHER);
+    await store.sweep();
 
-    expect(await heldRows()).toBe(1);
+    expect(await heldRows()).toBe(0);
   });
 
   /*

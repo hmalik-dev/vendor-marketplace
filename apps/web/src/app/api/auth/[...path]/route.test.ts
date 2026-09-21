@@ -222,13 +222,28 @@ describe('password reset through the auth proxy', () => {
 describe('sign-in through the auth proxy', () => {
   const SIGN_IN = 'sign-in/email';
 
+  // The in-process floor is what this suite drives; a stray key must not reach a real API.
   beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', '');
     resetThrottle();
     upstreamPost.mockReset();
   });
 
-  it('refuses the eleventh sign-in for one email from eleven different addresses', async () => {
-    upstreamPost.mockResolvedValue(Response.json({ token: 't' }));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('does not spend the budget on the provider being down', async () => {
+    upstreamPost.mockResolvedValue(Response.json({}, { status: 503 }));
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      statuses.push((await call(SIGN_IN, { email: 'down@example.com', password: 'p' })).status);
+    }
+
+    expect(statuses).toEqual(Array(12).fill(503));
+  });
+
+  it('refuses the eleventh attempt once ten wrong passwords for one email came from ten addresses', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID' }, { status: 401 }));
 
     const statuses: number[] = [];
     for (let i = 0; i < 11; i++) {
@@ -240,9 +255,23 @@ describe('sign-in through the auth proxy', () => {
       statuses.push(response.status);
     }
 
-    expect(statuses.slice(0, 10)).toEqual(Array(10).fill(200));
+    expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401));
     expect(statuses[10]).toBe(429);
     expect(upstreamPost).toHaveBeenCalledTimes(10);
+  });
+
+  it('never locks out successful sign-ins, so naming an address cannot deny its owner', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ token: 't' }));
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 15; i++) {
+      statuses.push(
+        (await call(SIGN_IN, { email: 'owner@example.com', password: 'right' }, `5.5.5.${i}`))
+          .status,
+      );
+    }
+
+    expect(statuses).toEqual(Array(15).fill(200));
   });
 
   it('hands the body on intact and returns the provider answer unchanged', async () => {

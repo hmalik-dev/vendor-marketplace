@@ -100,7 +100,14 @@ async function forwardBudgeted(
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
   }
 
-  if (await chargeAddress(email, path)) {
+  /*
+   * A password sign-in is charged for its failures only: the budget is shared
+   * and durable, so charging every attempt would let anyone lock an account out
+   * by naming its address. Codes and mail are charged as they are asked for.
+   */
+  const failuresOnly = path.join('/') === 'sign-in/email';
+
+  if (await chargeAddress(email, path, Date.now(), !failuresOnly)) {
     return NextResponse.json(
       { message: 'Too many attempts' },
       { status: 429, headers: { 'Retry-After': '600' } },
@@ -111,10 +118,16 @@ async function forwardBudgeted(
   headers.delete('content-length');
   headers.delete('content-encoding');
   const upstream = new Request(request.url, { method: 'POST', headers, body });
-
-  return neonAuth()
+  const response = await neonAuth()
     .handler()
     .POST(upstream as NextRequest, context);
+
+  // Only the provider's refusal of the credential counts; its outage must not spend anyone's budget.
+  if (failuresOnly && (response.status === 401 || response.status === 403)) {
+    await chargeAddress(email, path);
+  }
+
+  return response;
 }
 
 async function forwardReset(

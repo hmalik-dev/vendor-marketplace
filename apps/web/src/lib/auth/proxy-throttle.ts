@@ -14,6 +14,7 @@
  * keeps a per-instance limit rather than none, and never lets an outage of the
  * counter open the door. The provider's own limits sit behind both.
  */
+import { createHash } from 'node:crypto';
 import { WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
 import { apiOrigin } from '../../config/public-env';
 import { visitorAddress } from '../visitor-address';
@@ -112,12 +113,15 @@ export function isAddressThrottled(
   address: string,
   path: readonly string[],
   now: number = Date.now(),
+  record = true,
 ): boolean {
   const key = `${path.join('/')}|${address.trim().toLowerCase()}`;
   const recent = (addressHits.get(key) ?? []).filter((at) => now - at < ADDRESS_WINDOW_MS);
 
-  recent.push(now);
-  addressHits.set(key, recent);
+  if (record) {
+    recent.push(now);
+    addressHits.set(key, recent);
+  }
 
   if (addressHits.size > 5_000) {
     for (const [stale, times] of addressHits) {
@@ -127,7 +131,10 @@ export function isAddressThrottled(
     }
   }
 
-  return recent.length > (addressLimit(path) ?? ADDRESS_LIMIT);
+  // A read-only check refuses once the budget is spent; a charge, once it is exceeded.
+  const limit = addressLimit(path) ?? ADDRESS_LIMIT;
+
+  return record ? recent.length > limit : recent.length >= limit;
 }
 
 const SHARED_COUNTER_TIMEOUT_MS = 2_000;
@@ -141,6 +148,7 @@ async function chargeShared(
   bucket: string,
   windowMs: number,
   limit: number,
+  record: boolean,
 ): Promise<boolean | null> {
   const key = process.env.WEB_TIER_KEY;
 
@@ -152,7 +160,7 @@ async function chargeShared(
     const response = await fetch(`${apiOrigin(process.env.API_URL)}/internal/throttle`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', [WEB_TIER_KEY_HEADER]: key },
-      body: JSON.stringify({ bucket, windowMs, limit }),
+      body: JSON.stringify({ bucket, windowMs, limit, record }),
       signal: AbortSignal.timeout(SHARED_COUNTER_TIMEOUT_MS),
     });
     const body = (await response.json()) as { throttled?: unknown };
@@ -177,7 +185,7 @@ export async function chargeCaller(
 
   const { bucket, limit } = callerBudget(caller, path);
 
-  return (await chargeShared(bucket, WINDOW_MS, limit)) ?? isThrottled(caller, path, now);
+  return (await chargeShared(bucket, WINDOW_MS, limit, true)) ?? isThrottled(caller, path, now);
 }
 
 /** True when this call is over the account-address budget, counted across instances. Records the call. */
@@ -185,11 +193,19 @@ export async function chargeAddress(
   address: string,
   path: readonly string[],
   now: number = Date.now(),
+  record = true,
 ): Promise<boolean> {
-  const bucket = `addr|${path.join('/')}|${address.trim().toLowerCase()}`;
-  const shared = await chargeShared(bucket, ADDRESS_WINDOW_MS, addressLimit(path) ?? ADDRESS_LIMIT);
+  // Hashed: the API stores the bucket, and an address is personal data it has no use for.
+  const digest = createHash('sha256').update(address.trim().toLowerCase()).digest('hex');
+  const bucket = `addr|${path.join('/')}|${digest}`;
+  const shared = await chargeShared(
+    bucket,
+    ADDRESS_WINDOW_MS,
+    addressLimit(path) ?? ADDRESS_LIMIT,
+    record,
+  );
 
-  return shared ?? isAddressThrottled(address, path, now);
+  return shared ?? isAddressThrottled(address, path, now, record);
 }
 
 /** Test seam: forgets every recorded call. */

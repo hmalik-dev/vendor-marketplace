@@ -164,6 +164,15 @@ describe('the shared counter', () => {
     expect(await fresh.chargeAddress(' V@Example.com ', path)).toBe(true);
   });
 
+  it('stores an opaque bucket, never the address', async () => {
+    const seen = fakeSharedCounter();
+
+    await chargeAddress('Someone@Example.com', ['sign-in', 'email']);
+
+    expect(seen.calls[0]?.bucket).toMatch(/^addr\|sign-in\/email\|[0-9a-f]{64}$/);
+    expect(JSON.stringify(seen.calls)).not.toContain('example.com');
+  });
+
   it('names the web tier to the API and charges a per-caller tight call by path', async () => {
     const seen = fakeSharedCounter();
 
