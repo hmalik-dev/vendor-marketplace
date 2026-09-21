@@ -23,10 +23,12 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveBaseUrl } from './e2e-base-url.mjs';
 import { resolveRoles } from './e2e-roles.mjs';
+import { describeFailure } from './e2e-diagnostics.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = resolveBaseUrl();
 const AUTH_DIR = resolve(ROOT, '.auth');
+const DIAGNOSTICS_DIR = resolve(AUTH_DIR, 'diagnostics');
 
 function readEnvFile(name) {
   const path = resolve(ROOT, name);
@@ -51,6 +53,21 @@ async function signIn(browser, role, email, password) {
   try {
     await page.goto(`${BASE}/sign-in`, { waitUntil: 'domcontentloaded' });
 
+    /*
+     * `domcontentloaded` is the server-rendered shell. A value filled before
+     * React owns the field lands in the DOM but not in the form's state, so the
+     * submit stays `disabled` and the click times out (VEN-570: the first role
+     * on a cold `next start`). Wait for React's own stamp on the input.
+     */
+    await page.waitForFunction(
+      () => {
+        const input = document.querySelector('input[type="password"]');
+        return !!input && Object.keys(input).some((key) => key.startsWith('__react'));
+      },
+      undefined,
+      { timeout: 30000 },
+    );
+
     await page.getByLabel(/email/i).first().fill(email);
     await page
       .getByLabel(/password/i)
@@ -74,6 +91,14 @@ async function signIn(browser, role, email, password) {
     console.log(
       `  ${role}: saved -> .auth/${role}.json  (landed on ${new URL(page.url()).pathname})`,
     );
+  } catch (error) {
+    mkdirSync(DIAGNOSTICS_DIR, { recursive: true });
+    error.diagnosis = await describeFailure(page, {
+      role,
+      secrets: [email, password],
+      screenshotDir: DIAGNOSTICS_DIR,
+    });
+    throw error;
   } finally {
     await context.close();
   }
@@ -116,7 +141,8 @@ try {
       await signIn(browser, role, email, password);
     } catch (error) {
       // Never echo the credential, only the failure.
-      console.error(`  ${role}: FAILED — ${error.message}`);
+      console.error(`  ${role}: FAILED — ${error.message.split('\n')[0]}`);
+      for (const line of error.diagnosis ?? []) console.error(line);
       failed++;
     }
   }
