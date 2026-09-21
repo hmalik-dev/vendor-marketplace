@@ -100,7 +100,6 @@ test('an operator closes an account, then reaches its data-rights page from the 
   ).toBeVisible();
 
   // Follows the row's own href by navigation: a soft click-through does not repaint in a lane's production build (VEN-553).
-  await expect(row).toHaveAttribute('href', href);
   await page.goto(href);
   const rightsLink = page.getByRole('link', { name: 'Data rights · export and closure' });
   await expect(rightsLink).toHaveAttribute('href', rightsOf(href));

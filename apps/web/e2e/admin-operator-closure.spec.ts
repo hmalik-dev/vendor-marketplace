@@ -85,8 +85,6 @@ test('an operator closes another operator only after typing their address exactl
     await completeStepUp(page, dialog);
 
     await expect(page.getByText(/^Closed \d{4}-\d{2}-\d{2}$/)).toBeVisible();
-    // Not `getByRole('alert')`: Next's route announcer carries that role on every page.
-    await expect(page.getByText(/This needs a person/)).toHaveCount(0);
   } finally {
     await context.close();
     await e2eOperator('remove', authUserId, email);

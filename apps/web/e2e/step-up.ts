@@ -1,7 +1,24 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
 import type { Locator, Page } from '@playwright/test';
 
 import { resolveE2EApiUrl } from './base-url';
-import { expect } from './fixtures';
+import { AUTH_DIR, expect } from './fixtures';
+
+/** The operator's address, from the environment or the gitignored `.env.e2e.local`. */
+function adminEmail(): string | undefined {
+  const fromEnv = process.env.E2E_ADMIN_EMAIL?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  const file = resolve(dirname(AUTH_DIR), '.env.e2e.local');
+  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  return text
+    .match(/^E2E_ADMIN_EMAIL=(.*)$/m)?.[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
+}
 
 /**
  * Drives the step-up code step of an irreversible console action (VEN-500) in a
@@ -14,7 +31,7 @@ import { expect } from './fixtures';
  * refused with `STEP_UP_REQUIRED`; it leaves the action retried.
  */
 export async function completeStepUp(page: Page, dialog: Locator): Promise<void> {
-  const to = process.env.E2E_ADMIN_EMAIL?.trim();
+  const to = adminEmail();
   const url = new URL('/__lane/mailbox/latest', `${resolveE2EApiUrl()}/`);
   if (to) {
     url.searchParams.set('to', to);
@@ -26,10 +43,15 @@ export async function completeStepUp(page: Page, dialog: Locator): Promise<void>
   // The grant lasts ten minutes, so an earlier closure by this operator can already
   // have let this one through: the dialog then closes and there is no code step.
   const send = dialog.getByRole('button', { name: 'Email me a code' });
-  const asked = await Promise.race([
-    send.waitFor({ state: 'visible' }).then(() => true),
-    dialog.waitFor({ state: 'hidden' }).then(() => false),
-  ]);
+  const asked = await expect
+    .poll(async () => {
+      if (await send.isVisible()) {
+        return 'asked';
+      }
+      return (await dialog.isVisible()) ? 'pending' : 'granted';
+    })
+    .not.toBe('pending')
+    .then(async () => send.isVisible());
   if (!asked) {
     await page.reload();
     return;
