@@ -17,7 +17,7 @@ import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import {
   countMessages,
   countNotifications,
-  countUnreadInConversation,
+  countEarlierUnreadInConversation,
   countUnreadPerConversation,
   findConversationById,
   findConversationsFor,
@@ -395,11 +395,11 @@ async function notifyRecipient(
   sent: MessageRow,
 ): Promise<void> {
   const recipientId = side === 'customer' ? row.vendorUserId : row.customerId;
-  const alreadyWaiting = await withRequestIdentity(db, identityOf(user), (tx) =>
-    countUnreadInConversation(tx, row.id, recipientId, sent.id),
+  const earlierWaiting = await withRequestIdentity(db, identityOf(user), (tx) =>
+    countEarlierUnreadInConversation(tx, row.id, recipientId, sent.id),
   );
 
-  if (alreadyWaiting > 0) {
+  if (earlierWaiting > 0) {
     return;
   }
 
