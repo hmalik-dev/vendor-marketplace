@@ -503,6 +503,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(expirySweepPlugin, {
     intervalMs: options.expirySweepIntervalMs ?? EXPIRY_SWEEP_INTERVAL_MS,
     webOrigin: canonicalWebOrigin(env),
+    platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
     reporter: errorReporter,
   });
 
@@ -529,6 +530,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(bookingRequestRoutes, {
     webOrigin: canonicalWebOrigin(env),
     rateLimitMax: env.BOOKING_REQUEST_RATE_LIMIT_MAX,
+    platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
   });
   await app.register(messagingRoutes, {
     allowedOrigins: allowedOrigins(env),

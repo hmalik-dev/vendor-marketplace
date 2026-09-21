@@ -26,6 +26,8 @@ import {
   TEST_ENV,
   type TestHarness,
 } from '../../testing/test-server.js';
+import { expireLapsedRequests } from '../booking-requests/booking-requests.service.js';
+import { bookingContextFor, expiryGuardFor } from './payments.service.js';
 
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
@@ -247,6 +249,7 @@ describe('payments', () => {
     harness.stripe.paymentIntents.clear();
     harness.stripe.intentsByKey.clear();
     harness.stripe.refunds.length = 0;
+    harness.stripe.cancelRequests.length = 0;
     harness.stripe.refundsToRefuse.clear();
     harness.email.sent.length = 0;
     await harness.database.db.delete(operatorAlerts);
@@ -266,6 +269,14 @@ describe('payments', () => {
   describe('opening checkout on a date that has passed (VEN-433)', () => {
     it('refuses with 409 and mints no PaymentIntent', async () => {
       const requestId = await acceptedRequest();
+      /*
+       * Payment deadline out of the way (VEN-528): this asserts the date guard on
+       * its own, and a week's window has always closed before a month-out event.
+       */
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: null })
+        .where(eq(bookingRequests.id, requestId));
       clockNow = addDays(START, 33);
 
       const response = await inject(
@@ -283,6 +294,14 @@ describe('payments', () => {
 
     it('still opens on the day of the event, which has not passed everywhere', async () => {
       const requestId = await acceptedRequest();
+      /*
+       * Payment deadline out of the way (VEN-528): this asserts the date guard on
+       * its own, and a week's window has always closed before a month-out event.
+       */
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: null })
+        .where(eq(bookingRequests.id, requestId));
       clockNow = new Date(`${EVENT_DATE}T12:00:00Z`);
 
       const response = await inject(
@@ -308,6 +327,127 @@ describe('payments', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json().status).toBe('succeeded');
+    });
+  });
+
+  describe('the payment deadline (VEN-528)', () => {
+    /** Past the seven-day payment window, well before the event. */
+    const LAPSED = addDays(START, 8);
+
+    const checkout = (requestId: string): ReturnType<typeof inject> =>
+      inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+
+    /** What the sweep runs, built the way the plugin builds it. */
+    const sweep = (): Promise<number> => {
+      const context = {
+        ...bookingContextFor(harness.app, harness.app.log, 'https://web.test'),
+        platformFeeRate: DEFAULT_PLATFORM_FEE_RATE,
+      };
+
+      return expireLapsedRequests(harness.app.db, LAPSED, context.mail, expiryGuardFor(context));
+    };
+
+    const statusOf = async (requestId: string): Promise<string | undefined> =>
+      (
+        await harness.database.db
+          .select({ status: bookingRequests.status })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId))
+      )[0]?.status;
+
+    it('refuses to open checkout on a lapsed request with 409 and mints no intent', async () => {
+      const requestId = await acceptedRequest();
+      clockNow = LAPSED;
+
+      const response = await checkout(requestId);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe(
+        'That request is no longer open, so there is nothing to pay for',
+      );
+      expect(harness.stripe.paymentIntents.size).toBe(0);
+      expect(await statusOf(requestId)).toBe('expired');
+    });
+
+    it('cancels the unpaid intent when its request expires', async () => {
+      const requestId = await acceptedRequest();
+      const opened = await checkout(requestId);
+      const intentId: string = opened.json().paymentIntentId;
+
+      expect(await sweep()).toBe(1);
+
+      expect(harness.stripe.cancelRequests).toEqual([intentId]);
+      expect(harness.stripe.paymentIntents.get(intentId)?.status).toBe('canceled');
+      expect(await statusOf(requestId)).toBe('expired');
+    });
+
+    it('books a payment made in time when the sweep reaches the request first', async () => {
+      const requestId = await acceptedRequest();
+      const opened = await checkout(requestId);
+      harness.stripe.succeed(opened.json().paymentIntentId);
+
+      expect(await sweep()).toBe(0);
+
+      const rows = await harness.database.db.select().from(bookings);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.totalAmountCents).toBe(PRICE_CENTS);
+      expect(rows[0]?.status).toBe('confirmed');
+      expect(harness.stripe.refunds).toEqual([]);
+      expect(harness.stripe.cancelRequests).toEqual([]);
+      expect(await statusOf(requestId)).toBe('accepted');
+    });
+
+    it('books a payment made in time when a read reaches the request first', async () => {
+      const requestId = await acceptedRequest();
+      const opened = await checkout(requestId);
+      harness.stripe.succeed(opened.json().paymentIntentId);
+      clockNow = LAPSED;
+
+      const response = await inject('GET', `/booking-requests/${requestId}`, CUSTOMER);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('accepted');
+      expect(await harness.database.db.select().from(bookings)).toHaveLength(1);
+      expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    it('answers a lapsed checkout for a paid request with the booking, not a refusal', async () => {
+      const requestId = await acceptedRequest();
+      const opened = await checkout(requestId);
+      harness.stripe.succeed(opened.json().paymentIntentId);
+      clockNow = LAPSED;
+
+      const response = await checkout(requestId);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('succeeded');
+      expect(await harness.database.db.select().from(bookings)).toHaveLength(1);
+      expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    it('holds the expiry while a payment is still processing', async () => {
+      const requestId = await acceptedRequest();
+      const opened = await checkout(requestId);
+      const intentId: string = opened.json().paymentIntentId;
+      const intent = harness.stripe.paymentIntents.get(intentId)!;
+      harness.stripe.paymentIntents.set(intentId, { ...intent, status: 'processing' });
+
+      expect(await sweep()).toBe(0);
+
+      expect(await statusOf(requestId)).toBe('accepted');
+      expect(harness.stripe.cancelRequests).toEqual([]);
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+    });
+
+    it('holds the expiry, and refunds nothing, when Stripe cannot be asked', async () => {
+      const requestId = await acceptedRequest();
+      await checkout(requestId);
+      harness.stripe.paymentIntents.clear();
+
+      expect(await sweep()).toBe(0);
+
+      expect(await statusOf(requestId)).toBe('accepted');
+      expect(harness.stripe.refunds).toEqual([]);
     });
   });
 
