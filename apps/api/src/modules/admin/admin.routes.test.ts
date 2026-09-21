@@ -793,6 +793,47 @@ describe('admin routes', () => {
     });
 
     /*
+     * VEN-479. The unwind's booking snapshot is taken before its loop, so a
+     * payment that confirms a booking while the loop is refunding the first one
+     * is a booking the snapshot never saw. The interleave is exact: the second
+     * booking commits inside the first booking's refund call.
+     */
+    it('refunds a booking confirmed between the unwind snapshot and its end', async () => {
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const snapshotted = await createFutureBooking(customerId, vendor.profileId);
+      let late = '';
+      harness.stripe.duringNextRefund = async () => {
+        late = await createFutureBooking(customerId, vendor.profileId, {
+          stripePaymentIntentId: 'pi_test_late',
+        });
+      };
+
+      const result = await unwindAccountBookings(
+        bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+        vendor.userId,
+        vendor.profileId,
+        new Date(),
+        SUSPENSION_UNWIND,
+      );
+
+      expect(result).toMatchObject({ bookingsCancelled: 2, refundsIssued: 2, refundsFailed: 0 });
+      expect(harness.stripe.refunds.map((refund) => refund.paymentIntentId).sort()).toEqual([
+        'pi_test_ban',
+        'pi_test_late',
+      ]);
+      const rows = await harness.database.db
+        .select({ id: bookings.id, status: bookings.status })
+        .from(bookings);
+      expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual(
+        [
+          { id: snapshotted, status: 'cancelled' },
+          { id: late, status: 'cancelled' },
+        ].sort((a, b) => a.id.localeCompare(b.id)),
+      );
+    });
+
+    /*
      * #415. The unwind records what Stripe *moved*, not what it asked for.
      *
      * The two agree on every first attempt and part company on the one that

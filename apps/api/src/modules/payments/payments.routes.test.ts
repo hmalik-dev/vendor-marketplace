@@ -122,6 +122,21 @@ describe('payments', () => {
   }
 
   /** A request the vendor has accepted — the only state checkout opens on. */
+  async function changeVendorUser(
+    requestId: string,
+    change:
+      | { isBanned: boolean }
+      | { deletedAt: Date | null }
+      | { isBanned: boolean; deletedAt: Date | null },
+  ): Promise<void> {
+    const [row] = await harness.database.db
+      .select({ userId: vendorProfiles.userId })
+      .from(bookingRequests)
+      .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookingRequests.vendorId))
+      .where(eq(bookingRequests.id, requestId));
+    await harness.database.db.update(users).set(change).where(eq(users.id, row!.userId));
+  }
+
   async function acceptedRequest(eventDate = EVENT_DATE, acceptsAgreement = true): Promise<string> {
     const { vendorId, packageId } = await createVendor(acceptsAgreement);
 
@@ -681,6 +696,26 @@ describe('payments', () => {
       expect(harness.stripe.paymentIntents.size).toBe(0);
     });
 
+    /* VEN-479: the unwind after a ban only refunds what it saw, so no charge may start. */
+    it.each([
+      ['banned', { isBanned: true }],
+      ['retired', { deletedAt: new Date('2026-09-20T00:00:00Z') }],
+    ] as const)('refuses to open checkout for a %s vendor with 409', async (_label, change) => {
+      const requestId = await acceptedRequest();
+      await changeVendorUser(requestId, change);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
+      expect(response.json().message).toBe('Sunlit Studio is no longer taking bookings');
+      expect(harness.stripe.paymentIntents.size).toBe(0);
+    });
+
     it('refuses a request nobody has accepted', async () => {
       const { vendorId, packageId } = await createVendor();
       const request = await inject('POST', '/booking-requests', CUSTOMER, {
@@ -940,6 +975,48 @@ describe('payments', () => {
       expect(again.json().outcome).toBe('refunded');
       expect(harness.stripe.refunds).toHaveLength(1);
       expect(await harness.database.db.select().from(bookings)).toEqual([]);
+    });
+
+    /* VEN-479: an intent created before the ban is refunded, never booked. */
+    it.each([
+      ['banned', { isBanned: true }],
+      ['retired', { deletedAt: new Date('2026-09-20T00:00:00Z') }],
+    ] as const)('refunds a payment on a request whose vendor was %s', async (_label, change) => {
+      const requestId = await acceptedRequest();
+      const checkout = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      const intentId: string = checkout.json().paymentIntentId;
+      await changeVendorUser(requestId, change);
+      harness.stripe.succeed(intentId);
+
+      const response = await redeliver(intentId);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().outcome).toBe('refunded');
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(harness.stripe.refunds[0]).toMatchObject({
+        paymentIntentId: intentId,
+        amountCents: PRICE_CENTS,
+      });
+      expect(harness.stripe.refunds[0]?.idempotencyKey).toMatch(
+        new RegExp(`^${intentId}_vendor_unavailable_\\d+$`),
+      );
+
+      /* Settled, not merely refunded: reinstating the vendor must not let a redelivery book returned money. */
+      const [request] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+      expect(request?.status).toBe('declined');
+      await changeVendorUser(requestId, { isBanned: false, deletedAt: null });
+      const again = await redeliver(intentId);
+      expect(again.json().outcome).toBe('refunded');
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+      expect(harness.stripe.refunds).toHaveLength(1);
     });
 
     /* VEN-477: a smaller refund made elsewhere is not the whole refund owed. */
