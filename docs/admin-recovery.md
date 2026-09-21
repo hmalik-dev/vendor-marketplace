@@ -21,7 +21,12 @@ To confirm: `POST /admin/step-up/challenge` emails a six-digit code to the
 address **on the operator's own account** (never one the request names), then
 `POST /admin/step-up/verify` with `{ "code": "123456" }`. The code lasts 10
 minutes and dies after five wrong tries. A stolen session token cannot mint it
-without the mailbox. The grant is held in memory, per instance: a restart or a
+without the mailbox. **The grant belongs to the operator, not to the session that
+earned it**: while it is live, a stolen token used at the same time also passes,
+which is why the ceiling exists and why a suspected theft is answered by signing
+the operator out, not by waiting for the grant to lapse. It is not bound to the
+session because the browser's token is refreshed every few minutes, and a
+token-bound grant would ask for a code each time. The grant is held in memory, per instance: a restart or a
 second replica costs the operator one re-prompt, never an open door.
 
 **Ceiling.** One operator can complete 10 bans and closures per rolling hour

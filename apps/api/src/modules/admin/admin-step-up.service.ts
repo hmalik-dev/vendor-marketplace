@@ -64,7 +64,7 @@ export async function startStepUp(
       idempotencyKey: randomUUID(),
     });
   } catch (error) {
-    deps.store.revoke(adminId);
+    deps.store.cancelChallenge(adminId);
     deps.log.error({ err: error, adminId }, 'The step-up code could not be emailed');
     throw new AppError(
       503,

@@ -92,9 +92,9 @@ export class StepUpStore {
     this.#challenges.delete(adminId);
   }
 
-  /** Live entries, for the suite that asserts nothing leaks. */
-  get size(): number {
-    return this.#challenges.size + this.#grants.size;
+  /** Voids a pending code — the send failed — and leaves any live grant alone. */
+  cancelChallenge(adminId: string): void {
+    this.#challenges.delete(adminId);
   }
 
   #sweep(nowMs: number): void {

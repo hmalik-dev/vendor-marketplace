@@ -2122,6 +2122,10 @@ Until now the question lived only in the VEN-377 console checklist.
 - **Step-up.** Ban, closure, dispute rulings and the two irreversible deletions
   ask for a code emailed to the operator's own address, valid 10 minutes, five
   tries. A stolen session token cannot mint it. It needs no provider capability.
+  The grant is the **operator's, not the session's**: a stolen token used while
+  the real operator's grant is live also passes (bounded by the ceiling for bans
+  and closures). Binding it to the bearer token was rejected because the browser
+  refreshes that token every few minutes, so every refresh would re-prompt.
 - **Ceiling.** One operator completes at most 10 bans and closures an hour; the
   next is refused before Stripe is asked for a refund, and the operator address
   is emailed.

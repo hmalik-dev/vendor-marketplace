@@ -249,6 +249,21 @@ describe('admin step-up and destructive ceiling', () => {
       expect(harness.email.sent).toHaveLength(1);
     });
 
+    it('keeps a live grant when a later code cannot be sent', async () => {
+      const adminId = await signIn(ADMIN, true);
+      await stepUp(ADMIN);
+      harness.email.failNext = true;
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/admin/step-up/challenge',
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(503);
+      expect(harness.app.stepUp.isFresh(adminId, now)).toBe(true);
+    });
+
     it('lets a ban through once the emailed code is entered, and stops after the grant lapses', async () => {
       await signIn(ADMIN, true);
       const target = await vendorWithBooking();
