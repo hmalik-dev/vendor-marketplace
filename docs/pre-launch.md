@@ -8,8 +8,7 @@ pnpm launch:check
 
 It reads the production values from `.env.production.local` (gitignored; real
 process environment variables win over it), asks each provider what is actually
-configured, and prints one line per item: `PASS`, `FAIL`, `SKIP` (the thing it
-checks has not landed yet) or `MANUAL` (no provider API can answer). It exits
+configured, and prints one line per item: `PASS`, `FAIL` or `MANUAL` (no provider API can answer). It exits
 non-zero while anything is `FAIL`. It is read-only — every provider call is a
 `GET`, the database session is `READ ONLY` — and it prints no secret beyond its
 prefix and last four characters. It needs production credentials, so it is run
@@ -42,7 +41,6 @@ on both today — correctly.
 | Database    | `database branch`                                        | `DATABASE_URL` is a Neon endpoint and `NEON_BRANCH` is `production`                                                                                                                                                                                                                                                                       |
 | Database    | `seeded rows`                                            | zero rows carry the marketing, demo or E2E seed markers — fabricated vendors and reviews on a public production site are misrepresentation                                                                                                                                                                                                |
 | Database    | `migrations`                                             | every migration in the repository journal is applied                                                                                                                                                                                                                                                                                      |
-| Database    | `row level security`                                     | `MANUAL` (VEN-504): no public base table has `relrowsecurity = false`; read it with the query in `docs/schema-review.md` after the deploy migrates                                                                                                                                                                                        |
 | Environment | `SENTRY_DSN`, `OPERATOR_ALERT_EMAIL`, `SUPPORT_EMAIL_TO` | set, not the registry placeholder, and matching the production shape                                                                                                                                                                                                                                                                      |
 | Environment | `RATE_LIMIT_MAX`                                         | between 30 and 1000 requests per minute per IP                                                                                                                                                                                                                                                                                            |
 | App         | `api /ready`                                             | `API_URL/ready` answers 200 (database and storage both up)                                                                                                                                                                                                                                                                                |
@@ -104,6 +102,7 @@ first. Both branches were empty of user rows and both held 0000–0009.
       and the landing-page category photography.
 - [ ] **A real end-to-end transaction** on live keys before opening to customers:
       book, pay, message, cancel with a refund, and see the payout arrive.
+- [ ] **Row level security** (VEN-504). `launch:check` does not read it: after the deploy migrates, confirm no public base table has `relrowsecurity = false`, with the query in `docs/schema-review.md`.
 - [ ] **Restore drill.** Backups are Neon-native only (VEN-408): the
       `production` branch needs its snapshot schedule on (paid plan, VEN-443; read
       it back), and the

@@ -70,7 +70,7 @@ export function renderLaunchReport(results: readonly LaunchResult[]): {
   const failures = results.filter((result) => result.status === 'FAIL').length;
   lines.push(
     failures === 0
-      ? `Ready: ${results.length} checks, none failing. Work through the MANUAL and SKIP lines by hand.`
+      ? `Ready: ${results.length} checks, none failing. Work through the MANUAL lines by hand.`
       : `Not ready: ${failures} of ${results.length} checks failing.`,
   );
 
