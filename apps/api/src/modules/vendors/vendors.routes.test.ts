@@ -487,6 +487,84 @@ describe('/vendor/profile', () => {
       expect(published.json().publishBlockers).toEqual([]);
     });
 
+    describe('editing a live storefront (VEN-557)', () => {
+      async function goLive(): Promise<void> {
+        await createProfile({ bio: 'Documentary wedding photography.', responseTimeHours: 24 });
+        await addPackage();
+        await acceptVendorAgreementAs(harness, VENDOR);
+        const live = await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR),
+          payload: { isPublished: true },
+        });
+        expect(live.json().isPublished).toBe(true);
+      }
+
+      async function put(payload: Record<string, unknown>) {
+        return harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR),
+          payload,
+        });
+      }
+
+      it('refuses to blank the bio and leaves the row unchanged', async () => {
+        await goLive();
+
+        const response = await put({ bio: '' });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().details.blockers).toEqual(['bio']);
+
+        const [row] = await harness.database.db.select().from(vendorProfiles);
+        expect(row?.bio).toBe('Documentary wedding photography.');
+        expect(row?.isPublished).toBe(true);
+      });
+
+      it('refuses to clear the reply window', async () => {
+        await goLive();
+
+        const response = await put({ responseTimeHours: null });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().details.blockers).toEqual(['responseTime']);
+
+        const [row] = await harness.database.db.select().from(vendorProfiles);
+        expect(row?.responseTimeHours).toBe(24);
+      });
+
+      it('saves a complete edit', async () => {
+        await goLive();
+
+        const response = await put({ bio: 'Film and photo.', responseTimeHours: 48 });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().bio).toBe('Film and photo.');
+        expect(response.json().isPublished).toBe(true);
+      });
+
+      it('lets a draft save those values', async () => {
+        await createProfile({ bio: 'Documentary wedding photography.', responseTimeHours: 24 });
+
+        const response = await put({ bio: '', responseTimeHours: null });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().bio).toBeNull();
+        expect(response.json().responseTimeHours).toBeNull();
+      });
+
+      it('lets a live vendor unpublish while blanking a field', async () => {
+        await goLive();
+
+        const response = await put({ bio: '', isPublished: false });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().isPublished).toBe(false);
+      });
+    });
+
     it('unpublishes without any prerequisite check', async () => {
       await createProfile({ bio: 'Documentary wedding photography.', responseTimeHours: 24 });
       await addPackage();

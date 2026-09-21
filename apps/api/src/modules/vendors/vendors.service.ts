@@ -526,36 +526,57 @@ export async function updateVendorProfile(
         ),
   ] as const);
 
-  if (input.isPublished !== undefined) {
-    if (input.isPublished) {
-      /*
-       * Checked before the blockers, because it is not one (#457). A blocker is
-       * a list of things the vendor can go and finish; this is a refusal they
-       * cannot clear at all, and reporting it as a fourth incomplete field
-       * would send them round the editor looking for it.
-       */
-      if (existing.moderationHold) {
-        throw forbidden(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
-      }
-      // The hold can still land between here and the write; see the transaction.
+  const publishing = input.isPublished === true;
 
-      const [effectiveCategories, activePackageCount, holdsAgreement] = await Promise.all([
-        categoryIds === undefined ? findVendorCategoryIds(db, existing.id) : categoryIds,
-        countActivePackages(db, existing.id),
-        holdsCurrentAgreement(db, existing.userId),
-      ]);
-      const blockers = publishBlockers(
-        { ...existing, ...patch } as VendorProfileRow,
-        effectiveCategories,
-        activePackageCount,
-        holdsAgreement,
+  if (publishing && existing.moderationHold) {
+    /*
+     * Checked before the blockers, because it is not one (#457). A blocker is
+     * a list of things the vendor can go and finish; this is a refusal they
+     * cannot clear at all, and reporting it as a fourth incomplete field
+     * would send them round the editor looking for it.
+     */
+    throw forbidden(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
+  }
+  // The hold can still land between here and the write; see the transaction.
+
+  /*
+   * A live storefront is held to the publish bar on every save (VEN-557), so a
+   * vendor cannot blank the bio or the reply window and stay public and
+   * searchable. An edit to a profile that stays live is refused only for a
+   * blocker the stored profile did not already carry: a lapsed agreement or a
+   * switched-off package is not this edit's doing and must not lock the vendor
+   * out of fixing the rest.
+   */
+  const editingLive = existing.isPublished && input.isPublished !== false;
+
+  if (publishing || editingLive) {
+    const [heldCategories, activePackageCount, holdsAgreement] = await Promise.all([
+      findVendorCategoryIds(db, existing.id),
+      countActivePackages(db, existing.id),
+      holdsCurrentAgreement(db, existing.userId),
+    ]);
+    const blockers = publishBlockers(
+      { ...existing, ...patch } as VendorProfileRow,
+      categoryIds ?? heldCategories,
+      activePackageCount,
+      holdsAgreement,
+    );
+    const alreadyBlocked = publishing
+      ? []
+      : publishBlockers(existing, heldCategories, activePackageCount, holdsAgreement);
+    const introduced = blockers.filter((key) => !alreadyBlocked.includes(key));
+
+    if (introduced.length > 0) {
+      throw validationFailed(
+        publishing
+          ? 'Complete your profile before publishing it.'
+          : 'Your storefront is live, so these fields cannot be left empty.',
+        { blockers: introduced },
       );
-
-      if (blockers.length > 0) {
-        throw validationFailed('Complete your profile before publishing it.', { blockers });
-      }
     }
+  }
 
+  if (input.isPublished !== undefined) {
     patch.isPublished = input.isPublished;
   }
 
