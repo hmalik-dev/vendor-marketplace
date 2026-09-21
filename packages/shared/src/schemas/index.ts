@@ -3054,7 +3054,7 @@ export type AdminActionDetail = z.infer<typeof adminActionDetailSchema>;
 export const adminExportAuditSchema = z.object({
   export: z.enum(ADMIN_EXPORTS),
   /** The narrowed filters as a query string, e.g. `?status=live`. */
-  filters: z.string().max(500),
+  filters: freeText().max(500),
   rowCount: z.number().int().min(0).max(1_000_000),
 });
 export type AdminExportAudit = z.infer<typeof adminExportAuditSchema>;
