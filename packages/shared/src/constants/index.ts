@@ -1154,6 +1154,17 @@ export const PAYOUT_RELEASE_HOURS = 72;
 export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
 
 /**
+ * How often the API reconciles local accounts against Neon Auth (VEN-480).
+ *
+ * A day, because Neon Auth sends no delete event and a deleted identity only has
+ * to stop holding a live account within a bounded time, not at once. The pass
+ * reads every live identity, so a tighter loop would buy nothing the payout and
+ * expiry sweeps do not already cover. It is safe to run twice: a retirement is a
+ * conditional claim.
+ */
+export const AUTH_RECONCILE_INTERVAL_MS = 24 * 60 * 60_000;
+
+/**
  * How often each instance ages lapsed booking requests. Ageing is guarded on
  * the status it read, so instances overlapping is safe; the interval only
  * bounds how long a customer waits to hear that their request lapsed.
