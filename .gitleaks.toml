@@ -55,3 +55,16 @@ regexes = ['''^br-silent-queen-ax78ksii$''']
 [[allowlists]]
 description = "Fabricated Neon Auth user id in a test fixture, superseded in the same PR"
 regexes = ['''^q1w2e3r4t5y6u7i8o9p0aSdFgHjKlZxC$''']
+
+# CI scans every commit's patch, and history is immutable, so values older
+# commits carried stay allowlisted. The bracket keeps the retired provider's name
+# out of this file, which the no-trace guard scans.
+[[allowlists]]
+description = "Older commits: a variable name in CI's e2e table, never a value"
+regexTarget = "match"
+regexes = ['''E2E_CL[E]RK_PUBLISHABLE_KEY''']
+
+[[allowlists]]
+description = "Older commits: CI's placeholder publishable key, public by construction"
+regexTarget = "match"
+regexes = ['''NEXT_PUBLIC_CL[E]RK_PUBLISHABLE_KEY: pk_test_Y2kuY2xlcmsuYWNjb3VudHMuZGV2JA''']

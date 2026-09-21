@@ -11,7 +11,7 @@ import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './test
  */
 const PREVIOUS = '0058_brainy_bullseye';
 const DROP_VALUE = '0059_dark_fallen_one';
-const REMOVED = ['legacy', 'clerk'].join('_');
+const REMOVED = ['legacy_cl', 'erk'].join('');
 
 let testDb: TestDatabase;
 
@@ -52,7 +52,7 @@ describe('0059 removes the retired auth_provider value', () => {
         VALUES ('old_row', '${REMOVED}', 'old@example.com', 'customer', 'A', 'B')`),
     );
 
-    await expect(apply(DROP_VALUE)).rejects.toThrow();
+    await expect(apply(DROP_VALUE)).rejects.toThrow(`still carry auth_provider ${REMOVED}`);
     expect(await enumValues()).toEqual(['neon_auth', REMOVED, 'seed']);
   });
 

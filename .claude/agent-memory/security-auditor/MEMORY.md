@@ -15,6 +15,7 @@
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — traces carry session cookies, stripe-listen.log carries whsec; masking never reaches artifacts
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — live session JWTs; `FORBIDDEN_PATHS` covers the path, no content rule will
 - [A storage branch per lane, CI run and PR](neon-storage-branch-per-runner.md) — `NEON_API_KEY` is production-capable; keep it step-scoped and away from `npm install`
+- [The no-trace guard fights the history scan](no-trace-guard-vs-history-scan.md) — `gitleaks git` reads every commit, so a scrubbed `.gitleaks.toml` entry reds CI for ever; fragment literals must actually split the needle
 - [Backup integrity is not authenticity](backup-integrity-is-not-authenticity.md) — a bucket-token holder forges a dump the drill pg_restores as superuser
 
 ## Auth, identity and tenancy
