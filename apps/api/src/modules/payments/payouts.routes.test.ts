@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   adminActions,
   availability,
@@ -290,10 +291,7 @@ describe('payouts', () => {
   /** Returns the operator's own id, which #434's action rows are keyed by. */
   async function signInAsAdmin(): Promise<string> {
     expect((await inject('GET', '/users/me', ADMIN)).statusCode).toBe(200);
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
 
     const rows = await harness.database.db
       .select({ id: users.id })

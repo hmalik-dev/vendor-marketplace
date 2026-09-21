@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import { users } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -259,10 +260,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
       url: '/events/stream-ticket',
       headers: bearer('user_admin_stream'),
     });
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, 'user_admin_stream'));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, 'user_admin_stream'));
     const ticket = await issueTicket();
 
     const [row] = await harness.database.db

@@ -1,3 +1,4 @@
+import { setUserRole } from './set-user-role.js';
 import { seedReferenceData } from '@vendor-marketplace/db';
 import {
   CURRENT_TERMS_VERSION,
@@ -1261,10 +1262,7 @@ export async function signInAs(
   }
 
   if (promoteToAdmin) {
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, authUserId));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, authUserId));
   }
 
   const rows = await harness.database.db

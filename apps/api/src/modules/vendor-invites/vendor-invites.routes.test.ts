@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import { eq, sql } from 'drizzle-orm';
 import {
   adminActions,
@@ -125,10 +126,7 @@ describe('the vendor gate', () => {
       avatarUrl: null,
     });
     expect((await accept(ADMIN)).statusCode).toBe(200);
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
   });
 
   afterEach(async () => {

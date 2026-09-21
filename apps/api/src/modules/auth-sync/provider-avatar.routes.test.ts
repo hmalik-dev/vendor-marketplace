@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import { eq } from 'drizzle-orm';
 import {
   bookingRequests,
@@ -45,7 +46,7 @@ describe('a stored provider avatar the write schema would refuse', () => {
     const vendorUserId = await signInAs(harness, 'avatar-vendor');
     const db = harness.database.db;
 
-    await db.update(users).set({ role: 'vendor' }).where(eq(users.id, vendorUserId));
+    await setUserRole(db, 'vendor', eq(users.id, vendorUserId));
     const [vendor] = await db
       .insert(vendorProfiles)
       .values({
