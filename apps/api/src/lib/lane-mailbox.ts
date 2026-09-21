@@ -33,7 +33,7 @@ export function withLaneMailbox(gateway: EmailGateway): {
       },
     },
     mailbox: {
-      latest: (to) => messages.findLast((message) => to === undefined || message.to === to),
+      latest: (to) => messages.filter((message) => to === undefined || message.to === to).at(-1),
     },
   };
 }

@@ -31,6 +31,7 @@ export async function completeStepUp(page: Page, dialog: Locator): Promise<void>
     dialog.waitFor({ state: 'hidden' }).then(() => false),
   ]);
   if (!asked) {
+    await page.reload();
     return;
   }
 
@@ -50,4 +51,13 @@ export async function completeStepUp(page: Page, dialog: Locator): Promise<void>
 
   await field.fill(code);
   await dialog.getByRole('button', { name: 'Confirm code' }).click();
+
+  /*
+   * The retried action has landed once the dialog closes, but the page behind it
+   * is still the stale render: the `router.refresh()` that follows a retried
+   * closure does not repaint it (observed on VEN-553; the record is closed, a
+   * reload shows it). Reloading keeps the specs on what the API committed.
+   */
+  await expect(dialog).toBeHidden();
+  await page.reload();
 }

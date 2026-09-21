@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { promisify } from 'node:util';
 
 import { AUTH_DIR, expect, expectSignedIn, storageStatePath, test } from './fixtures';
+import { waitForHydration } from './hydration';
 import { completeStepUp } from './step-up';
 
 /**
@@ -47,7 +48,8 @@ test('an operator closes another operator only after typing their address exactl
   }
 
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-  const email = `e2e-operator-${stamp}@example.com`;
+  // The `+auth_test` suffix is what `DISPOSABLE_OPERATOR_EMAIL` fences the helper to.
+  const email = `e2e-operator-${stamp}+auth_test@example.com`;
   const authUserId = `seed_e2e_operator_${stamp}`;
   const context = await browser.newContext({ storageState: ADMIN_STATE });
 
@@ -58,6 +60,7 @@ test('an operator closes another operator only after typing their address exactl
     await page.goto(`/admin/users/${userId}`);
     await expectSignedIn(page);
 
+    await waitForHydration(page, 'button');
     await page.getByRole('button', { name: 'Close account' }).click();
     const dialog = page.getByRole('alertdialog');
     const confirm = dialog.getByRole('button', { name: 'Close account' });

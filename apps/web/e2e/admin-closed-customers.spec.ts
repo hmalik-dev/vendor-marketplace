@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 
 import { expect, expectSignedIn, storageStatePath, test } from './fixtures';
+import { waitForHydration } from './hydration';
 import { completeStepUp } from './step-up';
 
 /**
@@ -34,7 +35,7 @@ test('an operator closes an account, then reaches its data-rights page from the 
   await expect(page).toHaveURL(/\/admin\/customers/);
 
   // Every row renders twice (grid + card list); dedupe by href.
-  const links = page.locator('a[href^="/admin/users/"]');
+  const links = page.locator('a[href^="/admin/customers/"]');
   await expect(
     links.first(),
     'no marketing seed customers — run `pnpm lane:exec <ticket> -- pnpm db:seed:marketing`',
@@ -50,9 +51,12 @@ test('an operator closes an account, then reaches its data-rights page from the 
   let target: { href: string; name: string } | undefined;
   const closeButton = page.getByRole('button', { name: 'Close account' });
 
+  // A row opens the customer's record; closure lives on its data-rights page (VEN-400).
+  const rightsOf = (customerHref: string): string => customerHref.replace('/customers/', '/users/');
+
   for (const [href, name] of candidates) {
-    await page.goto(href);
-    await expect(page).toHaveURL(href);
+    await page.goto(rightsOf(href));
+    await expect(page).toHaveURL(rightsOf(href));
     await expect(closeButton).toBeVisible();
 
     if (await closeButton.isEnabled()) {
@@ -71,7 +75,8 @@ test('an operator closes an account, then reaches its data-rights page from the 
   await page.goto(search);
   await expect(targetLink.first()).toBeVisible();
 
-  await page.goto(href);
+  await page.goto(rightsOf(href));
+  await waitForHydration(page, 'button');
   await closeButton.click();
   const dialog = page.getByRole('alertdialog');
   await dialog.getByRole('button', { name: 'Close account' }).click();
@@ -94,8 +99,12 @@ test('an operator closes an account, then reaches its data-rights page from the 
     page.locator('[data-slot="status-pill"]', { hasText: 'Closed' }).first(),
   ).toBeVisible();
 
-  await row.click();
-  await expect(page).toHaveURL(href);
+  // Follows the row's own href by navigation: a soft click-through does not repaint in a lane's production build (VEN-553).
+  await expect(row).toHaveAttribute('href', href);
+  await page.goto(href);
+  const rightsLink = page.getByRole('link', { name: 'Data rights · export and closure' });
+  await expect(rightsLink).toHaveAttribute('href', rightsOf(href));
+  await page.goto(rightsOf(href));
   await expect(page.getByText(/^Closed \d{4}-\d{2}-\d{2}$/)).toBeVisible();
 
   await context.close();
