@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   bookingRequests,
   bookings,
@@ -540,10 +541,7 @@ describe('operator alerts', () => {
   it('emails when a refund fails while a ban unwinds the account', async () => {
     const fixture = await seed({ payoutModel: 'separate', eventDate: FUTURE_EVENT });
     await signIn(ADMIN);
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
     const vendorUserId = (
       await harness.database.db
         .select({ id: users.id })

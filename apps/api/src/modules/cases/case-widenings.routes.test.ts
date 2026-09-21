@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import { eq } from 'drizzle-orm';
 import { supportCases, users } from '@vendor-marketplace/db/schema';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -46,10 +47,7 @@ describe('the counted filtered-empty routes on /admin/cases', () => {
     });
 
     await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(ADMIN) });
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
   });
 
   afterAll(async () => {

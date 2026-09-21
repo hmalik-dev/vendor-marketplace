@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   adminCaseBookingSchema,
   adminCaseDetailSchema,
@@ -91,10 +92,7 @@ describe('the operations case queue (#431)', () => {
     expect(response.statusCode).toBe(200);
 
     if (promoteToAdmin) {
-      await harness.database.db
-        .update(users)
-        .set({ role: 'admin' })
-        .where(eq(users.authUserId, authUserId));
+      await setUserRole(harness.database.db, 'admin', eq(users.authUserId, authUserId));
     }
 
     const rows = await harness.database.db
@@ -1185,10 +1183,7 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
 
   it('lifts the hold and records the failure on the case', async () => {
     await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(ADMIN) });
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
 
     await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
     const customers = await harness.database.db

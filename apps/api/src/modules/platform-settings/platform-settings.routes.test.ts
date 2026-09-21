@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   adminActions,
   availability,
@@ -71,11 +72,11 @@ describe('launch switches', () => {
 
   async function signInAsAdmin(): Promise<string> {
     expect((await inject('GET', '/users/me', ADMIN)).statusCode).toBe(200);
-    const [row] = await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN))
-      .returning({ id: users.id });
+    const [row] = await setUserRole(
+      harness.database.db,
+      'admin',
+      eq(users.authUserId, ADMIN),
+    ).returning({ id: users.id });
 
     return row!.id;
   }

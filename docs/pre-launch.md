@@ -96,6 +96,9 @@ first. Both branches were empty of user rows and both held 0000–0009.
       branch protection and a storage cap whose breach makes writes fail. After
       the upgrade: protect the `production` branch and widen its history
       retention.
+- [ ] **Production admin account** (VEN-502): sign up on production, then grant
+      the role with the transaction under _First operator grant_ below. A plain
+      `UPDATE users SET role` is refused by the database (VEN-533).
 - [ ] **Image licensing.** Confirm the licence of every shipped marketing image
       and the landing-page category photography.
 - [ ] **A real end-to-end transaction** on live keys before opening to customers:
@@ -109,6 +112,24 @@ first. Both branches were empty of user rows and both held 0000–0009.
       confirm you can promote the previous Vercel deployment and redeploy the API
       host's previous image before the first real release.
 - [ ] **Rotate every credential touched during setup**.
+
+### First operator grant
+
+Once, from a `psql` session on the owner URL (`DATABASE_URL_UNPOOLED`, read from
+your env, never pasted), after the account has signed up. Run exactly this, with
+the sign-up address:
+
+```sql
+BEGIN;
+SET LOCAL app.operator_role_grant = 'on';
+UPDATE users SET role = 'admin' WHERE email = '<the address you signed up with>' AND deleted_at IS NULL;
+COMMIT;
+```
+
+It must report `UPDATE 1`; roll back on anything else. The setting is
+transaction-local and reserved for this step and the in-app operator grant
+(VEN-506): nothing else sets it, and the fixture seeds never do. Once VEN-506
+lands, later operators are granted in the app, not here.
 
 ## Deploy constraints
 
