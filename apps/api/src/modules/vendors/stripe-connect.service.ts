@@ -6,7 +6,12 @@ import {
 import { z } from 'zod';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, notFound } from '../../lib/errors.js';
-import { isMissingPayoutsOnly, isOnboarded, type StripeConnectGateway } from '../../lib/stripe.js';
+import {
+  isMissingPayoutsOnly,
+  isOnboarded,
+  RecipientAccountRefusedError,
+  type StripeConnectGateway,
+} from '../../lib/stripe.js';
 import { notifyVendorUser, PAYOUT_NOTICES, type NotifyDeps } from '../notifications/notify-user.js';
 import { findUserById } from '../users/users.dao.js';
 import { holdsCurrentAgreement } from './legal-agreement.service.js';
@@ -14,6 +19,7 @@ import {
   claimStripeAccountId,
   findVendorProfileByStripeAccountId,
   findVendorProfileByUserId,
+  recordAccountRefusal,
   updateVendorStripeStatusIfUnchanged,
 } from './vendors.dao.js';
 
@@ -83,11 +89,37 @@ export async function startPayoutOnboarding(
       throw notFound('You have not created a vendor profile yet');
     }
 
-    const created = await deps.stripe.createRecipientAccount({
-      vendorId: vendor.id,
-      contactEmail: user.email,
-      displayName: vendor.businessName,
-    });
+    const attempts = vendor.stripeAccountAttempts;
+    let created: { accountId: string };
+
+    try {
+      /*
+       * Keyed on the vendor, so two presses inside one round trip get the same
+       * account back instead of one live and one orphan (VEN-526). The key is
+       * versioned by the refusals recorded so far, not fixed (D36): Stripe
+       * replays a *refused* result for 24 hours, and a fixed key would answer
+       * every retry with the first refusal.
+       */
+      created = await deps.stripe.createRecipientAccount({
+        vendorId: vendor.id,
+        contactEmail: user.email,
+        displayName: vendor.businessName,
+        idempotencyKey: `recipient-account:${vendor.id}:${attempts}`,
+      });
+    } catch (error) {
+      // Only a refusal Stripe answered moves the key; a dropped connection may
+      // have made the account, and a new key would make a second.
+      if (error instanceof RecipientAccountRefusedError) {
+        await recordAccountRefusal(deps.db, vendor.id, attempts).catch((recordError: unknown) =>
+          deps.log?.warn(
+            { err: recordError, vendorId: vendor.id },
+            'Could not record a refused account creation; the retry will reuse its key',
+          ),
+        );
+      }
+
+      throw error;
+    }
 
     /*
      * Persisted before the link is minted, and claimed conditionally. Two tabs

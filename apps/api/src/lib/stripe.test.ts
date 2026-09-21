@@ -8,6 +8,7 @@ import {
   isForeignEnvIntent,
   isMissingPayoutsOnly,
   isOnboarded,
+  isRefusedAccountCreation,
   paymentIntentParams,
   pickTransfer,
   readAccountStatusFrom,
@@ -22,6 +23,33 @@ import {
   transferParams,
   type StripeConnectGateway,
 } from './stripe.js';
+
+describe('isRefusedAccountCreation', () => {
+  it('counts a v1 invalid_request_error and a v2 invalid_fields body as refusals', () => {
+    const v1 = Stripe.errors.StripeError.generate({
+      type: 'invalid_request_error',
+      message: 'bad',
+    });
+    const v2 = Stripe.errors.generateV2Error({ code: 'invalid_fields', message: 'bad' });
+
+    expect(v1.rawType).toBe('invalid_request_error');
+    expect(v2.rawType).toBeUndefined();
+    expect(isRefusedAccountCreation(v1)).toBe(true);
+    expect(isRefusedAccountCreation(v2)).toBe(true);
+  });
+
+  it('does not count a concurrent-key conflict, a 5xx or a dropped connection', () => {
+    const conflict = Stripe.errors.StripeError.generate({
+      type: 'idempotency_error',
+      message: 'in flight',
+    });
+    const outage = Stripe.errors.StripeError.generate({ type: 'api_error', message: 'oops' });
+
+    expect(isRefusedAccountCreation(conflict)).toBe(false);
+    expect(isRefusedAccountCreation(outage)).toBe(false);
+    expect(isRefusedAccountCreation(new Error('socket hang up'))).toBe(false);
+  });
+});
 
 describe('paymentIntentParams', () => {
   const INPUT = {

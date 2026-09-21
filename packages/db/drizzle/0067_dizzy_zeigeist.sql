@@ -1,0 +1,1 @@
+ALTER TABLE "vendor_profiles" ADD COLUMN "stripe_account_attempts" integer DEFAULT 0 NOT NULL;
