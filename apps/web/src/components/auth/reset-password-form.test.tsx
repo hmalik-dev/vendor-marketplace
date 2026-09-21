@@ -77,6 +77,14 @@ describe('ResetPasswordForm', () => {
     await user.type(screen.getByLabelText('New password'), password);
   }
 
+  it('offers a way back to sign in before the reset is done', () => {
+    render(<ResetPasswordForm initialEmail="" />);
+
+    expect(screen.getByRole('link', { name: 'Back to sign in' }).getAttribute('href')).toBe(
+      '/sign-in',
+    );
+  });
+
   it('prefills the address from the request screen', () => {
     render(<ResetPasswordForm initialEmail="sam@example.com" />);
 

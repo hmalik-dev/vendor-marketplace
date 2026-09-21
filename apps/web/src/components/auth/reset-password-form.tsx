@@ -149,6 +149,12 @@ export function ResetPasswordForm({ initialEmail }: ResetPasswordFormProps): Rea
       >
         {AUTH_COPY.codeResend}
       </Button>
+
+      <p className="mt-5 text-center text-cta text-stone-700">
+        <Link href="/sign-in" className="font-semibold text-clay-500 hover:underline">
+          {AUTH_COPY.forgotBack}
+        </Link>
+      </p>
     </form>
   );
 }
