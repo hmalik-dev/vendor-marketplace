@@ -121,10 +121,11 @@ describe('reporting and message visibility (#436)', () => {
     });
     expect(created.statusCode).toBe(201);
 
+    /* A storefront is born unpublished; the subjects below are the public ones. */
     const profiles = await harness.database.db
-      .select({ id: vendorProfiles.id })
-      .from(vendorProfiles)
-      .limit(1);
+      .update(vendorProfiles)
+      .set({ isPublished: true })
+      .returning({ id: vendorProfiles.id });
     const vendorProfileId = profiles[0]!.id;
 
     const requestRows = await harness.database.db
@@ -359,6 +360,82 @@ describe('reporting and message visibility (#436)', () => {
 
     expect(response.statusCode).toBe(404);
     expect(await harness.database.db.select().from(supportCases)).toHaveLength(0);
+  });
+
+  /*
+   * VEN-531: a report may only name what the reporter could see. Each hidden
+   * subject answers the exact 404 a missing id does, so 200 versus 404 is no
+   * oracle for a draft vendor, a private note or an admin-hidden review.
+   */
+  describe('subjects the reporter could not see', () => {
+    async function expectRefusedLikeMissing(
+      subjectType: ReportSubject,
+      subjectId: string,
+    ): Promise<void> {
+      const missing = await report(CUSTOMER, subjectType, randomUUID());
+      const response = await report(CUSTOMER, subjectType, subjectId);
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual(missing.json());
+      expect(await harness.database.db.select().from(supportCases)).toHaveLength(0);
+      expect(harness.email.sent).toHaveLength(0);
+    }
+
+    it('refuses a review an admin has hidden', async () => {
+      const fixture = await seed();
+      await harness.database.db
+        .update(reviews)
+        .set({ isPublic: false })
+        .where(eq(reviews.id, fixture.reviewId));
+
+      await expectRefusedLikeMissing('review', fixture.reviewId);
+    });
+
+    it('refuses a private vendor-to-customer review', async () => {
+      const fixture = await seed();
+      await harness.database.db
+        .update(reviews)
+        .set({ type: 'vendor_to_customer', isPublic: false })
+        .where(eq(reviews.id, fixture.reviewId));
+
+      await expectRefusedLikeMissing('review', fixture.reviewId);
+    });
+
+    it('refuses a public-flagged vendor-to-customer review', async () => {
+      const fixture = await seed();
+      await harness.database.db
+        .update(reviews)
+        .set({ type: 'vendor_to_customer' })
+        .where(eq(reviews.id, fixture.reviewId));
+
+      await expectRefusedLikeMissing('review', fixture.reviewId);
+    });
+
+    for (const [label, change] of [
+      ['unpublished', { isPublished: false }],
+      ['deleted', { isDeleted: true }],
+    ] as const) {
+      it(`refuses the storefront, review and photo of an ${label} vendor`, async () => {
+        const fixture = await seed();
+        await harness.database.db.update(vendorProfiles).set(change);
+
+        await expectRefusedLikeMissing('vendor_profile', fixture.vendorProfileId);
+        await expectRefusedLikeMissing('review', fixture.reviewId);
+        await expectRefusedLikeMissing('portfolio_item', fixture.portfolioItemId);
+      });
+    }
+
+    it('refuses the storefront, review and photo of a banned vendor', async () => {
+      const fixture = await seed();
+      await harness.database.db
+        .update(users)
+        .set({ isBanned: true })
+        .where(eq(users.id, fixture.vendorUserId));
+
+      await expectRefusedLikeMissing('vendor_profile', fixture.vendorProfileId);
+      await expectRefusedLikeMissing('review', fixture.reviewId);
+      await expectRefusedLikeMissing('portfolio_item', fixture.portfolioItemId);
+    });
   });
 
   /*
