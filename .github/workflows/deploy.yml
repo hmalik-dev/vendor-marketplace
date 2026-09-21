@@ -4,7 +4,7 @@
 #   integration only); the branch names the environment and its GitHub
 #   environment, so each has its own secrets and variables
 #     → gate       the commit is still that branch's tip
-#     → preflight  nothing configured yet → skipped with a warning; partly configured → fails by name
+#     → preflight  an input not configured → fails by name, so a release never reads green having shipped nothing
 #     → migrate    DATABASE_URL_UNPOOLED only (NEON_BRANCH must name the
 #                  environment), then the idempotent reference seed
 #     → api        deploy the API image; the host's own branch auto-deploy is
@@ -27,10 +27,10 @@
 # There is deliberately no automatic rollback: a failed readiness poll stops the
 # release and says so, and deciding whether to revert or fix forward is a person's.
 #
-# The API host is decision D10, reopened when the Railway service was removed;
-# it is chosen by the repository variable API_HOST and implemented by one entry
-# in scripts/deploy.mjs. Until VEN-377 provisions the inputs below, preflight
-# skips every run with a warning; a partly configured deploy fails by name.
+# The API host is Railway (decision D10, confirmed); it is chosen by the
+# variable API_HOST and implemented by one entry in scripts/deploy.mjs. A run
+# exists only because someone pushed a release branch, so preflight fails by name
+# on any input not set on that GitHub environment rather than skipping.
 name: Deploy
 
 on:
@@ -88,7 +88,7 @@ jobs:
         run: node scripts/deploy.mjs gate
 
       # Handed whether each input is set, never its value.
-      - name: Skip until configured, refuse when partly configured
+      - name: Refuse to release unless every input is configured
         id: preflight
         if: steps.gate.outputs.deploy == 'true'
         env:
@@ -106,9 +106,6 @@ jobs:
           HAS_API_URL: ${{ vars.API_URL != '' }}
           HAS_WEB_URL: ${{ vars.WEB_URL != '' }}
           API_HOST: ${{ vars.API_HOST }}
-          # Set to `required` once VEN-377 has provisioned the inputs: an empty
-          # configuration then fails instead of skipping.
-          DEPLOY_GATE: ${{ vars.DEPLOY_GATE }}
         run: node scripts/deploy.mjs preflight
 
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4

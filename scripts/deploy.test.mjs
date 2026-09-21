@@ -4,9 +4,8 @@
  * `git`, `pnpm` and `npx` replaced by stubs that record what they were asked to
  * do. That is what "tested, not assumed" means here without a production
  * account: the order, the abort on a failed migration, the failed poll, the
- * skip while nothing is configured (and the failure once DEPLOY_GATE is set or
- * the configuration is partial), and no secret in any log. Runs under plain
- * `node` via `pnpm test:agents`.
+ * failure, by name, when nothing or only part of the configuration is set, and
+ * no secret in any log. Runs under plain `node` via `pnpm test:agents`.
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -138,20 +137,16 @@ function allPresent() {
   };
 }
 
-test('preflight: nothing configured skips with a warning and reports ready=false', async () => {
-  const { io, lines } = recordingIo();
-  const dir = mkdtempSync(path.join(tmpdir(), 'preflight-'));
-  const output = path.join(dir, 'out');
-  writeFileSync(output, '');
-  try {
-    await PHASES.preflight({ GITHUB_OUTPUT: output }, io);
-    assert.equal(readFileSync(output, 'utf8'), 'ready=false\n');
-  } finally {
-    rmSync(dir, { recursive: true });
-  }
-  assert.match(lines.join(''), /^::warning::Deploy skipped/);
+test('preflight: nothing configured fails naming every input, never skips', async () => {
+  const { io } = recordingIo();
+  const error = await PHASES.preflight({}, io).then(
+    () => null,
+    (caught) => caught,
+  );
+  assert.ok(error, 'preflight must reject');
+  assert.match(error.message, /not fully configured/);
   for (const { name, kind } of REQUIRED_INPUTS) {
-    assert.ok(lines.join('').includes(`${name} (${kind})`), name);
+    assert.ok(error.message.includes(`${name} (${kind})`), name);
   }
 });
 
@@ -159,13 +154,8 @@ test('preflight: partly configured fails naming what is missing and where it is 
   const { io } = recordingIo();
   await assert.rejects(
     PHASES.preflight({ ...allPresent(), HAS_SENTRY_AUTH_TOKEN: 'false' }, io),
-    /not fully configured.*missing: SENTRY_AUTH_TOKEN \(secret\).*VEN-377/,
+    /not fully configured.*missing: SENTRY_AUTH_TOKEN \(secret\).*docs\/environments\.md/,
   );
-});
-
-test('preflight: DEPLOY_GATE=required makes an empty configuration fail, not skip', async () => {
-  const { io } = recordingIo();
-  await assert.rejects(PHASES.preflight({ DEPLOY_GATE: 'required' }, io), /not fully configured/);
 });
 
 test('workflows: smoke is gated on its URL, ci and smoke read-only, every deploy action SHA-pinned', () => {
@@ -750,15 +740,17 @@ test('dry run: a readiness poll that fails fails the release', () => {
 });
 
 const GATE_STEP = "Gate on CI success and on still being the branch's tip";
-const PREFLIGHT_STEP = 'Skip until configured, refuse when partly configured';
+const PREFLIGHT_STEP = 'Refuse to release unless every input is configured';
 
-test('dry run: with nothing configured the run skips green before touching anything', () => {
-  const result = dryRun({ secrets: {}, vars: {} });
+test('dry run: a staging push with nothing configured fails red naming every input', () => {
+  const result = dryRun({ secrets: {}, vars: {}, branch: 'staging' });
 
-  assert.equal(result.failedAt, null);
-  assert.equal(result.ran.at(-1), PREFLIGHT_STEP);
+  assert.equal(result.failedAt, PREFLIGHT_STEP);
   assert.deepEqual(result.invocations, ['git ls-remote origin']);
-  assert.match(result.printed, /Deploy skipped/);
+  assert.match(result.printed, /not fully configured/);
+  for (const { name, kind } of REQUIRED_INPUTS) {
+    assert.ok(result.printed.includes(`${name} (${kind})`), name);
+  }
 });
 
 test('dry run: a partly configured deploy fails closed before touching anything', () => {
