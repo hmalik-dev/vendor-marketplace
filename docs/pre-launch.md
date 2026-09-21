@@ -71,7 +71,7 @@ first. Both branches were empty of user rows and both held 0000–0009.
   and a test replays 0015–0017 in one transaction. The failed run rolled back and
   left the branch at 10 rows.
 - After the run, `staging` has `users.auth_user_id` and `users_auth_user_id_key`
-  and no `clerk_user_id` or `users_clerk_user_id_key`; tables, columns,
+  and no pre-rename auth id column or its unique key; tables, columns,
   constraints, indexes, enums and triggers match a database built from the
   journal (27 tables, 273 columns, 249 constraints, 91 indexes, 179 enum labels,
   6 triggers).

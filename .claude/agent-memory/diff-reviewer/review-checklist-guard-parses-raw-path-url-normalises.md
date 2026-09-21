@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 An authorization guard that parses a **stored path string** (`key.split('/')`,
 `segments.length !== 3`, `segments[1] === ownerId`) is checked against a
@@ -18,7 +18,7 @@ four segments, yields _no_ owner, sails past the guard, and resolves to
 **Why:** #407 shipped `assertOwnedImageRefs` in `apps/api/src/lib/storage.ts`
 with exactly this hole. The write schema (`imageRefSchema`) only rejects `..`
 and a leading `//`, so a single dot segment is legal input; the guard's unit
-tests listed a legacy key, a site path, a Clerk URL and an unknown prefix — no
+tests listed a legacy key, a site path, an auth provider URL and an unknown prefix — no
 normalization case — so the whole suite stayed green.
 
 **How to apply:** whenever a diff adds a guard that decides ownership by

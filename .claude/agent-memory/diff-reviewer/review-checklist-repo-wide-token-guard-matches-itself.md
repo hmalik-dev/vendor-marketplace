@@ -5,16 +5,16 @@ metadata:
   type: feedback
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 A "this word may not come back" guard that scans every tracked file **includes
 its own source**. Its docstring names the word it forbids ("the identity
-provider (Clerk) was replaced…") and every allow-list entry whose _reason_
+provider (the auth provider) was replaced…") and every allow-list entry whose _reason_
 spells the word (`'sends the `svix-*` headers'`) is another self-match. Building
 the needles from fragments (`['cl','erk'].join('')`) protects the needle array
 and nothing else, and the file's comment will claim otherwise.
 
-**Why:** VEN-449 shipped `packages/shared/src/repo-guard.test.ts` with `(Clerk)`
+**Why:** VEN-449 shipped `packages/shared/src/repo-guard.test.ts` with `(the auth provider)`
 on line 8 and literal `svix` in ~14 allow-list reasons. The scan lowercases
 `path + text`, so two of its five cases were red — `finds nothing outside the
 allow-list` and `flags a forbidden token added under apps/`, because the real

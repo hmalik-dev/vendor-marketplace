@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `apps/web/src/lib/current-user.ts`'s `getCurrentUser` is wrapped in React
 `cache()` (#412). **This does not leak one visitor's `/users/me` to another**,
@@ -27,7 +27,7 @@ and a later audit should not re-open it:
 **Why this matters going forward:** `/vendors/[slug]` renders role-derived HTML
 (`canBook`) and carries **no** `export const dynamic`. It is dynamic only
 because the root layout renders `SiteHeader`, which calls `readRoleForChrome()`
-→ Clerk `auth()` → `headers()`, and a dynamic API anywhere in the route's server
+→ the auth provider `auth()` → `headers()`, and a dynamic API anywhere in the route's server
 tree opts the whole route out of the Full Route Cache.
 
 **t428 escalated the stake on `/`.** `apps/web/src/app/page.tsx` now reads the

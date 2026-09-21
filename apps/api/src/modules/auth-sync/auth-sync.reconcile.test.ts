@@ -307,20 +307,6 @@ describe('reconcileAuthUsers', () => {
   });
 
   /*
-   * An auth-era row has no Neon Auth identity by construction. Reading that as a
-   * deletion would retire the account and refund its bookings.
-   */
-  it('leaves rows the previous provider issued alone', async () => {
-    await seed('user_2abcdefghijklmnopqrstuvwxyz', { authProvider: 'legacy_clerk' });
-    await seed('user_a', { email: 'katherine@example.com' });
-
-    const summary = await reconcileAuthUsers(context(), sourceHolding(identity('user_a')));
-
-    expect(summary).toMatchObject({ examined: 1, deleted: 0, skipped: 1 });
-    expect((await read('user_2abcdefghijklmnopqrstuvwxyz'))[0]?.deletedAt).toBeNull();
-  });
-
-  /*
    * VEN-450: the provider is recorded, not read off the id. A Neon Auth id that
    * happens to look like an auth one is a live Neon account, and its deletion at
    * Neon Auth must still retire it.

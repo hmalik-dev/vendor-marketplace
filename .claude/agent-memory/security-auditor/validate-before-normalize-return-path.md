@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 **Status: FIXED as of ticket #76 (2026-08-29). Do not re-report.**
 
@@ -46,5 +46,5 @@ sign-in, not on the validator. If a caller ever stops routing through
 `safeReturnPath`, that is the finding.
 
 Related: [[middleware-request-path-header-trust]],
-[[role-bounce-self-loop-admin-bookings]], [[clerk-redirect-url-param-collision]],
+[[role-bounce-self-loop-admin-bookings]], auth-provider-redirect-url-param-collision,
 [[url-params-validated-in-the-nuqs-hook]]

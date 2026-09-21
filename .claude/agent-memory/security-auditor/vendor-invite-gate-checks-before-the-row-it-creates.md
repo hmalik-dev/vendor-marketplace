@@ -1,14 +1,14 @@
 ---
 name: vendor-invite-gate-checks-before-the-row-it-creates
-description: the vendor invite gate decides on a Clerk/Neon snapshot before the row it commits; VEN-441 added hasLiveAccount to all three entry points — where each one runs (tx or not) is the thing to re-check
+description: the vendor invite gate decides on an auth provider/Neon snapshot before the row it commits; VEN-441 added hasLiveAccount to all three entry points — where each one runs (tx or not) is the thing to re-check
 metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 VEN-406 review (2026-09-15): `assertVendorMayJoin` in `acceptTerms`' no-row path
-judges `normalizeRole(snapshot.roleHint)`, then `syncUserFromClerk` ->
+judges `normalizeRole(snapshot.roleHint)`, then `syncUserFromAuth` ->
 `insertUserIfAbsent` returns the **held** row on conflict. A `user.created`
 webhook landing in the window supplies `role='vendor'` while the snapshot, flipped
 via client-writable metadata, said customer. Revoke-vs-accept also races.

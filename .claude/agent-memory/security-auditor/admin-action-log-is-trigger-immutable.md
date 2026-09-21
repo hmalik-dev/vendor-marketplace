@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `admin_actions` (#434, `packages/db/drizzle/0030_faithful_tomorrow_man.sql`) is
 immutable by trigger, not by convention, and the shape was audited and cleared.
@@ -23,10 +23,10 @@ What is settled, so a later pass does not relitigate it:
   `TRUNCATE users CASCADE` is refused by that same statement trigger.
 - **The one permitted DELETE is the `actor_id` cascade**, allowed only while the
   actor's `users` row is already gone. It is unreachable from the product:
-  `user.deleted` and the Clerk reconcile pass both go through
-  `softDeleteUserByClerkId` (`deleted_at`), and the only hard `delete(users)`
+  `user.deleted` and the auth provider reconcile pass both go through
+  `softDeleteUserByAuthId` (`deleted_at`), and the only hard `delete(users)`
   calls are seed teardowns scoped to their own `DEMO_SEED_PREFIX` /
-  `seed_mkt_` clerk ids. If a hard delete of a real `users` row is ever
+  `seed_mkt_` auth ids. If a hard delete of a real `users` row is ever
   introduced, that becomes a log-laundering path — that is the thing to
   re-check, not the trigger.
 - **`SET search_path = pg_catalog, public` is on both functions and is

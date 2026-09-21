@@ -1131,28 +1131,28 @@ Below 1280px the marketing panel drops and the auth panel centres.
 **Sign Up Layout (auth panel):**
 - Centered card (`max-w-md`) — deliberately narrow: this is the one surface where a single focused column beats using the width, because the decision is one field at a time. Fill the space beside it at ≥1280px with the marketing panel described below rather than leaving empty gutters.
 - Logo at top center (Fraunces wordmark)
-- **Role selection first** (before Clerk form): Two large clickable cards side by side:
+- **Role selection first** (before the auth provider form): Two large clickable cards side by side:
   - "I'm planning an event" — icon (PartyPopper or Calendar), description, → sets `customer` role
   - "I'm an event vendor" — icon (Briefcase or Store), description, → sets `vendor` role
   - Selected card: `primary-50` bg, `primary-400` border (3px), scale(1.02)
   - Unselected: `stone-100` bg, `stone-200` border
 - Role cards sit **side by side** on one row at every width above 640px — they are a comparison, and stacking them turns a choice into a scroll
-- After role selection, show Clerk `<SignUp>` with the appearance below. The chosen role stays visible with a "Change" affordance, so the decision (irreversible per D4) is never made blind
+- After role selection, show the auth provider `<SignUp>` with the appearance below. The chosen role stays visible with a "Change" affordance, so the decision (irreversible per D4) is never made blind
 - Subtle decorative blob shape behind the card
 - The whole panel — role choice and form — must fit inside 836px without scrolling
 
 **Sign In Layout:**
 - Same centered card approach
-- Clerk `<SignIn>` component with custom appearance
+- the auth provider `<SignIn>` component with custom appearance
 - "Don't have an account? Sign up" link below
 
-**Clerk Appearance Customization:**
+**The auth provider Appearance Customization:**
 
-The app wraps `<ClerkProvider appearance={{ theme: shadcn }}>` (`@clerk/ui/themes`),
-so Clerk inherits the shadcn slots already bound to the VendorHub palette in
-`globals.css`. Do not hand-write brand hexes into a Clerk appearance object —
+The app wraps `<AuthProvider appearance={{ theme: shadcn }}>` (`@auth-sdk/ui/themes`),
+so the auth provider inherits the shadcn slots already bound to the VendorHub palette in
+`globals.css`. Do not hand-write brand hexes into an auth provider appearance object —
 that is a second source of truth that silently drifts. Override individual
-elements only where Clerk's defaults fight the design system:
+elements only where the auth provider's defaults fight the design system:
 
 ```ts
 appearance: {
@@ -1200,7 +1200,7 @@ Fixed 240px sidebar + a 12-column content grid:
 **Tabs**: Profile | Bookings | Reviews
 
 **Profile tab:**
-- **Profile header**: Avatar (80px circle, Clerk default or uploaded photo, click to change), name (Fraunces 600, text-2xl), "Member since [year]" (stone-500, text-sm), email-verified badge (primary-400 checkmark)
+- **Profile header**: Avatar (80px circle, the auth provider default or uploaded photo, click to change), name (Fraunces 600, text-2xl), "Member since [year]" (stone-500, text-sm), email-verified badge (primary-400 checkmark)
 - **Profile form** (below header, `--container-form`, two-column field grid per §5):
   - Bio (textarea, 300 char max, placeholder: "Tell vendors a bit about yourself")
   - City + State (one row) — placed directly under the bio, before preferences: where someone is planning shapes every vendor they see
@@ -1716,7 +1716,7 @@ helper, never inline arithmetic in a component:
 
 ### shadcn/ui Theming
 
-shadcn's semantic slots are bound to the VendorHub palette in `apps/web/src/app/globals.css`, so every shadcn component — and Clerk's shadcn theme — renders in brand without per-component overrides. `apps/web/src/app/theme-tokens.test.ts` guards that binding. The mapping (do not duplicate hexes here — bind to the token):
+shadcn's semantic slots are bound to the VendorHub palette in `apps/web/src/app/globals.css`, so every shadcn component — and the auth provider's shadcn theme — renders in brand without per-component overrides. `apps/web/src/app/theme-tokens.test.ts` guards that binding. The mapping (do not duplicate hexes here — bind to the token):
 
 ```css
 :root {

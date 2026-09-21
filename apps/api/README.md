@@ -36,5 +36,5 @@ client-visible message; anything else is logged and answered with an opaque
 
 `pnpm --filter @vendor-marketplace/api test` boots an in-process Postgres (PGlite),
 applies the real migrations, and drives the real Fastify instance. Only two
-network boundaries are faked: auth token verification and svix webhook
+network boundaries are faked: auth token verification and Resend webhook
 signature verification.

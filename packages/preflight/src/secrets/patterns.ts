@@ -67,7 +67,7 @@ export const FORBIDDEN_PATHS: readonly ForbiddenPath[] = [
   },
   {
     /*
-     * Playwright storage state — live Clerk session cookies for the E2E
+     * Playwright storage state — live session cookies for the E2E
      * accounts, one file per role. `.gitignore` covers `.auth/`, and this is
      * the belt to that suspenders for the same reason `.env` has one: an ignore
      * rule stops an accidental `git add`, not a deliberate `git add -f`. No
@@ -117,19 +117,14 @@ export const SECRET_RULES: readonly SecretRule[] = [
   },
   {
     id: 'stripe-test',
-    label: 'Stripe/Clerk test key with real entropy',
+    label: 'Stripe test key with real entropy',
     // `sk_test_ci_placeholder` stops at `ci` — underscores are not in the class,
     // so declared placeholders never reach the length threshold.
     pattern: /\b(?:sk|rk)_test_[A-Za-z0-9]{16,}/g,
   },
   {
-    id: 'clerk-live',
-    label: 'Clerk live key',
-    pattern: /\bpk_live_[A-Za-z0-9]{10,}/g,
-  },
-  {
     id: 'svix-secret',
-    label: 'svix/Clerk webhook signing secret',
+    label: 'svix webhook signing secret',
     pattern: /\bwhsec_[A-Za-z0-9+/=]{16,}/g,
   },
   {

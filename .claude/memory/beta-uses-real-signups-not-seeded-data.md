@@ -15,7 +15,7 @@ to exercise.
 
 **How to apply:** vendors join by admin invite or approved application, so an
 admin account is needed on the deployment. `docs/demo.md` was deleted as stale
-(Clerk-era, retired); derive required env from the registry, not from old docs. Clerk
+(pre-Neon, retired); derive required env from the registry, not from old docs. The auth provider
 was retired with VEN-447/448/449.
 
 Related: [[production-api-intentionally-down]], [[vendor-marketplace-neon-dev-branch]].
