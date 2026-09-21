@@ -1322,6 +1322,12 @@ export const termsAcceptanceStatusSchema = z.object({
   /** When they accepted `current`, or `null` while they have not. */
   acceptedAt: z.coerce.date().nullable(),
   /**
+   * True when this account accepted an earlier version and has not accepted
+   * `current`: the one case that shows an explicit tick. A first acceptance is
+   * made by continuing under a notice, together with the account (VEN-507).
+   */
+  explicitTickRequired: z.boolean(),
+  /**
    * The account behind this session, as the server holds it: the **stored** role
    * once a row exists, `null` before. The screen reads it to show the role
    * read-only and to report what a request actually produced (VEN-507).
@@ -1335,15 +1341,22 @@ export type TermsAcceptanceStatus = z.infer<typeof termsAcceptanceStatusSchema>;
 /**
  * What the interstitial sends.
  *
- * **`accepted` is the affirmative act, on the wire.** The box starts unticked
- * and the submit is disabled until it is ticked, but a disabled button is a
- * courtesy to the reader rather than a rule — so the value travels and the
- * service refuses anything but `true`. A record that says somebody accepted
- * because a request arrived is browsewrap wearing a checkbox.
+ * **A new version's `accepted` is the affirmative act, on the wire.** That box
+ * starts unticked and its submit is disabled until it is ticked, but a disabled
+ * button is a courtesy to the reader rather than a rule — so the value travels
+ * and the service refuses anything but `true` for an account that accepted an
+ * earlier version. A first acceptance sends none: it is made by continuing under
+ * the notice, and the row says so.
  */
 export const acceptTermsSchema = z.object({
   version: legalVersionSchema,
-  accepted: z.boolean(),
+  /**
+   * The tick. **Required as `true` for an account that accepted an earlier
+   * version** (the service refuses it otherwise); a first acceptance is made by
+   * continuing under the notice and sends none. An explicit `false` is always
+   * refused.
+   */
+  accepted: z.boolean().optional(),
   /**
    * The role the person confirmed on this screen. **Required when the request
    * creates the account** (the service answers 400 without it), ignored for an

@@ -73,11 +73,20 @@ async function termsStatusOf(db: AppDatabase, user: UserRow): Promise<TermsAccep
     'terms_of_service',
     CURRENT_TERMS_VERSION,
   );
+  /*
+   * An earlier version on file is what separates a re-acceptance (explicit
+   * tick) from a first one (a notice, made with the account). A retired row is
+   * never asked; the gate answers it 401 first.
+   */
+  const acceptedEarlier =
+    held === null &&
+    (await findAcceptancesByUser(db, user.id)).some((row) => row.document === 'terms_of_service');
 
   return {
     ...unacceptedTermsStatus(),
     accepted: held !== null,
     acceptedAt: held?.acceptedAt ?? null,
+    explicitTickRequired: acceptedEarlier,
     account: { exists: true, role: user.role },
   };
 }
@@ -89,19 +98,24 @@ function unacceptedTermsStatus(): TermsAcceptanceStatus {
     documentSha256: legalDocumentSha256('terms_of_service'),
     accepted: false,
     acceptedAt: null,
+    explicitTickRequired: false,
     account: { exists: false, role: null },
     suggestedRole: null,
   };
 }
 
 /** The row this module writes, assembled once for both of its callers. */
-function termsAcceptanceRow(user: UserRow, context: AcceptanceContext): NewAcceptance {
+function termsAcceptanceRow(
+  user: UserRow,
+  context: AcceptanceContext,
+  method: 'clickwrap_checkbox' | 'continue_notice',
+): NewAcceptance {
   return {
     vendorId: null,
     document: 'terms_of_service',
     version: CURRENT_TERMS_VERSION,
     documentSha256: legalDocumentSha256('terms_of_service'),
-    acceptanceMethod: 'clickwrap_checkbox',
+    acceptanceMethod: method,
     acceptedByUserId: user.id,
     /*
      * Copied and frozen, and taken from the account rather than the request: a
@@ -132,19 +146,21 @@ function termsAcceptanceRow(user: UserRow, context: AcceptanceContext): NewAccep
  * of a document the person never read, which is the one thing this record must
  * never contain.
  *
- * **`accepted` must be `true` on the wire.** The checkbox starts unticked and
- * the submit is disabled until it is ticked, but a disabled button is a
- * courtesy to the reader and not a rule: the rule is here, where a submission
- * that does not carry the affirmative act is refused and writes nothing.
+ * **A first acceptance is made by continuing, under a notice** (VEN-507): the
+ * screen names the Terms and the Privacy Policy beside the submit, and the row
+ * says so (`continue_notice`) — it never claims a box was ticked. **A new
+ * version is different**: an account that accepted an earlier one must send
+ * `accepted: true`, from a box the person ticked, or nothing is written. An
+ * explicit `false` is refused in both cases.
  */
 export async function acceptTerms(
   db: AppDatabase,
   authUserId: string,
   loadSnapshot: () => Promise<AuthUserSnapshot>,
-  input: { version: string; accepted: boolean; role?: SignUpRole | undefined },
+  input: { version: string; accepted?: boolean | undefined; role?: SignUpRole | undefined },
   context: AcceptanceContext,
 ): Promise<TermsAcceptanceStatus> {
-  if (!input.accepted) {
+  if (input.accepted === false) {
     throw validationFailed('Tick the box to accept the Terms of Service.');
   }
 
@@ -187,21 +203,32 @@ export async function acceptTerms(
     }
 
     /*
-     * The vendor gate (VEN-406) for a row the `user.created` webhook wrote: it
-     * is not an account until this acceptance, so it is held to the same rule
-     * as the path below. An account that has accepted *any* version already
-     * exists and is not re-gated by a new version of the Terms.
+     * A new version needs the tick. The status says whether this is one: an
+     * earlier acceptance is on file and the current one is not.
      */
-    const firstAcceptance = !(await findAcceptancesByUser(db, existing.id)).some(
-      (row) => row.document === 'terms_of_service',
-    );
+    if (status.explicitTickRequired && input.accepted !== true) {
+      throw validationFailed('Tick the box to accept the Terms of Service.');
+    }
 
+    /*
+     * The vendor gate (VEN-406) for a row that has no acceptance yet: it is not
+     * an account until this one, so it is held to the same rule as the path
+     * below. An account that has accepted *any* version already exists and is
+     * not re-gated by a new version of the Terms.
+     */
     await db.transaction(async (tx) => {
-      if (firstAcceptance) {
+      if (!status.explicitTickRequired) {
         await admitVendor(tx, existing.role, existing.email);
       }
 
-      await insertAcceptance(tx, termsAcceptanceRow(existing, context));
+      await insertAcceptance(
+        tx,
+        termsAcceptanceRow(
+          existing,
+          context,
+          status.explicitTickRequired ? 'clickwrap_checkbox' : 'continue_notice',
+        ),
+      );
     });
 
     return termsStatusOf(db, existing);
@@ -240,7 +267,7 @@ export async function acceptTerms(
      */
     await admitVendor(tx, row.role, row.email);
 
-    await insertAcceptance(tx, termsAcceptanceRow(row, context));
+    await insertAcceptance(tx, termsAcceptanceRow(row, context, 'continue_notice'));
 
     return row;
   });

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readSignUpRole } from '@/lib/auth/signup-role';
@@ -79,6 +79,22 @@ describe('SignUpForm', () => {
   });
 
   /* VEN-451: frame `12` draws the card description at 12px and the fields on stone-0. */
+  it('shows the notice with working links under the submit, and has no checkbox', () => {
+    render(<SignUpForm initialRole={null} />);
+
+    const notice = document.querySelector('[data-continue-notice]') as HTMLElement;
+    expect(notice.textContent).toBe('By continuing you agree to the Terms and Privacy Policy.');
+    expect(within(notice).getByRole('link', { name: 'Terms' }).getAttribute('href')).toBe('/terms');
+    expect(within(notice).getByRole('link', { name: 'Privacy Policy' }).getAttribute('href')).toBe(
+      '/privacy',
+    );
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: CREATE }).compareDocumentPosition(notice) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('draws the role descriptions at 12px and the fields on stone-0', () => {
     render(<SignUpForm initialRole={null} />);
 

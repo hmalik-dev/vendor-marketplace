@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AUTH_COPY } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { AuthScreen } from '@/components/auth/auth-screen';
+import { ContinueNotice } from '@/components/legal/continue-notice';
 import { VerifyEmailStep } from '@/components/auth/verify-email-step';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -260,6 +261,9 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
           >
             {AUTH_COPY.signUpSubmit}
           </Button>
+
+          {/* A notice only: nothing is recorded here. The acceptance is written on the confirm screen. */}
+          <ContinueNotice className="mt-3" />
 
           {/* The hint explains the disabled button, so it sits directly beneath it. */}
           {role === null ? (

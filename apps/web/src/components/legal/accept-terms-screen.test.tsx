@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   CURRENT_TERMS_VERSION,
@@ -33,10 +33,16 @@ function status(overrides: Partial<TermsAcceptanceStatus> = {}): TermsAcceptance
     documentSha256: legalDocumentSha256('terms_of_service'),
     accepted: false,
     acceptedAt: null,
+    explicitTickRequired: false,
     account: { exists: false, role: null },
     suggestedRole: null,
     ...overrides,
   };
+}
+
+/** An account that accepted an earlier version: the one screen with a tick. */
+function tickStatus(): TermsAcceptanceStatus {
+  return status({ explicitTickRequired: true, account: { exists: true, role: 'customer' } });
 }
 
 function box(): HTMLInputElement {
@@ -44,7 +50,9 @@ function box(): HTMLInputElement {
 }
 
 function submit(): HTMLButtonElement {
-  return screen.getByRole('button', { name: 'Accept and continue' }) as HTMLButtonElement;
+  return screen.getByRole('button', {
+    name: /^(Accept and continue|Continue)$/,
+  }) as HTMLButtonElement;
 }
 
 beforeEach(() => {
@@ -60,6 +68,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -79,14 +88,13 @@ function stored(role: 'customer' | 'vendor' | 'admin'): TermsAcceptanceStatus {
 }
 
 describe('the role confirmed on this screen (VEN-507)', () => {
-  it('preselects nothing without a hint and keeps the submit disabled after the tick', async () => {
+  it('preselects nothing without a hint and keeps the submit disabled', async () => {
     const user = userEvent.setup();
     render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
 
     expect(radio(CUSTOMER_RADIO).checked).toBe(false);
     expect(radio(VENDOR_RADIO).checked).toBe(false);
 
-    await user.click(box());
     expect(submit().disabled).toBe(true);
     await user.click(submit());
     expect(post).not.toHaveBeenCalled();
@@ -99,12 +107,9 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     const user = userEvent.setup();
     render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
 
-    await user.click(box());
-
     expect(radio(CUSTOMER_RADIO).checked).toBe(false);
     expect(radio(VENDOR_RADIO).checked).toBe(false);
     expect(submit().disabled).toBe(true);
-    vi.restoreAllMocks();
   });
 
   it('preselects a hint under a day old, and still needs the submit', async () => {
@@ -113,15 +118,12 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
 
     expect(radio(VENDOR_RADIO).checked).toBe(true);
-    expect(post).not.toHaveBeenCalled();
 
-    await user.click(box());
     await user.click(submit());
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     expect(bodyOfPost()).toEqual({
       version: CURRENT_TERMS_VERSION,
-      accepted: true,
       role: 'vendor',
     });
     expect(readSignUpRole()).toBeNull();
@@ -173,7 +175,6 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
     expect(radio(VENDOR_RADIO).checked).toBe(true);
 
-    await user.click(box());
     await user.click(submit());
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
@@ -186,7 +187,6 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     rememberSignUpRole('vendor');
     render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
 
-    await user.click(box());
     await user.click(submit());
     await waitFor(() => expect(screen.getByText(/Nothing has been recorded/)).toBeDefined());
 
@@ -208,11 +208,10 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
     expect(screen.getByTestId('stored-role').textContent).toContain('joining as a customer');
 
-    await user.click(box());
     await user.click(submit());
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
-    expect(bodyOfPost()).toEqual({ version: CURRENT_TERMS_VERSION, accepted: true });
+    expect(bodyOfPost()).toEqual({ version: CURRENT_TERMS_VERSION });
   });
 
   it('shows the stored role before continuing when another tab stored a different one', async () => {
@@ -227,7 +226,6 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
 
     await user.click(radio(VENDOR_RADIO));
-    await user.click(box());
     await user.click(submit());
 
     await waitFor(() => expect(screen.getByText('This account is a customer')).toBeDefined());
@@ -250,7 +248,6 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
 
     await user.click(radio(VENDOR_RADIO));
-    await user.click(box());
     await user.click(submit());
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/after-sign-in'));
@@ -264,7 +261,6 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     rememberSignUpRole('vendor');
     render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
 
-    await user.click(box());
     await user.click(submit());
 
     await waitFor(() =>
@@ -285,6 +281,37 @@ describe('the role confirmed on this screen (VEN-507)', () => {
       'customer',
     );
   });
+
+  it('has no checkbox and shows the notice with working Terms and Privacy links under the submit', () => {
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    const notice = document.querySelector('[data-continue-notice]') as HTMLElement;
+    expect(notice.textContent).toBe('By continuing you agree to the Terms and Privacy Policy.');
+    expect(within(notice).getByRole('link', { name: 'Terms' }).getAttribute('href')).toBe('/terms');
+    expect(within(notice).getByRole('link', { name: 'Privacy Policy' }).getAttribute('href')).toBe(
+      '/privacy',
+    );
+    /* Directly under the submit: the notice follows the button in document order. */
+    expect(
+      submit().compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('sends one request for a double-click on the submit', async () => {
+    const user = userEvent.setup();
+    let release: (value: TermsAcceptanceStatus) => void = () => undefined;
+    post.mockReset();
+    post.mockReturnValue(new Promise<TermsAcceptanceStatus>((resolve) => (release = resolve)));
+    rememberSignUpRole('customer');
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    await user.dblClick(submit());
+    release(status({ accepted: true, account: { exists: true, role: 'customer' } }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+    expect(post).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('the acceptance gate', () => {
@@ -295,7 +322,7 @@ describe('the acceptance gate', () => {
    * property, not a detail of the render.
    */
   it('starts with the box unticked and the submit disabled', () => {
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 
     expect(box().checked).toBe(false);
     expect(submit().disabled).toBe(true);
@@ -303,7 +330,7 @@ describe('the acceptance gate', () => {
 
   /** The document is named and linked beside the box, not merely alluded to. */
   it('names and links the document beside the box', () => {
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 
     const link = screen.getByRole('link', { name: 'Terms of Service' });
 
@@ -321,7 +348,7 @@ describe('the acceptance gate', () => {
    */
   it('expands the document in place without resetting the tick', async () => {
     const user = userEvent.setup();
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 
     await user.click(box());
     await user.click(screen.getByRole('button', { name: /Read all \d+ sections/ }));
@@ -332,9 +359,8 @@ describe('the acceptance gate', () => {
 
   it('sends the tick and the version, and forwards through /after-sign-in', async () => {
     const user = userEvent.setup();
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo="/bookings/abc" />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo="/bookings/abc" />);
 
-    await user.click(radio(CUSTOMER_RADIO));
     await user.click(box());
     await user.click(submit());
 
@@ -343,7 +369,7 @@ describe('the acceptance gate', () => {
     expect(post.mock.calls[0]?.[0]).toBe('/legal/terms/accept');
     expect(post.mock.calls[0]?.[1]).toMatchObject({
       method: 'POST',
-      body: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
+      body: { version: CURRENT_TERMS_VERSION, accepted: true },
     });
     /*
      * Back through `/after-sign-in` rather than straight to the destination:
@@ -360,7 +386,7 @@ describe('the acceptance gate', () => {
    */
   it('sends nothing while the box is unticked', async () => {
     const user = userEvent.setup();
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 
     await user.click(submit());
 
@@ -374,9 +400,8 @@ describe('the acceptance gate', () => {
     post.mockRejectedValue(new ApiClientError(409, 'CONFLICT', 'not current'));
 
     const user = userEvent.setup();
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 
-    await user.click(radio(CUSTOMER_RADIO));
     await user.click(box());
     await user.click(submit());
 
@@ -390,9 +415,8 @@ describe('the acceptance gate', () => {
   it('sends a suspended account to /suspended instead of offering a retry', async () => {
     const user = userEvent.setup();
     post.mockRejectedValue(new ApiClientError(403, 'FORBIDDEN', 'This account has been suspended'));
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 
-    await user.click(radio(CUSTOMER_RADIO));
     await user.click(box());
     await user.click(submit());
 
@@ -404,9 +428,8 @@ describe('the acceptance gate', () => {
   it('ends a session the API no longer honours and returns to sign-in', async () => {
     const user = userEvent.setup();
     post.mockRejectedValue(new ApiClientError(401, 'UNAUTHORIZED', 'Sign in again'));
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 
-    await user.click(radio(CUSTOMER_RADIO));
     await user.click(box());
     await user.click(submit());
 
@@ -418,9 +441,8 @@ describe('the acceptance gate', () => {
   it('still offers a retry for a server failure', async () => {
     const user = userEvent.setup();
     post.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 
-    await user.click(radio(CUSTOMER_RADIO));
     await user.click(box());
     await user.click(submit());
 
@@ -432,7 +454,7 @@ describe('the acceptance gate', () => {
 
   /** The card promises "you don't lose your place", so an in-text link must not navigate this tab. */
   it('opens the Privacy Policy link inside the Terms card in a new tab', () => {
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 
     const links = screen.getAllByRole('link', { name: 'Privacy Policy' });
 
@@ -442,5 +464,14 @@ describe('the acceptance gate', () => {
       expect(link.getAttribute('target')).toBe('_blank');
       expect(link.getAttribute('rel')).toBe('noopener noreferrer');
     }
+  });
+
+  it('shows no role choice and no notice on the new-version screen', () => {
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.queryByTestId('stored-role')).toBeNull();
+    expect(document.querySelector('[data-continue-notice]')).toBeNull();
+    expect(screen.getByRole('checkbox')).toBeDefined();
   });
 });
