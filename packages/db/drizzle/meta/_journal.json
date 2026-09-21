@@ -505,6 +505,13 @@
       "when": 1789992043539,
       "tag": "0071_boring_wind_dancer",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1789999032061,
+      "tag": "0072_wealthy_bushwacker",
+      "breakpoints": true
     }
   ]
 }

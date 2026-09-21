@@ -56,6 +56,8 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   support_case_resolved: 'Closed a case',
   payout_retried: 'Retried a payout',
   user_data_exported: 'Exported an account record',
+  admin_exported: 'Exported a CSV',
+  admin_data_read: 'Read customer data',
   user_closed: 'Closed an account',
   operator_account_closed: 'Closed an operator account',
   /*

@@ -1376,6 +1376,16 @@ export const ADMIN_ACTIONS = [
   'vendor_invited',
   'vendor_invite_revoked',
   'vendor_application_declined',
+  /*
+   * Bulk reads of customer data (VEN-475), logged although they change nothing:
+   * an operator account is one password, so "who pulled the file, and how big"
+   * has to be answerable. `admin_exported` is one CSV request (detail: the
+   * export, its filters and row count); `admin_data_read` is one look at a
+   * customer's record or the payments list, written at most once per operator
+   * per subject per hour so browsing does not flood the log.
+   */
+  'admin_exported',
+  'admin_data_read',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -1408,6 +1418,17 @@ export const ADMIN_ACTION_SUBJECTS = [
   'vendor_application',
 ] as const;
 export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
+
+/** The CSV exports the console offers (VEN-475); each one is audited. */
+export const ADMIN_EXPORTS = ['vendors', 'activity', 'cases'] as const;
+export type AdminExport = (typeof ADMIN_EXPORTS)[number];
+
+/** The reads that write an `admin_data_read` row, at most one per hour each. */
+export const ADMIN_READ_SURFACES = ['customer_detail', 'payments'] as const;
+export type AdminReadSurface = (typeof ADMIN_READ_SURFACES)[number];
+
+/** A repeat read inside this window writes no second row. */
+export const ADMIN_READ_AUDIT_WINDOW_MS = 60 * 60 * 1000;
 
 /**
  * The activity feed's date-range facet (VEN-388): how far back from the moment
