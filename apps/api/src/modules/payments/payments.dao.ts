@@ -1,10 +1,11 @@
-import { and, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lt, ne, notExists, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
   bookings,
   legalAcceptances,
   servicePackages,
+  users,
   vendorProfiles,
   type BookingRow,
   type NewBookingRow,
@@ -70,6 +71,11 @@ export interface PayableRequestRow {
    * multiply the request row by however many times they have accepted.
    */
   vendorHoldsCurrentAgreement: boolean;
+  /**
+   * The vendor's user is banned or retired (VEN-479). On the row for the same
+   * reason as the flags above: the refusal and the read must not disagree.
+   */
+  vendorUserUnavailable: boolean;
 }
 
 export async function findPayableRequest(
@@ -99,6 +105,7 @@ export async function findPayableRequest(
       vendorAvatarUrl: vendorProfiles.profileImageUrl,
       vendorStripeAccountId: vendorProfiles.stripeAccountId,
       vendorStripeOnboarded: vendorProfiles.stripeOnboarded,
+      vendorUserUnavailable: sql<boolean>`(${users.isBanned} OR ${users.deletedAt} IS NOT NULL)`,
       vendorHoldsCurrentAgreement: sql<boolean>`EXISTS (
         SELECT 1 FROM ${legalAcceptances}
         WHERE ${legalAcceptances.vendorId} = ${vendorProfiles.id}
@@ -108,11 +115,41 @@ export async function findPayableRequest(
     })
     .from(bookingRequests)
     .innerJoin(vendorProfiles, eq(bookingRequests.vendorId, vendorProfiles.id))
+    .innerJoin(users, eq(users.id, vendorProfiles.userId))
     .leftJoin(servicePackages, eq(bookingRequests.packageId, servicePackages.id))
     .where(eq(bookingRequests.id, requestId))
     .limit(1);
 
   return rows?.[0] ?? null;
+}
+
+/**
+ * Settles an accepted request whose charge was refunded because its vendor is
+ * banned or retired (VEN-479). Without it the request stays `accepted` beside a
+ * succeeded intent, and an unban (or an unwind that rolled its ban back) would
+ * let a later reconcile book money already returned. Never touches a request
+ * that has a booking behind it.
+ */
+export async function declineRefundedRequest(
+  db: AppDatabase,
+  requestId: string,
+  now: Date,
+): Promise<void> {
+  await db
+    .update(bookingRequests)
+    .set({ status: 'declined', updatedAt: now })
+    .where(
+      and(
+        eq(bookingRequests.id, requestId),
+        eq(bookingRequests.status, 'accepted'),
+        notExists(
+          db
+            .select({ present: sql`1` })
+            .from(bookings)
+            .where(eq(bookings.requestId, requestId)),
+        ),
+      ),
+    );
 }
 
 /** A booking with the occasion the confirmed screen renders beside the venue. */

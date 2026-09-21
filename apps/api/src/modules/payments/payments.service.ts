@@ -73,6 +73,7 @@ import {
   findBookingByRequest,
   findPayableRequest,
   recordPaymentIntent,
+  declineRefundedRequest,
   recordReplacementIntent,
   type PayableRequestRow,
 } from './payments.dao.js';
@@ -240,6 +241,19 @@ async function requirePayableByCustomer(
       402,
       ERROR_CODES.PAYMENT_REQUIRED,
       `${row.vendorBusinessName} cannot take payment yet`,
+    );
+  }
+
+  /*
+   * A banned or retired vendor cannot fulfil the booking, and the unwind that
+   * follows a ban only refunds what it saw (VEN-479). Refused here so no charge
+   * is taken at all; the message is the same whichever of the two it is.
+   */
+  if (row.vendorUserUnavailable) {
+    throw new AppError(
+      409,
+      ERROR_CODES.VENDOR_UNAVAILABLE,
+      `${row.vendorBusinessName} is no longer taking bookings`,
     );
   }
 
@@ -541,6 +555,14 @@ export async function recordSuccessfulPayment(
   }
 
   /*
+   * The intent was created while the vendor was in good standing; a ban or
+   * closure since then must not be confirmed into a booking (VEN-479).
+   */
+  if (row.vendorUserUnavailable) {
+    return refuseDeclinedPayment(context, intent, requestId, 'vendor_unavailable');
+  }
+
+  /*
    * The charge is authoritative for the amount, not the request row. A vendor
    * cannot edit a locked price, but reading the total off the money that
    * actually moved means the booking can never claim a figure the customer was
@@ -723,6 +745,7 @@ async function answerForHeldBooking(
 const REFUSED_PAYMENT_LOG: Record<RefusedPaymentCause, string> = {
   declined_request: 'Refunded a payment made on a request the platform had already declined',
   duplicate_intent: 'Refunded a second payment made on a request that was already booked',
+  vendor_unavailable: 'Refunded a payment made on a request whose vendor is banned or closed',
 };
 
 /**
@@ -777,6 +800,10 @@ async function refuseDeclinedPayment(
   } catch (error) {
     alert(false);
     throw error;
+  }
+
+  if (cause === 'vendor_unavailable') {
+    await declineRefundedRequest(context.db, requestId, new Date());
   }
 
   context.log.warn({ requestId, paymentIntentId: intent.id }, REFUSED_PAYMENT_LOG[cause]);

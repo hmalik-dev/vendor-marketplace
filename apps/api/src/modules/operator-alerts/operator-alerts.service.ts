@@ -393,7 +393,7 @@ export function externalRefundAlert(input: {
 }
 
 /** Why a succeeded charge was given back rather than booked. */
-export type RefusedPaymentCause = 'declined_request' | 'duplicate_intent';
+export type RefusedPaymentCause = 'declined_request' | 'duplicate_intent' | 'vendor_unavailable';
 
 /**
  * A refund Stripe later failed on a payment no booking owns — the refund of a
@@ -420,6 +420,27 @@ export function unmatchedRefundFailedAlert(input: {
   };
 }
 
+const REFUSED_PAYMENT_WORDING: Record<
+  RefusedPaymentCause,
+  { subject: string; detail: (price: string) => string }
+> = {
+  declined_request: {
+    subject: 'payment on a declined request',
+    detail: (price) =>
+      `A customer paid ${price} after the platform declined the request, so no booking was made.`,
+  },
+  duplicate_intent: {
+    subject: 'second payment on a booked request',
+    detail: (price) =>
+      `A customer paid ${price} a second time on a request that was already booked, so the extra charge was not kept.`,
+  },
+  vendor_unavailable: {
+    subject: "payment on a banned or closed vendor's request",
+    detail: (price) =>
+      `A customer paid ${price} on a request whose vendor was banned or closed, so no booking was made.`,
+  },
+};
+
 /**
  * A charge succeeded on a request the platform had already refused, so it was
  * not booked, or a second charge landed on a request already booked.
@@ -433,7 +454,7 @@ export function paymentRefusedAlert(input: {
   refunded: boolean;
   cause: RefusedPaymentCause;
 }): OperatorAlert {
-  const duplicate = input.cause === 'duplicate_intent';
+  const wording = REFUSED_PAYMENT_WORDING[input.cause];
 
   return {
     kind: 'payment_refused',
@@ -444,12 +465,10 @@ export function paymentRefusedAlert(input: {
      */
     subjectId: `${input.requestId}:${input.refunded ? 'refunded' : 'unrefunded'}`,
     summary: input.refunded
-      ? `Refunded ${duplicate ? 'a second payment on a booked' : 'a payment on a declined'} request ${input.requestId}`
-      : `A ${duplicate ? 'second payment on a booked' : 'payment on a declined'} request ${input.requestId} has not been refunded`,
+      ? `Refunded a ${wording.subject} ${input.requestId}`
+      : `A ${wording.subject} ${input.requestId} has not been refunded`,
     details: [
-      duplicate
-        ? `A customer paid ${formatPrice(input.amountCents)} a second time on a request that was already booked, so the extra charge was not kept.`
-        : `A customer paid ${formatPrice(input.amountCents)} after the platform declined the request, so no booking was made.`,
+      wording.detail(formatPrice(input.amountCents)),
       input.refunded
         ? 'The payment has been refunded in full.'
         : 'The payment has not been refunded: the refund failed and Stripe will redeliver the event.',

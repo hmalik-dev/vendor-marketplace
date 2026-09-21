@@ -197,7 +197,7 @@ export async function openCheckout(requestId: string): Promise<CheckoutOutcome> 
     if (error.statusCode === 404) {
       return { state: 'not-found' };
     }
-    if (error.statusCode === 402) {
+    if (error.statusCode === 402 || error.code === ERROR_CODES.VENDOR_UNAVAILABLE) {
       return { state: 'vendor-unavailable' };
     }
     if (error.statusCode === 409) {
