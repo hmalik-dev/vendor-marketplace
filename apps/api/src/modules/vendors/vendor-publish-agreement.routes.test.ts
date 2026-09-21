@@ -191,4 +191,49 @@ describe('publishing and the vendor agreement', () => {
     expect(response.json().details.blockers).toEqual(['agreement']);
     expect(await isPublished(vendorId)).toBe(false);
   });
+
+  /*
+   * VEN-557: a live storefront whose acceptance has since gone stale carries the
+   * `agreement` blocker through no edit of its own. Only a blocker an edit
+   * introduces refuses the save, or the vendor could not fix their bio.
+   */
+  describe('editing a live storefront whose agreement has lapsed', () => {
+    function edit(payload: Record<string, unknown>) {
+      return harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        payload,
+      });
+    }
+
+    async function goLive(): Promise<string> {
+      const vendorId = await completeProfile();
+      await acceptVendorAgreementAs(harness, VENDOR);
+      expect((await publish()).statusCode).toBe(200);
+      return vendorId;
+    }
+
+    it('still saves an edit that introduces nothing new', async () => {
+      await goLive();
+      vi.mocked(agreement.holdsCurrentAgreement).mockResolvedValueOnce(false);
+
+      const response = await edit({ bio: 'A newer bio.' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().bio).toBe('A newer bio.');
+      expect(response.json().isPublished).toBe(true);
+    });
+
+    it('refuses only the blocker the edit introduces, not the lapsed agreement', async () => {
+      const vendorId = await goLive();
+      vi.mocked(agreement.holdsCurrentAgreement).mockResolvedValueOnce(false);
+
+      const response = await edit({ bio: '' });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().details.blockers).toEqual(['bio']);
+      expect(await isPublished(vendorId)).toBe(true);
+    });
+  });
 });
