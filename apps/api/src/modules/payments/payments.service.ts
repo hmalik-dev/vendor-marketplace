@@ -15,7 +15,7 @@ import {
   type CheckoutIntent,
   type DisputeOutcome,
 } from '@vendor-marketplace/shared';
-import type { BookingRow } from '@vendor-marketplace/db/schema';
+import type { BookingRequestRow, BookingRow } from '@vendor-marketplace/db/schema';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
 import { toBookingView, toBookingWithContext } from '../../lib/booking-view.js';
@@ -27,6 +27,7 @@ import type { EventHub } from '../../lib/event-stream.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import {
   PAYMENT_INTENT_CANCELED,
+  PAYMENT_INTENT_PROCESSING,
   PAYMENT_INTENT_SUCCEEDED,
   RefundRefusedError,
   reversalAmountCents,
@@ -38,10 +39,16 @@ import {
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import { readRefundAttempts, recordRefundRefusal } from './refunds.dao.js';
 import {
+  findRequestById,
   findVendorByUserId,
   findVendorContact,
   findVendorUserId,
 } from '../booking-requests/booking-requests.dao.js';
+import {
+  ageIfExpired,
+  type ExpiryPaymentGuard,
+  type ExpirySettlement,
+} from '../booking-requests/booking-requests.service.js';
 import { findOpenChargebackCase } from '../cases/cases.dao.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import {
@@ -161,6 +168,7 @@ async function requirePayableByCustomer(
   context: PaymentContext,
   user: AuthenticatedUser,
   requestId: string,
+  now: Date,
 ): Promise<PayableRequestRow> {
   const row = await findPayableRequest(context.db, requestId);
 
@@ -174,9 +182,21 @@ async function requirePayableByCustomer(
     throw notFound('That request does not exist');
   }
 
-  if (row.status !== 'accepted') {
+  /*
+   * The payment deadline is enforced here, not left to the sweep (VEN-528): a
+   * request that has lapsed but not yet been aged still reads `accepted`, and
+   * would mint and confirm an intent after the vendor's date was due back. Aged
+   * first, so a payment already made is booked rather than refused and an
+   * unpaid intent is cancelled.
+   */
+  const stored = await findRequestById(context.db, requestId);
+  const status = stored
+    ? (await ageIfExpired(context.db, stored, now, context.mail, expiryGuardFor(context))).status
+    : row.status;
+
+  if (status !== 'accepted') {
     throw conflict(
-      row.status === 'cancelled' || row.status === 'declined' || row.status === 'expired'
+      status === 'cancelled' || status === 'declined' || status === 'expired'
         ? 'That request is no longer open, so there is nothing to pay for'
         : 'That request has not been accepted yet',
     );
@@ -235,7 +255,7 @@ export async function openCheckout(
   requestId: string,
   now: Date = new Date(),
 ): Promise<CheckoutIntent> {
-  const row = await requirePayableByCustomer(context, user, requestId);
+  const row = await requirePayableByCustomer(context, user, requestId, now);
   const amountCents = payableAmount(row);
 
   if (amountCents < MIN_BOOKING_AMOUNT_CENTS) {
@@ -527,6 +547,74 @@ export async function recordSuccessfulPayment(
   );
 
   return { outcome: 'booked', booking };
+}
+
+/**
+ * The payment half of expiring an accepted request (VEN-528).
+ *
+ * Runs before the request is expired, because afterwards a succeeded intent can
+ * only be refunded. A payment made before the deadline is honoured: the intent
+ * is booked through `recordSuccessfulPayment`, the same path the webhook takes.
+ * An unpaid one is cancelled so it cannot succeed after the date is released. If
+ * Stripe cannot say, or the payment is still processing, the request is held for
+ * the next read or tick — a delayed expiry costs a vendor an hour, a wrong one
+ * costs a customer their money and their date.
+ */
+export function expiryGuardFor(context: PaymentContext): ExpiryPaymentGuard {
+  return { settleBeforeExpiry: (row) => settleBeforeExpiry(context, row) };
+}
+
+async function settleBeforeExpiry(
+  context: PaymentContext,
+  row: BookingRequestRow,
+): Promise<ExpirySettlement> {
+  const intentId = row.stripePaymentIntentId;
+
+  if (!intentId) {
+    return 'release';
+  }
+
+  /** `null` when the intent is still payable and has to be cancelled. */
+  const settle = async (intent: PaymentIntentSnapshot): Promise<ExpirySettlement | null> => {
+    if (intent.status === PAYMENT_INTENT_SUCCEEDED) {
+      await recordSuccessfulPayment(context, intent);
+      return 'booked';
+    }
+
+    if (intent.status === PAYMENT_INTENT_PROCESSING) {
+      return 'hold';
+    }
+
+    return intent.status === PAYMENT_INTENT_CANCELED ? 'release' : null;
+  };
+
+  try {
+    const decided = await settle(await context.stripe.retrievePaymentIntent(intentId));
+
+    if (decided) {
+      return decided;
+    }
+
+    try {
+      await context.stripe.cancelPaymentIntent(intentId);
+      return 'release';
+    } catch (cancelError) {
+      /* Paid between the read and the cancel: Stripe refuses, and the intent now says why. */
+      const decidedAfter = await settle(await context.stripe.retrievePaymentIntent(intentId));
+
+      if (decidedAfter) {
+        return decidedAfter;
+      }
+
+      throw cancelError;
+    }
+  } catch (error) {
+    context.log.error(
+      { err: error, requestId: row.id, paymentIntentId: intentId },
+      'Could not settle a payment intent before expiring its request; the expiry is held',
+    );
+    return 'hold';
+  }
 }
 
 /**

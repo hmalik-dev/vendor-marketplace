@@ -18,7 +18,9 @@ import {
   listBookingRequests,
   listBookings,
   transitionRequest,
+  type ExpiryPaymentGuard,
 } from './booking-requests.service.js';
+import { bookingContextFor, expiryGuardFor } from '../payments/payments.service.js';
 
 const REQUESTS_PATH = '/booking-requests';
 
@@ -39,6 +41,8 @@ export interface BookingRequestRoutesOptions {
    * a URL from it for exactly this reason.
    */
   webOrigin: string;
+  /** `STRIPE_PLATFORM_FEE_RATE`: a read that expires a request books a payment made in time first. */
+  platformFeeRate: number;
 }
 
 export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOptions> = async (
@@ -51,6 +55,12 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
    * never `BRAND_DOMAIN`, which is the domain the product will live on rather
    * than the one this deployment answers on.
    */
+  const guardFor = (log: NotificationEmailDeps['log']): ExpiryPaymentGuard =>
+    expiryGuardFor({
+      ...bookingContextFor(app, log, options.webOrigin),
+      platformFeeRate: options.platformFeeRate,
+    });
+
   const mailFor = (log: NotificationEmailDeps['log']): NotificationEmailDeps => ({
     db: app.db,
     email: app.email,
@@ -118,6 +128,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
         request.query,
         app.clock(),
         mailFor(request.log),
+        guardFor(request.log),
       ),
   );
 
@@ -134,6 +145,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
         request.params.requestId,
         app.clock(),
         mailFor(request.log),
+        guardFor(request.log),
       ),
   );
 
@@ -153,6 +165,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
         quote: request.body,
         hub: app.events,
         mail: mailFor(request.log),
+        guard: guardFor(request.log),
       }),
   );
 
@@ -173,6 +186,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
           now: app.clock(),
           hub: app.events,
           mail: mailFor(request.log),
+          guard: guardFor(request.log),
         }),
     );
   }

@@ -119,6 +119,14 @@ export interface StripeConnectGateway {
   retrievePaymentIntent(paymentIntentId: string): Promise<PaymentIntentSnapshot>;
 
   /**
+   * Cancels an intent nobody will pay any more, so a customer's open checkout
+   * tab cannot confirm it after the request that made it has expired (VEN-528).
+   * Stripe refuses one that is `processing` or already `succeeded`; the caller
+   * re-reads the intent and decides, rather than treating that as an outage.
+   */
+  cancelPaymentIntent(paymentIntentId: string): Promise<PaymentIntentSnapshot>;
+
+  /**
    * Reads a dispute back (#431).
    *
    * The `charge.dispute.*` handler re-reads for the same reason the intent
@@ -598,6 +606,9 @@ export const PAYMENT_INTENT_SUCCEEDED = 'succeeded';
 
 /** Stripe's terminal failure state: the intent can never be paid. */
 export const PAYMENT_INTENT_CANCELED = 'canceled';
+
+/** A payment submitted and not yet settled; Stripe will not cancel it. */
+export const PAYMENT_INTENT_PROCESSING = 'processing';
 
 /**
  * A chargeback as this platform reads it (#431).
@@ -1091,6 +1102,12 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
 
     async retrievePaymentIntent(paymentIntentId) {
       return toSnapshot(await stripe.paymentIntents.retrieve(paymentIntentId));
+    },
+
+    async cancelPaymentIntent(paymentIntentId) {
+      return toSnapshot(
+        await stripe.paymentIntents.cancel(paymentIntentId, { cancellation_reason: 'abandoned' }),
+      );
     },
 
     async retrieveDispute(disputeId) {

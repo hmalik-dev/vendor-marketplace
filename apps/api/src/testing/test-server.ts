@@ -462,6 +462,8 @@ export interface FakeStripe extends StripeConnectGateway {
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
   /** Moves an intent to `canceled`, as Stripe does once it can never be paid. */
   cancel: (paymentIntentId: string) => PaymentIntentSnapshot;
+  /** Intents the platform asked Stripe to cancel, in order (VEN-528). */
+  cancelRequests: string[];
 }
 
 function createFakeStripe(deployEnv: string): FakeStripe {
@@ -494,8 +496,10 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   /** Idempotency keys whose result was a failure, replayed as Stripe does. */
   const failedTransferKeys = new Map<string, string>();
   const disputes = new Map<string, StripeDisputeSnapshot>();
+  const cancelRequests: string[] = [];
 
   const fake: FakeStripe = {
+    cancelRequests,
     createdAccounts,
     createdLinks,
     accountStatuses,
@@ -652,6 +656,25 @@ function createFakeStripe(deployEnv: string): FakeStripe {
       }
 
       return intent;
+    },
+
+    cancelPaymentIntent: async (paymentIntentId) => {
+      cancelRequests.push(paymentIntentId);
+
+      const intent = paymentIntents.get(paymentIntentId);
+
+      if (!intent) {
+        throw new Error(`No fake payment intent ${paymentIntentId}`);
+      }
+
+      /* Stripe refuses these two, and the caller has to read the intent again. */
+      if (intent.status === 'succeeded' || intent.status === 'processing') {
+        throw new Error(
+          `The fake intent ${paymentIntentId} is ${intent.status} and cannot be canceled`,
+        );
+      }
+
+      return fake.cancel(paymentIntentId);
     },
 
     createTransfer: async (input) => {
