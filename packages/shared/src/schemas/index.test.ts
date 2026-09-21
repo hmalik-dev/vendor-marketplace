@@ -6,12 +6,17 @@ import {
   bookingRequestSchema,
   createBookingRequestSchema,
   createReviewSchema,
+  phoneSchema,
+  reorderPortfolioSchema,
+  reorderServicePackagesSchema,
+  vendorApplicationInputSchema,
   createServicePackageSchema,
   updateServicePackageSchema,
   createTagSuggestionSchema,
   createPortfolioItemSchema,
   createVendorProfileSchema,
   imageRefSchema,
+  storedImageRefSchema,
   paginatedSchema,
   sendMessageSchema,
   vendorTagIdsSchema,
@@ -32,6 +37,7 @@ import {
   MAX_CUSTOMER_BIO_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
+  MAX_REORDER_IDS,
   MAX_TAGLINE_LENGTH,
   MAX_TAGS_PER_CATEGORY,
   MAX_YEARS_IN_BUSINESS,
@@ -1053,6 +1059,15 @@ describe('imageRefSchema', () => {
      */
     ['credentials disguising the host', 'https://cdn.example.com@evil.example/x.png', false],
 
+    // Decoded until stable (VEN-537): a second layer of encoding traverses once a host decodes twice.
+    ['a doubly encoded traversal', 'a/%252e%252e/b.webp', false],
+    ['an encoded separator walking back', 'a/b/..%2f..%2fc.webp', false],
+    ['an encoded backslash walking back', 'a/%5c..%5c..%5cc.webp', false],
+    ['an encoded control character', 'portfolio/a%00b.webp', false],
+    ['an encoded protocol-relative prefix', '%2f%2fevil.example/a.webp', false],
+    ['a backslash in an absolute URL', 'https://cdn.example.com\\@evil.example/a.webp', false],
+    ['an encoded prefix letter in an own key', '%70ortfolio/abc.webp', true],
+    ['a malformed escape', 'portfolio/100%.webp', true],
     // `%2e` decodes to `.` before the path resolves, so it traverses too.
     ['a percent-encoded traversal', 'a/%2e%2e/%2e%2e/b.webp', false],
   ];
@@ -1073,7 +1088,7 @@ describe('imageRefSchema', () => {
 
     const relative = CASES.filter(([, value, accepted]) => accepted && !/^https?:/i.test(value));
 
-    expect(relative).toHaveLength(2);
+    expect(relative).toHaveLength(4);
 
     relative.forEach(([label, value]) => {
       const resolved = resolveImageUrl(CDN_BASE, imageRefSchema.parse(value));
@@ -1097,6 +1112,14 @@ describe('imageRefSchema', () => {
 
     expect(imageRefSchema.safeParse(foreign).success).toBe(true);
     expect(resolveImageUrl(CDN_BASE, foreign)).toBe(foreign);
+  });
+
+  /* A response only says what is stored: a row from before the tightening must still be served. */
+  it('lets a stored reference the input schema now refuses through a response', () => {
+    const legacy = '%252e%252e/customer-profile/abc/x.webp';
+
+    expect(imageRefSchema.safeParse(legacy).success).toBe(false);
+    expect(storedImageRefSchema.parse(legacy)).toBe(legacy);
   });
 
   it('trims an otherwise valid reference rather than rejecting it', () => {
@@ -1155,5 +1178,58 @@ describe('free text drops the bidi controls that reorder it', () => {
         state: 'TX',
       }).businessName,
     ).toBe('Barr Mansion');
+  });
+});
+
+describe('VEN-544 input rules', () => {
+  const id = UUID;
+
+  it('lets a 150-character business name apply', () => {
+    const name = 'n'.repeat(150);
+
+    expect(
+      vendorApplicationInputSchema.safeParse({
+        email: 'a@example.com',
+        businessName: name,
+        category: 'Catering',
+        city: 'Austin',
+        message: 'Hello there',
+      }).success,
+    ).toBe(true);
+    expect(
+      createVendorProfileSchema.safeParse({
+        businessName: name,
+        categoryIds: [id],
+        city: 'Austin',
+        state: 'TX',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('refuses a review headline that is only whitespace', () => {
+    const content = 'x'.repeat(200);
+
+    expect(createReviewSchema.safeParse({ rating: 5, title: '   ', content }).success).toBe(false);
+    expect(createReviewSchema.safeParse({ rating: 5, content }).success).toBe(true);
+  });
+
+  it('needs a digit in a phone number', () => {
+    expect(phoneSchema.safeParse('()()()()').success).toBe(false);
+    expect(phoneSchema.safeParse('.......').success).toBe(false);
+    expect(phoneSchema.safeParse('+1 (555) 123-4567').success).toBe(true);
+  });
+
+  it('caps a reorder list', () => {
+    const ids = (n: number): string[] => Array.from({ length: n }, () => id);
+
+    expect(
+      reorderServicePackagesSchema.safeParse({ packageIds: ids(MAX_REORDER_IDS) }).success,
+    ).toBe(true);
+    expect(
+      reorderServicePackagesSchema.safeParse({ packageIds: ids(MAX_REORDER_IDS + 1) }).success,
+    ).toBe(false);
+    expect(reorderPortfolioSchema.safeParse({ itemIds: ids(MAX_REORDER_IDS + 1) }).success).toBe(
+      false,
+    );
   });
 });

@@ -24,6 +24,11 @@ export function unauthorized(message = 'Authentication required'): AppError {
   return new AppError(401, ERROR_CODES.UNAUTHORIZED, message);
 }
 
+/** The account is banned: a 403 the browser recognises as terminal. */
+export function accountSuspended(message = 'This account has been suspended'): AppError {
+  return new AppError(403, ERROR_CODES.ACCOUNT_SUSPENDED, message);
+}
+
 export function forbidden(message = 'You do not have access to this resource'): AppError {
   return new AppError(403, ERROR_CODES.FORBIDDEN, message);
 }
@@ -50,4 +55,9 @@ export function conflict(message: string, details?: unknown): AppError {
 
 export function validationFailed(message: string, details?: unknown): AppError {
   return new AppError(400, ERROR_CODES.VALIDATION_ERROR, message, details);
+}
+
+/** The caller is over a cap this API holds itself; the client backs off. */
+export function tooManyRequests(message: string): AppError {
+  return new AppError(429, ERROR_CODES.RATE_LIMITED, message);
 }

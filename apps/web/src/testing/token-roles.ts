@@ -95,7 +95,7 @@ export const STONE_ROLES: Readonly<Record<string, StoneToken>> = {
     onInk: { ground: 'stone-900', use: 'muted copy on the closing band' },
   },
   'stone-560': {
-    roles: ['ink-text'],
+    roles: ['ink-text', 'border'],
     onInk: { ground: 'stone-950', use: 'the footer micro-labels and tagline' },
   },
   'stone-600': { roles: ['text'] },

@@ -179,6 +179,8 @@ describe('a refund made outside the app', () => {
     harness.stripe.intentsByKey.clear();
     harness.stripe.refunds.length = 0;
     harness.stripe.transfers.length = 0;
+    harness.stripe.reversals.length = 0;
+    harness.stripe.reversalsToRefuse.clear();
     harness.stripe.refundsToRefuse.clear();
     harness.stripe.failedRefundKeys.clear();
     harness.email.sent.length = 0;
@@ -309,6 +311,107 @@ describe('a refund made outside the app', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json().outcome).toBe('refund-unchanged');
+    });
+  });
+
+  describe('a foreign refund that did not land', () => {
+    it('releases its cents, and only its own, when Stripe later marks it failed', async () => {
+      const paid = await paidBooking();
+      const first = harness.stripe.refundExternally(paid.intentId, GOODWILL_CENTS);
+      harness.stripe.refundExternally(paid.intentId, 5_000);
+      await chargeRefunded(paid.intentId);
+      expect((await currentBooking()).externalRefundCents).toBe(15_000);
+
+      harness.stripe.refunds[0]!.status = 'failed';
+      const response = await webhook('refund.updated', first);
+
+      expect(response.json().outcome).toBe('refund-failed');
+      expect((await currentBooking()).externalRefundCents).toBe(5_000);
+
+      harness.stripe.refunds[1]!.status = 'canceled';
+      await webhook('refund.updated', 're_test_2');
+
+      expect((await currentBooking()).externalRefundCents).toBe(0);
+    });
+
+    it('leaves the recorded cents alone when the failed refund was our own', async () => {
+      const paid = await paidBooking();
+      harness.stripe.refundExternally(paid.intentId, GOODWILL_CENTS);
+      await chargeRefunded(paid.intentId);
+      const ours = await harness.stripe.createRefund({
+        paymentIntentId: paid.intentId,
+        amountCents: 20_000,
+        idempotencyKey: `cancel_${paid.id}_marked`,
+      });
+      harness.stripe.refunds[1]!.status = 'failed';
+
+      await webhook('refund.updated', ours.refundId);
+
+      expect((await currentBooking()).externalRefundCents).toBe(GOODWILL_CENTS);
+    });
+  });
+
+  describe('a Dashboard refund landing beside our cancellation top-up', () => {
+    it('is recorded without holding the booking, and the cancellation then finishes as cancelled', async () => {
+      const paid = await paidBooking();
+      harness.stripe.refundExternally(paid.intentId, GOODWILL_CENTS);
+      await harness.stripe.createRefund({
+        paymentIntentId: paid.intentId,
+        amountCents: PRICE_CENTS - GOODWILL_CENTS,
+        idempotencyKey: `cancel_${paid.id}_marked`,
+      });
+
+      const response = await chargeRefunded(paid.intentId);
+
+      expect(response.json().outcome).toBe('refund-recorded');
+      const beforeCancel = await currentBooking();
+      expect(beforeCancel.status).toBe('confirmed');
+      expect(beforeCancel.externalRefundCents).toBe(GOODWILL_CENTS);
+
+      const cancelled = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+
+      expect(cancelled.statusCode).toBe(200);
+      const after = await currentBooking();
+      expect(after.status).toBe('cancelled');
+      expect(after.refundAmountCents).toBe(PRICE_CENTS);
+      expect(after.externalRefundCents).toBe(GOODWILL_CENTS);
+      expect(harness.stripe.refunds.map((refund) => refund.amountCents)).toEqual([
+        GOODWILL_CENTS,
+        PRICE_CENTS - GOODWILL_CENTS,
+      ]);
+    });
+  });
+
+  describe('the reversal key', () => {
+    it('is new after Stripe refused a reversal, and the retry reverses under it (D36)', async () => {
+      const paid = await paidBooking();
+      const transfer = await harness.stripe.createTransfer({
+        bookingId: paid.id,
+        attempt: 0,
+        amountCents: paid.vendorPayoutCents,
+        destinationAccountId: VENDOR_ACCOUNT,
+        transferGroup: `booking_${paid.requestId}`,
+      });
+      clockNow = addDays(START, 28);
+      harness.stripe.reversalsToRefuse.add(transfer.transferId);
+
+      const refused = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+
+      expect(refused.statusCode).toBeGreaterThanOrEqual(500);
+      expect(harness.stripe.reversals).toEqual([]);
+      const [recorded] = await harness.database.db.select().from(refundAttempts);
+      expect(recorded).toMatchObject({ scope: `cancel_${paid.id}_reversal`, failedAttempts: 1 });
+
+      harness.stripe.reversalsToRefuse.clear();
+      const retried = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+
+      expect(retried.statusCode).toBe(200);
+      expect(harness.stripe.reversals).toHaveLength(1);
+      expect(harness.stripe.reversals[0]).toMatchObject({
+        transferId: transfer.transferId,
+        amountCents: paid.vendorPayoutCents / 2,
+        idempotencyKey: `cancel_${paid.id}_reversal_1`,
+      });
     });
   });
 

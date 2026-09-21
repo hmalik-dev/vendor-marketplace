@@ -1,11 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import {
+  addDays,
   ADMIN_PAGE_SIZE,
   DEFAULT_PAGE_SIZE,
   MAX_TAGS_PER_CATEGORY,
+  toDateString,
 } from '@vendor-marketplace/shared';
 import { eq, notInArray } from 'drizzle-orm';
 import {
+  adminActions,
   bookingRequests,
   bookings,
   categories,
@@ -19,6 +22,9 @@ import {
   vendorTags,
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import type { AlertSource } from '../operator-alerts/operator-alerts.service.js';
+import { bookingContextFor } from '../payments/payments.service.js';
+import { SUSPENSION_UNWIND, unwindAccountBookings } from './account-unwind.js';
 import {
   bearer,
   createTestHarness,
@@ -87,6 +93,8 @@ describe('admin routes', () => {
   }
 
   /** A confirmed, paid booking in the future — what a ban has to unwind. */
+  let futureDay = 0;
+
   /**
    * A confirmed booking on a future date.
    *
@@ -99,7 +107,10 @@ describe('admin routes', () => {
     vendorProfileId: string,
     overrides: { eventDate?: string; stripePaymentIntentId?: string } = {},
   ): Promise<string> {
-    const eventDate = overrides.eventDate ?? '2099-06-01';
+    // One accepted request per vendor date is a database rule (VEN-482).
+    futureDay += 1;
+    const eventDate =
+      overrides.eventDate ?? toDateString(addDays(new Date('2099-05-31T12:00:00Z'), futureDay));
 
     const requestRows = await harness.database.db
       .insert(bookingRequests)
@@ -200,6 +211,8 @@ describe('admin routes', () => {
      */
     const routes = [
       { method: 'GET', url: '/admin/vendors' },
+      { method: 'POST', url: '/admin/step-up/challenge' },
+      { method: 'POST', url: '/admin/step-up/verify' },
       { method: 'GET', url: '/admin/vendors/facets' },
       { method: 'GET', url: '/admin/metrics' },
       { method: 'GET', url: '/admin/customers' },
@@ -273,6 +286,12 @@ describe('admin routes', () => {
       { method: 'GET', url: '/admin/requests' },
       /* VEN-400. One customer's contact details, bookings, reviews and notifications. */
       { method: 'GET', url: `/admin/customers/${NIL}` },
+      /* VEN-475. The web tier reports each CSV export here. */
+      { method: 'POST', url: '/admin/exports' },
+      /* VEN-506. Whoever holds the console: granting and revoking it is privilege escalation. */
+      { method: 'GET', url: '/admin/operators' },
+      { method: 'POST', url: '/admin/operators' },
+      { method: 'DELETE', url: `/admin/operators/${NIL}` },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {
@@ -745,6 +764,126 @@ describe('admin routes', () => {
     });
 
     /*
+     * VEN-499, D36. Stripe replays a refused refund for 24 hours under its key,
+     * so the unwind's retry has to send a new one for the same intent.
+     */
+    it('retries a refused unwind refund under a new key for the same intent', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const bookingId = await createFutureBooking(customerId, vendor.profileId);
+      /* A ban is taken once, so the unwind is re-run as an operator's retry would. */
+      const unwind = () =>
+        unwindAccountBookings(
+          bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+          vendor.userId,
+          vendor.profileId,
+          new Date(),
+          SUSPENSION_UNWIND,
+        );
+      harness.stripe.refundsToRefuse.add('pi_test_ban');
+
+      expect(await unwind()).toMatchObject({ refundsFailed: 1, refundsIssued: 0 });
+      expect(harness.stripe.refunds).toEqual([]);
+
+      harness.stripe.refundsToRefuse.clear();
+      const retried = await unwind();
+
+      expect(retried).toMatchObject({ refundsFailed: 0, refundsIssued: 1 });
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(harness.stripe.refunds[0]).toMatchObject({
+        paymentIntentId: 'pi_test_ban',
+        amountCents: 120_000,
+        idempotencyKey: `ban-refund:direct:marked:${bookingId}_1`,
+      });
+      const [booking] = await harness.database.db.select().from(bookings);
+      expect(booking).toMatchObject({ status: 'cancelled', refundAmountCents: 120_000 });
+    });
+
+    /*
+     * VEN-479. The unwind's booking snapshot is taken before its loop, so a
+     * payment that confirms a booking while the loop is refunding the first one
+     * is a booking the snapshot never saw. The interleave is exact: the second
+     * booking commits inside the first booking's refund call.
+     */
+    it('refunds a booking confirmed between the unwind snapshot and its end', async () => {
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const snapshotted = await createFutureBooking(customerId, vendor.profileId);
+      let late = '';
+      harness.stripe.duringNextRefund = async () => {
+        late = await createFutureBooking(customerId, vendor.profileId, {
+          stripePaymentIntentId: 'pi_test_late',
+        });
+      };
+
+      const result = await unwindAccountBookings(
+        bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+        vendor.userId,
+        vendor.profileId,
+        new Date(),
+        SUSPENSION_UNWIND,
+      );
+
+      expect(result).toMatchObject({ bookingsCancelled: 2, refundsIssued: 2, refundsFailed: 0 });
+      expect(harness.stripe.refunds.map((refund) => refund.paymentIntentId).sort()).toEqual([
+        'pi_test_ban',
+        'pi_test_late',
+      ]);
+      const rows = await harness.database.db
+        .select({ id: bookings.id, status: bookings.status })
+        .from(bookings);
+      expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual(
+        [
+          { id: snapshotted, status: 'cancelled' },
+          { id: late, status: 'cancelled' },
+        ].sort((a, b) => a.id.localeCompare(b.id)),
+      );
+    });
+
+    /*
+     * VEN-546. The refund is out and the cancel finds the row moved on (here a
+     * Dashboard refund holding it `disputed`, inside the refund call). The unwind
+     * must say so, not count the refund as clean, and owe the vendor nothing.
+     */
+    it('alerts and zeroes the payout when a refunded booking cannot be cancelled', async () => {
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const bookingId = await createFutureBooking(customerId, vendor.profileId);
+      const dispatched: AlertSource[] = [];
+      harness.stripe.duringNextRefund = async () => {
+        await harness.database.db
+          .update(bookings)
+          .set({ status: 'disputed' })
+          .where(eq(bookings.id, bookingId));
+      };
+
+      const result = await unwindAccountBookings(
+        {
+          ...bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+          alerts: { dispatch: (alert) => void dispatched.push(alert) },
+        },
+        vendor.userId,
+        vendor.profileId,
+        new Date(),
+        SUSPENSION_UNWIND,
+      );
+
+      expect(result).toMatchObject({ bookingsCancelled: 0, refundsIssued: 0, refundsFailed: 1 });
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(dispatched).toHaveLength(1);
+      expect(dispatched[0]).toMatchObject({
+        kind: 'refund_failed',
+        subjectId: `${bookingId}:unreconciled`,
+      });
+      const [booking] = await harness.database.db
+        .select({ status: bookings.status, vendorPayoutCents: bookings.vendorPayoutCents })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+      expect(booking).toEqual({ status: 'disputed', vendorPayoutCents: 0 });
+    });
+
+    /*
      * #415. The unwind records what Stripe *moved*, not what it asked for.
      *
      * The two agree on every first attempt and part company on the one that
@@ -938,7 +1077,7 @@ describe('admin routes', () => {
       expect(rows.filter((row) => row.status === 'cancelled')).toHaveLength(1);
     });
 
-    it('refuses a second ban on an account already banned', async () => {
+    it('answers 200 to a second ban on an account already banned, changing nothing', async () => {
       await signIn(ADMIN, true);
       const target = await signIn(CUSTOMER);
 
@@ -954,7 +1093,115 @@ describe('admin routes', () => {
         url: `/admin/users/${target}/ban`,
         headers: bearer(ADMIN),
       });
-      expect(second.statusCode).toBe(409);
+      expect(second.statusCode).toBe(200);
+      expect(second.json()).toMatchObject({ isBanned: true, bookingsCancelled: 0 });
+    });
+
+    /**
+     * VEN-478. Stripe is unreachable for the last two of three refunds — the same
+     * state a killed process leaves: banned, an intent row, two `confirmed`
+     * bookings with paid customers. Re-running the ban finishes it.
+     */
+    describe('an interrupted unwind', () => {
+      async function threeBookings(): Promise<{ vendorUserId: string; intents: string[] }> {
+        await signIn(ADMIN, true);
+        const customerId = await signIn(CUSTOMER);
+        const vendor = await createVendorProfile({ isPublished: true });
+        const intents = ['pi_resume_1', 'pi_resume_2', 'pi_resume_3'];
+
+        for (const [index, intent] of intents.entries()) {
+          await createFutureBooking(customerId, vendor.profileId, {
+            eventDate: `2099-08-0${index + 1}`,
+            stripePaymentIntentId: intent,
+          });
+        }
+
+        return { vendorUserId: vendor.userId, intents };
+      }
+
+      const ban = (userId: string, actor = ADMIN) =>
+        harness.app.inject({
+          method: 'PUT',
+          url: `/admin/users/${userId}/ban`,
+          headers: bearer(actor),
+        });
+
+      async function statuses(): Promise<string[]> {
+        const rows = await harness.database.db
+          .select({ status: bookings.status })
+          .from(bookings)
+          .orderBy(bookings.eventDate);
+        return rows.map((row) => row.status);
+      }
+
+      async function actions(): Promise<string[]> {
+        const rows = await harness.database.db
+          .select({ action: adminActions.action })
+          .from(adminActions);
+        return rows.map((row) => row.action).sort();
+      }
+
+      it('is finished by re-running the ban, refunding the rest exactly once', async () => {
+        const { vendorUserId, intents } = await threeBookings();
+        harness.stripe.refundsToRefuse.add(intents[1]!);
+        harness.stripe.refundsToRefuse.add(intents[2]!);
+
+        const first = await ban(vendorUserId);
+        expect(first.json()).toMatchObject({ isBanned: true, refundsIssued: 1, refundsFailed: 2 });
+        expect(await statuses()).toEqual(['cancelled', 'confirmed', 'confirmed']);
+        expect(await actions()).toEqual(['account_unwind_finished', 'user_banned']);
+
+        // Stripe is back; a refusal is not replayed for a key that never reached it.
+        harness.stripe.refundsToRefuse.clear();
+        harness.stripe.failedRefundKeys.clear();
+
+        const resumed = await ban(vendorUserId);
+        expect(resumed.statusCode).toBe(200);
+        expect(resumed.json()).toMatchObject({
+          isBanned: true,
+          bookingsCancelled: 2,
+          refundsIssued: 2,
+          refundsFailed: 0,
+        });
+        expect(await statuses()).toEqual(['cancelled', 'cancelled', 'cancelled']);
+        expect(harness.stripe.refunds.map((refund) => refund.paymentIntentId).sort()).toEqual(
+          [...intents].sort(),
+        );
+        // One intent row for the whole ban, and one outcome row per run that did something.
+        expect(await actions()).toEqual([
+          'account_unwind_finished',
+          'account_unwind_finished',
+          'user_banned',
+        ]);
+      });
+
+      it('refunds nothing further and writes no row when a finished ban is re-run', async () => {
+        const { vendorUserId } = await threeBookings();
+        expect((await ban(vendorUserId)).statusCode).toBe(200);
+        const refundsBefore = harness.stripe.refunds.length;
+        const actionsBefore = await actions();
+        expect(refundsBefore).toBe(3);
+
+        const again = await ban(vendorUserId);
+
+        expect(again.statusCode).toBe(200);
+        expect(again.json()).toMatchObject({ bookingsCancelled: 0, refundsIssued: 0 });
+        expect(harness.stripe.refunds).toHaveLength(refundsBefore);
+        expect(await actions()).toEqual(actionsBefore);
+      });
+
+      it('cannot be re-run by anyone but an operator', async () => {
+        const { vendorUserId, intents } = await threeBookings();
+        harness.stripe.refundsToRefuse.add(intents[1]!);
+        await ban(vendorUserId);
+        harness.stripe.refundsToRefuse.clear();
+        harness.stripe.failedRefundKeys.clear();
+        const refundsBefore = harness.stripe.refunds.length;
+
+        expect((await ban(vendorUserId, CUSTOMER)).statusCode).toBe(403);
+        expect((await ban(vendorUserId, VENDOR)).statusCode).toBe(403);
+        expect(harness.stripe.refunds).toHaveLength(refundsBefore);
+      });
     });
 
     it('answers 404 for an id that is not an account', async () => {

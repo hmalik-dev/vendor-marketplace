@@ -2,7 +2,12 @@ import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema
 import { addDays, toDateString } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterEach, afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  type TestHarness,
+  acceptVendorAgreementAs,
+} from '../../testing/test-server.js';
 import { updateVendorProfileById } from './vendors.dao.js';
 import { updateVendorProfile } from './vendors.service.js';
 
@@ -61,6 +66,7 @@ describe('a vendor whose owner is banned', () => {
     });
     expect(blocked.statusCode).toBe(200);
 
+    await acceptVendorAgreementAs(harness, VENDOR);
     const published = await harness.app.inject({
       method: 'PUT',
       url: '/vendor/profile',
@@ -211,10 +217,18 @@ describe('a vendor whose owner is banned', () => {
 
     // Straight to the service: the auth hook would refuse a banned caller first.
     await expect(
-      updateVendorProfile(harness.database.db, harness.app.storage, owner!.id, {
-        isPublished: true,
-      }),
-    ).rejects.toMatchObject({ statusCode: 403, message: 'This account has been suspended' });
+      updateVendorProfile(
+        harness.database.db,
+        harness.app.storage,
+        owner!.id,
+        { isPublished: true },
+        harness.app.storagePublicUrl,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'ACCOUNT_SUSPENDED',
+      message: 'This account has been suspended',
+    });
 
     const [row] = await harness.database.db
       .select({ isPublished: vendorProfiles.isPublished })

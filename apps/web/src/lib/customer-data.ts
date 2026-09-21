@@ -140,6 +140,11 @@ export type CheckoutOutcome =
    * request "isn't here".
    */
   | { state: 'vendor-unavailable' }
+  /**
+   * The vendor is banned or retired — 409 `VENDOR_UNAVAILABLE`. Unlike the 402
+   * this never clears, so it is its own state and the screen offers no retry.
+   */
+  | { state: 'vendor-closed' }
   /** The request left `accepted` underneath the customer — 409. */
   | { state: 'not-payable' }
   /**
@@ -196,6 +201,9 @@ export async function openCheckout(requestId: string): Promise<CheckoutOutcome> 
     }
     if (error.statusCode === 404) {
       return { state: 'not-found' };
+    }
+    if (error.code === ERROR_CODES.VENDOR_UNAVAILABLE) {
+      return { state: 'vendor-closed' };
     }
     if (error.statusCode === 402) {
       return { state: 'vendor-unavailable' };

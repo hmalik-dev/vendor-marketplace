@@ -112,7 +112,7 @@
   --color-stone-480: #d8d0c2; /* the closing band's pitch and numerals, on stone-900 */
   --color-stone-520: #b8af9f; /* footer link columns, on stone-950 */
   --color-stone-540: #a79d8c; /* muted copy on the closing band, on stone-900 */
-  --color-stone-560: #8c8375; /* footer micro-labels and body, on stone-950 */
+  --color-stone-560: #8c8375; /* footer micro-labels and body, on stone-950; also the field and unchecked-control border, 3:1 on cream (VEN-541) */
   --color-stone-600: #6b6459; /* MUTED TEXT — the minimum for any real label */
   --color-stone-700: #4a443c; /* body text */
   --color-stone-800: #3a342e; /* the admin header's hairline on a stone-900 ground */

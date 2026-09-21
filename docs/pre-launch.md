@@ -8,8 +8,7 @@ pnpm launch:check
 
 It reads the production values from `.env.production.local` (gitignored; real
 process environment variables win over it), asks each provider what is actually
-configured, and prints one line per item: `PASS`, `FAIL`, `SKIP` (the thing it
-checks has not landed yet) or `MANUAL` (no provider API can answer). It exits
+configured, and prints one line per item: `PASS`, `FAIL` or `MANUAL` (no provider API can answer). It exits
 non-zero while anything is `FAIL`. It is read-only — every provider call is a
 `GET`, the database session is `READ ONLY` — and it prints no secret beyond its
 prefix and last four characters. It needs production credentials, so it is run
@@ -20,8 +19,7 @@ and every item below done.
 
 **Current state:** not launched. The deployment authenticates against a Neon Auth
 **development** branch and Stripe is in **test mode**, so `launch:check` fails
-on both today — correctly. `docs/demo.md` describes the showcase deployment,
-which is not a launch.
+on both today — correctly.
 
 ---
 
@@ -32,6 +30,7 @@ which is not a launch.
 | Neon Auth   | `neon auth endpoint`                                     | `NEON_AUTH_BASE_URL` serves a JWKS with at least one signing key                                                                                                                                                                                                                                                                          |
 | Neon Auth   | `neon auth identity store`                               | `NEON_AUTH_DATABASE_URL` names the same database host as `DATABASE_URL` — a source on another branch answers empty and the reconcile pass refuses to run                                                                                                                                                                                  |
 | Stripe      | `stripe key`                                             | `STRIPE_SECRET_KEY` is `sk_live_`                                                                                                                                                                                                                                                                                                         |
+| Stripe      | `stripe publishable key`                                 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is `pk_live_` — checkout confirms an intent made with the secret key, and keys from different modes fail with "No such payment_intent"                                                                                                                                                               |
 | Stripe      | `stripe webhook endpoint`                                | one enabled endpoint at `API_URL/webhooks/stripe` per configured signing secret (`STRIPE_WEBHOOK_SECRET`, plus `STRIPE_CONNECT_WEBHOOK_SECRET` for the connected-account endpoint) subscribes, between them, to every type in `HANDLED_STRIPE_EVENT_TYPES` (`apps/api/src/modules/webhooks/stripe.routes.ts`); the missing ones are named |
 | Stripe      | `stripe connected-account events`                        | `PASS` once `STRIPE_CONNECT_WEBHOOK_SECRET` is set and the second endpoint exists; otherwise `MANUAL`: the endpoint list does not say which endpoint listens to connected accounts, and vendor `account.updated` arrives only there                                                                                                       |
 | Stripe      | `charges_enabled`, `payouts_enabled`                     | both `true` on the platform account                                                                                                                                                                                                                                                                                                       |
@@ -42,13 +41,12 @@ which is not a launch.
 | Database    | `database branch`                                        | `DATABASE_URL` is a Neon endpoint and `NEON_BRANCH` is `production`                                                                                                                                                                                                                                                                       |
 | Database    | `seeded rows`                                            | zero rows carry the marketing, demo or E2E seed markers — fabricated vendors and reviews on a public production site are misrepresentation                                                                                                                                                                                                |
 | Database    | `migrations`                                             | every migration in the repository journal is applied                                                                                                                                                                                                                                                                                      |
-| Database    | `row level security`                                     | `MANUAL` (VEN-504): no public base table has `relrowsecurity = false`; read it with the query in `docs/schema-review.md` after the deploy migrates                                                                                                                                                                                        |
 | Environment | `SENTRY_DSN`, `OPERATOR_ALERT_EMAIL`, `SUPPORT_EMAIL_TO` | set, not the registry placeholder, and matching the production shape                                                                                                                                                                                                                                                                      |
 | Environment | `RATE_LIMIT_MAX`                                         | between 30 and 1000 requests per minute per IP                                                                                                                                                                                                                                                                                            |
 | App         | `api /ready`                                             | `API_URL/ready` answers 200 (database and storage both up)                                                                                                                                                                                                                                                                                |
 | App         | `web security headers`                                   | a real response from `WEB_URL` carries HSTS, an enforcing CSP, `X-Content-Type-Options`, `X-Frame-Options` and `Referrer-Policy`                                                                                                                                                                                                          |
 | Database    | `platform_settings.maxBookingCents`                      | set — a closed beta caps what one booking can charge (VEN-404, set in `/admin/settings`)                                                                                                                                                                                                                                                  |
-| App         | `platform_settings.vendorInviteOnly`                     | `SKIP` until VEN-406 lands; a closed beta needs invite-only on                                                                                                                                                                                                                                                                            |
+| Database    | `platform_settings.vendorInviteOnly`                     | `true` — vendors join by invitation, so the initial vendors are curated (VEN-406, set in `/admin/settings`); `FAIL` while it is off or the settings row was never written                                                                                                                                                                 |
 
 ---
 
@@ -71,7 +69,7 @@ first. Both branches were empty of user rows and both held 0000–0009.
   and a test replays 0015–0017 in one transaction. The failed run rolled back and
   left the branch at 10 rows.
 - After the run, `staging` has `users.auth_user_id` and `users_auth_user_id_key`
-  and no `clerk_user_id` or `users_clerk_user_id_key`; tables, columns,
+  and no pre-rename auth id column or its unique key; tables, columns,
   constraints, indexes, enums and triggers match a database built from the
   journal (27 tables, 273 columns, 249 constraints, 91 indexes, 179 enum labels,
   6 triggers).
@@ -97,10 +95,14 @@ first. Both branches were empty of user rows and both held 0000–0009.
       branch protection and a storage cap whose breach makes writes fail. After
       the upgrade: protect the `production` branch and widen its history
       retention.
+- [ ] **Production admin account** (VEN-502): sign up on production, then grant
+      the role with the transaction under _First operator grant_ below. A plain
+      `UPDATE users SET role` is refused by the database (VEN-533).
 - [ ] **Image licensing.** Confirm the licence of every shipped marketing image
       and the landing-page category photography.
 - [ ] **A real end-to-end transaction** on live keys before opening to customers:
       book, pay, message, cancel with a refund, and see the payout arrive.
+- [ ] **Row level security** (VEN-504). `launch:check` does not read it: after the deploy migrates, confirm no public base table has `relrowsecurity = false`, with the query in `docs/schema-review.md`.
 - [ ] **Restore drill.** Backups are Neon-native only (VEN-408): the
       `production` branch needs its snapshot schedule on (paid plan, VEN-443; read
       it back), and the
@@ -110,6 +112,30 @@ first. Both branches were empty of user rows and both held 0000–0009.
       confirm you can promote the previous Vercel deployment and redeploy the API
       host's previous image before the first real release.
 - [ ] **Rotate every credential touched during setup**.
+
+### First operator grant
+
+Once, from a `psql` session on the owner URL (`DATABASE_URL_UNPOOLED`, read from
+your env, never pasted), after the account has signed up. Run exactly this, with
+the sign-up address:
+
+```sql
+BEGIN;
+SET LOCAL app.operator_role_grant = 'on';
+UPDATE users SET role = 'admin' WHERE email = '<the address you signed up with>' AND deleted_at IS NULL;
+COMMIT;
+```
+
+It must report `UPDATE 1`; roll back on anything else. The setting is
+transaction-local and reserved for this step and the in-app operator grant
+(VEN-506): nothing else sets it, and the fixture seeds never do.
+
+**This is the single pre-launch exception, not a routine.** Every later operator
+is granted and revoked in the console at `/admin/operators` (step-up, audit row,
+never the last live operator). An operator created by the transaction above has
+no recorded earlier role, so the console will not revoke them: that is
+deliberate, and it is why the first operator is the founder who keeps the
+account.
 
 ## Deploy constraints
 

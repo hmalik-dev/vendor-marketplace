@@ -20,7 +20,12 @@ import {
 import { eq, inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { findDuePayoutBookingIds } from '../payments/payouts.dao.js';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  acceptVendorAgreementAs,
+  bearer,
+  createTestHarness,
+  type TestHarness,
+} from '../../testing/test-server.js';
 
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
@@ -864,6 +869,7 @@ describe('/vendor/dashboard', () => {
   describe('the checklist is the real publish gate', () => {
     it('names a missing package while everything else is satisfied', async () => {
       await createProfile();
+      await acceptVendorAgreementAs(harness, VENDOR);
 
       const body = (await read()).json() as DashboardBody;
 
@@ -871,8 +877,20 @@ describe('/vendor/dashboard', () => {
       expect(body.isPublished).toBe(false);
     });
 
+    it('names the unaccepted vendor agreement, and drops it after acceptance', async () => {
+      await createProfile();
+      await addPackage();
+
+      expect(((await read()).json() as DashboardBody).publishBlockers).toEqual(['agreement']);
+
+      await acceptVendorAgreementAs(harness, VENDOR);
+
+      expect(((await read()).json() as DashboardBody).publishBlockers).toEqual([]);
+    });
+
     it('clears once the package exists', async () => {
       await createProfile();
+      await acceptVendorAgreementAs(harness, VENDOR);
       await addPackage();
 
       expect(((await read()).json() as DashboardBody).publishBlockers).toEqual([]);

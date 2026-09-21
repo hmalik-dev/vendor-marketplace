@@ -1,13 +1,14 @@
 import {
   SIGN_UP_ROLES,
   stripBidiControls,
+  stripRefusedText,
   type UpdateUserInput,
   type User,
   type SignUpRole,
 } from '@vendor-marketplace/shared';
 import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
-import { forbidden, notFound, unauthorized, validationFailed } from '../../lib/errors.js';
+import { accountSuspended, notFound, unauthorized, validationFailed } from '../../lib/errors.js';
 import { assertOwnedImageRefs } from '../../lib/storage.js';
 import { findUserById, insertUserIfAbsent, updateUserById } from './users.dao.js';
 
@@ -71,7 +72,7 @@ export function normalizeRole(value: unknown): SignUpRole {
  * cannot be forgotten by a caller the way doing it per read can.
  */
 export function mirroredAuthName(value: string): string {
-  return stripBidiControls(value).trim();
+  return stripRefusedText(stripBidiControls(value)).normalize('NFC').trim();
 }
 
 /** First and last name out of Better Auth's single `name` field. */
@@ -149,7 +150,7 @@ export async function resolveStreamSubject(
   }
 
   if (account.isBanned) {
-    throw forbidden('This account has been suspended');
+    throw accountSuspended();
   }
 
   return { id: account.id };
@@ -174,6 +175,26 @@ export async function updateUserProfile(
   input: UpdateUserInput,
 ): Promise<User> {
   assertOwnedImageRefs([input.avatarUrl], userId);
+
+  /*
+   * The schema compares the pair only when both keys arrive; a partial edit is
+   * held against the stored other half (VEN-544).
+   */
+  if (input.typicalGuestCountMin !== undefined || input.typicalGuestCountMax !== undefined) {
+    const current = await findUserById(db, userId);
+    const min =
+      input.typicalGuestCountMin !== undefined
+        ? input.typicalGuestCountMin
+        : (current?.typicalGuestCountMin ?? null);
+    const max =
+      input.typicalGuestCountMax !== undefined
+        ? input.typicalGuestCountMax
+        : (current?.typicalGuestCountMax ?? null);
+
+    if (min !== null && max !== null && min > max) {
+      throw validationFailed('Minimum guest count must not exceed maximum guest count');
+    }
+  }
 
   const row = await updateUserById(db, userId, input);
   if (!row) {

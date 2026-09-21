@@ -1,10 +1,15 @@
 import Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
 import {
+  createStripeClient,
   createStripeConnectGateway,
+  STRIPE_API_VERSION,
   describeAccountEvent,
+  isForeignEnvIntent,
   isMissingPayoutsOnly,
   isOnboarded,
+  isRefusedAccountCreation,
+  paymentIntentIdempotencyKey,
   paymentIntentParams,
   pickTransfer,
   readAccountStatusFrom,
@@ -20,9 +25,37 @@ import {
   type StripeConnectGateway,
 } from './stripe.js';
 
+describe('isRefusedAccountCreation', () => {
+  it('counts a v1 invalid_request_error and a v2 invalid_fields body as refusals', () => {
+    const v1 = Stripe.errors.StripeError.generate({
+      type: 'invalid_request_error',
+      message: 'bad',
+    });
+    const v2 = Stripe.errors.generateV2Error({ code: 'invalid_fields', message: 'bad' });
+
+    expect(v1.rawType).toBe('invalid_request_error');
+    expect(v2.rawType).toBeUndefined();
+    expect(isRefusedAccountCreation(v1)).toBe(true);
+    expect(isRefusedAccountCreation(v2)).toBe(true);
+  });
+
+  it('does not count a concurrent-key conflict, a 5xx or a dropped connection', () => {
+    const conflict = Stripe.errors.StripeError.generate({
+      type: 'idempotency_error',
+      message: 'in flight',
+    });
+    const outage = Stripe.errors.StripeError.generate({ type: 'api_error', message: 'oops' });
+
+    expect(isRefusedAccountCreation(conflict)).toBe(false);
+    expect(isRefusedAccountCreation(outage)).toBe(false);
+    expect(isRefusedAccountCreation(new Error('socket hang up'))).toBe(false);
+  });
+});
+
 describe('paymentIntentParams', () => {
   const INPUT = {
     requestId: 'req_one',
+    replacements: 0,
     amountCents: 145_000,
     customerId: 'cus_one',
     vendorId: 'ven_one',
@@ -36,7 +69,7 @@ describe('paymentIntentParams', () => {
    * meaningless without one.
    */
   it('charges into the platform balance, with no fee and no destination', () => {
-    const params = paymentIntentParams(INPUT);
+    const params = paymentIntentParams(INPUT, 'staging');
 
     expect(params.transfer_data).toBeUndefined();
     expect(params.application_fee_amount).toBeUndefined();
@@ -44,9 +77,33 @@ describe('paymentIntentParams', () => {
     expect(params.transfer_group).toBe('booking_req_one');
   });
 
+  /** VEN-529: staging and production share one test account, so the tier rides on the intent. */
+  it.each(['staging', 'production'])('tags the intent with its %s environment', (tier) => {
+    expect(paymentIntentParams(INPUT, tier).metadata).toEqual({
+      requestId: 'req_one',
+      customerId: 'cus_one',
+      vendorId: 'ven_one',
+      env: tier,
+    });
+  });
+
+  it('recognises only a tag naming another environment as foreign', () => {
+    expect(isForeignEnvIntent({ metadata: { env: 'production' } }, 'staging')).toBe(true);
+    expect(isForeignEnvIntent({ metadata: { env: 'staging' } }, 'staging')).toBe(false);
+    expect(isForeignEnvIntent({ metadata: {} }, 'staging')).toBe(false);
+  });
+
+  /** VEN-547: the first key is the one intents were opened under before it, then one per replacement. */
+  it('keeps the first creation key and suffixes each replacement', () => {
+    expect(paymentIntentIdempotencyKey(INPUT)).toBe('pay_req_one_separate');
+    expect(paymentIntentIdempotencyKey({ requestId: 'req_one', replacements: 2 })).toBe(
+      'pay_req_one_separate_r2',
+    );
+  });
+
   /** The group is what ties the charge to the transfer it eventually funds. */
   it('labels the charge with the transfer group the release will search on', () => {
-    expect(paymentIntentParams(INPUT).transfer_group).toBe(transferGroupFor('req_one'));
+    expect(paymentIntentParams(INPUT, 'staging').transfer_group).toBe(transferGroupFor('req_one'));
   });
 });
 
@@ -578,6 +635,7 @@ describe('parseEventNotification', () => {
   const gateway = (extra?: string): StripeConnectGateway =>
     createStripeConnectGateway({
       secretKey: 'sk_test_unused',
+      deployEnv: 'staging',
       webhookSecret: own,
       ...(extra ? { connectWebhookSecret: extra } : {}),
     });
@@ -664,5 +722,29 @@ describe('pickTransfer', () => {
         { live: true },
       )?.transferId,
     ).toBe('tr_platform');
+  });
+
+  /* VEN-499: `data[0]` was whichever transfer Stripe listed first. */
+  it('prefers the platform transfer over a manual one that is listed first, live or not', () => {
+    const listed = [
+      transfer('tr_manual', 50_000, 50_000),
+      transfer('tr_platform', 127_600, 63_800, { bookingId: 'bk_1' }),
+    ];
+
+    expect(pickTransfer(listed)).toEqual({
+      transferId: 'tr_platform',
+      amountCents: 127_600,
+      reversedCents: 63_800,
+    });
+    expect(pickTransfer(listed, { live: true })?.transferId).toBe('tr_platform');
+  });
+});
+
+describe('the Stripe API version', () => {
+  it('is pinned to the exact SDK release and sent by the gateway client', () => {
+    const client = createStripeClient('sk_test_unused');
+
+    expect(STRIPE_API_VERSION).toBe('2026-08-26.dahlia');
+    expect(client.getApiField('version')).toBe(STRIPE_API_VERSION);
   });
 });

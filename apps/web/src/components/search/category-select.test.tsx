@@ -509,7 +509,9 @@ describe('CategorySelect', () => {
     const box = field();
     expect(box.className).toContain('has-[:focus-visible]:bg-stone-200');
     expect(box.className).not.toContain('inset-ring');
-    expect(box.className).not.toContain('has-[:focus-visible]:ring-');
+    // VEN-541: an inset ring (never an outward one) meets 3:1 where a fill alone is 1.19:1.
+    expect(box.className).toContain('has-[:focus-visible]:ring-inset');
+    expect(box.className).toContain('has-[:focus-visible]:ring-clay-400');
     expect(box.className).toContain('group/segment');
 
     const label = screen.getByText('Vendor type');

@@ -126,6 +126,9 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
     setFailure(outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.signUpFailed);
   }
 
+  // A network failure says nothing about what the reader typed, so only a refusal marks the fields.
+  const credentialsRefused = failure !== null && failure !== AUTH_COPY.unreachable;
+
   return (
     <AuthScreen
       headline="Let's get you set up"
@@ -160,7 +163,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
                     'cursor-pointer rounded-xl px-3.5 py-4 transition-colors duration-(--duration-fast)',
                     // The offset colour is not optional: without it the ring's offset
                     // band draws Tailwind's default white on the panel's stone-50.
-                    'has-focus-visible:ring-2 has-focus-visible:ring-clay-400/40 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-stone-50',
+                    'has-focus-visible:ring-2 has-focus-visible:ring-clay-400 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-stone-50',
                     isSelected
                       ? choice.selectedCard
                       : 'border border-stone-300 bg-stone-0 hover:border-stone-400',
@@ -225,7 +228,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
           data-role-pending={role === null ? '' : undefined}
         >
           {failure ? (
-            <Banner status="failed" className="mb-4">
+            <Banner status="failed" role="alert" className="mb-4">
               {failure}
             </Banner>
           ) : null}
@@ -236,6 +239,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             placeholder="you@example.com"
             name="email"
             autoComplete="email"
+            aria-invalid={credentialsRefused ? true : undefined}
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -247,6 +251,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             placeholder="••••••••••"
             name="password"
             autoComplete="new-password"
+            aria-invalid={credentialsRefused ? true : undefined}
             minLength={10}
             required
             value={password}
@@ -255,6 +260,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
 
           <Button
             type="submit"
+            className="py-3.25"
             loading={busy}
             aria-disabled={role === null ? true : undefined}
             disabled={email.trim() === '' || password.length < 10}
@@ -276,7 +282,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             </p>
           ) : null}
 
-          <p className="mt-5 text-center text-cta text-stone-700">
+          <p className="mt-5 text-center text-action text-stone-700">
             {AUTH_COPY.signUpAlt}{' '}
             <Link href="/sign-in" className="font-semibold text-clay-500 hover:underline">
               Sign in

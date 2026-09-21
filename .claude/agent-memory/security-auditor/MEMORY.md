@@ -15,23 +15,24 @@
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — traces carry session cookies, stripe-listen.log carries whsec; masking never reaches artifacts
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — live session JWTs; `FORBIDDEN_PATHS` covers the path, no content rule will
 - [A storage branch per lane, CI run and PR](neon-storage-branch-per-runner.md) — `NEON_API_KEY` is production-capable; keep it step-scoped and away from `npm install`
+- [The no-trace guard fights the history scan](no-trace-guard-vs-history-scan.md) — `gitleaks git` reads every commit, so a scrubbed `.gitleaks.toml` entry reds CI for ever; fragment literals must actually split the needle
 - [Backup integrity is not authenticity](backup-integrity-is-not-authenticity.md) — a bucket-token holder forges a dump the drill pg_restores as superuser
 
 ## Auth, identity and tenancy
 
 - [Neon Auth cutover boundaries](neon-auth-cutover-boundaries.md) — verification sound, role double-narrowed; the unthrottled `/api/auth` proxy is the new surface
-- [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` is null for a gated account; `requireClerkSubject` (Clerk-era name, retired by VEN-447) is the deliberate exception
+- [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` is null for a gated account; `requireAuthSubject` (pre-Neon name, retired by VEN-447) is the deliberate exception
 - [The server session cache's key is the whole gate](server-session-cache-key-is-the-cookie.md) — a hit skips the SDK's signature and revocation check; a second `*session_token` cookie keys the victim's JWT
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` renders a booking amount with no `force-dynamic`
-- [Email is a label, the auth id is the key (was `clerk_user_id`, retired)](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial; nothing resolves a person by email
-- [Closing an account releases its address](closed-account-address-is-released.md) — `users_email_key` is partial since #451; the old permanent-500 memory was stale
-- [The sign-up role is confirmed, not narrowed](signup-role-is-confirmed-not-narrowed.md) — VEN-507: `normalizeRole` throws; `explicitTickRequired` is server-derived, and only the notice branch runs `admitVendor`
+- [Email is a label, the auth id is the key (the pre-rename column is gone)](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial; nothing resolves a person by email
+- [Retired users keep their email in the unique index](retired-users-keep-their-email-in-the-unique-index.md) — re-registering the same address is a permanent opaque 500
 - [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes left low-severity on purpose
 - [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — adding `requireAuth` breaks it; removing the inline ban check is the regression
 - [safeReturnPath is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise, 894k-case fuzz clean; do not re-report
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — the matcher skips dotted paths
 - [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — `roleCanReach` is a redirect hint and must never become a gate
+- [Every `FORBIDDEN` is read as a suspension](every-forbidden-is-read-as-a-suspension.md) — `terminalRefusal` has no suspension-specific code, so widening its funnel sends stale-tab and tenancy 403s to a static "you are suspended" page
 
 ## Vendor visibility, moderation and PII
 
@@ -48,6 +49,7 @@
 - [`canBook` is chrome, not a gate](canbook-is-chrome-not-a-gate.md) — three server checks refuse a vendor; the prop degrades permissive on purpose
 - [Vendor selection writes are transaction-only](vendor-selection-writes-are-transaction-only.md) — `replaceVendorTags`/`Categories` no longer self-transact
 - [The `updatedAt` precondition is not a gate](edit-version-precondition-is-not-a-gate.md) — VEN-481 audited clean; the 409 body is the 200's projection, and an explicit `null` coerces to the epoch
+- [The vendor agreement gate has four definitions](vendor-agreement-gate-has-four-definitions.md) — VEN-509 audited clean; publish/checkout/accept want the current version, payout takes any, and both EXISTS need `vendor_profiles` unaliased
 - [Vendor invite gate checks before the row it creates](vendor-invite-gate-checks-before-the-row-it-creates.md) — snapshot role judged, webhook row committed; waitlist email squattable
 
 ## Money, bookings and background work
@@ -66,6 +68,7 @@
 - [Launch switches gate new intents, not open ones](launch-switches-gate-new-intents-not-open-ones.md) — an issued client secret survives the pause
 - [Idempotency guards orphan their side effects](idempotency-guards-orphan-side-effects.md) — every `ON CONFLICT DO NOTHING` here fronts non-transactional follow-on writes
 - [The background queue carries no session](background-work-queue-carries-no-session.md) — re-derive the recipient; never close over `request.auth` or a `tx`
+- [`metadata.env` is the cross-deployment filter](env-tag-is-the-cross-deployment-filter.md) — VEN-529: one shared test account, a branched DB, so the intent tag is the only tier signal; filter order is load-bearing and the retrieve can 500 an alert path
 - [The e2e fixture now calls Stripe for real](e2e-fixture-creates-real-stripe-accounts.md) — one `sk_test_` prefix check keeps a live key out
 - [`stripe_onboarded` entails an account id](stripe-onboarded-entails-account-id.md) — a CHECK; the `acct_` format check was refused as a product decision
 
@@ -73,6 +76,7 @@
 
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking with an empty `closeBlockers`
 - [The unwind's full refund is the ban's argument](account-unwind-full-refund-is-the-ban-argument.md) — superseded by D39: closure refused while a future confirmed booking exists
+- [Ban and closure are resumable endpoints now](unwind-resume-is-a-repeatable-endpoint.md) — VEN-478; the derived pending gate never clears on a legacy/unrefundable booking, and double refund is settled
 - [An unwind spares a request with a booking behind it](unwind-decline-spares-requests-with-a-booking.md) — unarrangeable; it closes a post-unban double-booking window
 - [`cancelled_by` names the actor, not the suspended side](cancelled-by-does-not-say-which-side.md) — "the other account was suspended" is false to an unbanned customer
 - [The acceptance record is undeletable PII](legal-acceptance-record-is-undeletable-pii.md) — closure is a soft delete, so the trigger's delete branch never fires
@@ -88,11 +92,12 @@
 - [URL params are validated in the nuqs hook](url-params-validated-in-the-nuqs-hook.md) — the hook is the boundary, not the screen
 - [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — probe with the bucket-path base; `/_next/image`'s remote patterns are an anonymous fetcher and must derive from the storage env var
 - [Every image-ref bypass is FIXED; the host is not](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — `https://evil.example/x.png` was never closed
+- [The image pipeline is one process-wide 2-slot queue](image-pipeline-is-one-process-wide-queue.md) — VEN-464: hand-off is sound, the unbounded FIFO of 12 MB buffers is the ceiling; `failOn: 'error'` loosens sharp's default
 - [`freeText()` lets NUL through](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — Postgres 22021 lets a caller pick which branch runs
 - [Webhook payload text bypasses the bidi strip](provider-payload-text-bypasses-the-bidi-strip.md) — a hand-`safeParse`d schema is invisible to the free-text guard
 - [Reviews: profanity floor, eligibility and tombstones](review-profanity-filter-is-a-hard-reject-floor.md) — tombstone finality rests on read order; a review can outlive a cancel
 - [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino's three doors, `PostgresError.detail` and bound params all closed; do not re-report
-- [Sentry is a second log sink](sentry-is-a-second-log-sink.md) — `captureException` bypasses the bound-param strip; `scrubErrorEvent` keeps `request.url`
+- [Sentry is a second log sink](sentry-is-a-second-log-sink.md) — VEN-522 made `request.url` path-only; what escapes now is a header name the list misses and a shape no regex knows
 - [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `log.warn({err})` re-emits `stripe-signature` and the raw body
 - [Log redaction covers the query, not the path](log-redaction-covers-query-not-path.md) — a credential in a path segment is logged whole
 - [Two failure-reason columns store the gateway's raw message](failure-reason-columns-rest-on-a-status-only-gateway.md) — admins read one; the only guard is `Resend refused the send (status)` carrying no address

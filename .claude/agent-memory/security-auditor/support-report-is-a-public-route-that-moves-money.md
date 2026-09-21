@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 Since #425, `POST /support/messages` is still deliberately public (no
 `requireAuth`, 6/hour keyed by `request.auth?.id ?? request.ip`) but an optional
@@ -17,7 +17,7 @@ sets `bookings.status = 'disputed'`, which stops the payout sweep.
 session — and delegates everything else to `placeDisputeHold`
 (`payments.service.ts:1086`): 404 for a booking that is not the caller's, 403
 for the vendor on it, 409 outside the window, and `releasedBefore` re-asserted
-at write time. The global `clerk-auth` `onRequest` hook rejects a banned account
+at write time. The global `auth-auth` `onRequest` hook rejects a banned account
 on _every_ route including this one, so the public route inherits the ban check
 it never declares. Verified 2026-09-06 — do not re-report the missing route
 guard.

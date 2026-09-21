@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   bookingRequests,
   bookings,
@@ -55,10 +56,7 @@ describe('the case queue under contention, against a real Postgres', () => {
     expect(response.statusCode).toBe(200);
 
     if (promoteToAdmin) {
-      await harness!.database.db
-        .update(users)
-        .set({ role: 'admin' })
-        .where(eq(users.authUserId, authUserId));
+      await setUserRole(harness!.database.db, 'admin', eq(users.authUserId, authUserId));
     }
 
     const rows = await harness!.database.db
@@ -72,6 +70,13 @@ describe('the case queue under contention, against a real Postgres', () => {
 
   /** One `charge.dispute.created` delivery, as Stripe makes it. */
   async function deliverChargeback(disputeId: string) {
+    harness!.stripe.paymentIntents.set(PAYMENT_INTENT_ID, {
+      id: PAYMENT_INTENT_ID,
+      status: 'succeeded',
+      amountReceivedCents: TOTAL_CENTS,
+      clientSecret: null,
+      metadata: {},
+    });
     harness!.stripe.disputes.set(disputeId, {
       id: disputeId,
       status: 'needs_response',

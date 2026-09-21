@@ -17,13 +17,25 @@ import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-mark
 import type { AppDatabase } from '../../lib/database.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
-import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
-import { assertOwnedImageRefs, thumbnailKeyFor, type ObjectStorage } from '../../lib/storage.js';
+import {
+  accountSuspended,
+  conflict,
+  forbidden,
+  notFound,
+  validationFailed,
+} from '../../lib/errors.js';
+import {
+  assertOwnedImageRefs,
+  assertStorageOriginRefs,
+  thumbnailKeyFor,
+  type ObjectStorage,
+} from '../../lib/storage.js';
 import { reapObjects } from '../portfolio/portfolio.service.js';
 import { replaceVendorTags } from '../tags/tags.dao.js';
 import { resolveVendorTagSelection } from '../tags/tags.service.js';
 import { lockVendorProfile } from '../admin/admin.dao.js';
 import { countActivePackages } from '../packages/packages.dao.js';
+import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import {
   findActiveCategoryIds,
   findVendorCategoryIds,
@@ -96,6 +108,7 @@ export function toVendorProfileDetail(
   categoryIds: string[],
   tagRows: TagRow[],
   activePackageCount: number,
+  holdsAgreement: boolean,
 ): VendorProfileDetail {
   return {
     ...row,
@@ -104,9 +117,20 @@ export function toVendorProfileDetail(
     avgRating: parseRating(row.avgRating),
     categoryIds,
     tags: tagRows satisfies Tag[],
-    publishBlockers: publishBlockers(row, categoryIds, activePackageCount),
+    publishBlockers: publishBlockers(row, categoryIds, activePackageCount, holdsAgreement),
   };
 }
+
+/** What a vendor calls each blocker, for the refusal of an edit to a live storefront. */
+const LIVE_EDIT_FIELD_LABELS: Record<PublishBlockerKey, string> = {
+  businessName: 'the business name',
+  location: 'the location',
+  categories: 'the categories',
+  bio: 'the bio',
+  responseTime: 'the reply window',
+  packages: 'the packages',
+  agreement: 'the agreement',
+};
 
 /**
  * Everything still standing between this profile and a public listing. Returned
@@ -117,6 +141,7 @@ export function publishBlockers(
   row: VendorProfileRow,
   categoryIds: readonly string[],
   activePackageCount: number,
+  holdsAgreement: boolean,
 ): PublishBlockerKey[] {
   const blockers: PublishBlockerKey[] = [];
 
@@ -142,6 +167,10 @@ export function publishBlockers(
   }
   if (activePackageCount === 0) {
     blockers.push('packages');
+  }
+  // The same definition of "accepted" the connect and payment gates use (VEN-509).
+  if (!holdsAgreement) {
+    blockers.push('agreement');
   }
 
   return blockers;
@@ -261,13 +290,14 @@ async function assertCategoriesSelectable(
 }
 
 async function loadDetail(db: AppDatabase, row: VendorProfileRow): Promise<VendorProfileDetail> {
-  const [categoryIds, tagRows, activePackageCount] = await Promise.all([
+  const [categoryIds, tagRows, activePackageCount, holdsAgreement] = await Promise.all([
     findVendorCategoryIds(db, row.id),
     findVendorTags(db, row.id),
     countActivePackages(db, row.id),
+    holdsCurrentAgreement(db, row.userId),
   ]);
 
-  return toVendorProfileDetail(row, categoryIds, tagRows, activePackageCount);
+  return toVendorProfileDetail(row, categoryIds, tagRows, activePackageCount, holdsAgreement);
 }
 
 /**
@@ -340,8 +370,10 @@ export async function createVendorProfile(
   db: AppDatabase,
   userId: string,
   input: CreateVendorProfileInput,
+  publicBaseUrl: string,
 ): Promise<VendorProfileDetail> {
   assertOwnedImageRefs([input.profileImageUrl, input.coverImageUrl], userId);
+  assertStorageOriginRefs([input.profileImageUrl, input.coverImageUrl], publicBaseUrl);
 
   const existing = await findVendorProfileByUserId(db, userId);
   if (existing) {
@@ -413,9 +445,11 @@ export async function updateVendorProfile(
   storage: ObjectStorage,
   userId: string,
   input: UpdateVendorProfileInput,
+  publicBaseUrl: string,
   log?: { warn: (details: unknown, message: string) => void },
 ): Promise<VendorProfileDetail> {
   assertOwnedImageRefs([input.profileImageUrl, input.coverImageUrl], userId);
+  assertStorageOriginRefs([input.profileImageUrl, input.coverImageUrl], publicBaseUrl);
 
   const existing = await findVendorProfileByUserId(db, userId);
   if (!existing) {
@@ -503,34 +537,57 @@ export async function updateVendorProfile(
         ),
   ] as const);
 
-  if (input.isPublished !== undefined) {
-    if (input.isPublished) {
-      /*
-       * Checked before the blockers, because it is not one (#457). A blocker is
-       * a list of things the vendor can go and finish; this is a refusal they
-       * cannot clear at all, and reporting it as a fourth incomplete field
-       * would send them round the editor looking for it.
-       */
-      if (existing.moderationHold) {
-        throw forbidden(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
-      }
-      // The hold can still land between here and the write; see the transaction.
+  const publishing = input.isPublished === true;
 
-      const [effectiveCategories, activePackageCount] = await Promise.all([
-        categoryIds === undefined ? findVendorCategoryIds(db, existing.id) : categoryIds,
-        countActivePackages(db, existing.id),
-      ]);
-      const blockers = publishBlockers(
-        { ...existing, ...patch } as VendorProfileRow,
-        effectiveCategories,
-        activePackageCount,
+  if (publishing && existing.moderationHold) {
+    /*
+     * Checked before the blockers, because it is not one (#457). A blocker is
+     * a list of things the vendor can go and finish; this is a refusal they
+     * cannot clear at all, and reporting it as a fourth incomplete field
+     * would send them round the editor looking for it.
+     */
+    throw forbidden(VENDOR_PROFILE_MODERATION_HOLD_MESSAGE);
+  }
+  // The hold can still land between here and the write; see the transaction.
+
+  /*
+   * A live storefront is held to the publish bar on every save (VEN-557), so a
+   * vendor cannot blank the bio or the reply window and stay public and
+   * searchable. An edit to a profile that stays live is refused only for a
+   * blocker the stored profile did not already carry: a lapsed agreement or a
+   * switched-off package is not this edit's doing and must not lock the vendor
+   * out of fixing the rest.
+   */
+  const editingLive = existing.isPublished && input.isPublished !== false;
+
+  if (publishing || editingLive) {
+    const [heldCategories, activePackageCount, holdsAgreement] = await Promise.all([
+      findVendorCategoryIds(db, existing.id),
+      countActivePackages(db, existing.id),
+      holdsCurrentAgreement(db, existing.userId),
+    ]);
+    const blockers = publishBlockers(
+      { ...existing, ...patch } as VendorProfileRow,
+      categoryIds ?? heldCategories,
+      activePackageCount,
+      holdsAgreement,
+    );
+    const alreadyBlocked = publishing
+      ? []
+      : publishBlockers(existing, heldCategories, activePackageCount, holdsAgreement);
+    const introduced = blockers.filter((key) => !alreadyBlocked.includes(key));
+
+    if (introduced.length > 0) {
+      throw validationFailed(
+        publishing
+          ? 'Complete your profile before publishing it.'
+          : `Your storefront is live, so ${introduced.map((key) => LIVE_EDIT_FIELD_LABELS[key]).join(' and ')} cannot be left empty.`,
+        { blockers: introduced },
       );
-
-      if (blockers.length > 0) {
-        throw validationFailed('Complete your profile before publishing it.', { blockers });
-      }
     }
+  }
 
+  if (input.isPublished !== undefined) {
     patch.isPublished = input.isPublished;
   }
 
@@ -573,12 +630,17 @@ export async function updateVendorProfile(
          * since would otherwise go live with nothing bookable.
          */
         await lockVendorProfile(tx, existing.id);
-        if ((await countActivePackages(tx, existing.id)) === 0) {
+        const lockedPackageCount = await countActivePackages(tx, existing.id);
+        // Re-read here too: the acceptance the pre-check saw can be gone by now (VEN-509).
+        const lockedHoldsAgreement = await holdsCurrentAgreement(tx, existing.userId);
+
+        if (lockedPackageCount === 0 || !lockedHoldsAgreement) {
           throw validationFailed('Complete your profile before publishing it.', {
             blockers: publishBlockers(
               { ...existing, ...patch } as VendorProfileRow,
               categoryIds ?? (await findVendorCategoryIds(tx, existing.id)),
-              0,
+              lockedPackageCount,
+              lockedHoldsAgreement,
             ),
           });
         }
@@ -613,7 +675,7 @@ export async function updateVendorProfile(
 
         // Neither a hold nor a missing profile: the owner was suspended meanwhile.
         if (current) {
-          throw forbidden(SUSPENDED_ACCOUNT_MESSAGE);
+          throw accountSuspended(SUSPENDED_ACCOUNT_MESSAGE);
         }
       }
 

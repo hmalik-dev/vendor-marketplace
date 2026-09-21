@@ -1,3 +1,4 @@
+import { clientAddress } from '../../lib/client-address.js';
 import { supportMessageReceiptSchema, supportMessageSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { bookingContextFor } from '../payments/payments.service.js';
@@ -48,8 +49,11 @@ export const supportRoutes: FastifyPluginAsyncZod<SupportRoutesOptions> = async 
         openToLockedOut: true,
         rateLimit: {
           ...SUPPORT_RATE_LIMIT,
-          keyGenerator: (request: { auth: { id: string } | null; ip: string }) =>
-            request.auth?.id ?? request.ip,
+          keyGenerator: (request: {
+            auth: { id: string } | null;
+            ip: string;
+            headers: Record<string, string | string[] | undefined>;
+          }) => request.auth?.id ?? clientAddress(request),
         },
       },
       schema: {

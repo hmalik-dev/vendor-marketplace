@@ -136,3 +136,49 @@ describe('useModalSheet', () => {
     expect(document.activeElement).toBe(outside);
   });
 });
+
+/** The dropdown's shape: the trigger ref is a non-focusable wrapper around the button. */
+function WrappedSheet(): React.ReactElement {
+  const [open, setOpen] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLDivElement>(null);
+
+  useModalSheet({ open, onClose: () => setOpen(false), panel, trigger });
+
+  return (
+    <>
+      <div ref={trigger} className="contents" onClick={() => setOpen(true)}>
+        <button type="button">Filters</button>
+      </div>
+      {open ? (
+        <div ref={panel} role="dialog" aria-modal="true">
+          <button type="button" onClick={() => setOpen(false)}>
+            Close
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+describe('useModalSheet with a wrapper as the trigger ref', () => {
+  it('returns focus to the button inside it after Escape', async () => {
+    render(<WrappedSheet />);
+    const button = screen.getByRole('button', { name: 'Filters' });
+    await userEvent.click(button);
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('returns focus to the button inside it after Close', async () => {
+    render(<WrappedSheet />);
+    const button = screen.getByRole('button', { name: 'Filters' });
+    await userEvent.click(button);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(document.activeElement).toBe(button);
+  });
+});

@@ -7,6 +7,7 @@ const call = vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 20 }))
 
 vi.mock('next/navigation', () => ({ usePathname: () => pathname }));
 vi.mock('@/lib/use-api', () => ({ useApi: () => call }));
+vi.mock('@/lib/report-error', () => ({ reportSwallowedError: vi.fn() }));
 vi.mock('@/lib/use-event-stream', () => ({
   useEventStream: () => ({ connected: true }),
 }));
@@ -228,5 +229,100 @@ describe('notification dates', () => {
 
     // The raw ISO form #72 measured must never reach a reader.
     expect(screen.queryByText(/\d{4}-\d{2}-\d{2}/)).toBeNull();
+  });
+});
+
+/*
+ * VEN-540. The badge and the struck-through row are set before the API answers.
+ * A refusal used to leave them that way, so the reader saw a clear bell the
+ * server never agreed to.
+ */
+describe('a mark-read the API refuses', () => {
+  const UNREAD = {
+    id: 'n1',
+    type: 'new_request',
+    title: 'New booking request',
+    body: 'A customer asked about Dec 19.',
+    data: {},
+    readAt: null,
+    createdAt: new Date('2026-12-19T15:00:00.000Z'),
+  };
+
+  it('restores the badge for one notification', async () => {
+    let refuse: (error: Error) => void = () => {};
+    call.mockImplementation((async (path: string) => {
+      if (path === '/notifications/n1/read') {
+        return new Promise((_resolve, reject) => {
+          refuse = reject;
+        });
+      }
+      return { items: [UNREAD], total: 1, page: 1, pageSize: 20 };
+    }) as never);
+
+    const user = userEvent.setup();
+    render(<NotificationBell />);
+    await user.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+    await user.click(screen.getByRole('button', { name: /New booking request/ }));
+
+    // Optimistic while the request is out…
+    expect(screen.getByRole('button', { name: 'Notifications' })).toBeDefined();
+
+    refuse(new Error('nope'));
+
+    // …and put back once it is refused.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Notifications, 1 unread' })).toBeDefined(),
+    );
+  });
+
+  it('restores the badge for mark all read', async () => {
+    let refuse: (error: Error) => void = () => {};
+    call.mockImplementation((async (path: string) => {
+      if (path === '/notifications/read-all') {
+        return new Promise((_resolve, reject) => {
+          refuse = reject;
+        });
+      }
+      return { items: [UNREAD], total: 1, page: 1, pageSize: 20 };
+    }) as never);
+
+    const user = userEvent.setup();
+    render(<NotificationBell />);
+    await user.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+    await user.click(screen.getByRole('button', { name: 'Mark all read' }));
+
+    expect(screen.getByRole('button', { name: 'Notifications' })).toBeDefined();
+
+    refuse(new Error('nope'));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Notifications, 1 unread' })).toBeDefined(),
+    );
+  });
+});
+
+describe('the bell announcements (VEN-542)', () => {
+  it('says the unread count in a live region and points aria-controls at the open panel', async () => {
+    call.mockResolvedValueOnce({
+      items: [
+        { id: 'n1', title: 'Hello', body: 'b', readAt: null, createdAt: new Date(), href: null },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    } as never);
+    render(<NotificationBell />);
+
+    const region = await screen.findByRole('status');
+    await waitFor(() => expect(region.textContent).toBe('1 unread notification'));
+
+    const button = screen.getByRole('button', { name: /Notifications/ });
+    expect(button.getAttribute('aria-haspopup')).toBe('dialog');
+
+    await userEvent.click(button);
+
+    const controls = button.getAttribute('aria-controls');
+    expect(controls).toBeTruthy();
+    expect(document.getElementById(controls ?? '')).not.toBeNull();
   });
 });

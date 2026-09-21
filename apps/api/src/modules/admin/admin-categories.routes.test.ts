@@ -7,6 +7,7 @@ import {
   createTestHarness,
   signInAs,
   type TestHarness,
+  acceptVendorAgreementAs,
 } from '../../testing/test-server.js';
 import { setCategoryActiveRow } from './admin-categories.dao.js';
 
@@ -104,6 +105,7 @@ describe('admin category management', () => {
     });
     expect(pkg.statusCode).toBe(201);
 
+    await acceptVendorAgreementAs(harness, VENDOR);
     const published = await harness.app.inject({
       method: 'PUT',
       url: '/vendor/profile',

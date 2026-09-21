@@ -36,7 +36,7 @@ export function RequestStepper({ current }: RequestStepperProps): React.ReactEle
               <span
                 aria-hidden="true"
                 className={cn(
-                  'flex size-6.5 items-center justify-center rounded-full text-xs font-bold',
+                  'flex size-6.5 items-center justify-center rounded-full text-meta font-bold',
                   isCurrent ? 'bg-clay-400 text-stone-0' : 'bg-stone-200 text-stone-600',
                 )}
               >

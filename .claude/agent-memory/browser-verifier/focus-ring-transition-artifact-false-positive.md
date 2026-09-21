@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 On ticket #73, a parity pass claimed the `Button` primitive's focus ring on
 `secondary`/`ink` variants "computes correctly but the composed box-shadow
@@ -40,4 +40,4 @@ layers after that wait, THEN it's a real bug — walk the cascade for a genuine
 specificity/override conflict rather than a timing artifact. See
 [[stored-auth-state-needs-marker-wait-not-fixed-sleep]] for the same
 "don't trust the synchronous read, wait for the settled state" pattern applied
-to a different kind of async UI state (Clerk auth) in this repo.
+to a different kind of async UI state (the auth provider auth) in this repo.

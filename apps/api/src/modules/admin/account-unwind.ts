@@ -3,12 +3,17 @@ import {
   isLegacyDestinationPayout,
   unwindFloorDate,
 } from '@vendor-marketplace/shared';
+import type { AppDatabase } from '../../lib/database.js';
 import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { refundFailedAlert } from '../operator-alerts/operator-alerts.service.js';
-import { cancelBookingAndFreeDate } from '../payments/payments.dao.js';
-import type { BookingContext } from '../payments/payments.service.js';
-import { declineOpenRequests, findConfirmedBookingsToUnwind } from './admin.dao.js';
+import { cancelBookingAndFreeDate, zeroUnreleasedVendorPayout } from '../payments/payments.dao.js';
+import { createRefundOnce, type BookingContext } from '../payments/payments.service.js';
+import {
+  declineOpenRequests,
+  findConfirmedBookingsToUnwind,
+  type BanAffectedBooking,
+} from './admin.dao.js';
 
 /**
  * Everything an admin operation needs — which is exactly a `BookingContext`.
@@ -182,6 +187,18 @@ export interface AccountUnwindResult {
   bookingsLeftForReview: number;
 }
 
+/** Whether an unwind changed anything, so a re-run of a finished one writes no audit row. */
+export function unwoundAnything(result: AccountUnwindResult): boolean {
+  return (
+    result.requestsDeclined +
+      result.bookingsCancelled +
+      result.refundsIssued +
+      result.refundsFailed +
+      result.bookingsLeftForReview >
+    0
+  );
+}
+
 /**
  * Leaves the marketplace in a state where nobody is waiting on an account that
  * can no longer answer.
@@ -218,13 +235,46 @@ export async function unwindAccountBookings(
   context.hub.closeFor(targetId);
 
   const floorDate = unwindFloorDate(now);
-  const affected = await findConfirmedBookingsToUnwind(
+  const snapshot = await findConfirmedBookingsToUnwind(
     context.db,
     targetId,
     vendorProfileId,
     floorDate,
   );
+  const first = await unwindBatch(context, targetId, now, copy, snapshot);
 
+  const requestsDeclined = await declineOpenRequests(context.db, targetId, vendorProfileId, now);
+
+  /*
+   * The closing pass (VEN-479). The snapshot above is taken before the loop
+   * runs, and the loop takes seconds to minutes for a large vendor; a customer
+   * whose payment landed in that window confirmed a booking the snapshot never
+   * saw, and nothing else would refund it. Anything the first pass already
+   * handled is excluded, so a booking left for review or whose refund failed is
+   * neither counted nor alerted a second time.
+   */
+  const handled = new Set(snapshot.map((booking) => booking.id));
+  const late = (
+    await findConfirmedBookingsToUnwind(context.db, targetId, vendorProfileId, floorDate)
+  ).filter((booking) => !handled.has(booking.id));
+  const closing = await unwindBatch(context, targetId, now, copy, late);
+
+  return {
+    requestsDeclined,
+    bookingsCancelled: first.bookingsCancelled + closing.bookingsCancelled,
+    refundsIssued: first.refundsIssued + closing.refundsIssued,
+    refundsFailed: first.refundsFailed + closing.refundsFailed,
+    bookingsLeftForReview: first.bookingsLeftForReview + closing.bookingsLeftForReview,
+  };
+}
+
+async function unwindBatch(
+  context: AdminContext,
+  targetId: string,
+  now: Date,
+  copy: AccountUnwindCopy,
+  affected: BanAffectedBooking[],
+): Promise<Omit<AccountUnwindResult, 'requestsDeclined'>> {
   let refundsIssued = 0;
   let bookingsCancelled = 0;
   let refundsFailed = 0;
@@ -288,6 +338,7 @@ export async function unwindAccountBookings(
      * refund the loop below is about to fail on.
      */
     let refundedCents: number | null = null;
+    let refundId: string | undefined;
 
     /*
      * A pre-#423 destination charge is refused here for the same reason
@@ -331,9 +382,10 @@ export async function unwindAccountBookings(
          * refund" left $490 unreturned on a booking then closed as refunded.
          */
         refundedCents = alreadyRefundedCents;
+        refundId = alreadyRefunded?.refundIds[0];
 
         if (remainingCents > 0) {
-          const refund = await context.stripe.createRefund({
+          const refund = await createRefundOnce(context, {
             paymentIntentId: booking.stripePaymentIntentId,
             amountCents: remainingCents,
             /*
@@ -352,13 +404,19 @@ export async function unwindAccountBookings(
              * give back. The refund carries neither `reverse_transfer` nor
              * `refund_application_fee` (#423).
              */
-            idempotencyKey: `${copy.refundKeyPrefix}:marked:${booking.id}`,
+            /*
+             * Attempt-numbered like the cancellation's: Stripe replays a refusal
+             * for 24 hours, so the retry after one needs a new key, and racers
+             * that read the same count still share one (VEN-499, D36).
+             */
+            scope: `${copy.refundKeyPrefix}:marked:${booking.id}`,
+            keyFor: (attempt) =>
+              `${copy.refundKeyPrefix}:marked:${booking.id}${attempt === 0 ? '' : `_${attempt}`}`,
           });
 
           refundedCents += refund.amountCents;
+          refundId = refund.refundId;
         }
-
-        refundsIssued += 1;
       } catch (error) {
         /*
          * One failed refund must not abandon the rest of the unwind. The
@@ -412,7 +470,30 @@ export async function unwindAccountBookings(
     });
 
     if (!cancelled) {
+      if (booking.stripePaymentIntentId) {
+        /*
+         * The refund is out and the row would not cancel: status moved under
+         * the loop (a Dashboard refund holding it `disputed`, the customer's own
+         * cancel). Left alone the booking is refunded in full with its payout
+         * intact, and the sweep pays the vendor after an unban (VEN-546). So the
+         * payout is zeroed here, the operator is told, and the refund is not
+         * counted as a clean one.
+         */
+        context.log.error(
+          { bookingId: booking.id, operation: copy.operation, refundId },
+          'Refunded a booking during an account unwind whose row could not be cancelled',
+        );
+        await zeroUnreleasedVendorPayout(context.db, booking.id);
+        context.alerts?.dispatch(
+          refundFailedAlert({ bookingId: booking.id, during: copy.operation, refundId }),
+        );
+        refundsFailed += 1;
+      }
       continue;
+    }
+
+    if (booking.stripePaymentIntentId) {
+      refundsIssued += 1;
     }
 
     bookingsCancelled += 1;
@@ -490,15 +571,45 @@ export async function unwindAccountBookings(
     }
   }
 
-  const requestsDeclined = await declineOpenRequests(context.db, targetId, vendorProfileId, now);
-
   return {
-    requestsDeclined,
     bookingsCancelled,
     refundsIssued,
     refundsFailed,
     bookingsLeftForReview,
   };
+}
+
+/**
+ * Bookings an unwind of this account has not finished: still `confirmed`, still
+ * ahead of the floor, and one this unwind would act on (VEN-478).
+ *
+ * Derived from the bookings themselves rather than stored, so it cannot drift
+ * from what `unwindAccountBookings` would select. An account-holder unwind
+ * leaves the holder's own bookings for review by design, so those never count:
+ * they would keep a finished closure looking unfinished for ever, and so would a
+ * legacy destination charge, which the unwind hands to an operator rather than
+ * refunds. A booking
+ * whose refund Stripe refuses does count, and stays counted until it is fixed.
+ */
+export async function countUnwindPending(
+  db: AppDatabase,
+  targetId: string,
+  vendorProfileId: string | null,
+  now: Date,
+  copy: AccountUnwindCopy,
+): Promise<number> {
+  const affected = await findConfirmedBookingsToUnwind(
+    db,
+    targetId,
+    vendorProfileId,
+    unwindFloorDate(now),
+  );
+
+  return affected.filter(
+    (booking) =>
+      !(copy.initiatedBy === 'account-holder' && booking.customerId === targetId) &&
+      !isLegacyDestinationPayout(booking),
+  ).length;
 }
 
 /** An operator suspended the account. */

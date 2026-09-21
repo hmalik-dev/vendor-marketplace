@@ -1,3 +1,4 @@
+import { withRequestIdentity } from '@vendor-marketplace/db';
 import { unwindFloorDate } from '@vendor-marketplace/shared';
 import type {
   AdminCloseAccountResult,
@@ -8,18 +9,21 @@ import type {
 } from '@vendor-marketplace/shared';
 import type { LegalAcceptanceRow, UserRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
-import {
-  isLegacyIdentity,
-  isSeededIdentity,
-  type AuthIdentityDeleter,
-} from '../auth-sync/identity.js';
+import { isSeededIdentity, type AuthIdentityDeleter } from '../auth-sync/identity.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
-import { hasAnotherLiveOperator, retireOperatorById, retireUserById } from '../users/users.dao.js';
-import { findConfirmedBookingsToUnwind } from './admin.dao.js';
+import {
+  hasAnotherLiveOperator,
+  retireOperatorById,
+  retireUserById,
+  type RetirementAudit,
+} from '../users/users.dao.js';
+import { findConfirmedBookingsToUnwind, insertAdminAction } from './admin.dao.js';
 import { fullName, recordAdminActionBestEffort } from './admin.service.js';
 import {
   bestEffortNotice,
   CLOSURE_UNWIND,
+  countUnwindPending,
+  SUSPENSION_UNWIND,
   unwindAccountBookings,
   type AdminContext,
 } from './account-unwind.js';
@@ -131,7 +135,7 @@ interface GatheredRecord {
  * and the drift would show up as the console under-reporting a category the
  * export contains.
  */
-async function gather(db: AppDatabase, user: UserRow): Promise<GatheredRecord> {
+async function gather(db: AppDatabase, user: UserRow, actorId: string): Promise<GatheredRecord> {
   const profile = await findVendorProfileRecord(db, user.id);
   const profileId = profile?.id ?? null;
 
@@ -140,7 +144,9 @@ async function gather(db: AppDatabase, user: UserRow): Promise<GatheredRecord> {
       findExportBookingRequests(db, user.id, profileId),
       findExportBookings(db, user.id, profileId),
       findExportReviews(db, user.id, profileId),
-      findExportMessages(db, user.id, profileId),
+      withRequestIdentity(db, { userId: actorId, role: 'admin', operator: true }, (tx) =>
+        findExportMessages(tx, user.id, profileId),
+      ),
       findExportNotifications(db, user.id),
       findLegalAcceptancesForUser(db, user.id),
     ]);
@@ -195,7 +201,7 @@ export async function exportUserData(
     throw notFound('No account with that id');
   }
 
-  const record = await gather(context.db, user);
+  const record = await gather(context.db, user, actorId);
   const { written, received } = splitReviews(record);
 
   const counterpartyIds = new Set<string>();
@@ -498,8 +504,8 @@ export const LAST_OPERATOR_REFUSAL =
  *
  * "Nothing removed" is not success here: an id this branch does not hold reads
  * the same as one already gone — a store pointed at the wrong branch is the
- * anticipated mistake — and `identityDeleted: true` goes into `admin_actions`,
- * which cannot be corrected. So the console asks for a person instead.
+ * anticipated mistake — and `identityDeleted: true` goes to the console,
+ * which acts on it. So the console asks for a person instead.
  */
 async function deleteAndConfirm(
   context: AdminContext,
@@ -562,40 +568,82 @@ export async function closeAccount(
   if (actorId === userId) {
     /*
      * The same refusal `setUserBanned` makes, for a sharper reason: an operator
-     * who closed their own account would take their entire `admin_actions` log
-     * with them one hard delete later, and an audit trail an actor can erase is
-     * not one. 403 rather than 400 — it is about who the caller is.
+     * who closed their own account would retire the actor of their own audit
+     * rows, and an audit trail an actor can retire is not one. 403 rather than 400 — it is about who the caller is.
      */
     throw forbidden('You cannot close your own account');
   }
 
-  if (user.deletedAt) {
-    throw conflict('That account is already closed');
-  }
-
   const profile = await findVendorProfileRecord(context.db, userId);
-  const blockers = await closeBlockers(context.db, userId, now);
 
-  if (blockers.length > 0) {
-    throw conflict(
-      `This account holds ${blockers.length} upcoming confirmed ${
-        blockers.length === 1 ? 'booking' : 'bookings'
-      }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
-      { bookings: blockers },
-    );
-  }
+  /*
+   * A closure re-run on a closed account is the **resume** (VEN-478), where the
+   * unwind was interrupted after the retirement committed: it skips the
+   * retirement and its intent row and finishes the unwind. Only while something
+   * is still pending; a finished closure is still a 409.
+   */
+  const resuming = user.deletedAt !== null;
 
-  const retired = operatorTarget
-    ? await retireOperatorById(context.db, userId)
-    : await retireUserById(context.db, userId);
-
-  if (retired === 'last-operator') {
-    throw conflict(LAST_OPERATOR_REFUSAL);
-  }
-
-  if (!retired) {
-    // Another closure took the claim between the read above and this update.
+  if (
+    resuming &&
+    (await countUnwindPending(context.db, userId, profile?.id ?? null, now, CLOSURE_UNWIND)) === 0
+  ) {
     throw conflict('That account is already closed');
+  }
+
+  /*
+   * The blockers are read **inside** the retirement, under the account's row
+   * lock (VEN-483). Read before it, a booking confirmed in between was left
+   * standing with a closed customer; now it either commits first and refuses
+   * the closure here, or waits until the retirement has committed.
+   */
+  function blockersOf(tx: AppDatabase): Promise<AdminCloseBlocker[]> {
+    return closeBlockers(tx, userId, now);
+  }
+
+  /*
+   * The audit row commits with the retirement or not at all (VEN-463): a closure
+   * that cannot be recorded does not happen, and the operator simply repeats it.
+   * It is the intent row (VEN-478): the trail starts with the attempt, and what
+   * the unwind then did is a row of its own, because rows cannot be updated.
+   */
+  const audit: RetirementAudit = (tx, { profileRetired }) =>
+    insertAdminAction(tx, {
+      actorId,
+      action: operatorTarget ? 'operator_account_closed' : 'user_closed',
+      subjectType: 'user',
+      subjectId: userId,
+      detail: { profileRetired },
+    });
+
+  let retired: { user: UserRow; profileRetired: boolean };
+
+  if (resuming) {
+    retired = { user, profileRetired: false };
+  } else {
+    const result = operatorTarget
+      ? await retireOperatorById(context.db, userId, blockersOf, audit)
+      : await retireUserById(context.db, userId, blockersOf, audit);
+
+    if (result === 'last-operator') {
+      throw conflict(LAST_OPERATOR_REFUSAL);
+    }
+
+    if (result && 'blocked' in result) {
+      throw conflict(
+        `This account holds ${result.blocked.length} upcoming confirmed ${
+          result.blocked.length === 1 ? 'booking' : 'bookings'
+        }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
+        { bookings: result.blocked },
+      );
+    }
+
+    if (!result) {
+      // Another closure took the claim between the read above and this update.
+      throw conflict('That account is already closed');
+    }
+
+    retired = result;
   }
 
   /*
@@ -638,8 +686,8 @@ export async function closeAccount(
    * gone a session token for it still verifies for up to 15 minutes (VEN-444,
    * q3); the retired row is what refuses it meanwhile.
    *
-   * Reported rather than thrown, through the same helper the audit write and
-   * the unwind's notifications use: the retirement has already committed and
+   * Reported rather than thrown, through the same helper the unwind's
+   * notifications use: the retirement has already committed and
    * an operator cannot repeat a closure — the route answers 409 on a closed
    * account — so a failure at Neon Auth must not answer 500 and tell them
    * nothing happened. It comes back as `identityDeleted: false`, and the
@@ -651,13 +699,23 @@ export async function closeAccount(
    */
   const identityDeleted = isSeededIdentity(user.authProvider)
     ? true
-    : deleteIdentity === null || isLegacyIdentity(user.authProvider)
+    : deleteIdentity === null
       ? false
       : await deleteAndConfirm(context, userId, user.authUserId, deleteIdentity);
 
+  context.log.info(
+    { userId, actorId, ...unwound, identityDeleted },
+    'An account closure finished unwinding',
+  );
+
+  /*
+   * What the closure then did, as a row of its own: the intent row above
+   * cannot be updated. Always written, because `identityDeleted` is the fact
+   * about an irreversible act that the trail must hold.
+   */
   await recordAdminActionBestEffort(context, {
     actorId,
-    action: operatorTarget ? 'operator_account_closed' : 'user_closed',
+    action: 'account_unwind_finished',
     subjectType: 'user',
     subjectId: userId,
     detail: {
@@ -666,8 +724,12 @@ export async function closeAccount(
       bookingsLeftForReview: unwound.bookingsLeftForReview,
       refundsIssued: unwound.refundsIssued,
       refundsFailed: unwound.refundsFailed,
-      profileRetired: retired.profileRetired,
-      identityDeleted,
+      /*
+       * A resume records only a deletion it made: it cannot tell "the first run
+       * already deleted it" from "never could", and a `false` here would put an
+       * uncorrectable falsehood in the log.
+       */
+      ...(resuming && !identityDeleted ? {} : { identityDeleted }),
     },
   });
 
@@ -693,6 +755,7 @@ export async function closeAccount(
  */
 export async function readUserDataRights(
   db: AppDatabase,
+  actorId: string,
   userId: string,
   now: Date,
 ): Promise<AdminUserDataRights> {
@@ -702,7 +765,7 @@ export async function readUserDataRights(
     throw notFound('No account with that id');
   }
 
-  const record = await gather(db, user);
+  const record = await gather(db, user, actorId);
   const { written, received } = splitReviews(record);
   const blockers = user.deletedAt ? [] : await closeBlockers(db, userId, now);
   const bookingsRefundedOnClose = user.deletedAt
@@ -730,6 +793,16 @@ export async function readUserDataRights(
       legalAcceptances: record.acceptances.length,
     },
     closeBlockers: blockers,
+    unwindPending:
+      user.deletedAt || user.isBanned
+        ? await countUnwindPending(
+            db,
+            userId,
+            record.profile?.id ?? null,
+            now,
+            user.deletedAt ? CLOSURE_UNWIND : SUSPENSION_UNWIND,
+          )
+        : 0,
     bookingsRefundedOnClose,
     legalAcceptances: record.acceptances.map(toAcceptanceRecord),
   };

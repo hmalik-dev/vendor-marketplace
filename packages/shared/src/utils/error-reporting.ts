@@ -40,7 +40,7 @@ export const PAYMENT_ERROR_TAGS = { area: 'payments', severity: 'critical' } as 
  * both undone if the caller's address arrives in a header instead.
  */
 const CREDENTIAL_HEADER =
-  /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-forwarded-for|x-real-ip|forwarded|x-web-tier-key|x-visitor-ip)$|token|secret|signature|session|svix/i;
+  /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-forwarded-for|x-real-ip|forwarded|x-web-tier-key|x-visitor-ip|x-vercel-forwarded-for|cf-connecting-ip|true-client-ip)$|^(?:x-vercel-ip-|cf-)|token|secret|signature|session|svix/i;
 
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 /** A JWT — the auth provider's session token is one, and so is its `__session` cookie. */
@@ -79,6 +79,24 @@ const QUERY_VALUE = /([?&][^\s=&#"']+=)[^\s&#"']*/g;
 /** The same secrets when a query string travels bare, as `searchParams.toString()` builds it. */
 const BARE_SECRET_PARAM = /\b((?:ticket|token|secret|signature)=)[^\s&#"']+/gi;
 
+/** An IPv4 address, each octet 0-255 so a version string like `1.2.3.456` is left alone. */
+const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
+/**
+ * An IPv6 address: eight groups, or a `::` form. A bare `12:30:45` clock time
+ * has neither, so it is not mistaken for one. The boundary is captured, not
+ * asserted, for the same Safari reason as `PHONE`.
+ */
+const IPV6 =
+  /(^|\W)(?:(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(?:[0-9a-f]{1,4}:){1,7}:(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?|::(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})(?![\w:])/gi;
+
+/** The opaque segment of a route that carries a credential in its path. */
+const CREDENTIAL_PATH = /(\/(?:invites?|stream-tickets?|tickets?)\/)[^\s/?#"']+/gi;
+
+/** A key whose value is a credential whatever its shape: the value is withheld, not scanned. */
+const WITHHELD_KEY = /token|secret|ticket|pass(?:word|wd)|auth(?!or)/i;
+/** A key that holds a whole query string, whose values are all suspect. */
+const QUERY_KEY = /^(?:query|query_string|http\.query|url\.query)$/i;
+
 export const REDACTED = '[redacted]';
 
 /** Deeper than any event an SDK builds; a cycle stops here instead of overflowing. */
@@ -90,10 +108,22 @@ function redactString(value: string): string {
     .replace(BEARER, REDACTED)
     .replace(PROVIDER_CREDENTIAL, REDACTED)
     .replace(STRIPE_OBJECT_ID, REDACTED)
+    .replace(CREDENTIAL_PATH, `$1${REDACTED}`)
     .replace(QUERY_VALUE, `$1${REDACTED}`)
     .replace(BARE_SECRET_PARAM, `$1${REDACTED}`)
     .replace(EMAIL, REDACTED)
+    .replace(IPV4, REDACTED)
+    .replace(IPV6, `$1${REDACTED}`)
     .replace(PHONE, `$1${REDACTED}`);
+}
+
+/** A value under a secret- or query-named key is withheld whole; anything else is scanned. */
+function redactEntry(key: string, entry: unknown, depth: number): unknown {
+  const withheld = WITHHELD_KEY.test(key) || QUERY_KEY.test(key);
+
+  return withheld && entry !== null && entry !== undefined && entry !== ''
+    ? REDACTED
+    : redactDeep(entry, depth);
 }
 
 function redactDeep(value: unknown, depth: number): unknown {
@@ -110,7 +140,7 @@ function redactDeep(value: unknown, depth: number): unknown {
   }
 
   return Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => [key, redactDeep(entry, depth + 1)]),
+    Object.entries(value).map(([key, entry]) => [key, redactEntry(key, entry, depth + 1)]),
   );
 }
 
@@ -123,6 +153,8 @@ export interface ReportableEvent {
         cookies?: unknown;
         data?: unknown;
         query_string?: unknown;
+        /** The server's environment, `REMOTE_ADDR` among it: dropped whole. */
+        env?: unknown;
         /** Path *and* query: every SDK builds it from a value that carries both. */
         url?: unknown;
       }
@@ -170,6 +202,7 @@ export function scrubErrorEvent<TEvent extends ReportableEvent>(event: TEvent): 
       cookies: _cookies,
       data: _data,
       query_string: _query,
+      env: _env,
       url,
       ...other
     } = request;

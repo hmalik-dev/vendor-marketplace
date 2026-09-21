@@ -1,7 +1,7 @@
 import { users } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { Writable } from 'node:stream';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SVIX_HEADERS,
   bearer,
@@ -129,6 +129,95 @@ describe('the rate-limit key behind a proxy', () => {
       ]);
 
       expect(escaped).toBe(true);
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
+/*
+ * VEN-549. On Railway the socket peer and the appended `X-Forwarded-For` entry
+ * are the edge node, so the limiter bucketed per node: callers behind one node
+ * shared 120 a minute and one caller got a bucket per node. The edge sets
+ * `X-Real-IP` to the connecting client; the key reads that.
+ */
+describe('the rate-limit key behind Railway', () => {
+  beforeEach(() => {
+    vi.stubEnv('RAILWAY_ENVIRONMENT', 'staging');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /** One edge node: the same socket and the same appended hop for every caller. */
+  async function callAs(harness: TestHarness, headers: Record<string, string>): Promise<number> {
+    const response = await harness.app.inject({
+      method: 'GET',
+      url: '/categories',
+      headers: { 'x-forwarded-for': '10.250.0.7', ...headers },
+    });
+    return response.statusCode;
+  }
+
+  it('gives two client addresses behind one edge node their own buckets', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const harness = await createTestHarness({ env: { RATE_LIMIT_MAX: 2 } });
+
+    try {
+      await callAs(harness, { 'x-real-ip': '198.51.100.11' });
+      await callAs(harness, { 'x-real-ip': '198.51.100.11' });
+
+      expect(await callAs(harness, { 'x-real-ip': '198.51.100.11' })).toBe(429);
+      expect(await callAs(harness, { 'x-real-ip': '198.51.100.12' })).toBe(200);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('does not let a forged x-forwarded-for mint a bucket', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const harness = await createTestHarness({ env: { RATE_LIMIT_MAX: 2 } });
+
+    try {
+      const real = { 'x-real-ip': '198.51.100.13' };
+      await callAs(harness, { ...real, 'x-forwarded-for': '203.0.113.1, 10.250.0.7' });
+      await callAs(harness, { ...real, 'x-forwarded-for': '203.0.113.2, 10.250.0.7' });
+
+      const third = await callAs(harness, {
+        ...real,
+        'x-forwarded-for': '203.0.113.3, 10.250.0.7',
+      });
+      expect(third).toBe(429);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('falls back to the socket address for a malformed x-real-ip', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const harness = await createTestHarness({ env: { RATE_LIMIT_MAX: 2 } });
+
+    try {
+      await callAs(harness, { 'x-real-ip': 'not-an-address' });
+      await callAs(harness, { 'x-real-ip': 'also-not-one' });
+
+      expect(await callAs(harness, { 'x-real-ip': 'a-third' })).toBe(429);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('ignores x-real-ip when only NODE_ENV says deployed, where no edge sets it', async () => {
+    vi.stubEnv('RAILWAY_ENVIRONMENT', '');
+    vi.stubEnv('NODE_ENV', 'production');
+    const harness = await createTestHarness({ env: { RATE_LIMIT_MAX: 2 } });
+
+    try {
+      await callAs(harness, { 'x-real-ip': '198.51.100.14' });
+      await callAs(harness, { 'x-real-ip': '198.51.100.15' });
+
+      expect(await callAs(harness, { 'x-real-ip': '198.51.100.16' })).toBe(429);
     } finally {
       await harness.close();
     }

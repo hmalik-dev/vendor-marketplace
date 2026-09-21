@@ -36,7 +36,7 @@ export const stripeConnectRoutes: FastifyPluginAsyncZod<StripeConnectRoutesOptio
     },
     async (request) =>
       startPayoutOnboarding(
-        { db: app.db, stripe: app.stripe, returnOrigin: options.returnOrigin },
+        { db: app.db, stripe: app.stripe, log: request.log, returnOrigin: options.returnOrigin },
         assertRole(request.auth, ['vendor']).id,
       ),
   );

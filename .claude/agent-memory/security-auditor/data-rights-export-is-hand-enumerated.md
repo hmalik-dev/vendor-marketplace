@@ -31,5 +31,5 @@ which the export enumerates the same way), check `exportUserData`'s literal and
 `retireUserById` writes only `deleted_at`, so every one of these columns
 survives a closed account. Related:
 [[legal-acceptance-record-is-undeletable-pii]],
-[[closed-account-address-is-released]],
+[[retired-users-keep-their-email-in-the-unique-index]],
 [[response-schemas-are-a-second-write-boundary]].

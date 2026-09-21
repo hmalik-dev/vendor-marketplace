@@ -125,7 +125,9 @@ async function readStop(page: Page): Promise<Stop | null> {
         indicators.push(`a bare ring-offset with no ring on ${describe(node)}: ${offset}`);
       }
 
-      if (insetRing !== '' && !EMPTY.test(insetRing)) {
+      // A segment's inset ring is the second half of its fill treatment (VEN-541,
+      // 3:1 where the fill alone is 1.19:1), counted once with the fill below.
+      if (insetRing !== '' && !EMPTY.test(insetRing) && !node.hasAttribute('data-focus-fill')) {
         indicators.push(`inset ring on ${describe(node)}: ${insetRing}`);
       }
 

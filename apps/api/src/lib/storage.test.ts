@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveImageUrl } from '@vendor-marketplace/shared';
 import {
   assertOwnedImageRefs,
+  assertStorageOriginRefs,
   buildObjectKey,
   ownsObjectKey,
   publicUrlFor,
@@ -191,6 +192,51 @@ describe('assertOwnedImageRefs', () => {
     expect(ownsObjectKey(`${CDN_BASE}/portfolio/owner-1/abc.webp`, 'owner-1')).toBe(false);
   });
 
+  /*
+   * VEN-537. The guard decides on the object a parser and the storage host
+   * resolve the reference to, so the prefix is read after the *whole* reference
+   * has been decoded until it stops changing, and case is not a difference:
+   * `%70ortfolio` is `portfolio`, and `PORTFOLIO` is the same namespace to a
+   * case-folding host. Each of these named a victim and was accepted.
+   */
+  it.each([
+    ['an encoded letter in the prefix', '%70ortfolio/owner-2/abc.webp'],
+    ['an encoded prefix in the bucket URL', 'http://localhost:9000/b/%70ortfolio/owner-2/abc.webp'],
+    ['an upper-cased prefix', 'PORTFOLIO/owner-2/abc.webp'],
+    ['a mixed-case prefix', 'Portfolio/owner-2/abc.webp'],
+    ['a doubly encoded dot walk', 'portfolio/%252e%252e/owner-2/abc.webp'],
+    ['a walk-back after the key', 'portfolio/owner-2/abc.webp/..%2f..%2f'],
+    ['a triply encoded prefix letter', '%252570ortfolio/owner-2/abc.webp'],
+    ['an encoded separator after the prefix', 'portfolio%2fowner-2/abc.webp'],
+    ['a doubly encoded separator', 'portfolio%252fowner-2%252fabc.webp'],
+    ['an encoded backslash', 'portfolio%5cowner-2%5cabc.webp'],
+    ['a fully encoded prefix', '%70%6f%72%74%66%6f%6c%69%6f/owner-2/abc.webp'],
+  ])('refuses a foreign key spelled with %s', (_label, ref) => {
+    expect(() => assertOwnedImageRefs([ref], 'owner-1'), ref).toThrow(
+      expect.objectContaining({ statusCode: 403 }),
+    );
+  });
+
+  it.each([
+    '%70ortfolio/owner-1/abc.webp',
+    'PORTFOLIO/owner-1/abc.webp',
+    'portfolio/%252e%252e/owner-1/abc.webp',
+    'portfolio/owner-1/abc.webp/..%2f..%2f',
+    `http://localhost:9000/b/%70ortfolio/owner-1/abc.webp`,
+  ])('still accepts the caller’s own key spelled as %s', (ref) => {
+    expect(() => assertOwnedImageRefs([ref], 'owner-1'), ref).not.toThrow();
+  });
+
+  it('leaves a malformed escape alone instead of throwing', () => {
+    expect(() => assertOwnedImageRefs(['portfolio/owner-1/100%.webp'], 'owner-1')).not.toThrow();
+    expect(() => assertOwnedImageRefs(['%zzportfolio/owner-2/a.webp'], 'owner-1')).not.toThrow();
+  });
+
+  it('keeps the reap guard on the raw spelling for an encoded prefix', () => {
+    expect(ownsObjectKey('%70ortfolio/owner-1/abc.webp', 'owner-1')).toBe(false);
+    expect(ownsObjectKey('PORTFOLIO/owner-1/abc.webp', 'owner-1')).toBe(false);
+  });
+
   it('answers 403 rather than a validation error', () => {
     expect(() => assertOwnedImageRefs([THEIRS], 'owner-1')).toThrow(
       expect.objectContaining({ statusCode: 403 }),
@@ -263,5 +309,33 @@ describe('thumbnailKeyFor', () => {
 
   it('leaves a key that is not a WebP alone rather than inventing one', () => {
     expect(thumbnailKeyFor('portfolio/owner-1/abc.png')).toBe('portfolio/owner-1/abc.png');
+  });
+});
+
+describe('assertStorageOriginRefs', () => {
+  const BASE = 'http://localhost:9000/vendor-marketplace-uploads';
+
+  it.each([
+    ['a foreign host', 'https://evil.example/a.webp'],
+    ['our host on another port', 'http://localhost:9001/vendor-marketplace-uploads/a.webp'],
+    ['our host on another scheme', 'https://localhost:9000/vendor-marketplace-uploads/a.webp'],
+    ['an auth avatar host', 'https://img.auth.com/a.png'],
+  ])('refuses %s with a 400', (_label, ref) => {
+    expect(() => assertStorageOriginRefs([ref], BASE)).toThrow(
+      expect.objectContaining({ statusCode: 400 }),
+    );
+  });
+
+  it.each([
+    'portfolio/owner-1/abc.webp',
+    '/images/marketing/hero.webp',
+    `${BASE}/portfolio/owner-1/abc.webp`,
+    'http://LOCALHOST:9000/other/a.webp',
+  ])('accepts %s', (ref) => {
+    expect(() => assertStorageOriginRefs([ref], BASE)).not.toThrow();
+  });
+
+  it('accepts absent references', () => {
+    expect(() => assertStorageOriginRefs([null, undefined], BASE)).not.toThrow();
   });
 });

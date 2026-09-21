@@ -4,6 +4,8 @@ import { dirname } from 'node:path';
 import { promisify } from 'node:util';
 
 import { AUTH_DIR, expect, expectSignedIn, storageStatePath, test } from './fixtures';
+import { waitForHydration } from './hydration';
+import { completeStepUp } from './step-up';
 
 /**
  * VEN-391: an operator closes **another operator's** account, past a typed
@@ -46,7 +48,8 @@ test('an operator closes another operator only after typing their address exactl
   }
 
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-  const email = `e2e-operator-${stamp}@example.com`;
+  // The `+auth_test` suffix is what `DISPOSABLE_OPERATOR_EMAIL` fences the helper to.
+  const email = `e2e-operator-${stamp}+auth_test@example.com`;
   const authUserId = `seed_e2e_operator_${stamp}`;
   const context = await browser.newContext({ storageState: ADMIN_STATE });
 
@@ -57,6 +60,7 @@ test('an operator closes another operator only after typing their address exactl
     await page.goto(`/admin/users/${userId}`);
     await expectSignedIn(page);
 
+    await waitForHydration(page, 'button');
     await page.getByRole('button', { name: 'Close account' }).click();
     const dialog = page.getByRole('alertdialog');
     const confirm = dialog.getByRole('button', { name: 'Close account' });
@@ -78,10 +82,9 @@ test('an operator closes another operator only after typing their address exactl
     await typed.fill(email);
     await expect(confirm).toBeEnabled();
     await confirm.click();
+    await completeStepUp(page, dialog);
 
     await expect(page.getByText(/^Closed \d{4}-\d{2}-\d{2}$/)).toBeVisible();
-    // Not `getByRole('alert')`: Next's route announcer carries that role on every page.
-    await expect(page.getByText(/This needs a person/)).toHaveCount(0);
   } finally {
     await context.close();
     await e2eOperator('remove', authUserId, email);

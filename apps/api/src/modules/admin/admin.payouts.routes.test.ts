@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   adminActions,
   bookingRequests,
@@ -10,8 +11,16 @@ import {
 import type { AdminActionRow } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { addDays, legalDocumentSha256, toDateString } from '@vendor-marketplace/shared';
+import { insertAcceptance } from '../legal/legal-acceptance.dao.js';
 import { findDuePayoutBookingIds } from '../payments/payouts.dao.js';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { PAYOUT_AGREEMENT_MISSING_REASON, releaseDuePayouts } from '../payments/payouts.service.js';
+import {
+  acceptVendorAgreementAs,
+  bearer,
+  createTestHarness,
+  type TestHarness,
+} from '../../testing/test-server.js';
 
 /**
  * Payout health on the operations console — #432.
@@ -34,8 +43,10 @@ import { bearer, createTestHarness, type TestHarness } from '../../testing/test-
 const ADMIN = 'user_payouts_admin';
 const VENDOR = 'user_payouts_vendor';
 const CUSTOMER = 'user_payouts_customer';
+const UNAGREED_VENDOR = 'user_payouts_unagreed_vendor';
 
 const VENDOR_ACCOUNT = 'acct_test_payout_vendor';
+const UNAGREED_VENDOR_ACCOUNT = 'acct_test_payout_unagreed_vendor';
 
 /** Pinned, because every predicate here is about which side of a date a row is on. */
 const NOW = new Date('2026-06-30T12:00:00Z');
@@ -64,10 +75,7 @@ describe('admin payout health', () => {
     expect(response.statusCode).toBe(200);
 
     if (promoteToAdmin) {
-      await harness.database.db
-        .update(users)
-        .set({ role: 'admin' })
-        .where(eq(users.authUserId, authUserId));
+      await setUserRole(harness.database.db, 'admin', eq(users.authUserId, authUserId));
     }
 
     const rows = await harness.database.db
@@ -93,6 +101,7 @@ describe('admin payout health', () => {
       },
     });
     expect(created.statusCode).toBe(201);
+    await acceptVendorAgreementAs(harness, VENDOR);
 
     const profileId: string = created.json().id;
     await harness.database.db
@@ -123,8 +132,12 @@ describe('admin payout health', () => {
   let intentSequence = 0;
 
   async function paidBooking(overrides: BookingOverrides = {}): Promise<string> {
-    const eventDate = overrides.eventDate ?? DUE_EVENT_DATE;
     intentSequence += 1;
+    // One confirmed booking per vendor date is a database rule (VEN-482), so
+    // each default booking takes the day before the last, so all stay due.
+    const eventDate =
+      overrides.eventDate ??
+      toDateString(addDays(new Date(`${DUE_EVENT_DATE}T12:00:00Z`), -intentSequence));
 
     const requestRows = await harness.database.db
       .insert(bookingRequests)
@@ -191,6 +204,7 @@ describe('admin payout health', () => {
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
       [CUSTOMER, 'customer'],
+      [UNAGREED_VENDOR, 'vendor'],
     ] as const) {
       harness.authUsers.set(authUserId, {
         authUserId,
@@ -634,6 +648,114 @@ describe('admin payout health', () => {
   });
 
   /* Acceptance 6 and 7 — every number a query result at request time. */
+  /*
+   * VEN-509. A payout is not released to a vendor with no accepted vendor
+   * agreement, by the same failed-and-retried path a missing Connect account
+   * takes, so it moves on the next attempt once they accept. An unaccepted
+   * vendor cannot reach a captured payment through checkout (the 402), so the
+   * booking is written directly: this is the defence for a row that got there
+   * another way.
+   */
+  describe('the vendor agreement (VEN-509)', () => {
+    async function unagreedVendor(): Promise<void> {
+      await signIn(UNAGREED_VENDOR);
+      harness.stripe.accountStatuses.set(UNAGREED_VENDOR_ACCOUNT, {
+        transfersActive: true,
+        payoutsActive: true,
+      });
+
+      const created = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/profile',
+        headers: bearer(UNAGREED_VENDOR),
+        payload: {
+          businessName: 'Moonlit Studio',
+          categoryIds: [photographyId],
+          city: 'Austin',
+          state: 'TX',
+        },
+      });
+      expect(created.statusCode).toBe(201);
+
+      vendorProfileId = created.json().id;
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ stripeOnboarded: true, stripeAccountId: UNAGREED_VENDOR_ACCOUNT })
+        .where(eq(vendorProfiles.id, vendorProfileId));
+    }
+
+    it('holds the transfer with a recorded reason, then releases it once the vendor accepts', async () => {
+      await unagreedVendor();
+      const bookingId = await paidBooking();
+
+      const held = await retry(bookingId);
+
+      expect(held.statusCode).toBe(200);
+      expect(held.json()).toMatchObject({
+        outcome: 'failed',
+        payoutStatus: 'pending',
+        payoutAttempts: 1,
+        payoutFailing: true,
+        payoutFailureReason: PAYOUT_AGREEMENT_MISSING_REASON,
+      });
+      expect(harness.stripe.transfers).toHaveLength(0);
+
+      await acceptVendorAgreementAs(harness, UNAGREED_VENDOR);
+      const released = await retry(bookingId);
+
+      expect(released.json()).toMatchObject({
+        outcome: 'released',
+        payoutStatus: 'released',
+        payoutFailureReason: null,
+      });
+      expect(harness.stripe.transfers).toHaveLength(1);
+    });
+
+    it('still releases money owed to a vendor whose only acceptance is an older version', async () => {
+      await unagreedVendor();
+      const [owner] = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.authUserId, UNAGREED_VENDOR));
+      await insertAcceptance(harness.database.db, {
+        vendorId: vendorProfileId,
+        document: 'vendor_agreement',
+        version: 'v0.9',
+        documentSha256: legalDocumentSha256('vendor_agreement'),
+        acceptanceMethod: 'seed_fixture',
+        acceptedByUserId: owner!.id,
+        acceptedByName: 'Test User',
+        businessName: 'Moonlit Studio',
+        ip: null,
+        userAgent: null,
+      });
+      const bookingId = await paidBooking();
+
+      const response = await retry(bookingId);
+
+      expect(response.json()).toMatchObject({ outcome: 'released', payoutFailureReason: null });
+      expect(harness.stripe.transfers).toHaveLength(1);
+    });
+
+    it('holds it for the sweep too, which the operator retry shares its claim with', async () => {
+      await unagreedVendor();
+      const bookingId = await paidBooking();
+
+      const result = await releaseDuePayouts(
+        { db: harness.database.db, stripe: harness.stripe, log: harness.app.log },
+        NOW,
+      );
+
+      expect(result).toEqual({ released: 0, skipped: 0, failed: 1 });
+      expect(harness.stripe.transfers).toHaveLength(0);
+      const [row] = await harness.database.db
+        .select({ reason: bookings.payoutFailureReason })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+      expect(row?.reason).toBe(PAYOUT_AGREEMENT_MISSING_REASON);
+    });
+  });
+
   describe('the overview count', () => {
     async function metrics(): Promise<{
       payoutsBlockedVendorsCount: number;

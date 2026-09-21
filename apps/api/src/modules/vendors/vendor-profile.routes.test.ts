@@ -8,7 +8,12 @@ import {
 } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  type TestHarness,
+  acceptVendorAgreementAs,
+} from '../../testing/test-server.js';
 
 /**
  * The public profile is the page where the decision happens, and three shipped
@@ -59,6 +64,7 @@ describe('GET /vendors/:slug', () => {
     }
 
     if (spec.publish !== false) {
+      await acceptVendorAgreementAs(harness, spec.user);
       const published = await harness.app.inject({
         method: 'PUT',
         url: '/vendor/profile',

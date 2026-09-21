@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `legal_acceptances` stores `ip` and `user_agent` per acceptance. Since #429 the
 row's subject is the **user**, so every account gets one at first sign-in — not
@@ -23,7 +23,7 @@ are:
 Both foreign keys are `NOT NULL`/`ON DELETE CASCADE`, so each branch is true
 **only** during that parent's cascade. A Terms row carries `vendor_id IS NULL`,
 so branch 2 never fires for it — and the product never hard-deletes a `users`
-row: Clerk `user.deleted` lands on `softDeleteUserByClerkId`, which sets
+row: the auth provider `user.deleted` lands on `softDeleteUserByAuthId`, which sets
 `deleted_at` and keeps the row for referential integrity. Only `seed-demo.ts`
 and `seed-marketing.ts` issue `db.delete(users)`.
 
@@ -50,7 +50,7 @@ Version equality, not `>=`: bumping the constant re-gates every vendor.
 **How to apply:** any diff that adds a column to `legal_acceptances`, widens who
 gets a row, or collects a new address/device string anywhere is also a change to
 `privacy.md`. Do not accept "it is only recorded, never trusted" — recorded _is_
-the processing. Check `softDeleteUserByClerkId` before believing any "closing
+the processing. Check `softDeleteUserByAuthId` before believing any "closing
 the account removes it" claim. The values are write-only today (no DAO selects
 `ip`/`user_agent`, and `legalAcceptanceSchema` strips them from every response),
 which is the one thing keeping this off a rendered surface. See

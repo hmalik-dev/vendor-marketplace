@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   decimal,
   index,
   integer,
@@ -30,7 +31,11 @@ export const users = pgTable(
     id: uuid('id')
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    /** Auth identity link — the join key for token verification. */
+    /**
+     * Auth identity link — the join key for token verification: the Neon Auth subject. Deliberately **no foreign key** to `neon_auth."user"`:
+     * the local Docker Postgres every lane runs on has no `neon_auth` schema
+     * (VEN-463).
+     */
     authUserId: varchar('auth_user_id', { length: 255 }).notNull(),
     /** Who issued `authUserId`; set at insert, so no reader has to guess from its shape. */
     authProvider: authProviderEnum('auth_provider').notNull().default('neon_auth'),
@@ -154,6 +159,11 @@ export const users = pgTable(
     index('users_banned_idx')
       .on(table.id)
       .where(sql`${table.isBanned} = true`),
+    // NULL on either side passes: a customer may state one bound or neither.
+    check(
+      'users_typical_guest_count_order',
+      sql`${table.typicalGuestCountMin} <= ${table.typicalGuestCountMax}`,
+    ),
   ],
 ).enableRLS();
 

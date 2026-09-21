@@ -397,7 +397,7 @@ export function AcceptTermsScreen({
               type="checkbox"
               checked={agreed}
               onChange={(event) => setAgreed(event.currentTarget.checked)}
-              className="mt-1 size-4 flex-none appearance-none rounded-[4px] border-[1.3px] border-stone-400 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[10px] checked:after:leading-[14px] checked:after:text-stone-0 checked:after:content-['✓']"
+              className="mt-1 size-4 flex-none appearance-none rounded-[4px] border-[1.3px] border-stone-560 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[10px] checked:after:leading-[14px] checked:after:text-stone-0 checked:after:content-['✓']"
             />
             <span className="text-base leading-prose text-stone-800">
               I have read and I accept the{' '}

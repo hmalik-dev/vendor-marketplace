@@ -49,19 +49,5 @@ export function appProbes({ env, get }: LaunchOptions): Probe[] {
         ];
       },
     },
-    {
-      // The invite-only switch is added to `platform_settings` by VEN-406.
-      // Until that column is on main there is nothing to read.
-      group: 'app',
-      name: 'platform_settings.vendorInviteOnly',
-      run: async () => [
-        {
-          group: 'app',
-          name: 'platform_settings.vendorInviteOnly',
-          status: 'SKIP',
-          detail: 'not in this tree until VEN-406 lands; a beta release needs it on',
-        },
-      ],
-    },
   ];
 }

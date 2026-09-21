@@ -105,6 +105,23 @@ describe('applyAuthSyncEvent, when an update meets a stale holder', () => {
     expect(claimant?.emailSyncFailedAt).toBeNull();
   });
 
+  it.each([
+    ['javascript:x', null],
+    [`https://cdn.example.com/${'a'.repeat(2000)}`, null],
+    ['https://cdn.example.com/bea.png', 'https://cdn.example.com/bea.png'],
+  ])('mirrors the provider avatar %j as %j (VEN-538)', async (avatarUrl, stored) => {
+    const event = claimAddress();
+    const outcome = await applyAuthSyncEvent(
+      context(),
+      { ...event, identity: { ...event.identity, email: 'bea@example.com', avatarUrl } },
+      NOW,
+      directoryHolding(),
+    );
+
+    expect(outcome).toBe('updated');
+    expect((await rowFor(CLAIMANT))?.avatarUrl).toBe(stored);
+  });
+
   it('mirrors a holder Neon Auth has moved, and lands the address', async () => {
     const directory = directoryHolding(
       neonIdentity(CLAIMANT, CONTESTED),
@@ -184,24 +201,6 @@ describe('applyAuthSyncEvent, when an update meets a stale holder', () => {
     expect(outcome).toBe('diverged');
     expect((await rowFor(HOLDER))?.deletedAt).toBeNull();
     expect((await rowFor(CLAIMANT))?.pendingEmail).toBe(CONTESTED);
-  });
-
-  /*
-   * VEN-450: an auth-era holder has no Neon Auth identity by construction, so
-   * its absence there is not a deletion and it must not be retired and refunded.
-   */
-  it('never asks Neon Auth about, or retires, a legacy-provider holder', async () => {
-    await harness.database.db
-      .update(users)
-      .set({ authUserId: 'user_2abcdefghijklmnopqrstuvwxyz', authProvider: 'legacy_clerk' })
-      .where(eq(users.authUserId, HOLDER));
-    const directory = directoryHolding(neonIdentity(CLAIMANT, CONTESTED));
-
-    const outcome = await applyAuthSyncEvent(context(), claimAddress(), NOW, directory);
-
-    expect(outcome).toBe('diverged');
-    expect(directory.lookup).not.toHaveBeenCalled();
-    expect((await rowFor('user_2abcdefghijklmnopqrstuvwxyz'))?.deletedAt).toBeNull();
   });
 
   /* The recorded provider decides, not the id: a Neon-issued id shaped like an auth one is released. */

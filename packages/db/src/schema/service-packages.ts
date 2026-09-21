@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   decimal,
   index,
   integer,
@@ -11,6 +12,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
+import { MAX_PACKAGE_PRICE_CENTS, MIN_BOOKING_AMOUNT_CENTS } from '@vendor-marketplace/shared';
 import { priceTypeEnum } from './enums.js';
 import { vendorProfiles } from './vendor-profiles.js';
 
@@ -56,7 +58,14 @@ export const servicePackages = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('service_packages_vendor_active_idx').on(table.vendorId, table.isActive)],
+  (table) => [
+    index('service_packages_vendor_active_idx').on(table.vendorId, table.isActive),
+    // `priceCentsSchema`'s band, so a writer that skips the schema cannot store outside it.
+    check(
+      'service_packages_price_cents_range',
+      sql`${table.priceCents} >= ${sql.raw(String(MIN_BOOKING_AMOUNT_CENTS))} AND ${table.priceCents} <= ${sql.raw(String(MAX_PACKAGE_PRICE_CENTS))}`,
+    ),
+  ],
 ).enableRLS();
 
 export type ServicePackageRow = typeof servicePackages.$inferSelect;

@@ -8,15 +8,22 @@ import {
   payoutReleaseAt,
 } from '@vendor-marketplace/shared';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
-import { loadStripe, type Appearance, type StripeElementsOptions } from '@stripe/stripe-js';
+import {
+  loadStripe,
+  type Appearance,
+  type PaymentIntentResult,
+  type StripeElementsOptions,
+} from '@stripe/stripe-js';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
+import { Banner } from '@/components/ui/banner';
 import { RefundScheduleBlock } from '@/components/checkout/refund-schedule-block';
 import { publicEnv } from '@/config/public-env';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { reportSwallowedError } from '@/lib/report-error';
 import type { WireCheckoutIntent } from '@/lib/wire-schemas';
 
 /**
@@ -168,7 +175,18 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
   const elements = useElements();
   const router = useRouter();
   const [paying, setPaying] = useState(false);
+  /*
+   * The guard is a ref, not `paying`: two submit events in one tick both read
+   * the same render's state, so `paying` is still false for the second. The
+   * state drives the button; this decides whether a call may be made.
+   */
+  const inFlight = useRef(false);
   const [decline, setDecline] = useState<Decline | null>(null);
+  /*
+   * Stripe.js rejected instead of answering, so the client cannot say whether
+   * the charge happened: not a decline, and it must not claim "not charged".
+   */
+  const [unreachable, setUnreachable] = useState(false);
 
   const event = eventDay(checkout.eventDate);
 
@@ -176,16 +194,29 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
     async (submitted: React.FormEvent) => {
       submitted.preventDefault();
 
-      if (!stripe || !elements || paying) {
+      if (!stripe || !elements || inFlight.current) {
         return;
       }
 
+      inFlight.current = true;
       setPaying(true);
+      setUnreachable(false);
 
-      const result = await stripe.confirmPayment({
-        elements,
-        redirect: 'if_required',
-      });
+      let result: PaymentIntentResult;
+      try {
+        result = await stripe.confirmPayment({
+          elements,
+          redirect: 'if_required',
+        });
+      } catch (error: unknown) {
+        // Stripe.js rejected rather than answered (network, blocked script):
+        // say so and hand the button back instead of leaving it spinning.
+        reportSwallowedError('checkout: confirming the payment rejected', error);
+        inFlight.current = false;
+        setUnreachable(true);
+        setPaying(false);
+        return;
+      }
 
       if (result.error) {
         /*
@@ -198,6 +229,7 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
           code: result.error.decline_code ?? result.error.code ?? null,
           attempts: (decline?.attempts ?? 0) + 1,
         });
+        inFlight.current = false;
         setPaying(false);
         return;
       }
@@ -210,7 +242,7 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
        */
       router.push(`/bookings/${requestId}/confirmed`);
     },
-    [decline?.attempts, elements, paying, requestId, router, stripe],
+    [decline?.attempts, elements, requestId, router, stripe],
   );
 
   return (
@@ -242,6 +274,12 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
           noValidate
           className="flex max-w-[620px] flex-col gap-4"
         >
+          {unreachable ? (
+            <Banner status="failed" title="We could not reach Stripe">
+              We could not confirm the payment just now. Check your bookings before paying again,
+              then try once more.
+            </Banner>
+          ) : null}
           {decline ? <DeclineBanner decline={decline} event={event} /> : null}
 
           <PaymentElement options={{ layout: 'tabs' }} />

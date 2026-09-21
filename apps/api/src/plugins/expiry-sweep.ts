@@ -1,12 +1,16 @@
 import fp from 'fastify-plugin';
 import type { ErrorReporter } from '../lib/error-reporting.js';
+import { purgeThrottleHits } from '../lib/throttle.js';
 import { expireLapsedRequests } from '../modules/booking-requests/booking-requests.service.js';
+import { bookingContextFor, expiryGuardFor } from '../modules/payments/payments.service.js';
 
 export interface ExpirySweepPluginOptions {
   /** How often to sweep, in milliseconds. **`0` disables the timer**, as every suite passes. */
   intervalMs: number;
   /** The web origin the expiry email's button points at. */
   webOrigin: string;
+  /** `STRIPE_PLATFORM_FEE_RATE`: the sweep books a payment it finds before it expires the request. */
+  platformFeeRate: number;
   reporter: ErrorReporter;
 }
 
@@ -35,13 +39,20 @@ export const expirySweepPlugin = fp<ExpirySweepPluginOptions>(
       running = true;
 
       try {
-        await expireLapsedRequests(app.db, app.clock(), {
-          db: app.db,
-          email: app.email,
-          log: app.log,
-          webOrigin: options.webOrigin,
-          background: app.background,
-        });
+        try {
+          await app.streamTickets.sweep();
+          await purgeThrottleHits(app.db, app.clock());
+        } catch (error) {
+          app.log.error({ err: error }, 'Stream ticket and throttle sweep failed');
+          options.reporter.capture(error);
+        }
+
+        const context = {
+          ...bookingContextFor(app, app.log, options.webOrigin),
+          platformFeeRate: options.platformFeeRate,
+        };
+
+        await expireLapsedRequests(app.db, app.clock(), context.mail, expiryGuardFor(context));
       } catch (error) {
         // Logged and swallowed: the next tick repairs it, and a rejection here would end the process.
         app.log.error({ err: error }, 'Booking request expiry sweep failed');
@@ -58,5 +69,16 @@ export const expirySweepPlugin = fp<ExpirySweepPluginOptions>(
       clearInterval(timer);
     });
   },
-  { name: 'expiry-sweep', dependencies: ['clock', 'database', 'email', 'background'] },
+  {
+    name: 'expiry-sweep',
+    dependencies: [
+      'clock',
+      'database',
+      'email',
+      'background',
+      'stripe',
+      'events',
+      'operator-alerts',
+    ],
+  },
 );

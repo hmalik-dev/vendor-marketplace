@@ -13,11 +13,10 @@
  * what lets `deploy.test.mjs` run the real phases, and dry-run the real workflow
  * file, under plain `node`.
  *
- * **Fail closed once provisioned.** A phase with a missing input exits non-zero
- * naming the input. The one skip is preflight finding *nothing* configured, and
- * only until the repository variable `DEPLOY_GATE=required` is set (as
- * `E2E_GATE` does for the e2e job); after that, an empty configuration fails
- * too, so a deleted environment cannot turn into a green run that deploys nothing.
+ * **Fail closed.** A phase with a missing input exits non-zero naming the input,
+ * and that includes preflight finding *nothing* configured: a run exists only
+ * because someone pushed `staging` or `production`, so a release that deployed
+ * nothing must never read green.
  *
  * **Nothing secret is printed.** A phase names variables, never values, and every
  * line a child process writes passes through `redactor` before it reaches the
@@ -43,9 +42,9 @@ const VERCEL_CLI = 'vercel@59.17.0';
  */
 export const API_HOSTS = {
   /*
-   * D10 as it stands: the Docker image `apps/api/Dockerfile` builds, on Railway.
-   * The service was removed on purpose and whether to re-provision it is open on
-   * VEN-377, so nothing selects this until an operator sets `API_HOST`. Choosing
+   * D10, confirmed: the Docker image `apps/api/Dockerfile` builds, on Railway,
+   * which runs the staging and production APIs. It is selected by the variable
+   * `API_HOST` on each GitHub environment. Choosing
    * a different host is an entry in this table and that one variable — nothing
    * else in the workflow names the platform.
    */
@@ -288,6 +287,54 @@ export function missingInputs(env) {
   );
 }
 
+/**
+ * VEN-519. Polls `GET <web>/api/ready` until it names `SENTRY_RELEASE` (the
+ * commit the API was just proven to serve) or the deadline passes. A short SHA
+ * on either side still has to match, as in the API check. The failure names
+ * both commits, never a value that is not one.
+ */
+async function webNamesRelease(env, io) {
+  const fetchImpl = io.fetch ?? fetch;
+  const sleep = io.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const now = io.now ?? Date.now;
+  const parsed = Number(env.SMOKE_DEADLINE_MS ?? '600000');
+  const deadline = Number.isFinite(parsed) ? parsed : 600_000;
+  const web = env.WEB_URL.split(',')[0].trim().replace(/\/+$/, '');
+  const startedAt = now();
+  let serving = null;
+  let detail = '';
+
+  for (;;) {
+    try {
+      const response = await fetchImpl(`${web}/api/ready`, {
+        signal: AbortSignal.timeout(10_000),
+      });
+      const body = response.ok ? await response.json() : null;
+      serving = typeof body?.commit === 'string' && body.commit !== '' ? body.commit : null;
+      detail = response.ok ? '' : `answered HTTP ${response.status}`;
+    } catch {
+      serving = null;
+      detail = 'did not answer';
+    }
+
+    const shortest = Math.min(serving?.length ?? 0, env.SENTRY_RELEASE.length);
+    if (shortest > 0 && serving.slice(0, shortest) === env.SENTRY_RELEASE.slice(0, shortest)) {
+      io.write(`web /api/ready names ${env.SENTRY_RELEASE.slice(0, 7)}\n`);
+      return;
+    }
+    if (now() - startedAt + 5_000 >= deadline) {
+      break;
+    }
+    await sleep(5_000);
+  }
+
+  throw new PhaseError(
+    serving
+      ? `Web/API skew: the web serves ${serving.slice(0, 7)} but the API serves ${env.SENTRY_RELEASE.slice(0, 7)}.`
+      : `The web's /api/ready never named ${env.SENTRY_RELEASE.slice(0, 7)} (${detail || 'no commit in the answer'}).`,
+  );
+}
+
 export const PHASES = {
   async gate(env, io) {
     const branch = env.DEPLOY_TARGET;
@@ -333,28 +380,11 @@ export const PHASES = {
 
   async preflight(env, io) {
     const missing = missingInputs(env);
-    const ready = (value) => {
-      if (!blank(env.GITHUB_OUTPUT)) appendFileSync(env.GITHUB_OUTPUT, `ready=${value}\n`);
-    };
-
-    /*
-     * Nothing provisioned yet (VEN-377) is a release that is not set up, not one
-     * that broke: it is skipped with a warning so a red run means a failure. A
-     * *partly* configured deploy is the broken case and still fails by name.
-     */
-    if (missing.length === REQUIRED_INPUTS.length && env.DEPLOY_GATE?.trim() !== 'required') {
-      ready(false);
-      io.error(
-        `::warning::Deploy skipped: no deploy input is configured (${missing.join(', ')}). ` +
-          'These are provisioned on VEN-377, and the API host itself is decision D10, still open there.\n',
-      );
-      return;
-    }
 
     if (missing.length > 0) {
       throw new PhaseError(
-        `The deploy is not fully configured (DEPLOY_GATE=required fails an empty configuration too); missing: ${missing.join(', ')}. ` +
-          'These are provisioned on VEN-377, and the API host itself is decision D10, still open there.',
+        `The deploy is not fully configured; missing: ${missing.join(', ')}. ` +
+          'Set them on the GitHub environment named for the pushed branch (docs/environments.md); Railway is the API host.',
       );
     }
 
@@ -364,7 +394,7 @@ export const PHASES = {
       );
     }
 
-    ready(true);
+    if (!blank(env.GITHUB_OUTPUT)) appendFileSync(env.GITHUB_OUTPUT, 'ready=true\n');
     io.write('Every deploy input is configured.\n');
   },
 
@@ -527,7 +557,9 @@ export const PHASES = {
    * where `/health` passes with it unreachable — must name this commit before
    * the deadline, and the web front door must render its data. The poll is the
    * existing smoke check (`packages/preflight/src/smoke`), whose suite pins the
-   * deadline, the commit match and the refusal of a 503.
+   * deadline, the commit match and the refusal of a 503. Then the web build
+   * must name the same commit at `/api/ready` (VEN-519): the API moving while
+   * the web stays on an old build is skew the API's answer cannot show.
    */
   async ready(env, io) {
     need(env, ['API_URL', 'WEB_URL', 'SENTRY_RELEASE']);
@@ -543,6 +575,8 @@ export const PHASES = {
       redact: redactor([]),
       write: io.write,
     });
+
+    await webNamesRelease(env, io);
   },
 };
 

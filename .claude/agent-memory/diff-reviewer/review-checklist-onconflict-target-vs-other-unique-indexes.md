@@ -5,7 +5,7 @@ metadata:
   type: feedback
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 When a diff calls an "idempotent" upsert — `onConflictDoUpdate({ target: X })` or
 a select-then-insert — open the table's schema file and read **every**
@@ -34,7 +34,7 @@ half-written state the failure above produces.
 
 **Under concurrency the arbiter is chosen by timing, so the same statement is
 right three runs in four (#442).** `insertUserIfAbsent` was
-`onConflictDoNothing({ target: users.clerkUserId })`; `users` also has
+`onConflictDoNothing({ target: users.authUserId })`; `users` also has
 `users_email_key`, and one identity signing in twice at once carries the same
 value for both. Postgres pre-checks only the _arbiter_ index: if it finds the
 conflict there it absorbs it silently, but if the peer's row is not visible yet

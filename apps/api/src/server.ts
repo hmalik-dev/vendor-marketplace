@@ -5,7 +5,11 @@ import rateLimit from '@fastify/rate-limit';
 import { timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import Fastify, { type FastifyInstance, type FastifyPluginOptions } from 'fastify';
+import Fastify, {
+  type FastifyInstance,
+  type FastifyPluginOptions,
+  type RouteOptions,
+} from 'fastify';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -19,11 +23,13 @@ import {
   OPERATOR_DIGEST_POLL_INTERVAL_MS,
   EMAIL_RETRY_SWEEP_INTERVAL_MS,
   EXPIRY_SWEEP_INTERVAL_MS,
+  AUTH_RECONCILE_INTERVAL_MS,
   PAYOUT_SWEEP_INTERVAL_MS,
   UPLOAD_SWEEP_INTERVAL_MS,
   VISITOR_IP_HEADER,
   WEB_TIER_KEY_HEADER,
 } from '@vendor-marketplace/shared';
+import { clientAddress } from './lib/client-address.js';
 import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
 import { allowedOrigins, canonicalWebOrigin, type ApiEnv } from './config/env.js';
 import type { AppDatabase } from './lib/database.js';
@@ -41,9 +47,12 @@ import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { createErrorReporter, type ErrorReporter } from './lib/error-reporting.js';
 import { eventsPlugin } from './plugins/events.js';
 import { operatorAlertsPlugin } from './plugins/operator-alerts.js';
+import { stepUpPlugin } from './plugins/step-up.js';
+import type { StepUpStore } from './lib/step-up.js';
 import { emailRetryPlugin } from './plugins/email-retry.js';
 import { expirySweepPlugin } from './plugins/expiry-sweep.js';
 import { uploadSweepPlugin } from './plugins/upload-sweep.js';
+import { authReconcilePlugin } from './plugins/auth-reconcile.js';
 import { payoutReleasePlugin } from './plugins/payout-release.js';
 import { storagePlugin } from './plugins/storage.js';
 import { emailPlugin } from './plugins/email.js';
@@ -57,6 +66,7 @@ import { messagingRoutes } from './modules/messaging/messaging.routes.js';
 import { placeRoutes } from './modules/places/places.routes.js';
 import { customerRoutes } from './modules/customers/customers.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
+import { throttleRoutes } from './modules/throttle/throttle.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
 import { reviewRoutes } from './modules/reviews/reviews.routes.js';
@@ -122,10 +132,20 @@ export interface BuildServerOptions {
    */
   payoutSweepIntervalMs?: number;
   /**
+   * How often accounts are reconciled against Neon Auth; `0` disables it. On by
+   * default for `payoutSweepIntervalMs`'s reason.
+   */
+  authReconcileIntervalMs?: number;
+  /**
    * How often lapsed booking requests are aged and announced; `0` disables it.
    * On by default for `payoutSweepIntervalMs`'s reason.
    */
   expirySweepIntervalMs?: number;
+  /**
+   * How often an open event stream is kept alive and its account re-read, so a
+   * ban or deletion ends it on any instance. Default 30 s; suites shorten it.
+   */
+  streamHeartbeatMs?: number;
   /**
    * How often failed transactional email is re-sent; `0` disables it. On by
    * default for `payoutSweepIntervalMs`'s reason.
@@ -136,6 +156,12 @@ export interface BuildServerOptions {
    * by default for `payoutSweepIntervalMs`'s reason.
    */
   uploadSweepIntervalMs?: number;
+  /**
+   * How long a client has to deliver a whole request, in milliseconds. Defaults
+   * to `REQUEST_TIMEOUT_MS`; a suite passes a short one to watch a stalled
+   * upload get cut off.
+   */
+  requestTimeoutMs?: number;
   /** Log what the upload sweep would delete and delete nothing. */
   uploadSweepDryRun?: boolean;
   /**
@@ -145,12 +171,19 @@ export interface BuildServerOptions {
   operatorDigestIntervalMs?: number;
   /** Pause between operator alert send retries; defaults to a real timer. */
   operatorAlertWait?: (ms: number) => Promise<void>;
+  /** Step-up seam; the suites pass a store that is always fresh unless the suite is about step-up. */
+  stepUp?: StepUpStore;
   /**
    * The error tracker seam. Defaults to Sentry when `SENTRY_DSN` is set and to
    * silence when it is not — which the env registry allows only off a
    * deployment, so a production API cannot be built without reporting.
    */
   errorReporter?: ErrorReporter;
+  /**
+   * Called with every route the server registers, from a root `onRoute` hook
+   * added before any plugin, so the suites can walk the real route table.
+   */
+  onRoute?: (route: RouteOptions) => void;
 }
 
 /**
@@ -184,6 +217,27 @@ const WEBHOOK_RATE_LIMIT_FACTOR = 10;
 /** Longest textual IP address, IPv6 with an embedded IPv4 tail. */
 const MAX_IP_LENGTH = 45;
 
+/** Non-file form fields an upload may carry (there are none today). */
+const MAX_UPLOAD_FORM_FIELDS = 5;
+
+/**
+ * The time a client has to deliver a complete request, headers and body.
+ *
+ * Fastify's default is no limit, which also switches off Node's own 300 s, so a
+ * client that opens an upload and then trickles or stops holds a socket and its
+ * buffered bytes forever. Sixty seconds carries a 12 MB image over roughly
+ * 200 KB/s.
+ *
+ * Node's `requestTimeout` alone is not enough: it only runs until the *headers*
+ * are complete (a raw socket that sends them and half a body is never cut), so
+ * the body deadline is the `onRequest` hook below. Neither counts the response,
+ * so `/events/stream`, a GET whose request is complete on arrival, is never cut.
+ */
+const REQUEST_TIMEOUT_MS = 60_000;
+
+/** Node only checks for expired requests on this cadence, so it bounds the timeout's precision. */
+const MAX_CONNECTIONS_CHECKING_INTERVAL_MS = 30_000;
+
 /**
  * The rate-limit key: the visitor the web tier forwarded, when the caller proves
  * it is the web tier, otherwise the caller's own address.
@@ -211,7 +265,7 @@ function rateLimitKey(
     visitor.length > MAX_IP_LENGTH ||
     !isIP(visitor)
   ) {
-    return request.ip;
+    return clientAddress(request);
   }
   const expected = Buffer.from(secret);
   const actual = Buffer.from(presented);
@@ -219,7 +273,7 @@ function rateLimitKey(
     // A rotated key on one side only puts every visitor back in one bucket, and
     // nothing else would say so.
     request.log.warn('web tier key mismatch: rate limit is keyed on the socket address');
-    return request.ip;
+    return clientAddress(request);
   }
   return `visitor:${visitor}`;
 }
@@ -230,7 +284,18 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   /** Route patterns that move money; filled as the payment plugins register below. */
   const moneyRoutes = new Set<string>();
 
+  const requestTimeout = Math.max(1, options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS);
+
   const app = Fastify({
+    requestTimeout,
+    // No idle-socket cap: the host proxy owns that, and a stream is idle by design.
+    connectionTimeout: 0,
+    http: {
+      connectionsCheckingInterval: Math.min(
+        MAX_CONNECTIONS_CHECKING_INTERVAL_MS,
+        Math.max(1, Math.floor(requestTimeout / 4)),
+      ),
+    },
     /*
      * One hop, and only on a deployment.
      *
@@ -247,6 +312,10 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
      * straight back to whoever is being limited. Trusting only hop 0 takes the
      * entry the immediate proxy appended — the client address as that proxy
      * saw it, which nothing outside can forge.
+     *
+     * On Railway that entry is the edge node, not the visitor (VEN-549), so
+     * `request.ip` is never the rate-limit key there: `clientAddress` reads
+     * the edge's `X-Real-IP`, and `request.ip` is only its fallback.
      *
      * A predicate rather than the count `trustProxy: 1`, because this
      * Fastify's types accept `string | boolean | string[] | TrustProxyFunction`
@@ -321,6 +390,10 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
+  if (options.onRoute) {
+    app.addHook('onRoute', options.onRoute);
+  }
+
   await app.register(errorHandlerPlugin, { reporter: errorReporter, paymentRoutes: moneyRoutes });
   // The API serves JSON and nothing a browser renders, so a response that is ever
   // opened as a document is told to load nothing.
@@ -359,6 +432,25 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   const countBearer = app.createRateLimit();
   // The plugin types `this` as a bare FastifyInstance; ours carries the Zod provider.
   const plain = app as unknown as FastifyInstance;
+  /*
+   * The body deadline: a request that declares a body must deliver all of it
+   * within `requestTimeout`, or its socket is destroyed.
+   */
+  app.addHook('onRequest', async (request, reply) => {
+    const { headers, raw } = request;
+    // Bytes outstanding, not a header present: a bodiless `content-length: 0` request
+    // (which a proxy adds to a GET) is never read, so `/events/stream` would never disarm it.
+    const length = headers['content-length'];
+    if (headers['transfer-encoding'] === undefined && (length === undefined || length === '0')) {
+      return;
+    }
+    const timer = setTimeout(() => raw.destroy(), requestTimeout);
+    timer.unref();
+    const clear = (): void => clearTimeout(timer);
+    raw.once('end', clear);
+    reply.raw.once('close', clear);
+  });
+
   app.addHook('onRequest', async (request, reply) => {
     const routeLimit = request.routeOptions.config?.rateLimit;
 
@@ -373,15 +465,25 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   });
   // The per-file ceiling is also enforced when the part is buffered, so an
   // oversized upload is refused rather than read into memory in full.
-  await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
+  // The upload form is one file and no fields; the small allowance is headroom,
+  // not a feature, and stops a body of thousands of empty fields being parsed.
+  await app.register(multipart, {
+    limits: {
+      fileSize: MAX_UPLOAD_BYTES,
+      files: 1,
+      fields: MAX_UPLOAD_FORM_FIELDS,
+      parts: MAX_UPLOAD_FORM_FIELDS + 1,
+    },
+  });
 
   await app.register(backgroundPlugin);
   await app.register(clockPlugin, options.clock ? { clock: options.clock } : {});
   await app.register(databasePlugin, { db });
   await app.register(eventsPlugin);
-  await app.register(storagePlugin, { storage });
+  await app.register(storagePlugin, { storage, publicUrl: env.STORAGE_PUBLIC_URL });
   await app.register(stripePlugin, {
     secretKey: env.STRIPE_SECRET_KEY,
+    deployEnv: env.DEPLOY_ENV,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
     ...(env.STRIPE_CONNECT_WEBHOOK_SECRET
       ? { connectWebhookSecret: env.STRIPE_CONNECT_WEBHOOK_SECRET }
@@ -413,9 +515,16 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     digestIntervalMs: options.operatorDigestIntervalMs ?? OPERATOR_DIGEST_POLL_INTERVAL_MS,
     ...(options.operatorAlertWait ? { wait: options.operatorAlertWait } : {}),
   });
+  await app.register(stepUpPlugin, { ...(options.stepUp ? { store: options.stepUp } : {}) });
   await app.register(payoutReleasePlugin, {
     intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,
     reporter: errorReporter,
+    webOrigin: canonicalWebOrigin(env),
+  });
+  await app.register(authReconcilePlugin, {
+    intervalMs: options.authReconcileIntervalMs ?? AUTH_RECONCILE_INTERVAL_MS,
+    reporter: errorReporter,
+    webOrigin: canonicalWebOrigin(env),
   });
   await app.register(uploadSweepPlugin, {
     intervalMs: options.uploadSweepIntervalMs ?? UPLOAD_SWEEP_INTERVAL_MS,
@@ -430,10 +539,12 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(expirySweepPlugin, {
     intervalMs: options.expirySweepIntervalMs ?? EXPIRY_SWEEP_INTERVAL_MS,
     webOrigin: canonicalWebOrigin(env),
+    platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
     reporter: errorReporter,
   });
 
   await app.register(healthRoutes);
+  await app.register(throttleRoutes, { webTierKey: env.WEB_TIER_KEY });
   await app.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(adminCategoryRoutes);
   await app.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });
@@ -456,11 +567,13 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(bookingRequestRoutes, {
     webOrigin: canonicalWebOrigin(env),
     rateLimitMax: env.BOOKING_REQUEST_RATE_LIMIT_MAX,
+    platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
   });
   await app.register(messagingRoutes, {
     allowedOrigins: allowedOrigins(env),
     conversationRateLimitMax: env.CONVERSATION_RATE_LIMIT_MAX,
     messageRateLimitMax: env.MESSAGE_RATE_LIMIT_MAX,
+    ...(options.streamHeartbeatMs ? { heartbeatMs: options.streamHeartbeatMs } : {}),
   });
   await app.register(uploadRoutes, {
     rateLimitMax: env.UPLOAD_RATE_LIMIT_MAX,
@@ -503,6 +616,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
     webOrigin: canonicalWebOrigin(env),
     keyMode: stripeKeyMode(env.STRIPE_SECRET_KEY),
+    deployEnv: env.DEPLOY_ENV,
   });
 
   await app.ready();

@@ -76,11 +76,11 @@ Create Stripe Refund for `refundAmount`. If vendor already received a Transfer, 
 
 ### D4: User Roles — Single Role Per Account
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **Decision:** Each user has exactly one role (`customer`, `vendor`, or `admin`), set at registration. No role switching.
 
-**Rationale:** Dual roles add significant complexity: role-switcher UI, context-aware dashboards, "which role am I in?" confusion, dual notification streams, auth middleware that checks active role not just assigned role. For MVP, a vendor who wants to book another vendor creates a second Clerk account with a different email.
+**Rationale:** Dual roles add significant complexity: role-switcher UI, context-aware dashboards, "which role am I in?" confusion, dual notification streams, auth middleware that checks active role not just assigned role. For MVP, a vendor who wants to book another vendor creates a second the auth provider account with a different email.
 
 **Data model:** `users.role` is `enum('customer','vendor','admin')`, single value, immutable after registration (no role-change endpoint).
 
@@ -202,7 +202,7 @@ blurbs, which are commentary and go stale — and diffs them against the live DO
 
 ## Technology Decisions (Settled)
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 These are documented with full rationale in the project plan (Section 3). Summarized here for quick reference:
 
@@ -212,7 +212,7 @@ These are documented with full rationale in the project plan (Section 3). Summar
 | Backend | Fastify 5 (separate service) | Type-safe routes via Zod provider, built-in Pino, clean plugin system |
 | ORM | Drizzle | SQL-like queries Claude can verify, schema-as-TypeScript |
 | Database | PostgreSQL 16 (Neon prod) | Proven, free tier, daily backups, point-in-time recovery |
-| Auth | Clerk | Eliminates auth attack surface, free 10k MAU, works with separate backend |
+| Auth | The auth provider | Eliminates auth attack surface, free 10k MAU, works with separate backend |
 | Payment | Stripe Connect Express (12%) | Hosted onboarding, platform fee support, industry standard |
 | Monorepo | Turborepo + pnpm | Simple config, Vercel-maintained, good enough for 4 packages |
 | Styling | Tailwind CSS 4 + shadcn/ui | Claude can read/modify component source directly |
@@ -412,7 +412,7 @@ accepted one.
 
 ### D12: The Eight Human Decisions — *2026-08-30*
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **What this is.** Every ticket sitting in `Deferred — needs a human` or
 `Blocked — needs a human` was put to the account holder in one pass and answered.
@@ -459,14 +459,14 @@ to mean anything. A seeded taxonomy is expensive to change once customers filter
 | **#19** Production provisioning | Hold **all** of it, Stripe live-mode activation included |
 | **#62** Stripe public business name | Hold — sandbox renders `VendYou` harmlessly, #9/#10 verify with it in place |
 | **#11** Transactional email | Hold — in-app notifications already cover every event row; domain verification needs DNS that does not exist until #19 |
-| **#46** Clerk secret rotation | Hold — scopes 1 and 2 already shipped; only the rotation remains |
+| **#46** The auth provider secret rotation | Hold — scopes 1 and 2 already shipped; only the rotation remains |
 | **#206** Neon Launch plan | Unchanged — already ruled 2026-08-29, lives in `docs/pre-launch.md` §3.2 |
 
 **Two consequences, accepted explicitly rather than discovered later.**
 
 1. **Stripe's live-mode activation is a review, not a toggle.** Holding it means that review
    time lands on the critical path at launch instead of running in the background now.
-2. **`CLERK_WEBHOOK_SECRET` is a known-leaked value that stays live.** It was pasted into a
+2. **`AUTH_PROVIDER_WEBHOOK_SECRET` is a known-leaked value that stays live.** It was pasted into a
    chat transcript on 2026-08-27. The webhook endpoint is repointed and signature
    verification is enforced, so nothing is actively broken, but per `CLAUDE.md` a leaked
    credential is rotated rather than merely deleted — this is a standing exposure with a
@@ -645,7 +645,7 @@ same constant and the same component; separate lanes would have collided on both
 
 ### D16: The #335 Ruling Round — Chips, the Hero, Sort and Sign-up — *2026-08-30*
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **What this is.** #335 put four questions to the account holder; #339 and #313 added
 three more. All seven are answered here, and **every one is written into
@@ -708,7 +708,7 @@ because a new marketplace defaulting to `Top rated` ranks its thinnest review co
 first and one 5★ review outranks forty. Revisit against real review volume.
 
 **6 — `Create my account`, and the plan was already right** (#313). Frame `12` draws it
-and `21-sign-up.md` has specified it since it was written; the live button reads Clerk's
+and `21-sign-up.md` has specified it since it was written; the live button reads the auth provider's
 default `Continue`. A code defect, not a plan gap.
 
 **7 — The sign-up photograph is fixed, so no scrim** (#313). The panel sets copy over a
@@ -720,8 +720,8 @@ Any ticket that makes the image dynamic must add the scrim in the same change.
 
 **8 — The role picker reappearing after email verification is a defect** (#313), and
 carrying the role is possible. The role is read from `?role=` server-side
-(`sign-up/[[...sign-up]]/page.tsx`) and handed to Clerk as `unsafeMetadata`
-(`sign-up-form.tsx`) before verification; Clerk's verification step is a path navigation
+(`sign-up/[[...sign-up]]/page.tsx`) and handed to the auth provider as `unsafeMetadata`
+(`sign-up-form.tsx`) before verification; the auth provider's verification step is a path navigation
 that remounts the page, and the picker — local state seeded from the query string —
 resets to unselected. The role is already in `unsafeMetadata`, so it is read back from
 there, or the picker is suppressed once verification is pending. **No larger
@@ -747,7 +747,7 @@ redirect.
 
 ### D17: Three More Design Rulings — Avatar Tint, Missing Covers, the 500 CTA — *2026-08-30*
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **What this is.** Lanes 302 and 305 landed while D16 was being written and filed three
 more `[DESIGN] … needs a human` rows — #342, #348, #350. All three are answered here and
@@ -786,7 +786,7 @@ is corrected**. It drew `Go to my bookings`, offering a visitor who has never si
 link to bookings they cannot have. #305 changed the string as a ticket, correctly
 reverted it — the words are the design and a ticket may not edit approved copy — and
 filed the question. This is the design pass that may. Rejected: an auth-aware pair of
-strings, because `global-error.tsx` renders **outside the Clerk provider** and cannot know
+strings, because `global-error.tsx` renders **outside the auth provider provider** and cannot know
 who is reading, so it needs a signed-out default anyway and two strings on one screen
 drift apart; and accepting the inaccuracy, since it is a dead end on a page that is
 already a failure. Landed in `40-states.md`, `31-content-voice.md`, `99-open-questions.md`.
@@ -986,7 +986,7 @@ up until the moment someone writes one.
 
 ### D27: The Admin Account Is Human-Provisioned, and Preflight Does Not Check It — *2026-08-31*
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **Ruled by the account holder**, when the E2E admin account was created: *"Admin account is
 only provisioned by me so it doesn't need preflight checks necessarily since that should be
@@ -1002,7 +1002,7 @@ two the fixture seeds.
 **The distinction the ruling draws.** The customer and vendor accounts are *fixture* — the
 seed forces their roles and builds the storefront they need, so preflight asserting they
 can reach their surfaces is asserting something the repository controls. The admin account
-is *provisioned*: it exists because a person created it in Clerk. Preflight's job is the
+is *provisioned*: it exists because a person created it in the auth provider. Preflight's job is the
 environment a ticket needs, not the accounts an operator owns.
 
 **What still holds.** `seed:e2e` seeds the admin row when `E2E_ADMIN_EMAIL` is present and
@@ -1609,7 +1609,7 @@ primitive disagree everywhere, not on checkout, so it belongs to whichever ticke
 
 ### D34: The Focus Ring Has One Owner and One Escape Hatch — *2026-09-06*
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk widget styling below is the historical record; the focus-ring rule itself stands.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider widget styling below is the historical record; the focus-ring rule itself stands.
 
 **Ruled for #383**, whose acceptance asked which of the two plan files had to move on the
 unbordered ring's opacity. **Neither.** `03-components.md:124` and `04-laws.md:166` both say
@@ -1671,9 +1671,9 @@ ring. `outline-stone-0` was flagged in the ticket as "near-white on cream"; on t
 actually sits on, it is the high-contrast choice, and that is the justification the acceptance
 asked for.
 
-**Clerk's nodes cannot carry the attribute, so each treatment is restated unlayered for them**
+**The auth provider's nodes cannot carry the attribute, so each treatment is restated unlayered for them**
 — and the text field has to write `ring-offset-0` by hand. That line is the whole mechanism in
-miniature: overriding Clerk's ring alone left the base rule's 2px band underneath it, and the
+miniature: overriding the auth provider's ring alone left the base rule's 2px band underneath it, and the
 sign-in field rendered the bordered treatment's tight ring pushed two pixels off the control.
 Found in the browser after the source guards were already green.
 
@@ -1849,7 +1849,7 @@ never existed.
 
 ### D38: The Acceptance Gate Is an API Refusal, and an Account Is Created by Accepting — *2026-09-07*
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **#429.** `legal_acceptances` (#427) recorded only vendors, only a version
 string, and only a `Continue` press. Closing all three moved the row's anchor
@@ -1887,10 +1887,10 @@ webhook row with no acceptance is held at the interstitial exactly like an
 account with no row at all. The transaction's job is atomicity on the
 first-sign-in path, and that is all.
 
-A consequence to keep: a session whose local row is **retired** (Clerk deleted
+A consequence to keep: a session whose local row is **retired** (the auth provider deleted
 the identity) must be told 401, not offered the gate — otherwise an erased
 account is invited to bring itself back, and `insertUserIfAbsent` collides on
-`clerk_user_id`. `findUserByClerkIdIncludingRetired` exists for that one branch.
+`auth_user_id`. `findUserByAuthIdIncludingRetired` exists for that one branch.
 
 **3. The immutability rule follows the anchor.** `0029` allowed one delete, keyed
 on `NOT EXISTS (the vendor named by OLD.vendor_id)`. A null names no vendor, so
@@ -1974,7 +1974,7 @@ Neon branches, checked before the index was written.
 simultaneous first-sign-in acceptances 500s about a quarter of the time, and the
 index neither caused that nor fixed it: `users` carries two unique indexes and
 one identity signing in twice at once collides on **both**, so
-`insertUserIfAbsent`'s `DO NOTHING` targeted at `users_clerk_user_id_key` let
+`insertUserIfAbsent`'s `DO NOTHING` targeted at `users_auth_user_id_key` let
 the `users_email_key` violation through as a 23505. Neither obvious repair was
 available: `ON CONFLICT (a, b)` names one arbiter *index* over those columns and
 there is no unique index on that pair, so the target could not be widened — and
@@ -1985,10 +1985,10 @@ that works there.
 
 **So the target is gone, and the declined path then asks which constraint
 declined it** — because widening what is swallowed must not make it silent. If
-the Clerk id is already in the table the identity met itself (the race, or a
+the auth provider id is already in the table the identity met itself (the race, or a
 retired row) and `null` is the answer every caller expects; if it is not, some
 other index arbitrated, meaning an address that belongs to somebody else, and
-`insertUserIfAbsent` **throws** naming that Clerk id. That last part is the
+`insertUserIfAbsent` **throws** naming that the auth provider id. That last part is the
 rule worth keeping: **a `null` returned from a write path must mean something
 the caller can act on, or it is a defect wearing a return value.** The 23505 it
 replaced carried `constraint` and `table` into the log through
@@ -1998,12 +1998,12 @@ collided is the entire remedy.
 
 **The security pass on #442 then found who actually reaches that throw, and it
 is not who the code said.** The comment claimed a live account holding the
-address needs two Clerk identities sharing one, which Clerk refuses — true, and
+address needs two the auth provider identities sharing one, which the auth provider refuses — true, and
 it made the case read as a seeding accident. But a **retired** account holding
 it is ordinary: `retireUserWhere` writes only `deleted_at`, and `users_email_key`
 carries no `WHERE deleted_at IS NULL`, so a closed account keeps its address in
-the index while Clerk frees it. **Anyone who closes their account and signs up
-again with the same address arrives with a new Clerk id and collides**, and has
+the index while the auth provider frees it. **Anyone who closes their account and signs up
+again with the same address arrives with a new the auth provider id and collides**, and has
 done since the row could first be retired — the targeted `DO NOTHING` raised a
 23505 at the same statement, so this is a pre-existing 500 that #442 changed the
 shape of rather than caused. #451's partial index is what lets that person back
@@ -2032,7 +2032,7 @@ the gate has already decided by the time any harness-registered hook could run.
 **Two things about that were argued and settled rather than overlooked.** It is
 a harness-wide boolean, so a suite cannot hold one identity gated and another
 accepted; the shape that would allow it is `harness.registerUser(id, snapshot,
-{ accepted })` replacing the raw `clerkUsers` Map at 43 call sites, and it is
+{ accepted })` replacing the raw `authUsers` Map at 43 call sites, and it is
 worth doing the day a suite needs mixed state. And the provisioning **must not**
 be memoised per identity: many suites clear `users` in `afterEach`, so "already
 provisioned" is not a fact that survives the test that established it — memoising
@@ -2040,7 +2040,7 @@ it broke 20 suites and was reverted.
 
 ### D39: An Account With Live Bookings Cannot Be Closed — *2026-09-07*
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **Closure is refused while the account holds a future confirmed booking.** The
 account holder ruled it directly, choosing refusal over both alternatives:
@@ -2089,12 +2089,12 @@ they were paid is not a thing this product does on an account closure.
 1. **#438 builds the refusal**, not a refund. Operator-initiated closure and any
    in-product self-closure answer `409` while a future confirmed booking exists,
    telling the customer to cancel their upcoming bookings first.
-2. **The Clerk self-serve path has to be intercepted, and it is the hard half.**
-   `<UserButton />` is mounted at `site-header.tsx:197`, and a Clerk account
+2. **The auth provider self-serve path has to be intercepted, and it is the hard half.**
+   `<UserButton />` is mounted at `site-header.tsx:197`, and an auth provider account
    deletion is *reactive* — by the time `user.deleted` reaches the webhook the
    identity is already gone and there is nothing left to refuse. A refusal that
    only guards the product's own closure route is a refusal a determined user
-   walks around. So either the self-serve delete is disabled in the Clerk
+   walks around. So either the self-serve delete is disabled in the auth provider
    instance and closure is routed through the product, or the webhook remains a
    backstop that cannot refuse.
 3. **#433's operator-settled fallback stays, and is now the backstop rather than
@@ -2107,3 +2107,36 @@ was the tidier-looking option and was rejected: it silently applies a penalty to
 someone who may simply be leaving, and it would have needed reconciling against
 D31, under which a cancellation is a *full* unwind rather than a tiered one.
 Refusal creates no new money rule to reconcile with anything.
+
+
+### D40: Admin Two-Factor — Step-Up Now, Provider MFA Later, Ruling Open — *2026-09-21*
+
+**Open question for the account holder (no ruling recorded; do not read one
+into this entry).** Neon Auth has no second factor, and the operator signs in
+with an emailed code. Should the operator account require provider-level MFA
+before launch, and if so is it a launch blocker or a post-launch hardening?
+Until now the question lived only in the VEN-377 console checklist.
+
+**Recommendation, shipped as VEN-500: step-up now, provider MFA later.**
+
+- **Step-up.** Ban, closure, dispute rulings and the two irreversible deletions
+  ask for a code emailed to the operator's own address, valid 10 minutes, five
+  tries. A stolen session token cannot mint it. It needs no provider capability.
+  The grant is the **operator's, not the session's**: a stolen token used while
+  the real operator's grant is live also passes (bounded by the ceiling for bans
+  and closures). Binding it to the bearer token was rejected because the browser
+  refreshes that token every few minutes, so every refresh would re-prompt.
+- **Ceiling.** One operator completes at most 10 bans and closures an hour; the
+  next is refused before Stripe is asked for a refund, and the operator address
+  is emailed.
+- **What it does not cover.** Someone holding the operator's **mailbox** passes
+  both the sign-in and the step-up. Only provider MFA closes that, which is why
+  the question stays open rather than closed by this change.
+- **Password reset (VEN-470) is not closed to operators.** Their sign-in is
+  already an emailed code, so the mailbox is the credential either way; excluding
+  operators removes no path and locks out a sole operator. Recovery is in
+  `docs/admin-recovery.md`.
+
+Rejected: a password re-entry through the auth proxy (operators sign in by
+emailed code, so it would add a credential nobody holds); a step-up claim minted
+by the provider (no such capability); a second approver (one operator).

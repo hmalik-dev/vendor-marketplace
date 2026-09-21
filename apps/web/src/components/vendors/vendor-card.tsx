@@ -184,7 +184,7 @@ export function VendorCard({
           bar, where a shared bar-level ring left three segments
           indistinguishable.
         */
-        'has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-clay-400/40 has-[a:focus-visible]:ring-offset-2 has-[a:focus-visible]:ring-offset-stone-50',
+        'has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-clay-400 has-[a:focus-visible]:ring-offset-2 has-[a:focus-visible]:ring-offset-stone-50',
         className,
       )}
     >

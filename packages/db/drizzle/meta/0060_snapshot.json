@@ -1,5 +1,5 @@
 {
-  "id": "606c2b03-747b-49a0-822b-6b8644def529",
+  "id": "40754c6a-6290-4c8a-9d54-32cc234ac137",
   "prevId": "8eaa4e7b-7cd5-4c8c-8d05-a9a83aafa9ae",
   "version": "7",
   "dialect": "postgresql",
@@ -3991,7 +3991,6 @@
       "schema": "public",
       "values": [
         "neon_auth",
-        "legacy_clerk",
         "seed"
       ]
     },
@@ -4160,7 +4159,6 @@
       "schema": "public",
       "values": [
         "clickwrap_checkbox",
-        "continue_notice",
         "seed_fixture"
       ]
     },

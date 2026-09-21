@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   adminCaseBookingSchema,
   adminCaseDetailSchema,
@@ -22,6 +23,7 @@ import {
 import { Writable } from 'node:stream';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createResendGateway } from '../../lib/email.js';
+import { failInsertsInto } from '../../testing/insert-failure.js';
 import {
   bearer,
   createTestHarness,
@@ -90,10 +92,7 @@ describe('the operations case queue (#431)', () => {
     expect(response.statusCode).toBe(200);
 
     if (promoteToAdmin) {
-      await harness.database.db
-        .update(users)
-        .set({ role: 'admin' })
-        .where(eq(users.authUserId, authUserId));
+      await setUserRole(harness.database.db, 'admin', eq(users.authUserId, authUserId));
     }
 
     const rows = await harness.database.db
@@ -168,6 +167,15 @@ describe('the operations case queue (#431)', () => {
         ...(overrides.payoutReleasedAt ? { payoutReleasedAt: overrides.payoutReleasedAt } : {}),
       })
       .returning({ id: bookings.id });
+
+    /* The intent Stripe would answer for; the webhook reads its environment tag first (VEN-529). */
+    harness.stripe.paymentIntents.set(paymentIntentId, {
+      id: paymentIntentId,
+      status: 'succeeded',
+      amountReceivedCents: TOTAL_CENTS,
+      clientSecret: null,
+      metadata: {},
+    });
 
     return { adminId, customerId, vendorProfileId, bookingId: bookingRows[0]!.id, paymentIntentId };
   }
@@ -864,8 +872,38 @@ describe('the operations case queue (#431)', () => {
     });
   });
 
+  it('ignores a dispute on another environment’s charge even when a copied booking matches it', async () => {
+    const fixture = await seed();
+    harness.stripe.paymentIntents.set(fixture.paymentIntentId, {
+      id: fixture.paymentIntentId,
+      status: 'succeeded',
+      amountReceivedCents: TOTAL_CENTS,
+      clientSecret: null,
+      metadata: { env: 'production' },
+    });
+
+    const delivered = await deliverDispute('charge.dispute.created', {
+      id: 'dp_test_copied',
+      status: 'needs_response',
+      reason: 'fraudulent',
+      amountCents: TOTAL_CENTS,
+      intentId: fixture.paymentIntentId,
+    });
+
+    expect(delivered.statusCode).toBe(200);
+    expect(delivered.json().outcome).toBe('ignored');
+    expect((await readCases()).total).toBe(0);
+  });
+
   it('ignores a dispute on a charge this platform did not make', async () => {
     await seed();
+    harness.stripe.paymentIntents.set('pi_not_ours', {
+      id: 'pi_not_ours',
+      status: 'succeeded',
+      amountReceivedCents: 5_000,
+      clientSecret: null,
+      metadata: {},
+    });
 
     const delivered = await deliverDispute('charge.dispute.created', {
       id: 'dp_test_foreign',
@@ -1145,10 +1183,7 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
 
   it('lifts the hold and records the failure on the case', async () => {
     await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(ADMIN) });
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
 
     await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
     const customers = await harness.database.db
@@ -1277,10 +1312,10 @@ describe('a case row that cannot be written (#431 security review)', () => {
     await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
 
     /*
-     * **A caller-chosen insert failure.** `freeText()` strips bidi controls and
-     * trims; neither removes `U+0000`, and Postgres refuses a null byte with
-     * `22021` — so a stranger on a public, rate-limited form decides when this
-     * write fails and what is bound to it.
+     * **An insert failure with the caller's text bound to it.** Postgres
+     * refuses a null byte with `22021`; the request schema now refuses one
+     * first (VEN-544), so the failure is made in the database instead, and a
+     * stranger on a public, rate-limited form still chooses what is bound.
      *
      * The regression: drizzle wraps a failed statement in a `DrizzleQueryError`
      * whose `message` is `Failed query: … params: <every bound parameter>`, and
@@ -1292,14 +1327,16 @@ describe('a case row that cannot be written (#431 security review)', () => {
      */
     const secret = 'A-COMPLAINT-NOBODY-ELSE-SHOULD-EVER-READ';
     captured.length = 0;
+    const restore = await failInsertsInto(harness.database.db, 'support_cases');
 
     const sent = await harness.app.inject({
       method: 'POST',
       url: '/support/messages',
       headers: bearer(CUSTOMER),
       ...fromANewVisitor(),
-      payload: { topic: 'trust-and-safety', message: `${secret}\u0000` },
+      payload: { topic: 'trust-and-safety', message: secret },
     });
+    await restore();
 
     // The send still succeeds: the row is best-effort and must not cost the email.
     expect(sent.statusCode).toBe(200);

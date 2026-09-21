@@ -133,7 +133,7 @@ export function RequestSummaryRail({
         />
         <div className="min-w-0">
           <p className="truncate font-display text-[19px] text-stone-900">{vendor.businessName}</p>
-          <p className="mt-0.5 text-sm text-stone-600">
+          <p className="mt-0.5 text-meta text-stone-600">
             {vendor.reviewCount > 0
               ? `★ ${vendor.avgRating.toFixed(1)} (${vendor.reviewCount})`
               : 'No reviews yet'}
@@ -144,12 +144,12 @@ export function RequestSummaryRail({
 
       {servicePackage ? (
         <div className="border-b border-stone-200 px-4.5 py-3.5">
-          <div className="mb-2 flex justify-between gap-3 text-base text-stone-700">
+          <div className="mb-2 flex justify-between gap-3 text-action text-stone-700">
             <span>{servicePackage.name}</span>
             <span className="font-semibold">{formatPrice(servicePackage.priceCents)}</span>
           </div>
           {servicePackage.inclusions.length > 0 ? (
-            <p className="text-sm leading-prose text-stone-600">
+            <p className="text-meta leading-prose text-stone-600">
               {servicePackage.inclusions.join(' · ')}
             </p>
           ) : null}
@@ -172,9 +172,9 @@ export function RequestSummaryRail({
             onChange={(event) => onCustomDetailsChange(event.target.value)}
             {...errorProps(customDetailsIssue)}
             placeholder="Two hours of engagement portraits at Zilker, golden hour."
-            className="min-h-24 rounded-[10px] border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900"
+            className="min-h-24 rounded-[10px] border-input bg-stone-150 px-3.25 py-2.5 text-base text-stone-900"
           />
-          <p className="mt-1.25 text-right text-xs text-stone-600">
+          <p className="mt-1.25 text-right text-helper text-stone-600">
             {detailsLength} / {BOOKING_REQUEST_NOTES_MAX_LENGTH}
           </p>
           <FieldMessage issue={customDetailsIssue} />

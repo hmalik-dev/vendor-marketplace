@@ -118,6 +118,7 @@ describe('two payment intents succeeding for one request, on real connections', 
     harness!.stripe.intentsByKey.clear();
     const stray = await harness!.stripe.createPaymentIntent({
       requestId,
+      replacements: 0,
       amountCents: PRICE_CENTS,
       customerId: 'cus_test',
       vendorId: 'ven_test',

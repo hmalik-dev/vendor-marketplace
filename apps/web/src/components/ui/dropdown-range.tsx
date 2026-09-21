@@ -322,7 +322,7 @@ function AmountField({
           onChange(parsed, parsed === null && typed.trim() !== '');
         }}
         className={cn(
-          'w-full rounded-md border border-stone-300 bg-stone-150 px-2.5 py-2 text-[13px] text-stone-900 outline-none',
+          'w-full rounded-md border border-input bg-stone-150 px-2.5 py-2 text-[13px] text-stone-900 outline-none',
           // The 1.5px focus border keeps the box the same size; the padding
           // gives back the half-pixel it takes on each side.
           'focus-visible:border-[1.5px] focus-visible:px-[9px] focus-visible:py-[7px]',

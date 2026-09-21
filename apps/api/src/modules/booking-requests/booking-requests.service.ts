@@ -54,6 +54,7 @@ import {
   findRequests,
   findBookableVendorById,
   findVendorById,
+  isVendorSellable,
   findVendorByUserId,
   findVendorUserId,
   findCustomerNames,
@@ -62,6 +63,7 @@ import {
   setHeldDate,
   statusesOnDate,
   hasRivalAcceptanceOn,
+  isAcceptedDateTaken,
   lockHeldDate,
   vendorHoldsCurrentAgreement,
 } from './booking-requests.dao.js';
@@ -81,6 +83,9 @@ function invalidTransition(from: BookingRequestStatus, to: BookingRequestStatus)
     `A ${from} request cannot become ${to}`,
   );
 }
+
+/** What an accept is told when another request holds the vendor's date. */
+const DATE_BOOKED_MESSAGE = 'That date was booked while this request was open';
 
 const NOTIFICATION_DATE = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -233,8 +238,8 @@ async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerIden
 /**
  * How many expiry chains a single list read may have open at once.
  *
- * `Promise.all` over the rows started all of them together, and each chain is
- * four statements and a notification write — so a vendor with a long history
+ * `Promise.all` over the rows started all of them together, and each chain is a
+ * transaction holding one connection throughout — so a vendor with a long history
  * opened one connection per expired request against a pool sized for a handful.
  * The page window bounds how many rows arrive; this bounds how many are worked
  * at a time, which is the half that decides whether the read starves everything
@@ -243,86 +248,141 @@ async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerIden
 const EXPIRY_CONCURRENCY = 4;
 
 /**
+ * What became of the money behind an accepted request that is about to expire
+ * (VEN-528): `release` — nothing was paid and the intent is cancelled, so the
+ * request may expire; `booked` — the payment had succeeded and is now a
+ * booking; `hold` — it is in flight or Stripe could not be asked, so the
+ * request stays as it is and the next read or tick decides.
+ */
+export type ExpirySettlement = 'release' | 'booked' | 'hold';
+
+/**
+ * The payment side of expiry, supplied by the payments module so this one does
+ * not import it. Absent for a caller that cannot reach Stripe.
+ */
+export interface ExpiryPaymentGuard {
+  settleBeforeExpiry(row: BookingRequestRow, now: Date): Promise<ExpirySettlement>;
+}
+
+/**
  * Ages a request that has run past its window — on the next read of it, or in
  * `expireLapsedRequests`' sweep, whichever comes first. The write is guarded on
  * the status it was read at, so a vendor accepting in the same second either
  * wins or is told the request expired — never both.
+ *
+ * An accepted request that already has a PaymentIntent asks `guard` first: a
+ * payment made in time is booked rather than expired and refunded, and an
+ * unpaid intent is cancelled so it cannot be paid after the date is released.
  */
-async function ageIfExpired(
+export async function ageIfExpired(
   db: AppDatabase,
   row: BookingRequestRow,
   now: Date,
   mail?: NotificationEmailDeps,
+  guard?: ExpiryPaymentGuard,
 ): Promise<BookingRequestRow> {
   if (row.status === 'expired' || requestStatusAsRead(row, now) !== 'expired') {
     return row;
   }
 
   const wasAccepted = row.status === 'accepted';
-  const expired = await applyExpiry(db, row.id, row.status);
-  if (!expired) {
+
+  if (wasAccepted && row.stripePaymentIntentId && guard) {
+    const settlement = await guard.settleBeforeExpiry(row, now);
+
+    if (settlement !== 'release') {
+      return (await findRequestById(db, row.id)) ?? row;
+    }
+  }
+
+  /*
+   * The status change, the released date and the notification rows commit
+   * together (VEN-536). `findLapsedRequests` selects only unexpired rows, so a
+   * request that committed `expired` and then lost the process before the date
+   * was freed was never retried: search kept excluding the vendor and nobody was
+   * told. Now a failure anywhere in here leaves the row as it was, and the next
+   * tick or read does the whole job.
+   */
+  const outcome = await db.transaction(async (tx) => {
+    /*
+     * The date first, the request second: the order an accept takes them in
+     * (`lockHeldDate`, then `applyTransition`). Reversed, an accept and an
+     * expiry of the same request could each hold one lock and wait on the other.
+     */
+    await lockHeldDate(tx, row.vendorId, row.eventDate);
+
+    const moved = await applyExpiry(tx, row.id, row.status);
+    if (!moved) {
+      return null;
+    }
+
+    /*
+     * A lapsed request stops holding the date. Without this the calendar keeps
+     * reading `pending` for a request nobody can act on any more, and the vendor
+     * loses a Saturday to a customer who went elsewhere a week ago.
+     */
+    await syncHeldDate(tx, moved.vendorId, moved.eventDate);
+
+    /*
+     * Once per request, not once per read — `applyExpiry`'s guarded UPDATE does
+     * the work: a second caller gets `null` and writes nothing. Each row sits in
+     * a savepoint, so one that cannot be written is logged and dropped rather
+     * than rolling back the release of the date it was announcing.
+     */
+    const deliveries: { delivery: Delivery; party: 'customer' | 'vendor' }[] = [];
+    const record = async (party: 'customer' | 'vendor', copy: NotificationCopy): Promise<void> => {
+      await bestEffortAnnouncement(mail, moved.id, async () => {
+        const delivery = await tx.transaction((savepoint) =>
+          recordNotification(savepoint, moved, party, 'request_expired', copy),
+        );
+        if (delivery) {
+          deliveries.push({ delivery, party });
+        }
+      });
+    };
+
+    await record('customer', {
+      title: wasAccepted ? 'Your booking was not paid in time' : 'Your request expired',
+      /*
+       * "for a week" was a literal that #401 made false: the reply window is
+       * now capped at the event, so a request sent four days before its date
+       * expires in four days, not seven. The duration is dropped rather than
+       * recomputed — the customer's next move does not depend on how long it
+       * waited, and a second place that states this deadline is a second place
+       * for it to drift.
+       */
+      body: wasAccepted
+        ? 'The payment window closed, so the date was released. Send a new request if you still want it.'
+        : 'It closed without a reply. Send it again, or find another vendor for the date.',
+    });
+
+    /*
+     * The vendor lost the date too, and nothing else on their side records it:
+     * the booking leaves `/vendor/bookings` and the calendar cell frees.
+     */
+    if (wasAccepted) {
+      await record('vendor', {
+        title: 'A booking was not paid in time',
+        body: 'The customer did not pay inside the window, so the date is open on your calendar again.',
+      });
+    }
+
+    return { expired: moved, deliveries };
+  });
+
+  if (!outcome) {
     // Something else moved it first; that decision stands.
     return (await findRequestById(db, row.id)) ?? row;
   }
 
-  /*
-   * A lapsed request stops holding the date. Without this the calendar keeps
-   * reading `pending` for a request nobody can act on any more, and the vendor
-   * loses a Saturday to a customer who went elsewhere a week ago.
-   */
-  await syncHeldDate(db, expired.vendorId, expired.eventDate);
-
-  /*
-   * Once per request, not once per read — and that is `applyTransition`'s
-   * guarded UPDATE doing the work, not a check here. A second caller finds the
-   * status already moved, gets `null` above, and returns before this line.
-   */
-  await bestEffortAnnouncement(mail, expired.id, () =>
-    notifyParty(
-      db,
-      expired,
-      'customer',
-      'request_expired',
-      {
-        title: wasAccepted ? 'Your booking was not paid in time' : 'Your request expired',
-        /*
-         * "for a week" was a literal that #401 made false: the reply window is
-         * now capped at the event, so a request sent four days before its date
-         * expires in four days, not seven. The duration is dropped rather than
-         * recomputed — the customer's next move does not depend on how long it
-         * waited, and a second place that states this deadline is a second place
-         * for it to drift.
-         */
-        body: wasAccepted
-          ? 'The payment window closed, so the date was released. Send a new request if you still want it.'
-          : 'It closed without a reply. Send it again, or find another vendor for the date.',
-      },
-      undefined,
-      mail,
-    ),
-  );
-
-  /*
-   * The vendor lost the date too, and nothing else on their side records it:
-   * the booking leaves `/vendor/bookings` and the calendar cell frees.
-   */
-  if (wasAccepted) {
-    await bestEffortAnnouncement(mail, expired.id, () =>
-      notifyParty(
-        db,
-        expired,
-        'vendor',
-        'request_expired',
-        {
-          title: 'A booking was not paid in time',
-          body: 'The customer did not pay inside the window, so the date is open on your calendar again.',
-        },
-        undefined,
-        mail,
-      ),
+  // Pushed only now: a bell must not ring for a row the transaction rolled back.
+  for (const { delivery, party } of outcome.deliveries) {
+    await bestEffortAnnouncement(mail, outcome.expired.id, () =>
+      deliverNotification(delivery, party, undefined, mail),
     );
   }
 
+  const { expired } = outcome;
   return expired;
 }
 
@@ -341,10 +401,11 @@ export async function expireLapsedRequests(
   db: AppDatabase,
   now: Date,
   mail: NotificationEmailDeps,
+  guard?: ExpiryPaymentGuard,
 ): Promise<number> {
   const lapsed = await findLapsedRequests(db, now, EXPIRY_SWEEP_BATCH);
   const aged = await mapWithConcurrency(lapsed, EXPIRY_CONCURRENCY, async (row) => {
-    const after = await ageIfExpired(db, row, now, mail);
+    const after = await ageIfExpired(db, row, now, mail, guard);
     return after.status === 'expired' && row.status !== 'expired';
   });
 
@@ -441,7 +502,10 @@ async function deliverNotification(
 /**
  * Runs the announcement, and never lets it undo the thing it announces.
  *
- * **Everything this guards has already committed.** `applyTransition` and
+ * **Everything this guards has already committed** — except in `ageIfExpired`,
+ * which calls it inside the expiry transaction and wraps the write in a
+ * savepoint. Swallowing a statement error there without one leaves the
+ * transaction aborted, and its COMMIT then rolls back without raising. `applyTransition` and
  * `syncHeldDate` are the transaction; `announce` runs after it, and a throw
  * there used to surface as an opaque 500 on a request that was already
  * `quoted` or `declined` — so the vendor saw a failure, the customer got no
@@ -579,6 +643,17 @@ export async function createBookingRequest(
 
     if (!servicePackage) {
       throw notFound('That package is no longer offered');
+    }
+
+    // The screen refuses this first; a direct call has to meet the same cap (VEN-544).
+    if (
+      servicePackage.maxGuests !== null &&
+      input.guestCount !== undefined &&
+      input.guestCount > servicePackage.maxGuests
+    ) {
+      throw validationFailed(
+        `${vendor.businessName} covers events up to ${servicePackage.maxGuests} guests. Enter ${servicePackage.maxGuests} or fewer, or pick a larger package.`,
+      );
     }
   }
 
@@ -728,6 +803,7 @@ export async function getBookingRequest(
   requestId: string,
   now: Date = new Date(),
   mail?: NotificationEmailDeps,
+  guard?: ExpiryPaymentGuard,
 ): Promise<BookingRequestDetail> {
   const row = await findRequestById(db, requestId);
 
@@ -737,7 +813,7 @@ export async function getBookingRequest(
 
   await requireParticipant(db, user, row);
 
-  const current = await ageIfExpired(db, row, now, mail);
+  const current = await ageIfExpired(db, row, now, mail, guard);
   const vendor = await findVendorById(db, current.vendorId);
 
   if (!vendor) {
@@ -766,6 +842,7 @@ export async function listBookingRequests(
   query: { status?: BookingRequestStatus } & HistoryPageQuery,
   now: Date = new Date(),
   mail?: NotificationEmailDeps,
+  guard?: ExpiryPaymentGuard,
 ): Promise<BookingRequestDetail[]> {
   const vendorId = await actorVendorId(db, user);
 
@@ -797,7 +874,7 @@ export async function listBookingRequests(
   const rows = await findRequests(db, filter, pageWindow(query));
 
   const visible = await mapWithConcurrency(rows, EXPIRY_CONCURRENCY, (row) =>
-    ageIfExpired(db, row, now, mail),
+    ageIfExpired(db, row, now, mail, guard),
   );
 
   if (visible.length === 0) {
@@ -849,6 +926,8 @@ interface TransitionOptions {
   hub?: EventHub;
   /** Present when the caller can send email; absent in a plain read. */
   mail?: NotificationEmailDeps;
+  /** Present when the caller can reach Stripe; settles an intent before a request expires. */
+  guard?: ExpiryPaymentGuard;
 }
 
 /**
@@ -870,7 +949,7 @@ export async function transitionRequest(
   }
 
   const party = await requireParticipant(db, user, existing);
-  const row = await ageIfExpired(db, existing, now, options.mail);
+  const row = await ageIfExpired(db, existing, now, options.mail, options.guard);
 
   const vendor = await findVendorById(db, row.vendorId);
   if (!vendor) {
@@ -899,11 +978,17 @@ export async function transitionRequest(
       await lockHeldDate(tx, row.vendorId, row.eventDate);
 
       if (await hasRivalAcceptanceOn(tx, row.vendorId, row.eventDate, row.id)) {
-        throw conflict('That date was booked while this request was open');
+        throw conflict(DATE_BOOKED_MESSAGE);
       }
     }
 
-    const written = await applyTransition(tx, row.id, row.status, { ...patch, status: target });
+    // The index is the backstop for a rival the read above could not see.
+    const written = await applyTransition(tx, row.id, row.status, {
+      ...patch,
+      status: target,
+    }).catch((error: unknown) => {
+      throw isAcceptedDateTaken(error) ? conflict(DATE_BOOKED_MESSAGE) : error;
+    });
 
     if (!written) {
       // The status moved under us between the read and the write.
@@ -1057,6 +1142,21 @@ async function prepareTransition({
     throw forbidden('The customer accepts the quote');
   }
 
+  /*
+   * Create refuses an invisible vendor; accept has to as well, or a storefront
+   * an operator pulled after the quote still takes the booking (VEN-556). The
+   * request stays as it was: unpublishing is reversible, so nothing is declined.
+   */
+  if (!(await isVendorSellable(db, row.vendorId))) {
+    throw new AppError(
+      409,
+      ERROR_CODES.VENDOR_UNAVAILABLE,
+      party === 'vendor'
+        ? 'Publish your storefront again before accepting bookings'
+        : `${vendor.businessName} is no longer taking bookings`,
+    );
+  }
+
   if (!vendor.stripeOnboarded) {
     throw new AppError(
       402,
@@ -1084,7 +1184,7 @@ async function prepareTransition({
 
   const calendar = await findAvailabilityOn(db, row.vendorId, row.eventDate);
   if (calendar?.status === 'booked') {
-    throw conflict('That date was booked while this request was open');
+    throw conflict(DATE_BOOKED_MESSAGE);
   }
 
   /*

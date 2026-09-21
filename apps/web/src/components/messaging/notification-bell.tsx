@@ -4,7 +4,7 @@ import { Bell } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { TERMS_ACCEPTANCE_PATH, VENDOR_APPLY_PATH } from '@vendor-marketplace/shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { EmptyStateGlyph } from '@/components/ui/empty-state';
 import { useApi } from '@/lib/use-api';
 import { useEventStream } from '@/lib/use-event-stream';
@@ -64,6 +64,7 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
   const [items, setItems] = useState<WireNotification[]>([...initial]);
   const [open, setOpen] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
+  const panelId = useId();
   /*
    * Escape has to put focus back where it came from, so the trigger is held
    * rather than found: `document.querySelector` would break the moment a
@@ -149,35 +150,50 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [open]);
 
+  /*
+   * Optimistic, and put back when the API refuses (VEN-540): a struck-through
+   * row and a lowered badge that the server never recorded would come back on
+   * the next fetch as if the reader had un-read them. Reported as well — a
+   * mark-read that always fails is a real defect with no other symptom.
+   */
   async function markRead(id: string): Promise<void> {
+    const before = items;
     setItems((current) =>
       current.map((item) => (item.id === id ? { ...item, readAt: new Date() } : item)),
     );
 
-    /*
-     * Justified swallow (#368): the row is already struck through optimistically
-     * and the true state returns on the next fetch, so a failure here changes
-     * nothing the reader can act on. Reported, not dropped — a mark-read that
-     * always fails is a real defect with no other symptom.
-     */
-    await call(`/notifications/${id}/read`, {
-      schema: wireNotificationPageSchema.nullable(),
-      method: 'PUT',
-    }).catch((error: unknown) => {
+    try {
+      await call(`/notifications/${id}/read`, {
+        schema: wireNotificationPageSchema.nullable(),
+        method: 'PUT',
+      });
+    } catch (error: unknown) {
       reportSwallowedError('notifications: marking one read failed', error);
-    });
+      restoreUnread(before.filter((item) => item.id === id));
+    }
   }
 
   async function markAllRead(): Promise<void> {
+    const before = items.filter((item) => item.readAt === null);
     setItems((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date() })));
 
-    // Same justification as `markRead` above.
-    await call('/notifications/read-all', {
-      schema: wireNotificationPageSchema.nullable(),
-      method: 'PUT',
-    }).catch((error: unknown) => {
+    try {
+      await call('/notifications/read-all', {
+        schema: wireNotificationPageSchema.nullable(),
+        method: 'PUT',
+      });
+    } catch (error: unknown) {
       reportSwallowedError('notifications: marking all read failed', error);
-    });
+      restoreUnread(before);
+    }
+  }
+
+  /** Puts the rows this call struck through back to unread. */
+  function restoreUnread(rows: readonly WireNotification[]): void {
+    const restore = new Set(rows.filter((row) => row.readAt === null).map((row) => row.id));
+    setItems((current) =>
+      current.map((item) => (restore.has(item.id) ? { ...item, readAt: null } : item)),
+    );
   }
 
   return (
@@ -188,6 +204,8 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
         onClick={() => setOpen((current) => !current)}
         aria-label={unread === 0 ? 'Notifications' : `Notifications, ${unread} unread`}
         aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-controls={open ? panelId : undefined}
         className="relative flex size-11 items-center justify-center rounded-full text-stone-700 hover:bg-stone-150 hover:text-stone-900"
       >
         <Bell aria-hidden="true" className="size-4.5" />
@@ -197,9 +215,15 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
           </span>
         ) : null}
       </button>
+      <span role="status" className="sr-only">
+        {unread === 0 ? '' : `${unread} unread ${unread === 1 ? 'notification' : 'notifications'}`}
+      </span>
 
       {open ? (
-        <div /* Inside the header's own stacking context, so a local z is enough. */
+        <div
+          id={panelId}
+          role="dialog"
+          aria-label="Notifications" /* Inside the header's own stacking context, so a local z is enough. */
           /*
            * 360px, bounded by the space actually to the panel's left.
            *

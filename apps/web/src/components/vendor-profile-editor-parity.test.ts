@@ -256,7 +256,7 @@ describe('the profile photo drop zone matches the frame (#143)', () => {
   });
 
   it('drops the 2px stone-200 edge the app shipped', () => {
-    expect(uploadSource).toContain('border border-dashed border-stone-400');
+    expect(uploadSource).toContain('border border-dashed border-stone-560');
     expect(uploadSource).not.toContain('border-2 border-dashed border-stone-200');
   });
 

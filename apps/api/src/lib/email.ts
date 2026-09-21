@@ -3,7 +3,7 @@
  *
  * The narrow port is what lets the route suites run the real handler, the real
  * service and real SQL while asserting on what *would* have been sent — the
- * same seam the auth token verifier, the svix verifier and the Stripe gateway
+ * same seam the auth token verifier, the Resend webhook verifier and the Stripe gateway
  * already use. Nothing here knows what an email says; that is
  * `notification-email.ts`'s job.
  *

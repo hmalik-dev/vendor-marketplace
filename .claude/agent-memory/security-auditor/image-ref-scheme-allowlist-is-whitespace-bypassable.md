@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 **Corrected twice by measurement against `packages/shared/dist`, most recently
 2026-09-04 on the #414 worktree.** Everything this file used to call live is
@@ -43,10 +43,21 @@ still unconstrained — that is the paragraph above, and it is the one thing her
 that is a decision rather than an oversight. Keys stay client-supplied —
 [[image-key-columns-are-client-supplied]].
 
-**`avatarUrl` has a second write path that never sees this schema:**
-`apps/api/src/plugins/clerk-auth.ts` reads Clerk's `imageUrl` on every sign-in
-and `users.service.ts` stores it. So "the schema refuses it before storage" is
-true of the three vendor-written columns and not of that one.
+**`avatarUrl`'s provider write path is now guarded too (VEN-538, audited clean).**
+The Neon Auth `image` claim is caller-controlled and reaches `users.avatar_url`
+by two routes that never see `imageRefSchema` — `createNeonUserLoader` in
+`apps/api/src/plugins/neon-auth.ts` (row insert only, via `syncUserFromAuth`)
+and `mirroredIdentity`/`applyAuthSyncEvent` in `modules/auth-sync/`. Both now
+call `providerAvatarUrl` (`modules/auth-sync/identity.ts`): http(s) only, no
+credentials, no C0/DEL/`\`, `<= MAX_URL_LENGTH` (= the column's varchar(500)),
+`null` meaning "no opinion" so a refused value never blanks a stored one. It
+returns the **raw trimmed string**, not `url.href`, so `https:/evil.com/x` is
+accepted by the guard and then read as an object **key** by `isProviderAvatar`
+and `resolveImageUrl` (`^https?:\/\//`) — that degrades to a bucket-prefixed
+404, never an extra origin, because the browser and `new URL` share one parser.
+The host stays unconstrained (paragraph above), and the enforced `img-src` is
+`'self' data: blob: <stripe> <storage origin>` — no provider CDN — so an
+external avatar does not render at all in production.
 
 **Why:** the file has now been wrong in both directions — first reporting a
 fixed bypass as live, then chasing bypasses of a guard that never defended the

@@ -1,9 +1,11 @@
 'use client';
 
+import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { useEffect, useRef, useState } from 'react';
 import { apiOrigin } from '@/config/public-env';
 import { ApiClientError, apiRequest } from '@/lib/api-client';
 import { getSessionToken } from '@/lib/auth/client';
+import { useRefusalRedirect } from '@/lib/use-api';
 import { wireStreamTicketSchema } from '@/lib/wire-schemas';
 
 const BASE_URL = apiOrigin();
@@ -71,6 +73,13 @@ export interface EventStream {
    * than an error one, and nothing about the page becomes unusable when false.
    */
   connected: boolean;
+  /**
+   * True once the session was refused (401/403, or no token at all) and the
+   * stream stopped for good. A screen must not show "Reconnecting" for it:
+   * nothing is reconnecting, and the reader is on their way to sign-in or
+   * `/suspended`.
+   */
+  ended: boolean;
 }
 
 export interface UseEventStreamOptions {
@@ -97,6 +106,10 @@ export interface UseEventStreamOptions {
  */
 export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions): EventStream {
   const [connected, setConnected] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const redirectOnRefusal = useRefusalRedirect();
+  const refused = useRef(redirectOnRefusal);
+  refused.current = redirectOnRefusal;
 
   const handler = useRef(onEvent);
   const reconnected = useRef(onReconnect);
@@ -139,10 +152,22 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
       });
     }
 
+    /** The session was refused: stop, mark it, and move the reader on. */
+    function end(error: unknown): void {
+      setEnded(true);
+      refused.current(error);
+    }
+
     async function connect(): Promise<void> {
       const token = await getSessionToken();
 
-      if (cancelled || !token) {
+      if (cancelled) {
+        return;
+      }
+
+      // `getSessionToken` answers null for a session the auth server refused.
+      if (!token) {
+        end(new ApiClientError(401, ERROR_CODES.UNAUTHORIZED, 'Signed out'));
         return;
       }
 
@@ -161,8 +186,14 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
          * not transient: retrying it spends a ticket every thirty seconds and
          * can never succeed, so the stream stays down and says so.
          */
-        if (!cancelled && isRetryable(error)) {
+        if (cancelled) {
+          return;
+        }
+
+        if (isRetryable(error)) {
           scheduleRetry();
+        } else {
+          end(error);
         }
         return;
       }
@@ -271,5 +302,5 @@ export function useEventStream({ onEvent, onReconnect }: UseEventStreamOptions):
     };
   }, []);
 
-  return { connected };
+  return { connected, ended };
 }

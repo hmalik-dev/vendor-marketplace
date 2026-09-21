@@ -66,6 +66,14 @@ export const vendorProfiles = pgTable(
     /** Stripe Connect Express account (ticket #9). */
     stripeAccountId: varchar('stripe_account_id', { length: 255 }),
     /**
+     * How many times Stripe has refused to create this vendor's account
+     * (VEN-526). The creation idempotency key is built from it, so concurrent
+     * presses share a key until a refusal is recorded, and the attempt after
+     * one gets a new key (D36: Stripe replays a refused result for 24 hours).
+     * Moved only by a compare-and-set in `recordAccountRefusal`.
+     */
+    stripeAccountAttempts: integer('stripe_account_attempts').notNull().default(0),
+    /**
      * Onboarding completed for `stripeAccountId`. **Cannot be true without
      * one** — see `vendor_profiles_stripe_onboarded_requires_account` below.
      */

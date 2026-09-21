@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { bookingRequests, vendorProfiles } from './schema/index.js';
+import { bookingRequests } from './schema/index.js';
 import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './testing/test-db.js';
 
 /**
@@ -35,17 +35,13 @@ async function acceptedRequest(
   vendorId: string,
   eventDate: string,
 ): Promise<string> {
-  const [row] = await testDb.db
-    .insert(bookingRequests)
-    .values({
-      customerId,
-      vendorId,
-      eventDate,
-      status: 'accepted',
-      acceptedAt: new Date('2026-01-02T00:00:00.000Z'),
-      expiresAt: STALE_REPLY_DEADLINE,
-    })
-    .returning({ id: bookingRequests.id });
+  // Raw SQL, as below: the ORM insert names every column of today's schema.
+  const rows = await testDb.db.execute<{ id: string }>(
+    sql`INSERT INTO booking_requests (customer_id, vendor_id, event_date, status, accepted_at, expires_at)
+      VALUES (${customerId}, ${vendorId}, ${eventDate}, 'accepted', ${new Date('2026-01-02T00:00:00.000Z').toISOString()}, ${STALE_REPLY_DEADLINE.toISOString()})
+      RETURNING id`,
+  );
+  const row = (Array.isArray(rows) ? rows : rows.rows)[0];
 
   return row!.id;
 }
@@ -70,16 +66,13 @@ describe('0052 against accepted requests written before it', () => {
         RETURNING id`,
     );
     const [customer, vendorUser] = inserted.rows;
-    const [vendor] = await testDb.db
-      .insert(vendorProfiles)
-      .values({
-        userId: vendorUser!.id,
-        businessName: 'Backfill Studio',
-        slug: 'backfill-studio',
-        city: 'Austin',
-        state: 'TX',
-      })
-      .returning({ id: vendorProfiles.id });
+    // Raw for the same reason: `vendor_profiles` has gained columns since 0052.
+    const vendorRows = await testDb.db.execute<{ id: string }>(
+      sql`INSERT INTO vendor_profiles (user_id, business_name, slug, city, state)
+        VALUES (${vendorUser!.id}, 'Backfill Studio', 'backfill-studio', 'Austin', 'TX')
+        RETURNING id`,
+    );
+    const [vendor] = vendorRows.rows;
 
     const paid = await acceptedRequest(customer!.id, vendor!.id, '2026-02-01');
     const farEvent = await acceptedRequest(customer!.id, vendor!.id, '2099-06-01');

@@ -23,6 +23,7 @@ import {
   type NextPendingPayoutRow,
   type OwedPayoutTotalRow,
 } from './dashboard.dao.js';
+import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import { publishBlockers, requireOwnVendorProfile } from './vendors.service.js';
 
 /** The window the response rate is measured over, as the frame labels it. */
@@ -133,6 +134,7 @@ export async function getVendorDashboard(
     owedPayoutTotals,
     categoryIds,
     activePackageCount,
+    holdsAgreement,
   ] = await Promise.all([
     countPendingRequests(db, vendor.id),
     countBookingsBetween(db, vendor.id, start, next),
@@ -149,6 +151,7 @@ export async function getVendorDashboard(
     findOwedPayoutTotals(db, vendor.id),
     findCategoryIds(db, vendor.id),
     countActivePackages(db, vendor.id),
+    holdsCurrentAgreement(db, vendor.userId),
   ]);
 
   const rating = Number.parseFloat(vendor.avgRating);
@@ -165,7 +168,7 @@ export async function getVendorDashboard(
     earningsThisMonthCents,
     isPublished: vendor.isPublished,
     moderationHold: vendor.moderationHold,
-    publishBlockers: publishBlockers(vendor, categoryIds, activePackageCount),
+    publishBlockers: publishBlockers(vendor, categoryIds, activePackageCount, holdsAgreement),
     stripeOnboarded: vendor.stripeOnboarded,
     /*
      * Every day in the window, in order — not only the ones with a row. The
@@ -220,6 +223,7 @@ function toPayoutSummary(
   for (const row of rows) {
     const state = payoutStatusOf({
       status: row.status,
+      residualHeld: row.residualHeld,
       payoutReleasedAt: null,
       stripeTransferId: null,
     });

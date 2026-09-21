@@ -1,3 +1,4 @@
+import type { NewVendorProfileRow } from '@vendor-marketplace/db/schema';
 import {
   VENDOR_PAYMENTS_RESUME_PATH,
   VENDOR_PAYMENTS_RETURN_PATH,
@@ -6,13 +7,21 @@ import {
 import { z } from 'zod';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, notFound } from '../../lib/errors.js';
-import { isMissingPayoutsOnly, isOnboarded, type StripeConnectGateway } from '../../lib/stripe.js';
+import {
+  isMissingPayoutsOnly,
+  isOnboarded,
+  RecipientAccountRefusedError,
+  type StripeAccountStatus,
+  type StripeConnectGateway,
+} from '../../lib/stripe.js';
+import { notifyVendorUser, PAYOUT_NOTICES, type NotifyDeps } from '../notifications/notify-user.js';
 import { findUserById } from '../users/users.dao.js';
 import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import {
   claimStripeAccountId,
   findVendorProfileByStripeAccountId,
   findVendorProfileByUserId,
+  recordAccountRefusal,
   updateVendorStripeStatusIfUnchanged,
 } from './vendors.dao.js';
 
@@ -22,6 +31,8 @@ export interface StripeConnectDeps {
   stripe: StripeConnectGateway;
   /** The request logger, so a half-onboarded account is diagnosable. */
   log?: { warn: (details: Record<string, unknown>, message: string) => void };
+  /** Where the vendor is told the account changed. The webhook passes it (VEN-525). */
+  notify?: NotifyDeps;
 }
 
 /**
@@ -80,11 +91,37 @@ export async function startPayoutOnboarding(
       throw notFound('You have not created a vendor profile yet');
     }
 
-    const created = await deps.stripe.createRecipientAccount({
-      vendorId: vendor.id,
-      contactEmail: user.email,
-      displayName: vendor.businessName,
-    });
+    const attempts = vendor.stripeAccountAttempts;
+    let created: { accountId: string };
+
+    try {
+      /*
+       * Keyed on the vendor, so two presses inside one round trip get the same
+       * account back instead of one live and one orphan (VEN-526). The key is
+       * versioned by the refusals recorded so far, not fixed (D36): Stripe
+       * replays a *refused* result for 24 hours, and a fixed key would answer
+       * every retry with the first refusal.
+       */
+      created = await deps.stripe.createRecipientAccount({
+        vendorId: vendor.id,
+        contactEmail: user.email,
+        displayName: vendor.businessName,
+        idempotencyKey: `recipient-account:${vendor.id}:${attempts}`,
+      });
+    } catch (error) {
+      // Only a refusal Stripe answered moves the key; a dropped connection may
+      // have made the account, and a new key would make a second.
+      if (error instanceof RecipientAccountRefusedError) {
+        await recordAccountRefusal(deps.db, vendor.id, attempts).catch((recordError: unknown) =>
+          deps.log?.warn(
+            { err: recordError, vendorId: vendor.id },
+            'Could not record a refused account creation; the retry will reuse its key',
+          ),
+        );
+      }
+
+      throw error;
+    }
 
     /*
      * Persisted before the link is minted, and claimed conditionally. Two tabs
@@ -229,27 +266,105 @@ async function attemptAccountStatusChange(
     return 'unchanged';
   }
 
-  const written = await updateVendorStripeStatusIfUnchanged(deps.db, vendor, {
-    stripeOnboarded: onboarded,
-    stripeDisabledReason: status.disabledReason,
-    stripeRequirementsDue: status.requirementsDue,
-  });
+  const written = await updateVendorStripeStatusIfUnchanged(deps.db, vendor, statusPatch(status));
 
   if (!written) {
     return null;
   }
 
   /*
+   * The row now says what this read said, and a read can be older than one
+   * another handler made meanwhile (VEN-547). That handler saw the row before
+   * this write, found nothing to change against its own newer read, and wrote
+   * nothing — so this write is the last and nothing would ever put the newer
+   * answer back: a vendor Stripe had restricted stayed onboarded until the next
+   * account event. So ask Stripe again after writing, and correct the row if it
+   * has moved on. The correction is conditional like the write, and a handler
+   * that finds the row moved again starts over.
+   */
+  const latest = await readLatestStatus(deps, accountId);
+  let finalOnboarded = onboarded;
+
+  if (latest && !sameStatus(statusPatch(latest), statusPatch(status))) {
+    const corrected = await updateVendorStripeStatusIfUnchanged(
+      deps.db,
+      written,
+      statusPatch(latest),
+    );
+
+    /*
+     * A row that moved again was written by a handler that read it after this
+     * write, so the decision is its to make; this one has already flipped the
+     * flag and still owes the notice, which a retry could not send.
+     */
+    if (corrected) {
+      finalOnboarded = isOnboarded(latest);
+    }
+  }
+
+  /*
    * The outcome still names what happened to the **flag**, because that is what
    * the webhook's response and its log line have always meant and what the
    * vendor's payout gate turns on. A reason-only change is `unchanged` from
-   * that vantage point and is still persisted above.
+   * that vantage point and is still persisted above, and so is a flag that a
+   * correction returned to where it started: nothing changed for the vendor.
    */
-  if (!flagChanged) {
+  if (finalOnboarded === vendor.stripeOnboarded) {
     return 'unchanged';
   }
 
-  return onboarded ? 'onboarded' : 'not-onboarded';
+  /*
+   * Only a flag flip reaches here, and only the writer whose guarded update
+   * landed, so a redelivery (`unchanged`) and a losing handler both stay quiet.
+   * The notice goes to the vendor's own user, never to a customer.
+   */
+  if (deps.notify) {
+    const notice = finalOnboarded ? PAYOUT_NOTICES.connected : PAYOUT_NOTICES.paused;
+
+    await notifyVendorUser(deps.notify, vendor.userId, { ...notice, data: {} });
+  }
+
+  return finalOnboarded ? 'onboarded' : 'not-onboarded';
+}
+
+/**
+ * The confirming read after a write. A failure here is not the write's: the row
+ * already holds the answer, and throwing would have Stripe redeliver into an
+ * `unchanged` that never sends the notice.
+ */
+async function readLatestStatus(
+  deps: StripeConnectDeps,
+  accountId: string,
+): Promise<StripeAccountStatus | null> {
+  try {
+    return await deps.stripe.readAccountStatus(accountId);
+  } catch (error) {
+    deps.log?.warn(
+      { err: error, stripeAccountId: accountId },
+      'Could not re-read the Stripe account after writing its status; the next event will',
+    );
+
+    return null;
+  }
+}
+
+/** The columns one Stripe read decides. */
+function statusPatch(
+  status: StripeAccountStatus,
+): Pick<NewVendorProfileRow, 'stripeOnboarded' | 'stripeDisabledReason' | 'stripeRequirementsDue'> {
+  return {
+    stripeOnboarded: isOnboarded(status),
+    stripeDisabledReason: status.disabledReason,
+    stripeRequirementsDue: status.requirementsDue,
+  };
+}
+
+function sameStatus(a: ReturnType<typeof statusPatch>, b: ReturnType<typeof statusPatch>): boolean {
+  return (
+    a.stripeOnboarded === b.stripeOnboarded &&
+    (a.stripeDisabledReason ?? null) === (b.stripeDisabledReason ?? null) &&
+    sameRequirements(a.stripeRequirementsDue ?? [], b.stripeRequirementsDue ?? [])
+  );
 }
 
 /** Order-sensitive comparison — Stripe returns the entries in a stable order. */

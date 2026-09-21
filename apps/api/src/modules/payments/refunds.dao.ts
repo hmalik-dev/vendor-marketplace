@@ -131,8 +131,23 @@ export async function recordExternalRefund(
       .set({ externalRefundCents: externalCents })
       .where(eq(bookings.id, bookingId));
 
+    /*
+     * Our own refund exists at Stripe and the row has not recorded one: a
+     * cancellation or unwind is between sending it and writing the row. It read
+     * Stripe before or after this foreign refund and folds whatever it found
+     * into the total it writes, so holding the booking here would fail its
+     * guarded update (`status = confirmed`) after the money moved. The figure is
+     * recorded either way, and `payoutResidualHeld` reads it once the booking is
+     * cancelled. A cancellation that dies here is finished by its retry, which
+     * finds both refunds; until then the cents are protected only once the row is
+     * `cancelled`, and a confirmed row whose cancellation never lands is the
+     * pre-existing window the platform refund alone already opens (VEN-499).
+     */
+    const ownRefundInFlight = found.platformCents > 0 && row.refundAmountCents === null;
     const holdable =
-      (row.status === 'confirmed' || row.status === 'completed') && row.payoutReleasedAt === null;
+      (row.status === 'confirmed' || row.status === 'completed') &&
+      row.payoutReleasedAt === null &&
+      !ownRefundInFlight;
     const held = holdable
       ? await applyBookingTransition(
           tx,
@@ -150,5 +165,50 @@ export async function recordExternalRefund(
       status: row.status,
       payoutReleased: row.payoutReleasedAt !== null,
     };
+  });
+}
+
+/**
+ * Gives back the foreign refunds that did not land (VEN-499).
+ *
+ * `externalRefundCents` only ever grew, so a Dashboard refund that later failed
+ * or was canceled kept the residual payout held until an operator ruled. What
+ * is still foreign is what Stripe reports usable beyond our own marked refunds;
+ * the recorded figure is lowered to that and never raised, so a delivery for
+ * our own refund, or a duplicate, changes nothing.
+ *
+ * Stripe is read **under the row lock**, like `recordExternalRefund` re-reads
+ * the row: a figure read before the lock could erase a foreign refund a
+ * concurrent `charge.refunded` recorded in between. Returns the cents released.
+ */
+export async function releaseFailedExternalRefunds(
+  db: AppDatabase,
+  bookingId: string,
+  readRefunds: () => Promise<FoundRefunds | null>,
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ externalRefundCents: bookings.externalRefundCents })
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .for('update');
+
+    if (!row || row.externalRefundCents === 0) {
+      return 0;
+    }
+
+    const found = await readRefunds();
+    const stillForeign = found ? Math.max(0, found.amountCents - found.platformCents) : 0;
+
+    if (row.externalRefundCents <= stillForeign) {
+      return 0;
+    }
+
+    await tx
+      .update(bookings)
+      .set({ externalRefundCents: stillForeign })
+      .where(eq(bookings.id, bookingId));
+
+    return row.externalRefundCents - stillForeign;
   });
 }

@@ -1,4 +1,5 @@
 import {
+  ADMIN_READ_AUDIT_WINDOW_MS,
   MAX_TAGS_PER_CATEGORY,
   addDays,
   generateSlug,
@@ -17,6 +18,8 @@ import type {
   AdminBookingPage,
   AdminBookingQuery,
   AdminCustomerPage,
+  AdminExportAudit,
+  AdminReadSurface,
   AdminCustomerQuery,
   AdminMetrics,
   AdminPackageActiveResult,
@@ -53,6 +56,7 @@ import { insertNotification } from '../messaging/messaging.dao.js';
 import {
   bestEffortNotice,
   unwindAccountBookings,
+  unwoundAnything,
   SUSPENSION_UNWIND,
   type AdminContext,
 } from './account-unwind.js';
@@ -70,6 +74,7 @@ import {
   findVendorProfileById,
   updateVendorProfileById,
 } from '../vendors/vendors.dao.js';
+import { holdsCurrentAgreement } from '../vendors/legal-agreement.service.js';
 import { publishBlockers, unpublishForMissingPackages } from '../vendors/vendors.service.js';
 import { normalizeTagName } from '../tags/tags.service.js';
 import { banOperatorById, hasAnotherLiveOperator } from '../users/users.dao.js';
@@ -113,6 +118,7 @@ import {
   findVendorFilterFacets,
   findVendorProfileByUserId,
   findVendorProfileIdByUserId,
+  hasRecentAdminRead,
   insertAdminAction,
   insertTag,
   lockVendorProfile,
@@ -190,6 +196,56 @@ export async function recordAdminActionBestEffort(
     () => insertAdminAction(context.db, record),
     'The admin operation succeeded but its action could not be logged',
   );
+}
+
+/**
+ * One row per CSV export (VEN-475): who, which export, its filters and how many
+ * rows it walked. Rides no other write, so a failure propagates and the web
+ * handler withholds the file — an export that could not be logged did not
+ * happen.
+ */
+export async function recordAdminExport(
+  db: AppDatabase,
+  actorId: string,
+  audit: AdminExportAudit,
+  now: Date,
+): Promise<void> {
+  await insertAdminAction(db, {
+    actorId,
+    action: 'admin_exported',
+    subjectType: 'user',
+    subjectId: actorId,
+    detail: { export: audit.export, filters: audit.filters, rowCount: audit.rowCount },
+    createdAt: now,
+  });
+}
+
+/**
+ * A read of customer data, logged at most once per operator per subject per
+ * hour (VEN-475). A list read has no subject of its own, so it is named by the
+ * operator, which makes the hour's window per operator per surface.
+ */
+export async function auditAdminRead(
+  db: AppDatabase,
+  actorId: string,
+  surface: AdminReadSurface,
+  subjectId: string,
+  now: Date,
+): Promise<void> {
+  const since = new Date(now.getTime() - ADMIN_READ_AUDIT_WINDOW_MS);
+
+  if (await hasRecentAdminRead(db, { actorId, subjectId, surface, since })) {
+    return;
+  }
+
+  await insertAdminAction(db, {
+    actorId,
+    action: 'admin_data_read',
+    subjectType: 'user',
+    subjectId,
+    detail: { surface },
+    createdAt: now,
+  });
 }
 
 /**
@@ -412,8 +468,18 @@ export async function setUserBanned(
     throw notFound('No account with that id');
   }
 
-  if (target.isBanned === isBanned) {
-    throw conflict(isBanned ? 'That account is already banned' : 'That account is not banned');
+  /*
+   * A ban re-run on an account that is already banned is the **resume**
+   * (VEN-478), not a conflict: an unwind the API was killed in the middle of
+   * leaves the flag committed and confirmed bookings standing, and this is how
+   * an operator finishes it. It skips the flag and its intent row and re-runs
+   * the unwind, whose every step is idempotent (the refund key, the `confirmed`
+   * selection); on a finished ban it changes nothing.
+   */
+  const resuming = isBanned && target.isBanned;
+
+  if (!isBanned && !target.isBanned) {
+    throw conflict('That account is not banned');
   }
 
   /*
@@ -476,89 +542,95 @@ export async function setUserBanned(
    * An operator's ban obeys closure's last-operator rule, under closure's lock
    * (VEN-417). The read answers the common case before anything moves; the
    * locked write answers the race, where a closure or a second ban committed
-   * between the two. And the flag goes **first** for an operator, as the
-   * retirement does in `closeAccount`: a refusal that arrived after the unwind
-   * would leave a live operator with their requests declined and bookings
-   * refunded for a ban that never happened.
+   * between the two.
    */
-  let operatorBan: { profileUnpublished: boolean } | undefined;
-
-  if (target.role === 'admin') {
-    if (!(await hasAnotherLiveOperator(context.db, targetId))) {
-      throw conflict(LAST_OPERATOR_BAN_REFUSAL);
-    }
-
-    const banned = await banOperatorById(context.db, targetId, now);
-
-    if (banned === 'last-operator') {
-      throw conflict(LAST_OPERATOR_BAN_REFUSAL);
-    }
-
-    if (!banned) {
-      throw conflict('That account is already banned');
-    }
-
-    operatorBan = banned;
+  if (
+    !resuming &&
+    target.role === 'admin' &&
+    !(await hasAnotherLiveOperator(context.db, targetId))
+  ) {
+    throw conflict(LAST_OPERATOR_BAN_REFUSAL);
   }
 
   /*
-   * The flag goes before the unwind for every role (VEN-423), as it does for an
-   * operator above: the unwind is one Stripe round trip per booking, and a
-   * still-signed-in customer could otherwise pay for an accepted request in
-   * the middle of it — after the snapshot, so nothing would ever refund it.
+   * The flag goes before the unwind for every role (VEN-423): the unwind is one
+   * Stripe round trip per booking, and a still-signed-in customer could
+   * otherwise pay for an accepted request in the middle of it — after the
+   * snapshot, so nothing would ever refund it.
+   *
+   * **The intent row commits with the flag** (VEN-478), so the trail starts with
+   * the attempt: a kill mid-unwind leaves a ban that is recorded, banned, and
+   * resumable, instead of an account suspended with no row at all. Nothing
+   * un-bans on a failed unwind any more — the operator finishes it instead.
    */
-  const { profileUnpublished } =
-    operatorBan ?? (await setBanned(context.db, targetId, profile?.id ?? null, true, now));
+  let profileUnpublished = false;
+
+  if (!resuming) {
+    ({ profileUnpublished } = await context.db.transaction(async (tx) => {
+      let result: { profileUnpublished: boolean } | 'last-operator' | null;
+
+      if (target.role === 'admin') {
+        result = await banOperatorById(tx, targetId, now);
+      } else {
+        result = await setBanned(tx, targetId, profile?.id ?? null, true, now);
+      }
+
+      if (result === 'last-operator') {
+        throw conflict(LAST_OPERATOR_BAN_REFUSAL);
+      }
+
+      if (!result) {
+        throw conflict('That account is already banned');
+      }
+
+      await insertAdminAction(tx, {
+        actorId,
+        action: 'user_banned',
+        subjectType: 'user',
+        subjectId: targetId,
+        detail: { profileUnpublished: result.profileUnpublished },
+      });
+
+      return result;
+    }));
+  }
 
   /*
    * A refund Stripe refuses is counted, not thrown; anything else the unwind
-   * throws (a database error mid-loop) would leave the flag committed, and the
-   * operator's retry would then 409 on "already banned" with bookings still
-   * confirmed. So a non-operator ban is taken back before the error surfaces —
-   * refund idempotency keys make the retry safe. An operator's ban stands: it
-   * obeys the last-operator lock and its unwind has no such failure to undo.
+   * throws (a database error mid-loop) surfaces as it is, with the ban standing.
+   * The operator's retry re-runs this same endpoint and finishes it.
    */
-  let unwound: Awaited<ReturnType<typeof unwindAccountBookings>>;
-  try {
-    unwound = await unwindAccountBookings(
-      context,
-      targetId,
-      profile?.id ?? null,
-      now,
-      SUSPENSION_UNWIND,
-    );
-  } catch (error) {
-    if (!operatorBan) {
-      await setBanned(context.db, targetId, profile?.id ?? null, false, now);
-    }
-
-    throw error;
-  }
+  const unwound = await unwindAccountBookings(
+    context,
+    targetId,
+    profile?.id ?? null,
+    now,
+    SUSPENSION_UNWIND,
+  );
 
   /*
-   * Last, and best-effort. Everything above has already happened — cards
-   * refunded, bookings cancelled, the account suspended — so a row exists only
-   * where the ban really landed, and a database that refused the row must not
-   * turn a completed ban into a 500 the operator would retry against a
-   * half-applied one.
+   * Last, and best-effort: what the unwind did. The row that says a ban was
+   * *decided* is the intent row above; this one says what it then did, and only
+   * when it did something, so re-running a finished ban leaves the trail alone.
    *
    * `refundsFailed` is in the payload because it is the number that needs a
    * human (#400): a ban carrying one left money with Stripe and a booking still
    * standing, and the log is where that is found again later.
    */
-  await recordAdminActionBestEffort(context, {
-    actorId,
-    action: 'user_banned',
-    subjectType: 'user',
-    subjectId: targetId,
-    detail: {
-      requestsDeclined: unwound.requestsDeclined,
-      bookingsCancelled: unwound.bookingsCancelled,
-      refundsIssued: unwound.refundsIssued,
-      refundsFailed: unwound.refundsFailed,
-      profileUnpublished,
-    },
-  });
+  if (unwoundAnything(unwound)) {
+    await recordAdminActionBestEffort(context, {
+      actorId,
+      action: 'account_unwind_finished',
+      subjectType: 'user',
+      subjectId: targetId,
+      detail: {
+        requestsDeclined: unwound.requestsDeclined,
+        bookingsCancelled: unwound.bookingsCancelled,
+        refundsIssued: unwound.refundsIssued,
+        refundsFailed: unwound.refundsFailed,
+      },
+    });
+  }
 
   /*
    * Named, not spread. `AccountUnwindResult` carries one field `AdminBanResult`
@@ -825,7 +897,12 @@ export async function retryBookingPayout(
    * so it is left behind here rather than trusted to be ignored downstream.
    */
   const result = await retryPayoutRelease(
-    { db: context.db, stripe: context.stripe, log: context.log },
+    {
+      db: context.db,
+      stripe: context.stripe,
+      log: context.log,
+      notify: { hub: context.hub, mail: context.mail },
+    },
     bookingId,
     now,
   );
@@ -1050,7 +1127,8 @@ export async function setVendorPublished(
        */
       const categoryIds = await findVendorCategoryIds(tx, vendor.id);
       const activePackages = await countActivePackages(tx, vendor.id);
-      const blockers = publishBlockers(vendor, categoryIds, activePackages);
+      const holdsAgreement = await holdsCurrentAgreement(tx, vendor.userId);
+      const blockers = publishBlockers(vendor, categoryIds, activePackages, holdsAgreement);
 
       /*
        * A held storefront is released by republishing it, so a vendor who has

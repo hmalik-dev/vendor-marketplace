@@ -17,9 +17,12 @@ import {
   createTestHarness,
   signInAs,
   type TestHarness,
+  acceptVendorAgreementAs,
 } from '../../testing/test-server.js';
 import {
+  addDays,
   SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE,
+  toDateString,
   VENDOR_PROFILE_MODERATION_HOLD_MESSAGE,
 } from '@vendor-marketplace/shared';
 import { updatePackageById } from '../packages/packages.dao.js';
@@ -48,6 +51,7 @@ describe('admin graduated moderation', () => {
   /** A published storefront with one bookable package — the state moderation acts on. */
   async function seedVendor(
     prices: readonly number[] = [150_000],
+    { acceptsAgreement = true }: { acceptsAgreement?: boolean } = {},
   ): Promise<{ id: string; slug: string; packageIds: string[] }> {
     const created = await harness.app.inject({
       method: 'POST',
@@ -81,6 +85,11 @@ describe('admin graduated moderation', () => {
       packageIds.push(pkg.json().id as string);
     }
 
+    if (!acceptsAgreement) {
+      return { id: body.id as string, slug: body.slug as string, packageIds };
+    }
+
+    await acceptVendorAgreementAs(harness, VENDOR);
     const published = await harness.app.inject({
       method: 'PUT',
       url: '/vendor/profile',
@@ -92,9 +101,13 @@ describe('admin graduated moderation', () => {
     return { id: body.id as string, slug: body.slug as string, packageIds };
   }
 
+  let futureDay = 0;
+
   /** A confirmed, paid booking in the future — what a ban would have unwound. */
   async function confirmedBooking(customerId: string, vendorId: string): Promise<string> {
-    const eventDate = '2099-06-01';
+    // One accepted request per vendor date is a database rule (VEN-482).
+    futureDay += 1;
+    const eventDate = toDateString(addDays(new Date('2099-05-31T12:00:00Z'), futureDay));
     const requestRows = await harness.database.db
       .insert(bookingRequests)
       .values({
@@ -369,6 +382,38 @@ describe('admin graduated moderation', () => {
   // --- Acceptance 1, 2 and 9: a storefront comes down without a ban ---------
 
   describe('PUT /admin/vendors/:vendorId/publish', () => {
+    /* VEN-509: an operator's republish runs the same blockers, agreement included. */
+    it('refuses to publish a vendor who has not accepted the agreement, then allows it once they do', async () => {
+      await signIn(ADMIN, true);
+      const vendor = await seedVendor([150_000], { acceptsAgreement: false });
+
+      const refused = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/vendors/${vendor.id}/publish`,
+        headers: bearer(ADMIN),
+        payload: { isPublished: true },
+      });
+
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json().details.blockers).toEqual(['agreement']);
+      const [held] = await harness.database.db
+        .select({ isPublished: vendorProfiles.isPublished })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendor.id));
+      expect(held?.isPublished).toBe(false);
+
+      await acceptVendorAgreementAs(harness, VENDOR);
+      const allowed = await harness.app.inject({
+        method: 'PUT',
+        url: `/admin/vendors/${vendor.id}/publish`,
+        headers: bearer(ADMIN),
+        payload: { isPublished: true },
+      });
+
+      expect(allowed.statusCode).toBe(200);
+      expect(allowed.json().isPublished).toBe(true);
+    });
+
     it('takes the storefront off search and 404s its slug, and unwinds nothing', async () => {
       const actorId = await signIn(ADMIN, true);
       const customerId = await signIn(CUSTOMER);

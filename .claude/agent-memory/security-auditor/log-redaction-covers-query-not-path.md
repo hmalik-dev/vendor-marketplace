@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `apps/api/src/server.ts` installs a custom pino `serializers.req` that runs
 `redactQueryValues` (`apps/api/src/lib/log-redaction.ts`) over `request.url`.
@@ -19,7 +19,7 @@ whole. The comment above the serializer claims the logger "cannot write a
 credential even if some future route puts it back into a URL" — that claim is
 one component wider than the code.
 
-**Why:** #215 found 27 live Clerk session JWTs in a lane's dev log, written by
+**Why:** #215 found 27 live the auth provider session JWTs in a lane's dev log, written by
 Fastify's default request serializer from `/events/stream?token=…`. The
 serializer is the standing guard against a repeat, and the comment is what a
 future author will trust instead of re-reading the regex.

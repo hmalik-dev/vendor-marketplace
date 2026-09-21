@@ -58,7 +58,7 @@ on lane 411 (2026-09-05), and the first two apply to route 1 as well:
   notifications, so the network never goes idle and every navigation times out
   at 30s. Use `'domcontentloaded'`, then `waitForLoadState('load')`.
 - **A context's _first_ page still lands on `/sign-in`** even with the single
-  warm-up reload `.claude/rules/e2e-auth.md` prescribes — the Clerk handshake (retired by VEN-447, historical)
+  warm-up reload `.claude/rules/e2e-auth.md` prescribes — the auth provider handshake (retired by VEN-447, historical)
   can outlast it. Loop the navigation until `new URL(page.url()).pathname` is
   the path you asked for; two of my three roles needed the third attempt.
 - **A correct URL is not a signed-in render, and that is the harder half.** On a

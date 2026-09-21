@@ -301,7 +301,7 @@ describe('SignUpForm', () => {
     for (const [label, line] of [
       ['Booking', "See what a vendor charges and when they're free"],
       ['Vending', 'Publish your prices and own your calendar'],
-      ['Both', 'Payment held until after the event'],
+      ['Both', 'Payment held until the event is complete'],
     ]) {
       expect(screen.getByText(label), label).toBeDefined();
       expect(screen.getByText(line), line).toBeDefined();
@@ -315,7 +315,7 @@ describe('SignUpForm', () => {
     await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
 
     expect(screen.getByText('Live calendars — if a date shows open, it is')).toBeDefined();
-    expect(screen.getByText('Payment held until after the event')).toBeDefined();
+    expect(screen.getByText('Payment held until the event is complete')).toBeDefined();
     expect(screen.getByText('Published prices, and no service fee on top')).toBeDefined();
 
     // Nothing on this screen may claim a scale the product does not have.

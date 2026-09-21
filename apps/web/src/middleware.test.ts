@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { NextRequest } from 'next/server';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest, type NextResponse } from 'next/server';
+import { CSP_NONCE_PLACEHOLDER } from '@/config/security-headers';
 import { REQUEST_PATH_HEADER } from '@/lib/return-path';
 
 import middleware from './middleware';
@@ -9,6 +10,62 @@ function stampedPathFor(url: string, incoming: Record<string, string> = {}): str
 
   return response.headers.get(`x-middleware-request-${REQUEST_PATH_HEADER}`);
 }
+
+beforeEach(() => {
+  vi.stubEnv('CSP_TEMPLATE', `script-src 'self' 'nonce-${CSP_NONCE_PLACEHOLDER}' 'strict-dynamic'`);
+  vi.stubEnv('CSP_HEADER_NAME', 'Content-Security-Policy');
+});
+
+afterEach(() => vi.unstubAllEnvs());
+
+describe('middleware CSP nonce', () => {
+  function respond(incoming: Record<string, string> = {}): NextResponse {
+    return middleware(new NextRequest(new URL('https://orla.test/'), { headers: incoming }));
+  }
+
+  it('sends the policy with a fresh nonce on the response and on the request', () => {
+    const response = respond();
+    const policy = response.headers.get('Content-Security-Policy') ?? '';
+    const nonce = /'nonce-([^']+)'/.exec(policy)?.[1];
+
+    expect(nonce).toMatch(/^[A-Za-z0-9+/=]{20,}$/);
+    expect(policy).not.toContain(CSP_NONCE_PLACEHOLDER);
+    expect(response.headers.get('x-middleware-request-x-nonce')).toBe(nonce);
+    expect(response.headers.get('x-middleware-request-content-security-policy')).toBe(policy);
+  });
+
+  it('hands Next the enforcing header on the request even when the response only reports', () => {
+    vi.stubEnv('CSP_HEADER_NAME', 'Content-Security-Policy-Report-Only');
+    const response = respond();
+
+    expect(response.headers.get('Content-Security-Policy-Report-Only')).toContain('nonce-');
+    expect(response.headers.get('Content-Security-Policy')).toBeNull();
+    expect(response.headers.get('x-middleware-request-content-security-policy')).toContain(
+      'nonce-',
+    );
+  });
+
+  it('never repeats a nonce across requests', () => {
+    const nonces = new Set(
+      Array.from({ length: 20 }, () => respond().headers.get('x-middleware-request-x-nonce')),
+    );
+
+    expect(nonces.size).toBe(20);
+  });
+
+  it('ignores a nonce the client supplies', () => {
+    const response = respond({ 'x-nonce': 'attacker' });
+
+    expect(response.headers.get('x-middleware-request-x-nonce')).not.toBe('attacker');
+    expect(response.headers.get('Content-Security-Policy')).not.toContain('attacker');
+  });
+
+  it('throws rather than serve pages with no policy when the build did not inline one', () => {
+    vi.stubEnv('CSP_TEMPLATE', '');
+
+    expect(() => respond()).toThrow(/CSP_TEMPLATE/);
+  });
+});
 
 describe('middleware', () => {
   it('stamps the requested path on the request', () => {

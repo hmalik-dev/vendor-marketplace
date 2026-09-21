@@ -20,7 +20,7 @@ vi.mock('@aws-sdk/client-s3', async (importOriginal) => {
   };
 });
 
-const { createS3Storage } = await import('./storage.js');
+const { createS3Storage, STORAGE_PREFIXES } = await import('./storage.js');
 
 const env = {
   STORAGE_ENDPOINT: 'http://storage.test',
@@ -129,6 +129,22 @@ describe('createS3Storage put', () => {
     const input = send.mock.calls[0]?.[0].input as { CacheControl: string; ContentType: string };
     expect(input.CacheControl).toBe('public, max-age=31536000, immutable');
     expect(input.ContentType).toBe('image/webp');
+  });
+
+  /*
+   * VEN-464: customer photos are public on purpose (one `public_read` bucket
+   * cannot hide a prefix). This pins that decision: a change that made one
+   * prefix private would have to change this test too.
+   */
+  it.each(STORAGE_PREFIXES)('stores %s public and immutable', async (prefix) => {
+    send.mockResolvedValue({});
+    const storage = createS3Storage(env);
+
+    const url = await storage.put(`${prefix}/owner/a.webp`, Buffer.from('x'), 'image/webp');
+
+    const input = send.mock.calls[0]?.[0].input as { CacheControl: string };
+    expect(input.CacheControl).toBe('public, max-age=31536000, immutable');
+    expect(url).toBe(`http://cdn.test/${prefix}/owner/a.webp`);
   });
 });
 

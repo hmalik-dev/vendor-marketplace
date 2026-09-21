@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `apps/web/src/config/security-headers.ts` is the **only** place the web tier's
 CSP exists — no middleware, no `vercel.json`, no second definition. It ships
@@ -21,7 +21,7 @@ directives that are tight — `frame-ancestors 'none'`, `object-src 'none'`,
 `img-src` and `frame-src`. With `'unsafe-inline'` present, script execution is
 not gated by the host allowlist at all.
 
-**How to apply:** when a diff adds hosts to `script-src` (Stripe in #396, Clerk
+**How to apply:** when a diff adds hosts to `script-src` (Stripe in #396, the auth provider
 before it), do not report the widening — including subdomain wildcards — as an
 XSS or exfiltration escalation. It cannot lower a bar that `'unsafe-inline'`
 already removed. Report instead on: whether the host is owned by the party it

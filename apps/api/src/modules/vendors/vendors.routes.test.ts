@@ -9,7 +9,12 @@ import {
   vendorTags,
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  type TestHarness,
+  acceptVendorAgreementAs,
+} from '../../testing/test-server.js';
 
 const VENDOR = 'user_vendor';
 const OTHER_VENDOR = 'user_vendor_two';
@@ -117,7 +122,7 @@ describe('/vendor/profile', () => {
       expect(body.tags).toEqual([]);
       // The bio was supplied; a reply window and a bookable package are what
       // is still missing.
-      expect(body.publishBlockers).toEqual(['responseTime', 'packages']);
+      expect(body.publishBlockers).toEqual(['responseTime', 'packages', 'agreement']);
     });
 
     it('persists the category selection', async () => {
@@ -430,6 +435,7 @@ describe('/vendor/profile', () => {
     it('publishes once every prerequisite is met', async () => {
       await createProfile({ bio: 'Documentary wedding photography.', responseTimeHours: 24 });
       await addPackage();
+      await acceptVendorAgreementAs(harness, VENDOR);
 
       const response = await harness.app.inject({
         method: 'PUT',
@@ -459,7 +465,7 @@ describe('/vendor/profile', () => {
       });
 
       expect(blocked.statusCode).toBe(400);
-      expect(blocked.json().details.blockers).toEqual(['responseTime']);
+      expect(blocked.json().details.blockers).toEqual(['responseTime', 'agreement']);
 
       await harness.app.inject({
         method: 'PUT',
@@ -468,6 +474,7 @@ describe('/vendor/profile', () => {
         payload: { responseTimeHours: 24 },
       });
 
+      await acceptVendorAgreementAs(harness, VENDOR);
       const published = await harness.app.inject({
         method: 'PUT',
         url: '/vendor/profile',
@@ -480,15 +487,106 @@ describe('/vendor/profile', () => {
       expect(published.json().publishBlockers).toEqual([]);
     });
 
+    describe('editing a live storefront (VEN-557)', () => {
+      async function goLive(): Promise<void> {
+        await createProfile({ bio: 'Documentary wedding photography.', responseTimeHours: 24 });
+        await addPackage();
+        await acceptVendorAgreementAs(harness, VENDOR);
+        const live = await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR),
+          payload: { isPublished: true },
+        });
+        expect(live.json().isPublished).toBe(true);
+      }
+
+      async function put(payload: Record<string, unknown>) {
+        return harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR),
+          payload,
+        });
+      }
+
+      it('refuses to blank the bio and leaves the row unchanged', async () => {
+        await goLive();
+
+        const response = await put({ bio: '' });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().details.blockers).toEqual(['bio']);
+
+        const [row] = await harness.database.db.select().from(vendorProfiles);
+        expect(row?.bio).toBe('Documentary wedding photography.');
+        expect(row?.isPublished).toBe(true);
+      });
+
+      it('refuses to clear the reply window', async () => {
+        await goLive();
+
+        const response = await put({ responseTimeHours: null });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().details.blockers).toEqual(['responseTime']);
+
+        const [row] = await harness.database.db.select().from(vendorProfiles);
+        expect(row?.responseTimeHours).toBe(24);
+        expect(row?.isPublished).toBe(true);
+      });
+
+      it('saves a complete edit', async () => {
+        await goLive();
+
+        const response = await put({ bio: 'Film and photo.', responseTimeHours: 48 });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().bio).toBe('Film and photo.');
+        expect(response.json().isPublished).toBe(true);
+      });
+
+      it('lets a draft save those values', async () => {
+        await createProfile({ bio: 'Documentary wedding photography.', responseTimeHours: 24 });
+
+        const response = await put({ bio: '', responseTimeHours: null });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().bio).toBeNull();
+        expect(response.json().responseTimeHours).toBeNull();
+      });
+
+      it('lets a live vendor unpublish while blanking a field', async () => {
+        await goLive();
+
+        const response = await put({ bio: '', isPublished: false });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().isPublished).toBe(false);
+        expect(response.json().bio).toBeNull();
+      });
+
+      it('names every blocker one edit introduces, and only those', async () => {
+        await goLive();
+
+        const response = await put({ bio: '', responseTimeHours: null, tagline: 'Still here' });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().details.blockers).toEqual(['bio', 'responseTime']);
+      });
+    });
+
     it('unpublishes without any prerequisite check', async () => {
       await createProfile({ bio: 'Documentary wedding photography.', responseTimeHours: 24 });
       await addPackage();
-      await harness.app.inject({
+      await acceptVendorAgreementAs(harness, VENDOR);
+      const live = await harness.app.inject({
         method: 'PUT',
         url: '/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
+      expect(live.json().isPublished).toBe(true);
 
       const response = await harness.app.inject({
         method: 'PUT',
@@ -510,7 +608,12 @@ describe('/vendor/profile', () => {
         headers: bearer(VENDOR),
       });
 
-      expect(response.json().publishBlockers).toEqual(['bio', 'responseTime', 'packages']);
+      expect(response.json().publishBlockers).toEqual([
+        'bio',
+        'responseTime',
+        'packages',
+        'agreement',
+      ]);
     });
 
     it('rejects an attempt to write a derived rating', async () => {

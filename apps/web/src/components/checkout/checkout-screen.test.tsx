@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BRAND_NAME, payoutReleaseAt } from '@vendor-marketplace/shared';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -160,6 +160,37 @@ describe('CheckoutScreen', () => {
     await waitFor(() => {
       expect(confirmPayment).toHaveBeenCalledTimes(1);
     });
+  });
+
+  /*
+   * VEN-540. `confirmPayment` can reject rather than answer (a blocked script,
+   * a dropped connection). That left `paying` true for ever with the rejection
+   * unhandled: a spinning button and no explanation.
+   */
+  it('re-enables the pay button and says so when confirmPayment rejects', async () => {
+    confirmPayment.mockRejectedValue(new Error('Failed to fetch'));
+    const user = userEvent.setup();
+    render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
+
+    await user.click(screen.getByRole('button', { name: /^Pay/ }));
+
+    expect(await screen.findByText('We could not reach Stripe')).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Pay/ })).toHaveProperty('disabled', false);
+    // Not a decline: the client cannot say the card was refused or uncharged.
+    expect(screen.queryByText(/declined/)).toBeNull();
+    expect(screen.queryByText(/haven.t been charged/)).toBeNull();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('calls confirmPayment once for two submit events in one tick', async () => {
+    confirmPayment.mockReturnValue(new Promise(() => {}));
+    render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
+    const form = document.querySelector('form') as HTMLFormElement;
+
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    expect(confirmPayment).toHaveBeenCalledTimes(1);
   });
 
   it('names the amount and the outcome on the button, never a bare Pay', () => {

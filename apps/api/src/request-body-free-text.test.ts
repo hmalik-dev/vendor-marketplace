@@ -233,10 +233,14 @@ describe('free text on a request body', () => {
     // whose business name, category, city and message are a stranger's free
     // text, plus `decideVendorApplicationSchema` and `createVendorInviteSchema`,
     // an enum and an email.
+    // 35 since VEN-500 added `adminStepUpVerifySchema`, a six-digit code.
+    // 36 since VEN-462 added `throttleChargeSchema`, an opaque printable-ASCII key and two numbers.
+    // 37 since VEN-475 added `adminExportAuditSchema`.
+    // 38 since VEN-506 added `grantOperatorSchema`, an email.
     //
     // A merge is where this number goes wrong: two lanes each add to 23 and a
     // both-sides union keeps one of the answers rather than the sum.
-    expect(names).toHaveLength(34);
+    expect(names).toHaveLength(38);
     expect(names).toContain('reorderCategoriesSchema');
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
@@ -284,6 +288,8 @@ describe('free text on a request body', () => {
        */
       'acceptTermsSchema.version',
       'acceptVendorAgreementSchema.version',
+      // VEN-500's emailed step-up code: six digits by pattern, not prose.
+      'adminStepUpVerifySchema.code',
       'createBookingRequestSchema.eventDate',
       'createBookingRequestSchema.eventStartTime',
       /*
@@ -295,7 +301,72 @@ describe('free text on a request body', () => {
        */
       'supportMessageSchema.errorContext.route',
       'supportMessageSchema.errorContext.occurredAt',
+      // VEN-462's throttle bucket: an opaque key by pattern, printable ASCII only.
+      'throttleChargeSchema.bucket',
     ]);
+  });
+
+  /*
+   * VEN-544. A NUL byte is Postgres error 22021 — a 500 for the caller — and a
+   * zero-width space is invisible text that clears a minimum. Both are refused
+   * rather than stripped, so what is stored is what was typed. Every leaf that
+   * takes ordinary prose must refuse them; the same discovery as above, so a
+   * field written as a bare `z.string()` fails here on the day it is added.
+   */
+  it('refuses a NUL byte and a zero-width space in every free-text field', () => {
+    const accepted: string[] = [];
+    const checked: string[] = [];
+
+    for (const name of bodySchemaNames()) {
+      for (const [path, leaf] of stringLeaves((schemas as Record<string, unknown>)[name], name)) {
+        if (!(leaf as ZodType).safeParse(PROBE).success) {
+          continue;
+        }
+
+        checked.push(path);
+
+        for (const bad of ['\u0000', '\u200b']) {
+          const probe = `${'a'.repeat(20)}${bad}${'b'.repeat(20)}`;
+
+          if ((leaf as ZodType).safeParse(probe).success) {
+            accepted.push(`${path} accepted U+${bad.charCodeAt(0).toString(16).padStart(4, '0')}`);
+          }
+        }
+      }
+    }
+
+    expect(checked.length).toBeGreaterThan(20);
+    expect(accepted).toEqual([]);
+  });
+
+  it('refuses a business name and a city of only zero-width characters, and a NUL byte', () => {
+    const valid = {
+      businessName: 'Sunlit Studio',
+      categoryIds: [crypto.randomUUID()],
+      city: 'Austin',
+      state: 'TX',
+    };
+
+    // The control: without it every refusal below could be a missing field.
+    expect(schemas.createVendorProfileSchema.safeParse(valid).success).toBe(true);
+
+    for (const [field, value] of [
+      ['businessName', '\u200b\u200b'],
+      ['city', '\u200b\u200b'],
+      ['businessName', 'a\u0000b'],
+    ] as const) {
+      const parsed = schemas.createVendorProfileSchema.safeParse({ ...valid, [field]: value });
+
+      expect(parsed.success, `${field} ${JSON.stringify(value)}`).toBe(false);
+    }
+  });
+
+  it('keeps tab, newline and a joiner inside text, and normalises to NFC', () => {
+    const parsed = schemas.updateUserSchema.safeParse({
+      bio: 'line one\n\tline two 👩\u200d💻 e\u0301',
+    });
+
+    expect(parsed.success && parsed.data.bio).toBe('line one\n\tline two 👩\u200d💻 é');
   });
 
   /*

@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import { eq, sql } from 'drizzle-orm';
 import {
   adminActions,
@@ -133,10 +134,7 @@ describe('the vendor gate', () => {
       avatarUrl: null,
     });
     expect((await accept(ADMIN)).statusCode).toBe(200);
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
   });
 
   afterEach(async () => {
@@ -402,6 +400,21 @@ describe('the vendor gate', () => {
       expect(rows.map((row) => [row.email, row.city, row.status])).toEqual([
         ['applicant@example.com', 'Austin', 'new'],
       ]);
+    });
+
+    it('takes a 150-character business name and stores it whole (VEN-544)', async () => {
+      const businessName = 'B'.repeat(150);
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        payload: { ...application('long@example.com'), businessName },
+      });
+
+      expect([response.statusCode, response.json()]).toEqual([200, { received: true }]);
+      const rows = await harness.database.db.select().from(vendorApplications);
+      expect(rows.map((row) => row.businessName)).toEqual([businessName]);
     });
 
     it('arrives already invited when the address was invited first', async () => {

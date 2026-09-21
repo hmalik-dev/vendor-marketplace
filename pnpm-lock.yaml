@@ -85,7 +85,7 @@ importers:
         specifier: ^0.35.4
         version: 0.35.4(@types/node@24.13.3)
       stripe:
-        specifier: ^22.6.0
+        specifier: 22.6.0
         version: 22.6.0(@types/node@24.13.3)
       svix:
         specifier: 2.1.0
