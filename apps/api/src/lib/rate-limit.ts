@@ -1,3 +1,4 @@
+import { clientAddress } from './client-address.js';
 /**
  * A per-route rate limit counted against the signed-in account rather than the
  * network address, so one account cannot flood a route and a second account
@@ -11,7 +12,10 @@ export function perAccountRateLimit(max: number, timeWindow: '1 minute' | '1 hou
   return {
     max,
     timeWindow,
-    keyGenerator: (request: { auth: { id: string } | null; ip: string }) =>
-      request.auth?.id ?? request.ip,
+    keyGenerator: (request: {
+      auth: { id: string } | null;
+      ip: string;
+      headers: Record<string, string | string[] | undefined>;
+    }) => request.auth?.id ?? clientAddress(request),
   };
 }

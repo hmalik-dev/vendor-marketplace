@@ -1,3 +1,4 @@
+import { clientAddress } from '../../lib/client-address.js';
 import {
   createReportSchema,
   REPORT_RATE_LIMIT,
@@ -34,8 +35,11 @@ export const reportRoutes: FastifyPluginAsyncZod<ReportRoutesOptions> = async (a
            * falling back would let a shared office address spend one person's
            * allowance on everybody behind it.
            */
-          keyGenerator: (request: { auth: { id: string } | null; ip: string }) =>
-            request.auth?.id ?? request.ip,
+          keyGenerator: (request: {
+            auth: { id: string } | null;
+            ip: string;
+            headers: Record<string, string | string[] | undefined>;
+          }) => request.auth?.id ?? clientAddress(request),
         },
       },
       schema: {

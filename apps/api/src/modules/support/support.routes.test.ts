@@ -464,3 +464,41 @@ describe('POST /support/messages, against a transport that refuses', () => {
     expect(JSON.stringify(body)).not.toContain('not verified');
   });
 });
+
+/*
+ * VEN-549. Behind Railway every signed-out sender arrives from the edge node's
+ * socket, so the six-an-hour limit must count the address the edge reports in
+ * `X-Real-IP`, not the socket.
+ */
+describe('POST /support/messages behind Railway', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('counts each signed-out sender behind one edge node on their own', async () => {
+    vi.stubEnv('RAILWAY_ENVIRONMENT', 'staging');
+    const harness = await createTestHarness();
+
+    try {
+      const send = async (realIp: string): Promise<number> => {
+        const result = await harness.app.inject({
+          method: 'POST',
+          url: '/support/messages',
+          remoteAddress: '10.250.0.7',
+          headers: { 'x-real-ip': realIp },
+          payload: { topic: 'something-else', email: 'visitor@example.com', message: MESSAGE },
+        });
+        return result.statusCode;
+      };
+
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        expect(await send('198.51.100.21')).toBe(200);
+      }
+
+      expect(await send('198.51.100.21')).toBe(429);
+      expect(await send('198.51.100.22')).toBe(200);
+    } finally {
+      await harness.close();
+    }
+  });
+});
