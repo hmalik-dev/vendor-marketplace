@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { BRAND_NAME, LEGAL_PATHS } from '@vendor-marketplace/shared';
 import { AUTH_COPY } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { AuthScreen } from '@/components/auth/auth-screen';
@@ -60,6 +61,12 @@ export interface SignUpFormProps {
    * both-sides panel, which picks no side before the visitor does.
    */
   initialRole: SignUpRole | null;
+  /**
+   * Whether vendors are admitted by invitation only. Read on the server by the
+   * page so the notice is in the first paint; `false` when unreadable, which
+   * shows nothing rather than a waitlist that may not exist.
+   */
+  vendorInviteOnly: boolean;
 }
 
 /**
@@ -77,7 +84,7 @@ export interface SignUpFormProps {
  * column itself does not move: the choice is the only thing that changes the
  * page. See design/design-plan/21-sign-up.md.
  */
-export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement {
+export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): React.ReactElement {
   const [role, setRole] = useState<SignUpRole | null>(initialRole);
   /* Set only when a submit was actually blocked, so the hint announces itself
      to a screen reader at the moment it becomes the reason nothing happened. */
@@ -257,6 +264,18 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             onChange={(event) => setPassword(event.target.value)}
           />
 
+          {/* Plain copy over a hairline, not a banner: it is how the product works, not a state (frame 35 in design/delta-waitlist). `role="status"` announces it when a role pick inserts it. */}
+          {role === 'vendor' && vendorInviteOnly ? (
+            <p
+              data-invite-notice=""
+              role="status"
+              className="-mt-px mb-3.25 border-t border-stone-300 pt-3 text-[12.5px] leading-[1.65] text-stone-700"
+            >
+              Vendors join {BRAND_NAME} by invitation for now. Sign up and we&apos;ll add you to the
+              waitlist.
+            </p>
+          ) : null}
+
           <Button
             type="submit"
             className="py-3.25"
@@ -278,7 +297,26 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             </p>
           ) : null}
 
-          <p className="mt-5 text-center text-action text-stone-700">
+          {/* A notice only: the versioned acceptance stays on the Terms screen. */}
+          <p
+            className={cn(
+              'text-center text-helper leading-[1.55] text-stone-600',
+              // 13px under the "Pick one above" hint, 10px under the button (frame 35).
+              role === null ? 'mt-3.25' : 'mt-2.5',
+            )}
+          >
+            By signing up, you agree to the{' '}
+            <Link href={LEGAL_PATHS.terms} className="text-clay-500 underline underline-offset-2">
+              Terms of Service
+            </Link>{' '}
+            and{' '}
+            <Link href={LEGAL_PATHS.privacy} className="text-clay-500 underline underline-offset-2">
+              Privacy Policy
+            </Link>
+            .
+          </p>
+
+          <p className="mt-3.25 text-center text-action text-stone-700">
             {AUTH_COPY.signUpAlt}{' '}
             <Link href="/sign-in" className="font-semibold text-clay-500 hover:underline">
               Sign in
