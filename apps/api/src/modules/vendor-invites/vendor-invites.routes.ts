@@ -1,3 +1,4 @@
+import { clientAddress } from '../../lib/client-address.js';
 import { z } from 'zod';
 import {
   adminVendorApplicationListSchema,
@@ -59,8 +60,11 @@ export const vendorApplicationRoutes: FastifyPluginAsyncZod = async (app) => {
       config: {
         rateLimit: {
           ...APPLICATION_RATE_LIMIT,
-          keyGenerator: (request: { auth: { id: string } | null; ip: string }) =>
-            request.auth?.id ?? request.ip,
+          keyGenerator: (request: {
+            auth: { id: string } | null;
+            ip: string;
+            headers: Record<string, string | string[] | undefined>;
+          }) => request.auth?.id ?? clientAddress(request),
         },
       },
       schema: {
