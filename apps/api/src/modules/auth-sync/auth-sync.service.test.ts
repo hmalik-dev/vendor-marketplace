@@ -113,7 +113,7 @@ describe('applyAuthSyncEvent, when an update meets a stale holder', () => {
     const event = claimAddress();
     const outcome = await applyAuthSyncEvent(
       context(),
-      { ...event, identity: { ...event.identity, email: null, avatarUrl } },
+      { ...event, identity: { ...event.identity, email: 'bea@example.com', avatarUrl } },
       NOW,
       directoryHolding(),
     );
