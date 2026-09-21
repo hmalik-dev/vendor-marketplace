@@ -1,7 +1,9 @@
 import Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
 import {
+  createStripeClient,
   createStripeConnectGateway,
+  STRIPE_API_VERSION,
   describeAccountEvent,
   isForeignEnvIntent,
   isMissingPayoutsOnly,
@@ -682,5 +684,14 @@ describe('pickTransfer', () => {
         { live: true },
       )?.transferId,
     ).toBe('tr_platform');
+  });
+});
+
+describe('the Stripe API version', () => {
+  it('is pinned to the exact SDK release and sent by the gateway client', () => {
+    const client = createStripeClient('sk_test_unused');
+
+    expect(STRIPE_API_VERSION).toBe('2026-08-26.dahlia');
+    expect(client.getApiField('version')).toBe(STRIPE_API_VERSION);
   });
 });

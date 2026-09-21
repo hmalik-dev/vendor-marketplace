@@ -913,6 +913,13 @@ export interface StripeCredentials {
  */
 const STRIPE_REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * The API version every request is made at: the constant of the exact `stripe`
+ * release pinned in package.json, so a dependency bump cannot move it silently.
+ * `launch:check` compares the webhook endpoints' `api_version` against it.
+ */
+export const STRIPE_API_VERSION = Stripe.API_VERSION;
+
 export interface FindTransferOptions {
   /** Ignore transfers that have been fully reversed. */
   live?: boolean;
@@ -948,8 +955,15 @@ export function pickTransfer(
     : null;
 }
 
+export function createStripeClient(secretKey: string): Stripe {
+  return new Stripe(secretKey, {
+    apiVersion: STRIPE_API_VERSION,
+    timeout: STRIPE_REQUEST_TIMEOUT_MS,
+  });
+}
+
 export function createStripeConnectGateway(credentials: StripeCredentials): StripeConnectGateway {
-  const stripe = new Stripe(credentials.secretKey, { timeout: STRIPE_REQUEST_TIMEOUT_MS });
+  const stripe = createStripeClient(credentials.secretKey);
   const signingSecrets = [credentials.webhookSecret, credentials.connectWebhookSecret].filter(
     (secret): secret is string => Boolean(secret),
   );

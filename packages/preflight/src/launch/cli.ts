@@ -1,7 +1,7 @@
 import { ENV_FILES, loadContext, REPO_ROOT } from '../context.js';
 import { postgresLaunchDatabase } from './database.js';
 import { readOnlyGet } from './http.js';
-import { loadHandledStripeEvents, loadSeedMarkers } from './repo-modules.js';
+import { loadHandledStripeEvents, loadSeedMarkers, loadStripeApiVersion } from './repo-modules.js';
 import { renderLaunchReport, runLaunchChecks } from './run.js';
 
 /**
@@ -17,8 +17,9 @@ const source = envFileFound
 
 process.stdout.write(`Launch check — reading ${source}\n\n`);
 
-const [handledStripeEvents, markers] = await Promise.all([
+const [handledStripeEvents, stripeApiVersion, markers] = await Promise.all([
   loadHandledStripeEvents(REPO_ROOT),
+  loadStripeApiVersion(REPO_ROOT),
   loadSeedMarkers(REPO_ROOT),
 ]);
 const database = env.DATABASE_URL
@@ -26,7 +27,13 @@ const database = env.DATABASE_URL
   : null;
 
 try {
-  const results = await runLaunchChecks({ env, get: readOnlyGet(), database, handledStripeEvents });
+  const results = await runLaunchChecks({
+    env,
+    get: readOnlyGet(),
+    database,
+    handledStripeEvents,
+    stripeApiVersion,
+  });
   const report = renderLaunchReport(results);
 
   process.stdout.write(`${report.lines.join('\n')}\n`);
