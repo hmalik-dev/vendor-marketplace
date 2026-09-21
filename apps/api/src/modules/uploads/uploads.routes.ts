@@ -43,6 +43,27 @@ function isMultipartCountLimit(error: unknown): boolean {
   );
 }
 
+/*
+ * A second file part never reaches the handler as `FST_FILES_LIMIT`. The parser
+ * records that error and destroys the first file's stream, so `toBuffer()`
+ * rejects with Node's own premature-close error while the real one sits unread
+ * in the parser's queue. On a connection the client has not dropped, that
+ * rejection is the files limit (or a body that ended early, which the same
+ * parser path produces). It fires only when the second part's headers arrive
+ * with the end of the first file; a second part that trails in later is not
+ * observable through `request.file()` and is ignored, as fields after the file
+ * already are.
+ */
+function isFilesLimitCloseOfLiveRequest(error: unknown, aborted: boolean): boolean {
+  return (
+    !aborted &&
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'ERR_STREAM_PREMATURE_CLOSE'
+  );
+}
+
 export interface UploadRoutesOptions {
   /** Uploads one account may make per minute. */
   rateLimitMax: number;
@@ -117,8 +138,13 @@ export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (a
             `Image is larger than the ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB limit.`,
           );
         }
-        if (isMultipartCountLimit(error)) {
-          throw validationFailed('The upload has too many form fields. Send the image only.');
+        if (
+          isMultipartCountLimit(error) ||
+          isFilesLimitCloseOfLiveRequest(error, request.raw.aborted)
+        ) {
+          throw validationFailed(
+            'The upload has too many parts or ended early. Send one image only.',
+          );
         }
         throw error;
       }
