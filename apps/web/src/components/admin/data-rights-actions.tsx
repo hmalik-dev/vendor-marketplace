@@ -118,6 +118,13 @@ export function DataRightsActions({
   const [refreshing, startRefresh] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [stepUpNeeded, setStepUpNeeded] = useState(false);
+  /*
+   * Set once a Finish came back with nothing left owed, so the note goes at once.
+   * `router.refresh()` below reconciles it with the server, but a browser pass
+   * (VEN-478) saw that refresh leave the stale render up until a reload, so the
+   * control does not wait on it to say what it just did.
+   */
+  const [finished, setFinished] = useState(false);
 
   async function exportRecord(): Promise<void> {
     setBusy(true);
@@ -214,6 +221,7 @@ export function DataRightsActions({
       }
 
       setStepUpNeeded(false);
+      setFinished(refundsFailed === 0);
       setError(
         refundsFailed > 0
           ? 'Some bookings are still confirmed: Stripe refused a refund. This needs a person.'
@@ -258,7 +266,7 @@ export function DataRightsActions({
         </p>
       </div>
 
-      {unwindPending > 0 && (isBanned || closedAt) ? (
+      {unwindPending > 0 && !finished && (isBanned || closedAt) ? (
         <>
           <div aria-hidden="true" className="my-1.5 h-px bg-stone-150" />
           <div data-action-tier className="flex flex-col gap-2">

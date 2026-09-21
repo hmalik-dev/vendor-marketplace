@@ -385,6 +385,9 @@ describe('an unfinished unwind (VEN-478)', () => {
 
     expect(requests).toEqual([['/admin/users/33333333-3333-4333-8333-333333333333/ban', 'PUT']]);
     expect(screen.queryByRole('alert')).toBeNull();
+    /* Gone at once, without waiting on the refresh that reconciles the page. */
+    expect(screen.queryByTestId('unwind-unfinished')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Finish' })).toBeNull();
   });
 
   it('re-runs the closure on a closed account, and says what is still owed', async () => {
@@ -401,6 +404,9 @@ describe('an unfinished unwind (VEN-478)', () => {
 
     expect(requests).toEqual([['/admin/users/33333333-3333-4333-8333-333333333333/close', 'POST']]);
     expect(screen.getByRole('alert').textContent).toContain('Stripe refused a refund');
+    /* A refused refund is not finished: the note and the control stay. */
+    expect(screen.getByTestId('unwind-unfinished')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Finish' })).toBeTruthy();
   });
 });
 
