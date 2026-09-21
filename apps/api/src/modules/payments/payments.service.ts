@@ -68,6 +68,7 @@ import {
   cancelBookingAndFreeDate,
   confirmBooking,
   findBookingById,
+  lockBookingById,
   findAnyBookingByRequest,
   findBookingByRequest,
   findPayableRequest,
@@ -1873,35 +1874,45 @@ export async function resolveDispute(
     throw conflict('That booking has no open report to resolve');
   }
 
-  const chargeback = await findOpenChargebackCase(context.db, bookingId);
-
   /*
-   * A chargeback is settled by the card network, and both rulings assume money
-   * the platform may not have. Stripe refuses a refund on a charge under
-   * dispute, and a `lost` one has already been debited from the platform, so
-   * refunding it pays the customer twice and lifting the hold pays the vendor
-   * out of the platform's own pocket. `won` and `warning_closed` are over
-   * without a debit, so the charge is refundable and the payout is real again.
+   * Read again under the row lock below: a chargeback does not move `status`, so a
+   * case that arrives while this ruling queues behind another is invisible to the
+   * lock's own re-check (VEN-545).
    */
-  if (
-    chargeback &&
-    outcome === 'customer' &&
-    // An allowlist, so a status Stripe adds later fails closed.
-    chargeback.networkOutcome !== 'won' &&
-    chargeback.networkOutcome !== 'warning_closed'
-  ) {
-    throw conflict(
-      chargeback.networkOutcome === 'lost'
-        ? 'The card network ruled against the platform and has already taken this payment back, so it cannot be refunded again. Recover it from the vendor through support.'
-        : 'A chargeback is still open on this payment and Stripe will not refund a disputed charge. Wait for the network to decide it.',
-    );
-  }
+  const refuseAgainstChargeback = (
+    open: Awaited<ReturnType<typeof findOpenChargebackCase>>,
+  ): void => {
+    /*
+     * A chargeback is settled by the card network, and both rulings assume money
+     * the platform may not have. Stripe refuses a refund on a charge under
+     * dispute, and a `lost` one has already been debited from the platform, so
+     * refunding it pays the customer twice and lifting the hold pays the vendor
+     * out of the platform's own pocket. `won` and `warning_closed` are over
+     * without a debit, so the charge is refundable and the payout is real again.
+     */
+    if (
+      open &&
+      outcome === 'customer' &&
+      // An allowlist, so a status Stripe adds later fails closed.
+      open.networkOutcome !== 'won' &&
+      open.networkOutcome !== 'warning_closed'
+    ) {
+      throw conflict(
+        open.networkOutcome === 'lost'
+          ? 'The card network ruled against the platform and has already taken this payment back, so it cannot be refunded again. Recover it from the vendor through support.'
+          : 'A chargeback is still open on this payment and Stripe will not refund a disputed charge. Wait for the network to decide it.',
+      );
+    }
 
-  if (chargeback?.networkOutcome === 'lost' && outcome === 'vendor') {
-    throw conflict(
-      'The card network ruled against the platform and has already taken this payment back, so the vendor cannot be paid it out as well.',
-    );
-  }
+    if (open?.networkOutcome === 'lost' && outcome === 'vendor') {
+      throw conflict(
+        'The card network ruled against the platform and has already taken this payment back, so the vendor cannot be paid it out as well.',
+      );
+    }
+  };
+
+  const chargeback = await findOpenChargebackCase(context.db, bookingId);
+  refuseAgainstChargeback(chargeback);
 
   if (outcome === 'vendor') {
     /*
@@ -1930,34 +1941,112 @@ export async function resolveDispute(
     return toBookingView(restored);
   }
 
-  const refund = await refundAndUnwind(context, booking, booking.totalAmountCents, 'dispute');
+  /*
+   * **The row is locked before Stripe is asked anything** (VEN-545). Two
+   * operators ruling at once, or a ruling racing the sweep, used to both pass the
+   * `disputed` check above; the vendor ruling then lifted the hold while this one
+   * was mid-refund, and the row write here matched nothing — a customer refunded
+   * in full on a booking whose vendor the sweep then paid in full.
+   *
+   * Held for the refund and the row write together, so a competing writer queues
+   * behind it and finds the booking cancelled. The status is re-read under the
+   * lock, because the read above is from before any wait.
+   *
+   * A refund Stripe refused is *returned*, not thrown, so the transaction still
+   * commits: `refundAndUnwind` records the refusal against the booking, and D36's
+   * retry key depends on that record surviving.
+   */
+  let refunded: UnwoundRefund | undefined;
 
   /*
-   * `admin`, because an operator ended it and not the customer. The distinction
-   * is what the customer's own screen reads to choose its words (#415), and a
-   * booking somebody asked to have reviewed is not one they cancelled.
+   * The customer is repaid and the row may still say payable: the one state that
+   * needs a human, so the operator is told which refund it was.
    */
-  const cancelled = await cancelBookingAndFreeDate(
-    context.db,
-    bookingId,
-    {
-      cancelledAt: now,
-      cancellationReason: "Resolved in the customer's favour after a reported problem",
-      cancelledBy: 'admin',
-      refundAmountCents: refund.amountCents,
-      // A full refund, so the vendor keeps nothing and the sweep never pays it.
-      vendorPayoutCents: refund.retainedPayoutCents,
-      disputeReason: null,
-    },
-    'disputed',
-    booking.payoutReleasedAt,
-  );
+  const alertUnreconciled = (): void => {
+    if (!refunded) {
+      return;
+    }
 
-  if (!cancelled) {
     context.log.error(
-      { bookingId, refundId: refund.refundId, refundCents: refund.amountCents },
+      { bookingId, refundId: refunded.refundId, refundCents: refunded.amountCents },
       'Refunded a disputed booking whose row could not be cancelled',
     );
+    context.alerts?.dispatch(
+      refundFailedAlert({
+        bookingId,
+        during: 'an upheld dispute',
+        refundId: refunded.refundId,
+      }),
+    );
+  };
+
+  const settled = await context.db
+    .transaction(async (tx) => {
+      const locked = await lockBookingById(tx, bookingId);
+
+      if (locked?.status !== 'disputed') {
+        return { kind: 'changed' as const };
+      }
+
+      // Under the lock too: see `refuseAgainstChargeback`.
+      refuseAgainstChargeback(await findOpenChargebackCase(tx, bookingId));
+
+      let refund: UnwoundRefund;
+
+      try {
+        refund = await refundAndUnwind(
+          { ...context, db: tx },
+          locked,
+          locked.totalAmountCents,
+          'dispute',
+        );
+      } catch (error) {
+        return { kind: 'refused' as const, error };
+      }
+
+      refunded = refund;
+
+      /*
+       * `admin`, because an operator ended it and not the customer. The distinction
+       * is what the customer's own screen reads to choose its words (#415), and a
+       * booking somebody asked to have reviewed is not one they cancelled.
+       */
+      const cancelled = await cancelBookingAndFreeDate(
+        tx,
+        bookingId,
+        {
+          cancelledAt: now,
+          cancellationReason: "Resolved in the customer's favour after a reported problem",
+          cancelledBy: 'admin',
+          refundAmountCents: refund.amountCents,
+          // A full refund, so the vendor keeps nothing and the sweep never pays it.
+          vendorPayoutCents: refund.retainedPayoutCents,
+          disputeReason: null,
+        },
+        'disputed',
+        locked.payoutReleasedAt,
+      );
+
+      return { kind: 'settled' as const, refund, cancelled };
+    })
+    .catch((error: unknown) => {
+      // A failed commit after the refund went out.
+      alertUnreconciled();
+      throw error;
+    });
+
+  if (settled.kind === 'refused') {
+    throw settled.error;
+  }
+
+  if (settled.kind === 'changed') {
+    throw conflict('That booking changed while you were resolving it');
+  }
+
+  const { refund, cancelled } = settled;
+
+  if (!cancelled) {
+    alertUnreconciled();
     throw conflict('That booking changed while you were resolving it');
   }
 
