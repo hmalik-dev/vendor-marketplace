@@ -1,5 +1,5 @@
 {
-  "id": "caff19a9-76de-4fa4-8c2c-9c84296b6d92",
+  "id": "46056231-241a-487c-b18c-0f47c84f8dac",
   "prevId": "dd0e1f2c-5666-4960-965a-2b55096a8840",
   "version": "7",
   "dialect": "postgresql",
@@ -4582,8 +4582,6 @@
         "user_data_exported",
         "user_closed",
         "operator_account_closed",
-        "operator_granted",
-        "operator_revoked",
         "vendor_unpublished",
         "vendor_republished",
         "review_hidden",
@@ -4600,7 +4598,11 @@
         "category_reordered",
         "vendor_invited",
         "vendor_invite_revoked",
-        "vendor_application_declined"
+        "vendor_application_declined",
+        "admin_exported",
+        "admin_data_read",
+        "operator_granted",
+        "operator_revoked"
       ]
     },
     "public.admin_action_subject": {

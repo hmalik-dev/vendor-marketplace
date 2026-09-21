@@ -1325,14 +1325,6 @@ export const ADMIN_ACTIONS = [
    * the wrong value stays wrong, so the distinction is made at the writer.
    */
   'operator_account_closed',
-  /**
-   * An operator gave another account operator access, or took it away (VEN-506).
-   *
-   * The detail carries the role the account held before the grant, which is
-   * what a revoke restores; never the address, which the ids resolve to.
-   */
-  'operator_granted',
-  'operator_revoked',
   /*
    * Graduated moderation (#435) — the levers that are not a ban.
    *
@@ -1394,6 +1386,14 @@ export const ADMIN_ACTIONS = [
    */
   'admin_exported',
   'admin_data_read',
+  /**
+   * An operator gave another account operator access, or took it away (VEN-506).
+   *
+   * The detail carries the role the account held before the grant, which is
+   * what a revoke restores; never the address, which the ids resolve to.
+   */
+  'operator_granted',
+  'operator_revoked',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
