@@ -372,7 +372,8 @@ describe('reporting and message visibility (#436)', () => {
       subjectType: ReportSubject,
       subjectId: string,
     ): Promise<void> {
-      const missing = await report(CUSTOMER, subjectType, randomUUID());
+      /* Another account, so the probe does not spend the reporter's allowance. */
+      const missing = await report(OUTSIDER, subjectType, randomUUID());
       const response = await report(CUSTOMER, subjectType, subjectId);
 
       expect(response.statusCode).toBe(404);
