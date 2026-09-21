@@ -14,4 +14,6 @@ CREATE TABLE "throttle_hits" (
 ALTER TABLE "throttle_hits" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "stream_tickets" ADD CONSTRAINT "stream_tickets_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "stream_tickets_user_id_idx" ON "stream_tickets" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "throttle_hits_bucket_hit_at_idx" ON "throttle_hits" USING btree ("bucket","hit_at");
+CREATE INDEX "throttle_hits_bucket_hit_at_idx" ON "throttle_hits" USING btree ("bucket","hit_at");--> statement-breakpoint
+CREATE POLICY "app_api_unscoped" ON "stream_tickets" TO "app_api" USING (true) WITH CHECK (true);--> statement-breakpoint
+CREATE POLICY "app_api_unscoped" ON "throttle_hits" TO "app_api" USING (true) WITH CHECK (true);
