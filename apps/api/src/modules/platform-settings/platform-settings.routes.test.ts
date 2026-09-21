@@ -72,11 +72,11 @@ describe('launch switches', () => {
 
   async function signInAsAdmin(): Promise<string> {
     expect((await inject('GET', '/users/me', ADMIN)).statusCode).toBe(200);
-    const [row] = await setUserRole(
-      harness.database.db,
-      'admin',
-      eq(users.authUserId, ADMIN),
-    ).returning({ id: users.id });
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
+    const [row] = await harness.database.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.authUserId, ADMIN));
 
     return row!.id;
   }
