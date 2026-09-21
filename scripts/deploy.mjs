@@ -297,7 +297,8 @@ async function webNamesRelease(env, io) {
   const fetchImpl = io.fetch ?? fetch;
   const sleep = io.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const now = io.now ?? Date.now;
-  const deadline = Number(env.SMOKE_DEADLINE_MS ?? '600000');
+  const parsed = Number(env.SMOKE_DEADLINE_MS ?? '600000');
+  const deadline = Number.isFinite(parsed) ? parsed : 600_000;
   const web = env.WEB_URL.split(',')[0].trim().replace(/\/+$/, '');
   const startedAt = now();
   let serving = null;

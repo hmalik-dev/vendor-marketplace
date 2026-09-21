@@ -157,7 +157,8 @@ jobs:
         run: node scripts/deploy.mjs web
 
       # Bounded: ten minutes covers a cold build on either platform without
-      # retrying a dead deployment indefinitely. A timeout fails the run.
+      # retrying a dead deployment indefinitely. The API poll and the web
+      # commit poll each get that budget. A timeout fails the run.
       - name: Poll /ready until it names this release
         if: steps.gate.outputs.deploy == 'true' && steps.preflight.outputs.ready == 'true'
         env:

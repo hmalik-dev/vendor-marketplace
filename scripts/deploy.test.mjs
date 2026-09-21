@@ -773,6 +773,31 @@ test('dry run: the web naming the same release as the API passes the gate', () =
   assert.ok(result.printed.includes(`web /api/ready names ${SHA.slice(0, 7)}`), result.printed);
 });
 
+test('ready: a web still on the previous build is polled again until it names this release', async () => {
+  const { io } = recordingIo();
+  const answers = ['b'.repeat(40), SHA];
+  let asked = 0;
+  let clock = 0;
+  io.fetch = async () => Response.json({ commit: answers[asked++] });
+  io.now = () => clock;
+  io.sleep = async (ms) => {
+    clock += ms;
+  };
+
+  await PHASES.ready(
+    {
+      PATH: '/bin',
+      API_URL: 'https://api.orla.test',
+      WEB_URL: 'https://orla.test',
+      SENTRY_RELEASE: SHA,
+    },
+    io,
+  );
+
+  assert.equal(asked, 2);
+  assert.equal(clock, 5_000);
+});
+
 test('ready: a web that never answers fails the release by name once the deadline passes', async () => {
   const { io } = recordingIo();
   let clock = 0;
