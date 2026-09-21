@@ -5,12 +5,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './testing/test-db.js';
 
 /**
- * `0059` recreates `auth_provider` without the value for rows a retired
+ * `0060` recreates `auth_provider` without the value for rows a retired
  * identity provider issued (VEN-503). The removed value is built from
  * fragments so this file does not trip the repo-wide no-trace guard.
  */
-const PREVIOUS = '0058_brainy_bullseye';
-const DROP_VALUE = '0059_dark_fallen_one';
+const PREVIOUS = '0059_condemned_madame_masque';
+const DROP_VALUE = '0060_silent_nick_fury';
 const REMOVED = ['legacy_cl', 'erk'].join('');
 
 let testDb: TestDatabase;
@@ -41,7 +41,7 @@ afterAll(async () => {
   await testDb.close();
 });
 
-describe('0059 removes the retired auth_provider value', () => {
+describe('0060 removes the retired auth_provider value', () => {
   it('starts from an enum that still lists it', async () => {
     expect(await enumValues()).toEqual(['neon_auth', REMOVED, 'seed']);
   });
