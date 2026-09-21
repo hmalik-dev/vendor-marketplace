@@ -22,7 +22,7 @@ plugins, and use `onRequest` / `preHandler` hooks for middleware.
 
 Role is chosen once, at sign-up, and travels as a `role` field on the Terms
 acceptance request (Neon Auth has no sign-up field to carry it, VEN-444). The
-caller can write that field, so it is narrowed by `normalizeRole` at the single
+caller can write that field, so it is validated by `normalizeRole` (which refuses anything but `customer` or `vendor`, never defaulting) at the single
 point where a user row is created, and `vendor` is gated on an invite before any
 row exists. **Every later authorization decision reads the local `users.role`
 column.** The Neon JWT's own `role` claim is always `authenticated` and is never

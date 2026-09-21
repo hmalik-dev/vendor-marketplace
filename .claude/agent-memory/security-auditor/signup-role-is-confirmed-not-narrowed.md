@@ -1,6 +1,6 @@
 ---
 name: signup-role-is-confirmed-not-narrowed
-description: VEN-507 — the client supplies users.role once on POST /legal/terms/accept; normalizeRole now REFUSES anything outside customer|vendor instead of narrowing to customer, and that throw is the only writer of the column
+description: VEN-507 — the client supplies users.role once on POST /legal/terms/accept; normalizeRole now REFUSES anything outside customer|vendor instead of narrowing to customer, and the same route's first acceptance is a notice (continue_notice) while a new version still needs the tick
 metadata:
   type: project
 ---
@@ -37,4 +37,19 @@ the role and the server stores what it submits.
   `emailVerified !== true`, so neither enumerates anyone else. The page is
   `force-dynamic` — keep it that way, it now renders per-account data.
 
-Related: [[terms-gate-is-a-five-state-session]], [[neon-auth-cutover-boundaries]].
+**The tick is now server-decided, not client-declared** (VEN-507, second pass).
+`acceptTerms` refuses an explicit `accepted: false` always, echoes the version
+first, then reads `termsStatusOf` and branches on **`explicitTickRequired`** =
+"no acceptance of `CURRENT_TERMS_VERSION` **and** some earlier
+`terms_of_service` row on file". True → `accepted !== true` is a 400 and the row
+is labelled `clickwrap_checkbox`; false → the first acceptance, labelled
+`continue_notice`, and the **only** branch that runs `admitVendor`. The client
+cannot reach the notice label on a re-acceptance, because the flag is derived
+from the database rather than from the body. One cliff to keep in view: it rests
+on `findAcceptancesByUser`, capped at `MAX_ACCEPTANCES_READ = 100` — an account
+with 100 newer rows would read as a first acceptance and skip the tick, which
+needs ~100 published document versions to reach. `insertAcceptance`'s
+`ON CONFLICT DO NOTHING` on `(user, document, version)` makes replay a no-op.
+
+Related: [[terms-gate-is-a-five-state-session]], [[neon-auth-cutover-boundaries]],
+[[legal-acceptance-record-is-undeletable-pii]].
