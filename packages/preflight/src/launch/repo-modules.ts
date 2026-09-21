@@ -4,6 +4,7 @@ import type { SeedMarkers } from './database.js';
 import { isString } from './http.js';
 
 const STRIPE_ROUTES = 'apps/api/src/modules/webhooks/stripe.routes.ts';
+const STRIPE_GATEWAY = 'apps/api/src/lib/stripe.ts';
 const MARKETING_SEED = 'packages/db/src/seed-marketing.ts';
 const DEMO_SEED_DATA = 'packages/db/src/demo-seed-data.ts';
 const E2E_SEED = 'packages/db/src/seed-e2e.ts';
@@ -46,6 +47,14 @@ export async function loadHandledStripeEvents(repoRoot: string): Promise<readonl
   }
 
   return handled;
+}
+
+export async function loadStripeApiVersion(repoRoot: string): Promise<string> {
+  return stringExport(
+    await importRepoModule(repoRoot, STRIPE_GATEWAY),
+    'STRIPE_API_VERSION',
+    STRIPE_GATEWAY,
+  );
 }
 
 export async function loadSeedMarkers(repoRoot: string): Promise<SeedMarkers> {
