@@ -15,6 +15,8 @@ export interface PayoutReleasePluginOptions {
    * is a log line nobody reads.
    */
   reporter: ErrorReporter;
+  /** `canonicalWebOrigin(env)`, for the link in the payout email. */
+  webOrigin: string;
 }
 
 /** Wait this long after `onReady` before the first sweep, plus up to the jitter. */
@@ -69,7 +71,22 @@ export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
 
       try {
         await releaseDuePayouts(
-          { db: app.db, stripe: app.stripe, log: app.log, alerts: app.operatorAlerts },
+          {
+            db: app.db,
+            stripe: app.stripe,
+            log: app.log,
+            alerts: app.operatorAlerts,
+            notify: {
+              hub: app.events,
+              mail: {
+                db: app.db,
+                email: app.email,
+                log: app.log,
+                webOrigin: options.webOrigin,
+                background: app.background,
+              },
+            },
+          },
           app.clock(),
         );
       } catch (error) {

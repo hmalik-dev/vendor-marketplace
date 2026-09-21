@@ -1,4 +1,4 @@
-import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { categories, notifications, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { CURRENT_VENDOR_AGREEMENT_VERSION } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -165,6 +165,93 @@ describe('POST /webhooks/stripe', () => {
 
     expect(response.json()).toEqual({ received: true, outcome: 'not-onboarded' });
     expect(await readOnboarded()).toBe(false);
+  });
+
+  /* VEN-525 acceptance 2, 3 and 4. */
+  describe('the vendor is told when the account changes', () => {
+    async function noticeTypes(): Promise<string[]> {
+      const rows = await harness.database.db
+        .select({ type: notifications.type })
+        .from(notifications);
+
+      return rows.map((row) => row.type);
+    }
+
+    async function noticeRecipients(): Promise<string[]> {
+      const rows = await harness.database.db
+        .select({ authUserId: users.authUserId })
+        .from(notifications)
+        .innerJoin(users, eq(users.id, notifications.userId));
+
+      return rows.map((row) => row.authUserId);
+    }
+
+    it('writes one stripe_onboarding_complete, and none when the event is redelivered', async () => {
+      const accountId = await seedOnboardingVendor();
+      harness.stripe.accountStatuses.set(accountId, { transfersActive: true, payoutsActive: true });
+      harness.stripe.nextEvent = { type: 'v2.core.account.updated', accountId };
+
+      expect((await post()).json().outcome).toBe('onboarded');
+      expect((await post()).json().outcome).toBe('unchanged');
+
+      expect(await noticeTypes()).toEqual(['stripe_onboarding_complete']);
+    });
+
+    it('writes one payouts_paused for the vendor when Stripe restricts the account', async () => {
+      const accountId = await seedOnboardingVendor();
+      harness.stripe.accountStatuses.set(accountId, { transfersActive: true, payoutsActive: true });
+      harness.stripe.nextEvent = { type: 'v2.core.account.updated', accountId };
+      await post();
+
+      harness.stripe.accountStatuses.set(accountId, {
+        transfersActive: false,
+        payoutsActive: false,
+      });
+      expect((await post()).json().outcome).toBe('not-onboarded');
+      expect((await post()).json().outcome).toBe('unchanged');
+
+      expect(await noticeTypes()).toEqual(['stripe_onboarding_complete', 'payouts_paused']);
+      const paused = await harness.database.db
+        .select({ title: notifications.title, body: notifications.body })
+        .from(notifications)
+        .where(eq(notifications.type, 'payouts_paused'));
+      expect(paused).toEqual([
+        {
+          title: 'Payouts are paused',
+          body: 'We cannot send payments to you right now. Open Payments to fix your payout details.',
+        },
+      ]);
+    });
+
+    it('never names the Stripe reason and writes nothing to anyone but the vendor', async () => {
+      const accountId = await seedOnboardingVendor();
+      harness.stripe.accountStatuses.set(accountId, { transfersActive: true, payoutsActive: true });
+      harness.stripe.nextEvent = { type: 'account.updated', accountId };
+      await post();
+      harness.stripe.accountStatuses.set(accountId, {
+        transfersActive: false,
+        payoutsActive: false,
+        disabledReason: 'requirements.past_due',
+      });
+      await post();
+
+      const rows = await harness.database.db.select().from(notifications);
+      expect(await noticeRecipients()).toEqual(['vendor_a', 'vendor_a']);
+      expect(JSON.stringify(rows)).not.toContain('past_due');
+    });
+
+    it('stays quiet when only the reason changes', async () => {
+      const accountId = await seedOnboardingVendor();
+      harness.stripe.accountStatuses.set(accountId, {
+        transfersActive: false,
+        payoutsActive: false,
+        disabledReason: 'requirements.past_due',
+      });
+      harness.stripe.nextEvent = { type: 'account.updated', accountId };
+
+      expect((await post()).json().outcome).toBe('unchanged');
+      expect(await noticeTypes()).toEqual([]);
+    });
   });
 
   /* #432 acceptance 4 — the reason behind the boolean, and only ever derived. */
