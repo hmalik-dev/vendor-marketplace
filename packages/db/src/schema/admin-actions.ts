@@ -108,7 +108,7 @@ export const adminActions = pgTable(
      */
     index('admin_actions_action_idx').on(table.action, table.createdAt.desc()),
   ],
-);
+).enableRLS();
 
 export type AdminActionRow = typeof adminActions.$inferSelect;
 export type NewAdminActionRow = typeof adminActions.$inferInsert;

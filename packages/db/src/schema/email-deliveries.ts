@@ -158,7 +158,7 @@ export const emailDeliveries = pgTable(
       .on(table.relatedEntityId, table.relatedEntityType, table.sentAt.desc())
       .where(sql`${table.relatedEntityId} is not null`),
   ],
-);
+).enableRLS();
 
 export type EmailDeliveryRow = typeof emailDeliveries.$inferSelect;
 export type NewEmailDeliveryRow = typeof emailDeliveries.$inferInsert;

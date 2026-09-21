@@ -180,7 +180,7 @@ export const supportCases = pgTable(
      */
     index('support_cases_subject_idx').on(table.status, table.subjectType, table.subjectId),
   ],
-);
+).enableRLS();
 
 export type SupportCaseRow = typeof supportCases.$inferSelect;
 export type NewSupportCaseRow = typeof supportCases.$inferInsert;

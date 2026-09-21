@@ -53,7 +53,7 @@ export const conversations = pgTable(
     index('conversations_customer_idx').on(table.customerId, table.lastMessageAt),
     index('conversations_vendor_idx').on(table.vendorId, table.lastMessageAt),
   ],
-);
+).enableRLS();
 
 export type ConversationRow = typeof conversations.$inferSelect;
 export type NewConversationRow = typeof conversations.$inferInsert;
@@ -76,7 +76,7 @@ export const messages = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('messages_conversation_created_idx').on(table.conversationId, table.createdAt)],
-);
+).enableRLS();
 
 export type MessageRow = typeof messages.$inferSelect;
 export type NewMessageRow = typeof messages.$inferInsert;

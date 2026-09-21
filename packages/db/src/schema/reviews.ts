@@ -55,7 +55,7 @@ export const reviews = pgTable(
       sql`${table.rating} >= ${sql.raw(String(REVIEW_RATING_MIN))} AND ${table.rating} <= ${sql.raw(String(REVIEW_RATING_MAX))}`,
     ),
   ],
-);
+).enableRLS();
 
 export type ReviewRow = typeof reviews.$inferSelect;
 export type NewReviewRow = typeof reviews.$inferInsert;
@@ -86,4 +86,4 @@ export const reviewTombstones = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.bookingId, table.reviewerId] })],
-);
+).enableRLS();

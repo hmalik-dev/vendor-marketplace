@@ -25,4 +25,4 @@ export const refundAttempts = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.paymentIntentId, table.scope] })],
-);
+).enableRLS();

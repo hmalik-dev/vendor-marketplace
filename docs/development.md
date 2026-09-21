@@ -68,6 +68,17 @@ branch deliberately.
 `preflight` refuses to start a ticket while `DATABASE_URL` points at a
 `production`, `main` or `master` branch.
 
+### Adding a table
+
+Row level security is on for every table in `public`, and a guard keeps it
+that way. End the `pgTable(...)` call with `.enableRLS()`, run `pnpm db:generate`
+(the flag is what emits `ENABLE ROW LEVEL SECURITY`), and add a row for the
+table, with its class, to `docs/schema-review.md`.
+`packages/db/src/schema/row-level-security.test.ts` fails, naming the table,
+when a table has no RLS or no row in that document. RLS is enabled but not
+forced and has no policies yet, so the API's owner connection is unaffected
+while a role without `BYPASSRLS` that is not the owner reads nothing.
+
 ## Object storage
 
 Uploaded images live on Neon Object Storage, which has no local emulator, so
