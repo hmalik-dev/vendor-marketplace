@@ -239,7 +239,7 @@ describe('the Neon Auth trust boundary', () => {
       method: 'POST',
       url: '/legal/terms/accept',
       headers: { authorization: `Bearer ${token}` },
-      payload: { version: CURRENT_TERMS_VERSION, accepted: true },
+      payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
     });
 
     expect(accepted.statusCode).toBe(200);
