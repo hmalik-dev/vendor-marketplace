@@ -4079,3 +4079,39 @@ export type AdminStepUpVerify = z.infer<typeof adminStepUpVerifySchema>;
 /** When the code, or the grant it buys, lapses. Never the code itself. */
 export const adminStepUpResultSchema = z.object({ expiresAt: z.coerce.date() });
 export type AdminStepUpResult = z.infer<typeof adminStepUpResultSchema>;
+
+// --- Operator access (VEN-506) ---------------------------------------------
+
+/** Who to make an operator: an existing account, found by the address it signed up with. */
+export const grantOperatorSchema = z.object({ email: emailSchema });
+export type GrantOperator = z.infer<typeof grantOperatorSchema>;
+
+/**
+ * One operator in the console's list.
+ *
+ * `grantedAt` and `grantedBy` are `null` for an operator nobody granted in the
+ * app — the first-operator bootstrap — and such a row has no role to go back
+ * to, so `revocable` is `false` for it rather than a guess.
+ */
+export const adminOperatorRowSchema = z.object({
+  userId: uuidSchema,
+  firstName: z.string(),
+  lastName: z.string(),
+  email: z.string(),
+  isBanned: z.boolean(),
+  since: z.string(),
+  grantedAt: z.string().nullable(),
+  grantedByName: z.string().nullable(),
+  revocable: z.boolean(),
+});
+export type AdminOperatorRow = z.infer<typeof adminOperatorRowSchema>;
+
+export const adminOperatorListSchema = z.object({ items: z.array(adminOperatorRowSchema) });
+export type AdminOperatorList = z.infer<typeof adminOperatorListSchema>;
+
+/** `changed` is `false` when the account already was (or was not) an operator. */
+export const adminOperatorChangeResultSchema = z.object({
+  userId: uuidSchema,
+  changed: z.boolean(),
+});
+export type AdminOperatorChangeResult = z.infer<typeof adminOperatorChangeResultSchema>;

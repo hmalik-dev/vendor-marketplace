@@ -505,6 +505,13 @@
       "when": 1789992043539,
       "tag": "0071_boring_wind_dancer",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1789996220289,
+      "tag": "0072_shiny_toad_men",
+      "breakpoints": true
     }
   ]
 }

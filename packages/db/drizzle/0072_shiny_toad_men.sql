@@ -1,0 +1,2 @@
+ALTER TYPE "public"."admin_action" ADD VALUE 'operator_granted' BEFORE 'vendor_unpublished';--> statement-breakpoint
+ALTER TYPE "public"."admin_action" ADD VALUE 'operator_revoked' BEFORE 'vendor_unpublished';
