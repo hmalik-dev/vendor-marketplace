@@ -373,7 +373,21 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
       async function applyEvent(): Promise<z.infer<typeof webhookResponseSchema>['outcome']> {
         if (isAccountEvent(event.type) && event.accountId) {
           return applyAccountStatusChange(
-            { db: app.db, stripe: app.stripe, log: request.log },
+            {
+              db: app.db,
+              stripe: app.stripe,
+              log: request.log,
+              notify: {
+                hub: app.events,
+                mail: {
+                  db: app.db,
+                  email: app.email,
+                  log: request.log,
+                  webOrigin: options.webOrigin,
+                  background: app.background,
+                },
+              },
+            },
             event.accountId,
           );
         }

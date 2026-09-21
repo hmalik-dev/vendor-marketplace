@@ -488,6 +488,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(payoutReleasePlugin, {
     intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,
     reporter: errorReporter,
+    webOrigin: canonicalWebOrigin(env),
   });
   await app.register(uploadSweepPlugin, {
     intervalMs: options.uploadSweepIntervalMs ?? UPLOAD_SWEEP_INTERVAL_MS,
