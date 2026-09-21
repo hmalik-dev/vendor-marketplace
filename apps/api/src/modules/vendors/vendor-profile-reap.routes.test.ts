@@ -248,6 +248,51 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
     expect(row!.profileImageUrl).toBeNull();
   });
 
+  it.each([
+    ['profileImageUrl', 'PUT'],
+    ['coverImageUrl', 'PUT'],
+    ['profileImageUrl', 'POST'],
+    ['coverImageUrl', 'POST'],
+  ] as const)('refuses a foreign-host %s on %s with a 400', async (field, method) => {
+    if (method === 'PUT') {
+      await createProfile(VENDOR, 'Sunlit Studio');
+    }
+
+    const response = await harness.app.inject({
+      method,
+      url: '/vendor/profile',
+      headers: bearer(VENDOR),
+      payload: {
+        ...(method === 'POST'
+          ? {
+              businessName: 'Sunlit Studio',
+              categoryIds: [photographyId],
+              city: 'Austin',
+              state: 'TX',
+            }
+          : {}),
+        [field]: 'https://evil.example/a.webp',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('refuses a foreign key spelled with an encoded prefix', async () => {
+    await createProfile(VENDOR, 'Sunlit Studio');
+    await createProfile(OTHER_VENDOR, 'Rival Studio');
+    const rivalId = await ownerIdOf(OTHER_VENDOR);
+
+    const response = await harness.app.inject({
+      method: 'PUT',
+      url: '/vendor/profile',
+      headers: bearer(VENDOR),
+      payload: { profileImageUrl: `%76endor-profile/${rivalId}/rival.webp` },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
   /* The same refusal on the way in, before a profile exists at all. */
   it('refuses a foreign cover on profile creation', async () => {
     await createProfile(OTHER_VENDOR, 'Rival Studio');

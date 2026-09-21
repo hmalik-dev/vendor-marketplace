@@ -391,7 +391,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(clockPlugin, options.clock ? { clock: options.clock } : {});
   await app.register(databasePlugin, { db });
   await app.register(eventsPlugin);
-  await app.register(storagePlugin, { storage });
+  await app.register(storagePlugin, { storage, publicUrl: env.STORAGE_PUBLIC_URL });
   await app.register(stripePlugin, {
     secretKey: env.STRIPE_SECRET_KEY,
     deployEnv: env.DEPLOY_ENV,
