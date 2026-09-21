@@ -42,12 +42,11 @@ describe('one accepted request and one confirmed booking per vendor date', () =>
     requestId: string,
     customerId: string,
     status: 'confirmed' | 'cancelled',
-    vendorId = VENDOR,
   ): Promise<void> {
     await database.db.insert(bookings).values({
       requestId,
       customerId,
-      vendorId,
+      vendorId: VENDOR,
       eventDate: DATE,
       totalAmountCents: 100_000,
       platformFeeCents: 10_000,
@@ -98,26 +97,20 @@ describe('one accepted request and one confirmed booking per vendor date', () =>
   });
 
   it('refuses a second confirmed booking for one vendor and date, by name', async () => {
-    const [first, second] = await database.db
-      .select({ id: bookingRequests.id, customerId: bookingRequests.customerId })
-      .from(bookingRequests)
-      .limit(2);
+    const first = await request(CUSTOMER_A, 'declined');
+    const second = await request(CUSTOMER_B, 'declined');
 
-    await booking(first!.id, first!.customerId, 'confirmed');
+    await booking(first, CUSTOMER_A, 'confirmed');
 
-    await expect(booking(second!.id, second!.customerId, 'confirmed')).rejects.toSatisfy(
-      (error: unknown) => violatesUniqueConstraint(error, CONFIRMED_DATE_KEY),
+    await expect(booking(second, CUSTOMER_B, 'confirmed')).rejects.toSatisfy((error: unknown) =>
+      violatesUniqueConstraint(error, CONFIRMED_DATE_KEY),
     );
   });
 
   it('lets a cancelled booking stand beside a confirmed one', async () => {
-    const [row] = await database.db
-      .select({ id: bookingRequests.id, customerId: bookingRequests.customerId })
-      .from(bookingRequests)
-      .limit(1)
-      .offset(2);
+    const third = await request(CUSTOMER_B, 'declined');
 
-    await booking(row!.id, row!.customerId, 'cancelled');
+    await booking(third, CUSTOMER_B, 'cancelled');
 
     const rows = await database.db.select({ status: bookings.status }).from(bookings);
 
