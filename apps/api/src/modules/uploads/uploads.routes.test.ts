@@ -309,6 +309,27 @@ describe('POST /upload/image', () => {
     expect(authenticated.json().message).toMatch(/attach an image/i);
   });
 
+  it('refuses a request carrying more form fields than the upload form has', async () => {
+    const fields = Array.from(
+      { length: 50 },
+      (_, i) => `--${BOUNDARY}\r\nContent-Disposition: form-data; name="f${i}"\r\n\r\nvalue\r\n`,
+    ).join('');
+
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/upload/image?prefix=portfolio',
+      headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
+      payload: Buffer.concat([
+        Buffer.from(fields),
+        multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
+      ]),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().message).toMatch(/too many/i);
+    expect(harness.storedObjects).toHaveLength(0);
+  });
+
   it('never reuses an object key across uploads', async () => {
     for (let i = 0; i < 2; i += 1) {
       await harness.app.inject({

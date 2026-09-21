@@ -184,6 +184,9 @@ const WEBHOOK_RATE_LIMIT_FACTOR = 10;
 /** Longest textual IP address, IPv6 with an embedded IPv4 tail. */
 const MAX_IP_LENGTH = 45;
 
+/** Non-file form fields an upload may carry (there are none today). */
+const MAX_UPLOAD_FORM_FIELDS = 5;
+
 /**
  * The rate-limit key: the visitor the web tier forwarded, when the caller proves
  * it is the web tier, otherwise the caller's own address.
@@ -373,7 +376,16 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   });
   // The per-file ceiling is also enforced when the part is buffered, so an
   // oversized upload is refused rather than read into memory in full.
-  await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
+  // The upload form is one file and no fields; the small allowance is headroom,
+  // not a feature, and stops a body of thousands of empty fields being parsed.
+  await app.register(multipart, {
+    limits: {
+      fileSize: MAX_UPLOAD_BYTES,
+      files: 1,
+      fields: MAX_UPLOAD_FORM_FIELDS,
+      parts: MAX_UPLOAD_FORM_FIELDS + 1,
+    },
+  });
 
   await app.register(backgroundPlugin);
   await app.register(clockPlugin, options.clock ? { clock: options.clock } : {});
