@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "booking_requests_accepted_date_key" ON "booking_requests" USING btree ("vendor_id","event_date") WHERE "booking_requests"."status" = 'accepted';--> statement-breakpoint
+CREATE UNIQUE INDEX "bookings_confirmed_date_key" ON "bookings" USING btree ("vendor_id","event_date") WHERE "bookings"."status" = 'confirmed';
