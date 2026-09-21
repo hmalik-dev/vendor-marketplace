@@ -37,6 +37,13 @@ export const STORAGE_PREFIX_ROLES: Record<StoragePrefix, readonly UserRole[]> = 
 /**
  * How long a stored object may be cached. Keys are unique per upload and never
  * overwritten, so the objects themselves are immutable.
+ *
+ * Every prefix is public, `customer-profile` included (VEN-464). The bucket is
+ * one `public_read` bucket, so no prefix can be hidden inside it, and a private
+ * one would need a second bucket, signed URLs and a bypass of the image
+ * optimizer cache. That is worth paying only for a photo meant to be
+ * owner-only; a customer avatar is not, and its key is an unguessable
+ * `prefix/ownerId/uuid.webp`. Revisit if a customer photo ever becomes private.
  */
 const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 

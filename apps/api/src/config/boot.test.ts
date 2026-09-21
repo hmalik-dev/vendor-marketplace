@@ -123,7 +123,7 @@ describe('the DEPLOY_ENV guards', () => {
     stubDeployed({ ...HTTPS, DEPLOY_ENV: 'local', STRIPE_SECRET_KEY: TEST_KEY });
     expect(() => bootEnv()).not.toThrow();
 
-    vi.stubEnv('RENDER', 'true');
+    vi.stubEnv('RAILWAY_ENVIRONMENT', 'production');
     expect(() => bootEnv()).toThrow(
       'a hosted platform cannot declare DEPLOY_ENV=local: this process runs on a hosting platform but DEPLOY_ENV is local',
     );

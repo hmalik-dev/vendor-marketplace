@@ -20,8 +20,7 @@ and every item below done.
 
 **Current state:** not launched. The deployment authenticates against a Neon Auth
 **development** branch and Stripe is in **test mode**, so `launch:check` fails
-on both today — correctly. `docs/demo.md` describes the showcase deployment,
-which is not a launch.
+on both today — correctly.
 
 ---
 
