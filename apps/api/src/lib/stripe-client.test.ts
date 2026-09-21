@@ -29,7 +29,11 @@ describe('the Stripe client construction', () => {
   });
 
   it('builds the gateway on that client', () => {
-    createStripeConnectGateway({ secretKey: 'sk_test_unused', deployEnv: 'staging' });
+    const credentials: Parameters<typeof createStripeConnectGateway>[0] = {
+      secretKey: 'sk_test_unused',
+      deployEnv: 'staging',
+    };
+    createStripeConnectGateway(credentials);
 
     expect(constructed).toEqual([
       ['sk_test_unused', { apiVersion: STRIPE_API_VERSION, timeout: 10_000 }],
