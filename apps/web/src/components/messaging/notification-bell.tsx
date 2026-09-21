@@ -4,7 +4,7 @@ import { Bell } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { TERMS_ACCEPTANCE_PATH, VENDOR_APPLY_PATH } from '@vendor-marketplace/shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { EmptyStateGlyph } from '@/components/ui/empty-state';
 import { useApi } from '@/lib/use-api';
 import { useEventStream } from '@/lib/use-event-stream';
@@ -64,6 +64,7 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
   const [items, setItems] = useState<WireNotification[]>([...initial]);
   const [open, setOpen] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
+  const panelId = useId();
   /*
    * Escape has to put focus back where it came from, so the trigger is held
    * rather than found: `document.querySelector` would break the moment a
@@ -203,6 +204,8 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
         onClick={() => setOpen((current) => !current)}
         aria-label={unread === 0 ? 'Notifications' : `Notifications, ${unread} unread`}
         aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-controls={open ? panelId : undefined}
         className="relative flex size-11 items-center justify-center rounded-full text-stone-700 hover:bg-stone-150 hover:text-stone-900"
       >
         <Bell aria-hidden="true" className="size-4.5" />
@@ -212,9 +215,15 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
           </span>
         ) : null}
       </button>
+      <span role="status" className="sr-only">
+        {unread === 0 ? '' : `${unread} unread ${unread === 1 ? 'notification' : 'notifications'}`}
+      </span>
 
       {open ? (
-        <div /* Inside the header's own stacking context, so a local z is enough. */
+        <div
+          id={panelId}
+          role="dialog"
+          aria-label="Notifications" /* Inside the header's own stacking context, so a local z is enough. */
           /*
            * 360px, bounded by the space actually to the panel's left.
            *

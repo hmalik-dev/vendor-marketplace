@@ -375,7 +375,7 @@ export function ImageUpload({
       */}
       {failure ? (
         <p
-          role="status"
+          role="alert"
           className={cn('text-xs', failure.tone === 'gold' ? 'text-gold-600' : 'text-error-500')}
         >
           {failure.reason} <span className="text-stone-600">{failure.fix}</span>

@@ -68,6 +68,11 @@ export interface BannerProps {
    */
   action?: ReactNode;
   className?: string;
+  /**
+   * `alert` for a failure the reader just caused (a refused sign-in): the
+   * region announces when it mounts. Standing context stays `status`.
+   */
+  role?: 'status' | 'alert';
 }
 
 export function Banner({
@@ -76,6 +81,7 @@ export function Banner({
   children,
   action,
   className,
+  role = 'status',
 }: BannerProps): React.ReactElement {
   const tokens = STATUS_TOKENS[status];
 
@@ -86,7 +92,7 @@ export function Banner({
        * of a pane, not an interruption. A live region here would re-announce
        * the same sentence on every re-render of the screen it sits on.
        */
-      role="status"
+      role={role}
       data-status={status}
       className={cn(
         /*

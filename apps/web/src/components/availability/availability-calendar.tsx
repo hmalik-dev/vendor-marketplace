@@ -567,7 +567,8 @@ export function AvailabilityCalendar({
                           <td key={date} className="p-0">
                             <button
                               type="button"
-                              disabled={(locked && !navigates) || isSaving}
+                              disabled={isSaving}
+                              aria-disabled={(locked && !navigates) || undefined}
                               {...(locked ? {} : { 'aria-pressed': isSelected })}
                               aria-label={describeCell(
                                 date,
@@ -597,7 +598,7 @@ export function AvailabilityCalendar({
                                 }
                                 // Keyboard activation reports no pointer, and
                                 // never fires the pointer handlers above.
-                                if (event.detail === 0) startAt(date, event.shiftKey);
+                                if (!locked && event.detail === 0) startAt(date, event.shiftKey);
                               }}
                               className={cn(
                                 // 7px padding at the 1440 reference; a 44px
