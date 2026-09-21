@@ -301,6 +301,19 @@ export async function openCheckout(
   }
 
   /*
+   * A vendor unpublished or put on a moderation hold since the accept takes no
+   * charge (VEN-556). After the booking lookup above, for the reason the date
+   * check below is: a customer who already paid keeps hearing `succeeded`.
+   */
+  if (row.vendorPulled) {
+    throw new AppError(
+      409,
+      ERROR_CODES.VENDOR_UNAVAILABLE,
+      `${row.vendorBusinessName} is no longer taking bookings`,
+    );
+  }
+
+  /*
    * The date has to still be ahead. The same refusal `accept` makes, carried to
    * the point money moves: without it a request accepted for a date that has
    * since passed could be paid for, and the payout sweep would release the
