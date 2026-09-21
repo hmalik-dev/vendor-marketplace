@@ -573,23 +573,31 @@ export async function closeAccount(
   }
 
   const profile = await findVendorProfileRecord(context.db, userId);
-  const blockers = await closeBlockers(context.db, userId, now);
 
-  if (blockers.length > 0) {
-    throw conflict(
-      `This account holds ${blockers.length} upcoming confirmed ${
-        blockers.length === 1 ? 'booking' : 'bookings'
-      }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
-      { bookings: blockers },
-    );
+  /*
+   * The blockers are read **inside** the retirement, under the account's row
+   * lock (VEN-483). Read before it, a booking confirmed in between was left
+   * standing with a closed customer; now it either commits first and refuses
+   * the closure here, or waits until the retirement has committed.
+   */
+  function blockersOf(tx: AppDatabase): Promise<AdminCloseBlocker[]> {
+    return closeBlockers(tx, userId, now);
   }
-
   const retired = operatorTarget
-    ? await retireOperatorById(context.db, userId)
-    : await retireUserById(context.db, userId);
+    ? await retireOperatorById(context.db, userId, blockersOf)
+    : await retireUserById(context.db, userId, blockersOf);
 
   if (retired === 'last-operator') {
     throw conflict(LAST_OPERATOR_REFUSAL);
+  }
+
+  if (retired && 'blocked' in retired) {
+    throw conflict(
+      `This account holds ${retired.blocked.length} upcoming confirmed ${
+        retired.blocked.length === 1 ? 'booking' : 'bookings'
+      }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
+      { bookings: retired.blocked },
+    );
   }
 
   if (!retired) {
