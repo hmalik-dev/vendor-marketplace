@@ -4,9 +4,10 @@ import { clientAddress } from './client-address.js';
  * network address, so one account cannot flood a route and a second account
  * behind the same address is unaffected.
  *
- * Only meaningful behind a guard that has already resolved `request.auth`
- * (an `onRequest` guard runs before the route's own limiter); the address is
- * the fallback for a caller no guard has identified.
+ * `request.auth` is resolved by the auth plugin's global `onRequest` hook,
+ * ahead of the route's own limiter; the address is the fallback for a caller
+ * it has not identified. A route guard must sit in `preParsing`, after this
+ * limiter: an `onRequest` guard would refuse a signed-out caller uncounted.
  */
 export function perAccountRateLimit(max: number, timeWindow: '1 minute' | '1 hour') {
   return {
