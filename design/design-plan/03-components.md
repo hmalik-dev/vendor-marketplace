@@ -114,15 +114,15 @@ deliberately overlaps.
 
 ## Inputs
 
-Rest: `bg-stone-150 border border-stone-300 rounded-lg px-3.5 py-2.5 text-base`.
+Rest: `bg-stone-150 border border-stone-560 rounded-lg px-3.5 py-2.5 text-base`.
 On a white card, the fill goes `stone-0`.
 Focus: **three mechanisms, chosen by what the element already has** — never mixed.
 
-| Element                                         | Focus treatment                                                   |
-| ----------------------------------------------- | ----------------------------------------------------------------- |
-| Standalone bordered field                       | `border-clay-400` + `ring-3 ring-clay-400/15`, **no offset**      |
-| Segment inside a joined bar or panel            | `bg-stone-200` fill + clay label. **No border, edge or outline.** |
-| Unbordered control (button, link, avatar, card) | `ring-2 ring-clay-400/40` + `ring-offset-2`                       |
+| Element                                         | Focus treatment                                                                |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| Standalone bordered field                       | `border-clay-400` + `ring-3 ring-clay-400/15`, **no offset**                   |
+| Segment inside a joined bar or panel            | `bg-stone-200` fill + clay label + `ring-2 ring-inset ring-clay-400` (VEN-541) |
+| Unbordered control (button, link, avatar, card) | `ring-2 ring-clay-400` + `ring-offset-2`                                       |
 
 This resolves the old conflict with `04-laws.md`, which specified the offset ring
 for everything. A bordered field already has an edge to darken — giving it a

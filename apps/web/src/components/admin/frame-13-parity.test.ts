@@ -591,7 +591,7 @@ describe('what the parity pass measured, kept from drifting back', () => {
 
   it('draws the checkbox rather than leaving the OS to', () => {
     // `border-*` and `rounded-*` are inert while `appearance` is `auto`.
-    expect(vendorTable).toContain('appearance-none rounded-[4px] border-[1.3px] border-stone-400');
+    expect(vendorTable).toContain('appearance-none rounded-[4px] border-[1.3px] border-stone-560');
   });
 
   it('declares no outline that `outline-style: none` would swallow', () => {

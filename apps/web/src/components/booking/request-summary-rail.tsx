@@ -172,7 +172,7 @@ export function RequestSummaryRail({
             onChange={(event) => onCustomDetailsChange(event.target.value)}
             {...errorProps(customDetailsIssue)}
             placeholder="Two hours of engagement portraits at Zilker, golden hour."
-            className="min-h-24 rounded-[10px] border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900"
+            className="min-h-24 rounded-[10px] border-input bg-stone-150 px-3.25 py-2.5 text-base text-stone-900"
           />
           <p className="mt-1.25 text-right text-xs text-stone-600">
             {detailsLength} / {BOOKING_REQUEST_NOTES_MAX_LENGTH}

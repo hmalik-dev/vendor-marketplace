@@ -137,7 +137,7 @@ export function RowMenu({
                  * steal it from a dialog that opened synchronously.
                  */
                 onSelect={() => window.setTimeout(item.onSelect, 0)}
-                className={`flex h-11 cursor-pointer items-center rounded-md px-3 text-meta font-semibold outline-none select-none data-[highlighted]:bg-stone-150 ${
+                className={`flex h-11 cursor-pointer items-center rounded-md px-3 text-meta font-semibold outline-none select-none data-[highlighted]:bg-stone-150 data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-clay-400 ${
                   item.destructive ? 'text-error-500' : 'text-stone-900'
                 }`}
               >
