@@ -269,7 +269,7 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
             <p
               data-invite-notice=""
               role="status"
-              className="mt-0.5 mb-3.25 border-t border-stone-300 pt-3 text-[12.5px] leading-[1.65] text-stone-700"
+              className="-mt-px mb-3.25 border-t border-stone-300 pt-3 text-[12.5px] leading-[1.65] text-stone-700"
             >
               Vendors join {BRAND_NAME} by invitation for now. Sign up and we&apos;ll add you to the
               waitlist.
@@ -298,7 +298,13 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
           ) : null}
 
           {/* A notice only: the versioned acceptance stays on the Terms screen. */}
-          <p className="mt-2.5 text-center text-helper leading-[1.55] text-stone-600">
+          <p
+            className={cn(
+              'text-center text-helper leading-[1.55] text-stone-600',
+              // 13px under the "Pick one above" hint, 10px under the button (frame 35).
+              role === null ? 'mt-3.25' : 'mt-2.5',
+            )}
+          >
             By signing up, you agree to the{' '}
             <Link href={LEGAL_PATHS.terms} className="text-clay-500 underline underline-offset-2">
               Terms of Service
@@ -310,7 +316,7 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
             .
           </p>
 
-          <p className="mt-5 text-center text-action text-stone-700">
+          <p className="mt-3.25 text-center text-action text-stone-700">
             {AUTH_COPY.signUpAlt}{' '}
             <Link href="/sign-in" className="font-semibold text-clay-500 hover:underline">
               Sign in
