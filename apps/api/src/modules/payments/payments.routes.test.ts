@@ -14,6 +14,8 @@ import {
   CURRENT_VENDOR_AGREEMENT_VERSION,
   DEFAULT_PLATFORM_FEE_RATE,
   ERROR_CODES,
+  EXPIRY_HOLD_MAX_ATTEMPTS,
+  EXPIRY_SWEEP_INTERVAL_MS,
   paymentDeadline,
   toDateString,
   formatPrice,
@@ -338,13 +340,13 @@ describe('payments', () => {
       inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
 
     /** What the sweep runs, built the way the plugin builds it. */
-    const sweep = (): Promise<number> => {
+    const sweep = (at: Date = LAPSED): Promise<number> => {
       const context = {
         ...bookingContextFor(harness.app, harness.app.log, 'https://web.test'),
         platformFeeRate: DEFAULT_PLATFORM_FEE_RATE,
       };
 
-      return expireLapsedRequests(harness.app.db, LAPSED, context.mail, expiryGuardFor(context));
+      return expireLapsedRequests(harness.app.db, at, context.mail, expiryGuardFor(context));
     };
 
     const statusOf = async (requestId: string): Promise<string | undefined> =>
@@ -448,6 +450,90 @@ describe('payments', () => {
 
       expect(await statusOf(requestId)).toBe('accepted');
       expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    describe('a hold that never ends (VEN-551)', () => {
+      const tick = (n: number): Date => new Date(LAPSED.getTime() + n * EXPIRY_SWEEP_INTERVAL_MS);
+
+      const alertsFor = async (requestId: string): Promise<{ kind: string }[]> => {
+        await harness.app.background.drain();
+        return (await harness.database.db.select().from(operatorAlerts)).filter((alert) =>
+          alert.subjectId.startsWith(requestId),
+        );
+      };
+
+      it('bounds the hold at five ticks', () => {
+        expect(EXPIRY_HOLD_MAX_ATTEMPTS).toBe(5);
+      });
+
+      it('holds for exactly the bound, then expires, frees the date, alerts once and refunds nothing', async () => {
+        const requestId = await acceptedRequest();
+        await checkout(requestId);
+        harness.stripe.paymentIntents.clear();
+
+        for (let n = 0; n < EXPIRY_HOLD_MAX_ATTEMPTS; n += 1) {
+          expect(await sweep(tick(n))).toBe(0);
+          expect(await statusOf(requestId)).toBe('accepted');
+        }
+        expect(await alertsFor(requestId)).toEqual([]);
+
+        expect(await sweep(tick(EXPIRY_HOLD_MAX_ATTEMPTS))).toBe(1);
+
+        expect(await statusOf(requestId)).toBe('expired');
+        const [date] = await harness.database.db
+          .select({ status: availability.status })
+          .from(availability)
+          .where(eq(availability.date, EVENT_DATE));
+        expect(date?.status).not.toBe('booked');
+        const alerts = await alertsFor(requestId);
+        expect(alerts).toHaveLength(1);
+        expect(alerts[0]?.kind).toBe('expiry_payment_unsettled');
+        expect(harness.stripe.refunds).toEqual([]);
+        expect(harness.stripe.cancelRequests).toEqual([]);
+      });
+
+      it('does not spend the bound on reads made inside one spacing window', async () => {
+        const requestId = await acceptedRequest();
+        await checkout(requestId);
+        harness.stripe.paymentIntents.clear();
+
+        for (let n = 0; n < EXPIRY_HOLD_MAX_ATTEMPTS + 3; n += 1) {
+          expect(await sweep(LAPSED)).toBe(0);
+        }
+
+        expect(await statusOf(requestId)).toBe('accepted');
+      });
+
+      it('still books a succeeded intent after earlier failed reads', async () => {
+        const requestId = await acceptedRequest();
+        const opened = await checkout(requestId);
+        const intentId: string = opened.json().paymentIntentId;
+        const intent = harness.stripe.paymentIntents.get(intentId)!;
+        harness.stripe.paymentIntents.clear();
+        expect(await sweep(tick(0))).toBe(0);
+
+        harness.stripe.paymentIntents.set(intentId, { ...intent, status: 'succeeded' });
+        expect(await sweep(tick(1))).toBe(0);
+
+        expect(await harness.database.db.select().from(bookings)).toHaveLength(1);
+        expect(await statusOf(requestId)).toBe('accepted');
+        expect(harness.stripe.refunds).toEqual([]);
+      });
+
+      it('releases a processing intent that turns out canceled inside the bound by the usual rule', async () => {
+        const requestId = await acceptedRequest();
+        const opened = await checkout(requestId);
+        const intentId: string = opened.json().paymentIntentId;
+        const intent = harness.stripe.paymentIntents.get(intentId)!;
+        harness.stripe.paymentIntents.set(intentId, { ...intent, status: 'processing' });
+        expect(await sweep(tick(0))).toBe(0);
+
+        harness.stripe.paymentIntents.set(intentId, { ...intent, status: 'canceled' });
+
+        expect(await sweep(tick(1))).toBe(1);
+        expect(await statusOf(requestId)).toBe('expired');
+        expect(await alertsFor(requestId)).toEqual([]);
+      });
     });
   });
 

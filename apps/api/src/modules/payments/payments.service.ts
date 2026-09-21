@@ -1,5 +1,7 @@
 import {
   ERROR_CODES,
+  EXPIRY_HOLD_MAX_ATTEMPTS,
+  EXPIRY_HOLD_SPACING_MS,
   MIN_BOOKING_AMOUNT_CENTS,
   calculateFees,
   calculateRefund,
@@ -40,6 +42,7 @@ import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import { readRefundAttempts, recordRefundRefusal } from './refunds.dao.js';
 import {
   findRequestById,
+  recordExpiryHold,
   findVendorByUserId,
   findVendorContact,
   findVendorUserId,
@@ -52,6 +55,7 @@ import {
 import { findOpenChargebackCase } from '../cases/cases.dao.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import {
+  expiryPaymentUnsettledAlert,
   paymentRefusedAlert,
   type RefusedPaymentCause,
   refundFailedAlert,
@@ -564,12 +568,38 @@ export async function recordSuccessfulPayment(
  * costs a customer their money and their date.
  */
 export function expiryGuardFor(context: PaymentContext): ExpiryPaymentGuard {
-  return { settleBeforeExpiry: (row) => settleBeforeExpiry(context, row) };
+  return { settleBeforeExpiry: (row, now) => settleBeforeExpiry(context, row, now) };
+}
+
+/**
+ * Holds the expiry, unless it has been held `EXPIRY_HOLD_MAX_ATTEMPTS` times
+ * already (VEN-551): then the request is released and the operator told, the
+ * intent left exactly as it is. A date held forever costs the vendor bookings;
+ * a payment that lands after the release takes the refund path it always did.
+ */
+async function holdOrGiveUp(
+  context: PaymentContext,
+  row: BookingRequestRow,
+  intentId: string,
+  now: Date,
+): Promise<ExpirySettlement> {
+  const attempts = row.expiryCheckAttempts ?? 0;
+
+  if (attempts < EXPIRY_HOLD_MAX_ATTEMPTS) {
+    await recordExpiryHold(context.db, row.id, now, EXPIRY_HOLD_SPACING_MS);
+    return 'hold';
+  }
+
+  context.alerts?.dispatch(
+    expiryPaymentUnsettledAlert({ requestId: row.id, paymentIntentId: intentId, attempts }),
+  );
+  return 'release';
 }
 
 async function settleBeforeExpiry(
   context: PaymentContext,
   row: BookingRequestRow,
+  now: Date,
 ): Promise<ExpirySettlement> {
   const intentId = row.stripePaymentIntentId;
 
@@ -585,7 +615,7 @@ async function settleBeforeExpiry(
     }
 
     if (intent.status === PAYMENT_INTENT_PROCESSING) {
-      return 'hold';
+      return holdOrGiveUp(context, row, intentId, now);
     }
 
     return intent.status === PAYMENT_INTENT_CANCELED ? 'release' : null;
@@ -616,7 +646,7 @@ async function settleBeforeExpiry(
       { err: error, requestId: row.id, paymentIntentId: intentId },
       'Could not settle a payment intent before expiring its request; the expiry is held',
     );
-    return 'hold';
+    return holdOrGiveUp(context, row, intentId, now);
   }
 }
 

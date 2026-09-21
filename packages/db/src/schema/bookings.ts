@@ -84,10 +84,22 @@ export const bookingRequests = pgTable(
      */
     stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
+    /**
+     * Ticks or reads that held this request's expiry because its payment intent
+     * was processing or unreadable (VEN-551). At `EXPIRY_HOLD_MAX_ATTEMPTS` the
+     * hold ends and the request expires. Null until the first hold.
+     */
+    expiryCheckAttempts: integer('expiry_check_attempts'),
+    /** When the last hold was counted; the sweep works never-held rows first. */
+    expiryLastAttemptAt: timestamp('expiry_last_attempt_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check(
+      'booking_requests_expiry_check_attempts_non_negative',
+      sql`${table.expiryCheckAttempts} IS NULL OR ${table.expiryCheckAttempts} >= 0`,
+    ),
     // Cents and counts are never negative; the wire ranges are stricter (VEN-550).
     check(
       'booking_requests_quoted_price_cents_non_negative',
@@ -112,6 +124,14 @@ export const bookingRequests = pgTable(
      * planner would scan the table. `EXPIRABLE_BOOKING_REQUEST_STATUSES` is the
      * same list, and `schema.test.ts` holds the two together.
      */
+    /*
+     * The sweep's order (VEN-551): never-held rows first, then by deadline. The
+     * same predicate as the index above, so a backlog is read from here in order
+     * and the batch stops at its limit.
+     */
+    index('booking_requests_expiry_sweep_order_idx')
+      .on(sql`${table.expiryLastAttemptAt} asc nulls first`, table.expiresAt)
+      .where(sql`${table.status} in ('pending', 'quoted', 'accepted')`),
     index('booking_requests_expires_at_idx')
       .on(table.expiresAt)
       .where(sql`${table.status} in ('pending', 'quoted', 'accepted')`),
