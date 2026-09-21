@@ -11,6 +11,8 @@
  * instance, which is the realistic shape, and it costs nothing to run. It is a
  * floor, not a substitute for the provider's own limits.
  */
+import { visitorAddress } from '../visitor-address';
+
 const WINDOW_MS = 60_000;
 const TIGHT_LIMIT = 10;
 const LOOSE_LIMIT = 60;
@@ -27,9 +29,9 @@ const TIGHT_PATHS: ReadonlySet<string> = new Set([
 
 const hits = new Map<string, number[]>();
 
-/** The caller's address as the platform reports it; the first hop is the client. */
+/** The caller's address by the web tier's one rule; a call naming nobody shares a bucket. */
 export function callerAddress(headers: Headers): string {
-  return headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  return visitorAddress(headers) ?? 'unknown';
 }
 
 /** True when this call is over budget. Records the call either way. */
