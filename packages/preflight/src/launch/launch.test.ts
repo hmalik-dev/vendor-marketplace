@@ -126,6 +126,7 @@ function databaseDouble(mode: Mode): LaunchDatabase {
       live ? { marketing: 0, demo: 0, e2e: 0 } : { marketing: 16, demo: 0, e2e: 1 },
     pendingMigrations: async () => (live ? [] : ['0043_past_joshua_kane']),
     maxBookingCents: async () => (live ? 500_000 : null),
+    vendorInviteOnly: async () => live,
   };
 }
 
@@ -285,10 +286,13 @@ describe('launch:check against correctly configured doubles', () => {
     );
   });
 
-  it('reads the booking cap, and reports invite-only as SKIP until VEN-406 lands', async () => {
+  it('reads the booking cap and the vendor invite gate', async () => {
     const results = await runLaunchChecks(options('live'));
 
-    expect(find(results, 'platform_settings.vendorInviteOnly').status).toBe('SKIP');
+    expect(find(results, 'platform_settings.vendorInviteOnly')).toMatchObject({
+      status: 'PASS',
+      detail: 'true',
+    });
     expect(find(results, 'platform_settings.maxBookingCents')).toMatchObject({
       status: 'PASS',
       detail: '500000',
@@ -301,6 +305,25 @@ describe('launch:check against correctly configured doubles', () => {
     expect(find(results, 'platform_settings.maxBookingCents')).toMatchObject({
       status: 'FAIL',
       detail: 'unset (expected a booking cap for a beta release)',
+    });
+  });
+
+  it('fails a platform where vendor sign-up is open', async () => {
+    const results = await runLaunchChecks(options('test'));
+
+    expect(find(results, 'platform_settings.vendorInviteOnly')).toMatchObject({
+      status: 'FAIL',
+      detail: 'false (expected true, so vendors join by invitation)',
+    });
+  });
+
+  it('fails a platform whose settings row was never written', async () => {
+    const database = { ...databaseDouble('live'), vendorInviteOnly: async () => null };
+    const results = await runLaunchChecks(options('live', { database }));
+
+    expect(find(results, 'platform_settings.vendorInviteOnly')).toMatchObject({
+      status: 'FAIL',
+      detail: 'unset (expected true, so vendors join by invitation)',
     });
   });
 
