@@ -17,7 +17,13 @@ import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-mark
 import type { AppDatabase } from '../../lib/database.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
-import { conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
+import {
+  accountSuspended,
+  conflict,
+  forbidden,
+  notFound,
+  validationFailed,
+} from '../../lib/errors.js';
 import {
   assertOwnedImageRefs,
   assertStorageOriginRefs,
@@ -637,7 +643,7 @@ export async function updateVendorProfile(
 
         // Neither a hold nor a missing profile: the owner was suspended meanwhile.
         if (current) {
-          throw forbidden(SUSPENDED_ACCOUNT_MESSAGE);
+          throw accountSuspended(SUSPENDED_ACCOUNT_MESSAGE);
         }
       }
 

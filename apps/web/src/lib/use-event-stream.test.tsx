@@ -2,8 +2,10 @@ import { cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getTokenMock = vi.fn();
+const redirectOnRefusal = vi.fn(() => true);
 
 vi.mock('./auth/client', () => ({ getSessionToken: () => getTokenMock() }));
+vi.mock('@/lib/use-api', () => ({ useRefusalRedirect: () => redirectOnRefusal }));
 
 const { requestStreamTicket, useEventStream } = await import('./use-event-stream');
 
@@ -44,6 +46,7 @@ beforeEach(() => {
   opened.length = 0;
   sources.length = 0;
   getTokenMock.mockReset().mockResolvedValue(SESSION_JWT);
+  redirectOnRefusal.mockClear();
   vi.stubGlobal('EventSource', FakeEventSource);
   vi.stubGlobal(
     'fetch',
@@ -204,6 +207,45 @@ describe('useEventStream', () => {
       vi.useRealTimers();
     },
   );
+
+  /*
+   * VEN-540. Stopping silently left `/messages` on "Reconnecting" for ever and
+   * the bell dead. The refusal now goes through the same funnel as every other
+   * client call, and the hook says the stream is over rather than reconnecting.
+   */
+  it.each([401, 403])(
+    'hands a %s ticket refusal to the redirect and reports ended',
+    async (status) => {
+      vi.mocked(fetch).mockResolvedValue(
+        Response.json(
+          {
+            statusCode: status,
+            error: status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN',
+            message: 'no',
+          },
+          { status },
+        ),
+      );
+
+      const { getByText } = render(<EndedProbe />);
+
+      await waitFor(() => expect(getByText('ended')).toBeTruthy());
+      expect(redirectOnRefusal).toHaveBeenCalledOnce();
+      const [error] = redirectOnRefusal.mock.calls[0] as unknown as [{ statusCode: number }];
+      expect(error.statusCode).toBe(status);
+    },
+  );
+
+  it('treats a missing token as a signed-out session', async () => {
+    getTokenMock.mockResolvedValue(null);
+
+    const { getByText } = render(<EndedProbe />);
+
+    await waitFor(() => expect(getByText('ended')).toBeTruthy());
+    const [error] = redirectOnRefusal.mock.calls[0] as unknown as [{ statusCode: number }];
+    expect(error.statusCode).toBe(401);
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
 
   /*
    * #318. The stream connected to a literal `http://localhost:4028` while the
@@ -375,3 +417,9 @@ describe('useEventStream', () => {
     expect(source.closed).toBe(true);
   });
 });
+
+function EndedProbe(): React.ReactElement {
+  const { ended } = useEventStream({ onEvent: () => {} });
+
+  return <p>{ended ? 'ended' : 'live'}</p>;
+}
