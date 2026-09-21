@@ -13,7 +13,6 @@
 - [Playwright parity gate on every FE ticket](playwright-parity-gate-every-fe-ticket.md) — compare the live page to its new Orla frame at 1440x900 before Done
 - [Design re-imports are merges, not overwrites](orla-design-reimport-is-a-merge.md) — the remote design-plan lags local refinements, and the parity gate is a local-only guardrail to preserve
 - [Ad-hoc work commits as one](adhoc-work-single-commit.md) — don't isolate unrelated changes; the commit hook blocks on a dirty tree
-- [Production API is intentionally down](production-api-intentionally-down.md) — Railway service removed on purpose; `Application not found` is expected, not an outage
 - [Vercel deployment URL](vendor-marketplace-vercel-deployment.md) — web-gules-eta-41.vercel.app follows `production`, not `main`; parity is checked against localhost
 - [Record findings in the backlog](record-findings-in-backlog.md) — chat reports scroll away; Linear is the durable queue
 - [Credentials live in env files only](credentials-env-files-only.md) — never inline in a command, never in Claude config; the Neon URL that leaked still needs rotating
@@ -68,3 +67,8 @@
 - [Neon Auth E2E accounts live on dev](neon-auth-e2e-accounts-on-dev.md) — customer/vendor/no-row newcomer are persistent Neon identities (VEN-447); creds only in .env.e2e.local, never accept Terms as the newcomer
 - [Beta uses real sign-ups, not seeded data](beta-uses-real-signups-not-seeded-data.md) — friends as real vendors/customers on staging; reference seed only, skip db:seed:demo
 - [Orchestrated tickets must end merged](orchestrated-tickets-must-end-merged.md) — stacked drafts merge bottom-up once the parent lands; a human gate is not bypassed
+- [Neon GitHub Actions: branch per PR](neon-github-actions-branch-per-pr.md) — neon_workflow.yml creates a DB branch per PR, deletes on close; noted 2026-09-20, YAML not captured, not adopted
+- [Environments model and provider gotchas](environments-model-and-provider-gotchas.md) — tiers, fast-forward promotion, sealed vars vanish from listings, Hobby-plan Vercel staging, Railway snapshot redeploys
+- [Never print env lines with a capture regex](never-print-env-lines-with-a-capture-regex.md) — BSD sed has no \s; a failed capture printed a Neon password; use cut for names
+- [DB changes are last resort after launch](db-changes-are-last-resort-after-launch.md) — once live nobody edits the DB by hand; a "run this SQL" runbook line is a missing app feature, file a ticket
+- [Tear down a lane's Neon branch after its PR](tear-down-lane-neon-branch-after-pr.md) — `pnpm lane:down <id>` once the PR is created and verified, at the latest at merge; six stale branches hit the plan ceiling and blocked four tickets
