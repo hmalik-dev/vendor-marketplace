@@ -44,7 +44,15 @@ import type { NeonAuthPluginOptions } from '../plugins/neon-auth.js';
 import { displayName, syncUserFromAuth } from '../modules/users/users.service.js';
 import type { AuthUserSnapshot } from '../modules/users/users.service.js';
 import { buildServer } from '../server.js';
+import { StepUpStore } from '../lib/step-up.js';
 import type { Clock } from '../plugins/clock.js';
+
+/** A store that treats every operator as freshly confirmed; see `enforceStepUp`. */
+class AlwaysFreshStepUpStore extends StepUpStore {
+  override isFresh(): boolean {
+    return true;
+  }
+}
 
 export const TEST_ENV: ApiEnv = {
   NODE_ENV: 'test',
@@ -139,6 +147,13 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
    */
   neonAuth?: Pick<NeonAuthPluginOptions, 'verifySessionToken' | 'loadAuthUser'>;
   loggerStream?: NodeJS.WritableStream;
+  /**
+   * The real step-up store (VEN-500), for the suites whose subject is the
+   * control itself. Every other suite is about what an admin route does once an
+   * operator is confirmed, so it gets a store that is always fresh; the
+   * production wiring never can be, because `buildServer` builds the real one.
+   */
+  enforceStepUp?: boolean;
   /**
    * Pins "now" for every date-sensitive route. A suite that leaves it unset
    * reads the real clock and is therefore hour-dependent; one that sets it
@@ -1088,6 +1103,7 @@ export async function createTestHarness(
     operatorDigestIntervalMs: 0,
     // Alert send retries do not wait on a real timer in a suite.
     operatorAlertWait: async () => undefined,
+    ...(options.enforceStepUp ? {} : { stepUp: new AlwaysFreshStepUpStore() }),
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.requestTimeoutMs ? { requestTimeoutMs: options.requestTimeoutMs } : {}),

@@ -2107,3 +2107,32 @@ was the tidier-looking option and was rejected: it silently applies a penalty to
 someone who may simply be leaving, and it would have needed reconciling against
 D31, under which a cancellation is a *full* unwind rather than a tiered one.
 Refusal creates no new money rule to reconcile with anything.
+
+
+### D40: Admin Two-Factor — Step-Up Now, Provider MFA Later, Ruling Open — *2026-09-21*
+
+**Open question for the account holder (no ruling recorded; do not read one
+into this entry).** Neon Auth has no second factor, and the operator signs in
+with an emailed code. Should the operator account require provider-level MFA
+before launch, and if so is it a launch blocker or a post-launch hardening?
+Until now the question lived only in the VEN-377 console checklist.
+
+**Recommendation, shipped as VEN-500: step-up now, provider MFA later.**
+
+- **Step-up.** Ban, closure, dispute rulings and the two irreversible deletions
+  ask for a code emailed to the operator's own address, valid 10 minutes, five
+  tries. A stolen session token cannot mint it. It needs no provider capability.
+- **Ceiling.** One operator completes at most 10 bans and closures an hour; the
+  next is refused before Stripe is asked for a refund, and the operator address
+  is emailed.
+- **What it does not cover.** Someone holding the operator's **mailbox** passes
+  both the sign-in and the step-up. Only provider MFA closes that, which is why
+  the question stays open rather than closed by this change.
+- **Password reset (VEN-470) is not closed to operators.** Their sign-in is
+  already an emailed code, so the mailbox is the credential either way; excluding
+  operators removes no path and locks out a sole operator. Recovery is in
+  `docs/admin-recovery.md`.
+
+Rejected: a password re-entry through the auth proxy (operators sign in by
+emailed code, so it would add a credential nobody holds); a step-up claim minted
+by the provider (no such capability); a second approver (one operator).
