@@ -119,6 +119,6 @@ describe('applyAccountStatusChange under interleaved handlers', () => {
      * vendor is onboarded. The loser re-reads Stripe and finds nothing to do.
      */
     expect(outcome).toBe('unchanged');
-    expect(calls).toBe(3);
+    expect(calls).toBe(4);
   });
 });

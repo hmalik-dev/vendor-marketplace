@@ -53,6 +53,8 @@ export interface PayableRequestRow {
   acceptedAt: Date | null;
   /** The intent recorded when checkout was opened, for reconciliation. */
   stripePaymentIntentId: string | null;
+  /** Canceled intents replaced so far; the creation key is built from it (VEN-547). */
+  paymentIntentReplacements: number;
   vendorSlug: string;
   vendorBusinessName: string;
   vendorAvatarUrl: string | null;
@@ -91,6 +93,7 @@ export async function findPayableRequest(
       packageDurationHours: servicePackages.durationHours,
       acceptedAt: bookingRequests.acceptedAt,
       stripePaymentIntentId: bookingRequests.stripePaymentIntentId,
+      paymentIntentReplacements: bookingRequests.paymentIntentReplacements,
       vendorSlug: vendorProfiles.slug,
       vendorBusinessName: vendorProfiles.businessName,
       vendorAvatarUrl: vendorProfiles.profileImageUrl,
@@ -217,6 +220,39 @@ export async function recordPaymentIntent(
     .update(bookingRequests)
     .set({ stripePaymentIntentId: paymentIntentId, updatedAt: sql`now()` })
     .where(and(eq(bookingRequests.id, requestId), eq(bookingRequests.status, 'accepted')));
+}
+
+/**
+ * Swaps a canceled intent for its replacement and moves the replacement count
+ * with it (VEN-547).
+ *
+ * A compare-and-set on the canceled id: callers racing over one replacement all
+ * derived the same key from the same count, so all made the same intent, and
+ * exactly one write lands. The count and the id move in one statement, so a
+ * caller that reads between the two writes never sees a live id beside a stale
+ * count and never bumps the key for an intent that is already the replacement.
+ */
+export async function recordReplacementIntent(
+  db: AppDatabase,
+  requestId: string,
+  replaced: { intentId: string; replacements: number },
+  paymentIntentId: string,
+): Promise<void> {
+  await db
+    .update(bookingRequests)
+    .set({
+      stripePaymentIntentId: paymentIntentId,
+      paymentIntentReplacements: replaced.replacements + 1,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(bookingRequests.id, requestId),
+        eq(bookingRequests.status, 'accepted'),
+        eq(bookingRequests.stripePaymentIntentId, replaced.intentId),
+        eq(bookingRequests.paymentIntentReplacements, replaced.replacements),
+      ),
+    );
 }
 
 /** What a successful charge writes, as one row. */
