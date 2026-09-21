@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   conversations,
   portfolioItems,
@@ -8,6 +8,7 @@ import {
 } from '@vendor-marketplace/db/schema';
 import type { ReportSubject } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
 
 /**
  * The subject of a report, resolved from `(subject_type, subject_id)` to the
@@ -71,13 +72,21 @@ async function vendorProfileSubject(
   const rows = await db
     .select({ businessName: vendorProfiles.businessName, slug: vendorProfiles.slug })
     .from(vendorProfiles)
-    .where(eq(vendorProfiles.id, vendorProfileId))
+    .where(and(eq(vendorProfiles.id, vendorProfileId), VENDOR_VISIBLE))
     .limit(1);
 
   return publicSubjectOf(rows[0]);
 }
 
-/** The three published subjects answer the same shape; this is that shape. */
+/**
+ * The three published subjects answer the same shape; this is that shape.
+ *
+ * Each of their queries carries what the public page carries — `VENDOR_VISIBLE`,
+ * and for a review the `customer_to_vendor` + `is_public` pair the vendor page
+ * lists — so a subject the reporter could not see resolves to `null`, the same
+ * answer as an id that does not exist. Anything else makes 200 versus 404 an
+ * existence oracle and copies a draft vendor's name into an operator case.
+ */
 function publicSubjectOf(
   row: { businessName: string; slug: string } | undefined,
 ): ReportSubjectProjection | null {
@@ -95,7 +104,14 @@ async function reviewSubject(
     .select({ businessName: vendorProfiles.businessName, slug: vendorProfiles.slug })
     .from(reviews)
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, reviews.vendorId))
-    .where(eq(reviews.id, reviewId))
+    .where(
+      and(
+        eq(reviews.id, reviewId),
+        eq(reviews.type, 'customer_to_vendor'),
+        eq(reviews.isPublic, true),
+        VENDOR_VISIBLE,
+      ),
+    )
     .limit(1);
 
   return publicSubjectOf(rows[0]);
@@ -110,7 +126,7 @@ async function portfolioSubject(
     .select({ businessName: vendorProfiles.businessName, slug: vendorProfiles.slug })
     .from(portfolioItems)
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, portfolioItems.vendorId))
-    .where(eq(portfolioItems.id, itemId))
+    .where(and(eq(portfolioItems.id, itemId), VENDOR_VISIBLE))
     .limit(1);
 
   return publicSubjectOf(rows[0]);
