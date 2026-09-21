@@ -126,6 +126,8 @@ export interface HarnessDatabase {
 
 export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestDatabase> {
   env?: Partial<ApiEnv>;
+  /** A short request timeout, for the suite that watches a stalled upload get cut off. */
+  requestTimeoutMs?: number;
   /**
    * The real Neon Auth token verifier and loader (over a local key set), in
    * place of the fakes that read the literal `token-<id>` — for the suite whose
@@ -1031,6 +1033,7 @@ export async function createTestHarness(
     operatorAlertWait: async () => undefined,
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.requestTimeoutMs ? { requestTimeoutMs: options.requestTimeoutMs } : {}),
     ...(options.errorReporter ? { errorReporter: options.errorReporter } : {}),
     auth: {
       // Tokens in the suites are literally the auth user id they stand for.
