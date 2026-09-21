@@ -526,6 +526,13 @@
       "when": 1790003437756,
       "tag": "0074_gifted_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790006854077,
+      "tag": "0075_real_deathbird",
+      "breakpoints": true
     }
   ]
 }
