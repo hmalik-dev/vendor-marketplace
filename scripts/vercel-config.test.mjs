@@ -1,10 +1,11 @@
 /**
- * VEN-494. Vercel builds only the `staging` and `production` branches: every
- * other branch's deployment is skipped, so pull-request and lane previews stop
- * spending the Hobby daily deployment allowance and stop failing on the web
- * variables they lack. `ignoreCommand` exits 0 to skip a build and 1 to run it;
- * the command is executed here under `sh`, exactly as Vercel runs it. Runs under
- * plain `node` via `pnpm test:agents`.
+ * VEN-494, VEN-535. Vercel's own Git integration builds nothing: every branch,
+ * `staging` and `production` included, is skipped, and Git deployments are
+ * switched off outright. The web ships only through the release workflow's
+ * prebuilt deploy, which runs after the migration and the API, so it can never
+ * be live ahead of the response contract it parses. `ignoreCommand` exits 0 to
+ * skip a build and 1 to run it; the command is executed here under `sh`,
+ * exactly as Vercel runs it. Runs under plain `node` via `pnpm test:agents`.
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -15,20 +16,18 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => readFileSync(path.join(ROOT, file), 'utf8');
-const { ignoreCommand } = JSON.parse(read('vercel.json'));
+const config = JSON.parse(read('vercel.json'));
+const { ignoreCommand } = config;
 
 const exitCodeFor = (branch) =>
   spawnSync('sh', ['-c', ignoreCommand], {
     env: { PATH: process.env.PATH, VERCEL_GIT_COMMIT_REF: branch },
   }).status;
 
-test('the branches that ship are built (exit 1)', () => {
-  assert.equal(exitCodeFor('staging'), 1);
-  assert.equal(exitCodeFor('production'), 1);
-});
-
-test('every other branch is skipped (exit 0)', () => {
+test('every branch is skipped by the Git integration (exit 0), the release branches included', () => {
   for (const branch of [
+    'staging',
+    'production',
     'main',
     'worktree-ven-494',
     'dependabot/npm/x',
@@ -38,6 +37,15 @@ test('every other branch is skipped (exit 0)', () => {
   ]) {
     assert.equal(exitCodeFor(branch), 0, `"${branch}" must be skipped`);
   }
+});
+
+test('an unset branch is skipped too', () => {
+  const { status } = spawnSync('sh', ['-c', ignoreCommand], { env: { PATH: process.env.PATH } });
+  assert.equal(status, 0);
+});
+
+test('Git deployments are disabled for every branch', () => {
+  assert.equal(config.git?.deploymentEnabled, false);
 });
 
 test('the web app root carries the same file, since Vercel reads the project root directory', () => {
