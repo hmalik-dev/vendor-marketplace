@@ -66,6 +66,7 @@ import { messagingRoutes } from './modules/messaging/messaging.routes.js';
 import { placeRoutes } from './modules/places/places.routes.js';
 import { customerRoutes } from './modules/customers/customers.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
+import { throttleRoutes } from './modules/throttle/throttle.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
 import { reviewRoutes } from './modules/reviews/reviews.routes.js';
@@ -140,6 +141,11 @@ export interface BuildServerOptions {
    * On by default for `payoutSweepIntervalMs`'s reason.
    */
   expirySweepIntervalMs?: number;
+  /**
+   * How often an open event stream is kept alive and its account re-read, so a
+   * ban or deletion ends it on any instance. Default 30 s; suites shorten it.
+   */
+  streamHeartbeatMs?: number;
   /**
    * How often failed transactional email is re-sent; `0` disables it. On by
    * default for `payoutSweepIntervalMs`'s reason.
@@ -538,6 +544,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   });
 
   await app.register(healthRoutes);
+  await app.register(throttleRoutes, { webTierKey: env.WEB_TIER_KEY });
   await app.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(adminCategoryRoutes);
   await app.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });
@@ -566,6 +573,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     allowedOrigins: allowedOrigins(env),
     conversationRateLimitMax: env.CONVERSATION_RATE_LIMIT_MAX,
     messageRateLimitMax: env.MESSAGE_RATE_LIMIT_MAX,
+    ...(options.streamHeartbeatMs ? { heartbeatMs: options.streamHeartbeatMs } : {}),
   });
   await app.register(uploadRoutes, {
     rateLimitMax: env.UPLOAD_RATE_LIMIT_MAX,

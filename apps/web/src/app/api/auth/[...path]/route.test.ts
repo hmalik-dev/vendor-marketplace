@@ -218,3 +218,67 @@ describe('password reset through the auth proxy', () => {
     expect(upstreamPost).not.toHaveBeenCalled();
   });
 });
+
+describe('sign-in through the auth proxy', () => {
+  const SIGN_IN = 'sign-in/email';
+
+  beforeEach(() => {
+    resetThrottle();
+    upstreamPost.mockReset();
+  });
+
+  it('refuses the eleventh sign-in for one email from eleven different addresses', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ token: 't' }));
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i++) {
+      const response = await call(
+        SIGN_IN,
+        { email: 'Victim@Example.com', password: 'guess' },
+        `7.7.7.${i}`,
+      );
+      statuses.push(response.status);
+    }
+
+    expect(statuses.slice(0, 10)).toEqual(Array(10).fill(200));
+    expect(statuses[10]).toBe(429);
+    expect(upstreamPost).toHaveBeenCalledTimes(10);
+  });
+
+  it('hands the body on intact and returns the provider answer unchanged', async () => {
+    upstreamPost.mockImplementation(async (request) =>
+      Response.json({ echoed: await request.json() }, { status: 401 }),
+    );
+
+    const response = await call(SIGN_IN, { email: 'a@example.com', password: 'p' });
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ echoed: { email: 'a@example.com', password: 'p' } });
+  });
+
+  it('does not forward a sign-in that names no address', async () => {
+    const response = await call(SIGN_IN, { password: 'p' });
+
+    expect(response.status).toBe(400);
+    expect(upstreamPost).not.toHaveBeenCalled();
+  });
+
+  it('budgets a code check per address too', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ status: true }));
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      statuses.push(
+        (
+          await call(
+            'email-otp/verify-email',
+            { email: 'c@example.com', otp: '123456' },
+            `6.6.6.${i}`,
+          )
+        ).status,
+      );
+    }
+
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+  });
+});

@@ -138,6 +138,8 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
   env?: Partial<ApiEnv>;
   /** A short request timeout, for the suite that watches a stalled upload get cut off. */
   requestTimeoutMs?: number;
+  /** A short stream heartbeat, for the suites that watch a ban end an open stream. */
+  streamHeartbeatMs?: number;
   /** Sees every route the server registers, for the suite that walks the route table. */
   onRoute?: (route: RouteOptions) => void;
   /**
@@ -1131,6 +1133,7 @@ export async function createTestHarness(
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.requestTimeoutMs ? { requestTimeoutMs: options.requestTimeoutMs } : {}),
+    ...(options.streamHeartbeatMs ? { streamHeartbeatMs: options.streamHeartbeatMs } : {}),
     ...(options.onRoute ? { onRoute: options.onRoute } : {}),
     ...(options.errorReporter ? { errorReporter: options.errorReporter } : {}),
     auth: {

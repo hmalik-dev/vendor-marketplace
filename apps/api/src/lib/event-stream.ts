@@ -9,6 +9,9 @@ export type StreamEvent =
   | { type: 'new_message'; conversationId: string; message: unknown }
   | { type: 'new_notification'; notification: unknown };
 
+/** Concurrent streams one user may hold on one instance (VEN-462). */
+export const MAX_STREAMS_PER_USER = 5;
+
 /**
  * The open SSE connections, by user.
  *
@@ -24,9 +27,18 @@ export type StreamEvent =
 export class EventHub {
   private readonly connections = new Map<string, Set<ServerResponse>>();
 
-  /** Registers a connection and returns the function that removes it. */
-  subscribe(userId: string, response: ServerResponse): () => void {
+  /**
+   * Registers a connection and returns the function that removes it, or `null`
+   * when the user already has {@link MAX_STREAMS_PER_USER} open — each holds a
+   * heartbeat and a subscription, and nobody needs more tabs than that.
+   */
+  subscribe(userId: string, response: ServerResponse): (() => void) | null {
     const existing = this.connections.get(userId) ?? new Set<ServerResponse>();
+
+    if (existing.size >= MAX_STREAMS_PER_USER) {
+      return null;
+    }
+
     existing.add(response);
     this.connections.set(userId, existing);
 
