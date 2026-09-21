@@ -136,6 +136,12 @@ export interface BuildServerOptions {
    * by default for `payoutSweepIntervalMs`'s reason.
    */
   uploadSweepIntervalMs?: number;
+  /**
+   * How long a client has to deliver a whole request, in milliseconds. Defaults
+   * to `REQUEST_TIMEOUT_MS`; a suite passes a short one to watch a stalled
+   * upload get cut off.
+   */
+  requestTimeoutMs?: number;
   /** Log what the upload sweep would delete and delete nothing. */
   uploadSweepDryRun?: boolean;
   /**
@@ -188,6 +194,24 @@ const MAX_IP_LENGTH = 45;
 const MAX_UPLOAD_FORM_FIELDS = 5;
 
 /**
+ * The time a client has to deliver a complete request, headers and body.
+ *
+ * Fastify's default is no limit, which also switches off Node's own 300 s, so a
+ * client that opens an upload and then trickles or stops holds a socket and its
+ * buffered bytes forever. Sixty seconds carries a 12 MB image over roughly
+ * 200 KB/s.
+ *
+ * Node's `requestTimeout` alone is not enough: it only runs until the *headers*
+ * are complete (a raw socket that sends them and half a body is never cut), so
+ * the body deadline is the `onRequest` hook below. Neither counts the response,
+ * so `/events/stream`, a GET whose request is complete on arrival, is never cut.
+ */
+const REQUEST_TIMEOUT_MS = 60_000;
+
+/** Node only checks for expired requests on this cadence, so it bounds the timeout's precision. */
+const MAX_CONNECTIONS_CHECKING_INTERVAL_MS = 30_000;
+
+/**
  * The rate-limit key: the visitor the web tier forwarded, when the caller proves
  * it is the web tier, otherwise the caller's own address.
  *
@@ -233,7 +257,18 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   /** Route patterns that move money; filled as the payment plugins register below. */
   const moneyRoutes = new Set<string>();
 
+  const requestTimeout = Math.max(1, options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS);
+
   const app = Fastify({
+    requestTimeout,
+    // No idle-socket cap: the host proxy owns that, and a stream is idle by design.
+    connectionTimeout: 0,
+    http: {
+      connectionsCheckingInterval: Math.min(
+        MAX_CONNECTIONS_CHECKING_INTERVAL_MS,
+        Math.max(1, Math.floor(requestTimeout / 4)),
+      ),
+    },
     /*
      * One hop, and only on a deployment.
      *
@@ -362,6 +397,25 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   const countBearer = app.createRateLimit();
   // The plugin types `this` as a bare FastifyInstance; ours carries the Zod provider.
   const plain = app as unknown as FastifyInstance;
+  /*
+   * The body deadline: a request that declares a body must deliver all of it
+   * within `requestTimeout`, or its socket is destroyed.
+   */
+  app.addHook('onRequest', async (request, reply) => {
+    const { headers, raw } = request;
+    // Bytes outstanding, not a header present: a bodiless `content-length: 0` request
+    // (which a proxy adds to a GET) is never read, so `/events/stream` would never disarm it.
+    const length = headers['content-length'];
+    if (headers['transfer-encoding'] === undefined && (length === undefined || length === '0')) {
+      return;
+    }
+    const timer = setTimeout(() => raw.destroy(), requestTimeout);
+    timer.unref();
+    const clear = (): void => clearTimeout(timer);
+    raw.once('end', clear);
+    reply.raw.once('close', clear);
+  });
+
   app.addHook('onRequest', async (request, reply) => {
     const routeLimit = request.routeOptions.config?.rateLimit;
 
