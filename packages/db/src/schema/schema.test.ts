@@ -3,6 +3,7 @@ import {
   BOOKING_REQUEST_STATUSES,
   BUDGET_TIERS,
   CATEGORY_SEEDS,
+  EXPIRABLE_BOOKING_REQUEST_STATUSES,
   LIVE_BOOKING_REQUEST_STATUSES,
   TAG_CATEGORIES,
   USER_ROLES,
@@ -487,5 +488,46 @@ describe('the live booking request indexes', () => {
       );
       expect(mentioned.sort(), row.indexname).toEqual([...LIVE_BOOKING_REQUEST_STATUSES].sort());
     }
+  });
+
+  describe('the expiry sweep index', () => {
+    it('is predicated on exactly the statuses the shared constant calls expirable', async () => {
+      const result = await testDb.db.execute<{ indexdef: string }>(
+        sql`SELECT indexdef FROM pg_indexes
+            WHERE tablename = 'booking_requests' AND indexname = 'booking_requests_expires_at_idx'`,
+      );
+
+      expect(result.rows).toHaveLength(1);
+      const mentioned = [...new Set(BOOKING_REQUEST_STATUSES)].filter((status) =>
+        result.rows[0]!.indexdef.includes(`'${status}'`),
+      );
+      expect(mentioned.sort()).toEqual([...EXPIRABLE_BOOKING_REQUEST_STATUSES].sort());
+    });
+
+    it('is the index the lapsed-request query plans on, over more than 10k mixed-status rows', async () => {
+      const actors = await seedBookingActors(testDb.db, 'expiry-plan');
+      // Mostly settled rows the sweep must skip, a thin band of expirable ones.
+      await testDb.db.execute(sql`
+        INSERT INTO booking_requests
+          (customer_id, vendor_id, package_id, event_date, status, expires_at)
+        SELECT ${actors.customerId}::uuid, ${actors.vendorId}::uuid, ${actors.packageId}::uuid,
+               DATE '2040-01-01' + g,
+               (ARRAY['declined','expired','cancelled','pending','quoted','accepted'])[1 + g % 6]::booking_request_status,
+               TIMESTAMPTZ '2040-01-01' + (g || ' minutes')::interval
+        FROM generate_series(1, 12000) g
+        WHERE g % 6 NOT IN (3, 4, 5) OR g % 200 < 3`);
+      await testDb.db.execute(sql`ANALYZE booking_requests`);
+
+      const plan = await testDb.db.execute<{ 'QUERY PLAN': string }>(
+        sql`EXPLAIN SELECT * FROM booking_requests
+            WHERE status IN ('pending', 'quoted', 'accepted')
+              AND expires_at IS NOT NULL AND expires_at <= TIMESTAMPTZ '2040-01-10'
+            ORDER BY expires_at ASC LIMIT 50`,
+      );
+      const text = plan.rows.map((row) => row['QUERY PLAN']).join('\n');
+
+      expect(text).toContain('booking_requests_expires_at_idx');
+      expect(text).not.toContain('Seq Scan on booking_requests');
+    });
   });
 });

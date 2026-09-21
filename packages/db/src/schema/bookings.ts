@@ -105,10 +105,16 @@ export const bookingRequests = pgTable(
     index('booking_requests_vendor_status_idx').on(table.vendorId, table.status),
     // The `ON DELETE SET NULL` scan when a package row goes with its vendor.
     index('booking_requests_package_idx').on(table.packageId),
-    // Serves the lazy expiry sweep, which only ever scans pending requests.
+    /*
+     * Serves the lazy expiry sweep, which scans every status that can lapse:
+     * `pending`, `quoted` and `accepted` (the payment deadline). A predicate
+     * narrower than the sweep's `status IN (...)` cannot be used by it, so the
+     * planner would scan the table. `EXPIRABLE_BOOKING_REQUEST_STATUSES` is the
+     * same list, and `schema.test.ts` holds the two together.
+     */
     index('booking_requests_expires_at_idx')
       .on(table.expiresAt)
-      .where(sql`${table.status} = 'pending'`),
+      .where(sql`${table.status} in ('pending', 'quoted', 'accepted')`),
     /*
      * One live request per natural key, so a repeat submission — a client
      * retry, a mobile touch-and-click double fire, a network-level retry —
