@@ -2,12 +2,11 @@ import { getServerSession } from './auth/server';
 import {
   adminActivityActorListSchema,
   adminCategoryListSchema,
-  type AdminExportAudit,
   type AdminActivityActorList,
   type AdminCategoryList,
 } from '@vendor-marketplace/shared';
 import { redirect } from 'next/navigation';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { ApiClientError, apiRequest } from './api-client';
 import { requireRole } from './current-user';
 import { redirectIfTermsRequired } from './terms-gate';
@@ -128,26 +127,6 @@ async function adminRead<T>(path: string, schema: z.ZodType<T>): Promise<T> {
 
   try {
     return await apiRequest(path, { schema, token });
-  } catch (error) {
-    throw await rethrowUnlessSessionFailure(error, signInPath);
-  }
-}
-
-/**
- * Tells the API an export was produced (VEN-475). Throws when it cannot, so the
- * handler withholds the file: an export nobody logged did not happen.
- */
-export async function recordAdminExport(audit: AdminExportAudit): Promise<void> {
-  const { token, signInPath } = await adminSession();
-
-  try {
-    await apiRequest('/admin/exports', {
-      method: 'POST',
-      // A label, not a key: a percent-encoded search can outgrow the API's bound.
-      body: { ...audit, filters: audit.filters.slice(0, 500) },
-      schema: z.object({ recorded: z.literal(true) }),
-      token,
-    });
   } catch (error) {
     throw await rethrowUnlessSessionFailure(error, signInPath);
   }

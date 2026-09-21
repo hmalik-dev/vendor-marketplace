@@ -2,9 +2,9 @@ import { MAX_PAGE_SIZE } from '@vendor-marketplace/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/current-user', () => ({ getCurrentUser: vi.fn() }));
-vi.mock('@/lib/admin-data', () => ({ recordAdminExport: vi.fn() }));
+vi.mock('@/lib/admin-export-audit', () => ({ recordAdminExport: vi.fn() }));
 
-import { recordAdminExport } from '@/lib/admin-data';
+import { recordAdminExport } from '@/lib/admin-export-audit';
 
 import { csvExport, csvField } from './admin-export';
 import { activityParams, caseParams } from './admin-list-params';

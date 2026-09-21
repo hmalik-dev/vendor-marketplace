@@ -1,6 +1,6 @@
 import { MAX_PAGE_SIZE, toDateString, type AdminExport } from '@vendor-marketplace/shared';
 import type { NextRequest } from 'next/server';
-import { recordAdminExport } from '@/lib/admin-data';
+import { recordAdminExport } from '@/lib/admin-export-audit';
 import { ApiClientError } from '@/lib/api-client';
 import { getCurrentUser } from '@/lib/current-user';
 import { isTermsRequired, termsAcceptancePath } from '@/lib/terms-gate';
