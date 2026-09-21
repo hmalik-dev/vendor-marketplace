@@ -32,6 +32,7 @@ describe('the Stripe client construction', () => {
     const credentials: Parameters<typeof createStripeConnectGateway>[0] = {
       secretKey: 'sk_test_unused',
       deployEnv: 'staging',
+      webhookSecret: 'unused',
     };
     createStripeConnectGateway(credentials);
 
