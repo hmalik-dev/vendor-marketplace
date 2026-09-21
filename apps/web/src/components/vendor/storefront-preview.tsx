@@ -45,7 +45,7 @@ export function StorefrontPreview({
       aria-label="Storefront preview"
       data-storefront-preview
       className={cn(
-        'flex shrink-0 flex-col gap-3.5 bg-stone-150 p-5.5 lg:border-l lg:border-stone-300',
+        'flex shrink-0 flex-col gap-3.5 bg-stone-150 px-6 py-5.5 lg:border-l lg:border-stone-300',
         className,
       )}
     >
@@ -60,7 +60,11 @@ export function StorefrontPreview({
         A two-option switch, so `radiogroup` rather than tabs: there is no
         tabbed content to own, only which placement the one card is drawn in.
       */}
-      <div role="radiogroup" aria-label="Preview placement" className="flex gap-1">
+      <div
+        role="radiogroup"
+        aria-label="Preview placement"
+        className="flex gap-[3px] rounded-[9px] bg-[#e6dfd3] p-[3px]"
+      >
         {TABS.map((tab) => {
           const isActive = tab.key === placement;
 

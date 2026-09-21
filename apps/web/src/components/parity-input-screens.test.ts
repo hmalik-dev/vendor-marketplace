@@ -68,7 +68,28 @@ describe('vendor profile editor (frame 09)', () => {
 
   it('paints the preview rail #F1ECE4 and sets its toggle at 12px', () => {
     const preview = read('components/vendor/storefront-preview.tsx');
-    expect(preview).toContain('bg-stone-150 p-5.5 lg:border-l');
+    expect(preview).toContain('bg-stone-150 px-6 py-5.5 lg:border-l');
     expect(preview).toContain('py-1.5 text-center text-meta');
+  });
+
+  it('seats the toggle on the frame’s #E6DFD3 track: 9px radius, 3px padding and gap', () => {
+    expect(read('components/vendor/storefront-preview.tsx')).toContain(
+      'className="flex gap-[3px] rounded-[9px] bg-[#e6dfd3] p-[3px]"',
+    );
+  });
+
+  it('sets the About counter at the frame’s 11.5px helper step', () => {
+    expect(read('components/vendor-profile-form.tsx')).toContain(
+      'mt-1 flex items-baseline justify-between gap-3 text-helper',
+    );
+  });
+
+  it('sets the stepper numerals and the rail’s vendor line at 12px, the package block at 13px', () => {
+    expect(read('components/booking/request-stepper.tsx')).toContain(
+      'rounded-full text-meta font-bold',
+    );
+    const rail = read('components/booking/request-summary-rail.tsx');
+    expect(rail).toContain('mt-0.5 text-meta text-stone-600');
+    expect(rail).toContain('justify-between gap-3 text-action text-stone-700');
   });
 });
