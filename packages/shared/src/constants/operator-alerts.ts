@@ -9,6 +9,10 @@
  *
  * `launch_switch_flipped` is raised by the launch switches (VEN-404), so an
  * accidental flip is noticed the same hour rather than when bookings dry up.
+ *
+ * `auth_identity_deleted` (VEN-480) is an account Neon Auth no longer knows that
+ * still holds confirmed bookings. The reconcile never closes it: refunding those
+ * bookings is an operator's decision, made through the console's closure.
  */
 export const OPERATOR_ALERT_KINDS = [
   'dispute_opened',
@@ -21,6 +25,7 @@ export const OPERATOR_ALERT_KINDS = [
   'vendor_payouts_disabled',
   'report_filed',
   'launch_switch_flipped',
+  'auth_identity_deleted',
   'daily_digest',
 ] as const;
 export type OperatorAlertKind = (typeof OPERATOR_ALERT_KINDS)[number];

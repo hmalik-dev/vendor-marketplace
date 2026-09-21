@@ -2,7 +2,7 @@ import type { NeonAuthIdentity } from '@vendor-marketplace/db';
 import type { AuthProvider } from '@vendor-marketplace/shared';
 import type { AdminContext } from '../admin/account-unwind.js';
 import { listLiveAuthIdentities } from '../users/users.dao.js';
-import { applyAuthSyncEvent } from './auth-sync.service.js';
+import { applyAuthSyncEvent, retireIfConfirmedGone } from './auth-sync.service.js';
 import {
   isProviderAvatar,
   isUnbackedIdentity,
@@ -28,6 +28,11 @@ export interface ReconcileSummary {
   updated: number;
   /** Rows whose identity no longer exists, retired exactly as a deletion is. */
   deleted: number;
+  /**
+   * Rows whose identity is confirmed gone but which hold confirmed bookings
+   * (VEN-480). Not closed: the operator was alerted and closes them.
+   */
+  flagged: number;
   /** Rows already agreeing with Neon Auth. On a second run this is all of them. */
   unchanged: number;
   /**
@@ -117,6 +122,7 @@ export async function reconcileAuthUsers(
     examined: local.length,
     updated: 0,
     deleted: 0,
+    flagged: 0,
     unchanged: 0,
     diverged: 0,
     skipped: rows.length - local.length,
@@ -156,23 +162,29 @@ export async function reconcileAuthUsers(
     );
   }
 
+  const control = remote.keys().next().value;
+
   for (const row of local) {
     const found = remote.get(row.authUserId);
 
     if (!found) {
-      if (options.dryRun) {
+      /*
+       * One lookup that came back short is not a deletion (VEN-480): the row is
+       * asked about again on its own, and closed only if that agrees.
+       */
+      const outcome = await retireIfConfirmedGone(context, identities, row.authUserId, now, {
+        // Any identity proven present a moment ago: if the second answer lacks it, the source is not to be trusted.
+        ...(control === undefined ? {} : { control }),
+        ...(options.dryRun === undefined ? {} : { dryRun: options.dryRun }),
+      });
+
+      if (outcome === 'deleted') {
         summary.deleted += 1;
-        continue;
+      } else if (outcome === 'flagged') {
+        summary.flagged += 1;
+      } else {
+        summary.unchanged += 1;
       }
-
-      const outcome = await applyAuthSyncEvent(
-        context,
-        { type: 'deleted', authUserId: row.authUserId },
-        now,
-        identities,
-      );
-
-      summary[outcome === 'deleted' ? 'deleted' : 'unchanged'] += 1;
       continue;
     }
 
