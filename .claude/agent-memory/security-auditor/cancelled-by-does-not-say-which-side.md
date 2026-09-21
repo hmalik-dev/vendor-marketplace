@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `bookings.cancelled_by` (#415) has two values, `customer` and `admin`. `admin`
 is written by exactly one path — `setUserBanned` in
@@ -19,7 +19,7 @@ record which side was suspended, and nothing else on the row does either — the
 written from the actor's point of view and equally silent about direction.
 
 **Why this matters and is not academic:** a ban is reversible. The banned party
-cannot read the screen while banned (`apps/api/src/plugins/clerk-auth.ts:122`
+cannot read the screen while banned (`apps/api/src/plugins/auth-auth.ts:122`
 403s them), but after an unban they can, and any copy that turns
 `cancelledBy === 'admin'` into "the _other_ account was suspended" then states
 the opposite of what happened and asserts a moderation fact about a

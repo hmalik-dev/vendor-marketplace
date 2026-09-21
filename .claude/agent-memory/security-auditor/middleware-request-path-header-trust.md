@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `apps/web/src/middleware.ts` stamps `x-orla-request-path` with
 `nextUrl.pathname + nextUrl.search` using `headers.set` on a copy of the request
@@ -35,8 +35,8 @@ whose prefix contains a listed extension — `/bookings.css`, `/customer/profile
 (a user-chosen slug that permits `.`, a catch-all, a file-ish route), re-run
 point 1 — the header becomes attacker-seeded there. `safeReturnPath` is the load
 bearing control, not the middleware; treat any reader that skips it as the
-finding. Note also that `middleware.test.ts` mocks `clerkMiddleware` away, so
-nothing in the suite proves Clerk preserves the handler's response headers — that
+finding. Note also that `middleware.test.ts` mocks `authMiddleware` away, so
+nothing in the suite proves the auth provider preserves the handler's response headers — that
 failure mode is fail-closed (destination lost, no unsafe redirect).
 
 Related: [[validate-before-normalize-return-path]]

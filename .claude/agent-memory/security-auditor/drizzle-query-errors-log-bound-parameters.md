@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 Verified in `node_modules/.pnpm/drizzle-orm@0.45.2/.../drizzle-orm/errors.js`:
 
@@ -35,7 +35,7 @@ local `try/catch` that logs `{ err }` is therefore net-neutral — do not report
 as a new leak.
 
 **How to apply:** it _is_ a finding when the failing statement binds something
-the log must never hold — a session token, a Clerk secret, an R2 key, a webhook
+the log must never hold — a session token, an auth provider secret, an R2 key, a webhook
 secret. As of #408 the four new catch sites (`bestEffortAnnouncement`,
 `bestEffortNotice`, `sendMessage`'s notification catch, `lib/background.ts`) all
 fail on `notifications` inserts, whose params are a user id, a title and a body

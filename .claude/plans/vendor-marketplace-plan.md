@@ -74,12 +74,12 @@
 
 ### Non-Goals (explicit MVP exclusions)
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 These are deliberately excluded and will NOT be built in MVP:
 
 - **Mobile app** — web is responsive; native app is post-MVP if traction warrants
-- **Social login** (Google/Apple) — Clerk supports it, but email/password is sufficient for MVP
+- **Social login** (Google/Apple) — the auth provider supports it, but email/password is sufficient for MVP
 - **Admin dashboard** — manage via database/Stripe dashboard directly for MVP
 - **Dispute resolution workflow** — handle manually via Stripe's dispute tools
 - **Calendar integrations** (Google Calendar, iCal sync)
@@ -98,7 +98,7 @@ These are deliberately excluded and will NOT be built in MVP:
 
 ### Decisions
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 | Decision | Choice | Rejected Alternatives |
 |----------|--------|----------------------|
@@ -106,7 +106,7 @@ These are deliberately excluded and will NOT be built in MVP:
 | Backend | Separate Fastify 5 API | Next.js API Routes, Express, Hono, NestJS |
 | ORM | Drizzle ORM | Prisma, Knex, raw SQL |
 | Database | PostgreSQL 16 (Neon prod, Docker local) | Supabase, PlanetScale |
-| Auth | Clerk | Custom JWT, NextAuth/Auth.js, Lucia (deprecated) |
+| Auth | The auth provider | Custom JWT, NextAuth/Auth.js, Lucia (deprecated) |
 | Payment | Stripe Connect (Express, 12% commission) | — |
 | Monorepo | Turborepo + pnpm | Nx |
 | Styling | Tailwind CSS 4 + shadcn/ui | CSS Modules, Styled Components |
@@ -120,7 +120,7 @@ These are deliberately excluded and will NOT be built in MVP:
 
 ### Rationale for Key Decisions
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **Fastify over Express/Hono/NestJS:**
 Fastify's type-provider-zod gives end-to-end type safety from Zod schema through route handler to response — Claude Code cannot produce type errors that silently pass. Built-in Pino logger handles structured logging without additional dependencies. Plugin system handles cross-cutting concerns (CORS, rate limiting, auth verification) cleanly. Express lacks built-in TypeScript support and async-first design. Hono is promising but has a thinner ecosystem for Stripe webhooks, file uploads, and SSE. NestJS is too verbose and decorator-heavy for a solo agentic build.
@@ -128,8 +128,8 @@ Fastify's type-provider-zod gives end-to-end type safety from Zod schema through
 **Drizzle over Prisma:**
 SQL-like query builder means generated queries read like SQL — easier to verify correctness, especially for complex joins (vendor search with category filters, availability intersection). Schema-as-TypeScript gives Claude direct read/modify access without a separate `.prisma` DSL. Lighter runtime with no query engine binary. Prisma's higher abstraction is better for teams but adds indirection that makes agentic debugging harder.
 
-**Clerk over custom JWT / NextAuth / Lucia:**
-Custom JWT auth is the #1 source of security bugs in web apps. Clerk eliminates the entire auth attack surface: password hashing, session management, CSRF, token rotation, email verification, password reset. Free tier covers 10k MAU. Works cleanly with separate frontend/backend architecture — React SDK on frontend, `@clerk/backend` JWT verification on Fastify. NextAuth is designed for Next.js API routes, creating friction with a separate Fastify backend; its credentials provider is discouraged for production. Lucia was deprecated/archived in early 2025.
+**The auth provider over custom JWT / NextAuth / Lucia:**
+Custom JWT auth is the #1 source of security bugs in web apps. The auth provider eliminates the entire auth attack surface: password hashing, session management, CSRF, token rotation, email verification, password reset. Free tier covers 10k MAU. Works cleanly with separate frontend/backend architecture — React SDK on frontend, `@auth-sdk/backend` JWT verification on Fastify. NextAuth is designed for Next.js API routes, creating friction with a separate Fastify backend; its credentials provider is discouraged for production. Lucia was deprecated/archived in early 2025.
 
 **R2 over S3/Supabase Storage:**
 S3-compatible API means zero code changes if migrating later. No egress fees — critical for an image-heavy marketplace. Pairs with Cloudflare DNS/CDN already in the deploy plan. S3 is more battle-tested but egress costs scale unpredictably.
@@ -170,22 +170,22 @@ vendor-marketplace/
 
 ### Frontend Architecture — `apps/web/`
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **Framework:** Next.js 15 App Router with React Server Components.
 
 **Rendering strategy:**
 - **Public pages** (vendor profile, search, landing, categories): Server Components fetch from Fastify API. SEO-critical, fast initial load.
 - **Dashboard pages** (vendor/customer): Server Components for initial data load, client components for interactive elements (forms, real-time updates).
-- **Mutations** (forms, actions): Client-side fetch to Fastify API. Clerk session token included automatically via `useAuth().getToken()`.
+- **Mutations** (forms, actions): Client-side fetch to Fastify API. The auth provider session token included automatically via `useAuth().getToken()`.
 - **Real-time** (messages): Client-side SSE connection directly to Fastify.
 
 **Auth flow (frontend):**
-- `<ClerkProvider>` wraps the app in root layout
+- `<AuthProvider>` wraps the app in root layout
 - Public routes: no auth required
-- Auth routes: `<SignIn>` and `<SignUp>` Clerk components (or custom forms with `useSignIn`/`useSignUp` hooks)
+- Auth routes: `<SignIn>` and `<SignUp>` the auth provider components (or custom forms with `useSignIn`/`useSignUp` hooks)
 - Protected routes: `<SignedIn>` gate or middleware-based redirect
-- API calls: Clerk provides session token via `getToken()`, sent as `Authorization: Bearer <token>`
+- API calls: the auth provider provides session token via `getToken()`, sent as `Authorization: Bearer <token>`
 
 **State management:** No global state library. Server Components for server state, React Hook Form for form state, `nuqs` for URL params, local `useState`/`useReducer` for component state. SWR or `useSWR` for client-side data fetching with revalidation.
 
@@ -197,7 +197,7 @@ app/
 │   ├── search/page.tsx          # Search/browse vendors
 │   ├── vendors/[slug]/page.tsx  # Public vendor profile
 │   └── categories/[slug]/page.tsx
-├── (auth)/                      # Clerk sign-in/sign-up
+├── (auth)/                      # The auth provider sign-in/sign-up
 │   ├── sign-in/[[...sign-in]]/page.tsx
 │   └── sign-up/[[...sign-up]]/page.tsx
 ├── (customer)/                  # Auth: customer role
@@ -226,7 +226,7 @@ components/
 
 ### Backend Architecture — `apps/api/`
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **Framework:** Fastify 5 with TypeScript and `fastify-type-provider-zod`.
 
@@ -238,15 +238,15 @@ components/
 - **DAOs:** Data access via Drizzle. One DAO per aggregate root. All queries parameterized. Return typed objects, never raw rows.
 
 **Auth flow (backend):**
-1. Fastify plugin extracts Clerk session token from `Authorization` header
-2. Verifies token via Clerk's JWKS endpoint (`@clerk/backend`)
-3. Resolves `clerk_user_id` → local `users` record
-4. If no local user exists (first API call after Clerk signup), creates one via lazy sync
+1. Fastify plugin extracts the auth provider session token from `Authorization` header
+2. Verifies token via the auth provider's JWKS endpoint (`@auth-sdk/backend`)
+3. Resolves `auth_user_id` → local `users` record
+4. If no local user exists (first API call after the auth provider signup), creates one via lazy sync
 5. Attaches `{ userId, role, vendorId? }` to `request.user`
 6. Role guard middleware checks `request.user.role` against route requirements
 
 **Webhook handlers:**
-- `POST /webhooks/clerk` — `user.created`, `user.updated`, `user.deleted` events. Creates/syncs local user records. Verifies webhook signature via `svix`.
+- `POST /webhooks/auth` — `user.created`, `user.updated`, `user.deleted` events. Creates/syncs local user records. Verifies webhook signature via `svix`.
 - `POST /webhooks/stripe` — `payment_intent.succeeded`, `account.updated`, `charge.dispute.created`. Verifies Stripe signature. Handles payment confirmation, onboarding completion, dispute notification.
 
 **Structured errors:**
@@ -265,22 +265,22 @@ No job queue for MVP. Stripe webhooks handle async payment confirmation. Email s
 
 ### API Client Pattern — `apps/web/lib/api-client.ts`
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
-Typed fetch wrapper with Clerk token injection:
+Typed fetch wrapper with the auth provider token injection:
 
-- **Server Components:** Call `auth()` from `@clerk/nextjs/server`, pass token to fetch.
+- **Server Components:** Call `auth()` from `@auth-sdk/nextjs/server`, pass token to fetch.
 - **Client Components:** Use `useAuth().getToken()` to get session token, include in fetch headers.
 - **Error handling:** Parse error responses into typed `ApiError`, surface user-friendly messages.
 - **Base URL:** `API_URL` env var (`http://localhost:4000` dev, production URL in prod).
 
 ### External Integrations
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 | Integration | Purpose | SDK/Client | Critical Path? |
 |------------|---------|------------|---------------|
-| Clerk | Authentication, identity | `@clerk/nextjs`, `@clerk/backend` | Yes — blocks all authed features |
+| The auth provider | Authentication, identity | `@auth-sdk/nextjs`, `@auth-sdk/backend` | Yes — blocks all authed features |
 | Stripe Connect | Payments, vendor onboarding, payouts | `stripe` SDK | Yes — blocks payment flow |
 | Cloudflare R2 | Image storage (portfolio, profile photos) | `@aws-sdk/client-s3` | Yes — blocks image upload |
 | Resend | Transactional email | `resend` SDK | No — graceful degradation |
@@ -339,7 +339,7 @@ placeholder itself.
 
 #### Capabilities
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 Variables are grouped into capabilities. A capability is the unit that a ticket
 declares a dependency on, so a ticket that never touches Stripe is never blocked on
@@ -348,7 +348,7 @@ Stripe credentials.
 | Capability | Variables | Required by |
 |-----------|-----------|-------------|
 | `core` | `NODE_ENV`, `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `WEB_URL`, `API_URL`, `NEXT_PUBLIC_API_URL`, `PORT`, `HOST`, `LOG_LEVEL`, `RATE_LIMIT_MAX` | every ticket |
-| `auth` | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, the four `NEXT_PUBLIC_CLERK_*_URL` routes | #2 and everything after |
+| `auth` | `NEXT_PUBLIC_AUTH_PROVIDER_PUBLISHABLE_KEY`, `AUTH_PROVIDER_SECRET_KEY`, `AUTH_PROVIDER_WEBHOOK_SECRET`, the four `NEXT_PUBLIC_AUTH_PROVIDER_*_URL` routes | #2 and everything after |
 | `storage` | `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_PUBLIC_URL`, `S3_FORCE_PATH_STYLE` | #3, #4, #16 |
 | `stripe` | `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PLATFORM_FEE_RATE` | #9, #10 |
 | `email` | `RESEND_API_KEY`, `EMAIL_FROM` | #11 |
@@ -362,7 +362,7 @@ nothing could enforce them.
 
 #### Values differ per environment
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 The single flat variable list this plan originally carried implied that development
 and production share values. They do not, and the ones that differ are exactly the
@@ -370,8 +370,8 @@ ones that fail silently when confused:
 
 | Variable | Development | Production | Consequence of reusing the dev value |
 |----------|------------|-----------|--------------------------------------|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Clerk **development** instance | Clerk **production** instance — a separate instance with its own user pool | Production users authenticate against the dev instance; sessions break on the real domain |
-| `CLERK_WEBHOOK_SECRET` | endpoint registered at the tunnel URL | endpoint registered at `https://api.<domain>` | Every production webhook fails signature verification — user rows are never created |
+| `NEXT_PUBLIC_AUTH_PROVIDER_PUBLISHABLE_KEY` / `AUTH_PROVIDER_SECRET_KEY` | The auth provider **development** instance | The auth provider **production** instance — a separate instance with its own user pool | Production users authenticate against the dev instance; sessions break on the real domain |
+| `AUTH_PROVIDER_WEBHOOK_SECRET` | endpoint registered at the tunnel URL | endpoint registered at `https://api.<domain>` | Every production webhook fails signature verification — user rows are never created |
 | `STRIPE_SECRET_KEY` / `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `sk_test_` / `pk_test_` | `sk_live_` / `pk_live_` | Real bookings charge nothing, or test cards are accepted in production |
 | `STRIPE_WEBHOOK_SECRET` | `stripe listen` ephemeral secret | the production endpoint's own signing secret | Payment confirmations never land; customers are charged with no booking record |
 | `DATABASE_URL` / `DATABASE_URL_UNPOOLED` | Neon `dev` branch | Neon `production` branch | Development writes to live customer data |
@@ -388,12 +388,12 @@ generated, so it can never fall behind the schema again.
 
 ### Environments & Release Path
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 | Environment | Purpose | Database | Auth | Payments | Storage |
 |-------------|---------|----------|------|----------|---------|
-| Local | Development | Neon `dev` branch | Clerk development instance | Stripe test mode + `stripe listen` | MinIO via `docker compose` |
-| Production | Live users | Neon `production` branch | Clerk production instance | Stripe live mode + Connect | Cloudflare R2 + public domain |
+| Local | Development | Neon `dev` branch | The auth provider development instance | Stripe test mode + `stripe listen` | MinIO via `docker compose` |
+| Production | Live users | Neon `production` branch | The auth provider production instance | Stripe live mode + Connect | Cloudflare R2 + public domain |
 
 No staging environment for MVP.
 
@@ -424,12 +424,12 @@ identical between local and production, which is where connection-level bugs hid
 
 ### Core Tables
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 ```
 users
   id                  uuid PK default gen_random_uuid()
-  clerk_user_id       varchar(255) unique not null    -- Clerk identity link
+  auth_user_id       varchar(255) unique not null    -- the auth provider identity link
   email               varchar(255) unique not null
   role                enum('customer','vendor','admin') not null
   first_name          varchar(100) not null
@@ -644,11 +644,11 @@ notifications
 
 ### Indexes
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 ```
 -- Identity lookups
-users(clerk_user_id)                     -- unique, Clerk → local user resolution
+users(auth_user_id)                     -- unique, the auth provider → local user resolution
 vendor_profiles(slug)                    -- unique, URL lookups
 vendor_profiles(user_id)                 -- unique, user → vendor profile
 
@@ -692,10 +692,10 @@ notifications(user_id, read_at)          -- unread count + notification list
 
 ### Route Map
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **Webhooks (no auth — signature verification):**
-- `POST /webhooks/clerk` — Clerk user lifecycle events
+- `POST /webhooks/auth` — the auth provider user lifecycle events
 - `POST /webhooks/stripe` — Stripe payment and account events
 
 **Public (no auth):**
@@ -910,9 +910,9 @@ vendor_payout = total_amount - platform_fee
 
 ### Security
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
-**Authentication:** Clerk handles identity. All API endpoints except public routes and webhook handlers require a valid Clerk session token. Token verification uses Clerk's JWKS endpoint — no shared secret for token validation.
+**Authentication:** The auth provider handles identity. All API endpoints except public routes and webhook handlers require a valid the auth provider session token. Token verification uses the auth provider's JWKS endpoint — no shared secret for token validation.
 
 **Authorization:** Role-based access with resource ownership checks (see Authorization Matrix). All ownership checks happen in the service layer, not middleware — middleware only checks role.
 
@@ -922,7 +922,7 @@ vendor_payout = total_amount - platform_fee
 
 **XSS:** React's default escaping handles output. No `dangerouslySetInnerHTML` or user-content injection. User-submitted text (bios, reviews, messages) stored and rendered as plain text, never HTML.
 
-**CSRF:** Clerk's session management handles CSRF protection via `__clerk_db_jwt` cookie attributes (SameSite, httpOnly, Secure).
+**CSRF:** The auth provider's session management handles CSRF protection via `__auth_db_jwt` cookie attributes (SameSite, httpOnly, Secure).
 
 **Rate limiting:** `@fastify/rate-limit` on all routes. Stricter limits on auth-related and payment endpoints.
 
@@ -932,7 +932,7 @@ vendor_payout = total_amount - platform_fee
 - Upload processed image to R2, never serve user-uploaded files directly from the server
 - Generate unique filenames (UUID-based), never use user-provided filenames
 
-**Webhook security:** Clerk webhooks verified via `svix` signature. Stripe webhooks verified via `stripe.webhooks.constructEvent`. Both reject unverified payloads.
+**Webhook security:** The auth provider webhooks verified via `svix` signature. Stripe webhooks verified via `stripe.webhooks.constructEvent`. Both reject unverified payloads.
 
 **Secrets:** All secrets in environment variables, declared once in the env registry (§4). No secrets in code, logs, or error responses. `.env` is gitignored, `.env.example` is generated and contains placeholders only, and `gitleaks` scans every push (§9).
 
@@ -1031,7 +1031,7 @@ undone locally.
 
 ### Testing Strategy
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **Unit tests (Vitest):**
 - Service layer: business logic, state transitions, authorization checks, edge cases
@@ -1061,7 +1061,7 @@ undone locally.
 - All E2E tests added in ticket #14 after all features are built
 
 **What NOT to test:**
-- Clerk's authentication internals (tested by Clerk)
+- the auth provider's authentication internals (tested by the auth provider)
 - Stripe's payment processing (tested by Stripe, verified via webhook handling)
 - shadcn/ui component internals
 - Simple pass-through components with no logic
@@ -1077,13 +1077,13 @@ undone locally.
 
 ### CI/CD Pipeline (GitHub Actions)
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **`ci.yml` — verification, on every PR and push to `main`.**
 
 The suites boot an in-process Postgres (PGlite) through `@vendor-marketplace/db/testing`, so
 CI needs no service container. It does need syntactically valid placeholder values
-for the variables consumed at build time — `next build` instantiates `ClerkProvider`,
+for the variables consumed at build time — `next build` instantiates `AuthProvider`,
 which refuses to load without a well-formed publishable key — but CI never reaches a
 third-party server.
 
@@ -1215,7 +1215,7 @@ gate — and #3 already shipped needing object storage that nothing had flagged.
 
 #### M4.5: Production Launch (Days 21-23)
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **Demonstrable state:** The marketplace is live on a real domain. A customer can sign
 up, discover a vendor, and complete a booking request in production. Merging to `main`
@@ -1224,7 +1224,7 @@ migrates and deploys automatically, and a failed readiness probe stops the relea
 **Tickets:** #18, #19, #20
 
 **Why here and not at the end.** The instinct is to deploy once everything is built.
-That concentrates every unknown — Clerk production instance behaviour, CORS between
+That concentrates every unknown — the auth provider production instance behaviour, CORS between
 two origins on real domains, R2 public URLs, webhook endpoints that must be
 re-registered against production URLs, cold-start behaviour on Railway — into a single
 session, at the point in the project where the surface area is largest and the
@@ -1287,7 +1287,7 @@ which remain the plan's own material.
 
 ### High-Risk Areas
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **1. Stripe Connect onboarding drop-off**
 - *Risk:* Stripe's KYC process is multi-step and vendors may abandon mid-flow.
@@ -1318,7 +1318,7 @@ which remain the plan's own material.
 - *Mitigation:* Soft delete. Cannot delete with CONFIRMED bookings (must complete or cancel them first). PENDING/QUOTED requests auto-cancelled. Completed bookings and reviews remain for history.
 
 **7. Development and production credential divergence**
-- *Risk:* Every Clerk key, Stripe key, and webhook signing secret differs between the
+- *Risk:* Every the auth provider key, Stripe key, and webhook signing secret differs between the
   development and production instances (§4). Reusing a development value in production
   fails silently rather than loudly: production webhooks fail signature verification, so
   user rows are never created and payments never confirm, while the UI shows no error.
@@ -1358,7 +1358,7 @@ which remain the plan's own material.
 
 **11. Big-bang first deployment**
 - *Risk:* Deploying only after all features are built concentrates every deployment
-  unknown — Clerk production behaviour, cross-origin requests between real domains, R2
+  unknown — the auth provider production behaviour, cross-origin requests between real domains, R2
   public URLs, webhook re-registration, container cold starts — into one session, at
   maximum surface area and minimum remaining schedule.
 - *Mitigation:* M4.5 deploys immediately after the booking loop works (#18–#20), so the
@@ -1543,7 +1543,7 @@ in the repository root; it is the source of truth for credentials and ports.
 
 ### Platforms
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 | Service | Platform | Cost | Notes |
 |---------|----------|------|-------|
@@ -1553,7 +1553,7 @@ in the repository root; it is the source of truth for credentials and ports.
 | File Storage | Cloudflare R2 | ~$0 | S3-compatible, no egress fees |
 | Email | Resend | Free (3k/mo) | Requires a verified sending domain |
 | Error Tracking | Sentry | Free (5k events/mo) | FE + BE |
-| Auth | Clerk | Free (10k MAU) | **Production instance — separate from development** |
+| Auth | The auth provider | Free (10k MAU) | **Production instance — separate from development** |
 | DNS + CDN | Cloudflare | Free | DNS, plus the public domain for R2 assets |
 | CI/CD | GitHub Actions | Free (2k min/mo private) | `ci.yml` verify, `deploy.yml` release |
 
@@ -1566,7 +1566,7 @@ simplicity is roughly $5/month.
 
 ### Provisioning checklist (ticket #19)
 
-> **Superseded by VEN-447/448/449**: Clerk is retired and identity is Neon Auth. The Clerk text in this section is the historical record, not the current design.
+> **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 Every item produces a value that differs from its development counterpart. Copying a
 development value into any of these fails silently — see §12, risk 7.
@@ -1576,12 +1576,12 @@ development value into any of these fails silently — see §12, risk 7.
 - [ ] Pooled connection string → `DATABASE_URL` on Railway
 - [ ] Direct connection string → `DATABASE_URL_UNPOOLED` on Railway and in GitHub Actions secrets
 
-**Clerk**
+**The auth provider**
 - [ ] Create the **production instance** (a separate instance with its own user pool)
 - [ ] Production `pk_live_` / `sk_live_` keys → Vercel and Railway
 - [ ] Configure the production domain and its DNS records
-- [ ] Register the webhook endpoint at `https://api.<domain>/webhooks/clerk`
-- [ ] Copy **that endpoint's** signing secret → `CLERK_WEBHOOK_SECRET` (a new value)
+- [ ] Register the webhook endpoint at `https://api.<domain>/webhooks/auth`
+- [ ] Copy **that endpoint's** signing secret → `AUTH_PROVIDER_WEBHOOK_SECRET` (a new value)
 - [ ] Verify a real sign-up creates a `users` row in the production database
 
 **Stripe**

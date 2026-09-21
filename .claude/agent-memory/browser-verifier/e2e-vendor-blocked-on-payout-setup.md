@@ -1,11 +1,11 @@
 ---
 name: e2e-vendor-blocked-on-payout-setup
-description: The E2E vendor (June Harlow, vendor+clerk_test@example.com) can view requests but cannot Accept them — POST /booking-requests/:id/accept returns 402 until Stripe payout setup is complete
+description: The E2E vendor (June Harlow, vendor+e2e_test@example.com) can view requests but cannot Accept them — POST /booking-requests/:id/accept returns 402 until Stripe payout setup is complete
 metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 On lane 307 (2026-08-30), after the vendor-profile fixture gap ([[e2e-vendor-account-has-no-seeded-profile]]) was fixed and the E2E vendor account was linked to the seeded "June Harlow" profile, the Decline flow worked end-to-end (POST .../decline → 200, row leaves queue), but clicking **Accept** on a pending request fired `POST /booking-requests/:id/accept` → **402 Payment Required**, surfaced in the UI as an inline alert: "Finish your payout setup before accepting bookings." There is no reachable payout-setup surface in the vendor nav (`Dashboard, Bookings, Business profile, Packages, Portfolio, Availability` — no `Payouts`/`Settings` item), so the gate cannot be cleared through the UI as this account is currently seeded.
 

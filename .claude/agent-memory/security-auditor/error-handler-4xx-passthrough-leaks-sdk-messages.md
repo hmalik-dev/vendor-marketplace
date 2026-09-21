@@ -1,11 +1,11 @@
 ---
 name: error-handler-4xx-passthrough-leaks-sdk-messages
-description: FIXED — apps/api's 4xx passthrough now only lets Fastify's own errors speak, so a Stripe/Clerk/AWS SDK error no longer reaches the client verbatim; do not re-report
+description: FIXED — apps/api's 4xx passthrough now only lets Fastify's own errors speak, so a Stripe/the auth provider/AWS SDK error no longer reaches the client verbatim; do not re-report
 metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 **Status: fixed. Do not re-report.** Verified against
 `apps/api/src/plugins/error-handler.ts` on 2026-08-31 (#15 audit).

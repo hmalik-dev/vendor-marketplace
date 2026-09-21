@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `apps/api/src/lib/log-error-serializer.ts` (#445) is the single sink for every
 `log.*({ err })` in the API. It strips `DrizzleQueryError`'s bound values from
@@ -35,9 +35,9 @@ whole thesis is that a future author is covered without knowing the hazard
 exists.
 
 **Door 2 stopped being hypothetical with #451.** `bestEffortNotice` now logs a
-`ClerkAPIResponseError` from `deleteClerkUser`, and that class carries an own
+`authAPIResponseError` from `deleteAuthUser`, and that class carries an own
 enumerable `errors` array, so pino copies it to `aggregateErrors` **unsanitised**.
-Contents are Clerk's own `{code, message, longMessage, meta}` — no credential,
+Contents are the auth provider's own `{code, message, longMessage, meta}` — no credential,
 no bound DB parameter — so it is not a leak today, but the "nothing reaches
 door 2" claim is no longer true and the next such error object may carry more.
 

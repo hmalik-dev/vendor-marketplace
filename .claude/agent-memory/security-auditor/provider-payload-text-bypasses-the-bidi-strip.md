@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `packages/shared/src/schemas/index.ts` makes `freeText()` — `z.string()
 .overwrite(stripBidiControls).trim()` — the one boundary every stored free-text
@@ -14,10 +14,10 @@ field crosses, and `apps/api/src/request-body-free-text.test.ts` enforces it by
 parsing a U+202E through every string field.
 
 A webhook schema is invisible to that guard. `resend.schemas.ts` and
-`clerk.schemas.ts` are run by hand with `safeParse` inside the handler; the
+`auth.schemas.ts` are run by hand with `safeParse` inside the handler; the
 route's `schema` option carries a `response` only. The test file names this gap
 itself ("a write path that is not a Fastify request body… needs its own guard;
-this one cannot see it") and points at `mirroredClerkName` as the covered
+this one cannot see it") and points at `mirroredAuthName` as the covered
 example.
 
 Confirmed 2026-09-07 on #439: `resendEventSchema.data.bounce.message` is a bare

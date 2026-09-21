@@ -42,23 +42,17 @@ export function mirroredIdentity(identity: NeonAuthIdentity): MirroredIdentity {
 }
 
 /**
- * Rows Neon Auth never issued: seeded marketplace accounts (`seed`) and ones the
- * previous identity provider issued (`legacy_clerk`).
+ * Rows Neon Auth never issued: seeded marketplace accounts (`seed`).
  *
  * Read from `users.auth_provider`, recorded at insert (VEN-450), never guessed
  * from the shape of the id: a Neon Auth id that happened to start `user_` would
  * otherwise be taken for an auth one and skipped for ever. The distinction
  * matters more than it looks: without it every seeded vendor reads as "deleted
- * in Neon Auth" and a caller retires the entire public marketplace, and a
- * legacy live account would be retired and refunded. Such a row is outside this
- * pass's jurisdiction until someone migrates it deliberately.
+ * in Neon Auth" and a caller retires the entire public marketplace. Such a row
+ * is outside this pass's jurisdiction.
  */
 export function isSeededIdentity(authProvider: AuthProvider): boolean {
   return authProvider === 'seed';
-}
-
-export function isLegacyIdentity(authProvider: AuthProvider): boolean {
-  return authProvider === 'legacy_clerk';
 }
 
 /** Rows no Neon Auth identity backs. */

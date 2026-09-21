@@ -1129,34 +1129,6 @@ describe('data rights', () => {
     });
 
     /*
-     * An auth-era row has no Neon Auth identity to end, and claiming it was
-     * ended would write a false, permanent `admin_actions` record.
-     */
-    it('reports a legacy-provider row as not deleted, and asks nothing', async () => {
-      await signIn(ADMIN, true);
-      const legacy = await harness.database.db
-        .insert(users)
-        .values({
-          authUserId: 'user_2abcdefghijklmnopqrstuvwxyz',
-          authProvider: 'legacy_clerk',
-          email: 'legacy-closure@example.com',
-          role: 'customer',
-          firstName: 'Legacy',
-          lastName: 'Customer',
-        })
-        .returning({ id: users.id });
-
-      const response = await harness.app.inject({
-        method: 'POST',
-        url: `/admin/users/${legacy[0]!.id}/close`,
-        headers: bearer(ADMIN),
-      });
-
-      expect(response.json()).toMatchObject({ identityDeleted: false });
-      expect(harness.deletedAuthUsers).toEqual([]);
-    });
-
-    /*
      * VEN-450: a Neon Auth id that starts `user_` is still a Neon identity. The
      * provider is recorded on the row, so closure deletes it rather than
      * mistaking it for an auth one and reporting nothing owed.

@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 **Corrected twice by measurement against `packages/shared/dist`, most recently
 2026-09-04 on the #414 worktree.** Everything this file used to call live is
@@ -44,7 +44,7 @@ that is a decision rather than an oversight. Keys stay client-supplied —
 [[image-key-columns-are-client-supplied]].
 
 **`avatarUrl` has a second write path that never sees this schema:**
-`apps/api/src/plugins/clerk-auth.ts` reads Clerk's `imageUrl` on every sign-in
+`apps/api/src/plugins/auth-auth.ts` reads the auth provider's `imageUrl` on every sign-in
 and `users.service.ts` stores it. So "the schema refuses it before storage" is
 true of the three vendor-written columns and not of that one.
 

@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `packages/shared/src/env/deployment.ts` is the single answer to "am I deployed?"
 for both apps (added with the `deployed` `ShapeTarget`, 2026-09-04). Audit it as
@@ -21,7 +21,7 @@ a gate that can be _absent_, not one that can be wrong:
 - `deploymentPlatform().origin` is `null` for a marker that announces no host
   (`DEPLOYMENT_PLATFORM` with no `DEPLOYMENT_ORIGIN`, `NODE_ENV` alone). Every
   check that compares against an origin is then skipped rather than failed —
-  the Clerk webhook guard is the live example. See
+  the auth provider webhook guard is the live example. See
   [[webhook-endpoint-guard-string-matches-localhost]].
 - The markers live in `turbo.json`'s `globalPassThroughEnv` (generated from
   `PLATFORM_ENV_KEYS` via `passThroughKeys()`), which Turborepo **excludes from

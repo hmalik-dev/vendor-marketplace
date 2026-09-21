@@ -293,7 +293,7 @@ describe('seedE2eFixtures', () => {
         .insert(users)
         .values({
           authUserId: AUTH_ID,
-          authProvider: 'legacy_clerk',
+          authProvider: 'seed',
           email: ADMIN.email,
           role: 'admin',
           firstName: 'Old',
@@ -331,7 +331,7 @@ describe('seedE2eFixtures', () => {
       });
       await database.db.insert(users).values({
         authUserId: AUTH_ID,
-        authProvider: 'legacy_clerk',
+        authProvider: 'seed',
         email: ADMIN.email,
         role: 'customer',
         firstName: 'Old',

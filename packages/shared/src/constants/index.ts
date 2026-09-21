@@ -13,10 +13,10 @@ export type UserRole = (typeof USER_ROLES)[number];
 /**
  * Which identity provider issued `users.auth_user_id`, recorded when the row is
  * written and never inferred from the shape of the id (VEN-450). `neon_auth` is
- * the only provider that can back a live account; `legacy_clerk` rows predate it
- * and `seed` rows are fixtures, so neither is in Neon Auth's jurisdiction.
+ * the only provider that can back a live account; `seed` rows are fixtures, so
+ * they are outside Neon Auth's jurisdiction.
  */
-export const AUTH_PROVIDERS = ['neon_auth', 'legacy_clerk', 'seed'] as const;
+export const AUTH_PROVIDERS = ['neon_auth', 'seed'] as const;
 export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
 
 export const PRICE_TYPES = ['fixed', 'starting_at', 'hourly'] as const;

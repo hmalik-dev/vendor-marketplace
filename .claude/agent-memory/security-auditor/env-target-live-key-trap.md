@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 The `target` argument passed to `registrySchemaShape` in `apps/api/src/config/env.ts`
 and `apps/web/src/config/env.ts` must be `baseline`, never `local`. Established
@@ -14,11 +14,11 @@ had become the wrong answer for these two call sites.
 
 **Why:** `local` resolves to `localShape`, which requires `pk_test_` / `sk_test_`.
 `next.config.ts` calls `assertWebEnv()` on every `next build` and the API calls
-`parseEnv()` at boot, so a `local` target throws on the live Clerk/Stripe keys
+`parseEnv()` at boot, so a `local` target throws on the live the auth provider/Stripe keys
 that are correct in production — Vercel build fails, API will not bind. The
 cheapest way out for an operator under pressure is to put a `pk_test_` key into
 production, which is a development credential reaching production and means the
-deployed app authenticates against Clerk's dev instance and transacts in Stripe
+deployed app authenticates against the auth provider's dev instance and transacts in Stripe
 test mode. Only `pnpm preflight --env local|production` knows which environment
 it is in; the apps cannot, because `next build` and `tsc` both set
 `NODE_ENV=production`.
@@ -30,9 +30,9 @@ call sites for the literal target.
 **Corrected 2026-08-28, after ticket #61 landed.** The "no test covers this"
 claim above was true when the audit ran and is now false — #61 closed it. Both
 call sites are pinned by a behavioural live-key test:
-`apps/web/src/config/env.test.ts` "accepts a live-mode Clerk key, because this
+`apps/web/src/config/env.test.ts` "accepts a live-mode the auth provider key, because this
 runs on Vercel too", and `apps/api/src/config/env.test.ts` "accepts a live-mode
-Clerk key, because this is how it boots in production". Each swaps `_test_` for
+The auth provider key, because this is how it boots in production". Each swaps `_test_` for
 `_live_` in the fixture and asserts the parse does not throw, so flipping either
 target to `local` fails that package's suite.
 

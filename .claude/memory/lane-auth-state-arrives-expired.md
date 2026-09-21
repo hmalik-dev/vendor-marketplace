@@ -18,7 +18,7 @@ and nearly filed a ticket against working code. **Naming the innocent party matt
 as naming the guilty one.**
 
 **Why:** measured 2026-08-31 by a peer session. Sharing `.auth/` across lanes is deliberate
-(a session per role, Clerk-era wording, retired by VEN-447; while each lane's data is its own), so the file being there is
+(a session per role, pre-Neon wording, retired by VEN-447; while each lane's data is its own), so the file being there is
 not evidence it works.
 
 **It expires again mid-pass, and that reads as a clean run — 2026-09-07.** Lane

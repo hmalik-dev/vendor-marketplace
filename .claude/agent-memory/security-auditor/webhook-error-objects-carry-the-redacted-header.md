@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `apps/api/src/server.ts` redacts signature headers by path
 (`req.headers["stripe-signature"]`). Redaction is path-based, so it protects only
@@ -19,8 +19,8 @@ constructor sets `this.header = header; this.payload = payload` — so the full 
 request body and the signature header land in the log stream at `warn`, on an
 endpoint no one has to authenticate to reach.
 
-svix's verification error does not carry the payload, which is why the Clerk
-route (same shape, `clerk.routes.ts`) does not leak. The hazard is the error
+svix's verification error does not carry the payload, which is why the auth provider
+route (same shape, `auth.routes.ts`) does not leak. The hazard is the error
 class, not the pattern.
 
 **Why:** an unauthenticated caller controls the entire content of a log record

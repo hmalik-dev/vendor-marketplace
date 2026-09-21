@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `apps/web/src/app/admin/layout.tsx` calls `requireRole('admin')` and every page
 below it is covered. `apps/web/src/app/admin/vendors/export/route.ts` sits under
@@ -16,7 +16,7 @@ it re-implements the gate inline (`getCurrentUser()` → 401, `user.role !== 'ad
 Two things that gate depends on, both easy to break:
 
 - The role comes from `getCurrentUser()`, which reads the API's `/users/me` and
-  therefore the local `users.role` column — never Clerk metadata. `normalizeRole`
+  therefore the local `users.role` column — never the auth provider metadata. `normalizeRole`
   (`modules/users/users.service.ts:48`) refuses `admin` from
   `unsafeMetadata.role`, so `admin` exists only where an operator wrote it to the
   database. Nothing in the product grants it.
@@ -30,7 +30,7 @@ the CSV export walks pages until `MAX_PAGES = 50` × `MAX_PAGE_SIZE = 100`. The
 bound is real (no unbounded loop) but it silently truncates past 5 000 rows.
 
 **Why:** this repo protects surfaces at the resource, deliberately — the
-middleware attaches the Clerk session and guards nothing
+middleware attaches the auth provider session and guards nothing
 (`apps/web/src/middleware.ts`). So a new `route.ts` is unprotected by default and
 nothing in the segment above it will say so.
 

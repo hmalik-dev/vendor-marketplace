@@ -1,11 +1,11 @@
 ---
 name: error-screen-chrome-is-hidden-not-unmounted
-description: The 500 screen hides the site header and footer with a body:has([data-error-screen]) CSS rule, so the chrome — Clerk's UserButton and the NotificationBell's event stream — still mounts and runs on a crashed page
+description: The 500 screen hides the site header and footer with a body:has([data-error-screen]) CSS rule, so the chrome — the auth provider's UserButton and the NotificationBell's event stream — still mounts and runs on a crashed page
 metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `apps/web/src/components/errors/error-screen.tsx` marks its root
 `data-error-screen`, and `apps/web/src/app/globals.css` hides
@@ -23,7 +23,7 @@ was chosen over a React flag so the first server paint is already correct.
   focusable on a crashed page — but the layout's server render still ran
   (`readRoleForChrome` → `/users/me`, `getCategories`), and the client children
   inside the header still hydrate: `NotificationBell` opens its `/events/stream`
-  connection and Clerk's `UserButton` mounts. If a future change must _not_ run
+  connection and the auth provider's `UserButton` mounts. If a future change must _not_ run
   on the error screen, hiding it here will not stop it.
 - `data-error-screen` is a document-wide switch: any element carrying it removes
   the chrome for the whole page. Only `ErrorScreen` sets it today, and the only
@@ -36,7 +36,7 @@ was chosen over a React flag so the first server paint is already correct.
 anything that is not a same-origin path (`^/(?![/\\])[^\s\\]*$`) before it
 renders; `support-email.ts` escapes it into the mail and the API never logs it.
 No app route carries a token in its query. The residual is a third-party param
-that lands in a URL (Clerk's `__clerk_ticket`) being echoed into support mail if
+that lands in a URL (the auth provider's `__auth_ticket`) being echoed into support mail if
 a crash happens on exactly that URL — noted, not filed.
 
 Related: [[public-mail-endpoint-echoes-to-any-address]],
