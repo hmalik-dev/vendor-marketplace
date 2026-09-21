@@ -12,7 +12,13 @@ import {
   IMAGE_SIZES,
   imageRemotePatterns,
 } from './src/config/image-optimizer';
-import { securityHeaders, shouldEnforceCsp } from './src/config/security-headers';
+import {
+  CSP_NONCE_PLACEHOLDER,
+  contentSecurityPolicy,
+  cspHeaderName,
+  securityHeaders,
+  shouldEnforceCsp,
+} from './src/config/security-headers';
 
 // Next.js only reads `.env` files beside the app, but the file developers edit
 // is the one at the repository root — the same one `apps/api` loads explicitly.
@@ -69,6 +75,26 @@ const servesTls = servesOverTls();
  */
 const release = releaseIdentifier();
 
+/*
+ * The CSP needs a nonce per request, so it is set by `src/middleware.ts`, not
+ * by `headers()`. The policy is built here, where the validated origins are, as
+ * a template carrying `CSP_NONCE_PLACEHOLDER`; it is inlined below and the
+ * middleware swaps in a fresh nonce for each response.
+ */
+const cspEnforced = shouldEnforceCsp({
+  cspEnforce: process.env.CSP_ENFORCE,
+  nodeEnv: process.env.NODE_ENV,
+});
+const cspOrigins = {
+  apiOrigin,
+  imageOrigin,
+  errorIngestOrigin: errorIngestOrigin(webEnv.NEXT_PUBLIC_SENTRY_DSN),
+  allowEval: !isProduction,
+  https: servesTls,
+};
+const cspTemplate = contentSecurityPolicy({ ...cspOrigins, nonce: CSP_NONCE_PLACEHOLDER });
+const cspBaseline = contentSecurityPolicy({ ...cspOrigins, nonce: null });
+
 const nextConfig: NextConfig = {
   /*
    * Next infers the workspace root from the nearest lockfile, and a stray
@@ -84,7 +110,12 @@ const nextConfig: NextConfig = {
    * without it, so there the client's Sentry `environment` is the tier the
    * server and the API report.
    */
-  env: { NEXT_PUBLIC_SENTRY_RELEASE: release ?? '', NEXT_PUBLIC_DEPLOY_ENV: webEnv.DEPLOY_ENV },
+  env: {
+    NEXT_PUBLIC_SENTRY_RELEASE: release ?? '',
+    NEXT_PUBLIC_DEPLOY_ENV: webEnv.DEPLOY_ENV,
+    CSP_TEMPLATE: cspTemplate,
+    CSP_HEADER_NAME: cspHeaderName(cspEnforced),
+  },
 
   /*
    * The legal copy is read off disk at build time, and file tracing cannot see
@@ -123,18 +154,19 @@ const nextConfig: NextConfig = {
       {
         // Every route, including the API proxy routes and static assets: a
         // header that only covers pages leaves the interesting paths bare.
+        // The CSP is the exception: it is per-request, see `src/middleware.ts`.
         source: '/:path*',
-        headers: securityHeaders({
-          apiOrigin,
-          imageOrigin,
-          errorIngestOrigin: errorIngestOrigin(webEnv.NEXT_PUBLIC_SENTRY_DSN),
-          allowEval: !isProduction,
-          enforceCsp: shouldEnforceCsp({
-            cspEnforce: process.env.CSP_ENFORCE,
-            nodeEnv: process.env.NODE_ENV,
-          }),
-          https: servesTls,
-        }),
+        headers: securityHeaders({ https: servesTls }),
+      },
+      {
+        /*
+         * The middleware skips `/_next`, so its assets would carry no CSP. This
+         * is the nonce-free baseline for them, built from the same origins as
+         * the per-request policy — which is also why `pnpm preflight` reads the
+         * baked `connect-src` and `img-src` back out of the routes manifest.
+         */
+        source: '/_next/:path*',
+        headers: [{ key: cspHeaderName(cspEnforced), value: cspBaseline }],
       },
     ];
   },

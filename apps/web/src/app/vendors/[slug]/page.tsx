@@ -9,6 +9,7 @@ import {
   toDateString,
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
+import { cspNonce } from '@/lib/csp-nonce';
 import { AboutPane } from '@/components/vendors/profile/about-pane';
 import { AvailabilityPane } from '@/components/vendors/profile/availability-pane';
 import { BookingRail } from '@/components/vendors/profile/booking-rail';
@@ -141,6 +142,7 @@ export default async function VendorProfilePage({
   params,
 }: PageProps): Promise<React.ReactElement> {
   const { slug } = await params;
+  const nonce = await cspNonce();
 
   /*
     One wave, not two (#390).
@@ -273,6 +275,7 @@ export default async function VendorProfilePage({
     <>
       <script
         type="application/ld+json"
+        nonce={nonce}
         /*
           `serialiseJsonLd`, not `JSON.stringify`: the payload carries the
           vendor's own business name and bio, and `dangerouslySetInnerHTML` is

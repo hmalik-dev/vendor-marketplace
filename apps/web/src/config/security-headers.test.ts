@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { contentSecurityPolicy, securityHeaders, shouldEnforceCsp } from './security-headers';
+import {
+  CSP_NONCE_PLACEHOLDER,
+  contentSecurityPolicy,
+  cspHeaderName,
+  securityHeaders,
+  shouldEnforceCsp,
+  withNonce,
+} from './security-headers';
 
-const ORIGINS = { apiOrigin: 'https://api.example.com', imageOrigin: 'https://cdn.example.com' };
+const NONCE = 'dGVzdC1ub25jZQ==';
+const ORIGINS = {
+  apiOrigin: 'https://api.example.com',
+  imageOrigin: 'https://cdn.example.com',
+  nonce: NONCE,
+};
 
 function headerMap(options: Parameters<typeof securityHeaders>[0]): Record<string, string> {
   return Object.fromEntries(securityHeaders(options).map((rule) => [rule.key, rule.value]));
@@ -10,7 +22,7 @@ function headerMap(options: Parameters<typeof securityHeaders>[0]): Record<strin
 describe('securityHeaders', () => {
   /* The acceptance check for #30 greps for exactly these four. */
   it('sends the four headers the launch gate checks for', () => {
-    const headers = headerMap({ ...ORIGINS, enforceCsp: true, https: true });
+    const headers = headerMap({ https: true });
 
     expect(headers['Strict-Transport-Security']).toBe('max-age=63072000; includeSubDomains');
     expect(headers['X-Content-Type-Options']).toBe('nosniff');
@@ -24,19 +36,15 @@ describe('securityHeaders', () => {
    * unreachable in that browser long after the mistake was fixed.
    */
   it('omits HSTS off HTTPS', () => {
-    expect(headerMap({ ...ORIGINS, enforceCsp: false, https: false })).not.toHaveProperty(
-      'Strict-Transport-Security',
-    );
+    expect(headerMap({ https: false })).not.toHaveProperty('Strict-Transport-Security');
   });
 
   it('never sends preload, which is an irreversible submission', () => {
-    expect(
-      headerMap({ ...ORIGINS, enforceCsp: true, https: true })['Strict-Transport-Security'],
-    ).not.toContain('preload');
+    expect(headerMap({ https: true })['Strict-Transport-Security']).not.toContain('preload');
   });
 
   it('denies the permissions nothing here uses', () => {
-    const policy = headerMap({ ...ORIGINS, enforceCsp: true, https: true })['Permissions-Policy'];
+    const policy = headerMap({ https: true })['Permissions-Policy'];
 
     for (const feature of ['camera', 'microphone', 'geolocation']) {
       expect(policy).toContain(`${feature}=()`);
@@ -50,28 +58,28 @@ describe('securityHeaders', () => {
    * Stripe's script origins, not only `self` (#396).
    */
   it('lets this page and the Stripe frame use the Payment Request API', () => {
-    const policy = headerMap({ ...ORIGINS, enforceCsp: true, https: true })['Permissions-Policy'];
+    const policy = headerMap({ https: true })['Permissions-Policy'];
 
     expect(policy).toContain('payment=(self "https://js.stripe.com" "https://*.js.stripe.com")');
     expect(policy).not.toContain('payment=()');
   });
 
-  /*
-   * Report-only is the whole point of the flag: a CSP that breaks sign-in is
-   * worse than none, so the policy is observed before it is enforced.
-   */
-  it('reports rather than enforces until the policy is promoted', () => {
-    const reporting = headerMap({ ...ORIGINS, enforceCsp: false, https: true });
+  /* The CSP needs a per-request nonce, so it is the middleware's, not a static header. */
+  it('sends no CSP itself', () => {
+    const names = securityHeaders({ https: true }).map((rule) => rule.key);
 
-    expect(reporting).toHaveProperty('Content-Security-Policy-Report-Only');
-    expect(reporting).not.toHaveProperty('Content-Security-Policy');
+    expect(names).not.toContain('Content-Security-Policy');
+    expect(names).not.toContain('Content-Security-Policy-Report-Only');
+  });
+});
+
+describe('cspHeaderName', () => {
+  it('reports rather than enforces until the policy is promoted', () => {
+    expect(cspHeaderName(false)).toBe('Content-Security-Policy-Report-Only');
   });
 
   it('enforces once promoted', () => {
-    const enforced = headerMap({ ...ORIGINS, enforceCsp: true, https: true });
-
-    expect(enforced).toHaveProperty('Content-Security-Policy');
-    expect(enforced).not.toHaveProperty('Content-Security-Policy-Report-Only');
+    expect(cspHeaderName(true)).toBe('Content-Security-Policy');
   });
 });
 
@@ -112,7 +120,7 @@ describe('contentSecurityPolicy', () => {
   });
 
   it('omits the image origin entirely when uploads share this one', () => {
-    expect(contentSecurityPolicy({ apiOrigin: 'https://api.example.com' })).toContain(
+    expect(contentSecurityPolicy({ apiOrigin: 'https://api.example.com', nonce: NONCE })).toContain(
       `img-src 'self' data: blob: https://*.stripe.com`,
     );
   });
@@ -235,17 +243,37 @@ describe('contentSecurityPolicy', () => {
   });
 
   /*
-   * Both directives carry `unsafe-inline`, and the test says so rather than
-   * implying a stricter policy than this is: Next inlines critical CSS, and
-   * the App Router inlines its bootstrap. Dropping it from scripts needs a
-   * per-request nonce, which opts the whole site out of static generation —
-   * its own ticket, not this one.
+   * VEN-523. `script-src` names no `unsafe-inline`: the only inline script that
+   * runs is one carrying this response's nonce. Style keeps it (a non-goal).
    */
-  it("carries 'unsafe-inline' on both style-src and script-src", () => {
+  it("drops 'unsafe-inline' from script-src and carries the nonce with strict-dynamic", () => {
     const directives = contentSecurityPolicy(ORIGINS).split('; ');
+    const script = directives.find((d) => d.startsWith('script-src'));
 
+    expect(script).not.toContain("'unsafe-inline'");
+    expect(script).toContain(`'nonce-${NONCE}'`);
+    expect(script).toContain("'strict-dynamic'");
     expect(directives.find((d) => d.startsWith('style-src'))).toContain("'unsafe-inline'");
-    expect(directives.find((d) => d.startsWith('script-src'))).toContain("'unsafe-inline'");
+  });
+
+  it('builds a nonce-free baseline for non-document responses', () => {
+    const script = contentSecurityPolicy({ ...ORIGINS, nonce: null })
+      .split('; ')
+      .find((d) => d.startsWith('script-src'));
+
+    expect(script).not.toMatch(/nonce|strict-dynamic|unsafe-inline/);
+  });
+
+  it('puts a different nonce in a different request, and only in script-src', () => {
+    const template = contentSecurityPolicy({ ...ORIGINS, nonce: CSP_NONCE_PLACEHOLDER });
+    const first = withNonce(template, 'AAAA');
+    const second = withNonce(template, 'BBBB');
+
+    expect(first).toContain(`'nonce-AAAA'`);
+    expect(second).toContain(`'nonce-BBBB'`);
+    expect(second).not.toContain('AAAA');
+    expect(first).not.toContain(CSP_NONCE_PLACEHOLDER);
+    expect(first.match(/nonce-/g)).toHaveLength(1);
   });
 
   /*
