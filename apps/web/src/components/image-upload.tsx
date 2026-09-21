@@ -280,7 +280,7 @@ export function ImageUpload({
           'has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-clay-400 has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-stone-50',
           hasPreview ? 'bg-stone-50' : 'placeholder-hatch',
           // 128px circle from `sm`, the size frame 09 draws the profile photo.
-          rounded ? 'size-24 rounded-full sm:size-32' : cn(aspectClassName, 'rounded-lg'),
+          rounded ? 'size-24 rounded-full sm:size-32' : cn(aspectClassName, 'rounded-[14px]'),
           isDragging && 'border-clay-400 bg-clay-100',
           isBusy && 'opacity-70',
         )}

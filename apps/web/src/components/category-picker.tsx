@@ -68,7 +68,7 @@ export function CategoryPicker({
                     ? // `clay-600` is the token for text on a `clay-100`
                       // surface, which is exactly what a selected chip is.
                       // `stone-800` was not even in the ramp.
-                      'border-clay-400 bg-clay-100 font-semibold text-clay-600'
+                      'border-[1.5px] border-clay-400 bg-clay-100 font-semibold text-clay-600'
                     : 'border-stone-300 bg-stone-0 font-medium text-stone-700 hover:border-stone-400 hover:bg-stone-50',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                 )}

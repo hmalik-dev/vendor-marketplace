@@ -107,11 +107,16 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
         {AUTH_COPY.forgotLink}
       </Link>
 
-      <Button type="submit" loading={busy} disabled={email.trim() === '' || password === ''}>
+      <Button
+        type="submit"
+        className="py-3.25"
+        loading={busy}
+        disabled={email.trim() === '' || password === ''}
+      >
         {AUTH_COPY.signInSubmit}
       </Button>
 
-      <p className="mt-5 text-center text-cta text-stone-700">
+      <p className="mt-5 text-center text-action text-stone-700">
         {AUTH_COPY.signInAlt}{' '}
         <Link href="/sign-up" className="font-semibold text-clay-500 hover:underline">
           Create an account
