@@ -62,6 +62,24 @@ export async function resendVerificationCode(email: string): Promise<AuthOutcome
   );
 }
 
+/**
+ * Asks Neon to email a reset code. The proxy answers every address the same, so
+ * `ok` says nothing about whether an account exists; only `unreachable` and a
+ * caller-level refusal (`rejected`, the per-caller 429) are ever different.
+ */
+export async function requestPasswordReset(email: string): Promise<AuthOutcome> {
+  return outcomeOf(await post('/email-otp/request-password-reset', { email }));
+}
+
+/** `rejected` covers a wrong, used or expired code, and a password Neon refuses. */
+export async function resetPasswordWithCode(input: {
+  email: string;
+  otp: string;
+  password: string;
+}): Promise<AuthOutcome> {
+  return outcomeOf(await post('/email-otp/reset-password', input));
+}
+
 export async function signOut(): Promise<void> {
   await post('/sign-out', null);
   clearSessionToken();

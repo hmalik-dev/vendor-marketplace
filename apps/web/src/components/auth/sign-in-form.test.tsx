@@ -41,6 +41,14 @@ describe('SignInForm', () => {
     expect(screen.getByLabelText('Password').getAttribute('placeholder')).toBe('••••••••••');
   });
 
+  it('links to the password reset', () => {
+    render(<SignInForm destination="/after-sign-in" />);
+
+    expect(screen.getByRole('link', { name: 'Forgot password?' }).getAttribute('href')).toBe(
+      '/forgot-password',
+    );
+  });
+
   it('signs in and goes to the destination it was given', async () => {
     const user = userEvent.setup();
     render(<SignInForm destination="/after-sign-in?returnTo=%2Fbookings" />);

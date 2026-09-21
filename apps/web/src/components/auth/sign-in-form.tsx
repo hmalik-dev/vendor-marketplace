@@ -95,6 +95,12 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
         value={password}
         onChange={(event) => setPassword(event.target.value)}
       />
+      <Link
+        href="/forgot-password"
+        className="-mt-2 mb-4 self-end text-cta font-semibold text-clay-500 hover:underline"
+      >
+        {AUTH_COPY.forgotLink}
+      </Link>
 
       <Button type="submit" loading={busy} disabled={email.trim() === '' || password === ''}>
         {AUTH_COPY.signInSubmit}

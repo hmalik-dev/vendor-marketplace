@@ -21,5 +21,14 @@ export const AUTH_COPY = {
   signUpFailed:
     'We could not create that account. Check the details, or sign in if you already have one.',
   signInFailed: 'That email and password did not match.',
+  forgotLink: 'Forgot password?',
+  forgotSubmit: 'Email me a code',
+  forgotBack: 'Back to sign in',
+  resetCodeSent: 'If that address has an account, we have emailed it a six-digit code.',
+  resetPasswordLabel: 'New password',
+  resetSubmit: 'Set new password',
+  resetDone: 'Your password is changed. Sign in with the new one.',
+  resetFailed: 'That code did not work, or it has expired. Check it, or ask for a new one.',
+  resetThrottled: 'Too many attempts. Wait a minute and try again.',
   unreachable: 'We could not reach the sign-in service. Try again in a moment.',
 } as const;

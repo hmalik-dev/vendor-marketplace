@@ -117,3 +117,5 @@
 - [Admin vendor detail is a gated aggregate](admin-vendor-detail-is-a-gated-aggregate.md) — widening notifications to `body` bypasses the case-row read grant
 - [Admin category writes](admin-category-writes.md) — PASS; the toggle can double-write its audit row under a concurrent repeat
 - [RLS is enabled, never forced](rls-is-enabled-not-forced-owner-bypasses.md) — VEN-504: the owner bypasses, so a future non-owner role reads zero rows silently; the guard is `relkind='r'` in `public`
+
+- [Auth proxy parser differential](auth-proxy-parser-differential.md) — a body-derived rate-limit key must fail closed; an unparseable body must not be forwarded unbudgeted
