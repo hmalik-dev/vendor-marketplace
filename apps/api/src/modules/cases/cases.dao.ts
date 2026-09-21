@@ -20,6 +20,7 @@ import type {
   SupportTopic,
 } from '@vendor-marketplace/shared';
 import { countWidenings } from '../admin/widenings.js';
+import { payoutResidualHeld } from '../payments/payouts.dao.js';
 import type { AppDatabase } from '../../lib/database.js';
 import { containsInsensitive } from '../../lib/like-pattern.js';
 
@@ -299,6 +300,7 @@ export async function findCaseBooking(
       disputeReason: bookings.disputeReason,
       cancelledBy: bookings.cancelledBy,
       stripePaymentIntentId: bookings.stripePaymentIntentId,
+      residualHeld: payoutResidualHeld(),
     })
     .from(bookings)
     .innerJoin(users, eq(users.id, bookings.customerId))
