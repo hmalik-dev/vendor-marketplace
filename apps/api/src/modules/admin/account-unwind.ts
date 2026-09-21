@@ -8,7 +8,11 @@ import { insertNotification } from '../messaging/messaging.dao.js';
 import { refundFailedAlert } from '../operator-alerts/operator-alerts.service.js';
 import { cancelBookingAndFreeDate } from '../payments/payments.dao.js';
 import { createRefundOnce, type BookingContext } from '../payments/payments.service.js';
-import { declineOpenRequests, findConfirmedBookingsToUnwind } from './admin.dao.js';
+import {
+  declineOpenRequests,
+  findConfirmedBookingsToUnwind,
+  type BanAffectedBooking,
+} from './admin.dao.js';
 
 /**
  * Everything an admin operation needs — which is exactly a `BookingContext`.
@@ -218,13 +222,46 @@ export async function unwindAccountBookings(
   context.hub.closeFor(targetId);
 
   const floorDate = unwindFloorDate(now);
-  const affected = await findConfirmedBookingsToUnwind(
+  const snapshot = await findConfirmedBookingsToUnwind(
     context.db,
     targetId,
     vendorProfileId,
     floorDate,
   );
+  const first = await unwindBatch(context, targetId, now, copy, snapshot);
 
+  const requestsDeclined = await declineOpenRequests(context.db, targetId, vendorProfileId, now);
+
+  /*
+   * The closing pass (VEN-479). The snapshot above is taken before the loop
+   * runs, and the loop takes seconds to minutes for a large vendor; a customer
+   * whose payment landed in that window confirmed a booking the snapshot never
+   * saw, and nothing else would refund it. Anything the first pass already
+   * handled is excluded, so a booking left for review or whose refund failed is
+   * neither counted nor alerted a second time.
+   */
+  const handled = new Set(snapshot.map((booking) => booking.id));
+  const late = (
+    await findConfirmedBookingsToUnwind(context.db, targetId, vendorProfileId, floorDate)
+  ).filter((booking) => !handled.has(booking.id));
+  const closing = await unwindBatch(context, targetId, now, copy, late);
+
+  return {
+    requestsDeclined,
+    bookingsCancelled: first.bookingsCancelled + closing.bookingsCancelled,
+    refundsIssued: first.refundsIssued + closing.refundsIssued,
+    refundsFailed: first.refundsFailed + closing.refundsFailed,
+    bookingsLeftForReview: first.bookingsLeftForReview + closing.bookingsLeftForReview,
+  };
+}
+
+async function unwindBatch(
+  context: AdminContext,
+  targetId: string,
+  now: Date,
+  copy: AccountUnwindCopy,
+  affected: BanAffectedBooking[],
+): Promise<Omit<AccountUnwindResult, 'requestsDeclined'>> {
   let refundsIssued = 0;
   let bookingsCancelled = 0;
   let refundsFailed = 0;
@@ -497,10 +534,7 @@ export async function unwindAccountBookings(
     }
   }
 
-  const requestsDeclined = await declineOpenRequests(context.db, targetId, vendorProfileId, now);
-
   return {
-    requestsDeclined,
     bookingsCancelled,
     refundsIssued,
     refundsFailed,
