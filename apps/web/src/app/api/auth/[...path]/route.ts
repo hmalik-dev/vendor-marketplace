@@ -166,14 +166,7 @@ async function endEverySession(request: NextRequest, email: string, body: string
         authCall(request, signIn, headers, JSON.stringify({ email, password })) as NextRequest,
         { params: Promise.resolve({ path: signIn }) },
       );
-    const userId = (
-      (await signedIn
-        .clone()
-        .json()
-        .catch(() => null)) as {
-        user?: { id?: unknown };
-      } | null
-    )?.user?.id;
+    const userId = await userIdIn(signedIn);
     const cookie = signedIn.headers
       .getSetCookie()
       .map((line) => line.split(';')[0])
@@ -199,11 +192,22 @@ async function endEverySession(request: NextRequest, email: string, body: string
       throw new Error(`Other sessions were not ended (${revoked.status})`);
     }
 
-    if (typeof userId === 'string') {
+    if (userId !== undefined) {
       forgetSessionsFor(userId);
     }
   } catch (error) {
     Sentry.captureException(error);
+  }
+}
+
+/** The account's id from a sign-in answer, or `undefined` when the body says none. */
+async function userIdIn(response: Response): Promise<string | undefined> {
+  try {
+    const id = ((await response.clone().json()) as { user?: { id?: unknown } } | null)?.user?.id;
+    return typeof id === 'string' ? id : undefined;
+  } catch {
+    // Only the cache eviction needs it; the revoke below does not.
+    return undefined;
   }
 }
 
