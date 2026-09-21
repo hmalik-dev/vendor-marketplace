@@ -512,6 +512,13 @@
       "when": 1789997718868,
       "tag": "0072_watery_winter_soldier",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1790000756365,
+      "tag": "0073_faulty_franklin_richards",
+      "breakpoints": true
     }
   ]
 }
