@@ -77,7 +77,9 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
     REQUESTS_PATH,
     {
       /*
-       * `onRequest`, not `preHandler` — the stage that runs before Fastify's
+       * `preParsing`, not `preHandler` (nor `onRequest`, which would run ahead of
+       * this route's limiter and refuse signed-out callers uncounted) — the stage
+       * that runs before Fastify's
        * own body parser and before schema validation. A vendor posting a
        * malformed body here got `400 VALIDATION_ERROR`: they were still denied,
        * because no handler below ever ran, but the status code reads like a
@@ -85,7 +87,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
        * signed-in vendor while verifying #412's storefront CTA gate — a
        * well-formed body already answered 403, so only the code was wrong.
        */
-      onRequest: requireRoleBeforeValidation('customer'),
+      preParsing: requireRoleBeforeValidation('customer'),
       config: { rateLimit: perAccountRateLimit(options.rateLimitMax, '1 hour') },
       schema: {
         body: createBookingRequestSchema,
