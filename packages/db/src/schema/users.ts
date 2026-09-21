@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   decimal,
   index,
   integer,
@@ -154,6 +155,11 @@ export const users = pgTable(
     index('users_banned_idx')
       .on(table.id)
       .where(sql`${table.isBanned} = true`),
+    // NULL on either side passes: a customer may state one bound or neither.
+    check(
+      'users_typical_guest_count_order',
+      sql`${table.typicalGuestCountMin} <= ${table.typicalGuestCountMax}`,
+    ),
   ],
 ).enableRLS();
 

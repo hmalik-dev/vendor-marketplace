@@ -89,6 +89,8 @@ export const bookingRequests = pgTable(
   (table) => [
     index('booking_requests_customer_status_idx').on(table.customerId, table.status),
     index('booking_requests_vendor_status_idx').on(table.vendorId, table.status),
+    // The `ON DELETE SET NULL` scan when a package row goes with its vendor.
+    index('booking_requests_package_idx').on(table.packageId),
     // Serves the lazy expiry sweep, which only ever scans pending requests.
     index('booking_requests_expires_at_idx')
       .on(table.expiresAt)

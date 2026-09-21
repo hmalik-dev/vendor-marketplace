@@ -179,6 +179,9 @@ export const supportCases = pgTable(
      * the index answer the wrong question quickly.
      */
     index('support_cases_subject_idx').on(table.status, table.subjectType, table.subjectId),
+    // The `ON DELETE SET NULL` scans when a user is erased.
+    index('support_cases_sender_user_idx').on(table.senderUserId),
+    index('support_cases_resolved_by_idx').on(table.resolvedBy),
   ],
 ).enableRLS();
 
