@@ -224,7 +224,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
           data-role-pending={role === null ? '' : undefined}
         >
           {failure ? (
-            <Banner status="failed" className="mb-4">
+            <Banner status="failed" role="alert" className="mb-4">
               {failure}
             </Banner>
           ) : null}
@@ -235,6 +235,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             placeholder="you@example.com"
             name="email"
             autoComplete="email"
+            aria-invalid={failure ? true : undefined}
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -246,6 +247,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             placeholder="••••••••••"
             name="password"
             autoComplete="new-password"
+            aria-invalid={failure ? true : undefined}
             minLength={10}
             required
             value={password}

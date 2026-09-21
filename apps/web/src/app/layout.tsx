@@ -169,7 +169,7 @@ export default async function RootLayout({
           */}
         <Toaster
           position="bottom-right"
-          duration={5000}
+          duration={8000}
           offset={{ bottom: TOAST_BOTTOM_OFFSET }}
           mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
         />

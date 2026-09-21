@@ -82,6 +82,28 @@ describe('SignInForm', () => {
     expect(screen.queryByLabelText('Verification code')).toBeNull();
   });
 
+  it('announces a refusal as an alert and marks both fields invalid', async () => {
+    signInWithEmail.mockResolvedValue('rejected');
+    const user = userEvent.setup();
+    render(<SignInForm destination="/after-sign-in" />);
+
+    expect(screen.getByLabelText('Email').getAttribute('aria-invalid')).toBeNull();
+
+    await submit(user);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('That email and password did not match.');
+    expect(screen.getByLabelText('Email').getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByLabelText('Password').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('gives the forgot-password link a 44px target', () => {
+    render(<SignInForm destination="/after-sign-in" />);
+
+    // jsdom has no layout, so the class-level fact is what can be asserted.
+    expect(screen.getByRole('link', { name: 'Forgot password?' }).className).toContain('min-h-11');
+  });
+
   it('says the service is unreachable, not that the password is wrong, on a network failure', async () => {
     signInWithEmail.mockResolvedValue('unreachable');
     const user = userEvent.setup();

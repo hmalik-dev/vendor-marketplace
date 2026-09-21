@@ -419,7 +419,7 @@ function SheetDropdown({
               <button
                 type="button"
                 onClick={close}
-                className="text-[12.5px] font-semibold text-clay-500"
+                className="-my-2.5 min-h-11 px-2 text-[12.5px] font-semibold text-clay-500"
               >
                 Close
               </button>

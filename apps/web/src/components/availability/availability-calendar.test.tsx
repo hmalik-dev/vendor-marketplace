@@ -244,7 +244,10 @@ describe('AvailabilityCalendar', () => {
   it('locks the dates the vendor does not own', () => {
     renderCalendar([entry('2026-06-15', 'booked'), entry('2026-06-17', 'pending')]);
 
-    expect(cell('2026-06-15')).toHaveProperty('disabled', true);
+    // Reachable by keyboard and announced as disabled, not removed from the tab order.
+    expect(cell('2026-06-15')).toHaveProperty('disabled', false);
+    expect(cell('2026-06-15').getAttribute('aria-disabled')).toBe('true');
+    expect(cell('2026-06-15').getAttribute('aria-label')).toContain('Booked — locked');
     // An ordinary open date stays editable.
     expect(cell('2026-06-18')).toHaveProperty('disabled', false);
   });
@@ -338,7 +341,7 @@ describe('AvailabilityCalendar', () => {
       ['2026-06-14', 'Available'],
     ]) {
       const past = cell(date);
-      expect(past, date).toHaveProperty('disabled', true);
+      expect(past.getAttribute('aria-disabled'), date).toBe('true');
       expect(past.getAttribute('aria-label'), date).toContain('in the past');
       // The historical status survives; the cell is read-only, not emptied.
       expect(past.getAttribute('aria-label'), date).toContain(label);
@@ -499,7 +502,7 @@ describe('AvailabilityCalendar', () => {
     expect(cell('2026-06-15').getAttribute('aria-label')).toBe(
       'Monday, June 15, 2026 — Booked — locked',
     );
-    expect(cell('2026-06-15')).toHaveProperty('disabled', true);
+    expect(cell('2026-06-15').getAttribute('aria-disabled')).toBe('true');
     expect(quarterCount('Booked ahead')).toBe('1 dates');
 
     /*
