@@ -1,5 +1,8 @@
 import * as Sentry from '@sentry/nextjs';
 import { webSentryOptions } from './config/error-reporting';
+import { disableZodJit } from './config/zod-jitless';
+
+disableZodJit();
 
 /*
  * Browser error reporting. Each `process.env.NEXT_PUBLIC_*` is written out in
