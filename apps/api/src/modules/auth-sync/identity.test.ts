@@ -15,6 +15,8 @@ describe('providerAvatarUrl (VEN-538)', () => {
     '//evil.com/x.png',
     'https://u:p@evil.com/x',
     'https://evil.com/\\x',
+    'https:/evil.com/x.png',
+    'ftp://example.com/x.png',
     'https://evil.com/a\tb',
     `https://example.com/${'a'.repeat(500)}`,
     '',

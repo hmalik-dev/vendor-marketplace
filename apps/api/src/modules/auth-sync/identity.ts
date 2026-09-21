@@ -82,10 +82,10 @@ export function providerAvatarUrl(value: unknown): string | null {
 
   const trimmed = value.trim();
 
-  // eslint-disable-next-line no-control-regex -- control characters are exactly what is refused
   if (
     trimmed === '' ||
     trimmed.length > MAX_URL_LENGTH ||
+    // eslint-disable-next-line no-control-regex -- control characters are exactly what is refused
     /[\u0000-\u001f\u007f\\]/.test(trimmed)
   ) {
     return null;
@@ -93,7 +93,8 @@ export function providerAvatarUrl(value: unknown): string | null {
 
   try {
     const url = new URL(trimmed);
-    const isWeb = url.protocol === 'https:' || url.protocol === 'http:';
+    // `https:/x` parses as a URL but is not one `isProviderAvatar` recognises, so the stored row would read as an upload.
+    const isWeb = /^https?:\/\//i.test(trimmed);
 
     return isWeb && url.username === '' && url.password === '' ? trimmed : null;
   } catch {
