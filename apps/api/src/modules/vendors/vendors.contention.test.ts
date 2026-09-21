@@ -6,6 +6,7 @@ import {
   type PostgresTestDatabase,
 } from '@vendor-marketplace/db/testing/postgres';
 import {
+  acceptVendorAgreementAs,
   bearer,
   createTestHarness,
   signInAs,
@@ -61,6 +62,7 @@ describe('the vendor’s own storefront writes, against a real Postgres', () => 
       },
     });
     expect(servicePackage.statusCode).toBe(201);
+    await acceptVendorAgreementAs(harness!, VENDOR);
 
     return { vendorId: profile.json().id, packageId: servicePackage.json().id };
   }

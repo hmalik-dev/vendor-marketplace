@@ -10,6 +10,8 @@ import {
 import type { AdminActionRow } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { legalDocumentSha256 } from '@vendor-marketplace/shared';
+import { insertAcceptance } from '../legal/legal-acceptance.dao.js';
 import { findDuePayoutBookingIds } from '../payments/payouts.dao.js';
 import { PAYOUT_AGREEMENT_MISSING_REASON, releaseDuePayouts } from '../payments/payouts.service.js';
 import {
@@ -704,6 +706,32 @@ describe('admin payout health', () => {
         payoutStatus: 'released',
         payoutFailureReason: null,
       });
+      expect(harness.stripe.transfers).toHaveLength(1);
+    });
+
+    it('still releases money owed to a vendor whose only acceptance is an older version', async () => {
+      await unagreedVendor();
+      const [owner] = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.authUserId, UNAGREED_VENDOR));
+      await insertAcceptance(harness.database.db, {
+        vendorId: vendorProfileId,
+        document: 'vendor_agreement',
+        version: 'v0.9',
+        documentSha256: legalDocumentSha256('vendor_agreement'),
+        acceptanceMethod: 'seed_fixture',
+        acceptedByUserId: owner!.id,
+        acceptedByName: 'Test User',
+        businessName: 'Moonlit Studio',
+        ip: null,
+        userAgent: null,
+      });
+      const bookingId = await paidBooking();
+
+      const response = await retry(bookingId);
+
+      expect(response.json()).toMatchObject({ outcome: 'released', payoutFailureReason: null });
       expect(harness.stripe.transfers).toHaveLength(1);
     });
 

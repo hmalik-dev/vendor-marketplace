@@ -6,6 +6,7 @@ import {
   type PostgresTestDatabase,
 } from '@vendor-marketplace/db/testing/postgres';
 import {
+  acceptVendorAgreementAs,
   bearer,
   createTestHarness,
   signInAs,
@@ -66,6 +67,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
     });
     expect(servicePackage.statusCode).toBe(201);
     packageId = servicePackage.json().id;
+    await acceptVendorAgreementAs(harness!, VENDOR);
   }
 
   async function vendorState(): Promise<{ isPublished: boolean; activePackages: number }> {
