@@ -1155,7 +1155,9 @@ async function prepareTransition({
       availability === 'paused' ? ERROR_CODES.VENDOR_PAUSED : ERROR_CODES.VENDOR_UNAVAILABLE,
       party === 'vendor'
         ? 'Publish your storefront again before accepting bookings'
-        : `${vendor.businessName} is no longer taking bookings`,
+        : availability === 'paused'
+          ? `${vendor.businessName} isn't taking bookings right now`
+          : `${vendor.businessName} is no longer taking bookings`,
     );
   }
 

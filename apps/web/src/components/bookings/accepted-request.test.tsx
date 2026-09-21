@@ -28,7 +28,12 @@ function acceptedRequest(overrides: Partial<WireBookingRequest> = {}): WireBooki
     quotedPriceCents: null,
     quoteNote: null,
     expiresAt: null,
-    vendor: { slug: 'kessler-co', businessName: 'Kessler & Co.', avatarUrl: null },
+    vendor: {
+      slug: 'kessler-co',
+      businessName: 'Kessler & Co.',
+      avatarUrl: null,
+      availability: 'available',
+    },
     ...overrides,
   } as unknown as WireBookingRequest;
 }
@@ -88,10 +93,27 @@ describe('AcceptedRequest', () => {
     render(<AcceptedRequest request={request} booking={null} />);
 
     expect(screen.queryByRole('link', { name: /^Pay/ })).toBeNull();
+    expect(screen.queryByText(/Paying now confirms it/)).toBeNull();
     expect(screen.getByRole('status').textContent).toContain(
       "Kessler & Co. isn't taking bookings right now",
     );
     expect(screen.getByRole('status').textContent).toContain('expires in 3d');
+  });
+
+  it('says a closed vendor cannot be paid, permanently, with no Pay link', () => {
+    const request = acceptedRequest({
+      vendor: {
+        slug: 'kessler-co',
+        businessName: 'Kessler & Co.',
+        avatarUrl: null,
+        availability: 'closed',
+      },
+    } as Partial<WireBookingRequest>);
+    render(<AcceptedRequest request={request} booking={null} />);
+
+    expect(screen.queryByRole('link', { name: /^Pay/ })).toBeNull();
+    expect(screen.queryByText(/Paying now confirms it/)).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('no longer taking bookings');
   });
 
   it('keeps the Pay link for an available vendor', () => {

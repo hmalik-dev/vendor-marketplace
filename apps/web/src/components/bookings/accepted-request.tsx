@@ -158,7 +158,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
               ? `Cancel more than ${FULL_REFUND_CUTOFF_HOURS} hours before the event and you're refunded in full — ${formatPrice(quote.refundCents)}.`
               : `The event is inside ${FULL_REFUND_CUTOFF_HOURS} hours, so cancelling now refunds ${formatPrice(quote?.refundCents ?? 0)} of ${formatPrice(booking.totalAmountCents)}.`}
           </p>
-        ) : (
+        ) : pulled !== null ? null : (
           <p className="text-[12.5px] leading-[1.55] text-stone-600">
             The date is held. Paying now confirms it — you&apos;re refunded in full if you cancel at
             least {FULL_REFUND_CUTOFF_HOURS} hours before the event.

@@ -1426,6 +1426,7 @@ describe('/booking-requests', () => {
 
       expect(response.statusCode).toBe(409);
       expect(response.json().error).toBe(ERROR_CODES.VENDOR_PAUSED);
+      expect(response.json().message).toBe("Sunlit Studio isn't taking bookings right now");
       const [row] = await harness.database.db
         .select({ status: bookingRequests.status })
         .from(bookingRequests);
