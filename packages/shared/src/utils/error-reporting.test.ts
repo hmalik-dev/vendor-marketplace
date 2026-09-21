@@ -289,7 +289,10 @@ describe('scrubErrorEvent: surfaces beyond `request` (VEN-522)', () => {
   });
 
   it('redacts an IPv6 address that follows a colon', () => {
-    const scrubbed = scrubErrorEvent({ message: `remoteAddress:${IPV6_ADDRESS} at 1:02:03` });
+    const scrubbed = scrubErrorEvent({
+      ...surfaceEvent(),
+      message: `remoteAddress:${IPV6_ADDRESS} at 1:02:03`,
+    });
 
     expect(scrubbed.message).toBe(`remoteAddress:${REDACTED} at 1:02:03`);
   });
