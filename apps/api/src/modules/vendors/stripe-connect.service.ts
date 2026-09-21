@@ -282,18 +282,24 @@ async function attemptAccountStatusChange(
    * has moved on. The correction is conditional like the write, and a handler
    * that finds the row moved again starts over.
    */
-  const latest = await deps.stripe.readAccountStatus(accountId);
-  const latestPatch = statusPatch(latest);
+  const latest = await readLatestStatus(deps, accountId);
   let finalOnboarded = onboarded;
 
-  if (!sameStatus(latestPatch, statusPatch(status))) {
-    const corrected = await updateVendorStripeStatusIfUnchanged(deps.db, written, latestPatch);
+  if (latest && !sameStatus(statusPatch(latest), statusPatch(status))) {
+    const corrected = await updateVendorStripeStatusIfUnchanged(
+      deps.db,
+      written,
+      statusPatch(latest),
+    );
 
-    if (!corrected) {
-      return null;
+    /*
+     * A row that moved again was written by a handler that read it after this
+     * write, so the decision is its to make; this one has already flipped the
+     * flag and still owes the notice, which a retry could not send.
+     */
+    if (corrected) {
+      finalOnboarded = isOnboarded(latest);
     }
-
-    finalOnboarded = isOnboarded(latest);
   }
 
   /*
@@ -319,6 +325,27 @@ async function attemptAccountStatusChange(
   }
 
   return finalOnboarded ? 'onboarded' : 'not-onboarded';
+}
+
+/**
+ * The confirming read after a write. A failure here is not the write's: the row
+ * already holds the answer, and throwing would have Stripe redeliver into an
+ * `unchanged` that never sends the notice.
+ */
+async function readLatestStatus(
+  deps: StripeConnectDeps,
+  accountId: string,
+): Promise<StripeAccountStatus | null> {
+  try {
+    return await deps.stripe.readAccountStatus(accountId);
+  } catch (error) {
+    deps.log?.warn(
+      { err: error, stripeAccountId: accountId },
+      'Could not re-read the Stripe account after writing its status; the next event will',
+    );
+
+    return null;
+  }
 }
 
 /** The columns one Stripe read decides. */

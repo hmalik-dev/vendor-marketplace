@@ -121,4 +121,25 @@ describe('applyAccountStatusChange under interleaved handlers', () => {
     expect(outcome).toBe('unchanged');
     expect(calls).toBe(4);
   });
+
+  it('still reports the flip when the confirming read fails after the write', async () => {
+    await seedVendor();
+
+    let calls = 0;
+    const stripe = {
+      readAccountStatus: () => {
+        calls += 1;
+
+        return calls === 1
+          ? Promise.resolve(ACTIVE)
+          : Promise.reject(new Error('Stripe rate limited'));
+      },
+    } as unknown as StripeConnectGateway;
+
+    const outcome = await applyAccountStatusChange({ db: harness.database.db, stripe }, ACCOUNT_ID);
+
+    expect(outcome).toBe('onboarded');
+    expect((await readProfile()).stripeOnboarded).toBe(true);
+    expect(calls).toBe(2);
+  });
 });

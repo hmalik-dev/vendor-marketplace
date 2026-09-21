@@ -207,7 +207,12 @@ describe('a Connect flag written from a read Stripe has since overtaken, against
 
 /** Holds until `done` is true; the wait is on the call count, not on a timer's length. */
 async function until(done: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 500 && !done(); attempt += 1) {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    if (done()) {
+      return;
+    }
     await new Promise((settle) => setTimeout(settle, 10));
   }
+
+  throw new Error('The awaited read never started');
 }
