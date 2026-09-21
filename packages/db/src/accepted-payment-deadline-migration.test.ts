@@ -35,17 +35,13 @@ async function acceptedRequest(
   vendorId: string,
   eventDate: string,
 ): Promise<string> {
-  const [row] = await testDb.db
-    .insert(bookingRequests)
-    .values({
-      customerId,
-      vendorId,
-      eventDate,
-      status: 'accepted',
-      acceptedAt: new Date('2026-01-02T00:00:00.000Z'),
-      expiresAt: STALE_REPLY_DEADLINE,
-    })
-    .returning({ id: bookingRequests.id });
+  // Raw SQL, as below: the ORM insert names every column of today's schema.
+  const rows = await testDb.db.execute<{ id: string }>(
+    sql`INSERT INTO booking_requests (customer_id, vendor_id, event_date, status, accepted_at, expires_at)
+      VALUES (${customerId}, ${vendorId}, ${eventDate}, 'accepted', ${new Date('2026-01-02T00:00:00.000Z').toISOString()}, ${STALE_REPLY_DEADLINE.toISOString()})
+      RETURNING id`,
+  );
+  const row = (Array.isArray(rows) ? rows : rows.rows)[0];
 
   return row!.id;
 }
