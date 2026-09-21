@@ -7,11 +7,19 @@ import {
   inArray,
   isNull,
   lte,
+  not,
   notInArray,
   sql,
   type SQL,
+  type SQLWrapper,
 } from 'drizzle-orm';
-import { bookings, legalAcceptances, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import {
+  bookings,
+  legalAcceptances,
+  supportCases,
+  users,
+  vendorProfiles,
+} from '@vendor-marketplace/db/schema';
 import { HELD_PAYOUT_STATUSES, type LegalAcceptanceDocument } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
@@ -74,6 +82,49 @@ export function payoutOwedClauses(): SQL[] {
 }
 
 /**
+ * A cancelled booking's residual that must not be sent while the platform has
+ * been refunded-against or charged back beyond what its own cancellation
+ * recorded (VEN-543), as one SQL expression.
+ *
+ * `disputed` is the hold for a booking still `confirmed` or `completed`, and
+ * `placeDisputeHold` and `recordExternalRefund` both refuse a `cancelled` one,
+ * so neither can freeze the residual: the sweep skipped it once and paid it on
+ * the next tick, while the customer held the money back. A hold that is a
+ * **fact on the row** survives every tick, and both facts already are one:
+ *
+ * - `external_refund_cents > 0` — a refund made at Stripe outside the platform,
+ *   written only by `recordExternalRefund`.
+ * - an `open` chargeback case on the booking. It stays open until an operator
+ *   rules, so resolving it is what lifts the hold; the sweep then pays.
+ *
+ * Not folded into `payoutOwedClauses`: the vendor dashboard selects owed rows
+ * with those clauses and must still see a held one to report it. It composes
+ * this expression instead, as a column, and the sweep negates it, so the two
+ * cannot name different sets.
+ */
+export function payoutResidualHeld(): SQL<boolean> {
+  /*
+   * Every column is written with its table. In a single-table select Drizzle
+   * drops the qualifier, and inside the subquery an unqualified `status` is
+   * `support_cases.status` — the dashboard's grouped read would compare the
+   * wrong column and 500 on the ambiguity it created.
+   */
+  function qualified(table: SQLWrapper, column: { name: string }): SQL {
+    return sql`${table}.${sql.identifier(column.name)}`;
+  }
+
+  return sql<boolean>`(${qualified(bookings, bookings.status)} = 'cancelled' and (
+    ${qualified(bookings, bookings.externalRefundCents)} > 0
+    or exists (
+      select 1 from ${supportCases}
+      where ${qualified(supportCases, supportCases.bookingId)} = ${qualified(bookings, bookings.id)}
+        and ${qualified(supportCases, supportCases.origin)} = 'chargeback'
+        and ${qualified(supportCases, supportCases.status)} = 'open'
+    )
+  ))`;
+}
+
+/**
  * A transfer this sweep still owes and has already tried — the operator's
  * question, as clauses (#432).
  *
@@ -98,6 +149,7 @@ export function payoutFailingClauses(): SQL[] {
     ...payoutOwedClauses(),
     gt(bookings.payoutAttempts, 0),
     notInArray(bookings.status, [...HELD_PAYOUT_STATUSES]),
+    not(payoutResidualHeld()),
     /*
      * A banned or closed owner is **stranded**, not failing (VEN-445): the sweep
      * no longer selects the row, so "the scheduled release keeps trying" would
@@ -173,6 +225,7 @@ export async function findDuePayoutBookingIds(
       and(
         inArray(bookings.status, [...RELEASABLE_STATUSES]),
         ...payoutOwedClauses(),
+        not(payoutResidualHeld()),
         lte(bookings.eventDate, dueThroughDate),
         eq(vendorProfiles.payoutHold, false),
         /*
@@ -266,6 +319,7 @@ export async function claimReleasableBooking(
         eq(bookings.id, bookingId),
         inArray(bookings.status, [...RELEASABLE_STATUSES]),
         ...payoutOwedClauses(),
+        not(payoutResidualHeld()),
         lte(bookings.eventDate, dueThroughDate),
         /*
          * The ban and retirement gate is re-read under the lock as well as in
