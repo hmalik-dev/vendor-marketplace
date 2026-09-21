@@ -94,9 +94,11 @@ describe('operator alerts', () => {
     });
     expect(created.statusCode).toBe(201);
 
+    /* A report may only name a storefront the public can see (VEN-531). */
     const profiles = await harness.database.db
-      .select({ id: vendorProfiles.id })
-      .from(vendorProfiles);
+      .update(vendorProfiles)
+      .set({ isPublished: true })
+      .returning({ id: vendorProfiles.id });
     const vendorProfileId = profiles[0]!.id;
 
     const requestRows = await harness.database.db
