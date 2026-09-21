@@ -664,11 +664,38 @@ export function assertUsableRefund(refundId: string, status: string | null | und
   }
 }
 
+/**
+ * Stripe answered an account creation with a refusal it executed (VEN-526).
+ * Like `RefundRefusedError`, distinct from a dropped connection on purpose:
+ * only a refusal is cached under the idempotency key (D36), so only a refusal
+ * moves the key. A connection that died may have made the account, and a retry
+ * under a new key would make a second.
+ */
+export class RecipientAccountRefusedError extends Error {}
+
+/**
+ * Whether Stripe executed and refused an account creation, which it will replay
+ * under the same key. `StripeInvalidRequestError` covers both spellings: v1
+ * bodies carry `type: invalid_request_error`, while a v2 field refusal carries
+ * `code: invalid_fields` and no type, so `rawType` alone misses it. A 5xx or
+ * dropped connection may have made the account, and `idempotency_error` is a
+ * concurrent request under the same key, so neither counts.
+ */
+export function isRefusedAccountCreation(error: unknown): error is Stripe.errors.StripeError {
+  return (
+    error instanceof Stripe.errors.StripeError &&
+    (error.rawType === 'invalid_request_error' ||
+      (error.raw as { code?: string } | undefined)?.code === 'invalid_fields')
+  );
+}
+
 export interface CreateRecipientAccountInput {
   /** Stored on the Stripe account so a support question can be traced back. */
   vendorId: string;
   contactEmail: string;
   displayName: string;
+  /** Collapses concurrent creations for one vendor onto one account. */
+  idempotencyKey: string;
 }
 
 export interface CreateOnboardingLinkInput {
@@ -1001,7 +1028,7 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
 
   return {
     async createRecipientAccount(input) {
-      const account = await stripe.v2.core.accounts.create({
+      const params: Stripe.V2.Core.AccountCreateParams = {
         contact_email: input.contactEmail,
         display_name: input.displayName,
         dashboard: 'express',
@@ -1025,7 +1052,17 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
           responsibilities: { fees_collector: 'application', losses_collector: 'application' },
         },
         metadata: { vendorId: input.vendorId },
-      });
+      };
+
+      const account = await stripe.v2.core.accounts
+        .create(params, { idempotencyKey: input.idempotencyKey })
+        .catch((error: unknown) => {
+          if (isRefusedAccountCreation(error)) {
+            throw new RecipientAccountRefusedError(error.message, { cause: error });
+          }
+
+          throw error;
+        });
 
       return { accountId: account.id };
     },
