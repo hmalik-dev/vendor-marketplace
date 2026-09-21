@@ -9,9 +9,15 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { apiOrigin } from '@/config/public-env';
-import { getSessionToken } from './auth/client';
+import { clearSessionToken, getSessionToken } from './auth/client';
 import { ApiClientError, apiRequest, type ApiRequestOptions } from './api-client';
-import { isGateExemptPath, isTermsRequired, termsAcceptancePath } from './terms-gate-paths';
+import { signInPathReturningTo } from './return-path';
+import {
+  isGateExemptPath,
+  isTermsRequired,
+  termsAcceptancePath,
+  terminalRefusal,
+} from './terms-gate-paths';
 
 export type BrowserRequestOptions<T> = Omit<ApiRequestOptions<T>, 'token'>;
 
@@ -19,6 +25,68 @@ export type BrowserRequest = <T>(path: string, options: BrowserRequestOptions<T>
 
 /** Browser calls need the absolute origin; server-only vars are unavailable here. */
 const BASE_URL = apiOrigin();
+
+const SUSPENDED_PATH = '/suspended';
+
+/** Where a refusal is already being answered, so leaving again would loop. */
+const REFUSAL_HOME_PREFIXES = [SUSPENDED_PATH, '/sign-in', '/sign-up', '/after-sign-in'] as const;
+
+export type RefusalRedirect = (error: unknown) => boolean;
+
+/**
+ * The mid-session refusal, handled once for every client call and the live
+ * stream: a suspension (403) goes to `/suspended`, a session the API no longer
+ * honours (401) forgets its cached token and goes to sign-in carrying the
+ * current path. `terminalRefusal` decides which; this only navigates.
+ *
+ * Returns whether the error was such a refusal, so a caller with its own
+ * fallback (the stream's "Reconnecting" banner) can tell. It does not navigate
+ * from the pages the gate exempts or from the refusal's own destinations.
+ * The identity is stable, so an effect may depend on it.
+ */
+export function useRefusalRedirect(): RefusalRedirect {
+  const router = useRouter();
+
+  return useCallback(
+    (error: unknown): boolean => {
+      const refusal = terminalRefusal(error);
+
+      /*
+       * `terminalRefusal` reads every 403 that is not the gate as a suspension,
+       * which suits the one screen and the server reads it was written for. Here
+       * it would judge every call, and a stale tab's Accept or a vendor on a
+       * moderation hold is a 403 too — telling them they are banned. Only the
+       * API's own suspension code is terminal on this path.
+       */
+      if (
+        refusal === null ||
+        (refusal === 'suspended' &&
+          !(error instanceof ApiClientError && error.code === ERROR_CODES.ACCOUNT_SUSPENDED))
+      ) {
+        return false;
+      }
+
+      const { pathname, search } = window.location;
+
+      if (
+        isGateExemptPath(pathname) ||
+        REFUSAL_HOME_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+      ) {
+        return true;
+      }
+
+      if (refusal === 'suspended') {
+        router.replace(SUSPENDED_PATH);
+      } else {
+        clearSessionToken();
+        window.location.assign(signInPathReturningTo(pathname + search));
+      }
+
+      return true;
+    },
+    [router],
+  );
+}
 
 /**
  * The browser-side counterpart to `getCurrentUser`. Client components cannot
@@ -28,6 +96,7 @@ const BASE_URL = apiOrigin();
  */
 export function useApi(): BrowserRequest {
   const router = useRouter();
+  const redirectOnRefusal = useRefusalRedirect();
 
   return useCallback(
     async <T>(path: string, options: BrowserRequestOptions<T>): Promise<T> => {
@@ -60,10 +129,12 @@ export function useApi(): BrowserRequest {
           router.push(termsAcceptancePath(window.location.pathname + window.location.search));
         }
 
+        redirectOnRefusal(error);
+
         throw error;
       }
     },
-    [router],
+    [redirectOnRefusal, router],
   );
 }
 

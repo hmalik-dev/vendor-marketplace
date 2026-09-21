@@ -5,10 +5,15 @@ import { z } from 'zod';
 import { ApiClientError } from './api-client';
 
 const push = vi.fn();
+const replace = vi.fn();
+const clearSessionToken = vi.fn();
 const apiRequest = vi.fn();
 
-vi.mock('./auth/client', () => ({ getSessionToken: async () => 'token' }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('./auth/client', () => ({
+  getSessionToken: async () => 'token',
+  clearSessionToken: () => clearSessionToken(),
+}));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace }) }));
 vi.mock('./api-client', async () => {
   const actual = await vi.importActual<typeof import('./api-client')>('./api-client');
 
@@ -116,4 +121,99 @@ describe('useApi and the acceptance gate', () => {
     });
     expect(push).not.toHaveBeenCalled();
   });
+});
+
+/**
+ * VEN-540. A session refused mid-session — banned, expired or signed out in
+ * another tab — used to surface as the API's own "Unauthorized" text on every
+ * retry. `terminalRefusal` already knows the two cases; this is its client half.
+ */
+describe('useApi and a session refused mid-session', () => {
+  const assign = vi.fn();
+  const originalLocation = window.location;
+
+  function stubLocation(pathname: string, search = ''): void {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname, search, assign },
+    });
+  }
+
+  beforeEach(() => {
+    push.mockReset();
+    replace.mockReset();
+    assign.mockReset();
+    clearSessionToken.mockReset();
+    apiRequest.mockReset();
+    stubLocation('/vendor/profile', '?tab=hours');
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+  });
+
+  it('sends a suspended account (403) to /suspended and still throws', async () => {
+    const refusal = new ApiClientError(403, ERROR_CODES.ACCOUNT_SUSPENDED, 'Account suspended');
+    apiRequest.mockRejectedValue(refusal);
+
+    const { result } = renderHook(() => useApi());
+
+    await expect(result.current('/vendor/profile', { schema: z.unknown() })).rejects.toBe(refusal);
+
+    expect(replace).toHaveBeenCalledExactlyOnceWith('/suspended');
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('sends a refused session (401) to sign-in with the current path, after dropping the token', async () => {
+    apiRequest.mockRejectedValue(new ApiClientError(401, ERROR_CODES.UNAUTHORIZED, 'Unauthorized'));
+
+    const { result } = renderHook(() => useApi());
+
+    await expect(result.current('/vendor/profile', { schema: z.unknown() })).rejects.toThrow();
+
+    expect(clearSessionToken).toHaveBeenCalledOnce();
+    expect(assign).toHaveBeenCalledExactlyOnceWith(
+      '/sign-in?returnTo=%2Fvendor%2Fprofile%3Ftab%3Dhours',
+    );
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('leaves an ordinary 403 to its caller — a stale tab or a moderation hold is not a ban', async () => {
+    apiRequest.mockRejectedValue(new ApiClientError(403, ERROR_CODES.FORBIDDEN, 'Not yours'));
+
+    const { result } = renderHook(() => useApi());
+
+    await expect(result.current('/x', { schema: z.unknown() })).rejects.toThrow();
+
+    expect(replace).not.toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('leaves the vendor gate to its caller — that 403 is not a suspension', async () => {
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, ERROR_CODES.VENDOR_NOT_INVITED, 'Not invited'),
+    );
+
+    const { result } = renderHook(() => useApi());
+
+    await expect(result.current('/x', { schema: z.unknown() })).rejects.toThrow();
+
+    expect(replace).not.toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it.each(['/support', '/terms', '/suspended', '/sign-in'])(
+    'does not navigate away from %s, where it is already answered',
+    async (pathname) => {
+      stubLocation(pathname);
+      apiRequest.mockRejectedValue(new ApiClientError(401, ERROR_CODES.UNAUTHORIZED, 'no'));
+
+      const { result } = renderHook(() => useApi());
+
+      await expect(result.current('/x', { schema: z.unknown() })).rejects.toThrow();
+
+      expect(assign).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -5,6 +5,7 @@ import type { WireConversation } from '@/lib/wire-schemas';
 
 const call = vi.fn();
 let connected = true;
+let ended = false;
 const onEventRef: { current: ((event: unknown) => void) | null } = { current: null };
 /** The screen writes the open thread into `?conversation=`, so a thread is linkable. */
 const push = vi.fn();
@@ -17,7 +18,7 @@ vi.mock('@/lib/use-api', () => ({ useApi: () => call }));
 vi.mock('@/lib/use-event-stream', () => ({
   useEventStream: ({ onEvent }: { onEvent: (event: unknown) => void }) => {
     onEventRef.current = onEvent;
-    return { connected };
+    return { connected, ended };
   },
 }));
 
@@ -47,6 +48,7 @@ afterEach(() => {
   replace.mockReset();
   refresh.mockReset();
   connected = true;
+  ended = false;
 });
 
 function conversation(overrides: Partial<WireConversation> = {}): WireConversation {
@@ -101,6 +103,63 @@ function respondWith(messages: ReturnType<typeof message>[]): void {
 }
 
 describe('MessagesScreen', () => {
+  /*
+   * VEN-540. A refused session stops the stream for good; "Reconnecting" over
+   * a stream that is not reconnecting is a lie the reader waits on.
+   */
+  it('shows Reconnecting for a dropped stream, and never for a refused one', async () => {
+    respondWith([]);
+    const props = {
+      initialConversations: [conversation()],
+      viewerId: VIEWER,
+      initialConversationId: null,
+      listFailed: false,
+    };
+
+    connected = false;
+    const { unmount } = render(<MessagesScreen {...props} />);
+    expect(await screen.findByText('Reconnecting')).toBeDefined();
+    unmount();
+
+    ended = true;
+    render(<MessagesScreen {...props} />);
+    await screen.findByLabelText('Write a message');
+    expect(screen.queryByText('Reconnecting')).toBeNull();
+  });
+
+  it('puts the unread count back when the API refuses the read', async () => {
+    let refuse: (error: Error) => void = () => {};
+    call.mockImplementation(async (path: string) => {
+      if (path.endsWith('/messages')) {
+        return page([]);
+      }
+      if (path === `/conversations/${CONVERSATION}/read`) {
+        return new Promise((_resolve, reject) => {
+          refuse = reject;
+        });
+      }
+      return null;
+    });
+    render(
+      <MessagesScreen
+        initialConversations={[conversation({ unreadCount: 3 })]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+        listFailed={false}
+      />,
+    );
+
+    const name = () => within(screen.getByRole('list')).getByText('Kessler & Co.');
+
+    // Cleared while the request is out…
+    await waitFor(() => expect(name().className).toContain('font-medium'));
+
+    await act(async () => refuse(new Error('nope')));
+
+    // …and unread again once it is refused.
+    await waitFor(() => expect(name().className).toContain('font-bold'));
+  });
+
   /* The line that makes a list of names navigable. */
   it('carries the booking line on every conversation row', async () => {
     respondWith([]);

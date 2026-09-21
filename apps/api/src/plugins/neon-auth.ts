@@ -1,7 +1,7 @@
 import fp from 'fastify-plugin';
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { CURRENT_TERMS_VERSION, type UserRole } from '@vendor-marketplace/shared';
-import { forbidden, unauthorized } from '../lib/errors.js';
+import { accountSuspended, forbidden, unauthorized } from '../lib/errors.js';
 import { findSessionSubject } from '../modules/users/users.dao.js';
 import { splitAuthName, type AuthUserSnapshot } from '../modules/users/users.service.js';
 
@@ -260,7 +260,7 @@ export const neonAuthPlugin = fp<NeonAuthPluginOptions>(
           return;
         }
 
-        throw forbidden('This account has been suspended');
+        throw accountSuspended();
       }
 
       if (!subject.holdsDocument) {
