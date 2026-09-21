@@ -966,6 +966,18 @@ export async function seedDemoData<
     );
   });
 
+  // One paused notice, on the last vendor, so the restricted state has a row behind it (VEN-525).
+  addNotification(
+    'stripe-paused',
+    vendorUserIds[DEMO_VENDORS.length - 1] as string,
+    'payouts_paused',
+    'Payouts are paused',
+    'We cannot send payments to you right now. Open Payments to fix your payout details.',
+    { vendorId: vendorProfileIds[DEMO_VENDORS.length - 1] as string },
+    addDays(now, -5),
+    false,
+  );
+
   /*
    * The moderation notification (#15). One row, on the first vendor, so the
    * demo data carries every type the product defines — `seed-demo.test.ts`

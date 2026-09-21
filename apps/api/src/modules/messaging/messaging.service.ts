@@ -1,5 +1,6 @@
 import {
   EVENT_TYPE_LABELS,
+  VENDOR_PAYMENTS_PATH,
   type ConversationSummary,
   type EventType,
   type NotificationItem,
@@ -101,6 +102,14 @@ export function notificationHref(row: NotificationRow): string | null {
    */
   if (row.type === 'tag_suggestion_approved') {
     return '/vendor/profile/edit';
+  }
+
+  if (row.type === 'payout_sent' || row.type === 'stripe_onboarding_complete') {
+    return '/vendor/dashboard';
+  }
+
+  if (row.type === 'payouts_paused') {
+    return VENDOR_PAYMENTS_PATH;
   }
 
   if (typeof data.bookingRequestId === 'string') {
