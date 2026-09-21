@@ -24,6 +24,7 @@ import {
   VISITOR_IP_HEADER,
   WEB_TIER_KEY_HEADER,
 } from '@vendor-marketplace/shared';
+import { clientAddress } from './lib/client-address.js';
 import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
 import { allowedOrigins, canonicalWebOrigin, type ApiEnv } from './config/env.js';
 import type { AppDatabase } from './lib/database.js';
@@ -238,7 +239,7 @@ function rateLimitKey(
     visitor.length > MAX_IP_LENGTH ||
     !isIP(visitor)
   ) {
-    return request.ip;
+    return clientAddress(request);
   }
   const expected = Buffer.from(secret);
   const actual = Buffer.from(presented);
@@ -246,7 +247,7 @@ function rateLimitKey(
     // A rotated key on one side only puts every visitor back in one bucket, and
     // nothing else would say so.
     request.log.warn('web tier key mismatch: rate limit is keyed on the socket address');
-    return request.ip;
+    return clientAddress(request);
   }
   return `visitor:${visitor}`;
 }
@@ -285,6 +286,10 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
      * straight back to whoever is being limited. Trusting only hop 0 takes the
      * entry the immediate proxy appended — the client address as that proxy
      * saw it, which nothing outside can forge.
+     *
+     * On Railway that entry is the edge node, not the visitor (VEN-549), so
+     * `request.ip` is never the rate-limit key there: `clientAddress` reads
+     * the edge's `X-Real-IP`, and `request.ip` is only its fallback.
      *
      * A predicate rather than the count `trustProxy: 1`, because this
      * Fastify's types accept `string | boolean | string[] | TrustProxyFunction`
