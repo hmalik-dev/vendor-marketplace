@@ -1,8 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import {
+  addDays,
   ADMIN_PAGE_SIZE,
   DEFAULT_PAGE_SIZE,
   MAX_TAGS_PER_CATEGORY,
+  toDateString,
 } from '@vendor-marketplace/shared';
 import { eq, notInArray } from 'drizzle-orm';
 import {
@@ -87,6 +89,8 @@ describe('admin routes', () => {
   }
 
   /** A confirmed, paid booking in the future — what a ban has to unwind. */
+  let futureDay = 0;
+
   /**
    * A confirmed booking on a future date.
    *
@@ -99,7 +103,10 @@ describe('admin routes', () => {
     vendorProfileId: string,
     overrides: { eventDate?: string; stripePaymentIntentId?: string } = {},
   ): Promise<string> {
-    const eventDate = overrides.eventDate ?? '2099-06-01';
+    // One accepted request per vendor date is a database rule (VEN-482).
+    futureDay += 1;
+    const eventDate =
+      overrides.eventDate ?? toDateString(addDays(new Date('2099-05-31T12:00:00Z'), futureDay));
 
     const requestRows = await harness.database.db
       .insert(bookingRequests)
