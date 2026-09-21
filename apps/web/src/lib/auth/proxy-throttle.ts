@@ -21,6 +21,8 @@ const TIGHT_PATHS: ReadonlySet<string> = new Set([
   'sign-up/email',
   'email-otp/verify-email',
   'email-otp/send-verification-otp',
+  'email-otp/request-password-reset',
+  'email-otp/reset-password',
 ]);
 
 const hits = new Map<string, number[]>();
@@ -55,7 +57,42 @@ export function isThrottled(
   return recent.length > (tight ? TIGHT_LIMIT : LOOSE_LIMIT);
 }
 
+const ADDRESS_WINDOW_MS = 600_000;
+const ADDRESS_LIMIT = 5;
+const addressHits = new Map<string, number[]>();
+
+/**
+ * True when this call for this account address is over budget: five per ten
+ * minutes per call, whoever sends it. The per-caller budget above stops one
+ * machine; this slows many machines mailing one inbox or guessing one
+ * six-digit code. Like that budget it is in-process, so each instance keeps its
+ * own count: a floor, with the provider's own limits behind it. Records the
+ * call either way.
+ */
+export function isAddressThrottled(
+  address: string,
+  path: readonly string[],
+  now: number = Date.now(),
+): boolean {
+  const key = `${path.join('/')}|${address.trim().toLowerCase()}`;
+  const recent = (addressHits.get(key) ?? []).filter((at) => now - at < ADDRESS_WINDOW_MS);
+
+  recent.push(now);
+  addressHits.set(key, recent);
+
+  if (addressHits.size > 5_000) {
+    for (const [stale, times] of addressHits) {
+      if (times.every((at) => now - at >= ADDRESS_WINDOW_MS)) {
+        addressHits.delete(stale);
+      }
+    }
+  }
+
+  return recent.length > ADDRESS_LIMIT;
+}
+
 /** Test seam: forgets every recorded call. */
 export function resetThrottle(): void {
   hits.clear();
+  addressHits.clear();
 }

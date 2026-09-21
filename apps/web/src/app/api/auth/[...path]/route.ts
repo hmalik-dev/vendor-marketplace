@@ -1,8 +1,9 @@
+import * as Sentry from '@sentry/nextjs';
 import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { neonAuth } from '@/lib/auth/server';
 import { isProxiedAuthCall } from '@/lib/auth/proxy-allowlist';
-import { callerAddress, isThrottled } from '@/lib/auth/proxy-throttle';
+import { callerAddress, isAddressThrottled, isThrottled } from '@/lib/auth/proxy-throttle';
 
 /**
  * Same-origin proxy to Neon Auth. The browser talks to this, never to the
@@ -18,6 +19,13 @@ import { callerAddress, isThrottled } from '@/lib/auth/proxy-throttle';
  *
  * **Throttled per caller** (`proxy-throttle.ts`): the API's limiter never sees
  * these calls, and Neon would see them all from this server's one address.
+ *
+ * **The password reset request is answered the same for every address**
+ * (`email-otp/request-password-reset`): Neon mails only a real account and takes
+ * longer doing it, so the browser gets a fixed 200 at once and the call to Neon
+ * finishes after the response. Status, body and timing then say nothing about
+ * whether the address has an account. That call and the code check are also
+ * budgeted per address (`isAddressThrottled`).
  *
  * Built per request, because `neonAuth()` reads the environment on first use
  * and a module-level `auth.handler()` would read it at build.
@@ -40,8 +48,93 @@ const forward =
       );
     }
 
+    const joined = path.join('/');
+    if (method === 'POST' && RESET_PATHS.has(joined)) {
+      return forwardReset(request, context, path);
+    }
+
     return neonAuth().handler()[method](request, context);
   };
+
+const MAX_BODY_BYTES = 4096;
+const REQUEST_RESET = 'email-otp/request-password-reset';
+const RESET_PATHS: ReadonlySet<string> = new Set([REQUEST_RESET, 'email-otp/reset-password']);
+
+function emailIn(body: string): string {
+  try {
+    const email = (JSON.parse(body) as { email?: unknown } | null)?.email;
+    return typeof email === 'string' ? email : '';
+  } catch {
+    return '';
+  }
+}
+
+async function forwardReset(
+  request: NextRequest,
+  context: RouteContext,
+  path: string[],
+): Promise<Response> {
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  const body = await request.text();
+  const email = emailIn(body);
+
+  // Both calls need an address, and the per-address budget only works if every
+  // forwarded call is charged to one: a body this cannot read is not forwarded.
+  if (email === '') {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  const overBudget = isAddressThrottled(email, path);
+  const isRequest = path.join('/') === REQUEST_RESET;
+
+  if (overBudget && !isRequest) {
+    return NextResponse.json(
+      { message: 'Too many attempts' },
+      { status: 429, headers: { 'Retry-After': '600' } },
+    );
+  }
+
+  // The body was re-encoded, so the headers describing the original bytes go.
+  const headers = new Headers(request.headers);
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  const upstream = new Request(request.url, { method: 'POST', headers, body });
+  const call = (): Promise<Response> =>
+    neonAuth()
+      .handler()
+      .POST(upstream as NextRequest, context);
+
+  if (!isRequest) {
+    // One refusal for every 4xx, so a code check cannot tell "no such account"
+    // from "wrong code" even if the provider words them differently.
+    const response = await call();
+    return response.status >= 400 && response.status < 500
+      ? NextResponse.json({ message: 'Invalid' }, { status: 400 })
+      : response;
+  }
+
+  if (!overBudget) {
+    after(async () => {
+      try {
+        const response = await call();
+        if (!response.ok) {
+          Sentry.captureMessage('Password reset mail was refused by the auth provider', {
+            level: 'error',
+            extra: { status: response.status },
+          });
+        }
+      } catch (error) {
+        // The caller already has the fixed answer; asking again retries the send.
+        Sentry.captureException(error);
+      }
+    });
+  }
+
+  return NextResponse.json({ success: true });
+}
 
 export const GET = forward('GET');
 export const POST = forward('POST');
