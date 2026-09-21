@@ -23,6 +23,14 @@ most importantly the `{ err }` log leak in
 `onConflictDoNothing` branch that swallows the write and lets the rest of the
 request commit.
 
+**22001 is the same weapon (VEN-544):** a schema `.max()` above its column's
+`varchar(n)` lets the caller pick a length that fails the insert in the same
+place. Confirmed on `vendorApplicationInputSchema.businessName` raised to
+`MAX_BUSINESS_NAME_LENGTH` (200) over `vendor_applications.business_name`
+`varchar(MAX_NAME_LENGTH)` (100), on the **unauthenticated**
+`POST /vendor-applications`. Check the column width, not the neighbouring
+field's constant, whenever a length constant moves.
+
 **How to apply:** when a diff adds a text column fed by `freeText()`, ask what
 happens when that one statement fails while everything around it succeeds. On
 `POST /support/messages` the booking-linked path is accidentally safe — the same

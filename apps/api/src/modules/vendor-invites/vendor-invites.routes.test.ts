@@ -361,6 +361,21 @@ describe('the vendor gate', () => {
       ]);
     });
 
+    it('takes a 150-character business name and stores it whole (VEN-544)', async () => {
+      const businessName = 'B'.repeat(150);
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor-applications',
+        ...fromANewVisitor(),
+        payload: { ...application('long@example.com'), businessName },
+      });
+
+      expect([response.statusCode, response.json()]).toEqual([200, { received: true }]);
+      const rows = await harness.database.db.select().from(vendorApplications);
+      expect(rows.map((row) => row.businessName)).toEqual([businessName]);
+    });
+
     it('arrives already invited when the address was invited first', async () => {
       await invite('early@example.com');
 
