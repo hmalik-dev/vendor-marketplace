@@ -2,7 +2,12 @@ import { servicePackages, users, vendorProfiles } from '@vendor-marketplace/db/s
 import { eq } from 'drizzle-orm';
 import { categories } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import {
+  bearer,
+  createTestHarness,
+  type TestHarness,
+  acceptVendorAgreementAs,
+} from '../../testing/test-server.js';
 
 const VENDOR = 'user_vendor';
 const OTHER_VENDOR = 'user_vendor_two';
@@ -301,6 +306,7 @@ describe('/vendor/packages', () => {
       await createProfile(VENDOR, 'Sunlit Studio');
       const created = await createPackage(VENDOR);
 
+      await acceptVendorAgreementAs(harness, VENDOR);
       const published = await harness.app.inject({
         method: 'PUT',
         url: '/vendor/profile',
@@ -331,6 +337,7 @@ describe('/vendor/packages', () => {
       const first = await createPackage(VENDOR, { name: 'First' });
       await createPackage(VENDOR, { name: 'Second' });
 
+      await acceptVendorAgreementAs(harness, VENDOR);
       await harness.app.inject({
         method: 'PUT',
         url: '/vendor/profile',

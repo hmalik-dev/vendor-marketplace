@@ -24,6 +24,7 @@ import { replaceVendorTags } from '../tags/tags.dao.js';
 import { resolveVendorTagSelection } from '../tags/tags.service.js';
 import { lockVendorProfile } from '../admin/admin.dao.js';
 import { countActivePackages } from '../packages/packages.dao.js';
+import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import {
   findActiveCategoryIds,
   findVendorCategoryIds,
@@ -96,6 +97,7 @@ export function toVendorProfileDetail(
   categoryIds: string[],
   tagRows: TagRow[],
   activePackageCount: number,
+  holdsAgreement: boolean,
 ): VendorProfileDetail {
   return {
     ...row,
@@ -104,7 +106,7 @@ export function toVendorProfileDetail(
     avgRating: parseRating(row.avgRating),
     categoryIds,
     tags: tagRows satisfies Tag[],
-    publishBlockers: publishBlockers(row, categoryIds, activePackageCount),
+    publishBlockers: publishBlockers(row, categoryIds, activePackageCount, holdsAgreement),
   };
 }
 
@@ -117,6 +119,7 @@ export function publishBlockers(
   row: VendorProfileRow,
   categoryIds: readonly string[],
   activePackageCount: number,
+  holdsAgreement: boolean,
 ): PublishBlockerKey[] {
   const blockers: PublishBlockerKey[] = [];
 
@@ -142,6 +145,10 @@ export function publishBlockers(
   }
   if (activePackageCount === 0) {
     blockers.push('packages');
+  }
+  // The same definition of "accepted" the connect and payment gates use (VEN-509).
+  if (!holdsAgreement) {
+    blockers.push('agreement');
   }
 
   return blockers;
@@ -261,13 +268,14 @@ async function assertCategoriesSelectable(
 }
 
 async function loadDetail(db: AppDatabase, row: VendorProfileRow): Promise<VendorProfileDetail> {
-  const [categoryIds, tagRows, activePackageCount] = await Promise.all([
+  const [categoryIds, tagRows, activePackageCount, holdsAgreement] = await Promise.all([
     findVendorCategoryIds(db, row.id),
     findVendorTags(db, row.id),
     countActivePackages(db, row.id),
+    holdsCurrentAgreement(db, row.userId),
   ]);
 
-  return toVendorProfileDetail(row, categoryIds, tagRows, activePackageCount);
+  return toVendorProfileDetail(row, categoryIds, tagRows, activePackageCount, holdsAgreement);
 }
 
 /**
@@ -516,14 +524,16 @@ export async function updateVendorProfile(
       }
       // The hold can still land between here and the write; see the transaction.
 
-      const [effectiveCategories, activePackageCount] = await Promise.all([
+      const [effectiveCategories, activePackageCount, holdsAgreement] = await Promise.all([
         categoryIds === undefined ? findVendorCategoryIds(db, existing.id) : categoryIds,
         countActivePackages(db, existing.id),
+        holdsCurrentAgreement(db, existing.userId),
       ]);
       const blockers = publishBlockers(
         { ...existing, ...patch } as VendorProfileRow,
         effectiveCategories,
         activePackageCount,
+        holdsAgreement,
       );
 
       if (blockers.length > 0) {
@@ -573,12 +583,17 @@ export async function updateVendorProfile(
          * since would otherwise go live with nothing bookable.
          */
         await lockVendorProfile(tx, existing.id);
-        if ((await countActivePackages(tx, existing.id)) === 0) {
+        const lockedPackageCount = await countActivePackages(tx, existing.id);
+        // Re-read here too: the acceptance the pre-check saw can be gone by now (VEN-509).
+        const lockedHoldsAgreement = await holdsCurrentAgreement(tx, existing.userId);
+
+        if (lockedPackageCount === 0 || !lockedHoldsAgreement) {
           throw validationFailed('Complete your profile before publishing it.', {
             blockers: publishBlockers(
               { ...existing, ...patch } as VendorProfileRow,
               categoryIds ?? (await findVendorCategoryIds(tx, existing.id)),
-              0,
+              lockedPackageCount,
+              lockedHoldsAgreement,
             ),
           });
         }

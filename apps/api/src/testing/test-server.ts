@@ -1,5 +1,9 @@
 import { seedReferenceData } from '@vendor-marketplace/db';
-import { CURRENT_TERMS_VERSION, legalDocumentSha256 } from '@vendor-marketplace/shared';
+import {
+  CURRENT_TERMS_VERSION,
+  CURRENT_VENDOR_AGREEMENT_VERSION,
+  legalDocumentSha256,
+} from '@vendor-marketplace/shared';
 import { users } from '@vendor-marketplace/db/schema';
 import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
 import { eq } from 'drizzle-orm';
@@ -1147,6 +1151,27 @@ export async function createTestHarness(
       await database.close();
     },
   };
+}
+
+/**
+ * Records the current vendor agreement for a vendor who already has a profile,
+ * through the real route: publishing now requires it (VEN-509), and accepting
+ * is how a vendor reaches that state. Idempotent, so a fixture may call it twice.
+ */
+export async function acceptVendorAgreementAs(
+  harness: Pick<TestHarness, 'app'>,
+  authUserId: string,
+): Promise<void> {
+  const accepted = await harness.app.inject({
+    method: 'POST',
+    url: '/vendor/agreement/accept',
+    headers: bearer(authUserId),
+    payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
+  });
+
+  if (accepted.statusCode !== 200) {
+    throw new Error(`Vendor agreement fixture failed: ${accepted.statusCode} ${accepted.body}`);
+  }
 }
 
 export function bearer(authUserId: string): Record<string, string> {

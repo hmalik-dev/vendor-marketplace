@@ -36,6 +36,9 @@ import { recordExternalRefund, type ExternalRefundFinding } from './refunds.dao.
  */
 const RELEASE_BATCH_SIZE = 100;
 
+export const PAYOUT_AGREEMENT_MISSING_REASON =
+  'The vendor has not accepted the vendor agreement yet, so the transfer could not be made';
+
 export interface PayoutContext {
   db: AppDatabase;
   stripe: StripeConnectGateway;
@@ -325,6 +328,19 @@ async function releaseOnePayout(
         { bookingId, vendorId: booking.vendorId },
         'Payout held: vendor not onboarded',
       );
+
+      return 'failed';
+    }
+
+    /*
+     * No acceptance row at all (VEN-509): money is not released to a vendor who
+     * never agreed to the commission and payout terms. A failure like the one
+     * above, so the sweep keeps retrying and it self-heals on acceptance. Only
+     * *no* row holds it; captured money under an older version is owed under it.
+     */
+    if (!booking.vendorHasAcceptedAgreement) {
+      failure = PAYOUT_AGREEMENT_MISSING_REASON;
+      context.log.warn({ bookingId, vendorId: booking.vendorId }, 'Payout held: no agreement');
 
       return 'failed';
     }

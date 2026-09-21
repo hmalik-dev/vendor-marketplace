@@ -1,6 +1,7 @@
 import {
   PUBLISH_BLOCKERS,
   PUBLISH_BLOCKER_KEYS,
+  VENDOR_AGREEMENT_PATH,
   type PublishBlockerKey,
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
@@ -111,12 +112,12 @@ export function PublishChecklist({ dashboard }: PublishChecklistProps): React.Re
               >
                 {PUBLISH_BLOCKERS[key].message}
               </span>
-              {isNext ? (
+              {isNext || (isBlocking && key === 'agreement') ? (
                 <Link
-                  href={PROFILE_EDIT_PATH}
+                  href={key === 'agreement' ? VENDOR_AGREEMENT_PATH : PROFILE_EDIT_PATH}
                   className="ml-auto shrink-0 text-sm font-semibold text-clay-500 hover:underline"
                 >
-                  Finish →
+                  {key === 'agreement' ? 'Accept →' : 'Finish →'}
                 </Link>
               ) : null}
             </li>

@@ -1,4 +1,8 @@
-import { PUBLISH_BLOCKERS, type PublishBlockerKey } from '@vendor-marketplace/shared';
+import {
+  PUBLISH_BLOCKERS,
+  VENDOR_AGREEMENT_PATH,
+  type PublishBlockerKey,
+} from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -51,6 +55,9 @@ export function PublishBlockerBanner({
     return null;
   }
 
+  // The one thing left is an acceptance, which the profile editor cannot complete.
+  const onlyAgreementLeft = blockers.every((key) => key === 'agreement');
+
   return (
     <Banner
       status="pending"
@@ -63,7 +70,11 @@ export function PublishBlockerBanner({
       }
       action={
         <Button asChild size="sm">
-          <Link href={PROFILE_EDIT_PATH}>Finish profile</Link>
+          {onlyAgreementLeft ? (
+            <Link href={VENDOR_AGREEMENT_PATH}>Accept agreement</Link>
+          ) : (
+            <Link href={PROFILE_EDIT_PATH}>Finish profile</Link>
+          )}
         </Button>
       }
     >
