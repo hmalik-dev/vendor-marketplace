@@ -287,6 +287,54 @@ export function missingInputs(env) {
   );
 }
 
+/**
+ * VEN-519. Polls `GET <web>/api/ready` until it names `SENTRY_RELEASE` (the
+ * commit the API was just proven to serve) or the deadline passes. A short SHA
+ * on either side still has to match, as in the API check. The failure names
+ * both commits, never a value that is not one.
+ */
+async function webNamesRelease(env, io) {
+  const fetchImpl = io.fetch ?? fetch;
+  const sleep = io.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const now = io.now ?? Date.now;
+  const parsed = Number(env.SMOKE_DEADLINE_MS ?? '600000');
+  const deadline = Number.isFinite(parsed) ? parsed : 600_000;
+  const web = env.WEB_URL.split(',')[0].trim().replace(/\/+$/, '');
+  const startedAt = now();
+  let serving = null;
+  let detail = '';
+
+  for (;;) {
+    try {
+      const response = await fetchImpl(`${web}/api/ready`, {
+        signal: AbortSignal.timeout(10_000),
+      });
+      const body = response.ok ? await response.json() : null;
+      serving = typeof body?.commit === 'string' && body.commit !== '' ? body.commit : null;
+      detail = response.ok ? '' : `answered HTTP ${response.status}`;
+    } catch {
+      serving = null;
+      detail = 'did not answer';
+    }
+
+    const shortest = Math.min(serving?.length ?? 0, env.SENTRY_RELEASE.length);
+    if (shortest > 0 && serving.slice(0, shortest) === env.SENTRY_RELEASE.slice(0, shortest)) {
+      io.write(`web /api/ready names ${env.SENTRY_RELEASE.slice(0, 7)}\n`);
+      return;
+    }
+    if (now() - startedAt + 5_000 >= deadline) {
+      break;
+    }
+    await sleep(5_000);
+  }
+
+  throw new PhaseError(
+    serving
+      ? `Web/API skew: the web serves ${serving.slice(0, 7)} but the API serves ${env.SENTRY_RELEASE.slice(0, 7)}.`
+      : `The web's /api/ready never named ${env.SENTRY_RELEASE.slice(0, 7)} (${detail || 'no commit in the answer'}).`,
+  );
+}
+
 export const PHASES = {
   async gate(env, io) {
     const branch = env.DEPLOY_TARGET;
@@ -509,7 +557,9 @@ export const PHASES = {
    * where `/health` passes with it unreachable — must name this commit before
    * the deadline, and the web front door must render its data. The poll is the
    * existing smoke check (`packages/preflight/src/smoke`), whose suite pins the
-   * deadline, the commit match and the refusal of a 503.
+   * deadline, the commit match and the refusal of a 503. Then the web build
+   * must name the same commit at `/api/ready` (VEN-519): the API moving while
+   * the web stays on an old build is skew the API's answer cannot show.
    */
   async ready(env, io) {
     need(env, ['API_URL', 'WEB_URL', 'SENTRY_RELEASE']);
@@ -525,6 +575,8 @@ export const PHASES = {
       redact: redactor([]),
       write: io.write,
     });
+
+    await webNamesRelease(env, io);
   },
 };
 

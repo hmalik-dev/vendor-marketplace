@@ -353,6 +353,11 @@ test('web: builds under the release and upload credential, and deploys without t
 
 test('ready: polls through the smoke check for this release, with a bounded deadline', async () => {
   const { io, calls } = recordingIo();
+  const asked = [];
+  io.fetch = async (url) => {
+    asked.push(url);
+    return Response.json({ commit: SHA });
+  };
   await PHASES.ready(
     {
       PATH: '/bin',
@@ -363,6 +368,7 @@ test('ready: polls through the smoke check for this release, with a bounded dead
     io,
   );
 
+  assert.deepEqual(asked, ['https://orla.test/api/ready']);
   assert.deepEqual(
     calls.map(({ command, args, env }) => ({ command, args, env })),
     [
@@ -586,9 +592,14 @@ function expand(value, context) {
 }
 
 /** Executes the job's `run` steps as Actions does: in order, stopping at the first failure. */
-function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '' }) {
+function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '', webCommit = SHA }) {
   const dir = mkdtempSync(path.join(tmpdir(), 'deploy-dry-run-'));
   try {
+    // The web's `/api/ready` answer, for the one child that fetches it: node itself is not stubbed.
+    writeFileSync(
+      path.join(dir, 'web-fetch.mjs'),
+      `globalThis.fetch = async () => Response.json({ commit: ${JSON.stringify(webCommit)} });\n`,
+    );
     for (const tool of ['git', 'pnpm', 'npx']) {
       writeFileSync(path.join(dir, tool), STUB);
       chmodSync(path.join(dir, tool), 0o755);
@@ -632,6 +643,9 @@ function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '' }) 
         cwd: ROOT,
         env: {
           ...env,
+          // A wrong web commit is polled to a zero deadline, not for the workflow's ten minutes.
+          ...(webCommit === SHA ? {} : { SMOKE_DEADLINE_MS: '0' }),
+          NODE_OPTIONS: `--import ${path.join(dir, 'web-fetch.mjs')}`,
           PATH: `${dir}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
           HOME: dir,
           GITHUB_OUTPUT: output,
@@ -737,6 +751,77 @@ test('dry run: a readiness poll that fails fails the release', () => {
 
   assert.equal(result.failedAt, 'Poll /ready until it names this release');
   assertNoSecretPrinted(result.printed);
+});
+
+test('dry run: the API naming this release while the web names another fails, naming both', () => {
+  const stale = 'b'.repeat(40);
+  const result = dryRun({ secrets: SECRETS, vars: VARS, webCommit: stale });
+
+  assert.equal(result.failedAt, 'Poll /ready until it names this release');
+  assert.ok(
+    result.printed.includes(
+      `Web/API skew: the web serves ${stale.slice(0, 7)} but the API serves ${SHA.slice(0, 7)}.`,
+    ),
+    result.printed,
+  );
+});
+
+test('dry run: the web naming the same release as the API passes the gate', () => {
+  const result = dryRun({ secrets: SECRETS, vars: VARS });
+
+  assert.equal(result.failedAt, null);
+  assert.ok(result.printed.includes(`web /api/ready names ${SHA.slice(0, 7)}`), result.printed);
+});
+
+test('ready: a web still on the previous build is polled again until it names this release', async () => {
+  const { io } = recordingIo();
+  const answers = ['b'.repeat(40), SHA];
+  let asked = 0;
+  let clock = 0;
+  io.fetch = async () => Response.json({ commit: answers[asked++] });
+  io.now = () => clock;
+  io.sleep = async (ms) => {
+    clock += ms;
+  };
+
+  await PHASES.ready(
+    {
+      PATH: '/bin',
+      API_URL: 'https://api.orla.test',
+      WEB_URL: 'https://orla.test',
+      SENTRY_RELEASE: SHA,
+    },
+    io,
+  );
+
+  assert.equal(asked, 2);
+  assert.equal(clock, 5_000);
+});
+
+test('ready: a web that never answers fails the release by name once the deadline passes', async () => {
+  const { io } = recordingIo();
+  let clock = 0;
+  io.fetch = async () => {
+    throw new Error('offline');
+  };
+  io.now = () => clock;
+  io.sleep = async (ms) => {
+    clock += ms;
+  };
+
+  await assert.rejects(
+    PHASES.ready(
+      {
+        PATH: '/bin',
+        API_URL: 'https://api.orla.test',
+        WEB_URL: 'https://orla.test,https://www.orla.test',
+        SENTRY_RELEASE: SHA,
+        SMOKE_DEADLINE_MS: '20000',
+      },
+      io,
+    ),
+    { message: `The web's /api/ready never named ${SHA.slice(0, 7)} (did not answer).` },
+  );
 });
 
 const GATE_STEP = "Gate on CI success and on still being the branch's tip";
