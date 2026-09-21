@@ -40,7 +40,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import type { AppDatabase } from '../../lib/database.js';
-import { VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
+import { VENDOR_SELLABLE, VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
 
 /** Newest first — both hubs read a request queue, and the queue is a stack. */
 const newestFirst = [desc(bookingRequests.createdAt)];
@@ -483,6 +483,17 @@ export async function findBookableVendorById(
     .limit(1);
 
   return rows?.[0] ?? null;
+}
+
+/** Whether the vendor may still be sold to: visible and not on a moderation hold (VEN-556). */
+export async function isVendorSellable(db: AppDatabase, vendorId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: vendorProfiles.id })
+    .from(vendorProfiles)
+    .where(and(eq(vendorProfiles.id, vendorId), VENDOR_SELLABLE))
+    .limit(1);
+
+  return rows.length > 0;
 }
 
 export async function findVendorsByIds(
