@@ -526,6 +526,8 @@ export const NOTIFICATION_TYPES = [
   'new_review',
   'payout_sent',
   'stripe_onboarding_complete',
+  // Stripe restricted the vendor's account; the copy names the fix, never the reason (VEN-525).
+  'payouts_paused',
   /*
    * Admin moderation (#15). Approving and merging both land here: the
    * vendor's suggestion became a real tag on their profile either way, and

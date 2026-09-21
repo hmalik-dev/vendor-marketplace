@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, notFound } from '../../lib/errors.js';
 import { isMissingPayoutsOnly, isOnboarded, type StripeConnectGateway } from '../../lib/stripe.js';
+import { notifyVendorUser, PAYOUT_NOTICES, type NotifyDeps } from '../notifications/notify-user.js';
 import { findUserById } from '../users/users.dao.js';
 import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import {
@@ -22,6 +23,8 @@ export interface StripeConnectDeps {
   stripe: StripeConnectGateway;
   /** The request logger, so a half-onboarded account is diagnosable. */
   log?: { warn: (details: Record<string, unknown>, message: string) => void };
+  /** Where the vendor is told the account changed. The webhook passes it (VEN-525). */
+  notify?: NotifyDeps;
 }
 
 /**
@@ -247,6 +250,17 @@ async function attemptAccountStatusChange(
    */
   if (!flagChanged) {
     return 'unchanged';
+  }
+
+  /*
+   * Only a flag flip reaches here, and only the writer whose guarded update
+   * landed, so a redelivery (`unchanged`) and a losing handler both stay quiet.
+   * The notice goes to the vendor's own user, never to a customer.
+   */
+  if (deps.notify) {
+    const notice = onboarded ? PAYOUT_NOTICES.connected : PAYOUT_NOTICES.paused;
+
+    await notifyVendorUser(deps.notify, vendor.userId, { ...notice, data: {} });
   }
 
   return onboarded ? 'onboarded' : 'not-onboarded';

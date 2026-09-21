@@ -325,7 +325,11 @@ describe('the payout sweep', () => {
     );
     await app.register(fp(async () => undefined, { name: 'operator-alerts' }));
     // No database decorated, so the sweep's first query throws.
-    await app.register(payoutReleasePlugin, { intervalMs: 5, reporter });
+    await app.register(payoutReleasePlugin, {
+      intervalMs: 5,
+      reporter,
+      webOrigin: 'https://web.test',
+    });
     await app.ready();
 
     await expect.poll(() => reporter.captured.length, { timeout: 2_000 }).toBeGreaterThan(0);

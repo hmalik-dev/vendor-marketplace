@@ -826,7 +826,12 @@ export async function retryBookingPayout(
    * so it is left behind here rather than trusted to be ignored downstream.
    */
   const result = await retryPayoutRelease(
-    { db: context.db, stripe: context.stripe, log: context.log },
+    {
+      db: context.db,
+      stripe: context.stripe,
+      log: context.log,
+      notify: { hub: context.hub, mail: context.mail },
+    },
     bookingId,
     now,
   );
