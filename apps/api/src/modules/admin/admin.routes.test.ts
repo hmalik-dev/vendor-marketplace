@@ -21,6 +21,7 @@ import {
   vendorTags,
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import type { AlertSource } from '../operator-alerts/operator-alerts.service.js';
 import { bookingContextFor } from '../payments/payments.service.js';
 import { SUSPENSION_UNWIND, unwindAccountBookings } from './account-unwind.js';
 import {
@@ -840,7 +841,7 @@ describe('admin routes', () => {
       const customerId = await signIn(CUSTOMER);
       const vendor = await createVendorProfile({ isPublished: true });
       const bookingId = await createFutureBooking(customerId, vendor.profileId);
-      const dispatched: { kind: string; subjectId: string; summary: string }[] = [];
+      const dispatched: AlertSource[] = [];
       harness.stripe.duringNextRefund = async () => {
         await harness.database.db
           .update(bookings)
