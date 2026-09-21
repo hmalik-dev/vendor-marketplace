@@ -818,7 +818,7 @@ export function BookingRequestScreen({
 
 /** `.inp` from the frame: `stone-150` fill, `stone-300` hairline, 10px radius. */
 const FIELD_CONTROL = cn(
-  'h-auto w-full rounded-[10px] border border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900',
+  'h-auto w-full rounded-[10px] border border-input bg-stone-150 px-3.25 py-2.5 text-base text-stone-900',
   FIELD_FOCUS,
 );
 

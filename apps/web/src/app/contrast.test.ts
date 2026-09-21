@@ -107,6 +107,15 @@ describe('field and control boundaries meet 3:1', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('draws every hand-rolled text field in the boundary token', () => {
+    // The field shape: a stone-150 fill with input padding. Cards share the fill but not the padding.
+    const offenders = productionFiles().filter((file) =>
+      /border-stone-300 bg-stone-150 px-(?:3\.25|\[13px\]|2\.5)/.test(source(file)),
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
   it('draws every hand-rolled checkbox in the boundary token', () => {
     const offenders = productionFiles().filter((file) =>
       /appearance-none[^'"`]*border-stone-400/.test(source(file)),
