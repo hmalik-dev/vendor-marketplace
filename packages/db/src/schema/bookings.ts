@@ -1,6 +1,7 @@
 import type { EventType } from '@vendor-marketplace/shared';
 import { sql } from 'drizzle-orm';
 import {
+  check,
   date,
   index,
   integer,
@@ -87,6 +88,19 @@ export const bookingRequests = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    // Cents and counts are never negative; the wire ranges are stricter (VEN-550).
+    check(
+      'booking_requests_quoted_price_cents_non_negative',
+      sql`${table.quotedPriceCents} IS NULL OR ${table.quotedPriceCents} >= 0`,
+    ),
+    check(
+      'booking_requests_final_price_cents_non_negative',
+      sql`${table.finalPriceCents} IS NULL OR ${table.finalPriceCents} >= 0`,
+    ),
+    check(
+      'booking_requests_guest_count_non_negative',
+      sql`${table.guestCount} IS NULL OR ${table.guestCount} >= 0`,
+    ),
     index('booking_requests_customer_status_idx').on(table.customerId, table.status),
     index('booking_requests_vendor_status_idx').on(table.vendorId, table.status),
     // The `ON DELETE SET NULL` scan when a package row goes with its vendor.
@@ -334,6 +348,21 @@ export const bookings = pgTable(
       .where(
         sql`${table.paidAt} is not null and ${table.payoutReleasedAt} is null and ${table.payoutAttempts} > 0`,
       ),
+    /*
+     * Impossible amounts (VEN-550). The sum `platform_fee + vendor_payout =
+     * total` is deliberately not a check: a cancellation rewrites the payout.
+     * The refund bound holds on every writer: a cancellation refunds at most
+     * the total, the unwind and dispute paths top up to it, and Stripe cannot
+     * refund a charge past the amount received, which is the total.
+     */
+    check('bookings_total_amount_cents_positive', sql`${table.totalAmountCents} > 0`),
+    check('bookings_platform_fee_cents_non_negative', sql`${table.platformFeeCents} >= 0`),
+    check('bookings_vendor_payout_cents_non_negative', sql`${table.vendorPayoutCents} >= 0`),
+    check(
+      'bookings_refund_amount_cents_range',
+      sql`${table.refundAmountCents} IS NULL OR (${table.refundAmountCents} >= 0 AND ${table.refundAmountCents} <= ${table.totalAmountCents})`,
+    ),
+    check('bookings_external_refund_cents_non_negative', sql`${table.externalRefundCents} >= 0`),
     // The same guarantee as `booking_requests_accepted_date_key`, for the row
     // that outlives the request: a cancelled or completed booking frees the
     // constraint, a confirmed one holds the date (VEN-482).
