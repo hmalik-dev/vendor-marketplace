@@ -74,9 +74,11 @@ branch policy to the environments either: a `workflow_run` job runs on the
 default branch, so a rule limiting `production` to the `production` branch
 would refuse every deploy.
 
-Vercel builds only `staging` and `production` from git (`vercel.json`); every
-other branch's deployment is skipped, so pull requests and lanes get no Vercel
-preview.
+Vercel builds nothing from git (`vercel.json`, VEN-535): Git deployments are
+off and every branch is skipped, so a push to `staging` or `production` cannot
+put the web live ahead of the migration and the API, and pull requests and lanes
+get no Vercel preview. The release workflow's prebuilt deploy is the only web
+path, so until VEN-377 provisions its inputs the deployed web does not move.
 
 ## What each environment holds
 

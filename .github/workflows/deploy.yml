@@ -10,7 +10,11 @@
 #     → api        deploy the API image; the host's own branch auto-deploy is
 #                  off, so this is the only thing that ever ships the API and
 #                  it always follows the migration
-#     → web        prebuilt Vercel deploy, source maps to Sentry
+#     → web        prebuilt Vercel deploy, source maps to Sentry; the only
+#                  path that ever ships the web (VEN-535): vercel.json turns
+#                  Vercel's Git deployments off and skips every branch, so a
+#                  push to `staging` or `production` cannot put the web live
+#                  ahead of the migration and the API
 #     → ready      GET /ready names this commit before the deadline, or the run fails
 #
 # Every step runs only if the one before it succeeded; nothing here is
