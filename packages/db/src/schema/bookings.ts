@@ -83,11 +83,36 @@ export const bookingRequests = pgTable(
      * — there would be nothing to ask Stripe about.
      */
     stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
+    /**
+     * How many canceled intents this request has replaced (VEN-547). The
+     * creation idempotency key is built from it, so callers racing over one
+     * replacement share a key, and the replacement after a cancellation gets a
+     * new one (D36: Stripe replays a canceled intent for the same key for 24
+     * hours). Moved only together with the intent id, by compare-and-set on the
+     * canceled id, in `recordReplacementIntent`.
+     */
+    paymentIntentReplacements: integer('payment_intent_replacements').notNull().default(0),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
+    /**
+     * Ticks or reads that held this request's expiry because its payment intent
+     * was processing or unreadable (VEN-551). At `EXPIRY_HOLD_MAX_ATTEMPTS` the
+     * hold ends and the request expires. Null until the first hold.
+     */
+    expiryCheckAttempts: integer('expiry_check_attempts'),
+    /** When the last hold was counted; the sweep works never-held rows first. */
+    expiryLastAttemptAt: timestamp('expiry_last_attempt_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check(
+      'booking_requests_payment_intent_replacements_non_negative',
+      sql`${table.paymentIntentReplacements} >= 0`,
+    ),
+    check(
+      'booking_requests_expiry_check_attempts_non_negative',
+      sql`${table.expiryCheckAttempts} IS NULL OR ${table.expiryCheckAttempts} >= 0`,
+    ),
     // Cents and counts are never negative; the wire ranges are stricter (VEN-550).
     check(
       'booking_requests_quoted_price_cents_non_negative',
@@ -105,10 +130,24 @@ export const bookingRequests = pgTable(
     index('booking_requests_vendor_status_idx').on(table.vendorId, table.status),
     // The `ON DELETE SET NULL` scan when a package row goes with its vendor.
     index('booking_requests_package_idx').on(table.packageId),
-    // Serves the lazy expiry sweep, which only ever scans pending requests.
+    /*
+     * Serves the lazy expiry sweep, which scans every status that can lapse:
+     * `pending`, `quoted` and `accepted` (the payment deadline). A predicate
+     * narrower than the sweep's `status IN (...)` cannot be used by it, so the
+     * planner would scan the table. `EXPIRABLE_BOOKING_REQUEST_STATUSES` is the
+     * same list, and `schema.test.ts` holds the two together.
+     */
+    /*
+     * The sweep's order (VEN-551): never-held rows first, then by deadline. The
+     * same predicate as the index above, so a backlog is read from here in order
+     * and the batch stops at its limit.
+     */
+    index('booking_requests_expiry_sweep_order_idx')
+      .on(sql`${table.expiryLastAttemptAt} asc nulls first`, table.expiresAt)
+      .where(sql`${table.status} in ('pending', 'quoted', 'accepted')`),
     index('booking_requests_expires_at_idx')
       .on(table.expiresAt)
-      .where(sql`${table.status} = 'pending'`),
+      .where(sql`${table.status} in ('pending', 'quoted', 'accepted')`),
     /*
      * One live request per natural key, so a repeat submission — a client
      * retry, a mobile touch-and-click double fire, a network-level retry —

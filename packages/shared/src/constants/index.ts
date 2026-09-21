@@ -526,6 +526,8 @@ export const NOTIFICATION_TYPES = [
   'new_review',
   'payout_sent',
   'stripe_onboarding_complete',
+  // Stripe restricted the vendor's account; the copy names the fix, never the reason (VEN-525).
+  'payouts_paused',
   /*
    * Admin moderation (#15). Approving and merging both land here: the
    * vendor's suggestion became a real tag on their profile either way, and
@@ -1152,11 +1154,38 @@ export const PAYOUT_RELEASE_HOURS = 72;
 export const PAYOUT_SWEEP_INTERVAL_MS = 15 * 60_000;
 
 /**
+ * How often the API reconciles local accounts against Neon Auth (VEN-480).
+ *
+ * A day, because Neon Auth sends no delete event and a deleted identity only has
+ * to stop holding a live account within a bounded time, not at once. The pass
+ * reads every live identity, so a tighter loop would buy nothing the payout and
+ * expiry sweeps do not already cover. It is safe to run twice: a retirement is a
+ * conditional claim.
+ */
+export const AUTH_RECONCILE_INTERVAL_MS = 24 * 60 * 60_000;
+
+/**
  * How often each instance ages lapsed booking requests. Ageing is guarded on
  * the status it read, so instances overlapping is safe; the interval only
  * bounds how long a customer waits to hear that their request lapsed.
  */
 export const EXPIRY_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+/**
+ * How many consecutive ticks the expiry of an accepted request is held while its
+ * payment intent is still processing or Stripe cannot return it (VEN-551). The
+ * tick after the last one expires the request and tells the operator, because a
+ * date held forever costs the vendor bookings; the intent is left as it is and
+ * never refunded automatically.
+ */
+export const EXPIRY_HOLD_MAX_ATTEMPTS = 5;
+
+/**
+ * The least time between two counted holds of one request. Under a tick, so
+ * every sweep counts, and far over a burst of reads: a customer refreshing their
+ * booking page must not spend the bound in seconds.
+ */
+export const EXPIRY_HOLD_SPACING_MS = 4 * 60_000;
 
 /**
  * How often each instance re-sends transactional email that failed to leave
@@ -1347,6 +1376,16 @@ export const ADMIN_ACTIONS = [
   'vendor_invited',
   'vendor_invite_revoked',
   'vendor_application_declined',
+  /*
+   * Bulk reads of customer data (VEN-475), logged although they change nothing:
+   * an operator account is one password, so "who pulled the file, and how big"
+   * has to be answerable. `admin_exported` is one CSV request (detail: the
+   * export, its filters and row count); `admin_data_read` is one look at a
+   * customer's record or the payments list, written at most once per operator
+   * per subject per hour so browsing does not flood the log.
+   */
+  'admin_exported',
+  'admin_data_read',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -1379,6 +1418,17 @@ export const ADMIN_ACTION_SUBJECTS = [
   'vendor_application',
 ] as const;
 export type AdminActionSubject = (typeof ADMIN_ACTION_SUBJECTS)[number];
+
+/** The CSV exports the console offers (VEN-475); each one is audited. */
+export const ADMIN_EXPORTS = ['vendors', 'activity', 'cases'] as const;
+export type AdminExport = (typeof ADMIN_EXPORTS)[number];
+
+/** The reads that write an `admin_data_read` row, at most one per hour each. */
+export const ADMIN_READ_SURFACES = ['customer_detail', 'payments'] as const;
+export type AdminReadSurface = (typeof ADMIN_READ_SURFACES)[number];
+
+/** A repeat read inside this window writes no second row. */
+export const ADMIN_READ_AUDIT_WINDOW_MS = 60 * 60 * 1000;
 
 /**
  * The activity feed's date-range facet (VEN-388): how far back from the moment
@@ -1704,6 +1754,9 @@ export const MAX_TITLE_LENGTH = 200;
  */
 export const MAX_DISPLAY_ORDER = 2_147_483_647;
 
+/** The most ids a reorder request may carry: a vendor's packages or portfolio. */
+export const MAX_REORDER_IDS = 500;
+
 /**
  * `notifications.title`, which is **not** `MAX_TITLE_LENGTH`.
  *
@@ -1760,10 +1813,18 @@ export const ERROR_CODES = {
    * as a plain 403 put every un-accepted account on the suspended screen.
    */
   TERMS_REQUIRED: 'TERMS_REQUIRED',
+  /**
+   * An irreversible admin route was reached without a fresh step-up (VEN-500).
+   * Its own code so the console opens the code prompt instead of `/suspended`.
+   */
+  STEP_UP_REQUIRED: 'STEP_UP_REQUIRED',
+  /** One operator has ended as many accounts this hour as the ceiling allows. */
+  ADMIN_CEILING_REACHED: 'ADMIN_CEILING_REACHED',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
   RATE_LIMITED: 'RATE_LIMITED',
   PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
+  VENDOR_UNAVAILABLE: 'VENDOR_UNAVAILABLE',
   PAYMENT_FAILED: 'PAYMENT_FAILED',
   INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
   UPLOAD_FAILED: 'UPLOAD_FAILED',

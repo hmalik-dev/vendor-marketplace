@@ -1,3 +1,4 @@
+import { setUserRole } from './set-user-role.js';
 import { seedReferenceData } from '@vendor-marketplace/db';
 import {
   CURRENT_TERMS_VERSION,
@@ -6,14 +7,15 @@ import {
 } from '@vendor-marketplace/shared';
 import { users } from '@vendor-marketplace/db/schema';
 import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
-import { eq } from 'drizzle-orm';
-import type { FastifyInstance } from 'fastify';
+import { eq, sql } from 'drizzle-orm';
+import type { FastifyInstance, RouteOptions } from 'fastify';
 import type { ApiEnv } from '../config/env.js';
 import type { AppDatabase } from '../lib/database.js';
 import type { EmailGateway, EmailMessage } from '../lib/email.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
 import {
+  paymentIntentIdempotencyKey,
   paymentIntentParams,
   refundParams,
   assertUsableRefund,
@@ -42,7 +44,15 @@ import type { NeonAuthPluginOptions } from '../plugins/neon-auth.js';
 import { displayName, syncUserFromAuth } from '../modules/users/users.service.js';
 import type { AuthUserSnapshot } from '../modules/users/users.service.js';
 import { buildServer } from '../server.js';
+import { StepUpStore } from '../lib/step-up.js';
 import type { Clock } from '../plugins/clock.js';
+
+/** A store that treats every operator as freshly confirmed; see `enforceStepUp`. */
+class AlwaysFreshStepUpStore extends StepUpStore {
+  override isFresh(): boolean {
+    return true;
+  }
+}
 
 export const TEST_ENV: ApiEnv = {
   NODE_ENV: 'test',
@@ -128,6 +138,10 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
   env?: Partial<ApiEnv>;
   /** A short request timeout, for the suite that watches a stalled upload get cut off. */
   requestTimeoutMs?: number;
+  /** A short stream heartbeat, for the suites that watch a ban end an open stream. */
+  streamHeartbeatMs?: number;
+  /** Sees every route the server registers, for the suite that walks the route table. */
+  onRoute?: (route: RouteOptions) => void;
   /**
    * The real Neon Auth token verifier and loader (over a local key set), in
    * place of the fakes that read the literal `token-<id>` — for the suite whose
@@ -135,6 +149,13 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
    */
   neonAuth?: Pick<NeonAuthPluginOptions, 'verifySessionToken' | 'loadAuthUser'>;
   loggerStream?: NodeJS.WritableStream;
+  /**
+   * The real step-up store (VEN-500), for the suites whose subject is the
+   * control itself. Every other suite is about what an admin route does once an
+   * operator is confirmed, so it gets a store that is always fresh; the
+   * production wiring never can be, because `buildServer` builds the real one.
+   */
+  enforceStepUp?: boolean;
   /**
    * Pins "now" for every date-sensitive route. A suite that leaves it unset
    * reads the real clock and is therefore hour-dependent; one that sets it
@@ -239,6 +260,48 @@ async function bootTestDatabase(): Promise<TestDatabase> {
   return database;
 }
 
+/**
+ * Lets a suite's teardown do what production can never do: hard-delete a user or
+ * a vendor profile that has audit or consent rows behind it.
+ *
+ * Those foreign keys are `RESTRICT` (VEN-463), so a suite that signs people in
+ * and then `delete(users)` between tests would otherwise fail on its first
+ * acceptance row. Each trigger below clears the referencing rows with triggers
+ * and constraints switched off for that one statement, and only in the harness's
+ * own throwaway database. The behaviour they stand in for is proved where it
+ * belongs, against a database without them: `admin-action-immutability.test.ts`
+ * and `legal-acceptance-immutability.test.ts` in `packages/db`.
+ */
+async function allowTeardownOfRecords(db: AppDatabase): Promise<void> {
+  const statements = [
+    `CREATE OR REPLACE FUNCTION test_teardown_user_records() RETURNS trigger AS $$
+      BEGIN
+        PERFORM set_config('session_replication_role', 'replica', true);
+        DELETE FROM admin_actions WHERE actor_id = OLD.id;
+        DELETE FROM legal_acceptances WHERE accepted_by_user_id = OLD.id;
+        PERFORM set_config('session_replication_role', 'origin', true);
+        RETURN OLD;
+      END $$ LANGUAGE plpgsql`,
+    `CREATE OR REPLACE FUNCTION test_teardown_vendor_records() RETURNS trigger AS $$
+      BEGIN
+        PERFORM set_config('session_replication_role', 'replica', true);
+        DELETE FROM legal_acceptances WHERE vendor_id = OLD.id;
+        PERFORM set_config('session_replication_role', 'origin', true);
+        RETURN OLD;
+      END $$ LANGUAGE plpgsql`,
+    'DROP TRIGGER IF EXISTS test_teardown_user_records ON users',
+    `CREATE TRIGGER test_teardown_user_records BEFORE DELETE ON users
+      FOR EACH ROW EXECUTE FUNCTION test_teardown_user_records()`,
+    'DROP TRIGGER IF EXISTS test_teardown_vendor_records ON vendor_profiles',
+    `CREATE TRIGGER test_teardown_vendor_records BEFORE DELETE ON vendor_profiles
+      FOR EACH ROW EXECUTE FUNCTION test_teardown_vendor_records()`,
+  ];
+
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+}
+
 /** Records what a route stored instead of reaching S3. */
 export interface RecordedObject {
   key: string;
@@ -325,7 +388,17 @@ export type FakeAccountStatus = StripeAccountCapabilities &
  */
 export interface FakeStripe extends StripeConnectGateway {
   /** Accounts the fake has minted, in creation order. */
-  createdAccounts: { accountId: string; vendorId: string; contactEmail: string }[];
+  createdAccounts: {
+    accountId: string;
+    vendorId: string;
+    contactEmail: string;
+    idempotencyKey: string | undefined;
+  }[];
+  /**
+   * The idempotency key of every `createRecipientAccount` call, including the
+   * ones Stripe collapsed onto an account it had already made.
+   */
+  recipientAccountKeys: (string | undefined)[];
   /** Every onboarding link minted, so a suite can assert on the URLs sent. */
   createdLinks: { accountId: string; returnUrl: string; refreshUrl: string }[];
   /**
@@ -440,6 +513,12 @@ export interface FakeStripe extends StripeConnectGateway {
    */
   transfersToRefuse: Set<string>;
   /**
+   * Transfer ids whose reversal the fake refuses as Stripe does — an answered
+   * refusal, replayed for 24 hours under the same key (VEN-499). Delete the id
+   * to let the next attempt through.
+   */
+  reversalsToRefuse: Set<string>;
+  /**
    * Idempotency keys whose result was a **failure**, replayed as Stripe does.
    *
    * Exposed so a suite can clear it between tests alongside `transfers`. Booking
@@ -462,11 +541,17 @@ export interface FakeStripe extends StripeConnectGateway {
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
   /** Moves an intent to `canceled`, as Stripe does once it can never be paid. */
   cancel: (paymentIntentId: string) => PaymentIntentSnapshot;
+  /** Intents the platform asked Stripe to cancel, in order (VEN-528). */
+  cancelRequests: string[];
+  /** Every key `createPaymentIntent` was sent, in order, replays included. */
+  paymentIntentKeys: string[];
 }
 
 function createFakeStripe(deployEnv: string): FakeStripe {
   const createdAccounts: FakeStripe['createdAccounts'] = [];
   const createdLinks: FakeStripe['createdLinks'] = [];
+  const recipientAccountKeys: FakeStripe['recipientAccountKeys'] = [];
+  const accountsByKey = new Map<string, string>();
   const accountStatuses = new Map<string, FakeAccountStatus>();
   const validSignatures = new Set<string>(['valid-signature']);
   const paymentIntents = new Map<string, PaymentIntentSnapshot>();
@@ -486,17 +571,25 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   paymentIntents.clear = () => {
     forgetIntents();
     failedRefundKeys.clear();
+    failedReversalKeys.clear();
     refundIdsByKey.clear();
   };
   const transfers: FakeStripe['transfers'] = [];
   const reversals: FakeStripe['reversals'] = [];
   const transfersToRefuse = new Set<string>();
+  const reversalsToRefuse = new Set<string>();
+  const failedReversalKeys = new Map<string, string>();
   /** Idempotency keys whose result was a failure, replayed as Stripe does. */
   const failedTransferKeys = new Map<string, string>();
   const disputes = new Map<string, StripeDisputeSnapshot>();
+  const cancelRequests: string[] = [];
+  const paymentIntentKeys: string[] = [];
 
   const fake: FakeStripe = {
+    cancelRequests,
+    paymentIntentKeys,
     createdAccounts,
+    recipientAccountKeys,
     createdLinks,
     accountStatuses,
     validSignatures,
@@ -522,6 +615,7 @@ function createFakeStripe(deployEnv: string): FakeStripe {
     transfers,
     reversals,
     transfersToRefuse,
+    reversalsToRefuse,
     failedTransferKeys,
     disputes,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
@@ -562,12 +656,24 @@ function createFakeStripe(deployEnv: string): FakeStripe {
     },
 
     createRecipientAccount: async (input) => {
+      recipientAccountKeys.push(input.idempotencyKey);
+
+      // Stripe answers a repeated key with the account it already made.
+      const replayed = input.idempotencyKey ? accountsByKey.get(input.idempotencyKey) : undefined;
+      if (replayed) {
+        return { accountId: replayed };
+      }
+
       const accountId = `acct_test_${createdAccounts.length + 1}`;
       createdAccounts.push({
         accountId,
         vendorId: input.vendorId,
         contactEmail: input.contactEmail,
+        idempotencyKey: input.idempotencyKey,
       });
+      if (input.idempotencyKey) {
+        accountsByKey.set(input.idempotencyKey, accountId);
+      }
       return { accountId };
     },
 
@@ -601,7 +707,8 @@ function createFakeStripe(deployEnv: string): FakeStripe {
        * fresh one each time would let a double-charge through a green suite —
        * which is exactly the shape of bug the parity rule warns about.
        */
-      const key = `pay_${input.requestId}`;
+      const key = paymentIntentIdempotencyKey(input);
+      paymentIntentKeys.push(key);
       const replayed = intentsByKey.get(key);
 
       if (replayed) {
@@ -652,6 +759,25 @@ function createFakeStripe(deployEnv: string): FakeStripe {
       }
 
       return intent;
+    },
+
+    cancelPaymentIntent: async (paymentIntentId) => {
+      cancelRequests.push(paymentIntentId);
+
+      const intent = paymentIntents.get(paymentIntentId);
+
+      if (!intent) {
+        throw new Error(`No fake payment intent ${paymentIntentId}`);
+      }
+
+      /* Stripe refuses these two, and the caller has to read the intent again. */
+      if (intent.status === 'succeeded' || intent.status === 'processing') {
+        throw new Error(
+          `The fake intent ${paymentIntentId} is ${intent.status} and cannot be canceled`,
+        );
+      }
+
+      return fake.cancel(paymentIntentId);
     },
 
     createTransfer: async (input) => {
@@ -755,6 +881,18 @@ function createFakeStripe(deployEnv: string): FakeStripe {
 
       if (replayed) {
         return { reversalId: replayed.reversalId, amountCents: replayed.amountCents };
+      }
+
+      const replayedFailure = failedReversalKeys.get(input.idempotencyKey);
+
+      if (replayedFailure) {
+        throw new RefundRefusedError(replayedFailure);
+      }
+
+      if (reversalsToRefuse.has(input.transferId)) {
+        const message = `Fake Stripe refused a reversal of ${input.transferId}`;
+        failedReversalKeys.set(input.idempotencyKey, message);
+        throw new RefundRefusedError(message);
       }
 
       const transfer = transfers.find((candidate) => candidate.transferId === input.transferId);
@@ -955,6 +1093,7 @@ export async function createTestHarness(
   options: TestHarnessOptions<HarnessDatabase> = {},
 ): Promise<TestHarness<HarnessDatabase>> {
   const database = options.database ?? (await bootTestDatabase());
+  await allowTeardownOfRecords(database.db);
   // Categories and tags are reference data every deployment starts with, so
   // the suites see the same rows the running application does.
   await seedReferenceData(database.db);
@@ -1022,6 +1161,8 @@ export async function createTestHarness(
      */
     payoutSweepIntervalMs: 0,
     // Nor does the expiry sweep: suites call `expireLapsedRequests` with a pinned clock.
+    // Nor the Neon Auth reconcile: it would retire rows the fake directory never heard of.
+    authReconcileIntervalMs: 0,
     expirySweepIntervalMs: 0,
     // Nor the email retry: suites call `retryFailedEmails` with a pinned clock.
     emailRetryIntervalMs: 0,
@@ -1031,9 +1172,12 @@ export async function createTestHarness(
     operatorDigestIntervalMs: 0,
     // Alert send retries do not wait on a real timer in a suite.
     operatorAlertWait: async () => undefined,
+    ...(options.enforceStepUp ? {} : { stepUp: new AlwaysFreshStepUpStore() }),
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.requestTimeoutMs ? { requestTimeoutMs: options.requestTimeoutMs } : {}),
+    ...(options.streamHeartbeatMs ? { streamHeartbeatMs: options.streamHeartbeatMs } : {}),
+    ...(options.onRoute ? { onRoute: options.onRoute } : {}),
     ...(options.errorReporter ? { errorReporter: options.errorReporter } : {}),
     auth: {
       // Tokens in the suites are literally the auth user id they stand for.
@@ -1210,10 +1354,7 @@ export async function signInAs(
   }
 
   if (promoteToAdmin) {
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, authUserId));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, authUserId));
   }
 
   const rows = await harness.database.db

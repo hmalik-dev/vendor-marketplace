@@ -11,8 +11,13 @@ import type { LegalAcceptanceRow, UserRow, VendorProfileRow } from '@vendor-mark
 import type { AppDatabase } from '../../lib/database.js';
 import { isSeededIdentity, type AuthIdentityDeleter } from '../auth-sync/identity.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
-import { hasAnotherLiveOperator, retireOperatorById, retireUserById } from '../users/users.dao.js';
-import { findConfirmedBookingsToUnwind } from './admin.dao.js';
+import {
+  hasAnotherLiveOperator,
+  retireOperatorById,
+  retireUserById,
+  type RetirementAudit,
+} from '../users/users.dao.js';
+import { findConfirmedBookingsToUnwind, insertAdminAction } from './admin.dao.js';
 import { fullName, recordAdminActionBestEffort } from './admin.service.js';
 import {
   bestEffortNotice,
@@ -497,8 +502,8 @@ export const LAST_OPERATOR_REFUSAL =
  *
  * "Nothing removed" is not success here: an id this branch does not hold reads
  * the same as one already gone — a store pointed at the wrong branch is the
- * anticipated mistake — and `identityDeleted: true` goes into `admin_actions`,
- * which cannot be corrected. So the console asks for a person instead.
+ * anticipated mistake — and `identityDeleted: true` goes to the console,
+ * which acts on it. So the console asks for a person instead.
  */
 async function deleteAndConfirm(
   context: AdminContext,
@@ -561,9 +566,8 @@ export async function closeAccount(
   if (actorId === userId) {
     /*
      * The same refusal `setUserBanned` makes, for a sharper reason: an operator
-     * who closed their own account would take their entire `admin_actions` log
-     * with them one hard delete later, and an audit trail an actor can erase is
-     * not one. 403 rather than 400 — it is about who the caller is.
+     * who closed their own account would retire the actor of their own audit
+     * rows, and an audit trail an actor can retire is not one. 403 rather than 400 — it is about who the caller is.
      */
     throw forbidden('You cannot close your own account');
   }
@@ -573,23 +577,45 @@ export async function closeAccount(
   }
 
   const profile = await findVendorProfileRecord(context.db, userId);
-  const blockers = await closeBlockers(context.db, userId, now);
 
-  if (blockers.length > 0) {
-    throw conflict(
-      `This account holds ${blockers.length} upcoming confirmed ${
-        blockers.length === 1 ? 'booking' : 'bookings'
-      }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
-      { bookings: blockers },
-    );
+  /*
+   * The blockers are read **inside** the retirement, under the account's row
+   * lock (VEN-483). Read before it, a booking confirmed in between was left
+   * standing with a closed customer; now it either commits first and refuses
+   * the closure here, or waits until the retirement has committed.
+   */
+  function blockersOf(tx: AppDatabase): Promise<AdminCloseBlocker[]> {
+    return closeBlockers(tx, userId, now);
   }
-
+  /*
+   * The audit row commits with the retirement or not at all (VEN-463): a closure
+   * that cannot be recorded does not happen, and the operator simply repeats it.
+   * It records the retirement itself; what the unwind then did is returned to the
+   * console and logged, because a row that is never updated cannot wait for it.
+   */
+  const audit: RetirementAudit = (tx, { profileRetired }) =>
+    insertAdminAction(tx, {
+      actorId,
+      action: operatorTarget ? 'operator_account_closed' : 'user_closed',
+      subjectType: 'user',
+      subjectId: userId,
+      detail: { profileRetired },
+    });
   const retired = operatorTarget
-    ? await retireOperatorById(context.db, userId)
-    : await retireUserById(context.db, userId);
+    ? await retireOperatorById(context.db, userId, blockersOf, audit)
+    : await retireUserById(context.db, userId, blockersOf, audit);
 
   if (retired === 'last-operator') {
     throw conflict(LAST_OPERATOR_REFUSAL);
+  }
+
+  if (retired && 'blocked' in retired) {
+    throw conflict(
+      `This account holds ${retired.blocked.length} upcoming confirmed ${
+        retired.blocked.length === 1 ? 'booking' : 'bookings'
+      }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
+      { bookings: retired.blocked },
+    );
   }
 
   if (!retired) {
@@ -637,8 +663,8 @@ export async function closeAccount(
    * gone a session token for it still verifies for up to 15 minutes (VEN-444,
    * q3); the retired row is what refuses it meanwhile.
    *
-   * Reported rather than thrown, through the same helper the audit write and
-   * the unwind's notifications use: the retirement has already committed and
+   * Reported rather than thrown, through the same helper the unwind's
+   * notifications use: the retirement has already committed and
    * an operator cannot repeat a closure — the route answers 409 on a closed
    * account — so a failure at Neon Auth must not answer 500 and tell them
    * nothing happened. It comes back as `identityDeleted: false`, and the
@@ -654,21 +680,10 @@ export async function closeAccount(
       ? false
       : await deleteAndConfirm(context, userId, user.authUserId, deleteIdentity);
 
-  await recordAdminActionBestEffort(context, {
-    actorId,
-    action: operatorTarget ? 'operator_account_closed' : 'user_closed',
-    subjectType: 'user',
-    subjectId: userId,
-    detail: {
-      requestsDeclined: unwound.requestsDeclined,
-      bookingsCancelled: unwound.bookingsCancelled,
-      bookingsLeftForReview: unwound.bookingsLeftForReview,
-      refundsIssued: unwound.refundsIssued,
-      refundsFailed: unwound.refundsFailed,
-      profileRetired: retired.profileRetired,
-      identityDeleted,
-    },
-  });
+  context.log.info(
+    { userId, actorId, ...unwound, identityDeleted },
+    'An account closure finished unwinding',
+  );
 
   return {
     userId,

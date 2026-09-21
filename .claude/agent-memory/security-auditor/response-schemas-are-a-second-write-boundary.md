@@ -30,6 +30,17 @@ the vendor's whole public Reviews tab. **Any SQL-concatenated display field
 needs its bound computed from the concatenation, not copied from the source
 column's constant.**
 
+**Third variant — tightening is worse than widening (VEN-544):** a new `refine`
+on a _shared helper_ applies retroactively to rows already stored. `freeText()`
+and `phoneSchema` feed response shapes too (`userSchema.firstName/lastName`,
+`userSchema.phone`, `servicePackageSchema.name`, `inclusionsSchema`), so the day
+the helper starts refusing ZWSP/BOM/a digitless phone, every legacy row holding
+one 500s its own reader — no attacker needed, and no backfill exists. Response
+leaves for prose are plain `z.string().max()` here (`bio`, `city`, `state`,
+`reviewSchema.title`); keep new refusals on the input side only. The ongoing
+feeder is `mirroredAuthName` (`apps/api/src/modules/users/users.service.ts:66`)
+— strip + trim, no refusal — still writing names the response schema rejects.
+
 **How to apply:** when a diff changes a field in `packages/shared/src/schemas`,
 grep the _column_ (not the field name) through the DAOs to find every response
 schema it reaches, and check each one. When a DAO _derives_ a string in SQL,

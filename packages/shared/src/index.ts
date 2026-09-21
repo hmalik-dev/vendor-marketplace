@@ -2,6 +2,7 @@ export * from './constants/brand.js';
 export * from './constants/index.js';
 export * from './constants/legal.js';
 export * from './constants/legal-manifest.js';
+export * from './constants/admin-step-up.js';
 export * from './constants/operator-alerts.js';
 export * from './constants/support.js';
 export * from './constants/vendor-invites.js';

@@ -4,11 +4,13 @@ import {
   isBeyondBookingHorizon,
   isUniversallyPastDate,
   normalizeImageRefPath,
+  REFUSED_TEXT_CHARACTERS,
   stripBidiControls,
 } from '../utils/index.js';
 import {
   ADMIN_ACTION_SUBJECTS,
   ADMIN_ACTIONS,
+  ADMIN_EXPORTS,
   ADMIN_ACTIVITY_RANGES,
   ADMIN_AVAILABILITY_LOCK_STATUSES,
   ADMIN_NOTIFICATION_RECIPIENTS,
@@ -44,6 +46,7 @@ import {
   MAX_NOTIFICATION_TITLE_LENGTH,
   MAX_REVIEWER_DISPLAY_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
+  MAX_REORDER_IDS,
   MAX_PAGE,
   MAX_PAGE_SIZE,
   MAX_PHONE_LENGTH,
@@ -233,13 +236,28 @@ export const imageRefSchema = z
  */
 export const storedImageRefSchema = z.string().max(MAX_URL_LENGTH);
 
+/**
+ * A phone number as a **response** says it: whatever is stored. Rows written
+ * before `phoneSchema` asked for a digit must still be readable (VEN-544), the
+ * reason `storedEmailSchema` exists.
+ */
+export const storedPhoneSchema = z.string().max(MAX_PHONE_LENGTH);
+
 /** E.164-ish; permissive because the auth provider owns phone verification. */
 export const phoneSchema = z
   .string()
   .trim()
   .min(7)
   .max(MAX_PHONE_LENGTH)
-  .regex(/^\+?[0-9 ()\-.]+$/, 'Must be a valid phone number');
+  .regex(/^\+?[0-9 ()\-.]+$/, 'Must be a valid phone number')
+  .regex(/[0-9]/, 'Must be a valid phone number');
+
+/**
+ * Nothing but zero-width or blank-rendering characters survives `trim()` and
+ * clears a minimum. The joiner and non-joiner are allowed **inside** text (emoji
+ * sequences, Persian), so they are refused only when they are all there is.
+ */
+const INVISIBLE_ONLY_TEXT = /^[\u00ad\u115f\u200b-\u200d\u2060\u2800\u3164\ufeff\uffa0]+$/;
 
 /**
  * Free text, as every write path accepts it: bidi stripped, then trimmed, and
@@ -266,7 +284,15 @@ export const phoneSchema = z
  * Write paths that are **not** request bodies — names mirrored from auth —
  * cannot be seen from there and go through `mirroredAuthName` instead.
  */
-const freeText = () => z.string().overwrite(stripBidiControls).trim();
+const freeText = () =>
+  z
+    .string()
+    .overwrite(stripBidiControls)
+    .overwrite((value) => value.normalize('NFC'))
+    .trim()
+    .refine((value) => !REFUSED_TEXT_CHARACTERS.test(value) && !INVISIBLE_ONLY_TEXT.test(value), {
+      message: 'Remove control or invisible characters and try again.',
+    });
 
 /** Free text with the common bounds: non-empty by default, capped at `max`. */
 const trimmedString = (max: number, min = 1) => freeText().min(min).max(max);
@@ -332,9 +358,9 @@ export const userSchema = z.object({
    * model has to be able to represent that. `updateUserSchema` still requires a
    * non-empty name, so a name that has been set cannot be blanked out again.
    */
-  firstName: trimmedString(MAX_NAME_LENGTH, 0),
-  lastName: trimmedString(MAX_NAME_LENGTH, 0),
-  phone: phoneSchema.nullable(),
+  firstName: z.string().max(MAX_NAME_LENGTH),
+  lastName: z.string().max(MAX_NAME_LENGTH),
+  phone: storedPhoneSchema.nullable(),
   /*
    * An image **reference**, not a URL. Since #47 an upload returns an object
    * key, and the resolver turns it into a URL on the way out — the same shape
@@ -485,7 +511,7 @@ export type CustomerReview = z.infer<typeof customerReviewSchema>;
 const limitedCustomerProfileShape = {
   id: uuidSchema,
   visibility: customerProfileVisibilitySchema,
-  firstName: trimmedString(MAX_NAME_LENGTH, 0),
+  firstName: z.string().max(MAX_NAME_LENGTH),
   memberSince: z.date(),
   bio: z.string().max(MAX_CUSTOMER_BIO_LENGTH).nullable(),
   city: z.string().max(MAX_NAME_LENGTH).nullable(),
@@ -523,9 +549,9 @@ export const limitedCustomerProfileSchema = z.object({
 export const fullCustomerProfileSchema = z.object({
   ...limitedCustomerProfileShape,
   visibility: z.literal('full'),
-  lastName: trimmedString(MAX_NAME_LENGTH, 0),
+  lastName: z.string().max(MAX_NAME_LENGTH),
   email: storedEmailSchema,
-  phone: phoneSchema.nullable(),
+  phone: storedPhoneSchema.nullable(),
   avatarUrl: storedImageRefSchema.nullable(),
 });
 
@@ -701,7 +727,7 @@ export type UploadedImage = z.infer<typeof uploadedImageSchema>;
 export const servicePackageSchema = z.object({
   id: uuidSchema,
   vendorId: uuidSchema,
-  name: trimmedString(MAX_BUSINESS_NAME_LENGTH),
+  name: z.string().max(MAX_BUSINESS_NAME_LENGTH),
   description: z.string(),
   priceCents: priceCentsSchema,
   priceType: priceTypeSchema,
@@ -753,7 +779,7 @@ export type UpdateServicePackageInput = z.infer<typeof updateServicePackageSchem
 
 /** Full ordered list of the vendor's package ids, applied as one reorder. */
 export const reorderServicePackagesSchema = z.object({
-  packageIds: z.array(uuidSchema).min(1),
+  packageIds: z.array(uuidSchema).min(1).max(MAX_REORDER_IDS),
 });
 export type ReorderServicePackagesInput = z.infer<typeof reorderServicePackagesSchema>;
 
@@ -781,7 +807,7 @@ export type CreatePortfolioItemInput = z.infer<typeof createPortfolioItemSchema>
 
 /** Full ordered list of portfolio item ids, applied as one reorder operation. */
 export const reorderPortfolioSchema = z.object({
-  itemIds: z.array(uuidSchema).min(1),
+  itemIds: z.array(uuidSchema).min(1).max(MAX_REORDER_IDS),
 });
 export type ReorderPortfolioInput = z.infer<typeof reorderPortfolioSchema>;
 
@@ -919,11 +945,11 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
    * for "the API forgot".
    */
   customer: z.object({
-    firstName: trimmedString(MAX_NAME_LENGTH, 0),
+    firstName: z.string().max(MAX_NAME_LENGTH),
     lastInitial: z.string().max(1),
-    lastName: trimmedString(MAX_NAME_LENGTH, 0).nullable(),
+    lastName: z.string().max(MAX_NAME_LENGTH).nullable(),
     email: storedEmailSchema.nullable(),
-    phone: phoneSchema.nullable(),
+    phone: storedPhoneSchema.nullable(),
   }),
   /** `null` for a custom request, and for a package the vendor later deleted. */
   package: z
@@ -1414,7 +1440,7 @@ export const vendorPayoutSummarySchema = z.object({
     .object({
       /** This booking's stored payout — not the total beside it. */
       cents: z.int().min(0),
-      customerFirstName: trimmedString(MAX_NAME_LENGTH, 0),
+      customerFirstName: z.string().max(MAX_NAME_LENGTH),
       /**
        * D35's release date, derived on read by `payoutReleaseAt` — the same
        * helper the sweep pays on, so the date shown and the date paid cannot
@@ -1593,7 +1619,7 @@ export type Review = z.infer<typeof reviewSchema>;
 
 export const createReviewSchema = z.object({
   rating: z.int().min(REVIEW_RATING_MIN).max(REVIEW_RATING_MAX),
-  title: freeText().max(MAX_TITLE_LENGTH).optional(),
+  title: freeText().min(1).max(MAX_TITLE_LENGTH).optional(),
   content: trimmedString(REVIEW_CONTENT_MAX_LENGTH, REVIEW_CONTENT_MIN_LENGTH),
 });
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
@@ -3024,6 +3050,15 @@ export const adminActionDetailSchema = z.record(
 );
 export type AdminActionDetail = z.infer<typeof adminActionDetailSchema>;
 
+/** What the web tier reports after it has walked an export (VEN-475). */
+export const adminExportAuditSchema = z.object({
+  export: z.enum(ADMIN_EXPORTS),
+  /** The narrowed filters as a query string, e.g. `?status=live`. */
+  filters: freeText().max(500),
+  rowCount: z.number().int().min(0).max(1_000_000),
+});
+export type AdminExportAudit = z.infer<typeof adminExportAuditSchema>;
+
 /** One row of `/admin/activity`. */
 export const adminActivityRowSchema = z.object({
   id: uuidSchema,
@@ -3141,7 +3176,7 @@ export type VendorSignUpGate = z.infer<typeof vendorSignUpGateSchema>;
 /** `POST /vendor-applications`: what the operator vets an applicant from. */
 export const vendorApplicationInputSchema = z.object({
   email: emailSchema,
-  businessName: trimmedString(MAX_NAME_LENGTH),
+  businessName: trimmedString(MAX_BUSINESS_NAME_LENGTH),
   category: trimmedString(MAX_NAME_LENGTH),
   city: trimmedString(MAX_NAME_LENGTH),
   message: freeText().max(MAX_VENDOR_APPLICATION_MESSAGE_LENGTH),
@@ -4041,3 +4076,33 @@ export const adminConversationMessagesSchema = z.object({
   messages: paginatedSchema(adminConversationMessageSchema),
 });
 export type AdminConversationMessages = z.infer<typeof adminConversationMessagesSchema>;
+
+/*
+ * The step-up (VEN-500). The code is emailed and typed, so it is digits only:
+ * a body that is not six of them is refused before it can cost an attempt.
+ */
+export const adminStepUpVerifySchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'Enter the six-digit code'),
+});
+export type AdminStepUpVerify = z.infer<typeof adminStepUpVerifySchema>;
+
+/** When the code, or the grant it buys, lapses. Never the code itself. */
+export const adminStepUpResultSchema = z.object({ expiresAt: z.coerce.date() });
+export type AdminStepUpResult = z.infer<typeof adminStepUpResultSchema>;
+
+/*
+ * One charge to the API's shared throttle counter (VEN-462), sent by the web
+ * tier. The bucket is an opaque key made of printable ASCII, so it carries no
+ * prose and no address; `record: false` reads the count without adding a hit.
+ */
+export const throttleChargeSchema = z.object({
+  bucket: z
+    .string()
+    .min(1)
+    .max(300)
+    .regex(/^[\x21-\x7e]+$/),
+  windowMs: z.number().int().min(1_000).max(86_400_000),
+  limit: z.number().int().min(1).max(1_000),
+  record: z.boolean().default(true),
+});
+export type ThrottleCharge = z.infer<typeof throttleChargeSchema>;

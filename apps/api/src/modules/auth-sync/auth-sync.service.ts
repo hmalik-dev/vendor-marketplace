@@ -1,10 +1,11 @@
 import type { UserRow } from '@vendor-marketplace/db/schema';
+import { unwindFloorDate } from '@vendor-marketplace/shared';
 import {
   DELETION_UNWIND,
   unwindAccountBookings,
   type AdminContext,
 } from '../admin/account-unwind.js';
-import { findVendorProfileByUserId } from '../admin/admin.dao.js';
+import { findConfirmedBookingsToUnwind, findVendorProfileByUserId } from '../admin/admin.dao.js';
 import {
   findLiveUserByEmail,
   findUserByAuthId,
@@ -16,6 +17,7 @@ import {
   isProviderAvatar,
   isUnbackedIdentity,
   mirroredIdentity,
+  providerAvatarUrl,
   type AuthIdentitySource,
   type MirroredIdentity,
 } from './identity.js';
@@ -83,13 +85,12 @@ export async function applyAuthSyncEvent(
    * picture (VEN-427): a row whose avatar is an object key or a site path
    * belongs to its holder, so only an absent or provider-hosted one is mirrored.
    */
+  const avatarUrl = providerAvatarUrl(identity.avatarUrl);
   const patch = {
     ...(identity.email === null ? {} : { email: identity.email }),
     ...(identity.firstName === null ? {} : { firstName: mirroredAuthName(identity.firstName) }),
     ...(identity.lastName === null ? {} : { lastName: mirroredAuthName(identity.lastName) }),
-    ...(identity.avatarUrl === null || !isProviderAvatar(current.avatarUrl)
-      ? {}
-      : { avatarUrl: identity.avatarUrl }),
+    ...(avatarUrl === null || !isProviderAvatar(current.avatarUrl) ? {} : { avatarUrl }),
   };
 
   let mirrored = await updateUserByAuthId(db, authUserId, patch);
@@ -199,9 +200,22 @@ async function releaseStaleHolder(
   }
 
   if (!remote) {
-    await applyUserDeleted(context, holder.authUserId, now);
+    let outcome: RetireIfGoneOutcome;
+    try {
+      outcome = await retireIfConfirmedGone(context, identities, holder.authUserId, now, {
+        control: claimantAuthUserId,
+      });
+    } catch (error) {
+      context.log.error(
+        { userId: claimantId, holderId: holder.id, err: error },
+        'Could not confirm with Neon Auth that a contested address is held by a deleted account; the account stays diverged',
+      );
 
-    return true;
+      return false;
+    }
+
+    // Retired now, or already gone; anything else is a holder left standing.
+    return outcome === 'deleted' || outcome === 'ignored';
   }
 
   if (remote.email === null || remote.email === email) {
@@ -213,6 +227,100 @@ async function releaseStaleHolder(
   });
 
   return corrected !== null && !corrected.emailDiverged;
+}
+
+export type RetireIfGoneOutcome =
+  /** Confirmed gone and retired through the deletion unwind. */
+  | 'deleted'
+  /** Confirmed gone, but holding confirmed bookings: an operator was alerted, nothing was closed. */
+  | 'flagged'
+  /** The confirming lookup found the identity: the first answer was short, not a deletion. */
+  | 'present'
+  /** No live local row, or another delivery took the claim first. */
+  | 'ignored';
+
+/**
+ * Closes an account on a **positive** not-found, and never on a short answer
+ * (VEN-480).
+ *
+ * The caller's first lookup did not return the id. That is evidence, not proof:
+ * the lookup is a plain read of Neon's `neon_auth` schema, and retiring a
+ * vendor refunds their future bookings, which cannot be taken back. So the
+ * identity is asked for once more, alone, and only an id absent from **both**
+ * answers is read as deleted. The `control` identity, when given, is a row known
+ * to exist; if the second answer lacks it too the source is not to be trusted
+ * and this throws rather than guess.
+ *
+ * An account with future confirmed bookings is never closed here, even when
+ * confirmed gone. Those refunds are money moving on the strength of an
+ * automatic read, so the operator is told and closes it through the console,
+ * which runs the same `applyUserDeleted` unwind.
+ */
+export async function retireIfConfirmedGone(
+  context: AdminContext,
+  identities: AuthIdentitySource,
+  authUserId: string,
+  now: Date,
+  options: { control?: string; dryRun?: boolean } = {},
+): Promise<RetireIfGoneOutcome> {
+  const target = await findUserByAuthId(context.db, authUserId);
+
+  if (!target || target.deletedAt !== null) {
+    return 'ignored';
+  }
+
+  const confirming = await identities.lookup(
+    options.control === undefined ? [authUserId] : [authUserId, options.control],
+  );
+
+  if (options.control !== undefined && !confirming.some((found) => found.id === options.control)) {
+    throw new Error('Neon Auth does not know the identity being synced');
+  }
+
+  if (confirming.some((found) => found.id === authUserId)) {
+    return 'present';
+  }
+
+  const profile = await findVendorProfileByUserId(context.db, target.id);
+  /*
+   * The vendor side only. A booking the deleted account paid for as a customer
+   * is left standing by the unwind (D39) and moves no money, so retiring the row
+   * is safe; and the console's closure refuses to run over it, which would leave
+   * a flag nobody could clear.
+   */
+  const stranded = profile
+    ? (
+        await findConfirmedBookingsToUnwind(context.db, target.id, profile.id, unwindFloorDate(now))
+      ).filter((booking) => booking.vendorId === profile.id)
+    : [];
+
+  if (stranded.length > 0) {
+    if (!options.dryRun) {
+      context.log.error(
+        { userId: target.id, confirmedBookings: stranded.length },
+        'Neon Auth no longer has an account that holds confirmed bookings; an operator must close it',
+      );
+      context.alerts?.dispatch({
+        kind: 'auth_identity_deleted',
+        subjectId: target.id,
+        summary: `An account deleted in Neon Auth holds ${stranded.length} confirmed booking(s)`,
+        details: [
+          `User ${target.id} no longer exists in Neon Auth, confirmed by two lookups.`,
+          `Confirmed future bookings: ${stranded.length}. Nothing was closed or refunded automatically.`,
+          'Close the account from the console to cancel and refund them.',
+        ],
+        adminPath: `/admin/users/${target.id}`,
+      });
+    }
+
+    return 'flagged';
+  }
+
+  if (options.dryRun) {
+    return 'deleted';
+  }
+
+  return (await applyUserDeleted(context, authUserId, now)) === 'deleted' ? 'deleted' : 'ignored';
 }
 
 /**

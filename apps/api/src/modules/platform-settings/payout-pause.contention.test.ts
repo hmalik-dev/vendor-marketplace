@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import { bookings, categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import {
   addDays,
@@ -89,10 +90,7 @@ describe('flipping the payout pause during overlapping sweeps, on real connectio
     });
 
     expect((await inject('GET', '/users/me', ADMIN)).statusCode).toBe(200);
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
 
     const [photography] = await harness.database.db
       .select({ id: categories.id })

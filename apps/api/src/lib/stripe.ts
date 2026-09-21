@@ -119,6 +119,14 @@ export interface StripeConnectGateway {
   retrievePaymentIntent(paymentIntentId: string): Promise<PaymentIntentSnapshot>;
 
   /**
+   * Cancels an intent nobody will pay any more, so a customer's open checkout
+   * tab cannot confirm it after the request that made it has expired (VEN-528).
+   * Stripe refuses one that is `processing` or already `succeeded`; the caller
+   * re-reads the intent and decides, rather than treating that as an outage.
+   */
+  cancelPaymentIntent(paymentIntentId: string): Promise<PaymentIntentSnapshot>;
+
+  /**
    * Reads a dispute back (#431).
    *
    * The `charge.dispute.*` handler re-reads for the same reason the intent
@@ -195,7 +203,7 @@ export interface FoundRefunds {
 export const PLATFORM_REFUND_METADATA = { orla_refund: '1' } as const;
 
 /**
- * Stripe answered a refund with a refusal, or with a refund that returns nothing.
+ * Stripe answered a refund or a transfer reversal with a refusal, or with a refund that returns nothing.
  *
  * Distinct from a connection failure on purpose: Stripe caches the answer to a
  * request it executed under its idempotency key for 24 hours, so only this kind
@@ -214,8 +222,14 @@ export interface StripeRefundSnapshot {
 }
 
 export interface CreatePaymentIntentInput {
-  /** The accepted request being paid for. Doubles as the idempotency key. */
+  /** The accepted request being paid for. Part of the idempotency key. */
   requestId: string;
+  /**
+   * How many canceled intents this request has already replaced (VEN-547). Part
+   * of the idempotency key: Stripe replays a canceled intent for a repeated key,
+   * so the replacement has to be sent under a new one.
+   */
+  replacements: number;
   amountCents: number;
   customerId: string;
   vendorId: string;
@@ -438,6 +452,19 @@ export function refusedRefundParams(params: Stripe.RefundCreateParams): string |
 }
 
 /**
+ * The creation key: unchanged for a request's first intent, so an intent opened
+ * before VEN-547 still replays, and suffixed with the replacement count after
+ * that.
+ */
+export function paymentIntentIdempotencyKey(
+  input: Pick<CreatePaymentIntentInput, 'requestId' | 'replacements'>,
+): string {
+  const base = `pay_${input.requestId}_separate`;
+
+  return input.replacements === 0 ? base : `${base}_r${input.replacements}`;
+}
+
+/**
  * The exact request `createPaymentIntent` sends, built where a test can read
  * it.
  *
@@ -599,6 +626,9 @@ export const PAYMENT_INTENT_SUCCEEDED = 'succeeded';
 /** Stripe's terminal failure state: the intent can never be paid. */
 export const PAYMENT_INTENT_CANCELED = 'canceled';
 
+/** A payment submitted and not yet settled; Stripe will not cancel it. */
+export const PAYMENT_INTENT_PROCESSING = 'processing';
+
 /**
  * A chargeback as this platform reads it (#431).
  *
@@ -653,11 +683,38 @@ export function assertUsableRefund(refundId: string, status: string | null | und
   }
 }
 
+/**
+ * Stripe answered an account creation with a refusal it executed (VEN-526).
+ * Like `RefundRefusedError`, distinct from a dropped connection on purpose:
+ * only a refusal is cached under the idempotency key (D36), so only a refusal
+ * moves the key. A connection that died may have made the account, and a retry
+ * under a new key would make a second.
+ */
+export class RecipientAccountRefusedError extends Error {}
+
+/**
+ * Whether Stripe executed and refused an account creation, which it will replay
+ * under the same key. `StripeInvalidRequestError` covers both spellings: v1
+ * bodies carry `type: invalid_request_error`, while a v2 field refusal carries
+ * `code: invalid_fields` and no type, so `rawType` alone misses it. A 5xx or
+ * dropped connection may have made the account, and `idempotency_error` is a
+ * concurrent request under the same key, so neither counts.
+ */
+export function isRefusedAccountCreation(error: unknown): error is Stripe.errors.StripeError {
+  return (
+    error instanceof Stripe.errors.StripeError &&
+    (error.rawType === 'invalid_request_error' ||
+      (error.raw as { code?: string } | undefined)?.code === 'invalid_fields')
+  );
+}
+
 export interface CreateRecipientAccountInput {
   /** Stored on the Stripe account so a support question can be traced back. */
   vendorId: string;
   contactEmail: string;
   displayName: string;
+  /** Collapses concurrent creations for one vendor onto one account. */
+  idempotencyKey: string;
 }
 
 export interface CreateOnboardingLinkInput {
@@ -913,6 +970,13 @@ export interface StripeCredentials {
  */
 const STRIPE_REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * The API version every request is made at: the constant of the exact `stripe`
+ * release pinned in package.json, so a dependency bump cannot move it silently.
+ * `launch:check` compares the webhook endpoints' `api_version` against it.
+ */
+export const STRIPE_API_VERSION = Stripe.API_VERSION;
+
 export interface FindTransferOptions {
   /** Ignore transfers that have been fully reversed. */
   live?: boolean;
@@ -926,7 +990,9 @@ export interface FindTransferOptions {
  * ones, one carrying a `bookingId` (made by `createTransfer`) wins over a
  * manual Dashboard transfer. A partly reversed transfer is returned with what
  * was reversed, because the caller nets that off. `null` means nothing live, so
- * the sweep makes one. Without `live`, the first transfer is returned as ever.
+ * the sweep makes one. Without `live` the same preference holds over every
+ * transfer, so a manual Dashboard transfer listed first is not read as the
+ * booking's own (VEN-499).
  */
 export function pickTransfer(
   transfers: readonly Pick<Stripe.Transfer, 'id' | 'amount' | 'amount_reversed' | 'metadata'>[],
@@ -935,9 +1001,7 @@ export function pickTransfer(
   const candidates = options.live
     ? transfers.filter((transfer) => transfer.amount_reversed < transfer.amount)
     : transfers;
-  const transfer = options.live
-    ? (candidates.find((candidate) => candidate.metadata?.bookingId) ?? candidates[0])
-    : candidates[0];
+  const transfer = candidates.find((candidate) => candidate.metadata?.bookingId) ?? candidates[0];
 
   return transfer
     ? {
@@ -948,8 +1012,15 @@ export function pickTransfer(
     : null;
 }
 
+export function createStripeClient(secretKey: string): Stripe {
+  return new Stripe(secretKey, {
+    apiVersion: STRIPE_API_VERSION,
+    timeout: STRIPE_REQUEST_TIMEOUT_MS,
+  });
+}
+
 export function createStripeConnectGateway(credentials: StripeCredentials): StripeConnectGateway {
-  const stripe = new Stripe(credentials.secretKey, { timeout: STRIPE_REQUEST_TIMEOUT_MS });
+  const stripe = createStripeClient(credentials.secretKey);
   const signingSecrets = [credentials.webhookSecret, credentials.connectWebhookSecret].filter(
     (secret): secret is string => Boolean(secret),
   );
@@ -976,7 +1047,7 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
 
   return {
     async createRecipientAccount(input) {
-      const account = await stripe.v2.core.accounts.create({
+      const params: Stripe.V2.Core.AccountCreateParams = {
         contact_email: input.contactEmail,
         display_name: input.displayName,
         dashboard: 'express',
@@ -1000,7 +1071,17 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
           responsibilities: { fees_collector: 'application', losses_collector: 'application' },
         },
         metadata: { vendorId: input.vendorId },
-      });
+      };
+
+      const account = await stripe.v2.core.accounts
+        .create(params, { idempotencyKey: input.idempotencyKey })
+        .catch((error: unknown) => {
+          if (isRefusedAccountCreation(error)) {
+            throw new RecipientAccountRefusedError(error.message, { cause: error });
+          }
+
+          throw error;
+        });
 
       return { accountId: account.id };
     },
@@ -1069,7 +1150,7 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
          * after would have been answered `idempotency_error` and 500'd, on the
          * one screen where that costs a booking.
          */
-        { idempotencyKey: `pay_${input.requestId}_separate` },
+        { idempotencyKey: paymentIntentIdempotencyKey(input) },
       );
 
       return toSnapshot(intent);
@@ -1077,6 +1158,12 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
 
     async retrievePaymentIntent(paymentIntentId) {
       return toSnapshot(await stripe.paymentIntents.retrieve(paymentIntentId));
+    },
+
+    async cancelPaymentIntent(paymentIntentId) {
+      return toSnapshot(
+        await stripe.paymentIntents.cancel(paymentIntentId, { cancellation_reason: 'abandoned' }),
+      );
     },
 
     async retrieveDispute(disputeId) {
@@ -1115,11 +1202,11 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
     },
 
     async reverseTransfer(input) {
-      const reversal = await stripe.transfers.createReversal(
-        input.transferId,
-        reversalParams(input),
-        { idempotencyKey: input.idempotencyKey },
-      );
+      const reversal = await stripe.transfers
+        .createReversal(input.transferId, reversalParams(input), {
+          idempotencyKey: input.idempotencyKey,
+        })
+        .catch(rethrowRefusal);
 
       return { reversalId: reversal.id, amountCents: reversal.amount };
     },
@@ -1130,22 +1217,7 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
           refundParams(input),
           input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
         )
-        .catch((error: unknown) => {
-          /*
-           * Only a refusal that is deterministic and was executed. A 5xx may have
-           * made the refund, a 429 never ran, and `idempotency_error` proves a
-           * request already ran under this key — the very thing that stops two
-           * racers refunding twice — so none of them may move the key.
-           */
-          if (
-            error instanceof Stripe.errors.StripeError &&
-            (error.rawType === 'invalid_request_error' || error.rawType === 'card_error')
-          ) {
-            throw new RefundRefusedError(error.message, { cause: error });
-          }
-
-          throw error;
-        });
+        .catch(rethrowRefusal);
 
       assertUsableRefund(refund.id, refund.status);
 
@@ -1204,6 +1276,23 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
       return sumUsableRefunds(refunds);
     },
   };
+}
+
+/**
+ * Only a refusal that is deterministic and was executed. A 5xx may have made
+ * the refund, a 429 never ran, and `idempotency_error` proves a request already
+ * ran under this key — the very thing that stops two racers refunding twice — so
+ * none of them may move the key.
+ */
+function rethrowRefusal(error: unknown): never {
+  if (
+    error instanceof Stripe.errors.StripeError &&
+    (error.rawType === 'invalid_request_error' || error.rawType === 'card_error')
+  ) {
+    throw new RefundRefusedError(error.message, { cause: error });
+  }
+
+  throw error;
 }
 
 /**

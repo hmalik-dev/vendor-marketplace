@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import sharp from 'sharp';
 import { users } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
@@ -105,10 +106,7 @@ describe('POST /upload/image', () => {
     await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CALLERS[role]) });
 
     if (role === 'admin') {
-      await harness.database.db
-        .update(users)
-        .set({ role: 'admin' })
-        .where(eq(users.authUserId, ADMIN));
+      await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
     }
   }
 
@@ -326,6 +324,26 @@ describe('POST /upload/image', () => {
     });
 
     expect(response.statusCode).toBe(400);
+    expect(response.json().message).toMatch(/too many/i);
+    expect(harness.storedObjects).toHaveLength(0);
+  });
+
+  it('refuses a request carrying more than one file part', async () => {
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/upload/image?prefix=portfolio',
+      headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
+      payload: Buffer.concat([
+        multipartBody('a.jpg', 'image/jpeg', await jpegBytes()).subarray(
+          0,
+          -Buffer.byteLength(`--${BOUNDARY}--\r\n`),
+        ),
+        multipartBody('b.jpg', 'image/jpeg', await jpegBytes()),
+      ]),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('VALIDATION_ERROR');
     expect(response.json().message).toMatch(/too many/i);
     expect(harness.storedObjects).toHaveLength(0);
   });

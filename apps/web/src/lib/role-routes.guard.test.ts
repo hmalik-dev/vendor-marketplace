@@ -1,8 +1,9 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { ROLE_ROUTE_RULES, roleCanReach } from '@/lib/role-routes';
-import { sourceFiles, TS_AND_TSX, WEB_SOURCE } from '@/testing/source-scan';
+import { sourceFiles, TS_AND_TSX, WEB_SOURCE, withoutComments } from '@/testing/source-scan';
 
 /**
  * `ROLE_ROUTE_RULES` says which roles a route renders for. The routes themselves
@@ -159,5 +160,64 @@ describe('the role-route table against the gates in app/', () => {
     ).map((rule) => String(rule.pattern));
 
     expect(unbacked).toEqual([]);
+  });
+});
+
+/*
+ * VEN-532. A layout does not re-run on client navigation, so `/admin`'s own
+ * `requireRole('admin')` is not enough: each admin page is role-checked next to
+ * its data. A page does that one of two ways — a `requireRole('admin')` of its
+ * own, or a call to an `admin-data` read, whose one session helper makes the
+ * check. Both halves are pinned: the helper, and each page that leans on it.
+ */
+describe('every admin page checks the admin role itself', () => {
+  const ADMIN_PAGE = /^admin[\\/](?:.*[\\/])?page\.tsx$/;
+  const ADMIN_DATA_IMPORT = /import\s*\{([^}]*)\}\s*from\s*['"]@\/lib\/admin-data['"]/;
+  const ADMIN_ROLE_CHECK = /\brequireRole\(\s*['"]admin['"]/;
+
+  async function adminDataReads(): Promise<{ session: string; reads: Set<string> }> {
+    // Comments stripped, so prose naming `requireRole('admin')` cannot stand in for the call.
+    const source = withoutComments(
+      await readFile(path.join(WEB_SOURCE, 'lib', 'admin-data.ts'), 'utf8'),
+    );
+    const session = /async function adminSession\(\)[^{]*\{([\s\S]*?)\n\}/.exec(source)?.[1] ?? '';
+    const exported = [
+      ...source.matchAll(/export (?:async function|function|const) (\w+)[\s\S]*?\n\}/g),
+    ];
+
+    // A read that bypasses `adminRead` would skip the session, and the check with it.
+    expect(exported.filter((fn) => !/\badminRead\(/.test(fn[0])).map((fn) => fn[1])).toEqual([]);
+
+    return { session, reads: new Set(exported.map((fn) => fn[1] as string)) };
+  }
+
+  it('makes the check in the session every admin-data read goes through', async () => {
+    const { session, reads } = await adminDataReads();
+
+    expect(session).toMatch(ADMIN_ROLE_CHECK);
+    expect(reads.size).toBeGreaterThan(10);
+  });
+
+  it('leaves no admin page without a role check', async () => {
+    const { reads } = await adminDataReads();
+    const pages = (await sourceFiles(APP, TS_AND_TSX)).filter((file) => ADMIN_PAGE.test(file.name));
+
+    expect(pages.length).toBeGreaterThanOrEqual(17);
+
+    const unchecked = pages
+      .filter((page) => {
+        const imported = (ADMIN_DATA_IMPORT.exec(page.code)?.[1] ?? '')
+          .split(',')
+          .map((name) => name.trim().split(/\s+as\s+/)[0] ?? '');
+        // Imported is not called: a read behind an early return leaves a branch unchecked.
+        const called = imported.some(
+          (name) => reads.has(name) && new RegExp(`\\b${name}\\(`).test(page.code),
+        );
+
+        return !ADMIN_ROLE_CHECK.test(page.code) && !called;
+      })
+      .map((page) => page.name);
+
+    expect(unchecked).toEqual([]);
   });
 });

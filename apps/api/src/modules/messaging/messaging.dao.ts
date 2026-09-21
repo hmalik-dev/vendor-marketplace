@@ -257,12 +257,18 @@ export async function countUnreadPerConversation(
   return new Map(rows.map((row) => [row.conversationId, row.total]));
 }
 
-/** Whether anything else in this thread is still waiting to be read. */
-export async function countUnreadInConversation(
+/**
+ * How many messages from the other party were sent *before* `sent` and are still
+ * unread, "before" being `created_at` and then `id` — the same total order the
+ * thread is paged in. Ordered, not merely "any other": two messages that commit
+ * together each see the other, and a symmetric check makes both skip their
+ * notification. With an order, only the earliest of a run can see nothing ahead.
+ */
+export async function countEarlierUnreadInConversation(
   db: AppDatabase,
   conversationId: string,
   readerId: string,
-  excludeMessageId: string,
+  sentId: string,
 ): Promise<number> {
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
@@ -271,8 +277,14 @@ export async function countUnreadInConversation(
       and(
         eq(messages.conversationId, conversationId),
         ne(messages.senderId, readerId),
-        ne(messages.id, excludeMessageId),
         isNull(messages.readAt),
+        /*
+         * Against the stored row, not a `Date` read back from it: `created_at` is
+         * microseconds and a JS `Date` truncates to milliseconds, so a bound taken
+         * from one sits below its own row and hides an earlier message sent in the
+         * same millisecond.
+         */
+        sql`(${messages.createdAt}, ${messages.id}) < (select ${messages.createdAt}, ${messages.id} from ${messages} where ${messages.id} = ${sentId})`,
       ),
     );
 

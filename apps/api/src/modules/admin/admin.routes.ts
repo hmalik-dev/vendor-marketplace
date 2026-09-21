@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  STEP_UP_CHALLENGES_PER_HOUR,
   adminActivityActorListSchema,
   adminActivityPageSchema,
   adminActivityQuerySchema,
@@ -16,6 +17,7 @@ import {
   adminCustomerDetailSchema,
   adminCustomerPageSchema,
   adminCustomerQuerySchema,
+  adminExportAuditSchema,
   adminMetricsSchema,
   adminPayoutRetryResultSchema,
   adminPackageActiveResultSchema,
@@ -27,6 +29,8 @@ import {
   adminReviewPageSchema,
   adminReviewQuerySchema,
   adminReviewVisibilityResultSchema,
+  adminStepUpResultSchema,
+  adminStepUpVerifySchema,
   adminTagListSchema,
   adminTagRowSchema,
   adminTagSuggestionPageSchema,
@@ -52,8 +56,12 @@ import {
 } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole, requireRoleBeforeValidation } from '../../lib/guards.js';
+import { perAccountRateLimit } from '../../lib/rate-limit.js';
+import { requireStepUp } from '../../lib/step-up.js';
+import { completeStepUp, startStepUp, withinDestructiveCeiling } from './admin-step-up.service.js';
 import { listCases, readCase, readCaseConversation, resolveCase } from '../cases/cases.service.js';
 import {
+  auditAdminRead,
   deleteReview,
   listActivity,
   listActivityActors,
@@ -66,6 +74,7 @@ import {
   listVendors,
   readMetrics,
   readVendorFacets,
+  recordAdminExport,
   removePortfolioItemAsAdmin,
   resolveBookingDispute,
   retryBookingPayout,
@@ -135,7 +144,50 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
    */
   const adminOnly = requireRoleBeforeValidation('admin');
 
+  /*
+   * The irreversible routes ask for a fresh step-up (VEN-500) **after** the
+   * role guard, both in `onRequest`: a wrong-role caller hears 403 without
+   * learning the route wants more, and neither waits on validation.
+   */
+  const irreversible = [adminOnly, requireStepUp];
+
   const context = (): AdminContext => bookingContextFor(app, app.log, options.webOrigin);
+
+  /*
+   * `preParsing`, not `onRequest`, for the same reason `POST /booking-requests`
+   * is: `onRequest` would refuse a signed-out caller ahead of the route's own
+   * limiter and leave the refusal uncounted.
+   */
+  app.post(
+    '/admin/step-up/challenge',
+    {
+      preParsing: adminOnly,
+      config: { rateLimit: perAccountRateLimit(STEP_UP_CHALLENGES_PER_HOUR, '1 hour') },
+      schema: { response: { 200: adminStepUpResultSchema } },
+    },
+    async (request) =>
+      startStepUp(
+        { db: app.db, store: app.stepUp, email: app.email, log: request.log },
+        assertRole(request.auth, ['admin']).id,
+        app.clock(),
+      ),
+  );
+
+  app.post(
+    '/admin/step-up/verify',
+    {
+      preParsing: adminOnly,
+      config: { rateLimit: perAccountRateLimit(STEP_UP_CHALLENGES_PER_HOUR * 5, '1 hour') },
+      schema: { body: adminStepUpVerifySchema, response: { 200: adminStepUpResultSchema } },
+    },
+    async (request) =>
+      completeStepUp(
+        app.stepUp,
+        assertRole(request.auth, ['admin']).id,
+        request.body.code,
+        app.clock(),
+      ),
+  );
 
   app.get(
     '/admin/vendors',
@@ -152,17 +204,20 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   app.put(
     '/admin/users/:userId/ban',
     {
-      onRequest: adminOnly,
+      onRequest: irreversible,
       schema: { params: userParamsSchema, response: { 200: adminBanResultSchema } },
     },
-    async (request) =>
-      setUserBanned(
-        context(),
-        assertRole(request.auth, ['admin']).id,
-        request.params.userId,
-        true,
+    async (request) => {
+      const adminId = assertRole(request.auth, ['admin']).id;
+      const ctx = context();
+
+      return withinDestructiveCeiling(
+        { db: app.db, log: ctx.log, alerts: ctx.alerts },
+        adminId,
         app.clock(),
-      ),
+        () => setUserBanned(ctx, adminId, request.params.userId, true, app.clock()),
+      );
+    },
   );
 
   app.put(
@@ -239,17 +294,27 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   app.post(
     '/admin/users/:userId/close',
     {
-      onRequest: adminOnly,
+      onRequest: irreversible,
       schema: { params: userParamsSchema, response: { 200: adminCloseAccountResultSchema } },
     },
-    async (request) =>
-      closeAccount(
-        context(),
-        assertRole(request.auth, ['admin']).id,
-        request.params.userId,
+    async (request) => {
+      const adminId = assertRole(request.auth, ['admin']).id;
+      const ctx = context();
+
+      return withinDestructiveCeiling(
+        { db: app.db, log: ctx.log, alerts: ctx.alerts },
+        adminId,
         app.clock(),
-        app.authDirectory?.deleteIdentity ?? null,
-      ),
+        () =>
+          closeAccount(
+            ctx,
+            adminId,
+            request.params.userId,
+            app.clock(),
+            app.authDirectory?.deleteIdentity ?? null,
+          ),
+      );
+    },
   );
 
   /**
@@ -270,7 +335,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   app.put(
     '/admin/bookings/:bookingId/dispute',
     {
-      onRequest: adminOnly,
+      onRequest: irreversible,
       schema: {
         params: bookingParamsSchema,
         body: resolveDisputeSchema,
@@ -414,7 +479,41 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       onRequest: adminOnly,
       schema: { params: userParamsSchema, response: { 200: adminCustomerDetailSchema } },
     },
-    async (request) => readCustomerDetail(app.db, request.params.userId),
+    async (request) => {
+      const actor = assertRole(request.auth, ['admin']);
+      const detail = await readCustomerDetail(app.db, request.params.userId);
+
+      // After the read, so a 404 leaves no row; before the reply, so a record
+      // that could not be logged is not handed over (VEN-475).
+      await auditAdminRead(app.db, actor.id, 'customer_detail', request.params.userId, app.clock());
+
+      return detail;
+    },
+  );
+
+  /**
+   * The web tier reports each CSV export here once it has walked the rows
+   * (VEN-475), and withholds the file when this fails.
+   */
+  app.post(
+    '/admin/exports',
+    {
+      onRequest: adminOnly,
+      schema: {
+        body: adminExportAuditSchema,
+        response: { 200: z.object({ recorded: z.literal(true) }) },
+      },
+    },
+    async (request) => {
+      await recordAdminExport(
+        app.db,
+        assertRole(request.auth, ['admin']).id,
+        request.body,
+        app.clock(),
+      );
+
+      return { recorded: true as const };
+    },
   );
 
   app.get(
@@ -432,7 +531,14 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       onRequest: adminOnly,
       schema: { querystring: adminPaymentQuerySchema, response: { 200: adminPaymentPageSchema } },
     },
-    async (request) => listPayments(app.db, request.query),
+    async (request) => {
+      const actor = assertRole(request.auth, ['admin']);
+      const page = await listPayments(app.db, request.query);
+
+      await auditAdminRead(app.db, actor.id, 'payments', actor.id, app.clock());
+
+      return page;
+    },
   );
 
   app.get(
@@ -453,7 +559,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   app.delete(
     '/admin/reviews/:reviewId',
     {
-      onRequest: adminOnly,
+      onRequest: irreversible,
       schema: { params: reviewParamsSchema, response: { 204: z.null() } },
     },
     async (request, reply) => {
@@ -546,7 +652,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   app.delete(
     '/admin/portfolio-items/:itemId',
     {
-      onRequest: adminOnly,
+      onRequest: irreversible,
       schema: { params: portfolioItemParamsSchema, response: { 204: z.null() } },
     },
     async (request, reply) => {

@@ -247,22 +247,52 @@ async function nameOf(db: AppDatabase, customerId: string): Promise<CustomerIden
 const EXPIRY_CONCURRENCY = 4;
 
 /**
+ * What became of the money behind an accepted request that is about to expire
+ * (VEN-528): `release` — nothing was paid and the intent is cancelled, so the
+ * request may expire; `booked` — the payment had succeeded and is now a
+ * booking; `hold` — it is in flight or Stripe could not be asked, so the
+ * request stays as it is and the next read or tick decides.
+ */
+export type ExpirySettlement = 'release' | 'booked' | 'hold';
+
+/**
+ * The payment side of expiry, supplied by the payments module so this one does
+ * not import it. Absent for a caller that cannot reach Stripe.
+ */
+export interface ExpiryPaymentGuard {
+  settleBeforeExpiry(row: BookingRequestRow, now: Date): Promise<ExpirySettlement>;
+}
+
+/**
  * Ages a request that has run past its window — on the next read of it, or in
  * `expireLapsedRequests`' sweep, whichever comes first. The write is guarded on
  * the status it was read at, so a vendor accepting in the same second either
  * wins or is told the request expired — never both.
+ *
+ * An accepted request that already has a PaymentIntent asks `guard` first: a
+ * payment made in time is booked rather than expired and refunded, and an
+ * unpaid intent is cancelled so it cannot be paid after the date is released.
  */
-async function ageIfExpired(
+export async function ageIfExpired(
   db: AppDatabase,
   row: BookingRequestRow,
   now: Date,
   mail?: NotificationEmailDeps,
+  guard?: ExpiryPaymentGuard,
 ): Promise<BookingRequestRow> {
   if (row.status === 'expired' || requestStatusAsRead(row, now) !== 'expired') {
     return row;
   }
 
   const wasAccepted = row.status === 'accepted';
+
+  if (wasAccepted && row.stripePaymentIntentId && guard) {
+    const settlement = await guard.settleBeforeExpiry(row, now);
+
+    if (settlement !== 'release') {
+      return (await findRequestById(db, row.id)) ?? row;
+    }
+  }
 
   /*
    * The status change, the released date and the notification rows commit
@@ -370,10 +400,11 @@ export async function expireLapsedRequests(
   db: AppDatabase,
   now: Date,
   mail: NotificationEmailDeps,
+  guard?: ExpiryPaymentGuard,
 ): Promise<number> {
   const lapsed = await findLapsedRequests(db, now, EXPIRY_SWEEP_BATCH);
   const aged = await mapWithConcurrency(lapsed, EXPIRY_CONCURRENCY, async (row) => {
-    const after = await ageIfExpired(db, row, now, mail);
+    const after = await ageIfExpired(db, row, now, mail, guard);
     return after.status === 'expired' && row.status !== 'expired';
   });
 
@@ -612,6 +643,17 @@ export async function createBookingRequest(
     if (!servicePackage) {
       throw notFound('That package is no longer offered');
     }
+
+    // The screen refuses this first; a direct call has to meet the same cap (VEN-544).
+    if (
+      servicePackage.maxGuests !== null &&
+      input.guestCount !== undefined &&
+      input.guestCount > servicePackage.maxGuests
+    ) {
+      throw validationFailed(
+        `${vendor.businessName} covers events up to ${servicePackage.maxGuests} guests. Enter ${servicePackage.maxGuests} or fewer, or pick a larger package.`,
+      );
+    }
   }
 
   // The launch switches (VEN-404): a paused platform or a price over the beta cap.
@@ -760,6 +802,7 @@ export async function getBookingRequest(
   requestId: string,
   now: Date = new Date(),
   mail?: NotificationEmailDeps,
+  guard?: ExpiryPaymentGuard,
 ): Promise<BookingRequestDetail> {
   const row = await findRequestById(db, requestId);
 
@@ -769,7 +812,7 @@ export async function getBookingRequest(
 
   await requireParticipant(db, user, row);
 
-  const current = await ageIfExpired(db, row, now, mail);
+  const current = await ageIfExpired(db, row, now, mail, guard);
   const vendor = await findVendorById(db, current.vendorId);
 
   if (!vendor) {
@@ -798,6 +841,7 @@ export async function listBookingRequests(
   query: { status?: BookingRequestStatus } & HistoryPageQuery,
   now: Date = new Date(),
   mail?: NotificationEmailDeps,
+  guard?: ExpiryPaymentGuard,
 ): Promise<BookingRequestDetail[]> {
   const vendorId = await actorVendorId(db, user);
 
@@ -829,7 +873,7 @@ export async function listBookingRequests(
   const rows = await findRequests(db, filter, pageWindow(query));
 
   const visible = await mapWithConcurrency(rows, EXPIRY_CONCURRENCY, (row) =>
-    ageIfExpired(db, row, now, mail),
+    ageIfExpired(db, row, now, mail, guard),
   );
 
   if (visible.length === 0) {
@@ -881,6 +925,8 @@ interface TransitionOptions {
   hub?: EventHub;
   /** Present when the caller can send email; absent in a plain read. */
   mail?: NotificationEmailDeps;
+  /** Present when the caller can reach Stripe; settles an intent before a request expires. */
+  guard?: ExpiryPaymentGuard;
 }
 
 /**
@@ -902,7 +948,7 @@ export async function transitionRequest(
   }
 
   const party = await requireParticipant(db, user, existing);
-  const row = await ageIfExpired(db, existing, now, options.mail);
+  const row = await ageIfExpired(db, existing, now, options.mail, options.guard);
 
   const vendor = await findVendorById(db, row.vendorId);
   if (!vendor) {

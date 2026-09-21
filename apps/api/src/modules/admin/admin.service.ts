@@ -1,4 +1,5 @@
 import {
+  ADMIN_READ_AUDIT_WINDOW_MS,
   MAX_TAGS_PER_CATEGORY,
   addDays,
   generateSlug,
@@ -17,6 +18,8 @@ import type {
   AdminBookingPage,
   AdminBookingQuery,
   AdminCustomerPage,
+  AdminExportAudit,
+  AdminReadSurface,
   AdminCustomerQuery,
   AdminMetrics,
   AdminPackageActiveResult,
@@ -114,6 +117,7 @@ import {
   findVendorFilterFacets,
   findVendorProfileByUserId,
   findVendorProfileIdByUserId,
+  hasRecentAdminRead,
   insertAdminAction,
   insertTag,
   lockVendorProfile,
@@ -191,6 +195,56 @@ export async function recordAdminActionBestEffort(
     () => insertAdminAction(context.db, record),
     'The admin operation succeeded but its action could not be logged',
   );
+}
+
+/**
+ * One row per CSV export (VEN-475): who, which export, its filters and how many
+ * rows it walked. Rides no other write, so a failure propagates and the web
+ * handler withholds the file — an export that could not be logged did not
+ * happen.
+ */
+export async function recordAdminExport(
+  db: AppDatabase,
+  actorId: string,
+  audit: AdminExportAudit,
+  now: Date,
+): Promise<void> {
+  await insertAdminAction(db, {
+    actorId,
+    action: 'admin_exported',
+    subjectType: 'user',
+    subjectId: actorId,
+    detail: { export: audit.export, filters: audit.filters, rowCount: audit.rowCount },
+    createdAt: now,
+  });
+}
+
+/**
+ * A read of customer data, logged at most once per operator per subject per
+ * hour (VEN-475). A list read has no subject of its own, so it is named by the
+ * operator, which makes the hour's window per operator per surface.
+ */
+export async function auditAdminRead(
+  db: AppDatabase,
+  actorId: string,
+  surface: AdminReadSurface,
+  subjectId: string,
+  now: Date,
+): Promise<void> {
+  const since = new Date(now.getTime() - ADMIN_READ_AUDIT_WINDOW_MS);
+
+  if (await hasRecentAdminRead(db, { actorId, subjectId, surface, since })) {
+    return;
+  }
+
+  await insertAdminAction(db, {
+    actorId,
+    action: 'admin_data_read',
+    subjectType: 'user',
+    subjectId,
+    detail: { surface },
+    createdAt: now,
+  });
 }
 
 /**
@@ -826,7 +880,12 @@ export async function retryBookingPayout(
    * so it is left behind here rather than trusted to be ignored downstream.
    */
   const result = await retryPayoutRelease(
-    { db: context.db, stripe: context.stripe, log: context.log },
+    {
+      db: context.db,
+      stripe: context.stripe,
+      log: context.log,
+      notify: { hub: context.hub, mail: context.mail },
+    },
     bookingId,
     now,
   );

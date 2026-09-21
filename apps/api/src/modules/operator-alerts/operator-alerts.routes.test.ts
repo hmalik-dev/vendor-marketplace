@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   bookingRequests,
   bookings,
@@ -94,9 +95,11 @@ describe('operator alerts', () => {
     });
     expect(created.statusCode).toBe(201);
 
+    /* A report may only name a storefront the public can see (VEN-531). */
     const profiles = await harness.database.db
-      .select({ id: vendorProfiles.id })
-      .from(vendorProfiles);
+      .update(vendorProfiles)
+      .set({ isPublished: true })
+      .returning({ id: vendorProfiles.id });
     const vendorProfileId = profiles[0]!.id;
 
     const requestRows = await harness.database.db
@@ -538,10 +541,7 @@ describe('operator alerts', () => {
   it('emails when a refund fails while a ban unwinds the account', async () => {
     const fixture = await seed({ payoutModel: 'separate', eventDate: FUTURE_EVENT });
     await signIn(ADMIN);
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
     const vendorUserId = (
       await harness.database.db
         .select({ id: users.id })

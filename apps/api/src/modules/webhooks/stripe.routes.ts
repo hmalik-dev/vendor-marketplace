@@ -31,6 +31,7 @@ import {
 import { findBookingIdByPaymentIntent } from '../operator-alerts/operator-alerts.dao.js';
 import { bookingContextFor, recordSuccessfulPayment } from '../payments/payments.service.js';
 import { reconcileRefundedIntent } from '../payments/refund-reconciliation.js';
+import { releaseFailedExternalRefunds } from '../payments/refunds.dao.js';
 import { generateSupportReference } from '../support/support.service.js';
 import {
   accountUpdateOutcomeSchema,
@@ -373,7 +374,21 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
       async function applyEvent(): Promise<z.infer<typeof webhookResponseSchema>['outcome']> {
         if (isAccountEvent(event.type) && event.accountId) {
           return applyAccountStatusChange(
-            { db: app.db, stripe: app.stripe, log: request.log },
+            {
+              db: app.db,
+              stripe: app.stripe,
+              log: request.log,
+              notify: {
+                hub: app.events,
+                mail: {
+                  db: app.db,
+                  email: app.email,
+                  log: request.log,
+                  webOrigin: options.webOrigin,
+                  background: app.background,
+                },
+              },
+            },
             event.accountId,
           );
         }
@@ -505,6 +520,24 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
         app.operatorAlerts.dispatch(
           refundFailedAlert({ bookingId, during: `a refund Stripe later marked ${refund.status}` }),
         );
+
+        /*
+         * After the alert, so a failed Stripe read cannot silence it. A foreign
+         * refund that did not land no longer holds the residual payout
+         * (VEN-499); a platform refund that failed is still a person's decision.
+         */
+        const paymentIntentId = refund.paymentIntentId;
+        const releasedCents = await releaseFailedExternalRefunds(app.db, bookingId, () =>
+          app.stripe.findRefund(paymentIntentId),
+        );
+
+        if (releasedCents > 0) {
+          request.log.info(
+            { bookingId, refundId: refund.refundId, releasedCents },
+            'Released the external refund total of a refund Stripe later marked unusable',
+          );
+        }
+
         return 'refund-failed';
       }
 

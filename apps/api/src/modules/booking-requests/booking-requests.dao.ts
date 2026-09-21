@@ -111,8 +111,12 @@ export async function findRequestById(
 
 /**
  * The requests whose window has run out but whose status has not been written
- * yet, oldest first, for the expiry sweep. Bounded so one tick after an outage
- * works a batch rather than the whole backlog; the next tick takes the rest.
+ * yet, for the expiry sweep. Bounded so one tick after an outage works a batch
+ * rather than the whole backlog; the next tick takes the rest.
+ *
+ * Rows never held come first, oldest first, then the held ones by how long ago
+ * they were tried (VEN-551): a hundred requests whose intents Stripe cannot
+ * return would otherwise be the oldest hundred on every tick and starve the rest.
  */
 export async function findLapsedRequests(
   db: AppDatabase,
@@ -123,8 +127,39 @@ export async function findLapsedRequests(
     .select()
     .from(bookingRequests)
     .where(hasLapsed(now))
-    .orderBy(asc(bookingRequests.expiresAt))
+    .orderBy(
+      sql`${bookingRequests.expiryLastAttemptAt} asc nulls first`,
+      asc(bookingRequests.expiresAt),
+    )
     .limit(limit);
+}
+
+/**
+ * Counts one held expiry, at most once per `spacingMs`, so a burst of reads does
+ * not spend the bound a tick is meant to. One statement, so two instances
+ * sweeping at once cannot both count a tick.
+ */
+export async function recordExpiryHold(
+  db: AppDatabase,
+  requestId: string,
+  now: Date,
+  spacingMs: number,
+): Promise<void> {
+  await db
+    .update(bookingRequests)
+    .set({
+      expiryCheckAttempts: sql`coalesce(${bookingRequests.expiryCheckAttempts}, 0) + 1`,
+      expiryLastAttemptAt: now,
+    })
+    .where(
+      and(
+        eq(bookingRequests.id, requestId),
+        or(
+          isNull(bookingRequests.expiryLastAttemptAt),
+          lte(bookingRequests.expiryLastAttemptAt, new Date(now.getTime() - spacingMs)),
+        ),
+      ),
+    );
 }
 
 export interface RequestListFilter {

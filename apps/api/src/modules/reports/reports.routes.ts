@@ -1,10 +1,11 @@
+import { clientAddress } from '../../lib/client-address.js';
 import {
   createReportSchema,
   REPORT_RATE_LIMIT,
   reportReceiptSchema,
 } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuth } from '../../lib/guards.js';
+import { authenticated, requireAuthBeforeValidation } from '../../lib/guards.js';
 import { generateSupportReference } from '../support/support.service.js';
 import { createReport } from './reports.service.js';
 
@@ -24,18 +25,26 @@ export const reportRoutes: FastifyPluginAsyncZod<ReportRoutesOptions> = async (a
        * anonymous accusation is one an operator cannot weigh, cannot follow up
        * and cannot rate limit to a person rather than to a coffee shop's IP.
        */
-      preHandler: requireAuth,
+      // `preParsing`, not `onRequest`: the route's own limiter is appended to
+      // `onRequest`, so a guard there would refuse anonymous callers before
+      // they were counted. `preParsing` runs after the limiter and still ahead
+      // of the body parser and of validation.
+      preParsing: requireAuthBeforeValidation,
       config: {
         rateLimit: {
           ...REPORT_RATE_LIMIT,
           /*
-           * By account and only by account. `requireAuth` has already run, so
-           * there is no anonymous caller to fall back to an IP for — and
-           * falling back would let a shared office address spend one person's
-           * allowance on everybody behind it.
+           * By account, and by address only for a caller the guard is about to
+           * refuse: the limiter runs first, so a signed-out caller is counted
+           * (and stops at the limit) before it is answered 401. A signed-in
+           * caller is never keyed by address, so a shared office address cannot
+           * spend one person's allowance on everybody behind it.
            */
-          keyGenerator: (request: { auth: { id: string } | null; ip: string }) =>
-            request.auth?.id ?? request.ip,
+          keyGenerator: (request: {
+            auth: { id: string } | null;
+            ip: string;
+            headers: Record<string, string | string[] | undefined>;
+          }) => request.auth?.id ?? clientAddress(request),
         },
       },
       schema: {

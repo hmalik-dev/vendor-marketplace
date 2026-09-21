@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   adminActions,
   availability,
@@ -81,7 +82,21 @@ describe('payouts', () => {
   /** The sweep, driven by hand — the same function the timer calls. */
   async function sweep(now: Date = clockNow): Promise<ReturnType<typeof releaseDuePayouts>> {
     return releaseDuePayouts(
-      { db: harness.database.db, stripe: harness.stripe, log: harness.app.log },
+      {
+        db: harness.database.db,
+        stripe: harness.stripe,
+        log: harness.app.log,
+        notify: {
+          hub: harness.app.events,
+          mail: {
+            db: harness.database.db,
+            email: harness.app.email,
+            log: harness.app.log,
+            webOrigin: 'https://web.test',
+            background: harness.app.background,
+          },
+        },
+      },
       now,
     );
   }
@@ -276,10 +291,7 @@ describe('payouts', () => {
   /** Returns the operator's own id, which #434's action rows are keyed by. */
   async function signInAsAdmin(): Promise<string> {
     expect((await inject('GET', '/users/me', ADMIN)).statusCode).toBe(200);
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
 
     const rows = await harness.database.db
       .select({ id: users.id })
@@ -1783,6 +1795,63 @@ describe('payouts', () => {
       const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
       expect(payouts.pendingCents).toBe(RETAINED_CENTS);
       expect(payouts.heldCents).toBe(0);
+    });
+  });
+
+  /* VEN-525 acceptance 1 and 4. */
+  describe('the vendor is told a payout went out', () => {
+    /** The payout-side types only: the booking flow writes its own notices to both parties. */
+    const PAYOUT_TYPES = ['payout_sent', 'stripe_onboarding_complete', 'payouts_paused'];
+
+    async function noticesOf(authUserId: string): Promise<{ type: string; title: string }[]> {
+      const rows = await harness.database.db
+        .select({ type: notifications.type, title: notifications.title })
+        .from(notifications)
+        .innerJoin(users, eq(users.id, notifications.userId))
+        .where(eq(users.authUserId, authUserId));
+
+      return rows.filter((row) => PAYOUT_TYPES.includes(row.type));
+    }
+
+    it('writes exactly one payout_sent for the vendor and none for the customer', async () => {
+      await paidBooking();
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      expect(await noticesOf(VENDOR)).toEqual([
+        { type: 'payout_sent', title: 'A payout is on its way' },
+      ]);
+      expect(await noticesOf(CUSTOMER)).toEqual([]);
+    });
+
+    it('does not notify again when the sweep runs a second time', async () => {
+      await paidBooking();
+      clockNow = AFTER_RELEASE;
+      await sweep();
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+
+      expect(await noticesOf(VENDOR)).toHaveLength(1);
+    });
+
+    it('says nothing while the transfer is failing', async () => {
+      const booking = await paidBooking();
+      harness.stripe.transfersToRefuse.add(booking.id);
+      clockNow = AFTER_RELEASE;
+      expect((await sweep()).failed).toBe(1);
+
+      expect(booking.stripeTransferId).toBeNull();
+      expect(await noticesOf(VENDOR)).toEqual([]);
+    });
+
+    it('emails the vendor alone, with a link to their dashboard', async () => {
+      await paidBooking();
+      harness.email.sent.length = 0;
+      clockNow = AFTER_RELEASE;
+      await sweep();
+      await harness.app.background.drain();
+
+      expect(harness.email.sent.map((message) => message.to)).toEqual(['grace@example.com']);
+      expect(harness.email.sent[0]?.text).toContain('https://web.test/vendor/dashboard');
     });
   });
 });

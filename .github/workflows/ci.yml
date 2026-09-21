@@ -94,6 +94,10 @@ jobs:
       - name: Scan for committed credentials
         run: pnpm secrets:scan:all
 
+      # A destructive statement in a migration added after launch (VEN-463).
+      - name: Check migrations for destructive statements
+        run: pnpm migrations:check
+
       # Production dependencies only, and only what is high or worse (VEN-397).
       # A finding with no upstream fix is pinned past in `pnpm.overrides`, never
       # ignored, so this step cannot go quiet about a new advisory.

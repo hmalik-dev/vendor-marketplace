@@ -14,6 +14,8 @@ import {
   CURRENT_VENDOR_AGREEMENT_VERSION,
   DEFAULT_PLATFORM_FEE_RATE,
   ERROR_CODES,
+  EXPIRY_HOLD_MAX_ATTEMPTS,
+  EXPIRY_SWEEP_INTERVAL_MS,
   paymentDeadline,
   toDateString,
   formatPrice,
@@ -26,6 +28,9 @@ import {
   TEST_ENV,
   type TestHarness,
 } from '../../testing/test-server.js';
+import { expireLapsedRequests } from '../booking-requests/booking-requests.service.js';
+import { recordReplacementIntent } from './payments.dao.js';
+import { bookingContextFor, expiryGuardFor } from './payments.service.js';
 
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
@@ -117,6 +122,21 @@ describe('payments', () => {
   }
 
   /** A request the vendor has accepted — the only state checkout opens on. */
+  async function changeVendorUser(
+    requestId: string,
+    change:
+      | { isBanned: boolean }
+      | { deletedAt: Date | null }
+      | { isBanned: boolean; deletedAt: Date | null },
+  ): Promise<void> {
+    const [row] = await harness.database.db
+      .select({ userId: vendorProfiles.userId })
+      .from(bookingRequests)
+      .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookingRequests.vendorId))
+      .where(eq(bookingRequests.id, requestId));
+    await harness.database.db.update(users).set(change).where(eq(users.id, row!.userId));
+  }
+
   async function acceptedRequest(eventDate = EVENT_DATE, acceptsAgreement = true): Promise<string> {
     const { vendorId, packageId } = await createVendor(acceptsAgreement);
 
@@ -246,7 +266,9 @@ describe('payments', () => {
     clockNow = START;
     harness.stripe.paymentIntents.clear();
     harness.stripe.intentsByKey.clear();
+    harness.stripe.paymentIntentKeys.length = 0;
     harness.stripe.refunds.length = 0;
+    harness.stripe.cancelRequests.length = 0;
     harness.stripe.refundsToRefuse.clear();
     harness.email.sent.length = 0;
     await harness.database.db.delete(operatorAlerts);
@@ -266,6 +288,14 @@ describe('payments', () => {
   describe('opening checkout on a date that has passed (VEN-433)', () => {
     it('refuses with 409 and mints no PaymentIntent', async () => {
       const requestId = await acceptedRequest();
+      /*
+       * Payment deadline out of the way (VEN-528): this asserts the date guard on
+       * its own, and a week's window has always closed before a month-out event.
+       */
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: null })
+        .where(eq(bookingRequests.id, requestId));
       clockNow = addDays(START, 33);
 
       const response = await inject(
@@ -283,6 +313,14 @@ describe('payments', () => {
 
     it('still opens on the day of the event, which has not passed everywhere', async () => {
       const requestId = await acceptedRequest();
+      /*
+       * Payment deadline out of the way (VEN-528): this asserts the date guard on
+       * its own, and a week's window has always closed before a month-out event.
+       */
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: null })
+        .where(eq(bookingRequests.id, requestId));
       clockNow = new Date(`${EVENT_DATE}T12:00:00Z`);
 
       const response = await inject(
@@ -308,6 +346,211 @@ describe('payments', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json().status).toBe('succeeded');
+    });
+  });
+
+  describe('the payment deadline (VEN-528)', () => {
+    /** Past the seven-day payment window, well before the event. */
+    const LAPSED = addDays(START, 8);
+
+    const checkout = (requestId: string): ReturnType<typeof inject> =>
+      inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+
+    /** What the sweep runs, built the way the plugin builds it. */
+    const sweep = (at: Date = LAPSED): Promise<number> => {
+      const context = {
+        ...bookingContextFor(harness.app, harness.app.log, 'https://web.test'),
+        platformFeeRate: DEFAULT_PLATFORM_FEE_RATE,
+      };
+
+      return expireLapsedRequests(harness.app.db, at, context.mail, expiryGuardFor(context));
+    };
+
+    const statusOf = async (requestId: string): Promise<string | undefined> =>
+      (
+        await harness.database.db
+          .select({ status: bookingRequests.status })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId))
+      )[0]?.status;
+
+    it('refuses to open checkout on a lapsed request with 409 and mints no intent', async () => {
+      const requestId = await acceptedRequest();
+      clockNow = LAPSED;
+
+      const response = await checkout(requestId);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe(
+        'That request is no longer open, so there is nothing to pay for',
+      );
+      expect(harness.stripe.paymentIntents.size).toBe(0);
+      expect(await statusOf(requestId)).toBe('expired');
+    });
+
+    it('cancels the unpaid intent when its request expires', async () => {
+      const requestId = await acceptedRequest();
+      const opened = await checkout(requestId);
+      const intentId: string = opened.json().paymentIntentId;
+
+      expect(await sweep()).toBe(1);
+
+      expect(harness.stripe.cancelRequests).toEqual([intentId]);
+      expect(harness.stripe.paymentIntents.get(intentId)?.status).toBe('canceled');
+      expect(await statusOf(requestId)).toBe('expired');
+    });
+
+    it('books a payment made in time when the sweep reaches the request first', async () => {
+      const requestId = await acceptedRequest();
+      const opened = await checkout(requestId);
+      harness.stripe.succeed(opened.json().paymentIntentId);
+
+      expect(await sweep()).toBe(0);
+
+      const rows = await harness.database.db.select().from(bookings);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.totalAmountCents).toBe(PRICE_CENTS);
+      expect(rows[0]?.status).toBe('confirmed');
+      expect(harness.stripe.refunds).toEqual([]);
+      expect(harness.stripe.cancelRequests).toEqual([]);
+      expect(await statusOf(requestId)).toBe('accepted');
+    });
+
+    it('books a payment made in time when a read reaches the request first', async () => {
+      const requestId = await acceptedRequest();
+      const opened = await checkout(requestId);
+      harness.stripe.succeed(opened.json().paymentIntentId);
+      clockNow = LAPSED;
+
+      const response = await inject('GET', `/booking-requests/${requestId}`, CUSTOMER);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('accepted');
+      expect(await harness.database.db.select().from(bookings)).toHaveLength(1);
+      expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    it('answers a lapsed checkout for a paid request with the booking, not a refusal', async () => {
+      const requestId = await acceptedRequest();
+      const opened = await checkout(requestId);
+      harness.stripe.succeed(opened.json().paymentIntentId);
+      clockNow = LAPSED;
+
+      const response = await checkout(requestId);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('succeeded');
+      expect(await harness.database.db.select().from(bookings)).toHaveLength(1);
+      expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    it('holds the expiry while a payment is still processing', async () => {
+      const requestId = await acceptedRequest();
+      const opened = await checkout(requestId);
+      const intentId: string = opened.json().paymentIntentId;
+      const intent = harness.stripe.paymentIntents.get(intentId)!;
+      harness.stripe.paymentIntents.set(intentId, { ...intent, status: 'processing' });
+
+      expect(await sweep()).toBe(0);
+
+      expect(await statusOf(requestId)).toBe('accepted');
+      expect(harness.stripe.cancelRequests).toEqual([]);
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+    });
+
+    it('holds the expiry, and refunds nothing, when Stripe cannot be asked', async () => {
+      const requestId = await acceptedRequest();
+      await checkout(requestId);
+      harness.stripe.paymentIntents.clear();
+
+      expect(await sweep()).toBe(0);
+
+      expect(await statusOf(requestId)).toBe('accepted');
+      expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    describe('a hold that never ends (VEN-551)', () => {
+      const tick = (n: number): Date => new Date(LAPSED.getTime() + n * EXPIRY_SWEEP_INTERVAL_MS);
+
+      const alertsFor = async (requestId: string): Promise<{ kind: string }[]> => {
+        await harness.app.background.drain();
+        return (await harness.database.db.select().from(operatorAlerts)).filter((alert) =>
+          alert.subjectId.startsWith(requestId),
+        );
+      };
+
+      it('bounds the hold at five ticks', () => {
+        expect(EXPIRY_HOLD_MAX_ATTEMPTS).toBe(5);
+      });
+
+      it('holds for exactly the bound, then expires, frees the date, alerts once and refunds nothing', async () => {
+        const requestId = await acceptedRequest();
+        await checkout(requestId);
+        harness.stripe.paymentIntents.clear();
+
+        for (let n = 0; n < EXPIRY_HOLD_MAX_ATTEMPTS; n += 1) {
+          expect(await sweep(tick(n))).toBe(0);
+          expect(await statusOf(requestId)).toBe('accepted');
+        }
+        expect(await alertsFor(requestId)).toEqual([]);
+
+        expect(await sweep(tick(EXPIRY_HOLD_MAX_ATTEMPTS))).toBe(1);
+
+        expect(await statusOf(requestId)).toBe('expired');
+        const [date] = await harness.database.db
+          .select({ status: availability.status })
+          .from(availability)
+          .where(eq(availability.date, EVENT_DATE));
+        expect(date?.status).not.toBe('booked');
+        const alerts = await alertsFor(requestId);
+        expect(alerts).toHaveLength(1);
+        expect(alerts[0]?.kind).toBe('expiry_payment_unsettled');
+        expect(harness.stripe.refunds).toEqual([]);
+        expect(harness.stripe.cancelRequests).toEqual([]);
+      });
+
+      it('does not spend the bound on reads made inside one spacing window', async () => {
+        const requestId = await acceptedRequest();
+        await checkout(requestId);
+        harness.stripe.paymentIntents.clear();
+
+        for (let n = 0; n < EXPIRY_HOLD_MAX_ATTEMPTS + 3; n += 1) {
+          expect(await sweep(LAPSED)).toBe(0);
+        }
+
+        expect(await statusOf(requestId)).toBe('accepted');
+      });
+
+      it('still books a succeeded intent after earlier failed reads', async () => {
+        const requestId = await acceptedRequest();
+        const opened = await checkout(requestId);
+        const intentId: string = opened.json().paymentIntentId;
+        const intent = harness.stripe.paymentIntents.get(intentId)!;
+        harness.stripe.paymentIntents.clear();
+        expect(await sweep(tick(0))).toBe(0);
+
+        harness.stripe.paymentIntents.set(intentId, { ...intent, status: 'succeeded' });
+        expect(await sweep(tick(1))).toBe(0);
+
+        expect(await harness.database.db.select().from(bookings)).toHaveLength(1);
+        expect(await statusOf(requestId)).toBe('accepted');
+        expect(harness.stripe.refunds).toEqual([]);
+      });
+
+      it('releases a processing intent that turns out canceled inside the bound by the usual rule', async () => {
+        const requestId = await acceptedRequest();
+        const opened = await checkout(requestId);
+        const intentId: string = opened.json().paymentIntentId;
+        const intent = harness.stripe.paymentIntents.get(intentId)!;
+        harness.stripe.paymentIntents.set(intentId, { ...intent, status: 'processing' });
+        expect(await sweep(tick(0))).toBe(0);
+
+        harness.stripe.paymentIntents.set(intentId, { ...intent, status: 'canceled' });
+
+        expect(await sweep(tick(1))).toBe(1);
+        expect(await statusOf(requestId)).toBe('expired');
+        expect(await alertsFor(requestId)).toEqual([]);
+      });
     });
   });
 
@@ -453,6 +696,26 @@ describe('payments', () => {
       expect(harness.stripe.paymentIntents.size).toBe(0);
     });
 
+    /* VEN-479: the unwind after a ban only refunds what it saw, so no charge may start. */
+    it.each([
+      ['banned', { isBanned: true }],
+      ['retired', { deletedAt: new Date('2026-09-20T00:00:00Z') }],
+    ] as const)('refuses to open checkout for a %s vendor with 409', async (_label, change) => {
+      const requestId = await acceptedRequest();
+      await changeVendorUser(requestId, change);
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
+      expect(response.json().message).toBe('Sunlit Studio is no longer taking bookings');
+      expect(harness.stripe.paymentIntents.size).toBe(0);
+    });
+
     it('refuses a request nobody has accepted', async () => {
       const { vendorId, packageId } = await createVendor();
       const request = await inject('POST', '/booking-requests', CUSTOMER, {
@@ -499,24 +762,62 @@ describe('payments', () => {
       expect(row?.intent).toBe(first.json().paymentIntentId);
     });
 
-    it('mints a new intent when the stored one was cancelled', async () => {
+    it('replaces a cancelled intent under a new key, and again after the next cancellation', async () => {
+      const requestId = await acceptedRequest();
+      const checkout = () =>
+        inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+      const first = await checkout();
+      harness.stripe.cancel(first.json().paymentIntentId);
+
+      const second = await checkout();
+      harness.stripe.cancel(second.json().paymentIntentId);
+      const third = await checkout();
+
+      expect(second.statusCode).toBe(200);
+      expect(first.json().paymentIntentId).toBe('pi_test_1');
+      expect(second.json().paymentIntentId).toBe('pi_test_2');
+      expect(third.json().paymentIntentId).toBe('pi_test_3');
+      expect(harness.stripe.paymentIntents.get('pi_test_3')?.status).toBe(
+        'requires_payment_method',
+      );
+      expect(harness.stripe.paymentIntentKeys).toEqual([
+        `pay_${requestId}_separate`,
+        `pay_${requestId}_separate_r1`,
+        `pay_${requestId}_separate_r2`,
+      ]);
+      const [row] = await harness.database.db
+        .select({
+          intent: bookingRequests.stripePaymentIntentId,
+          replacements: bookingRequests.paymentIntentReplacements,
+        })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+      expect(row).toEqual({ intent: 'pi_test_3', replacements: 2 });
+    });
+
+    it('records a replacement only against the canceled intent it read', async () => {
       const requestId = await acceptedRequest();
       const first = await inject(
         'POST',
         `/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
-      harness.stripe.intentsByKey.clear();
-      harness.stripe.cancel(first.json().paymentIntentId);
+      const firstId: string = first.json().paymentIntentId;
 
-      const second = await inject(
-        'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
-        CUSTOMER,
+      const stale = await recordReplacementIntent(
+        harness.database.db,
+        requestId,
+        { intentId: 'pi_not_stored', replacements: 0 },
+        'pi_late',
+      );
+      const current = await recordReplacementIntent(
+        harness.database.db,
+        requestId,
+        { intentId: firstId, replacements: 0 },
+        'pi_replacement',
       );
 
-      expect(second.statusCode).toBe(200);
-      expect(second.json().paymentIntentId).not.toBe(first.json().paymentIntentId);
+      expect({ stale, current }).toEqual({ stale: false, current: true });
     });
 
     /*
@@ -528,6 +829,7 @@ describe('payments', () => {
       harness.stripe.intentsByKey.clear();
       const stray = await harness.stripe.createPaymentIntent({
         requestId,
+        replacements: 0,
         amountCents: PRICE_CENTS,
         customerId: 'cus_test',
         vendorId: 'ven_test',
@@ -673,6 +975,48 @@ describe('payments', () => {
       expect(again.json().outcome).toBe('refunded');
       expect(harness.stripe.refunds).toHaveLength(1);
       expect(await harness.database.db.select().from(bookings)).toEqual([]);
+    });
+
+    /* VEN-479: an intent created before the ban is refunded, never booked. */
+    it.each([
+      ['banned', { isBanned: true }],
+      ['retired', { deletedAt: new Date('2026-09-20T00:00:00Z') }],
+    ] as const)('refunds a payment on a request whose vendor was %s', async (_label, change) => {
+      const requestId = await acceptedRequest();
+      const checkout = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      const intentId: string = checkout.json().paymentIntentId;
+      await changeVendorUser(requestId, change);
+      harness.stripe.succeed(intentId);
+
+      const response = await redeliver(intentId);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().outcome).toBe('refunded');
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(harness.stripe.refunds[0]).toMatchObject({
+        paymentIntentId: intentId,
+        amountCents: PRICE_CENTS,
+      });
+      expect(harness.stripe.refunds[0]?.idempotencyKey).toMatch(
+        new RegExp(`^${intentId}_vendor_unavailable_\\d+$`),
+      );
+
+      /* Settled, not merely refunded: reinstating the vendor must not let a redelivery book returned money. */
+      const [request] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+      expect(request?.status).toBe('declined');
+      await changeVendorUser(requestId, { isBanned: false, deletedAt: null });
+      const again = await redeliver(intentId);
+      expect(again.json().outcome).toBe('refunded');
+      expect(await harness.database.db.select().from(bookings)).toEqual([]);
+      expect(harness.stripe.refunds).toHaveLength(1);
     });
 
     /* VEN-477: a smaller refund made elsewhere is not the whole refund owed. */

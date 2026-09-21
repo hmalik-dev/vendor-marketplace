@@ -43,6 +43,27 @@ function isMultipartCountLimit(error: unknown): boolean {
   );
 }
 
+/*
+ * A second file part never reaches the handler as `FST_FILES_LIMIT`. The parser
+ * records that error and destroys the first file's stream, so `toBuffer()`
+ * rejects with Node's own premature-close error while the real one sits unread
+ * in the parser's queue. On a connection the client has not dropped, that
+ * rejection is the files limit (or a body that ended early, which the same
+ * parser path produces). It fires only when the second part's headers arrive
+ * with the end of the first file; a second part that trails in later is not
+ * observable through `request.file()` and is ignored, as fields after the file
+ * already are.
+ */
+function isFilesLimitCloseOfLiveRequest(error: unknown, aborted: boolean): boolean {
+  return (
+    !aborted &&
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'ERR_STREAM_PREMATURE_CLOSE'
+  );
+}
+
 export interface UploadRoutesOptions {
   /** Uploads one account may make per minute. */
   rateLimitMax: number;
@@ -55,7 +76,7 @@ export interface UploadRoutesOptions {
  * decoded and re-encoded before they ever reach storage, so what is served is
  * always a WebP this process produced rather than whatever the client sent.
  *
- * Authorization is **per prefix**: the `onRequest` guard settles only that
+ * Authorization is **per prefix**: the `preParsing` guard settles only that
  * there is a caller, and `STORAGE_PREFIX_ROLES` decides who may write to the
  * namespace. The two run in that order on purpose — authenticate, then
  * validate, then authorize — so nothing about the namespace reaches a caller
@@ -66,12 +87,14 @@ export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (a
     '/upload/image',
     {
       /*
-       * `onRequest`, not `preHandler`. Fastify validates the querystring before
+       * `preParsing`, not `preHandler`. Fastify validates the querystring before
        * `preHandler` runs, and `uploadQuerySchema`'s `z.enum` puts every
        * allowed prefix into the 400's `details` — so a signed-out caller could
-       * read the whole storage namespace out of a validation error.
+       * read the whole storage namespace out of a validation error. Not
+       * `onRequest` either: that runs ahead of this route's limiter, so a
+       * signed-out flood would be refused uncounted.
        */
-      onRequest: requireAuthBeforeValidation,
+      preParsing: requireAuthBeforeValidation,
       config: { rateLimit: perAccountRateLimit(options.rateLimitMax, '1 minute') },
       schema: {
         querystring: uploadQuerySchema,
@@ -117,8 +140,13 @@ export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (a
             `Image is larger than the ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB limit.`,
           );
         }
-        if (isMultipartCountLimit(error)) {
-          throw validationFailed('The upload has too many form fields. Send the image only.');
+        if (
+          isMultipartCountLimit(error) ||
+          isFilesLimitCloseOfLiveRequest(error, request.raw.aborted)
+        ) {
+          throw validationFailed(
+            'The upload has too many parts or ended early. Send one image only.',
+          );
         }
         throw error;
       }

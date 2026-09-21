@@ -1,5 +1,6 @@
 import { isIP } from 'node:net';
 import type { FastifyRequest } from 'fastify';
+import { clientAddress } from '../../lib/client-address.js';
 import type { AcceptanceContext } from './terms.service.js';
 
 /** The record keeps what the browser said it was, bounded before the column. */
@@ -28,8 +29,9 @@ const MAX_USER_AGENT_LENGTH = 500;
  * edited afterwards.
  */
 export function acceptanceContext(request: FastifyRequest): AcceptanceContext {
+  const ip = clientAddress(request);
   return {
-    ip: isIP(request.ip) ? request.ip : null,
+    ip: isIP(ip) ? ip : null,
     userAgent: request.headers['user-agent']?.slice(0, MAX_USER_AGENT_LENGTH) ?? null,
   };
 }
