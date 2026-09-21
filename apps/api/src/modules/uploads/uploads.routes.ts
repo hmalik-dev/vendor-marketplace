@@ -30,6 +30,19 @@ function isFileTooLarge(error: unknown): boolean {
   );
 }
 
+/** `@fastify/multipart` codes for a body with more fields or parts than allowed. */
+const MULTIPART_COUNT_LIMIT_CODES: readonly string[] = ['FST_FIELDS_LIMIT', 'FST_PARTS_LIMIT'];
+
+function isMultipartCountLimit(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    MULTIPART_COUNT_LIMIT_CODES.includes(error.code)
+  );
+}
+
 export interface UploadRoutesOptions {
   /** Uploads one account may make per minute. */
   rateLimitMax: number;
@@ -87,14 +100,16 @@ export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (a
         );
       }
 
-      const part = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
-
-      if (!part) {
-        throw validationFailed('Attach an image file to upload.');
-      }
-
       let buffer: Buffer;
+      let mimetype: string;
       try {
+        const part = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
+
+        if (!part) {
+          throw validationFailed('Attach an image file to upload.');
+        }
+
+        mimetype = part.mimetype;
         buffer = await part.toBuffer();
       } catch (error) {
         if (isFileTooLarge(error)) {
@@ -102,10 +117,13 @@ export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (a
             `Image is larger than the ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB limit.`,
           );
         }
+        if (isMultipartCountLimit(error)) {
+          throw validationFailed('The upload has too many form fields. Send the image only.');
+        }
         throw error;
       }
 
-      const processed = await processUploadedImage(buffer, part.mimetype);
+      const processed = await processUploadedImage(buffer, mimetype);
 
       // The uploader is written into the key: it is the only record of who
       // minted it, and the only thing that makes deleting one safe.
