@@ -18,7 +18,13 @@ import { Button } from '@/components/ui/button';
  * replaced, moved one bucket over.
  */
 export type CheckoutUnavailableReason =
-  'failed' | 'not-accepted' | 'closed' | 'paused' | 'over-cap' | 'vendor-unavailable';
+  | 'failed'
+  | 'not-accepted'
+  | 'closed'
+  | 'paused'
+  | 'over-cap'
+  | 'vendor-unavailable'
+  | 'vendor-closed';
 
 export interface CheckoutUnavailableProps {
   reason: CheckoutUnavailableReason;
@@ -115,6 +121,21 @@ function copyFor(
       money: 'No payment was taken and your booking is still accepted.',
       action: { label: 'Try this payment again', href: `${booking}/checkout` },
       secondary: { label: 'Back to this booking', href: booking },
+    };
+  }
+
+  /*
+   * A banned or retired vendor (409 `VENDOR_UNAVAILABLE`, VEN-555). Permanent, so
+   * no retry link and no "temporary" or "still accepted" — the API's own wording.
+   */
+  if (reason === 'vendor-closed') {
+    return {
+      eyebrow: 'Payment unavailable',
+      heading: `${vendor} is no longer taking bookings`,
+      body: `${vendor} can't accept this booking any more, so it can't be paid for.`,
+      money: 'Nothing can be paid on this booking.',
+      action: { label: 'Back to this booking', href: booking },
+      secondary: { label: 'Browse vendors', href: '/search' },
     };
   }
 
