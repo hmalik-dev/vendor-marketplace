@@ -75,7 +75,7 @@
 These are deliberately excluded and will NOT be built in MVP:
 
 - **Mobile app** — web is responsive; native app is post-MVP if traction warrants
-- **Social login** (Google/Apple) — Clerk supports it, but email/password is sufficient for MVP
+- **Social login** (Google/Apple) — the auth provider supports it, but email/password is sufficient for MVP
 - **Admin dashboard** — manage via database/Stripe dashboard directly for MVP
 - **Dispute resolution workflow** — handle manually via Stripe's dispute tools
 - **Calendar integrations** (Google Calendar, iCal sync)
@@ -100,7 +100,7 @@ These are deliberately excluded and will NOT be built in MVP:
 | Backend | Separate Fastify 5 API | Next.js API Routes, Express, Hono, NestJS |
 | ORM | Drizzle ORM | Prisma, Knex, raw SQL |
 | Database | PostgreSQL 16 (Neon prod, Docker local) | Supabase, PlanetScale |
-| Auth | Clerk | Custom JWT, NextAuth/Auth.js, Lucia (deprecated) |
+| Auth | The auth provider | Custom JWT, NextAuth/Auth.js, Lucia (deprecated) |
 | Payment | Stripe Connect (Express, 12% commission) | — |
 | Monorepo | Turborepo + pnpm | Nx |
 | Styling | Tailwind CSS 4 + shadcn/ui | CSS Modules, Styled Components |
@@ -120,8 +120,8 @@ Fastify's type-provider-zod gives end-to-end type safety from Zod schema through
 **Drizzle over Prisma:**
 SQL-like query builder means generated queries read like SQL — easier to verify correctness, especially for complex joins (vendor search with category filters, availability intersection). Schema-as-TypeScript gives Claude direct read/modify access without a separate `.prisma` DSL. Lighter runtime with no query engine binary. Prisma's higher abstraction is better for teams but adds indirection that makes agentic debugging harder.
 
-**Clerk over custom JWT / NextAuth / Lucia:**
-Custom JWT auth is the #1 source of security bugs in web apps. Clerk eliminates the entire auth attack surface: password hashing, session management, CSRF, token rotation, email verification, password reset. Free tier covers 10k MAU. Works cleanly with separate frontend/backend architecture — React SDK on frontend, `@clerk/backend` JWT verification on Fastify. NextAuth is designed for Next.js API routes, creating friction with a separate Fastify backend; its credentials provider is discouraged for production. Lucia was deprecated/archived in early 2025.
+**The auth provider over custom JWT / NextAuth / Lucia:**
+Custom JWT auth is the #1 source of security bugs in web apps. The auth provider eliminates the entire auth attack surface: password hashing, session management, CSRF, token rotation, email verification, password reset. Free tier covers 10k MAU. Works cleanly with separate frontend/backend architecture — React SDK on frontend, `@auth-sdk/backend` JWT verification on Fastify. NextAuth is designed for Next.js API routes, creating friction with a separate Fastify backend; its credentials provider is discouraged for production. Lucia was deprecated/archived in early 2025.
 
 **R2 over S3/Supabase Storage:**
 S3-compatible API means zero code changes if migrating later. No egress fees — critical for an image-heavy marketplace. Pairs with Cloudflare DNS/CDN already in the deploy plan. S3 is more battle-tested but egress costs scale unpredictably.
@@ -167,15 +167,15 @@ vendorhub/
 **Rendering strategy:**
 - **Public pages** (vendor profile, search, landing, categories): Server Components fetch from Fastify API. SEO-critical, fast initial load.
 - **Dashboard pages** (vendor/customer): Server Components for initial data load, client components for interactive elements (forms, real-time updates).
-- **Mutations** (forms, actions): Client-side fetch to Fastify API. Clerk session token included automatically via `useAuth().getToken()`.
+- **Mutations** (forms, actions): Client-side fetch to Fastify API. The auth provider session token included automatically via `useAuth().getToken()`.
 - **Real-time** (messages): Client-side SSE connection directly to Fastify.
 
 **Auth flow (frontend):**
-- `<ClerkProvider>` wraps the app in root layout
+- `<AuthProvider>` wraps the app in root layout
 - Public routes: no auth required
-- Auth routes: `<SignIn>` and `<SignUp>` Clerk components (or custom forms with `useSignIn`/`useSignUp` hooks)
+- Auth routes: `<SignIn>` and `<SignUp>` the auth provider components (or custom forms with `useSignIn`/`useSignUp` hooks)
 - Protected routes: `<SignedIn>` gate or middleware-based redirect
-- API calls: Clerk provides session token via `getToken()`, sent as `Authorization: Bearer <token>`
+- API calls: the auth provider provides session token via `getToken()`, sent as `Authorization: Bearer <token>`
 
 **State management:** No global state library. Server Components for server state, React Hook Form for form state, `nuqs` for URL params, local `useState`/`useReducer` for component state. SWR or `useSWR` for client-side data fetching with revalidation.
 
@@ -187,7 +187,7 @@ app/
 │   ├── search/page.tsx          # Search/browse vendors
 │   ├── vendors/[slug]/page.tsx  # Public vendor profile
 │   └── categories/[slug]/page.tsx
-├── (auth)/                      # Clerk sign-in/sign-up
+├── (auth)/                      # The auth provider sign-in/sign-up
 │   ├── sign-in/[[...sign-in]]/page.tsx
 │   └── sign-up/[[...sign-up]]/page.tsx
 ├── (customer)/                  # Auth: customer role
@@ -226,15 +226,15 @@ components/
 - **DAOs:** Data access via Drizzle. One DAO per aggregate root. All queries parameterized. Return typed objects, never raw rows.
 
 **Auth flow (backend):**
-1. Fastify plugin extracts Clerk session token from `Authorization` header
-2. Verifies token via Clerk's JWKS endpoint (`@clerk/backend`)
-3. Resolves `clerk_user_id` → local `users` record
-4. If no local user exists (first API call after Clerk signup), creates one via lazy sync
+1. Fastify plugin extracts the auth provider session token from `Authorization` header
+2. Verifies token via the auth provider's JWKS endpoint (`@auth-sdk/backend`)
+3. Resolves `auth_user_id` → local `users` record
+4. If no local user exists (first API call after the auth provider signup), creates one via lazy sync
 5. Attaches `{ userId, role, vendorId? }` to `request.user`
 6. Role guard middleware checks `request.user.role` against route requirements
 
 **Webhook handlers:**
-- `POST /webhooks/clerk` — `user.created`, `user.updated`, `user.deleted` events. Creates/syncs local user records. Verifies webhook signature via `svix`.
+- `POST /webhooks/auth` — `user.created`, `user.updated`, `user.deleted` events. Creates/syncs local user records. Verifies webhook signature via `svix`.
 - `POST /webhooks/stripe` — `payment_intent.succeeded`, `account.updated`, `charge.dispute.created`. Verifies Stripe signature. Handles payment confirmation, onboarding completion, dispute notification.
 
 **Structured errors:**
@@ -253,9 +253,9 @@ No job queue for MVP. Stripe webhooks handle async payment confirmation. Email s
 
 ### API Client Pattern — `apps/web/lib/api-client.ts`
 
-Typed fetch wrapper with Clerk token injection:
+Typed fetch wrapper with the auth provider token injection:
 
-- **Server Components:** Call `auth()` from `@clerk/nextjs/server`, pass token to fetch.
+- **Server Components:** Call `auth()` from `@auth-sdk/nextjs/server`, pass token to fetch.
 - **Client Components:** Use `useAuth().getToken()` to get session token, include in fetch headers.
 - **Error handling:** Parse error responses into typed `ApiError`, surface user-friendly messages.
 - **Base URL:** `API_URL` env var (`http://localhost:4000` dev, production URL in prod).
@@ -264,7 +264,7 @@ Typed fetch wrapper with Clerk token injection:
 
 | Integration | Purpose | SDK/Client | Critical Path? |
 |------------|---------|------------|---------------|
-| Clerk | Authentication, identity | `@clerk/nextjs`, `@clerk/backend` | Yes — blocks all authed features |
+| The auth provider | Authentication, identity | `@auth-sdk/nextjs`, `@auth-sdk/backend` | Yes — blocks all authed features |
 | Stripe Connect | Payments, vendor onboarding, payouts | `stripe` SDK | Yes — blocks payment flow |
 | Cloudflare R2 | Image storage (portfolio, profile photos) | `@aws-sdk/client-s3` | Yes — blocks image upload |
 | Resend | Transactional email | `resend` SDK | No — graceful degradation |
@@ -330,7 +330,7 @@ Stripe credentials.
 | Capability | Variables | Required by |
 |-----------|-----------|-------------|
 | `core` | `NODE_ENV`, `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `WEB_URL`, `API_URL`, `NEXT_PUBLIC_API_URL`, `PORT`, `HOST`, `LOG_LEVEL`, `RATE_LIMIT_MAX` | every ticket |
-| `auth` | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, the four `NEXT_PUBLIC_CLERK_*_URL` routes | #2 and everything after |
+| `auth` | `NEXT_PUBLIC_AUTH_PROVIDER_PUBLISHABLE_KEY`, `AUTH_PROVIDER_SECRET_KEY`, `AUTH_PROVIDER_WEBHOOK_SECRET`, the four `NEXT_PUBLIC_AUTH_PROVIDER_*_URL` routes | #2 and everything after |
 | `storage` | `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_PUBLIC_URL`, `S3_FORCE_PATH_STYLE` | #3, #4, #16 |
 | `stripe` | `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PLATFORM_FEE_RATE` | #9, #10 |
 | `email` | `RESEND_API_KEY`, `EMAIL_FROM` | #11 |
@@ -349,8 +349,8 @@ ones that fail silently when confused:
 
 | Variable | Development | Production | Consequence of reusing the dev value |
 |----------|------------|-----------|--------------------------------------|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Clerk **development** instance | Clerk **production** instance — a separate instance with its own user pool | Production users authenticate against the dev instance; sessions break on the real domain |
-| `CLERK_WEBHOOK_SECRET` | endpoint registered at the tunnel URL | endpoint registered at `https://api.<domain>` | Every production webhook fails signature verification — user rows are never created |
+| `NEXT_PUBLIC_AUTH_PROVIDER_PUBLISHABLE_KEY` / `AUTH_PROVIDER_SECRET_KEY` | The auth provider **development** instance | The auth provider **production** instance — a separate instance with its own user pool | Production users authenticate against the dev instance; sessions break on the real domain |
+| `AUTH_PROVIDER_WEBHOOK_SECRET` | endpoint registered at the tunnel URL | endpoint registered at `https://api.<domain>` | Every production webhook fails signature verification — user rows are never created |
 | `STRIPE_SECRET_KEY` / `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `sk_test_` / `pk_test_` | `sk_live_` / `pk_live_` | Real bookings charge nothing, or test cards are accepted in production |
 | `STRIPE_WEBHOOK_SECRET` | `stripe listen` ephemeral secret | the production endpoint's own signing secret | Payment confirmations never land; customers are charged with no booking record |
 | `DATABASE_URL` / `DATABASE_URL_UNPOOLED` | Neon `dev` branch | Neon `production` branch | Development writes to live customer data |
@@ -369,8 +369,8 @@ generated, so it can never fall behind the schema again.
 
 | Environment | Purpose | Database | Auth | Payments | Storage |
 |-------------|---------|----------|------|----------|---------|
-| Local | Development | Neon `dev` branch | Clerk development instance | Stripe test mode + `stripe listen` | MinIO via `docker compose` |
-| Production | Live users | Neon `production` branch | Clerk production instance | Stripe live mode + Connect | Cloudflare R2 + public domain |
+| Local | Development | Neon `dev` branch | The auth provider development instance | Stripe test mode + `stripe listen` | MinIO via `docker compose` |
+| Production | Live users | Neon `production` branch | The auth provider production instance | Stripe live mode + Connect | Cloudflare R2 + public domain |
 
 No staging environment for MVP.
 
@@ -404,7 +404,7 @@ identical between local and production, which is where connection-level bugs hid
 ```
 users
   id                  uuid PK default gen_random_uuid()
-  clerk_user_id       varchar(255) unique not null    -- Clerk identity link
+  auth_user_id       varchar(255) unique not null    -- the auth provider identity link
   email               varchar(255) unique not null
   role                enum('customer','vendor','admin') not null
   first_name          varchar(100) not null
@@ -621,7 +621,7 @@ notifications
 
 ```
 -- Identity lookups
-users(clerk_user_id)                     -- unique, Clerk → local user resolution
+users(auth_user_id)                     -- unique, the auth provider → local user resolution
 vendor_profiles(slug)                    -- unique, URL lookups
 vendor_profiles(user_id)                 -- unique, user → vendor profile
 
@@ -666,7 +666,7 @@ notifications(user_id, read_at)          -- unread count + notification list
 ### Route Map
 
 **Webhooks (no auth — signature verification):**
-- `POST /webhooks/clerk` — Clerk user lifecycle events
+- `POST /webhooks/auth` — the auth provider user lifecycle events
 - `POST /webhooks/stripe` — Stripe payment and account events
 
 **Public (no auth):**
@@ -881,7 +881,7 @@ vendor_payout = total_amount - platform_fee
 
 ### Security
 
-**Authentication:** Clerk handles identity. All API endpoints except public routes and webhook handlers require a valid Clerk session token. Token verification uses Clerk's JWKS endpoint — no shared secret for token validation.
+**Authentication:** The auth provider handles identity. All API endpoints except public routes and webhook handlers require a valid the auth provider session token. Token verification uses the auth provider's JWKS endpoint — no shared secret for token validation.
 
 **Authorization:** Role-based access with resource ownership checks (see Authorization Matrix). All ownership checks happen in the service layer, not middleware — middleware only checks role.
 
@@ -891,7 +891,7 @@ vendor_payout = total_amount - platform_fee
 
 **XSS:** React's default escaping handles output. No `dangerouslySetInnerHTML` or user-content injection. User-submitted text (bios, reviews, messages) stored and rendered as plain text, never HTML.
 
-**CSRF:** Clerk's session management handles CSRF protection via `__clerk_db_jwt` cookie attributes (SameSite, httpOnly, Secure).
+**CSRF:** The auth provider's session management handles CSRF protection via `__auth_db_jwt` cookie attributes (SameSite, httpOnly, Secure).
 
 **Rate limiting:** `@fastify/rate-limit` on all routes. Stricter limits on auth-related and payment endpoints.
 
@@ -901,7 +901,7 @@ vendor_payout = total_amount - platform_fee
 - Upload processed image to R2, never serve user-uploaded files directly from the server
 - Generate unique filenames (UUID-based), never use user-provided filenames
 
-**Webhook security:** Clerk webhooks verified via `svix` signature. Stripe webhooks verified via `stripe.webhooks.constructEvent`. Both reject unverified payloads.
+**Webhook security:** The auth provider webhooks verified via `svix` signature. Stripe webhooks verified via `stripe.webhooks.constructEvent`. Both reject unverified payloads.
 
 **Secrets:** All secrets in environment variables, declared once in the env registry (§4). No secrets in code, logs, or error responses. `.env` is gitignored, `.env.example` is generated and contains placeholders only, and `gitleaks` scans every push (§9).
 
@@ -1028,7 +1028,7 @@ undone locally.
 - All E2E tests added in ticket #14 after all features are built
 
 **What NOT to test:**
-- Clerk's authentication internals (tested by Clerk)
+- the auth provider's authentication internals (tested by the auth provider)
 - Stripe's payment processing (tested by Stripe, verified via webhook handling)
 - shadcn/ui component internals
 - Simple pass-through components with no logic
@@ -1048,7 +1048,7 @@ undone locally.
 
 The suites boot an in-process Postgres (PGlite) through `@vendorhub/db/testing`, so
 CI needs no service container. It does need syntactically valid placeholder values
-for the variables consumed at build time — `next build` instantiates `ClerkProvider`,
+for the variables consumed at build time — `next build` instantiates `AuthProvider`,
 which refuses to load without a well-formed publishable key — but CI never reaches a
 third-party server.
 
@@ -1187,7 +1187,7 @@ migrates and deploys automatically, and a failed readiness probe stops the relea
 **Tickets:** #18, #19, #20
 
 **Why here and not at the end.** The instinct is to deploy once everything is built.
-That concentrates every unknown — Clerk production instance behaviour, CORS between
+That concentrates every unknown — the auth provider production instance behaviour, CORS between
 two origins on real domains, R2 public URLs, webhook endpoints that must be
 re-registered against production URLs, cold-start behaviour on Railway — into a single
 session, at the point in the project where the surface area is largest and the
@@ -1269,7 +1269,7 @@ email, notification, and admin work in M5 and M6 then ships to a running system.
 
 **Non-goals:**
 - No application code (API routes, frontend pages)
-- No Clerk, Stripe, or R2 integration
+- No the auth provider, Stripe, or R2 integration
 - No CI/CD pipeline (added with ticket #2)
 
 **Behavioral requirements:**
@@ -1308,19 +1308,19 @@ email, notification, and admin work in M5 and M6 then ships to a running system.
 
 **Scope:**
 - `apps/web`: Next.js 15 scaffold with App Router, Tailwind CSS 4, shadcn/ui setup
-- `apps/web`: Clerk integration — `<ClerkProvider>`, sign-in page, sign-up page (with role selection: customer or vendor)
+- `apps/web`: the auth provider integration — `<AuthProvider>`, sign-in page, sign-up page (with role selection: customer or vendor)
 - `apps/web`: Root layout with responsive header (logo, navigation, auth state), footer
 - `apps/web`: Middleware for route protection (redirect unauthenticated users from dashboard routes)
 - `apps/web`: Customer dashboard shell (empty, with sidebar navigation placeholder)
 - `apps/web`: Vendor dashboard shell (empty, with sidebar navigation)
-- `apps/web`: API client wrapper (`lib/api-client.ts`) with Clerk token injection for server and client components
+- `apps/web`: API client wrapper (`lib/api-client.ts`) with the auth provider token injection for server and client components
 - `apps/api`: Fastify 5 setup (`server.ts`) with Pino logger, CORS, helmet, rate limiting
-- `apps/api`: Clerk auth plugin (verify session token, resolve local user, lazy-create if first visit)
+- `apps/api`: the auth provider auth plugin (verify session token, resolve local user, lazy-create if first visit)
 - `apps/api`: Role guard middleware
 - `apps/api`: Structured error handler plugin
 - `apps/api`: Health check endpoint (`GET /health`)
 - `apps/api`: User routes (`GET /users/me`, `PUT /users/me`)
-- `apps/api`: Clerk webhook handler (`POST /webhooks/clerk` — user.created, user.updated)
+- `apps/api`: the auth provider webhook handler (`POST /webhooks/auth` — user.created, user.updated)
 - `.github/workflows/ci.yml` — GitHub Actions CI pipeline
 - *Sentry integration deferred to ticket #15 (Phase 3 — Operations & Admin)*
 
@@ -1330,7 +1330,7 @@ email, notification, and admin work in M5 and M6 then ships to a running system.
 - No business logic beyond auth
 
 **Behavioral requirements:**
-- New user signs up via Clerk → sees role selection → Clerk webhook creates local user record
+- New user signs up via the auth provider → sees role selection → the auth provider webhook creates local user record
 - If webhook is delayed, first API call creates local user via lazy sync
 - Sign-in redirects to role-appropriate dashboard
 - Unauthenticated access to `/dashboard` redirects to sign-in
@@ -1338,25 +1338,25 @@ email, notification, and admin work in M5 and M6 then ships to a running system.
 - Vendor cannot access `/customer/*` routes (but vendors ARE customers too — see edge cases)
 - `GET /users/me` returns local user profile with role
 - `PUT /users/me` updates name, phone, avatar
-- Invalid/expired Clerk token → `401 Unauthorized`
-- Missing Clerk token on protected route → `401 Unauthorized`
+- Invalid/expired the auth provider token → `401 Unauthorized`
+- Missing the auth provider token on protected route → `401 Unauthorized`
 - Wrong role for route → `403 Forbidden`
 - Health check returns `200` with database connectivity status
 - *Note: Sentry integration moved to ticket #15. Ticket #2 focuses on auth + app shell only.*
 
 **Edge cases:**
 - **Vendor-as-customer:** A vendor may also want to book other vendors. For MVP, a user has one role. If this becomes a requirement, role can be made an array. Document this decision.
-- **Race condition: webhook vs first API call.** Both attempt to create the local user. Use `ON CONFLICT (clerk_user_id) DO NOTHING` to handle safely.
-- **Clerk outage:** If Clerk's JWKS endpoint is unreachable, cache the last-known JWKS keys (Clerk SDK does this automatically).
+- **Race condition: webhook vs first API call.** Both attempt to create the local user. Use `ON CONFLICT (auth_user_id) DO NOTHING` to handle safely.
+- **The auth provider outage:** If the auth provider's JWKS endpoint is unreachable, cache the last-known JWKS keys (the auth provider SDK does this automatically).
 
 **Affected packages:** `apps/web`, `apps/api`, `packages/shared` (user schemas), `packages/db` (user DAO)
 
 **Verification:**
-- Sign-up flow end-to-end (manual: Clerk test mode)
+- Sign-up flow end-to-end (manual: the auth provider test mode)
 - Sign-in/sign-out (manual)
 - Protected route redirect (manual + frontend test)
 - API auth middleware (integration tests: valid token, invalid token, missing token, wrong role)
-- Webhook handler (integration test: simulate Clerk event, verify user created in DB)
+- Webhook handler (integration test: simulate the auth provider event, verify user created in DB)
 - CI pipeline passes on PR
 
 **Blocked by:** #1
@@ -2016,7 +2016,7 @@ email, notification, and admin work in M5 and M6 then ships to a running system.
 
 **Demo dataset (seeded via `pnpm --filter @vendorhub/db seed:demo`):**
 
-**Users (created in local DB with matching Clerk test-mode accounts):**
+**Users (created in local DB with matching the auth provider test-mode accounts):**
 - 1 admin account (`admin@vendorhub.test`, role: admin)
 - 3 customer accounts (`customer1@vendorhub.test`, `customer2@vendorhub.test`, `customer3@vendorhub.test`)
 - 12-15 vendor accounts (one email per vendor, e.g., `luminous.photo@vendorhub.test`)
@@ -2080,10 +2080,10 @@ Critical user journeys automated via Playwright (run headless in CI, headed loca
 7. **Admin flow:** Admin logs in → views dashboard metrics → moderates a review → manages vendor publish status
 8. **Auth guards:** Unauthenticated access redirects, wrong role gets 403, banned user blocked
 
-**Clerk Test Mode Setup:**
-- All test accounts created in Clerk's test mode via Clerk Backend API during seed
+**The auth provider Test Mode Setup:**
+- All test accounts created in the auth provider's test mode via the auth provider Backend API during seed
 - Deterministic passwords for all test accounts (e.g., `TestPass123!`) documented in `.env.example`
-- Seed script creates Clerk users + local DB records in one pass, handles existing accounts idempotently
+- Seed script creates the auth provider users + local DB records in one pass, handles existing accounts idempotently
 
 **Non-goals:**
 - No load testing / performance benchmarks (use k6 post-MVP if needed)
@@ -2099,7 +2099,7 @@ Critical user journeys automated via Playwright (run headless in CI, headed loca
 
 **Edge cases:**
 - Seed script handles pre-existing data (upsert via `ON CONFLICT`)
-- Seed script handles missing Clerk/Stripe credentials gracefully (skips external account creation, logs warning, still seeds local DB)
+- Seed script handles missing the auth provider/Stripe credentials gracefully (skips external account creation, logs warning, still seeds local DB)
 - Playwright tests resilient to SSE timing (use `waitForResponse`/polling, not fixed timeouts)
 
 **Affected packages:** `packages/db`, `apps/web`, `apps/api`
@@ -2146,7 +2146,7 @@ Critical user journeys automated via Playwright (run headless in CI, headed loca
 
 **Behavioral requirements:**
 - Only users with `role = 'admin'` can access `/admin/*` routes — others get 403
-- Admin routes use the same Clerk auth flow as other protected routes
+- Admin routes use the same the auth provider auth flow as other protected routes
 - Dashboard metrics are computed on request (no caching for MVP — dataset is small)
 - Revenue calculations: `SUM(platform_fee_cents)` for bookings with status COMPLETED
 - Ban action: sets `is_banned = true` + `banned_at = now()`. If banned user is a vendor with CONFIRMED bookings, those bookings are auto-cancelled with refunds. PENDING/QUOTED requests auto-cancelled. Profile unpublished.
@@ -2284,10 +2284,10 @@ precisely the ones whose confusion fails silently, and §4's per-environment tab
 enumerates them. Ticket #19 is the work of standing up the production side of that
 table.
 
-The failures this prevents are all quiet ones. A Clerk **production instance** is a
+The failures this prevents are all quiet ones. An auth provider **production instance** is a
 separate instance with its own user pool and its own keys — reusing development keys
 yields an app that authenticates nobody on the real domain. Every webhook endpoint
-(Clerk, Stripe) must be re-registered against the production URL and issues **a new
+(the auth provider, Stripe) must be re-registered against the production URL and issues **a new
 signing secret**; reusing the development secret means signature verification rejects
 every production webhook, so user rows are never created and payments never confirm,
 with no error visible to the user. Stripe must be moved to live mode with Connect
@@ -2435,7 +2435,7 @@ configuration — so they parallelize cleanly. #20 requires both.
 - *Mitigation:* Soft delete. Cannot delete with CONFIRMED bookings (must complete or cancel them first). PENDING/QUOTED requests auto-cancelled. Completed bookings and reviews remain for history.
 
 **7. Development and production credential divergence**
-- *Risk:* Every Clerk key, Stripe key, and webhook signing secret differs between the
+- *Risk:* Every the auth provider key, Stripe key, and webhook signing secret differs between the
   development and production instances (§4). Reusing a development value in production
   fails silently rather than loudly: production webhooks fail signature verification, so
   user rows are never created and payments never confirm, while the UI shows no error.
@@ -2475,7 +2475,7 @@ configuration — so they parallelize cleanly. #20 requires both.
 
 **11. Big-bang first deployment**
 - *Risk:* Deploying only after all features are built concentrates every deployment
-  unknown — Clerk production behaviour, cross-origin requests between real domains, R2
+  unknown — the auth provider production behaviour, cross-origin requests between real domains, R2
   public URLs, webhook re-registration, container cold starts — into one session, at
   maximum surface area and minimum remaining schedule.
 - *Mitigation:* M4.5 deploys immediately after the booking loop works (#18–#20), so the
@@ -2667,7 +2667,7 @@ in the repository root; it is the source of truth for credentials and ports.
 | File Storage | Cloudflare R2 | ~$0 | S3-compatible, no egress fees |
 | Email | Resend | Free (3k/mo) | Requires a verified sending domain |
 | Error Tracking | Sentry | Free (5k events/mo) | FE + BE |
-| Auth | Clerk | Free (10k MAU) | **Production instance — separate from development** |
+| Auth | The auth provider | Free (10k MAU) | **Production instance — separate from development** |
 | DNS + CDN | Cloudflare | Free | DNS, plus the public domain for R2 assets |
 | CI/CD | GitHub Actions | Free (2k min/mo private) | `ci.yml` verify, `deploy.yml` release |
 
@@ -2688,12 +2688,12 @@ development value into any of these fails silently — see §12, risk 7.
 - [ ] Pooled connection string → `DATABASE_URL` on Railway
 - [ ] Direct connection string → `DATABASE_URL_UNPOOLED` on Railway and in GitHub Actions secrets
 
-**Clerk**
+**The auth provider**
 - [ ] Create the **production instance** (a separate instance with its own user pool)
 - [ ] Production `pk_live_` / `sk_live_` keys → Vercel and Railway
 - [ ] Configure the production domain and its DNS records
-- [ ] Register the webhook endpoint at `https://api.<domain>/webhooks/clerk`
-- [ ] Copy **that endpoint's** signing secret → `CLERK_WEBHOOK_SECRET` (a new value)
+- [ ] Register the webhook endpoint at `https://api.<domain>/webhooks/auth`
+- [ ] Copy **that endpoint's** signing secret → `AUTH_PROVIDER_WEBHOOK_SECRET` (a new value)
 - [ ] Verify a real sign-up creates a `users` row in the production database
 
 **Stripe**

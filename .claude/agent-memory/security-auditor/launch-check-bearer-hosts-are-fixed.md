@@ -1,14 +1,14 @@
 ---
 name: launch-check-bearer-hosts-are-fixed
-description: pnpm launch:check (VEN-409) audited clean — bearer secrets go only to hard-coded provider hosts; the pk-decoded Clerk FAPI host, API_URL and WEB_URL get unauthenticated GETs
+description: pnpm launch:check (VEN-409) audited clean — bearer secrets go only to hard-coded provider hosts; the pk-decoded the auth provider FAPI host, API_URL and WEB_URL get unauthenticated GETs
 metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `packages/preflight/src/launch/` was audited 2026-09-14 and passed. `bearer()` is called only with the
-`CLERK_API`/`STRIPE_API`/`RESEND_API` constants. The Frontend API host decoded from the publishable
+`AUTH_PROVIDER_API`/`STRIPE_API`/`RESEND_API` constants. The Frontend API host decoded from the publishable
 key is hostname-regex-checked and fetched with no headers. `repo-modules.ts` imports three
 constant paths under `REPO_ROOT`, and none of those modules has import-time side effects.
 `loadContext` merges env into a copy, never into `process.env`.

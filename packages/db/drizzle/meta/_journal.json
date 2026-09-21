@@ -421,6 +421,13 @@
       "when": 1789950965515,
       "tag": "0059_condemned_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1789952661173,
+      "tag": "0060_silent_nick_fury",
+      "breakpoints": true
     }
   ]
 }

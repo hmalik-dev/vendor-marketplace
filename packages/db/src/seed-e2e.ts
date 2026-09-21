@@ -418,8 +418,8 @@ async function ensureConsoleListRows(
 }
 
 /**
- * A `users` row no Neon Auth identity backs: the previous provider's (`legacy_clerk`)
- * or a seeded one (`seed`), read from the recorded `auth_provider`, never the id's shape.
+ * A `users` row no Neon Auth identity backs: a seeded one (`seed`), read from
+ * the recorded `auth_provider`, never the id's shape.
  */
 const UNBACKED_ROW = ne(users.authProvider, 'neon_auth');
 

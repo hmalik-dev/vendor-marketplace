@@ -5,19 +5,19 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `users_email_key` is partial as of migration `0039_reflective_dust.sql`:
 `UNIQUE (email) WHERE deleted_at IS NULL`. Closing an account releases its
 address, and two rows — one retired, one live — can now hold the same one.
 
-**Why the release is safe:** identity is `clerk_user_id`, and that index is
-still **full** unique. A retired row keeps its clerk id forever, Clerk never
+**Why the release is safe:** identity is `auth_user_id`, and that index is
+still **full** unique. A retired row keeps its auth id forever, the auth provider never
 reissues one, so a returning person always lands on a brand-new `users.id`.
 Audited 2026-09-07 across `apps/api/src` and `packages`: **nothing resolves a
 person by email.** `findUserEmail`, `findCustomerNames`, `userExists`,
 `findUserRecord`, every data-rights gather and the whole export key on
-`users.id`; the auth hook and the webhook key on `clerk_user_id`. The two
+`users.id`; the auth hook and the webhook key on `auth_user_id`. The two
 email-keyed queries in the tree are fixtures — `packages/db/src/scripts/
 seed-e2e.ts:121` (guarded by `vendor_profiles.is_deleted = false`, and
 `retireUserWhere` retires the row and the storefront in **one** transaction, so
@@ -27,16 +27,16 @@ null`). `admin.dao.ts`'s two hits are `containsInsensitive` search filters, not
 joins.
 
 **How to apply:** the invariant a future change must not break is _"email is a
-label, `clerk_user_id` is the key."_ Any new read that resolves a user by email
+label, `auth_user_id` is the key."_ Any new read that resolves a user by email
 — a support-case linker, a merge tool, an import — inherits the whole retired
 row's bookings, reviews and messages to whoever next registers that address.
 Insert-side, `insertUserIfAbsent`'s `onConflictDoNothing` targets
-`clerk_user_id` and therefore does **not** swallow an email collision; two live
+`auth_user_id` and therefore does **not** swallow an email collision; two live
 accounts on one address still raise 23505, which is the half of the guarantee
 `data-rights.routes.test.ts` asserts separately. Note `email` is compared
 case-sensitively, so `A@x.com` and `a@x.com` are two live rows — pre-#451 and
 unchanged.
 
-Related: [[closure-deletes-the-clerk-identity]],
+Related: closure-deletes-the-auth-provider-identity,
 [[closure-refuses-only-the-customer-side]],
-[[clerk-webhook-is-now-a-money-mover]].
+auth-provider-webhook-is-now-a-money-mover.

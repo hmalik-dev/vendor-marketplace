@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `packages/db/src/scripts/safe-target.ts` holds `assertSafeTarget(what)` — the one
 control keeping a fabricating seed off a real database. `seed-marketing.ts` and
@@ -26,7 +26,7 @@ limit and do not re-file it. `staging` is likewise unprotected by name.
 
 **Why:** the e2e fixture forces `users.role` to `vendor`, clears `deleted_at`,
 publishes a storefront and sets `stripe_onboarded`. None of that is additive-only,
-so the target check has to run before Clerk is even asked.
+so the target check has to run before the auth provider is even asked.
 
 **How to apply:** on any diff adding or changing a `packages/db` seed script,
 check the `assertSafeTarget` call exists and is the first thing after `loadEnv()`.

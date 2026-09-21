@@ -16,7 +16,6 @@ const dashed = (...parts: readonly string[]) => parts.join('-');
 
 const STRIPE_LIVE = token('sk', 'live', '4eC39HqLyjWDarjtT1zdp7dc');
 const STRIPE_TEST = token('sk', 'test', '9QmZp0RvT7bNw4LcYdF1sHgU');
-const CLERK_LIVE = token('pk', 'live', 'Y2xlcmsuZXhhbXBsZS5jb20k');
 const SVIX = token('whsec', '9QmZp0RvT7bNw4LcYdF1sHgU');
 const NEON = token('npg', 'x5UGZF0yfaktEXAMPLE');
 const GITHUB_TOKEN = token('ghp', '1234567890abcdefghijABCDEFGHIJ');
@@ -36,7 +35,7 @@ describe('forbidden paths', () => {
   );
 
   it('allows the generated .env.example', () => {
-    expect(scan('.env.example', `CLERK_SECRET_KEY=${token('sk', 'test', '...')}`)).toEqual([]);
+    expect(scan('.env.example', `STRIPE_KEY=${token('sk', 'test', '...')}`)).toEqual([]);
   });
 
   it.each(['certs/server.pem', 'deploy/id_rsa', 'app.key', '.netrc', '.pgpass'])(
@@ -47,7 +46,7 @@ describe('forbidden paths', () => {
   );
 
   /*
-   * Playwright storage state: live Clerk session cookies, one file per role,
+   * Playwright storage state: live session cookies, one file per role,
    * and since #392 that set includes an `admin` session with authority over the
    * console. No *content* rule reaches them — the high-entropy rule keys on
    * `SECRET|TOKEN|PASSWORD`-shaped key names and storage state files the JWT
@@ -63,7 +62,7 @@ describe('forbidden paths', () => {
 
   it('does not ban every file that happens to sit under an auth directory', () => {
     // `src/auth/config.json` is not `.auth/`, and the rule must tell them apart.
-    expect(scan('src/auth/config.json', '{"provider":"clerk"}')).toEqual([]);
+    expect(scan('src/auth/config.json', '{"provider":"neon"}')).toEqual([]);
   });
 
   /*
@@ -95,7 +94,6 @@ describe('provider token rules', () => {
 
   it.each([
     ['stripe-live', `key = '${STRIPE_LIVE}'`],
-    ['clerk-live', `key = '${CLERK_LIVE}'`],
     ['svix-secret', `secret = '${SVIX}'`],
     ['aws-access-key', `id = "${AWS_KEY}"`],
     ['github-token', `tok = "${GITHUB_TOKEN}"`],
@@ -106,11 +104,7 @@ describe('provider token rules', () => {
   });
 
   it('does not fire on the CI workflow placeholders', () => {
-    const workflow = [
-      `CLERK_SECRET_KEY: ${token('sk', 'test', 'ci', 'placeholder')}`,
-      `CLERK_WEBHOOK_SECRET: ${token('whsec', 'ci', 'placeholder')}`,
-      `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${token('pk', 'test', 'Y2kuY2xlcmsuYWNjb3VudHMuZGV2JA')}`,
-    ].join('\n');
+    const workflow = [`RESEND_WEBHOOK_SECRET: ${token('whsec', 'ci', 'placeholder')}`].join('\n');
 
     expect(scan('.github/workflows/ci.yml', workflow)).toEqual([]);
   });
@@ -164,9 +158,8 @@ describe('generic secret-named assignments', () => {
 describe('known fixtures', () => {
   it('exempts the literals the env-shape suites assert against', () => {
     const fixtures = [
-      `CLERK_SECRET_KEY: '${token('sk', 'test', '51ABCdefGHIjklMNOpqr')}'`,
       `STRIPE_SECRET_KEY: '${token('sk', 'test', '51ABCdefGHIjklMNO')}'`,
-      `CLERK_WEBHOOK_SECRET: '${token('whsec', 'MfKQ9r8sTuVwXyZ0123456789')}'`,
+      `RESEND_WEBHOOK_SECRET: '${token('whsec', 'MfKQ9r8sTuVwXyZ0123456789')}'`,
     ].join('\n');
 
     expect(scan('src/env.test.ts', fixtures)).toEqual([]);

@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 The `mcp__plugin_playwright_playwright__*` tools all operate on a single
 browser context that appears to arrive pre-authenticated (e.g. `vendor.json`
@@ -15,7 +15,7 @@ second, independently authenticated identity. There is no MCP tool to call
 `browser.newContext({ storageState: ... })` for a second `.auth/*.json` role.
 Reading `document.cookie` via `browser_evaluate` to hand-copy the session is
 also blocked by the auto-mode permission classifier (consistent with
-[[clerk-handshake-urls-leak-session-tokens]] — it would surface a live session
+auth-provider-handshake-urls-leak-session-tokens — it would surface a live session
 token in the transcript).
 
 **Why:** verifying a negative-permission criterion (e.g. "customer.json must
@@ -27,7 +27,7 @@ into `scripts/_tmp-*.mjs` (repo root, so `import { chromium } from 'playwright'`
 resolves — ESM ignores `NODE_PATH`), point `storageState` at the target
 `.auth/<role>.json`, drive just the one assertion headless via Bash, print only
 booleans/status codes/sanitized paths (strip query strings — they can carry
-Clerk handshake tokens), then delete the script immediately after. This is
+The auth provider handshake tokens), then delete the script immediately after. This is
 report-only tooling, not a code change to the app. For the anonymous
 (signed-out) state, the same pattern works with no `storageState` at all.
 

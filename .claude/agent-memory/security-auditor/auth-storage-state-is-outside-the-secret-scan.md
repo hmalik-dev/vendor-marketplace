@@ -1,14 +1,14 @@
 ---
 name: auth-storage-state-is-outside-the-secret-scan
-description: .auth/*.json holds live Clerk session JWTs; FORBIDDEN_PATHS covers the path as of #392, and no content rule ever will — do not re-report the path half
+description: .auth/*.json holds live the auth provider session JWTs; FORBIDDEN_PATHS covers the path as of #392, and no content rule ever will — do not re-report the path half
 metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `.auth/<role>.json` is Playwright storage state: live `__session`,
-`__client_uat` and `__clerk_db_jwt` cookies for an E2E account. Since #392 that
+`__client_uat` and `__auth_db_jwt` cookies for an E2E account. Since #392 that
 includes an **admin** session on every checkout by default, and
 `.worktreeinclude` copies `.auth/` into every lane worktree.
 

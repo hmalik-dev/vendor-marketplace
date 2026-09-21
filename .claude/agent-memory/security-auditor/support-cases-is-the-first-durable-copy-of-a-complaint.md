@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `support_cases` (#431, `packages/db/src/schema/support-cases.ts`) is the first
 place a support message body is stored rather than only emailed. Three writers,
@@ -19,7 +19,7 @@ and only one of them is an admin operation:
   the failure branch, see
   [[free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand]].
 - **`charge.dispute.created`** — `openChargebackCase` synthesises the booking's
-  own customer (`id` / `clerkUserId` / `role`, read from the `users` row) as the
+  own customer (`id` / `authUserId` / `role`, read from the `users` row) as the
   actor for `placeDisputeHold`. **This was audited and is sound**: every input on
   the chain is server-derived — signed event → `retrieveDispute` → Stripe's
   `payment_intent` → `bookings.stripe_payment_intent_id` → that booking's

@@ -1,11 +1,11 @@
 ---
 name: account-unwind-full-refund-is-the-ban-argument
-description: unwindAccountBookings refunds 100% and zeroes the vendor payout because a ban is operator-initiated; the same code now runs on self-service Clerk deletion, where that reasoning inverts into a D3 cancellation-tier bypass
+description: unwindAccountBookings refunds 100% and zeroes the vendor payout because a ban is operator-initiated; the same code now runs on self-service the auth provider deletion, where that reasoning inverts into a D3 cancellation-tier bypass
 metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 `unwindAccountBookings` (`apps/api/src/modules/admin/account-unwind.ts`) refunds
 `booking.totalAmountCents` — the **full** amount, never D3's tiers — and writes
@@ -14,9 +14,9 @@ removing a party from a transaction the other side did nothing wrong in, so
 charging them a cancellation penalty would be indefensible."_
 
 **That argument is the ban's, and it only holds while the operator is the
-initiator.** #433 pointed the Clerk `user.deleted` webhook at the same function
+initiator.** #433 pointed the auth provider `user.deleted` webhook at the same function
 via `DELETION_UNWIND`, and per #438's own state section _"the only deletion that
-exists happens if the user deletes their own Clerk identity"_ — `<UserButton />`
+exists happens if the user deletes their own the auth provider identity"_ — `<UserButton />`
 in `site-header.tsx`. So the refunded party is now the one who initiated.
 
 The gap is concrete: `cancelBooking` prices a customer cancellation with

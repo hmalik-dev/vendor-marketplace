@@ -1,11 +1,11 @@
 ---
 name: neon-auth-cutover-boundaries
-description: VEN-447 moved customer and vendor sign-in from Clerk to Neon Auth; the new trust boundaries are the same-origin /api/auth proxy, /api/session/token, and one users.auth_user_id column now holding ids from two providers
+description: VEN-447 moved customer and vendor sign-in from the auth provider to Neon Auth; the new trust boundaries are the same-origin /api/auth proxy, /api/session/token, and one users.auth_user_id column now holding ids from two providers
 metadata:
   type: project
 ---
 
-> **Clerk is retired** (VEN-447/448/449 moved auth to Neon Auth). Clerk names below describe the pre-cutover code and are historical; do not act on them as live.
+> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
 
 **Audited 2026-09-19 (VEN-447).** Token verification itself is sound and does
 not need re-reading: `apps/api/src/plugins/neon-auth.ts` pins `EdDSA`, pins
@@ -31,11 +31,11 @@ the localStorage `signup_role` value as trusted input.
 - `/api/session/token` hands the browser a 15-minute JWT from the httpOnly
   cookie. `no-store`, no CORS, never a client prop — verified.
 - `users.auth_user_id` holds ids from two providers in one column, and since
-  **VEN-450 `users.auth_provider`** (`neon_auth|legacy_clerk|seed`) says which —
+  **VEN-450 `users.auth_provider`** (`neon_auth|the removed legacy provider value|seed`) says which —
   recorded at insert, never inferred from the id. `isUnbackedIdentity` is
   `!== 'neon_auth'`, and it is the _only_ thing keeping `pnpm reconcile:auth`,
   `releaseStaleHolder` and `closeAccount`'s identity deletion off seeded and
-  Clerk-era rows: absent at Neon Auth otherwise means **retired and refunded**.
+  pre-Neon rows: absent at Neon Auth otherwise means **retired and refunded**.
   The column defaults to `neon_auth`, so **the dangerous value is the default** —
   a new writer of an unbacked row (seed, fixture, import) that omits it arms a
   mass retirement, and no CHECK ties `'seed'` to a `seed_` id. Migration 0056 is

@@ -8,11 +8,7 @@ import type {
 } from '@vendor-marketplace/shared';
 import type { LegalAcceptanceRow, UserRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
-import {
-  isLegacyIdentity,
-  isSeededIdentity,
-  type AuthIdentityDeleter,
-} from '../auth-sync/identity.js';
+import { isSeededIdentity, type AuthIdentityDeleter } from '../auth-sync/identity.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import { hasAnotherLiveOperator, retireOperatorById, retireUserById } from '../users/users.dao.js';
 import { findConfirmedBookingsToUnwind } from './admin.dao.js';
@@ -651,7 +647,7 @@ export async function closeAccount(
    */
   const identityDeleted = isSeededIdentity(user.authProvider)
     ? true
-    : deleteIdentity === null || isLegacyIdentity(user.authProvider)
+    : deleteIdentity === null
       ? false
       : await deleteAndConfirm(context, userId, user.authUserId, deleteIdentity);
 
