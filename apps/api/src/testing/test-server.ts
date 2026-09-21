@@ -15,6 +15,7 @@ import type { EmailGateway, EmailMessage } from '../lib/email.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
 import {
+  paymentIntentIdempotencyKey,
   paymentIntentParams,
   refundParams,
   assertUsableRefund,
@@ -477,6 +478,8 @@ export interface FakeStripe extends StripeConnectGateway {
   cancel: (paymentIntentId: string) => PaymentIntentSnapshot;
   /** Intents the platform asked Stripe to cancel, in order (VEN-528). */
   cancelRequests: string[];
+  /** Every key `createPaymentIntent` was sent, in order, replays included. */
+  paymentIntentKeys: string[];
 }
 
 function createFakeStripe(deployEnv: string): FakeStripe {
@@ -512,9 +515,11 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   const failedTransferKeys = new Map<string, string>();
   const disputes = new Map<string, StripeDisputeSnapshot>();
   const cancelRequests: string[] = [];
+  const paymentIntentKeys: string[] = [];
 
   const fake: FakeStripe = {
     cancelRequests,
+    paymentIntentKeys,
     createdAccounts,
     recipientAccountKeys,
     createdLinks,
@@ -633,7 +638,8 @@ function createFakeStripe(deployEnv: string): FakeStripe {
        * fresh one each time would let a double-charge through a green suite —
        * which is exactly the shape of bug the parity rule warns about.
        */
-      const key = `pay_${input.requestId}`;
+      const key = paymentIntentIdempotencyKey(input);
+      paymentIntentKeys.push(key);
       const replayed = intentsByKey.get(key);
 
       if (replayed) {

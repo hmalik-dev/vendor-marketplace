@@ -29,6 +29,7 @@ import {
   type TestHarness,
 } from '../../testing/test-server.js';
 import { expireLapsedRequests } from '../booking-requests/booking-requests.service.js';
+import { recordReplacementIntent } from './payments.dao.js';
 import { bookingContextFor, expiryGuardFor } from './payments.service.js';
 
 const VENDOR = 'user_vendor';
@@ -250,6 +251,7 @@ describe('payments', () => {
     clockNow = START;
     harness.stripe.paymentIntents.clear();
     harness.stripe.intentsByKey.clear();
+    harness.stripe.paymentIntentKeys.length = 0;
     harness.stripe.refunds.length = 0;
     harness.stripe.cancelRequests.length = 0;
     harness.stripe.refundsToRefuse.clear();
@@ -725,24 +727,62 @@ describe('payments', () => {
       expect(row?.intent).toBe(first.json().paymentIntentId);
     });
 
-    it('mints a new intent when the stored one was cancelled', async () => {
+    it('replaces a cancelled intent under a new key, and again after the next cancellation', async () => {
+      const requestId = await acceptedRequest();
+      const checkout = () =>
+        inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+      const first = await checkout();
+      harness.stripe.cancel(first.json().paymentIntentId);
+
+      const second = await checkout();
+      harness.stripe.cancel(second.json().paymentIntentId);
+      const third = await checkout();
+
+      expect(second.statusCode).toBe(200);
+      expect(first.json().paymentIntentId).toBe('pi_test_1');
+      expect(second.json().paymentIntentId).toBe('pi_test_2');
+      expect(third.json().paymentIntentId).toBe('pi_test_3');
+      expect(harness.stripe.paymentIntents.get('pi_test_3')?.status).toBe(
+        'requires_payment_method',
+      );
+      expect(harness.stripe.paymentIntentKeys).toEqual([
+        `pay_${requestId}_separate`,
+        `pay_${requestId}_separate_r1`,
+        `pay_${requestId}_separate_r2`,
+      ]);
+      const [row] = await harness.database.db
+        .select({
+          intent: bookingRequests.stripePaymentIntentId,
+          replacements: bookingRequests.paymentIntentReplacements,
+        })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+      expect(row).toEqual({ intent: 'pi_test_3', replacements: 2 });
+    });
+
+    it('records a replacement only against the canceled intent it read', async () => {
       const requestId = await acceptedRequest();
       const first = await inject(
         'POST',
         `/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
-      harness.stripe.intentsByKey.clear();
-      harness.stripe.cancel(first.json().paymentIntentId);
+      const firstId: string = first.json().paymentIntentId;
 
-      const second = await inject(
-        'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
-        CUSTOMER,
+      const stale = await recordReplacementIntent(
+        harness.database.db,
+        requestId,
+        { intentId: 'pi_not_stored', replacements: 0 },
+        'pi_late',
+      );
+      const current = await recordReplacementIntent(
+        harness.database.db,
+        requestId,
+        { intentId: firstId, replacements: 0 },
+        'pi_replacement',
       );
 
-      expect(second.statusCode).toBe(200);
-      expect(second.json().paymentIntentId).not.toBe(first.json().paymentIntentId);
+      expect({ stale, current }).toEqual({ stale: false, current: true });
     });
 
     /*
@@ -754,6 +794,7 @@ describe('payments', () => {
       harness.stripe.intentsByKey.clear();
       const stray = await harness.stripe.createPaymentIntent({
         requestId,
+        replacements: 0,
         amountCents: PRICE_CENTS,
         customerId: 'cus_test',
         vendorId: 'ven_test',
