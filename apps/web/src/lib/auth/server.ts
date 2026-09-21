@@ -154,6 +154,20 @@ function remember(cookieValue: string, session: ServerSession): void {
   }
 }
 
+/**
+ * Forgets what this process remembers for one user. A revoke at the provider
+ * leaves the cookie value unchanged, so without this a revoked cookie keeps its
+ * remembered token until it lapses (VEN-518). Other server instances lapse on
+ * their own within the JWT's life.
+ */
+export function forgetSessionsFor(userId: string): void {
+  for (const [key, minted] of mintedSessions) {
+    if (minted.userId === userId) {
+      mintedSessions.delete(key);
+    }
+  }
+}
+
 /** Test seam: forgets every remembered session. */
 export function clearServerSessions(): void {
   mintedSessions.clear();

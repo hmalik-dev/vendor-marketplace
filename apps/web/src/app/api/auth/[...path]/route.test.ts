@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const upstreamPost = vi.fn<(request: Request) => Promise<Response>>();
+type Context = { params: Promise<{ path: string[] }> };
+const upstreamPost = vi.fn<(request: Request, context: Context) => Promise<Response>>();
 const afterTasks: Array<() => Promise<void>> = [];
 
+const forgetSessionsFor = vi.fn();
 vi.mock('@/lib/auth/server', () => ({
+  forgetSessionsFor: (userId: string) => forgetSessionsFor(userId),
   neonAuth: () => ({
     handler: () => ({ POST: upstreamPost, GET: vi.fn() }),
   }),
@@ -46,6 +49,7 @@ describe('password reset through the auth proxy', () => {
     upstreamPost.mockReset();
     captureException.mockReset();
     captureMessage.mockReset();
+    forgetSessionsFor.mockReset();
   });
   afterEach(() => afterTasks.splice(0));
 
@@ -199,6 +203,130 @@ describe('password reset through the auth proxy', () => {
     const response = await call(RESET, { email: 'a@example.com', otp: '123456', password: 'x' });
 
     expect([response.status, await response.json()]).toEqual([200, { success: true }]);
+  });
+
+  describe('ending the account’s sessions after a reset (VEN-518)', () => {
+    const reset = { email: 'a@example.com', otp: '123456', password: 'a-new-long-password' };
+    // The real handler routes on `params`, never on the request URL.
+    const route = async (context: Context): Promise<string> =>
+      (await context.params).path.join('/');
+    const answers = (
+      signIn: Response | Error,
+      revoke: Response = Response.json({ status: true }),
+    ) =>
+      upstreamPost.mockImplementation(async (_request, context) => {
+        const path = await route(context);
+        if (path === 'sign-in/email') {
+          if (signIn instanceof Error) throw signIn;
+          return signIn;
+        }
+        if (path === 'revoke-sessions') return revoke;
+        return Response.json({ success: true });
+      });
+    const paths = (): Promise<string[]> =>
+      Promise.all(upstreamPost.mock.calls.map(([, context]) => route(context)));
+
+    function sessionResponse(): Response {
+      const headers = new Headers();
+      headers.append('set-cookie', '__Secure-neon-auth.session_token=abc; Path=/; HttpOnly');
+      headers.append('set-cookie', '__Secure-neon-auth.session_data=xyz; Path=/');
+      return new Response(JSON.stringify({ token: 'abc', user: { id: 'user-9' } }), { headers });
+    }
+
+    it('signs in with the new password, then revokes every session with that session', async () => {
+      answers(sessionResponse());
+
+      const response = await call(RESET, reset);
+
+      expect([response.status, await response.json()]).toEqual([200, { success: true }]);
+      expect(await paths()).toEqual([
+        'email-otp/reset-password',
+        'sign-in/email',
+        'revoke-sessions',
+      ]);
+      expect(await upstreamPost.mock.calls[1]?.[0].json()).toEqual({
+        email: 'a@example.com',
+        password: 'a-new-long-password',
+      });
+      expect(upstreamPost.mock.calls[2]?.[0].headers.get('cookie')).toBe(
+        '__Secure-neon-auth.session_token=abc; __Secure-neon-auth.session_data=xyz',
+      );
+      expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
+    });
+
+    it('does not sign in or revoke when the code check is refused', async () => {
+      upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID_OTP' }, { status: 400 }));
+
+      const response = await call(RESET, reset);
+
+      expect(response.status).toBe(400);
+      expect(await paths()).toEqual(['email-otp/reset-password']);
+    });
+
+    it('reports a failed revoke and still answers that the password was reset', async () => {
+      answers(sessionResponse(), Response.json({}, { status: 500 }));
+
+      const response = await call(RESET, reset);
+
+      expect([response.status, await response.json()]).toEqual([200, { success: true }]);
+      expect(captureException).toHaveBeenCalledWith(
+        new Error('Other sessions were not ended (500)'),
+      );
+      expect(forgetSessionsFor).not.toHaveBeenCalled();
+    });
+
+    it('reports a sign-in that opens no session and never calls revoke', async () => {
+      answers(Response.json({ code: 'INVALID' }, { status: 401 }));
+
+      const response = await call(RESET, reset);
+
+      expect(response.status).toBe(200);
+      expect(await paths()).not.toContain('revoke-sessions');
+      expect(captureException).toHaveBeenCalledWith(
+        new Error('Could not open a session to end the others (401)'),
+      );
+    });
+
+    it('reports a sign-in that sets no session cookie and never calls revoke', async () => {
+      answers(Response.json({ token: 'abc', user: { id: 'user-9' } }));
+
+      const response = await call(RESET, reset);
+
+      expect(response.status).toBe(200);
+      expect(await paths()).not.toContain('revoke-sessions');
+      expect(captureException).toHaveBeenCalledWith(
+        new Error('Signing in to end the other sessions set no session cookie'),
+      );
+    });
+
+    it('reports a sign-in that throws and still answers that the password was reset', async () => {
+      const failure = new Error('down');
+      answers(failure);
+
+      const response = await call(RESET, reset);
+
+      expect([response.status, await response.json()]).toEqual([200, { success: true }]);
+      expect(captureException).toHaveBeenCalledWith(failure);
+    });
+
+    it('does not carry the caller’s cookie or bearer token into the internal calls', async () => {
+      answers(sessionResponse());
+      const request = new Request('http://localhost/api/auth/email-otp/reset-password', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-forwarded-for': '3.3.3.3',
+          cookie: 'planted=1',
+          authorization: 'Bearer attacker',
+        },
+        body: JSON.stringify(reset),
+      });
+      await POST(request as never, { params: Promise.resolve({ path: RESET.split('/') }) });
+
+      const signIn = upstreamPost.mock.calls[1]?.[0].headers;
+      expect([signIn?.get('cookie'), signIn?.get('authorization')]).toEqual([null, null]);
+      expect(upstreamPost.mock.calls[2]?.[0].headers.get('authorization')).toBeNull();
+    });
   });
 
   it('drops the length and encoding headers of the original bytes when forwarding', async () => {
