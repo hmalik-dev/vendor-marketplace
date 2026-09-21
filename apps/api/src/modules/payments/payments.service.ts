@@ -426,22 +426,39 @@ function toRailPackage(row: PayableRequestRow): CheckoutIntent['servicePackage']
  * Only a refusal Stripe answered moves it. A dropped connection has no cached
  * answer, and a retry under a new key would make a refund that may already exist.
  */
-async function createRefundOnce(
+export async function createRefundOnce(
   context: { db: AppDatabase; stripe: StripeConnectGateway; log: FastifyBaseLogger },
   input: CreateRefundInput & { scope: string; keyFor: (attempt: number) => string },
 ): Promise<{ refundId: string; amountCents: number }> {
   const { scope, keyFor, ...refund } = input;
-  const attempts = await readRefundAttempts(context.db, refund.paymentIntentId, scope);
+
+  return underAttemptKey(context, refund.paymentIntentId, scope, (attempt) =>
+    context.stripe.createRefund({ ...refund, idempotencyKey: keyFor(attempt) }),
+  );
+}
+
+/**
+ * Runs one Stripe money call under the key its scope has earned (VEN-469,
+ * VEN-499): `send` gets the persisted refusal count, and a refusal Stripe
+ * answered is recorded so the next call gets a new key.
+ */
+async function underAttemptKey<T>(
+  context: { db: AppDatabase; log: FastifyBaseLogger },
+  paymentIntentId: string,
+  scope: string,
+  send: (attempt: number) => Promise<T>,
+): Promise<T> {
+  const attempts = await readRefundAttempts(context.db, paymentIntentId, scope);
 
   try {
-    return await context.stripe.createRefund({ ...refund, idempotencyKey: keyFor(attempts) });
+    return await send(attempts);
   } catch (error) {
     if (error instanceof RefundRefusedError) {
-      await recordRefundRefusal(context.db, refund.paymentIntentId, scope, attempts).catch(
+      await recordRefundRefusal(context.db, paymentIntentId, scope, attempts).catch(
         (recordError: unknown) =>
           context.log.error(
-            { err: recordError, paymentIntentId: refund.paymentIntentId },
-            'Could not record a refused refund; the retry will reuse its key',
+            { err: recordError, paymentIntentId },
+            'Could not record a refused Stripe call; the retry will reuse its key',
           ),
       );
     }
@@ -1291,7 +1308,8 @@ async function refundAndUnwind(
    */
   const transferReversed = await reverseOutstanding(context, booking, {
     target: booking.vendorPayoutCents - retainedPayoutCents,
-    idempotencyKey: `${keyPrefix}_${booking.id}_reversal`,
+    paymentIntentId: booking.stripePaymentIntentId,
+    scope: `${keyPrefix}_${booking.id}_reversal`,
   });
 
   return { ...refund, retainedPayoutCents, transferReversed };
@@ -1333,7 +1351,7 @@ interface UnwoundRefund {
 async function reverseOutstanding(
   context: BookingContext,
   booking: BookingRow,
-  reversal: { target: number; idempotencyKey: string },
+  reversal: { target: number; paymentIntentId: string; scope: string },
 ): Promise<boolean> {
   const transfer = await context.stripe.findTransfer(transferGroupFor(booking.requestId));
 
@@ -1358,11 +1376,18 @@ async function reverseOutstanding(
     return true;
   }
 
-  await context.stripe.reverseTransfer({
-    transferId: transfer.transferId,
-    amountCents: outstanding,
-    idempotencyKey: reversal.idempotencyKey,
-  });
+  /*
+   * The same attempt-numbered key as the refund, for the same reason (D36):
+   * Stripe replays a refused reversal for 24 hours. Attempt 0 keeps the key the
+   * reversal always had, so one already in flight is still matched.
+   */
+  await underAttemptKey(context, reversal.paymentIntentId, reversal.scope, (attempt) =>
+    context.stripe.reverseTransfer({
+      transferId: transfer.transferId,
+      amountCents: outstanding,
+      idempotencyKey: attempt === 0 ? reversal.scope : `${reversal.scope}_${attempt}`,
+    }),
+  );
 
   return true;
 }

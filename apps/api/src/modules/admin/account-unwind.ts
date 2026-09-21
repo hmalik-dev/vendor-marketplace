@@ -7,7 +7,7 @@ import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { refundFailedAlert } from '../operator-alerts/operator-alerts.service.js';
 import { cancelBookingAndFreeDate } from '../payments/payments.dao.js';
-import type { BookingContext } from '../payments/payments.service.js';
+import { createRefundOnce, type BookingContext } from '../payments/payments.service.js';
 import { declineOpenRequests, findConfirmedBookingsToUnwind } from './admin.dao.js';
 
 /**
@@ -333,7 +333,7 @@ export async function unwindAccountBookings(
         refundedCents = alreadyRefundedCents;
 
         if (remainingCents > 0) {
-          const refund = await context.stripe.createRefund({
+          const refund = await createRefundOnce(context, {
             paymentIntentId: booking.stripePaymentIntentId,
             amountCents: remainingCents,
             /*
@@ -352,7 +352,14 @@ export async function unwindAccountBookings(
              * give back. The refund carries neither `reverse_transfer` nor
              * `refund_application_fee` (#423).
              */
-            idempotencyKey: `${copy.refundKeyPrefix}:marked:${booking.id}`,
+            /*
+             * Attempt-numbered like the cancellation's: Stripe replays a refusal
+             * for 24 hours, so the retry after one needs a new key, and racers
+             * that read the same count still share one (VEN-499, D36).
+             */
+            scope: `${copy.refundKeyPrefix}:marked:${booking.id}`,
+            keyFor: (attempt) =>
+              `${copy.refundKeyPrefix}:marked:${booking.id}${attempt === 0 ? '' : `_${attempt}`}`,
           });
 
           refundedCents += refund.amountCents;
