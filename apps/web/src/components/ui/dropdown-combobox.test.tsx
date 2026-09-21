@@ -93,6 +93,17 @@ describe('ComboboxDropdown — the sheet mount', () => {
     expect(label?.getAttribute('for')).toBeNull();
   });
 
+  it('draws the sheet Close as a 44px target', async () => {
+    const user = userEvent.setup();
+    renderCombobox();
+
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+
+    expect(screen.getByRole('button', { name: 'Close' }).className.split(/\s+/)).toContain(
+      'min-h-11',
+    );
+  });
+
   it('shows a button rather than an input while the sheet is the mount', () => {
     renderCombobox();
 

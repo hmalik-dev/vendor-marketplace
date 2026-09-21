@@ -67,7 +67,19 @@ export function useModalSheet({ open, onClose, panel, trigger }: ModalSheetOptio
       return;
     }
 
-    const opener = (trigger.current ?? document.activeElement) as HTMLElement | null;
+    /*
+     * The trigger ref may be a `display: contents` wrapper, which is not
+     * focusable: `.focus()` on it leaves focus on `<body>`. Restore to the
+     * control inside it instead.
+     */
+    const wrapper = trigger.current;
+    const opener = (
+      wrapper
+        ? wrapper.contains(document.activeElement) && wrapper !== document.activeElement
+          ? document.activeElement
+          : (wrapper.querySelector<HTMLElement>(FOCUSABLE) ?? wrapper)
+        : document.activeElement
+    ) as HTMLElement | null;
 
     // Focus enters the panel, so the next Tab is inside it rather than back at
     // the top of the document.
