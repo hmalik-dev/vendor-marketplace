@@ -16,6 +16,7 @@ import { PRICE_TYPE_LABELS } from '@/lib/package-labels';
 
 export { PRICE_TYPE_LABELS };
 import { NO_PACKAGE_PROBLEM, packageProblemFrom } from '@/lib/package-issues';
+import { STALE_EDIT_NOTICE, currentFromStaleEdit } from '@/lib/stale-edit';
 import { userFacingError } from '@/lib/user-facing-error';
 import { useSubmitValidation } from '@/lib/use-submit-validation';
 import { useApi } from '@/lib/use-api';
@@ -125,6 +126,20 @@ export function PackageForm({
   const fieldId = useId();
   const [form, setForm] = useState<FormState>(() => initialState(servicePackage));
   const [isSaving, setIsSaving] = useState(false);
+  /*
+   * The version a save is judged against is the row the manager holds, which it
+   * replaces after every save and every bookable toggle. After a refusal it is the
+   * moved row's version instead, for as long as the manager's row is the one that
+   * refusal was taken against (VEN-481).
+   */
+  const [rebased, setRebased] = useState<{ against: Date; version: Date } | null>(null);
+  const openedOn = servicePackage?.updatedAt ?? null;
+  const version =
+    rebased !== null && openedOn !== null && rebased.against.getTime() === openedOn.getTime()
+      ? rebased.version
+      : openedOn;
+  /** The row as another save left it, set when this one was refused. */
+  const [changedTo, setChangedTo] = useState<WireServicePackage | null>(null);
 
   const isNew = servicePackage === null;
 
@@ -205,14 +220,25 @@ export function PackageForm({
         isNew ? '/vendor/packages' : `/vendor/packages/${servicePackage.id}`,
         {
           method: isNew ? 'POST' : 'PUT',
-          body: parsed.data,
+          body: isNew ? parsed.data : { ...parsed.data, updatedAt: version },
           schema: wireServicePackageSchema,
         },
       );
 
+      setChangedTo(null);
       toast.success(isNew ? 'Package added.' : 'Package saved.');
       onSaved(saved);
     } catch (error) {
+      const current = currentFromStaleEdit(error, wireServicePackageSchema);
+      if (current !== null) {
+        /* Typed text stays; only the version moves, so the next save is a deliberate one. */
+        if (openedOn !== null) {
+          setRebased({ against: openedOn, version: current.updatedAt });
+        }
+        setChangedTo(current);
+        return;
+      }
+
       toast.error(userFacingError(error, 'Could not save that package.'));
     } finally {
       setIsSaving(false);
@@ -254,6 +280,28 @@ export function PackageForm({
         {validation.attempted && validation.blockers.length > 0 ? (
           <div className="mt-4">
             <FormErrorSummary blockers={validation.blockers} />
+          </div>
+        ) : null}
+
+        {changedTo !== null ? (
+          <div className="mt-4">
+            <FormErrorCard>
+              <div className="text-base text-stone-900">
+                <p>{STALE_EDIT_NOTICE}</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => {
+                    setForm(initialState(changedTo));
+                    setChangedTo(null);
+                  }}
+                >
+                  Load the current values
+                </Button>
+              </div>
+            </FormErrorCard>
           </div>
         ) : null}
 

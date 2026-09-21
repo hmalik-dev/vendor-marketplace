@@ -9,7 +9,7 @@ import {
 import type { NewServicePackageRow, ServicePackageRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { lockVendorProfile } from '../admin/admin.dao.js';
-import { forbidden, notFound } from '../../lib/errors.js';
+import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import { assertCompleteOrder } from '../../lib/ordering.js';
 import {
   requireOwnVendorProfile,
@@ -24,6 +24,9 @@ import {
   nextDisplayOrder,
   updatePackageById,
 } from './packages.dao.js';
+
+const PACKAGE_CHANGED_MESSAGE =
+  'This package changed since you opened it. Review the current values, then save again.';
 
 export function toServicePackage(row: ServicePackageRow): ServicePackage {
   return { ...row, durationHours: parseDurationHours(row.durationHours) };
@@ -136,6 +139,7 @@ export async function updatePackage(
 
     const updated = await updatePackageById(tx, vendor.id, packageId, patch, {
       requireUnheld: patch.isActive === true,
+      expectedUpdatedAt: input.updatedAt,
     });
 
     if (updated && input.isActive === false) {
@@ -146,11 +150,15 @@ export async function updatePackage(
   });
 
   if (!row) {
-    if (
-      patch.isActive === true &&
-      (await findPackageById(db, vendor.id, packageId))?.moderationHold
-    ) {
+    const current = await findPackageById(db, vendor.id, packageId);
+
+    if (patch.isActive === true && current?.moderationHold) {
       throw forbidden(SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE);
+    }
+
+    /* The row is there and the write matched nothing, so it moved since the form opened (VEN-481). */
+    if (current && input.updatedAt) {
+      throw conflict(PACKAGE_CHANGED_MESSAGE, { current: toServicePackage(current) });
     }
 
     throw notFound('That package does not exist');

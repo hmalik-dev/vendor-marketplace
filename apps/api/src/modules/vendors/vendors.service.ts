@@ -31,12 +31,20 @@ import {
   findVendorProfileByUserId,
   findVendorTags,
   insertVendorProfile,
+  lockVendorProfileAtVersion,
   replaceVendorCategories,
   slugExists,
+  touchVendorProfile,
   updateVendorProfileById,
 } from './vendors.dao.js';
 
 const SUSPENDED_ACCOUNT_MESSAGE = 'This account has been suspended';
+
+const PROFILE_CHANGED_MESSAGE =
+  'Your profile changed since you opened it. Review the current values, then save again.';
+
+/** Thrown inside the edit transaction so it rolls back; turned into the 409 outside it. */
+class StaleProfileEdit extends Error {}
 
 const PROFILE_USER_UNIQUE = 'vendor_profiles_user_id_key';
 const PROFILE_SLUG_UNIQUE = 'vendor_profiles_slug_key';
@@ -540,8 +548,19 @@ export async function updateVendorProfile(
         await replaceVendorTags(tx, existing.id, tags.tagIds);
       }
 
+      /*
+       * After the child writes, for the lock order the publish path below gives.
+       * A stale save is rolled back whole, categories and tags included.
+       */
+      if (
+        input.updatedAt &&
+        !(await lockVendorProfileAtVersion(tx, existing.id, input.updatedAt))
+      ) {
+        throw new StaleProfileEdit();
+      }
+
       if (Object.keys(patch).length === 0) {
-        return existing;
+        return input.updatedAt ? touchVendorProfile(tx, existing.id) : existing;
       }
 
       if (patch.isPublished === true) {
@@ -600,7 +619,15 @@ export async function updateVendorProfile(
 
       return updated;
     })
-    .catch((error: unknown) => {
+    .catch(async (error: unknown) => {
+      if (error instanceof StaleProfileEdit) {
+        const current = await findVendorProfileByUserId(db, userId);
+        throw conflict(
+          PROFILE_CHANGED_MESSAGE,
+          current ? { current: await loadDetail(db, current) } : undefined,
+        );
+      }
+
       throw asProfileConflict(error) ?? error;
     });
 

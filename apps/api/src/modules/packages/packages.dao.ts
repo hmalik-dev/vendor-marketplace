@@ -5,6 +5,7 @@ import {
   type ServicePackageRow,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import { updatedAtIs } from '../../lib/edit-version.js';
 
 /** Newest packages sort last, so a fresh one lands at the end of the list. */
 const byDisplayOrder = [asc(servicePackages.displayOrder), asc(servicePackages.createdAt)];
@@ -87,7 +88,7 @@ export async function updatePackageById(
   packageId: string,
   patch: Partial<NewServicePackageRow>,
   /** The compare-and-set `updateVendorProfileById` documents, for a package (#457). */
-  options: { requireUnheld?: boolean } = {},
+  options: { requireUnheld?: boolean; expectedUpdatedAt?: Date } = {},
 ): Promise<ServicePackageRow | null> {
   if (!vendorId || !packageId || Object.keys(patch).length === 0) {
     return null;
@@ -101,6 +102,9 @@ export async function updatePackageById(
         eq(servicePackages.vendorId, vendorId),
         eq(servicePackages.id, packageId),
         options.requireUnheld === true ? eq(servicePackages.moderationHold, false) : undefined,
+        options.expectedUpdatedAt
+          ? updatedAtIs(servicePackages.updatedAt, options.expectedUpdatedAt)
+          : undefined,
       ),
     )
     .returning();

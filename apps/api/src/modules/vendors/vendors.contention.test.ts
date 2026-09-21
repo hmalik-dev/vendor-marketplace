@@ -195,4 +195,32 @@ describe('the vendor’s own storefront writes, against a real Postgres', () => 
       expect(loser.json().message).toBe('That web address was just taken. Choose another.');
     }
   });
+
+  /**
+   * Two tabs saving the profile from one version at the same moment (VEN-481).
+   * The version is checked under a row lock; without it both read the old
+   * version, both pass, and the earlier edit is lost. Exactly one may win.
+   */
+  it('lets exactly one of two simultaneous saves from one version through', async () => {
+    await seedStorefront();
+    const opened = await harness!.app.inject({
+      method: 'GET',
+      url: '/vendor/profile',
+      headers: bearer(VENDOR),
+    });
+    const version = opened.json().updatedAt as string;
+
+    const responses = await Promise.all(
+      ['First tab', 'Second tab'].map((tagline) =>
+        harness!.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR),
+          payload: { tagline, updatedAt: version },
+        }),
+      ),
+    );
+
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+  });
 });
