@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { disableZodJit } from './zod-jitless';
@@ -14,6 +16,19 @@ describe('disableZodJit', () => {
     disableZodJit();
 
     expect(z.config().jitless).toBe(true);
+  });
+
+  /*
+   * Zod probes for eval when a schema is *constructed*, and importing the
+   * shared package constructs them all — so this has to be the entry's first
+   * import. A source check: the rendered result is the browser's
+   * `securitypolicyviolation` event.
+   */
+  it('is the first import of the client entry, ahead of anything that builds a schema', () => {
+    const entry = readFileSync(join(process.cwd(), 'src/instrumentation-client.ts'), 'utf8');
+    const firstImport = /^import .*$/m.exec(entry)?.[0];
+
+    expect(firstImport).toBe("import './config/zod-jitless-init';");
   });
 
   it('still parses objects', () => {

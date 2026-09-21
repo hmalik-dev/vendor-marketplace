@@ -8,8 +8,7 @@ import { z } from 'zod';
  * probe and parses the interpreted way, which is what a blocked probe fell
  * back to anyway.
  *
- * Called from `instrumentation-client.ts`, which runs before any client code
- * parses a schema.
+ * Called by `zod-jitless-init.ts`, the first import of `instrumentation-client.ts`.
  */
 export function disableZodJit(): void {
   z.config({ jitless: true });
