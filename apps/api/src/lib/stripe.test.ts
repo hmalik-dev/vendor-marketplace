@@ -9,6 +9,7 @@ import {
   isMissingPayoutsOnly,
   isOnboarded,
   isRefusedAccountCreation,
+  paymentIntentIdempotencyKey,
   paymentIntentParams,
   pickTransfer,
   readAccountStatusFrom,
@@ -54,6 +55,7 @@ describe('isRefusedAccountCreation', () => {
 describe('paymentIntentParams', () => {
   const INPUT = {
     requestId: 'req_one',
+    replacements: 0,
     amountCents: 145_000,
     customerId: 'cus_one',
     vendorId: 'ven_one',
@@ -89,6 +91,14 @@ describe('paymentIntentParams', () => {
     expect(isForeignEnvIntent({ metadata: { env: 'production' } }, 'staging')).toBe(true);
     expect(isForeignEnvIntent({ metadata: { env: 'staging' } }, 'staging')).toBe(false);
     expect(isForeignEnvIntent({ metadata: {} }, 'staging')).toBe(false);
+  });
+
+  /** VEN-547: the first key is the one intents were opened under before it, then one per replacement. */
+  it('keeps the first creation key and suffixes each replacement', () => {
+    expect(paymentIntentIdempotencyKey(INPUT)).toBe('pay_req_one_separate');
+    expect(paymentIntentIdempotencyKey({ requestId: 'req_one', replacements: 2 })).toBe(
+      'pay_req_one_separate_r2',
+    );
   });
 
   /** The group is what ties the charge to the transfer it eventually funds. */

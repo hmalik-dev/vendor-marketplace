@@ -73,6 +73,7 @@ import {
   findBookingByRequest,
   findPayableRequest,
   recordPaymentIntent,
+  recordReplacementIntent,
   type PayableRequestRow,
 } from './payments.dao.js';
 
@@ -310,12 +311,19 @@ export async function openCheckout(
    * cancelled intent is replaced; a `succeeded` one is returned as it is, and
    * `/confirmed` reconciles it into a booking.
    */
+  let replaced: { intentId: string; replacements: number } | null = null;
+
   if (row.stripePaymentIntentId) {
     const stored = await context.stripe.retrievePaymentIntent(row.stripePaymentIntentId);
 
     if (stored.status !== PAYMENT_INTENT_CANCELED) {
       return toCheckoutIntent(row, stored);
     }
+
+    replaced = {
+      intentId: row.stripePaymentIntentId,
+      replacements: row.paymentIntentReplacements,
+    };
   }
 
   /*
@@ -324,15 +332,25 @@ export async function openCheckout(
    * transfer — there is no point charging a customer for a booking that can
    * never be paid out — but the account itself is not needed until the release,
    * a fixed window after the event date.
+   *
+   * The replacement count is part of the key (VEN-547, D36): Stripe replays a
+   * canceled intent for the same key for 24 hours, so the intent after a
+   * cancellation is asked for under the next one. Callers racing over the same
+   * cancellation read the same count and so send the same key.
    */
   const intent = await context.stripe.createPaymentIntent({
     requestId,
+    replacements: replaced ? replaced.replacements + 1 : row.paymentIntentReplacements,
     amountCents,
     customerId: row.customerId,
     vendorId: row.vendorId,
   });
 
-  await recordPaymentIntent(context.db, requestId, intent.id);
+  if (replaced) {
+    await recordReplacementIntent(context.db, requestId, replaced, intent.id);
+  } else {
+    await recordPaymentIntent(context.db, requestId, intent.id);
+  }
 
   return toCheckoutIntent(row, intent);
 }

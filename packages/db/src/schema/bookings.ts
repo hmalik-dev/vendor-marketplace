@@ -83,6 +83,15 @@ export const bookingRequests = pgTable(
      * — there would be nothing to ask Stripe about.
      */
     stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
+    /**
+     * How many canceled intents this request has replaced (VEN-547). The
+     * creation idempotency key is built from it, so callers racing over one
+     * replacement share a key, and the replacement after a cancellation gets a
+     * new one (D36: Stripe replays a canceled intent for the same key for 24
+     * hours). Moved only together with the intent id, by compare-and-set on the
+     * canceled id, in `recordReplacementIntent`.
+     */
+    paymentIntentReplacements: integer('payment_intent_replacements').notNull().default(0),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     /**
      * Ticks or reads that held this request's expiry because its payment intent
@@ -96,6 +105,10 @@ export const bookingRequests = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check(
+      'booking_requests_payment_intent_replacements_non_negative',
+      sql`${table.paymentIntentReplacements} >= 0`,
+    ),
     check(
       'booking_requests_expiry_check_attempts_non_negative',
       sql`${table.expiryCheckAttempts} IS NULL OR ${table.expiryCheckAttempts} >= 0`,

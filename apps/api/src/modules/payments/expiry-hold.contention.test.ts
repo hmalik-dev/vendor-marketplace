@@ -85,6 +85,7 @@ describe('the expiry sweep with more unreadable intents than one batch', () => {
 
     const readable = await harness.stripe.createPaymentIntent({
       requestId: 'readable',
+      replacements: 0,
       amountCents: 145_000,
       customerId: 'cus_test',
       vendorId: 'ven_test',

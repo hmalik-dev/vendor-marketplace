@@ -222,8 +222,14 @@ export interface StripeRefundSnapshot {
 }
 
 export interface CreatePaymentIntentInput {
-  /** The accepted request being paid for. Doubles as the idempotency key. */
+  /** The accepted request being paid for. Part of the idempotency key. */
   requestId: string;
+  /**
+   * How many canceled intents this request has already replaced (VEN-547). Part
+   * of the idempotency key: Stripe replays a canceled intent for a repeated key,
+   * so the replacement has to be sent under a new one.
+   */
+  replacements: number;
   amountCents: number;
   customerId: string;
   vendorId: string;
@@ -443,6 +449,19 @@ export function refusedRefundParams(params: Stripe.RefundCreateParams): string |
   }
 
   return null;
+}
+
+/**
+ * The creation key: unchanged for a request's first intent, so an intent opened
+ * before VEN-547 still replays, and suffixed with the replacement count after
+ * that.
+ */
+export function paymentIntentIdempotencyKey(
+  input: Pick<CreatePaymentIntentInput, 'requestId' | 'replacements'>,
+): string {
+  const base = `pay_${input.requestId}_separate`;
+
+  return input.replacements === 0 ? base : `${base}_r${input.replacements}`;
 }
 
 /**
@@ -1131,7 +1150,7 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
          * after would have been answered `idempotency_error` and 500'd, on the
          * one screen where that costs a booking.
          */
-        { idempotencyKey: `pay_${input.requestId}_separate` },
+        { idempotencyKey: paymentIntentIdempotencyKey(input) },
       );
 
       return toSnapshot(intent);

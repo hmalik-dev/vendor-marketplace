@@ -1,0 +1,2 @@
+ALTER TABLE "booking_requests" ADD COLUMN "payment_intent_replacements" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "booking_requests" ADD CONSTRAINT "booking_requests_payment_intent_replacements_non_negative" CHECK ("booking_requests"."payment_intent_replacements" >= 0);
