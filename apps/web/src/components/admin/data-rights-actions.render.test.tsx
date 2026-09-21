@@ -13,12 +13,25 @@ let closeResult: WireAdminCloseAccountResult = {} as WireAdminCloseAccountResult
 /** Every request the component made, as `[path, method]`. */
 const requests: Array<[string, string | undefined]> = [];
 
-vi.mock('@/lib/use-api', () => ({
-  useApi: () => async (path: string, init?: { method?: string }) => {
-    requests.push([path, init?.method]);
-    return closeResult;
-  },
-}));
+/** Paths whose next request is refused with a step-up demand (VEN-500), once. */
+const stepUpOnce = new Set<string>();
+
+vi.mock('@/lib/use-api', async () => {
+  const { ApiClientError } = await import('@/lib/api-client');
+  const { ERROR_CODES } = await import('@vendor-marketplace/shared');
+
+  return {
+    useApi: () => async (path: string, init?: { method?: string }) => {
+      requests.push([path, init?.method]);
+
+      if (stepUpOnce.delete(path)) {
+        throw new ApiClientError(403, ERROR_CODES.STEP_UP_REQUIRED, 'Confirm it is you');
+      }
+
+      return closeResult;
+    },
+  };
+});
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const { DataRightsActions } = await import('./data-rights-actions');
@@ -39,6 +52,7 @@ const CLEAN_CLOSURE: WireAdminCloseAccountResult = {
 
 beforeEach(() => {
   requests.length = 0;
+  stepUpOnce.clear();
   closeResult = CLEAN_CLOSURE;
 });
 
@@ -387,6 +401,42 @@ describe('an unfinished unwind (VEN-478)', () => {
 
     expect(requests).toEqual([['/admin/users/33333333-3333-4333-8333-333333333333/close', 'POST']]);
     expect(screen.getByRole('alert').textContent).toContain('Stripe refused a refund');
+  });
+});
+
+describe('Finish on an unfinished unwind needs the step-up (VEN-500)', () => {
+  it('offers the code step instead of an error, and retries the ban once it is verified', async () => {
+    const ban = '/admin/users/33333333-3333-4333-8333-333333333333/ban';
+
+    closeResult = { userId: 'u', refundsFailed: 0 } as unknown as WireAdminCloseAccountResult;
+    stepUpOnce.add(ban);
+    renderActions({ isBanned: true, unwindPending: 2 });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    });
+
+    expect(requests).toEqual([[ban, 'PUT']]);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Email me a code' })).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Email me a code' }));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Six-digit code'), { target: { value: '123456' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm code' }));
+    });
+
+    expect(requests).toEqual([
+      [ban, 'PUT'],
+      ['/admin/step-up/challenge', 'POST'],
+      ['/admin/step-up/verify', 'POST'],
+      [ban, 'PUT'],
+    ]);
+    expect(screen.queryByRole('button', { name: 'Confirm code' })).toBeNull();
   });
 });
 
