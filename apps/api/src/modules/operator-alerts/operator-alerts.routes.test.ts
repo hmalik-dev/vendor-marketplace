@@ -128,6 +128,15 @@ describe('operator alerts', () => {
       })
       .returning({ id: bookings.id });
 
+    /* The intent Stripe would answer for; the webhook reads its environment tag first (VEN-529). */
+    harness.stripe.paymentIntents.set(paymentIntentId, {
+      id: paymentIntentId,
+      status: 'succeeded',
+      amountReceivedCents: TOTAL_CENTS,
+      clientSecret: null,
+      metadata: {},
+    });
+
     return { customerId, vendorProfileId, bookingId: bookingRows[0]!.id, paymentIntentId };
   }
 
@@ -477,6 +486,13 @@ describe('operator alerts', () => {
   });
 
   it('alerts when a refund on a payment with no booking later fails', async () => {
+    harness.stripe.paymentIntents.set('pi_declined_request', {
+      id: 'pi_declined_request',
+      status: 'succeeded',
+      amountReceivedCents: TOTAL_CENTS,
+      clientSecret: null,
+      metadata: {},
+    });
     harness.stripe.refunds.push({
       paymentIntentId: 'pi_declined_request',
       amountCents: TOTAL_CENTS,
@@ -499,6 +515,13 @@ describe('operator alerts', () => {
   });
 
   it('emails when a dispute names a payment intent no booking owns', async () => {
+    harness.stripe.paymentIntents.set('pi_no_booking', {
+      id: 'pi_no_booking',
+      status: 'succeeded',
+      amountReceivedCents: TOTAL_CENTS,
+      clientSecret: null,
+      metadata: {},
+    });
     const response = await deliverDispute('dp_orphan', 'pi_no_booking');
 
     expect(response.json().outcome).toBe('ignored');

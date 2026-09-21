@@ -20,7 +20,7 @@ import { withRequestIdentity } from '@vendor-marketplace/db';
 import type { BookingRow, SupportCaseRow } from '@vendor-marketplace/db/schema';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
-import type { StripeDisputeSnapshot } from '../../lib/stripe.js';
+import { isForeignEnvPaymentIntent, type StripeDisputeSnapshot } from '../../lib/stripe.js';
 import { AppError, conflict, forbidden, notFound } from '../../lib/errors.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
 import { fullName } from '../admin/admin.service.js';
@@ -281,6 +281,8 @@ export interface ChargebackDeps extends CaseDeps {
   bookings: BookingContext;
   /** Told of a dispute that matches no booking; absent in a suite that does not care. */
   alerts?: OperatorAlerts;
+  /** `DEPLOY_ENV`: a dispute on another deployment's charge is not this operator's to hear of. */
+  deployEnv: string;
 }
 
 /**
@@ -379,6 +381,21 @@ export async function openChargebackCase(
   const dispute = await retrieve();
 
   if (!dispute.paymentIntentId) {
+    return 'ignored';
+  }
+
+  /*
+   * Before the lookup, not inside its miss (VEN-529): a staging database
+   * branched from production holds production's payment intent ids, so the
+   * other deployment's chargeback would match a copied booking here.
+   */
+  if (
+    await isForeignEnvPaymentIntent(deps.bookings.stripe, dispute.paymentIntentId, deps.deployEnv)
+  ) {
+    deps.log.info(
+      { disputeId, paymentIntentId: dispute.paymentIntentId },
+      'Ignored a dispute on a payment intent created by another deployment',
+    );
     return 'ignored';
   }
 
