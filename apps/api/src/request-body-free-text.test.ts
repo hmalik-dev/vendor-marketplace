@@ -235,10 +235,11 @@ describe('free text on a request body', () => {
     // an enum and an email.
     // 35 since VEN-500 added `adminStepUpVerifySchema`, a six-digit code.
     // 36 since VEN-462 added `throttleChargeSchema`, an opaque printable-ASCII key and two numbers.
+    // 37 since VEN-475 added `adminExportAuditSchema`.
     //
     // A merge is where this number goes wrong: two lanes each add to 23 and a
     // both-sides union keeps one of the answers rather than the sum.
-    expect(names).toHaveLength(36);
+    expect(names).toHaveLength(37);
     expect(names).toContain('reorderCategoriesSchema');
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');

@@ -519,6 +519,13 @@
       "when": 1790000770455,
       "tag": "0073_tense_fenris",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1790003437756,
+      "tag": "0074_gifted_iron_lad",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import {
 import {
   ADMIN_ACTION_SUBJECTS,
   ADMIN_ACTIONS,
+  ADMIN_EXPORTS,
   ADMIN_ACTIVITY_RANGES,
   ADMIN_AVAILABILITY_LOCK_STATUSES,
   ADMIN_NOTIFICATION_RECIPIENTS,
@@ -3048,6 +3049,15 @@ export const adminActionDetailSchema = z.record(
   z.union([z.string(), z.number(), z.boolean(), z.null()]),
 );
 export type AdminActionDetail = z.infer<typeof adminActionDetailSchema>;
+
+/** What the web tier reports after it has walked an export (VEN-475). */
+export const adminExportAuditSchema = z.object({
+  export: z.enum(ADMIN_EXPORTS),
+  /** The narrowed filters as a query string, e.g. `?status=live`. */
+  filters: freeText().max(500),
+  rowCount: z.number().int().min(0).max(1_000_000),
+});
+export type AdminExportAudit = z.infer<typeof adminExportAuditSchema>;
 
 /** One row of `/admin/activity`. */
 export const adminActivityRowSchema = z.object({
