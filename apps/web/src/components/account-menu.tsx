@@ -55,7 +55,7 @@ export interface AccountMenuProps {
  * 44px rows inset in a 6px-padded panel, highlight carried by the fill.
  */
 const ITEM_CLASS =
-  'flex h-11 w-full cursor-pointer items-center rounded-md px-3 text-left text-meta font-semibold text-stone-900 outline-none select-none data-[highlighted]:bg-stone-150';
+  'flex h-11 w-full cursor-pointer items-center rounded-md px-3 text-left text-meta font-semibold text-stone-900 outline-none select-none data-[highlighted]:bg-stone-150 data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-clay-400';
 
 export function AccountMenu({
   name,

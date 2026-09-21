@@ -56,6 +56,9 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
     setFailure(outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.signInFailed);
   }
 
+  // A network failure says nothing about what the reader typed, so only a refusal marks the fields.
+  const credentialsRefused = failure !== null && failure !== AUTH_COPY.unreachable;
+
   if (verifying) {
     return (
       <VerifyEmailStep
@@ -70,7 +73,7 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
   return (
     <form onSubmit={submit} noValidate className="flex flex-col">
       {failure ? (
-        <Banner status="failed" className="mb-4">
+        <Banner status="failed" role="alert" className="mb-4">
           {failure}
         </Banner>
       ) : null}
@@ -81,6 +84,7 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
         placeholder="you@example.com"
         name="email"
         autoComplete="email"
+        aria-invalid={credentialsRefused ? true : undefined}
         required
         value={email}
         onChange={(event) => setEmail(event.target.value)}
@@ -91,22 +95,28 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
         placeholder="••••••••••"
         name="password"
         autoComplete="current-password"
+        aria-invalid={credentialsRefused ? true : undefined}
         required
         value={password}
         onChange={(event) => setPassword(event.target.value)}
       />
       <Link
         href="/forgot-password"
-        className="-mt-2 mb-4 self-end text-cta font-semibold text-clay-500 hover:underline"
+        className="-mt-2 mb-2 inline-flex min-h-11 items-center self-end text-cta font-semibold text-clay-500 hover:underline"
       >
         {AUTH_COPY.forgotLink}
       </Link>
 
-      <Button type="submit" loading={busy} disabled={email.trim() === '' || password === ''}>
+      <Button
+        type="submit"
+        className="py-3.25"
+        loading={busy}
+        disabled={email.trim() === '' || password === ''}
+      >
         {AUTH_COPY.signInSubmit}
       </Button>
 
-      <p className="mt-5 text-center text-cta text-stone-700">
+      <p className="mt-5 text-center text-action text-stone-700">
         {AUTH_COPY.signInAlt}{' '}
         <Link href="/sign-up" className="font-semibold text-clay-500 hover:underline">
           Create an account

@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import {
   MAX_EMAIL_FAILURE_REASON_LENGTH,
+  MAX_BUSINESS_NAME_LENGTH,
   MAX_EMAIL_LENGTH,
   MAX_NAME_LENGTH,
   VENDOR_APPLICATION_STATUSES,
@@ -66,6 +67,8 @@ export const vendorInvites = pgTable(
   },
   (table) => [
     uniqueIndex('vendor_invites_email_key').on(table.email),
+    /* A user delete finds the invites naming it through this, not a scan (VEN-463). */
+    index('vendor_invites_invited_by_idx').on(table.invitedBy),
     check('vendor_invites_email_lowercase', sql`${table.email} = lower(${table.email})`),
   ],
 ).enableRLS();
@@ -79,7 +82,7 @@ export const vendorApplications = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     email: varchar('email', { length: MAX_EMAIL_LENGTH }).notNull(),
-    businessName: varchar('business_name', { length: MAX_NAME_LENGTH }).notNull(),
+    businessName: varchar('business_name', { length: MAX_BUSINESS_NAME_LENGTH }).notNull(),
     category: varchar('category', { length: MAX_NAME_LENGTH }).notNull(),
     city: varchar('city', { length: MAX_NAME_LENGTH }).notNull(),
     message: text('message').notNull(),

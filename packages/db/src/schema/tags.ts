@@ -104,6 +104,8 @@ export const tagSuggestions = pgTable(
     // Admin review queue: oldest pending suggestions first (ticket #15).
     index('tag_suggestions_status_created_at_idx').on(table.status, table.createdAt),
     index('tag_suggestions_vendor_id_idx').on(table.vendorId),
+    /* A tag delete finds the suggestions resolved to it through this, not a scan (VEN-463). */
+    index('tag_suggestions_resolved_tag_idx').on(table.resolvedTagId),
     /*
      * One pending row per idea, enforced by the database rather than by a read
      * (#399).

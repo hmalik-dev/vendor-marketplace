@@ -12,6 +12,26 @@ import type { AuthProvider, LegalAcceptanceDocument } from '@vendor-marketplace/
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import type { AppDatabase } from '../../lib/database.js';
 
+/** What a retirement reports: the retired row, or what stood in the way of it. */
+export type RetireOutcome<B> = { user: UserRow; profileRetired: boolean } | { blocked: B[] };
+
+/** Read inside the retirement's transaction, under the row lock, so it cannot go stale. */
+export type RetirementBlockers<B> = (tx: AppDatabase) => Promise<B[]>;
+
+/**
+ * Written inside the retirement's transaction once the row is retired, so a
+ * failure rolls the retirement back (VEN-463). Receives what the retirement did.
+ */
+export type RetirementAudit = (
+  tx: AppDatabase,
+  outcome: { profileRetired: boolean },
+) => Promise<void>;
+
+interface RetirementGuard<B> {
+  userId: string;
+  blockersOf: RetirementBlockers<B>;
+}
+
 /** Live users only — an auth-deleted identity must not resolve to a session. */
 const notDeleted = isNull(users.deletedAt);
 
@@ -523,7 +543,7 @@ export async function retireUserByAuthId(
 
   const retired = await retireUserWhere(db, and(eq(users.authUserId, authUserId), notDeleted));
 
-  return retired?.user ?? null;
+  return retired && 'user' in retired ? retired.user : null;
 }
 
 /**
@@ -539,15 +559,23 @@ export async function retireUserByAuthId(
  * It reports whether a storefront actually came down, which the auth path has
  * no response to put anywhere and the console's does.
  */
-export async function retireUserById(
+export async function retireUserById<B>(
   db: AppDatabase,
   userId: string,
-): Promise<{ user: UserRow; profileRetired: boolean } | null> {
+  blockersOf?: RetirementBlockers<B>,
+  audit?: RetirementAudit,
+): Promise<RetireOutcome<B> | null> {
   if (!userId) {
     return null;
   }
 
-  return retireUserWhere(db, and(eq(users.id, userId), notDeleted));
+  return retireUserWhere(
+    db,
+    and(eq(users.id, userId), notDeleted),
+    undefined,
+    blockersOf && { userId, blockersOf },
+    audit,
+  );
 }
 
 /**
@@ -592,10 +620,12 @@ export const OPERATOR_RETIREMENT_LOCK = sql`select pg_advisory_xact_lock(hashtex
  * the second retirement start its statement after the first has committed, so
  * its snapshot sees one live operator fewer.
  */
-export async function retireOperatorById(
+export async function retireOperatorById<B>(
   db: AppDatabase,
   userId: string,
-): Promise<{ user: UserRow; profileRetired: boolean } | 'last-operator' | null> {
+  blockersOf?: RetirementBlockers<B>,
+  audit?: RetirementAudit,
+): Promise<RetireOutcome<B> | 'last-operator' | null> {
   const other = alias(users, 'other_operator');
   const retired = await retireUserWhere(
     db,
@@ -610,6 +640,8 @@ export async function retireOperatorById(
       ),
     ),
     OPERATOR_RETIREMENT_LOCK,
+    blockersOf && { userId, blockersOf },
+    audit,
   );
 
   if (retired) {
@@ -693,12 +725,14 @@ export async function banOperatorById(
  * and only the one whose UPDATE matches a row does the work. That is what makes
  * a redelivered `user.deleted` a no-op rather than a second unwind.
  */
-async function retireUserWhere(
+async function retireUserWhere<B>(
   db: AppDatabase,
   where: SQL | undefined,
   lock?: SQL,
-): Promise<{ user: UserRow; profileRetired: boolean } | null> {
-  const retired = await retireUserInTransaction(db, where, lock);
+  guard?: RetirementGuard<B>,
+  audit?: RetirementAudit,
+): Promise<RetireOutcome<B> | null> {
+  const retired = await retireUserInTransaction(db, where, lock, guard, audit);
 
   /*
    * A retired row's address leaves `users_email_key`, so it is released as
@@ -707,21 +741,45 @@ async function retireUserWhere(
    * (VEN-386). After the commit, not inside it: a 23505 there would abort the
    * retirement itself.
    */
-  if (retired) {
+  if (retired && 'user' in retired) {
     await handAddressToWaiter(db, retired.user.email);
   }
 
   return retired;
 }
 
-async function retireUserInTransaction(
+async function retireUserInTransaction<B>(
   db: AppDatabase,
   where: SQL | undefined,
   lock?: SQL,
-): Promise<{ user: UserRow; profileRetired: boolean } | null> {
+  guard?: RetirementGuard<B>,
+  audit?: RetirementAudit,
+): Promise<RetireOutcome<B> | null> {
   return db.transaction(async (tx) => {
     if (lock) {
       await tx.execute(lock);
+    }
+
+    if (guard) {
+      /*
+       * `FOR UPDATE`, not the retirement's own row lock: the `UPDATE` below
+       * takes `FOR NO KEY UPDATE`, which a concurrent booking insert's
+       * `FOR KEY SHARE` on this row (its `customer_id` foreign key) does not
+       * conflict with. `FOR UPDATE` does, so a booking being confirmed either
+       * commits before the blockers are read or waits behind this retirement
+       * (VEN-483).
+       */
+      await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.id, guard.userId), notDeleted))
+        .for('update');
+
+      const blocked = await guard.blockersOf(tx);
+
+      if (blocked.length > 0) {
+        return { blocked };
+      }
     }
 
     const updated = await tx
@@ -742,7 +800,11 @@ async function retireUserInTransaction(
       .where(eq(vendorProfiles.userId, row.id))
       .returning({ id: vendorProfiles.id });
 
-    return { user: row, profileRetired: profiles.length > 0 };
+    const profileRetired = profiles.length > 0;
+
+    await audit?.(tx, { profileRetired });
+
+    return { user: row, profileRetired };
   });
 }
 

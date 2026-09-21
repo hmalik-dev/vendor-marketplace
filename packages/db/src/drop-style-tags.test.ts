@@ -127,6 +127,15 @@ describe('the pending journal applied in a single transaction, as the migrator d
       expect(ENTRIES[split - 1]?.tag.startsWith(DEPLOYED_THROUGH)).toBe(true);
       expect(ENTRIES.length).toBeGreaterThan(split);
 
+      // The migrator creates its bookkeeping table before it applies anything;
+      // 0077 grants on it, so a replay by hand has to have it too.
+      await fresh.db.execute(sql.raw('CREATE SCHEMA IF NOT EXISTS "drizzle"'));
+      await fresh.db.execute(
+        sql.raw(
+          'CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)',
+        ),
+      );
+
       for (const entry of ENTRIES.slice(0, split)) {
         for (const statement of statementsOf(entry.tag)) {
           await fresh.db.execute(sql.raw(statement));

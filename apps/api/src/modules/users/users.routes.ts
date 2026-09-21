@@ -1,6 +1,6 @@
 import { updateUserSchema, userSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuth } from '../../lib/guards.js';
+import { authenticated, requireAuth, requireAuthBeforeValidation } from '../../lib/guards.js';
 import { getUserProfile, updateUserProfile } from './users.service.js';
 
 export const userRoutes: FastifyPluginAsyncZod = async (app) => {
@@ -13,7 +13,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put(
     '/users/me',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { body: updateUserSchema, response: { 200: userSchema } },
     },
     async (request) => updateUserProfile(app.db, authenticated(request.auth).id, request.body),

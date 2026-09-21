@@ -7,6 +7,7 @@ settings:
 overrides:
   next>postcss: 8.5.28
   cosmiconfig>js-yaml: 4.3.2
+  '@eslint/eslintrc>js-yaml': 4.3.2
   metro>image-size: 2.0.4
   qs: '>=6.16.0'
   esbuild: '>=0.25.0'
@@ -85,7 +86,7 @@ importers:
         specifier: ^0.35.4
         version: 0.35.4(@types/node@24.13.3)
       stripe:
-        specifier: ^22.6.0
+        specifier: 22.6.0
         version: 22.6.0(@types/node@24.13.3)
       svix:
         specifier: 2.1.0
@@ -5404,10 +5405,6 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  js-yaml@4.3.1:
-    resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
-    hasBin: true
-
   js-yaml@4.3.2:
     resolution: {integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==}
     hasBin: true
@@ -8033,7 +8030,7 @@ snapshots:
       globals: 14.0.0
       ignore: 5.3.2
       import-fresh: 3.3.1
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       minimatch: 3.1.5
       strip-json-comments: 3.1.1
     transitivePeerDependencies:
@@ -12379,10 +12376,6 @@ snapshots:
   joycon@3.1.1: {}
 
   js-tokens@4.0.0: {}
-
-  js-yaml@4.3.1:
-    dependencies:
-      argparse: 2.0.1
 
   js-yaml@4.3.2:
     dependencies:

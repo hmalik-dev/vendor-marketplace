@@ -1,4 +1,4 @@
-import type { AuthProvider } from '@vendor-marketplace/shared';
+import { MAX_URL_LENGTH, type AuthProvider } from '@vendor-marketplace/shared';
 import type { NeonAuthDirectory, NeonAuthIdentity } from '@vendor-marketplace/db';
 import { mirroredAuthName, splitAuthName } from '../users/users.service.js';
 
@@ -37,7 +37,7 @@ export function mirroredIdentity(identity: NeonAuthIdentity): MirroredIdentity {
     // Normalised here, not only at the write, so the drift check compares what the write would store.
     firstName: mirroredAuthName(firstName) === '' ? null : mirroredAuthName(firstName),
     lastName: mirroredAuthName(lastName) === '' ? null : mirroredAuthName(lastName),
-    avatarUrl: identity.image,
+    avatarUrl: providerAvatarUrl(identity.image),
   };
 }
 
@@ -66,4 +66,38 @@ export function isUnbackedIdentity(authProvider: AuthProvider): boolean {
  */
 export function isProviderAvatar(avatarUrl: string | null): boolean {
   return avatarUrl === null || /^https?:\/\//i.test(avatarUrl);
+}
+
+/**
+ * The avatar an identity provider hands us, or `null` when it is not one we
+ * will store (VEN-538). A signed-in user can set their own `image` to anything,
+ * so it is checked before it becomes a row: an absolute http(s) URL, no
+ * credentials, no control characters, at most `MAX_URL_LENGTH`. Null means "no
+ * opinion", so a bad value never blanks an existing avatar either.
+ */
+export function providerAvatarUrl(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  if (
+    trimmed === '' ||
+    trimmed.length > MAX_URL_LENGTH ||
+    // eslint-disable-next-line no-control-regex -- control characters are exactly what is refused
+    /[\u0000-\u001f\u007f\\]/.test(trimmed)
+  ) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    // `https:/x` parses as a URL but is not one `isProviderAvatar` recognises, so the stored row would read as an upload.
+    const isWeb = /^https?:\/\//i.test(trimmed);
+
+    return isWeb && url.username === '' && url.password === '' ? trimmed : null;
+  } catch {
+    return null;
+  }
 }

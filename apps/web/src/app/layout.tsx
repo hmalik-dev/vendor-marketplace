@@ -147,7 +147,8 @@ export default async function RootLayout({
           </PublicChrome>
         </NuqsAdapter>
         {/*
-            Bottom-right, 5s dismiss, per design/design-plan/03-components.md.
+            Bottom-right, 8s dismiss (VEN-542, WCAG 2.2.1: 03-components.md's 5s
+            was too short for a toast that is the only error message).
             `richColors` is deliberately absent: it fills the whole toast with
             a tint per type, where the spec puts the type in a 4px left accent
             on a `stone-0` surface.
@@ -158,7 +159,7 @@ export default async function RootLayout({
             `elementFromPoint` on the button centre returned the toast. sonner
             pauses its dismiss timer on hover and the pointer is still resting
             where it clicked, so the control was unreachable for 30 seconds
-            rather than 5.
+            rather than a few.
 
             **`bottom` only, and `mobileOffset` as well as `offset`.** A scalar
             is written to all four sides, which would move every toast in from
@@ -169,7 +170,7 @@ export default async function RootLayout({
           */}
         <Toaster
           position="bottom-right"
-          duration={5000}
+          duration={8000}
           offset={{ bottom: TOAST_BOTTOM_OFFSET }}
           mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
         />

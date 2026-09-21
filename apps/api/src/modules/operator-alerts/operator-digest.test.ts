@@ -108,7 +108,7 @@ describe('the operator digest (VEN-405)', () => {
         customerId: customer!.id,
         vendorId: vendor!.id,
         eventDate: '2026-10-01',
-        totalAmountCents: 0,
+        totalAmountCents: 10_000,
         platformFeeCents: 0,
         vendorPayoutCents: 0,
         ...values,
@@ -128,6 +128,7 @@ describe('the operator digest (VEN-405)', () => {
     await booking(
       await request({ eventDate: '2026-10-02', status: 'accepted', createdAt: LONG_AGO }),
       {
+        eventDate: '2026-10-02',
         totalAmountCents: 45_050,
         vendorPayoutCents: 39_644,
         paidAt: ago(6),

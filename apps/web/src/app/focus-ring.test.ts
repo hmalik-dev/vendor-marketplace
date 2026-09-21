@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
  * The law is `design/design-plan/03-components.md` § Inputs, restated in
  * `04-laws.md`: **three** focus treatments chosen by what the element already
  * has, never mixed. The base rule in `globals.css` is the *unbordered control*
- * one — `ring-2 ring-clay-400/40 ring-offset-2 ring-offset-stone-50` — and
+ * one — `ring-2 ring-clay-400 ring-offset-2 ring-offset-stone-50` — and
  * both files state `/40`. It was `/30` here and in every hand-rolled copy of it
  * until #383; the two plan files already agreed, and the code was the outlier,
  * so nothing in the plan moved.
@@ -25,7 +25,7 @@ import { describe, expect, it } from 'vitest';
 const globalsCss = readFileSync(join(process.cwd(), 'src/app/globals.css'), 'utf8');
 
 /** The unbordered treatment: the four utilities the law names, in its order. */
-const RING = ['ring-2', 'ring-clay-400/40', 'ring-offset-2', 'ring-offset-stone-50'] as const;
+const RING = ['ring-2', 'ring-clay-400', 'ring-offset-2', 'ring-offset-stone-50'] as const;
 
 function ruleFor(selector: string): string {
   const match = globalsCss.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`));
@@ -91,6 +91,6 @@ describe('the product’s focus ring reaches every control', () => {
 
     expect(form).toContain('has-focus-visible:ring-offset-stone-50');
     // And at the law's opacity, like every other copy of this treatment.
-    expect(form).toContain('has-focus-visible:ring-clay-400/40');
+    expect(form).toContain('has-focus-visible:ring-clay-400');
   });
 });

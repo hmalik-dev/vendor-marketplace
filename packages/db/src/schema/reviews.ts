@@ -46,6 +46,8 @@ export const reviews = pgTable(
     // One review per user per booking — the race guard for concurrent submits.
     uniqueIndex('reviews_booking_reviewer_key').on(table.bookingId, table.reviewerId),
     index('reviews_booking_idx').on(table.bookingId),
+    // The unique index above leads with booking_id; a user delete scans by reviewer alone.
+    index('reviews_reviewer_idx').on(table.reviewerId),
     // Public vendor reviews only; vendor_to_customer reviews stay private.
     index('reviews_vendor_public_idx')
       .on(table.vendorId, table.createdAt)
@@ -85,5 +87,9 @@ export const reviewTombstones = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.bookingId, table.reviewerId] })],
+  (table) => [
+    primaryKey({ columns: [table.bookingId, table.reviewerId] }),
+    // The primary key leads with booking_id; a user delete scans by reviewer alone.
+    index('review_tombstones_reviewer_idx').on(table.reviewerId),
+  ],
 ).enableRLS();

@@ -62,7 +62,7 @@ import { containsInsensitive } from '../../lib/like-pattern.js';
  * the same rows the transfer names, or the number an operator acts on describes
  * a set the sweep does not work.
  */
-import { payoutFailingClauses } from '../payments/payouts.dao.js';
+import { payoutFailingClauses, payoutResidualHeld } from '../payments/payouts.dao.js';
 
 /**
  * Every read and write the admin portal makes. Policy lives in the service; this
@@ -1026,6 +1026,7 @@ function bookingSelection() {
     payoutReleasedAt: bookings.payoutReleasedAt,
     payoutAttempts: bookings.payoutAttempts,
     payoutFailureReason: bookings.payoutFailureReason,
+    residualHeld: payoutResidualHeld(),
     vendorUnpayable: sql<boolean>`(${vendorOwner.isBanned} or ${vendorOwner.deletedAt} is not null)`,
     paidAt: bookings.paidAt,
     customerFirstName: users.firstName,
@@ -1852,6 +1853,33 @@ export interface AdminActionRecord {
    * people. `admin-actions.ts` carries the full rule.
    */
   detail: AdminActionDetail;
+  /** The application clock's instant, for a caller whose dedupe window reads it. */
+  createdAt?: Date;
+}
+
+/**
+ * Whether this operator already has a read row for the subject and surface
+ * since `since` (VEN-475).
+ */
+export async function hasRecentAdminRead(
+  db: AppDatabase,
+  read: { actorId: string; subjectId: string; surface: string; since: Date },
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: adminActions.id })
+    .from(adminActions)
+    .where(
+      and(
+        eq(adminActions.actorId, read.actorId),
+        eq(adminActions.action, 'admin_data_read'),
+        eq(adminActions.subjectId, read.subjectId),
+        sql`${adminActions.detail}->>'surface' = ${read.surface}`,
+        gte(adminActions.createdAt, read.since),
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
 }
 
 /**
@@ -2003,4 +2031,29 @@ export async function findAdminActionActors(
     .from(adminActions)
     .innerJoin(users, eq(users.id, adminActions.actorId))
     .orderBy(asc(users.firstName), asc(users.lastName), asc(users.id));
+}
+
+/**
+ * Bans and closures one operator has completed since `since`, for the hourly
+ * ceiling (VEN-500). Reads the audit log, so the count is the record itself
+ * rather than a second counter that could drift from it.
+ */
+export async function countAdminActionsSince(
+  db: AppDatabase,
+  actorId: string,
+  actions: readonly (typeof adminActions.$inferSelect.action)[],
+  since: Date,
+): Promise<number> {
+  const rows = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(adminActions)
+    .where(
+      and(
+        eq(adminActions.actorId, actorId),
+        inArray(adminActions.action, [...actions]),
+        gte(adminActions.createdAt, since),
+      ),
+    );
+
+  return rows?.[0]?.total ?? 0;
 }

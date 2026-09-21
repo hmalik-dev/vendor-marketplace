@@ -6,7 +6,43 @@ import {
   MAX_UPLOAD_BYTES,
   MIN_UPLOAD_IMAGE_WIDTH,
 } from '@vendor-marketplace/shared';
-import { MAIN_IMAGE_MAX_EDGE, processUploadedImage, THUMBNAIL_EDGE } from './images.js';
+import { crc32 } from 'node:zlib';
+import {
+  MAIN_IMAGE_MAX_EDGE,
+  MAX_INPUT_PIXELS,
+  processUploadedImage,
+  THUMBNAIL_EDGE,
+} from './images.js';
+
+/**
+ * A PNG that is a valid signature and IHDR declaring `width` x `height`, padded
+ * to `totalBytes`. Nothing after the header is decodable pixel data, so a
+ * refusal that comes from the header alone is provably "before decode".
+ */
+function pngDeclaring(width: number, height: number, totalBytes: number): Buffer {
+  const ihdrData = Buffer.alloc(13);
+  ihdrData.writeUInt32BE(width, 0);
+  ihdrData.writeUInt32BE(height, 4);
+  ihdrData[8] = 8; // bit depth
+  ihdrData[9] = 2; // RGB
+  const type = Buffer.from('IHDR');
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(ihdrData.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([type, ihdrData])));
+  const header = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    length,
+    type,
+    ihdrData,
+    crc,
+  ]);
+  // libvips reads the header only once the first IDAT chunk starts.
+  const idatLength = Buffer.alloc(4);
+  const idatBytes = totalBytes - header.length - idatLength.length - 4;
+  idatLength.writeUInt32BE(idatBytes);
+  return Buffer.concat([header, idatLength, Buffer.from('IDAT'), Buffer.alloc(idatBytes)]);
+}
 
 /** A solid-colour JPEG of the requested size, with an EXIF block attached. */
 async function jpeg(width: number, height: number): Promise<Buffer> {
@@ -199,6 +235,44 @@ describe('processUploadedImage', () => {
       // Rotated upright: the long stored side is now the width.
       expect(meta.width).toBe(MIN_UPLOAD_IMAGE_WIDTH + 400);
       expect(meta.height).toBe(MIN_UPLOAD_IMAGE_WIDTH - 200);
+    });
+  });
+});
+
+describe('input pixel limit', () => {
+  it('refuses a 12 MB PNG declaring more pixels than the limit', async () => {
+    const side = Math.ceil(Math.sqrt(MAX_INPUT_PIXELS)) + 1;
+    const bomb = pngDeclaring(side, side, MAX_UPLOAD_BYTES);
+
+    await expect(processUploadedImage(bomb, 'image/png')).rejects.toMatchObject({
+      statusCode: 400,
+      message: expect.stringMatching(/megapixels/),
+    });
+  });
+
+  it('accepts an image exactly at the limit', async () => {
+    const png = await sharp({
+      create: {
+        width: MAX_INPUT_PIXELS / 1_000,
+        height: 1_000,
+        channels: 3,
+        background: { r: 1, g: 2, b: 3 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    await expect(processUploadedImage(png, 'image/png')).resolves.toBeDefined();
+  });
+});
+
+describe('an undecodable file', () => {
+  it('is refused with the read-failure message rather than passed through', async () => {
+    await expect(
+      processUploadedImage(Buffer.from('not an image at all'), 'image/jpeg'),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'That file could not be read as an image.',
     });
   });
 });

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."operator_alert_kind" ADD VALUE 'auth_identity_deleted' BEFORE 'daily_digest';

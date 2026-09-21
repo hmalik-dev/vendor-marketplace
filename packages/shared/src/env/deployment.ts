@@ -127,11 +127,6 @@ const PLATFORMS: readonly {
     hosts: ['VERCEL_PROJECT_PRODUCTION_URL', 'VERCEL_URL'],
   },
   {
-    platform: 'Render',
-    markers: ['RENDER', 'RENDER_EXTERNAL_URL'],
-    hosts: ['RENDER_EXTERNAL_URL'],
-  },
-  {
     platform: 'Railway',
     markers: ['RAILWAY_PUBLIC_DOMAIN', 'RAILWAY_ENVIRONMENT'],
     hosts: ['RAILWAY_PUBLIC_DOMAIN'],

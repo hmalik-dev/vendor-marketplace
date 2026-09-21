@@ -1,5 +1,6 @@
 import { eq, sql, type SQL } from 'drizzle-orm';
 import { vendorProfiles } from '@vendor-marketplace/db/schema';
+import type { VendorAvailability } from '@vendor-marketplace/shared';
 
 /**
  * The owner of this storefront still has an account (#433).
@@ -71,3 +72,30 @@ export const VENDOR_VISIBLE: SQL = sql`${eq(vendorProfiles.isPublished, true)}
   AND ${eq(vendorProfiles.isDeleted, false)}
   AND ${OWNER_NOT_DELETED}
   AND ${OWNER_NOT_BANNED}`;
+
+/**
+ * A storefront a customer may still be sold to (VEN-556): visible, and not on an
+ * operator's moderation hold.
+ *
+ * Read at accept and checkout, where a vendor pulled after the request was made
+ * must not take the booking or the money. Not folded into `VENDOR_VISIBLE`,
+ * whose readers are public reads that have never consulted `moderation_hold`.
+ */
+export const VENDOR_SELLABLE: SQL = sql`${VENDOR_VISIBLE}
+  AND ${eq(vendorProfiles.moderationHold, false)}`;
+
+/**
+ * A storefront no customer can ever be sold to again (VEN-559): retired, or
+ * owned by an account that is banned or deleted. Separate from a pause, which is
+ * reversible and gets different copy.
+ */
+export const VENDOR_CLOSED: SQL = sql`(${eq(vendorProfiles.isDeleted, true)}
+  OR NOT ${OWNER_NOT_DELETED}
+  OR NOT ${OWNER_NOT_BANNED})`;
+
+/** `closed` before `paused`: a ban unpublishes too, and the permanent reading wins. */
+export const VENDOR_AVAILABILITY: SQL<VendorAvailability> = sql<VendorAvailability>`CASE
+  WHEN ${VENDOR_CLOSED} THEN 'closed'
+  WHEN NOT (${VENDOR_SELLABLE}) THEN 'paused'
+  ELSE 'available'
+END`;

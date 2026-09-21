@@ -9,7 +9,11 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuth, requireRoleBeforeValidation } from '../../lib/guards.js';
+import {
+  authenticated,
+  requireAuthBeforeValidation,
+  requireRoleBeforeValidation,
+} from '../../lib/guards.js';
 import { perAccountRateLimit } from '../../lib/rate-limit.js';
 import type { NotificationEmailDeps } from '../notifications/notification-email.js';
 import {
@@ -18,7 +22,9 @@ import {
   listBookingRequests,
   listBookings,
   transitionRequest,
+  type ExpiryPaymentGuard,
 } from './booking-requests.service.js';
+import { bookingContextFor, expiryGuardFor } from '../payments/payments.service.js';
 
 const REQUESTS_PATH = '/booking-requests';
 
@@ -39,6 +45,8 @@ export interface BookingRequestRoutesOptions {
    * a URL from it for exactly this reason.
    */
   webOrigin: string;
+  /** `STRIPE_PLATFORM_FEE_RATE`: a read that expires a request books a payment made in time first. */
+  platformFeeRate: number;
 }
 
 export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOptions> = async (
@@ -51,6 +59,12 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
    * never `BRAND_DOMAIN`, which is the domain the product will live on rather
    * than the one this deployment answers on.
    */
+  const guardFor = (log: NotificationEmailDeps['log']): ExpiryPaymentGuard =>
+    expiryGuardFor({
+      ...bookingContextFor(app, log, options.webOrigin),
+      platformFeeRate: options.platformFeeRate,
+    });
+
   const mailFor = (log: NotificationEmailDeps['log']): NotificationEmailDeps => ({
     db: app.db,
     email: app.email,
@@ -63,7 +77,9 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
     REQUESTS_PATH,
     {
       /*
-       * `onRequest`, not `preHandler` — the stage that runs before Fastify's
+       * `preParsing`, not `preHandler` (nor `onRequest`, which would run ahead of
+       * this route's limiter and refuse signed-out callers uncounted) — the stage
+       * that runs before Fastify's
        * own body parser and before schema validation. A vendor posting a
        * malformed body here got `400 VALIDATION_ERROR`: they were still denied,
        * because no handler below ever ran, but the status code reads like a
@@ -71,7 +87,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
        * signed-in vendor while verifying #412's storefront CTA gate — a
        * well-formed body already answered 403, so only the code was wrong.
        */
-      onRequest: requireRoleBeforeValidation('customer'),
+      preParsing: requireRoleBeforeValidation('customer'),
       config: { rateLimit: perAccountRateLimit(options.rateLimitMax, '1 hour') },
       schema: {
         body: createBookingRequestSchema,
@@ -108,7 +124,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
   app.get(
     REQUESTS_PATH,
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { querystring: bookingRequestListQuerySchema, response: { 200: requestListSchema } },
     },
     async (request) =>
@@ -118,13 +134,14 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
         request.query,
         app.clock(),
         mailFor(request.log),
+        guardFor(request.log),
       ),
   );
 
   app.get(
     `${REQUESTS_PATH}/:requestId`,
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { params: requestParamsSchema, response: { 200: bookingRequestDetailSchema } },
     },
     async (request) =>
@@ -134,6 +151,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
         request.params.requestId,
         app.clock(),
         mailFor(request.log),
+        guardFor(request.log),
       ),
   );
 
@@ -153,6 +171,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
         quote: request.body,
         hub: app.events,
         mail: mailFor(request.log),
+        guard: guardFor(request.log),
       }),
   );
 
@@ -165,7 +184,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
     app.post(
       `${REQUESTS_PATH}/:requestId/${action}`,
       {
-        preHandler: requireAuth,
+        onRequest: requireAuthBeforeValidation,
         schema: { params: requestParamsSchema, response: { 200: bookingRequestDetailSchema } },
       },
       async (request) =>
@@ -173,6 +192,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
           now: app.clock(),
           hub: app.events,
           mail: mailFor(request.log),
+          guard: guardFor(request.log),
         }),
     );
   }
@@ -180,7 +200,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
   app.get(
     '/bookings',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: {
         querystring: historyPageQuerySchema,
         response: { 200: z.array(bookingWithContextSchema) },

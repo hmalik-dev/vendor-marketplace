@@ -231,7 +231,7 @@ describe('/users/me', () => {
       });
 
       expect(response.statusCode).toBe(403);
-      expect(response.json().error).toBe('FORBIDDEN');
+      expect(response.json().error).toBe('ACCOUNT_SUSPENDED');
     });
   });
 
@@ -254,6 +254,88 @@ describe('/users/me', () => {
 
       return row!.id;
     }
+
+    it('refuses a minimum guest count above the stored maximum (VEN-544)', async () => {
+      await signIn(CUSTOMER_AUTH_ID);
+      const stored = await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+        payload: { typicalGuestCountMin: 10, typicalGuestCountMax: 100 },
+      });
+      expect(stored.statusCode).toBe(200);
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+        payload: { typicalGuestCountMin: 500 },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().message).toBe(
+        'Minimum guest count must not exceed maximum guest count',
+      );
+
+      const reloaded = await harness.app.inject({
+        method: 'GET',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+      });
+      expect(reloaded.json()).toMatchObject({
+        typicalGuestCountMin: 10,
+        typicalGuestCountMax: 100,
+      });
+    });
+
+    it('refuses a maximum guest count below the stored minimum (VEN-544)', async () => {
+      await signIn(CUSTOMER_AUTH_ID);
+      await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+        payload: { typicalGuestCountMin: 50, typicalGuestCountMax: 100 },
+      });
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+        payload: { typicalGuestCountMax: 20 },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('still reads back a row stored before the refusal existed (VEN-544)', async () => {
+      await signIn(CUSTOMER_AUTH_ID);
+      await harness.database.db
+        .update(users)
+        .set({ firstName: 'Jo\u200bhn', phone: '()-. ()' })
+        .where(eq(users.id, await userIdOf(CUSTOMER_AUTH_ID)));
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ firstName: 'Jo\u200bhn', phone: '()-. ()' });
+    });
+
+    it('refuses a NUL byte in a name with a 400, not a 500 (VEN-544)', async () => {
+      await signIn(CUSTOMER_AUTH_ID);
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+        payload: { firstName: 'a\u0000b' },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
 
     it('updates the fields a user owns', async () => {
       await signIn(CUSTOMER_AUTH_ID);

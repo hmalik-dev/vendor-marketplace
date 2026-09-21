@@ -27,6 +27,62 @@ describe('CheckoutUnavailable', () => {
     expect(screen.queryByText(/isn't here/)).toBeNull();
   });
 
+  /* VEN-555: a banned or retired vendor, where no retry can ever succeed. */
+  it('tells a customer a banned or retired vendor is closed, with no retry', () => {
+    const { container } = render(
+      <CheckoutUnavailable
+        reason="vendor-closed"
+        requestId={REQUEST_ID}
+        vendorName="Kessler & Co."
+      />,
+    );
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      'Kessler & Co. is no longer taking bookings',
+    );
+    expect(container.textContent).not.toMatch(/temporary/i);
+    expect(container.textContent).not.toMatch(/still accepted/i);
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(hrefs).toEqual([`/bookings/${REQUEST_ID}`, '/search']);
+    expect(hrefs.some((href) => href?.endsWith('/checkout'))).toBe(false);
+    expect(screen.getByRole('link', { name: 'Back to this booking' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Browse vendors' })).toBeDefined();
+  });
+
+  /* VEN-559: unpublished or on a hold, which is reversible and says so. */
+  it('tells a customer a paused vendor is temporary, names the deadline, and offers a retry', () => {
+    render(
+      <CheckoutUnavailable
+        reason="vendor-paused"
+        requestId={REQUEST_ID}
+        vendorName="Kessler & Co."
+        deadline="expires in 3d"
+      />,
+    );
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      "Kessler & Co. isn't taking bookings right now",
+    );
+    expect(screen.getByText(/This is temporary/)).toBeDefined();
+    expect(screen.getByText(/Your booking expires in 3d/)).toBeDefined();
+    expect(screen.queryByText(/no longer taking bookings/)).toBeNull();
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(hrefs).toEqual([`/bookings/${REQUEST_ID}/checkout`, `/bookings/${REQUEST_ID}`]);
+  });
+
+  it('says nothing about a deadline when there is none to name', () => {
+    const { container } = render(
+      <CheckoutUnavailable
+        reason="vendor-paused"
+        requestId={REQUEST_ID}
+        vendorName="Kessler & Co."
+        deadline={null}
+      />,
+    );
+
+    expect(container.textContent).not.toMatch(/Your booking/);
+  });
+
   /* VEN-404: over the beta cap, where a retry can never succeed. */
   it('sends a customer over the beta cap to support rather than a retry', () => {
     render(<CheckoutUnavailable reason="over-cap" requestId={REQUEST_ID} vendorName={null} />);

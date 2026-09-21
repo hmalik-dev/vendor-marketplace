@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lt, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lt, not, notInArray, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -12,7 +12,11 @@ import {
   type BookingStatus,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
-import { RELEASABLE_STATUSES, payoutOwedClauses } from '../payments/payouts.dao.js';
+import {
+  RELEASABLE_STATUSES,
+  payoutOwedClauses,
+  payoutResidualHeld,
+} from '../payments/payouts.dao.js';
 
 /**
  * A booking that was paid for and kept — the shape both dashboard figures
@@ -214,6 +218,8 @@ function owedPayout(vendorId: string) {
 
 export interface OwedPayoutTotalRow {
   status: BookingStatus;
+  /** `payoutResidualHeld` — a cancelled residual frozen by a foreign refund or chargeback. */
+  residualHeld: boolean;
   cents: number;
   count: number;
   /** Earliest event date in this group — the input to `payoutReleaseAt`. */
@@ -259,13 +265,14 @@ export async function findOwedPayoutTotals(
   return db
     .select({
       status: bookings.status,
+      residualHeld: payoutResidualHeld(),
       cents: sql<number>`coalesce(sum(${bookings.vendorPayoutCents}), 0)::int`,
       count: sql<number>`count(*)::int`,
       earliestEventDate: sql<string>`min(${bookings.eventDate})::text`,
     })
     .from(bookings)
     .where(owedPayout(vendorId))
-    .groupBy(bookings.status);
+    .groupBy(bookings.status, payoutResidualHeld());
 }
 
 export interface NextPendingPayoutRow {
@@ -327,7 +334,13 @@ export async function findNextPendingPayout(
     })
     .from(bookings)
     .innerJoin(users, eq(bookings.customerId, users.id))
-    .where(and(owedPayout(vendorId), notInArray(bookings.status, [...HELD_PAYOUT_STATUSES])))
+    .where(
+      and(
+        owedPayout(vendorId),
+        notInArray(bookings.status, [...HELD_PAYOUT_STATUSES]),
+        not(payoutResidualHeld()),
+      ),
+    )
     .orderBy(asc(bookings.eventDate))
     .limit(1);
 

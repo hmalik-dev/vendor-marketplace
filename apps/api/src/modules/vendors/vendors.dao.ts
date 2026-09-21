@@ -270,6 +270,26 @@ export async function claimStripeAccountId(
   return claimed?.[0] ?? (await findVendorProfileById(db, vendorId));
 }
 
+/**
+ * Records that Stripe refused the account creation made at `observed` refusals
+ * (VEN-526). A compare-and-set, like `recordRefundRefusal`: two presses refused
+ * under the same key both pass the same `observed`, and exactly one increment
+ * lands, so the key moves once and a late caller cannot move it out from under
+ * one still using it.
+ */
+export async function recordAccountRefusal(
+  db: AppDatabase,
+  vendorId: string,
+  observed: number,
+): Promise<void> {
+  await db
+    .update(vendorProfiles)
+    .set({ stripeAccountAttempts: observed + 1 })
+    .where(
+      and(eq(vendorProfiles.id, vendorId), eq(vendorProfiles.stripeAccountAttempts, observed)),
+    );
+}
+
 /** A vendor profile by its own id, used to re-read after a lost claim. */
 export async function findVendorProfileById(
   db: AppDatabase,

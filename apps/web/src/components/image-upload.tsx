@@ -262,7 +262,7 @@ export function ImageUpload({
            * `stone-50`. `placeholder-hatch` is the frames' own gradient, and
            * the uploaded image covers it once there is one.
            */
-          'relative flex w-full items-center justify-center overflow-hidden border border-dashed border-stone-400 transition-colors',
+          'relative flex w-full items-center justify-center overflow-hidden border border-dashed border-stone-560 transition-colors',
           /*
             The focus ring belongs to the zone, not to the input.
 
@@ -277,10 +277,10 @@ export function ImageUpload({
             `overflow-hidden` (which clips the uploaded image to the rounded
             zone) does not clip it.
           */
-          'has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-clay-400/40 has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-stone-50',
+          'has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-clay-400 has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-stone-50',
           hasPreview ? 'bg-stone-50' : 'placeholder-hatch',
           // 128px circle from `sm`, the size frame 09 draws the profile photo.
-          rounded ? 'size-24 rounded-full sm:size-32' : cn(aspectClassName, 'rounded-lg'),
+          rounded ? 'size-24 rounded-full sm:size-32' : cn(aspectClassName, 'rounded-[14px]'),
           isDragging && 'border-clay-400 bg-clay-100',
           isBusy && 'opacity-70',
         )}
@@ -375,7 +375,7 @@ export function ImageUpload({
       */}
       {failure ? (
         <p
-          role="status"
+          role="alert"
           className={cn('text-xs', failure.tone === 'gold' ? 'text-gold-600' : 'text-error-500')}
         >
           {failure.reason} <span className="text-stone-600">{failure.fix}</span>

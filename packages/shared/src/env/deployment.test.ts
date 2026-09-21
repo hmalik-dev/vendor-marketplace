@@ -13,11 +13,6 @@ describe('deploymentPlatform', () => {
       { VERCEL: '1', VERCEL_PROJECT_PRODUCTION_URL: 'orla.vercel.app' },
       'https://orla.vercel.app',
     ],
-    [
-      'Render',
-      { RENDER: 'true', RENDER_EXTERNAL_URL: 'https://orla.onrender.com' },
-      'https://orla.onrender.com',
-    ],
     ['Railway', { RAILWAY_PUBLIC_DOMAIN: 'orla.up.railway.app' }, 'https://orla.up.railway.app'],
   ])('recognises %s and reads its origin', (platform, source, origin) => {
     expect(deploymentPlatform(source)).toEqual({ platform, origin });
@@ -69,10 +64,15 @@ describe('deploymentPlatform', () => {
   );
 
   it('leaves an origin that already carries a scheme alone', () => {
-    expect(deploymentPlatform({ RENDER: 'true', RENDER_EXTERNAL_URL: 'https://a.test/' })).toEqual({
-      platform: 'Render',
-      origin: 'https://a.test',
-    });
+    expect(
+      deploymentPlatform({ VERCEL: '1', VERCEL_PROJECT_PRODUCTION_URL: 'https://a.test/' }),
+    ).toEqual({ platform: 'Vercel', origin: 'https://a.test' });
+  });
+
+  it('no longer names Render, which is not a supported host', () => {
+    expect(
+      deploymentPlatform({ RENDER: 'true', RENDER_EXTERNAL_URL: 'https://x.example.com' }),
+    ).toBeNull();
   });
 });
 
@@ -101,7 +101,7 @@ describe('isDeployedRuntime', () => {
   });
 
   it('treats a platform boot as a deployment even with no NODE_ENV', () => {
-    expect(isDeployedRuntime({ RENDER: 'true' })).toBe(true);
+    expect(isDeployedRuntime({ RAILWAY_ENVIRONMENT: 'production' })).toBe(true);
   });
 
   it.each(['development', 'test'])('leaves a %s process alone', (nodeEnv) => {
@@ -122,8 +122,6 @@ describe('PLATFORM_ENV_KEYS', () => {
     'VERCEL',
     'VERCEL_PROJECT_PRODUCTION_URL',
     'VERCEL_URL',
-    'RENDER',
-    'RENDER_EXTERNAL_URL',
     'RAILWAY_PUBLIC_DOMAIN',
     'RAILWAY_ENVIRONMENT',
   ])('carries %s', (key) => {

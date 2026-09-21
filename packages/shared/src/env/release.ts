@@ -17,7 +17,6 @@ export const RELEASE_ENV_KEYS = [
   'SENTRY_RELEASE',
   'RAILWAY_GIT_COMMIT_SHA',
   'VERCEL_GIT_COMMIT_SHA',
-  'RENDER_GIT_COMMIT',
 ] as const;
 
 /** The release this process belongs to, or `null` off a deployment. */

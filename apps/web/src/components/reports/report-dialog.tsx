@@ -69,7 +69,7 @@ const REASON_OPTIONS = REPORT_REASONS.map((reason) => ({
 }));
 
 const FIELD = cn(
-  'h-auto w-full rounded-[10px] border border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900',
+  'h-auto w-full rounded-[10px] border border-input bg-stone-150 px-3.25 py-2.5 text-base text-stone-900',
   FIELD_FOCUS,
 );
 

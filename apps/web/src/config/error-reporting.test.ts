@@ -231,7 +231,12 @@ describe('sentryBuildOptions', () => {
 describe('the CSP and the ingest host', () => {
   it('admits exactly the DSN host on connect-src, and nothing when reporting is off', () => {
     const origin = errorIngestOrigin(DSN);
-    const base = { apiOrigin: 'https://api.example.com', https: true, allowEval: false };
+    const base = {
+      apiOrigin: 'https://api.example.com',
+      https: true,
+      allowEval: false,
+      nonce: 'dGVzdA==',
+    };
 
     expect(origin).toBe('https://o1.ingest.sentry.io');
     expect(contentSecurityPolicy({ ...base, errorIngestOrigin: origin })).toMatch(

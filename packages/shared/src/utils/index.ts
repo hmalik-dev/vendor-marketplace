@@ -642,6 +642,8 @@ export type PayoutStatusSubject = Pick<PayoutSubject, 'status' | 'payoutReleased
      */
     payoutModel?: PayoutModel;
     vendorPayoutCents?: number;
+    /** A cancelled residual frozen by a foreign refund or an open chargeback (VEN-543). */
+    residualHeld?: boolean;
   };
 
 export function payoutStatusOf(booking: PayoutStatusSubject): PayoutStatus {
@@ -654,7 +656,7 @@ export function payoutStatusOf(booking: PayoutStatusSubject): PayoutStatus {
    * what the vendor dashboard selects on too, so a hold status added to one and
    * not the other cannot happen.
    */
-  if (HELD_PAYOUT_STATUSES.some((held) => held === booking.status)) {
+  if (booking.residualHeld || HELD_PAYOUT_STATUSES.some((held) => held === booking.status)) {
     return 'held';
   }
 
@@ -930,14 +932,43 @@ export function resolveImageUrl(
  * to decide whose object a reference names (#407). The guard was written with
  * its own copy of half these rules and was bypassed by one backslash.
  *
+ * The whole reference is percent-decoded, repeatedly, until it stops changing
+ * (VEN-537). A host that decodes twice reads `%252e%252e` as a traversal and
+ * `%70ortfolio` as a namespace, and neither shows in the spelling that was
+ * stored. Every pass shortens the string, so the loop ends. Decoding also
+ * folds `%2f` and `%5c` into separators, which object storage does when it
+ * derives the key.
+ *
  * Segment resolution is deliberately left to each caller: the schema asks only
- * whether a `..` is present, and the guard resolves them away. So is `%2f`,
- * which a parser leaves encoded — it cannot change whether a reference escapes
- * to another host, so the schema has no use for it, while the guard folds it
- * because object storage decodes it when deriving the key.
+ * whether a `..` is present, and the guard resolves them away.
  */
 export function normalizeImageRefPath(value: string): string {
-  return value.replace(/\\/g, '/').replace(/%2e/gi, '.');
+  let current = value;
+
+  for (;;) {
+    const next = decodeOnce(current);
+
+    if (next === current) {
+      return current.replace(/\\/g, '/');
+    }
+
+    current = next;
+  }
+}
+
+/**
+ * One layer of percent-decoding that never throws: a malformed escape
+ * (`100%`) is data, not an error, so it falls back to decoding only the ASCII
+ * escapes and leaving the rest as written.
+ */
+function decodeOnce(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value.replace(/%([0-7][0-9a-f])/gi, (_match, hex: string) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    );
+  }
 }
 
 /**
@@ -997,6 +1028,26 @@ const BIDI_CONTROLS = /[\u202a-\u202e\u2066-\u2069]/g;
 
 export function stripBidiControls(value: string): string {
   return value.replace(BIDI_CONTROLS, '');
+}
+
+/**
+ * What free text refuses rather than strips, so the stored value is the typed
+ * value (VEN-544): C0 and C1 controls other than tab, line feed and carriage
+ * return (U+0000 is a Postgres 22021, a 500 for the caller), the line and
+ * paragraph separators, and the zero-width space, word joiner and byte-order
+ * mark, which no one types on purpose.
+ */
+/* eslint-disable no-control-regex */
+export const REFUSED_TEXT_CHARACTERS =
+  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u0080-\u009f\u200b\u2028\u2029\u2060\ufeff]/;
+
+/* eslint-enable no-control-regex */
+
+const REFUSED_TEXT_CHARACTERS_GLOBAL = new RegExp(REFUSED_TEXT_CHARACTERS.source, 'g');
+
+/** Removes what `REFUSED_TEXT_CHARACTERS` refuses, for text that did not arrive on a request body. */
+export function stripRefusedText(value: string): string {
+  return value.replace(REFUSED_TEXT_CHARACTERS_GLOBAL, '');
 }
 
 /**

@@ -155,17 +155,15 @@ describe('admin_actions is append-only', () => {
   });
 
   /**
-   * The one delete the rule allows, and the last test because it empties the
-   * table: erasing the operator's whole account takes their rows with it,
-   * because a recorded action with nobody behind it names nobody.
-   *
-   * Unreachable from the product — a `users` row is retired via `deleted_at`
-   * rather than removed — so this proves the exception is exact rather than
-   * that anything uses it.
+   * VEN-463, AC1: erasing the operator's account is refused while a row names
+   * them, because `actor_id` is `RESTRICT`. It used to cascade, which made
+   * deleting the operator the one way to delete their history.
    */
-  it('lets the cascade through when the operator account itself is erased', async () => {
-    await testDb.db.execute(sql.raw(`DELETE FROM users WHERE id = '${ACTOR}'`));
+  it('refuses to erase an operator who has a logged action', async () => {
+    const message = await refusalOf(testDb.db, `DELETE FROM users WHERE id = '${ACTOR}'`);
 
-    expect(await actionCount()).toBe(0);
+    expect(message).toContain('admin_actions_actor_id_users_id_fk');
+    expect(message).toContain('RESTRICT');
+    expect(await actionCount()).toBe(1);
   });
 });

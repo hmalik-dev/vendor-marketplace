@@ -134,7 +134,7 @@ describe('ImageUpload', () => {
 
     expect(input?.className).toContain('opacity-0');
     expect(zone?.className).toContain('has-[input:focus-visible]:ring-2');
-    expect(zone?.className).toContain('has-[input:focus-visible]:ring-clay-400/40');
+    expect(zone?.className).toContain('has-[input:focus-visible]:ring-clay-400');
     // The zone clips the uploaded image; a ring is a box-shadow drawn outside
     // the border box, so its own `overflow-hidden` does not cut it.
     expect(zone?.className).toContain('overflow-hidden');
@@ -291,7 +291,7 @@ describe('ImageUpload, when the server refuses the upload', () => {
     const file = new File([new Uint8Array(2048)], 'photo.jpg', { type: 'image/jpeg' });
     await userEvent.upload(screen.getByLabelText('Profile photo'), file);
 
-    const status = await screen.findByRole('status');
+    const status = await screen.findByRole('alert');
     return status.textContent ?? '';
   }
 

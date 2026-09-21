@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import {
   ADMIN_VENDOR_STATUS_LABELS,
+  ERROR_CODES,
   adminBanResultSchema,
   adminVendorPublishResultSchema,
 } from '@vendor-marketplace/shared';
@@ -16,6 +17,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { VENDOR_STATUS_TONES } from '@/components/admin/vendor-status';
 import { displayRating } from '@/lib/admin-params';
+import { ApiClientError } from '@/lib/api-client';
 import { userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import type { WireAdminVendorRow } from '@/lib/wire-schemas';
@@ -307,6 +309,18 @@ export function VendorTable({
                   failed += await setBanned(row.userId, true);
                   suspended += 1;
                 } catch (error) {
+                  /*
+                   * A missing step-up (VEN-500) is not one row's refusal: it
+                   * ends the run and rethrows so `ConfirmAction` shows the code
+                   * step, whose verified code retries the press. Banners have
+                   * no field to type a code into.
+                   */
+                  if (
+                    error instanceof ApiClientError &&
+                    error.code === ERROR_CODES.STEP_UP_REQUIRED
+                  ) {
+                    throw error;
+                  }
                   refused.push(
                     `${row.businessName} (${userFacingError(error, 'the request did not reach the server')})`,
                   );
@@ -376,7 +390,7 @@ export function VendorTable({
                   type="checkbox"
                   checked={selected.has(row.userId)}
                   onChange={(event) => toggle(row.userId, event.currentTarget.checked)}
-                  className="size-3.5 appearance-none rounded-[4px] border-[1.3px] border-stone-400 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[9px] checked:after:leading-[12px] checked:after:text-stone-0 checked:after:content-['✓']"
+                  className="size-3.5 appearance-none rounded-[4px] border-[1.3px] border-stone-560 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[9px] checked:after:leading-[12px] checked:after:text-stone-0 checked:after:content-['✓']"
                 />
               </label>
             ),

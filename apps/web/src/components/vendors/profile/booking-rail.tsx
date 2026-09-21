@@ -561,7 +561,7 @@ export function BookingRail({
  * input beside it, which reads as a misaligned pair on the frame's shared row.
  */
 const FIELD_BOX = cn(
-  'h-[38px] w-full rounded-lg border border-stone-300 bg-stone-150 px-[13px] py-2.5 text-stone-900',
+  'h-[38px] w-full rounded-lg border border-input bg-stone-150 px-[13px] py-2.5 text-stone-900',
   /*
    * #383. These three are standalone bordered fields — they carry their own
    * `border-stone-300` — so they take the bordered treatment, not the base

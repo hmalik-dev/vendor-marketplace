@@ -1,0 +1,8 @@
+ALTER TABLE "booking_requests" ADD CONSTRAINT "booking_requests_quoted_price_cents_non_negative" CHECK ("booking_requests"."quoted_price_cents" IS NULL OR "booking_requests"."quoted_price_cents" >= 0);--> statement-breakpoint
+ALTER TABLE "booking_requests" ADD CONSTRAINT "booking_requests_final_price_cents_non_negative" CHECK ("booking_requests"."final_price_cents" IS NULL OR "booking_requests"."final_price_cents" >= 0);--> statement-breakpoint
+ALTER TABLE "booking_requests" ADD CONSTRAINT "booking_requests_guest_count_non_negative" CHECK ("booking_requests"."guest_count" IS NULL OR "booking_requests"."guest_count" >= 0);--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_total_amount_cents_positive" CHECK ("bookings"."total_amount_cents" > 0);--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_platform_fee_cents_non_negative" CHECK ("bookings"."platform_fee_cents" >= 0);--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_vendor_payout_cents_non_negative" CHECK ("bookings"."vendor_payout_cents" >= 0);--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_refund_amount_cents_range" CHECK ("bookings"."refund_amount_cents" IS NULL OR ("bookings"."refund_amount_cents" >= 0 AND "bookings"."refund_amount_cents" <= "bookings"."total_amount_cents"));--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_external_refund_cents_non_negative" CHECK ("bookings"."external_refund_cents" >= 0);

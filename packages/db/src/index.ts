@@ -34,3 +34,8 @@ export { demoVendorProfileId } from './seed-demo.js';
  * string that would drift silently the moment the seed changed it.
  */
 export { E2E_VENDOR_SLUG } from './seed-e2e.js';
+export {
+  withRequestIdentity,
+  type IdentityTransaction,
+  type RequestIdentity,
+} from './request-identity.js';

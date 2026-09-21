@@ -72,6 +72,8 @@ export function MessagesScreen({
   const router = useRouter();
 
   const [conversations, setConversations] = useState<WireConversation[]>([...initialConversations]);
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
   /*
    * `router.refresh()` (Try again) hands this component fresh props without
    * remounting it, so state seeded from them once would stay `[]` and read
@@ -278,26 +280,36 @@ export function MessagesScreen({
   }, [call]);
 
   /*
-   * Opening the thread is what marks it read; the list count follows.
-   *
-   * Justified swallow (#368): the count is corrected on the next load, and
-   * an error toast for a read receipt would interrupt the reader over
-   * something they did not ask for and cannot act on. Reported rather than
-   * dropped, because a mark-read that fails *every* time is a real defect
-   * that would otherwise never surface.
+   * Opening the thread is what marks it read; the count clears optimistically
+   * and is restored when the API refuses, so a badge never claims a read that
+   * did not happen (VEN-540). No toast: a read receipt is not something the
+   * reader asked for. Reported as well, because a mark-read that fails
+   * *every* time is a real defect that would otherwise never surface.
    */
   const markRead = useCallback(
     async (conversationId: string) => {
-      await call(`/conversations/${conversationId}/read`, {
-        schema: wireMessagePageSchema.nullable(),
-        method: 'PUT',
-      }).catch((error: unknown) => {
-        reportSwallowedError('messages: marking a conversation read failed', error);
-      });
+      // Read from the latest render, not from inside the updater, which React
+      // runs later than this line.
+      const cleared =
+        conversationsRef.current.find((row) => row.id === conversationId)?.unreadCount ?? 0;
 
       setConversations((rows) =>
         rows.map((row) => (row.id === conversationId ? { ...row, unreadCount: 0 } : row)),
       );
+
+      try {
+        await call(`/conversations/${conversationId}/read`, {
+          schema: wireMessagePageSchema.nullable(),
+          method: 'PUT',
+        });
+      } catch (error: unknown) {
+        reportSwallowedError('messages: marking a conversation read failed', error);
+        setConversations((rows) =>
+          rows.map((row) =>
+            row.id === conversationId ? { ...row, unreadCount: row.unreadCount + cleared } : row,
+          ),
+        );
+      }
     },
     [call],
   );
@@ -521,7 +533,7 @@ export function MessagesScreen({
    * A dropped stream is the normal case on a phone, so it is `informational`
    * — steel, never red — and the composer stays usable throughout.
    */
-  const { connected } = useEventStream({
+  const { connected, ended } = useEventStream({
     onEvent: (event) => {
       if (event.type === 'new_message') {
         const parsed = wireMessageSchema.safeParse(event.message);
@@ -865,7 +877,7 @@ export function MessagesScreen({
               Steel, not red: a dropped stream resolves itself, and `40-states.md`
               is explicit that connection loss is information rather than failure.
             */}
-            {connected ? null : (
+            {connected || ended ? null : (
               <div className="shrink-0 px-5.5 pt-3">
                 <Banner status="informational" title="Reconnecting">
                   New messages may take a moment to appear. You can still write and send.
@@ -889,6 +901,8 @@ export function MessagesScreen({
                 and the profile tablist take, for the same reason.
               */
               data-focus-own
+              role="region"
+              aria-label="Message history"
               className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5.5 py-4.5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400"
             >
               {/*

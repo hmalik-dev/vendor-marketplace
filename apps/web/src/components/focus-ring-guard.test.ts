@@ -187,7 +187,12 @@ describe('focus rings paint', () => {
    */
   it('never rings on behalf of a descendant without silencing one', () => {
     const offenders = allFiles
-      .filter(({ code }) => PAINTS_FOR_DESCENDANT.test(code) && !SILENCES.test(code))
+      .filter(
+        ({ name, code }) =>
+          name !== DEFINES_THE_TREATMENTS &&
+          PAINTS_FOR_DESCENDANT.test(code) &&
+          !SILENCES.test(code),
+      )
       .map(({ name }) => name);
 
     expect(offenders).toEqual([]);

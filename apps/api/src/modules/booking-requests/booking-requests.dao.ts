@@ -37,9 +37,11 @@ import {
   type BookingRequestStatus,
   type BookingSettlement,
   type PageWindow,
+  type VendorAvailability,
 } from '@vendor-marketplace/shared';
+import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import type { AppDatabase } from '../../lib/database.js';
-import { VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
+import { VENDOR_AVAILABILITY, VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
 
 /** Newest first — both hubs read a request queue, and the queue is a stack. */
 const newestFirst = [desc(bookingRequests.createdAt)];
@@ -52,7 +54,10 @@ const newestFirst = [desc(bookingRequests.createdAt)];
  * vendor block carried no category, so the bookings hub hardcoded it to null and
  * its category filter had nothing to filter on (#302/#187).
  */
-export type VendorSummaryRow = VendorProfileRow & { categoryName: string | null };
+export type VendorSummaryRow = VendorProfileRow & {
+  categoryName: string | null;
+  availability: VendorAvailability;
+};
 
 /**
  * The vendor's primary category, as a correlated subquery.
@@ -89,6 +94,7 @@ const primaryCategoryName = sql<string | null>`(
 const vendorSummaryColumns = {
   ...getTableColumns(vendorProfiles),
   categoryName: primaryCategoryName,
+  availability: VENDOR_AVAILABILITY,
 };
 
 export async function findRequestById(
@@ -110,8 +116,12 @@ export async function findRequestById(
 
 /**
  * The requests whose window has run out but whose status has not been written
- * yet, oldest first, for the expiry sweep. Bounded so one tick after an outage
- * works a batch rather than the whole backlog; the next tick takes the rest.
+ * yet, for the expiry sweep. Bounded so one tick after an outage works a batch
+ * rather than the whole backlog; the next tick takes the rest.
+ *
+ * Rows never held come first, oldest first, then the held ones by how long ago
+ * they were tried (VEN-551): a hundred requests whose intents Stripe cannot
+ * return would otherwise be the oldest hundred on every tick and starve the rest.
  */
 export async function findLapsedRequests(
   db: AppDatabase,
@@ -122,8 +132,39 @@ export async function findLapsedRequests(
     .select()
     .from(bookingRequests)
     .where(hasLapsed(now))
-    .orderBy(asc(bookingRequests.expiresAt))
+    .orderBy(
+      sql`${bookingRequests.expiryLastAttemptAt} asc nulls first`,
+      asc(bookingRequests.expiresAt),
+    )
     .limit(limit);
+}
+
+/**
+ * Counts one held expiry, at most once per `spacingMs`, so a burst of reads does
+ * not spend the bound a tick is meant to. One statement, so two instances
+ * sweeping at once cannot both count a tick.
+ */
+export async function recordExpiryHold(
+  db: AppDatabase,
+  requestId: string,
+  now: Date,
+  spacingMs: number,
+): Promise<void> {
+  await db
+    .update(bookingRequests)
+    .set({
+      expiryCheckAttempts: sql`coalesce(${bookingRequests.expiryCheckAttempts}, 0) + 1`,
+      expiryLastAttemptAt: now,
+    })
+    .where(
+      and(
+        eq(bookingRequests.id, requestId),
+        or(
+          isNull(bookingRequests.expiryLastAttemptAt),
+          lte(bookingRequests.expiryLastAttemptAt, new Date(now.getTime() - spacingMs)),
+        ),
+      ),
+    );
 }
 
 export interface RequestListFilter {
@@ -342,6 +383,19 @@ export async function insertRequest(
   return inserted?.[0] ?? null;
 }
 
+/** The partial unique indexes behind "one commitment per vendor date" (VEN-482). */
+export const ACCEPTED_DATE_KEY = 'booking_requests_accepted_date_key';
+export const CONFIRMED_DATE_KEY = 'bookings_confirmed_date_key';
+
+/**
+ * Whether a write failed because another request already holds this vendor's
+ * date as `accepted` — the database's answer when `hasRivalAcceptanceOn` was
+ * skipped or lost a race.
+ */
+export function isAcceptedDateTaken(error: unknown): boolean {
+  return violatesUniqueConstraint(error, ACCEPTED_DATE_KEY);
+}
+
 /**
  * Applies a transition, but only from the status the caller read.
  *
@@ -434,6 +488,20 @@ export async function findBookableVendorById(
     .limit(1);
 
   return rows?.[0] ?? null;
+}
+
+/** Whether the vendor can be sold to, and if not whether that can be undone (VEN-556, VEN-559). */
+export async function findVendorAvailability(
+  db: AppDatabase,
+  vendorId: string,
+): Promise<VendorAvailability> {
+  const rows = await db
+    .select({ availability: VENDOR_AVAILABILITY })
+    .from(vendorProfiles)
+    .where(eq(vendorProfiles.id, vendorId))
+    .limit(1);
+
+  return rows[0]?.availability ?? 'closed';
 }
 
 export async function findVendorsByIds(

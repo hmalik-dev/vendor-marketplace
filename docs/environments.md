@@ -64,8 +64,8 @@ token scoped to that environment), `VERCEL_TOKEN`, `SENTRY_AUTH_TOKEN`;
 variables `NEON_BRANCH` (`staging` or `production`), `NEON_HOST` (that
 branch's direct endpoint host), `API_HOST`, `API_SERVICE`, `API_URL`, `WEB_URL`
 (staging's first entry must be a host containing `staging`, since it is the
-alias target), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SENTRY_WEB_PROJECT`; and
-the repository variable `DEPLOY_GATE=required` once all are set.
+alias target), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SENTRY_WEB_PROJECT`. A push to
+`staging` or `production` with any of them unset fails at preflight, naming it.
 
 Never set any of these at the repository level: GitHub falls back from an
 environment to the repository, and the names are the same on both tiers, so a
@@ -74,9 +74,11 @@ branch policy to the environments either: a `workflow_run` job runs on the
 default branch, so a rule limiting `production` to the `production` branch
 would refuse every deploy.
 
-Vercel builds only `staging` and `production` from git (`vercel.json`); every
-other branch's deployment is skipped, so pull requests and lanes get no Vercel
-preview.
+Vercel builds nothing from git (`vercel.json`, VEN-535): Git deployments are
+off and every branch is skipped, so a push to `staging` or `production` cannot
+put the web live ahead of the migration and the API, and pull requests and lanes
+get no Vercel preview. The release workflow's prebuilt deploy is the only web
+path, so until VEN-377 provisions its inputs the deployed web does not move.
 
 ## What each environment holds
 

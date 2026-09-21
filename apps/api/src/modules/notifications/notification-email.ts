@@ -83,6 +83,7 @@ const EMAIL_LABELS: Partial<Record<NotificationType, string>> = {
   new_review: 'Read the review',
   payout_sent: 'Open your dashboard',
   stripe_onboarding_complete: 'Open your dashboard',
+  payouts_paused: 'Open Payments',
   tag_suggestion_approved: 'Open your profile',
 };
 

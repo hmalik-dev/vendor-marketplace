@@ -4,9 +4,8 @@
  * `git`, `pnpm` and `npx` replaced by stubs that record what they were asked to
  * do. That is what "tested, not assumed" means here without a production
  * account: the order, the abort on a failed migration, the failed poll, the
- * skip while nothing is configured (and the failure once DEPLOY_GATE is set or
- * the configuration is partial), and no secret in any log. Runs under plain
- * `node` via `pnpm test:agents`.
+ * failure, by name, when nothing or only part of the configuration is set, and
+ * no secret in any log. Runs under plain `node` via `pnpm test:agents`.
  */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -138,20 +137,16 @@ function allPresent() {
   };
 }
 
-test('preflight: nothing configured skips with a warning and reports ready=false', async () => {
-  const { io, lines } = recordingIo();
-  const dir = mkdtempSync(path.join(tmpdir(), 'preflight-'));
-  const output = path.join(dir, 'out');
-  writeFileSync(output, '');
-  try {
-    await PHASES.preflight({ GITHUB_OUTPUT: output }, io);
-    assert.equal(readFileSync(output, 'utf8'), 'ready=false\n');
-  } finally {
-    rmSync(dir, { recursive: true });
-  }
-  assert.match(lines.join(''), /^::warning::Deploy skipped/);
+test('preflight: nothing configured fails naming every input, never skips', async () => {
+  const { io } = recordingIo();
+  const error = await PHASES.preflight({}, io).then(
+    () => null,
+    (caught) => caught,
+  );
+  assert.ok(error, 'preflight must reject');
+  assert.match(error.message, /not fully configured/);
   for (const { name, kind } of REQUIRED_INPUTS) {
-    assert.ok(lines.join('').includes(`${name} (${kind})`), name);
+    assert.ok(error.message.includes(`${name} (${kind})`), name);
   }
 });
 
@@ -159,13 +154,8 @@ test('preflight: partly configured fails naming what is missing and where it is 
   const { io } = recordingIo();
   await assert.rejects(
     PHASES.preflight({ ...allPresent(), HAS_SENTRY_AUTH_TOKEN: 'false' }, io),
-    /not fully configured.*missing: SENTRY_AUTH_TOKEN \(secret\).*VEN-377/,
+    /not fully configured.*missing: SENTRY_AUTH_TOKEN \(secret\).*docs\/environments\.md/,
   );
-});
-
-test('preflight: DEPLOY_GATE=required makes an empty configuration fail, not skip', async () => {
-  const { io } = recordingIo();
-  await assert.rejects(PHASES.preflight({ DEPLOY_GATE: 'required' }, io), /not fully configured/);
 });
 
 test('workflows: smoke is gated on its URL, ci and smoke read-only, every deploy action SHA-pinned', () => {
@@ -363,6 +353,11 @@ test('web: builds under the release and upload credential, and deploys without t
 
 test('ready: polls through the smoke check for this release, with a bounded deadline', async () => {
   const { io, calls } = recordingIo();
+  const asked = [];
+  io.fetch = async (url) => {
+    asked.push(url);
+    return Response.json({ commit: SHA });
+  };
   await PHASES.ready(
     {
       PATH: '/bin',
@@ -373,6 +368,7 @@ test('ready: polls through the smoke check for this release, with a bounded dead
     io,
   );
 
+  assert.deepEqual(asked, ['https://orla.test/api/ready']);
   assert.deepEqual(
     calls.map(({ command, args, env }) => ({ command, args, env })),
     [
@@ -596,9 +592,14 @@ function expand(value, context) {
 }
 
 /** Executes the job's `run` steps as Actions does: in order, stopping at the first failure. */
-function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '' }) {
+function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '', webCommit = SHA }) {
   const dir = mkdtempSync(path.join(tmpdir(), 'deploy-dry-run-'));
   try {
+    // The web's `/api/ready` answer, for the one child that fetches it: node itself is not stubbed.
+    writeFileSync(
+      path.join(dir, 'web-fetch.mjs'),
+      `globalThis.fetch = async () => Response.json({ commit: ${JSON.stringify(webCommit)} });\n`,
+    );
     for (const tool of ['git', 'pnpm', 'npx']) {
       writeFileSync(path.join(dir, tool), STUB);
       chmodSync(path.join(dir, tool), 0o755);
@@ -642,6 +643,9 @@ function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '' }) 
         cwd: ROOT,
         env: {
           ...env,
+          // A wrong web commit is polled to a zero deadline, not for the workflow's ten minutes.
+          ...(webCommit === SHA ? {} : { SMOKE_DEADLINE_MS: '0' }),
+          NODE_OPTIONS: `--import ${path.join(dir, 'web-fetch.mjs')}`,
           PATH: `${dir}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
           HOME: dir,
           GITHUB_OUTPUT: output,
@@ -749,16 +753,89 @@ test('dry run: a readiness poll that fails fails the release', () => {
   assertNoSecretPrinted(result.printed);
 });
 
-const GATE_STEP = "Gate on CI success and on still being the branch's tip";
-const PREFLIGHT_STEP = 'Skip until configured, refuse when partly configured';
+test('dry run: the API naming this release while the web names another fails, naming both', () => {
+  const stale = 'b'.repeat(40);
+  const result = dryRun({ secrets: SECRETS, vars: VARS, webCommit: stale });
 
-test('dry run: with nothing configured the run skips green before touching anything', () => {
-  const result = dryRun({ secrets: {}, vars: {} });
+  assert.equal(result.failedAt, 'Poll /ready until it names this release');
+  assert.ok(
+    result.printed.includes(
+      `Web/API skew: the web serves ${stale.slice(0, 7)} but the API serves ${SHA.slice(0, 7)}.`,
+    ),
+    result.printed,
+  );
+});
+
+test('dry run: the web naming the same release as the API passes the gate', () => {
+  const result = dryRun({ secrets: SECRETS, vars: VARS });
 
   assert.equal(result.failedAt, null);
-  assert.equal(result.ran.at(-1), PREFLIGHT_STEP);
+  assert.ok(result.printed.includes(`web /api/ready names ${SHA.slice(0, 7)}`), result.printed);
+});
+
+test('ready: a web still on the previous build is polled again until it names this release', async () => {
+  const { io } = recordingIo();
+  const answers = ['b'.repeat(40), SHA];
+  let asked = 0;
+  let clock = 0;
+  io.fetch = async () => Response.json({ commit: answers[asked++] });
+  io.now = () => clock;
+  io.sleep = async (ms) => {
+    clock += ms;
+  };
+
+  await PHASES.ready(
+    {
+      PATH: '/bin',
+      API_URL: 'https://api.orla.test',
+      WEB_URL: 'https://orla.test',
+      SENTRY_RELEASE: SHA,
+    },
+    io,
+  );
+
+  assert.equal(asked, 2);
+  assert.equal(clock, 5_000);
+});
+
+test('ready: a web that never answers fails the release by name once the deadline passes', async () => {
+  const { io } = recordingIo();
+  let clock = 0;
+  io.fetch = async () => {
+    throw new Error('offline');
+  };
+  io.now = () => clock;
+  io.sleep = async (ms) => {
+    clock += ms;
+  };
+
+  await assert.rejects(
+    PHASES.ready(
+      {
+        PATH: '/bin',
+        API_URL: 'https://api.orla.test',
+        WEB_URL: 'https://orla.test,https://www.orla.test',
+        SENTRY_RELEASE: SHA,
+        SMOKE_DEADLINE_MS: '20000',
+      },
+      io,
+    ),
+    { message: `The web's /api/ready never named ${SHA.slice(0, 7)} (did not answer).` },
+  );
+});
+
+const GATE_STEP = "Gate on CI success and on still being the branch's tip";
+const PREFLIGHT_STEP = 'Refuse to release unless every input is configured';
+
+test('dry run: a staging push with nothing configured fails red naming every input', () => {
+  const result = dryRun({ secrets: {}, vars: {}, branch: 'staging' });
+
+  assert.equal(result.failedAt, PREFLIGHT_STEP);
   assert.deepEqual(result.invocations, ['git ls-remote origin']);
-  assert.match(result.printed, /Deploy skipped/);
+  assert.match(result.printed, /not fully configured/);
+  for (const { name, kind } of REQUIRED_INPUTS) {
+    assert.ok(result.printed.includes(`${name} (${kind})`), name);
+  }
 });
 
 test('dry run: a partly configured deploy fails closed before touching anything', () => {

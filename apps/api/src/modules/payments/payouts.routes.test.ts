@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   adminActions,
   availability,
@@ -7,6 +8,7 @@ import {
   conversations,
   notifications,
   operatorAlerts,
+  supportCases,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
@@ -80,7 +82,21 @@ describe('payouts', () => {
   /** The sweep, driven by hand — the same function the timer calls. */
   async function sweep(now: Date = clockNow): Promise<ReturnType<typeof releaseDuePayouts>> {
     return releaseDuePayouts(
-      { db: harness.database.db, stripe: harness.stripe, log: harness.app.log },
+      {
+        db: harness.database.db,
+        stripe: harness.stripe,
+        log: harness.app.log,
+        notify: {
+          hub: harness.app.events,
+          mail: {
+            db: harness.database.db,
+            email: harness.app.email,
+            log: harness.app.log,
+            webOrigin: 'https://web.test',
+            background: harness.app.background,
+          },
+        },
+      },
       now,
     );
   }
@@ -275,10 +291,7 @@ describe('payouts', () => {
   /** Returns the operator's own id, which #434's action rows are keyed by. */
   async function signInAsAdmin(): Promise<string> {
     expect((await inject('GET', '/users/me', ADMIN)).statusCode).toBe(200);
-    await harness.database.db
-      .update(users)
-      .set({ role: 'admin' })
-      .where(eq(users.authUserId, ADMIN));
+    await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
 
     const rows = await harness.database.db
       .select({ id: users.id })
@@ -300,6 +313,7 @@ describe('payouts', () => {
     harness.stripe.failedTransferKeys.clear();
     harness.email.sent.length = 0;
     await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(supportCases);
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -715,11 +729,13 @@ describe('payouts', () => {
         })
         .returning({ id: vendorProfiles.id });
 
-      const earlier = toDateString(addDays(START, 20));
       const { id: _requestId, ...requestColumns } = request!;
       const { id: _bookingId, ...bookingColumns } = payable;
 
       for (let index = 0; index < 101; index += 1) {
+        // One accepted request per vendor date is a database rule (VEN-482), so
+        // each unpayable row gets a day of its own, all still due.
+        const earlier = toDateString(addDays(START, 20 - index));
         const [stuckRequest] = await harness.database.db
           .insert(bookingRequests)
           .values({
@@ -1693,6 +1709,149 @@ describe('payouts', () => {
       const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
       expect(payouts.next).toBeNull();
       expect(payouts.pendingCents).toBe(0);
+    });
+  });
+
+  /**
+   * VEN-543. A late cancellation leaves the vendor a residual, and `cancelled`
+   * is a status neither hold can move, so a refund made outside the platform or
+   * an open chargeback used to be skipped once and paid on the next tick.
+   */
+  describe('a cancelled booking whose residual is contested', () => {
+    const RETAINED_CENTS = EXPECTED_PAYOUT_CENTS / 2;
+    const FOREIGN_REFUND_CENTS = 30_000;
+
+    async function lateCancelledBooking(): Promise<typeof bookings.$inferSelect> {
+      const paid = await paidBooking();
+      clockNow = addDays(new Date(`${EVENT_DATE}T12:00:00Z`), -2);
+      expect(
+        (await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {})).statusCode,
+      ).toBe(200);
+      clockNow = AFTER_RELEASE;
+
+      const cancelled = await currentBooking();
+      expect(cancelled.vendorPayoutCents).toBe(RETAINED_CENTS);
+
+      return cancelled;
+    }
+
+    async function openChargebackCase(bookingId: string): Promise<string> {
+      const [row] = await harness.database.db
+        .insert(supportCases)
+        .values({
+          reference: 'ORL-TEST-543',
+          origin: 'chargeback',
+          message: 'The card network opened a chargeback.',
+          bookingId,
+        })
+        .returning({ id: supportCases.id });
+
+      return row!.id;
+    }
+
+    it('makes no transfer on two consecutive sweeps after a foreign refund is recorded', async () => {
+      const cancelled = await lateCancelledBooking();
+      harness.stripe.refundExternally(cancelled.stripePaymentIntentId!, FOREIGN_REFUND_CENTS);
+
+      // The first run finds and records the refund; the second used to pay.
+      expect(await sweep()).toEqual({ released: 0, skipped: 1, failed: 0 });
+      expect((await currentBooking()).externalRefundCents).toBe(FOREIGN_REFUND_CENTS);
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toEqual([]);
+    });
+
+    it('holds while a chargeback case is open, and pays the residual once it is resolved', async () => {
+      const cancelled = await lateCancelledBooking();
+      const caseId = await openChargebackCase(cancelled.id);
+
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toEqual([]);
+
+      await harness.database.db
+        .update(supportCases)
+        .set({ status: 'resolved' })
+        .where(eq(supportCases.id, caseId));
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toHaveLength(1);
+      expect(harness.stripe.transfers[0]?.amountCents).toBe(RETAINED_CENTS);
+    });
+
+    it('reports the row as held on the vendor dashboard while the sweep leaves it', async () => {
+      const cancelled = await lateCancelledBooking();
+      await openChargebackCase(cancelled.id);
+
+      const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
+
+      expect(payouts.heldCents).toBe(RETAINED_CENTS);
+      expect(payouts.heldCount).toBe(1);
+      expect(payouts.pendingCents).toBe(0);
+      expect(payouts.next).toBeNull();
+    });
+
+    it('still pays an uncontested cancelled residual and reports it pending', async () => {
+      await lateCancelledBooking();
+
+      const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
+      expect(payouts.pendingCents).toBe(RETAINED_CENTS);
+      expect(payouts.heldCents).toBe(0);
+    });
+  });
+
+  /* VEN-525 acceptance 1 and 4. */
+  describe('the vendor is told a payout went out', () => {
+    /** The payout-side types only: the booking flow writes its own notices to both parties. */
+    const PAYOUT_TYPES = ['payout_sent', 'stripe_onboarding_complete', 'payouts_paused'];
+
+    async function noticesOf(authUserId: string): Promise<{ type: string; title: string }[]> {
+      const rows = await harness.database.db
+        .select({ type: notifications.type, title: notifications.title })
+        .from(notifications)
+        .innerJoin(users, eq(users.id, notifications.userId))
+        .where(eq(users.authUserId, authUserId));
+
+      return rows.filter((row) => PAYOUT_TYPES.includes(row.type));
+    }
+
+    it('writes exactly one payout_sent for the vendor and none for the customer', async () => {
+      await paidBooking();
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      expect(await noticesOf(VENDOR)).toEqual([
+        { type: 'payout_sent', title: 'A payout is on its way' },
+      ]);
+      expect(await noticesOf(CUSTOMER)).toEqual([]);
+    });
+
+    it('does not notify again when the sweep runs a second time', async () => {
+      await paidBooking();
+      clockNow = AFTER_RELEASE;
+      await sweep();
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+
+      expect(await noticesOf(VENDOR)).toHaveLength(1);
+    });
+
+    it('says nothing while the transfer is failing', async () => {
+      const booking = await paidBooking();
+      harness.stripe.transfersToRefuse.add(booking.id);
+      clockNow = AFTER_RELEASE;
+      expect((await sweep()).failed).toBe(1);
+
+      expect(booking.stripeTransferId).toBeNull();
+      expect(await noticesOf(VENDOR)).toEqual([]);
+    });
+
+    it('emails the vendor alone, with a link to their dashboard', async () => {
+      await paidBooking();
+      harness.email.sent.length = 0;
+      clockNow = AFTER_RELEASE;
+      await sweep();
+      await harness.app.background.drain();
+
+      expect(harness.email.sent.map((message) => message.to)).toEqual(['grace@example.com']);
+      expect(harness.email.sent[0]?.text).toContain('https://web.test/vendor/dashboard');
     });
   });
 });

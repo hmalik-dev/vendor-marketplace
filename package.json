@@ -13,6 +13,7 @@
     "lane:exec": "tsx packages/preflight/src/lane/cli.ts exec",
     "lane:pr": "tsx packages/preflight/src/lane/cli.ts pr",
     "lane:down": "tsx packages/preflight/src/lane/cli.ts down",
+    "migrations:check": "pnpm --filter @vendor-marketplace/preflight run migrations:check",
     "secrets:scan": "pnpm --filter @vendor-marketplace/preflight run secrets:scan",
     "secrets:scan:all": "pnpm --filter @vendor-marketplace/preflight run secrets:scan -- --tracked",
     "smoke": "pnpm --filter @vendor-marketplace/preflight run smoke",
@@ -25,6 +26,7 @@
     "test": "turbo run test",
     "test:contention": "turbo run test:contention",
     "e2e:auth": "node scripts/e2e-auth.mjs",
+    "e2e:mail-code": "pnpm --silent --filter @vendor-marketplace/db e2e:mail-code",
     "test:agents": "for f in .claude/workflows/*.test.mjs .claude/hooks/*.test.mjs scripts/*.test.mjs; do echo \"== $f\"; node \"$f\" || exit 1; done",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
@@ -56,6 +58,7 @@
     "overrides": {
       "next>postcss": "8.5.28",
       "cosmiconfig>js-yaml": "4.3.2",
+      "@eslint/eslintrc>js-yaml": "4.3.2",
       "metro>image-size": "2.0.4",
       "qs": ">=6.16.0",
       "esbuild": ">=0.25.0"

@@ -11,6 +11,8 @@ import {
   PAYMENT_INTENT_SUCCEEDED,
   type StripeEventNotification,
   type StripeKeyMode,
+  isForeignEnvIntent,
+  isForeignEnvPaymentIntent,
 } from '../../lib/stripe.js';
 import {
   openChargebackCase,
@@ -29,6 +31,7 @@ import {
 import { findBookingIdByPaymentIntent } from '../operator-alerts/operator-alerts.dao.js';
 import { bookingContextFor, recordSuccessfulPayment } from '../payments/payments.service.js';
 import { reconcileRefundedIntent } from '../payments/refund-reconciliation.js';
+import { releaseFailedExternalRefunds } from '../payments/refunds.dao.js';
 import { generateSupportReference } from '../support/support.service.js';
 import {
   accountUpdateOutcomeSchema,
@@ -221,6 +224,12 @@ export interface StripeWebhookRoutesOptions {
    * (a key of no recognised mode) skips the check.
    */
   keyMode: StripeKeyMode | null;
+  /**
+   * `DEPLOY_ENV`. Staging and production share one Stripe test account, so an
+   * intent, dispute or refund tagged for the other tier is acknowledged and
+   * ignored rather than retried or paged (VEN-529).
+   */
+  deployEnv: string;
 }
 
 export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptions> = async (
@@ -365,7 +374,21 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
       async function applyEvent(): Promise<z.infer<typeof webhookResponseSchema>['outcome']> {
         if (isAccountEvent(event.type) && event.accountId) {
           return applyAccountStatusChange(
-            { db: app.db, stripe: app.stripe, log: request.log },
+            {
+              db: app.db,
+              stripe: app.stripe,
+              log: request.log,
+              notify: {
+                hub: app.events,
+                mail: {
+                  db: app.db,
+                  email: app.email,
+                  log: request.log,
+                  webOrigin: options.webOrigin,
+                  background: app.background,
+                },
+              },
+            },
             event.accountId,
           );
         }
@@ -404,6 +427,14 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
         const intent = await app.stripe.retrievePaymentIntent(event.objectId);
 
         if (intent.status !== PAYMENT_INTENT_SUCCEEDED) {
+          return 'ignored';
+        }
+
+        if (isForeignEnvIntent(intent, options.deployEnv)) {
+          request.log.info(
+            { paymentIntentId: intent.id, intentEnv: intent.metadata.env, env: options.deployEnv },
+            'Ignored a succeeded payment intent created by another deployment',
+          );
           return 'ignored';
         }
 
@@ -461,6 +492,17 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           return 'refund-unchanged';
         }
 
+        /* Before the lookup: a database branched from the other tier holds its intent ids too (VEN-529). */
+        if (
+          await isForeignEnvPaymentIntent(app.stripe, refund.paymentIntentId, options.deployEnv)
+        ) {
+          request.log.info(
+            { refundId: refund.refundId, paymentIntentId: refund.paymentIntentId },
+            'Ignored a failed refund on a payment intent created by another deployment',
+          );
+          return 'refund-unchanged';
+        }
+
         const bookingId = await findBookingIdByPaymentIntent(app.db, refund.paymentIntentId);
 
         if (!bookingId) {
@@ -478,6 +520,24 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
         app.operatorAlerts.dispatch(
           refundFailedAlert({ bookingId, during: `a refund Stripe later marked ${refund.status}` }),
         );
+
+        /*
+         * After the alert, so a failed Stripe read cannot silence it. A foreign
+         * refund that did not land no longer holds the residual payout
+         * (VEN-499); a platform refund that failed is still a person's decision.
+         */
+        const paymentIntentId = refund.paymentIntentId;
+        const releasedCents = await releaseFailedExternalRefunds(app.db, bookingId, () =>
+          app.stripe.findRefund(paymentIntentId),
+        );
+
+        if (releasedCents > 0) {
+          request.log.info(
+            { bookingId, refundId: refund.refundId, releasedCents },
+            'Released the external refund total of a refund Stripe later marked unusable',
+          );
+        }
+
         return 'refund-failed';
       }
 
@@ -518,6 +578,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
             log: request.log,
             bookings: bookingContextFor(app, request.log, options.webOrigin),
             alerts: app.operatorAlerts,
+            deployEnv: options.deployEnv,
           },
           disputeId,
           () => app.stripe.retrieveDispute(disputeId),

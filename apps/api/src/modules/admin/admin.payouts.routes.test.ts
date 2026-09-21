@@ -1,3 +1,4 @@
+import { setUserRole } from '../../testing/set-user-role.js';
 import {
   adminActions,
   bookingRequests,
@@ -10,7 +11,7 @@ import {
 import type { AdminActionRow } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { legalDocumentSha256 } from '@vendor-marketplace/shared';
+import { addDays, legalDocumentSha256, toDateString } from '@vendor-marketplace/shared';
 import { insertAcceptance } from '../legal/legal-acceptance.dao.js';
 import { findDuePayoutBookingIds } from '../payments/payouts.dao.js';
 import { PAYOUT_AGREEMENT_MISSING_REASON, releaseDuePayouts } from '../payments/payouts.service.js';
@@ -74,10 +75,7 @@ describe('admin payout health', () => {
     expect(response.statusCode).toBe(200);
 
     if (promoteToAdmin) {
-      await harness.database.db
-        .update(users)
-        .set({ role: 'admin' })
-        .where(eq(users.authUserId, authUserId));
+      await setUserRole(harness.database.db, 'admin', eq(users.authUserId, authUserId));
     }
 
     const rows = await harness.database.db
@@ -134,8 +132,12 @@ describe('admin payout health', () => {
   let intentSequence = 0;
 
   async function paidBooking(overrides: BookingOverrides = {}): Promise<string> {
-    const eventDate = overrides.eventDate ?? DUE_EVENT_DATE;
     intentSequence += 1;
+    // One confirmed booking per vendor date is a database rule (VEN-482), so
+    // each default booking takes the day before the last, so all stay due.
+    const eventDate =
+      overrides.eventDate ??
+      toDateString(addDays(new Date(`${DUE_EVENT_DATE}T12:00:00Z`), -intentSequence));
 
     const requestRows = await harness.database.db
       .insert(bookingRequests)

@@ -6,6 +6,7 @@ import {
   conversations,
   notifications,
   platformSettings,
+  servicePackages,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
@@ -876,6 +877,46 @@ describe('/booking-requests', () => {
       expect(response.statusCode).toBe(404);
     });
 
+    describe('a package guest cap (VEN-544)', () => {
+      async function capPackage(packageId: string, maxGuests: number): Promise<void> {
+        await harness.database.db
+          .update(servicePackages)
+          .set({ maxGuests })
+          .where(eq(servicePackages.id, packageId));
+      }
+
+      it('accepts a guest count equal to the cap', async () => {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+        await capPackage(packageId, 50);
+
+        const response = await createRequest(vendorId, { packageId, guestCount: 50 });
+
+        expect(response.statusCode).toBe(201);
+      });
+
+      it('refuses one guest over the cap, naming the limit', async () => {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+        await capPackage(packageId, 50);
+
+        const response = await createRequest(vendorId, { packageId, guestCount: 51 });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toMatchObject({
+          error: ERROR_CODES.VALIDATION_ERROR,
+          message:
+            'Sunlit Studio covers events up to 50 guests. Enter 50 or fewer, or pick a larger package.',
+        });
+      });
+
+      it('leaves an uncapped package alone', async () => {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+
+        const response = await createRequest(vendorId, { packageId, guestCount: 5000 });
+
+        expect(response.statusCode).toBe(201);
+      });
+    });
+
     it('refuses an occasion outside the vocabulary', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
 
@@ -1365,6 +1406,87 @@ describe('/booking-requests', () => {
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toContain('has passed');
+    });
+
+    /* VEN-556: create refuses an invisible vendor; accept must not book one pulled since. */
+    it.each([
+      ['unpublished', { isPublished: false }],
+      ['on a moderation hold', { isPublished: false, moderationHold: true }],
+      ['held while still published', { moderationHold: true }],
+    ] as const)('refuses to accept a quote from a vendor %s', async (_label, change) => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId: string = created.json().id;
+      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await harness.database.db.update(vendorProfiles).set(change);
+
+      const response = await post(CUSTOMER, `/booking-requests/${requestId}/accept`);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_PAUSED);
+      expect(response.json().message).toBe("Sunlit Studio isn't taking bookings right now");
+      const [row] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests);
+      expect(row?.status).toBe('quoted');
+    });
+
+    /* VEN-559: the customer read says which of the two a pulled vendor is. */
+    it.each([
+      ['available', { isPublished: true }],
+      ['paused', { moderationHold: true }],
+      ['closed', { isDeleted: true }],
+    ] as const)('reads a %s vendor on the request', async (availability, change) => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId: string = created.json().id;
+      await harness.database.db.update(vendorProfiles).set(change);
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: `/booking-requests/${requestId}`,
+        headers: bearer(CUSTOMER),
+      });
+
+      expect(response.json().vendor.availability).toBe(availability);
+    });
+
+    it('refuses to accept a quote from a retired vendor with the permanent code', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId: string = created.json().id;
+      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await harness.database.db.update(vendorProfiles).set({ isDeleted: true });
+
+      const response = await post(CUSTOMER, `/booking-requests/${requestId}/accept`);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
+    });
+
+    it('tells a vendor whose storefront is unpublished to publish it before accepting', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId });
+      const requestId: string = created.json().id;
+      await harness.database.db.update(vendorProfiles).set({ isPublished: false });
+
+      const response = await post(VENDOR, `/booking-requests/${requestId}/accept`);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_PAUSED);
+      expect(response.json().message).toBe(
+        'Publish your storefront again before accepting bookings',
+      );
+      const [row] = await harness.database.db
+        .select({ status: bookingRequests.status })
+        .from(bookingRequests);
+      expect(row?.status).toBe('pending');
     });
 
     it('pending -> quoted -> accepted locks the quoted price', async () => {

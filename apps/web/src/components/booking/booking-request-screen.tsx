@@ -554,7 +554,7 @@ export function BookingRequestScreen({
   const primaryLabel = step === 1 ? 'Continue to review' : 'Send request';
 
   return (
-    <div className="mx-auto grid w-full max-w-[1360px] gap-8.5 px-6 pt-6.5 pb-8 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_400px] xl:px-10">
+    <div className="mx-auto grid w-full max-w-[1440px] gap-8.5 px-6 pt-6.5 pb-8 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_400px] xl:px-10">
       <div className="min-w-0">
         <RequestStepper current={step} />
 
@@ -563,7 +563,7 @@ export function BookingRequestScreen({
             ? `Tell ${vendor.businessName} about your event`
             : 'Check this over before it goes'}
         </h1>
-        <p className="mb-5 text-md leading-prose text-stone-700">
+        <p className="mb-5 text-cta leading-prose text-stone-700">
           {step === 1
             ? 'The more they know now, the fewer messages it takes to lock the date.'
             : 'Nothing is sent yet. Edit anything that is not right.'}
@@ -680,6 +680,7 @@ export function BookingRequestScreen({
                     <button
                       {...props}
                       type="button"
+                      data-focus-own
                       aria-haspopup="listbox"
                       aria-expanded={eventTypeOpen}
                       className={cn(
@@ -754,7 +755,7 @@ export function BookingRequestScreen({
               issue={validation.issueFor(`${fieldId}-notes`)}
               className="sm:col-span-2"
               footer={
-                <div className="mt-1.25 flex justify-between text-xs text-stone-600">
+                <div className="mt-1.25 flex justify-between text-helper text-stone-600">
                   <span>Optional, but it speeds up the quote</span>
                   <span>
                     {form.notes.length} / {BOOKING_REQUEST_NOTES_MAX_LENGTH}
@@ -818,7 +819,7 @@ export function BookingRequestScreen({
 
 /** `.inp` from the frame: `stone-150` fill, `stone-300` hairline, 10px radius. */
 const FIELD_CONTROL = cn(
-  'h-auto w-full rounded-[10px] border border-stone-300 bg-stone-150 px-3.25 py-2.5 text-base text-stone-900',
+  'h-auto w-full rounded-[10px] border border-input bg-stone-150 px-3.25 py-2.5 text-base text-stone-900',
   FIELD_FOCUS,
 );
 

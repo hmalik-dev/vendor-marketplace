@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { readSignUpRole } from '@/lib/auth/signup-role';
 
 const replace = vi.fn();
@@ -61,7 +62,7 @@ describe('SignUpForm', () => {
    * See design/design-plan/21-sign-up.md.
    */
   it('shows the form with no role chosen, and marks the submit pending', () => {
-    const { container } = render(<SignUpForm initialRole={null} />);
+    const { container } = render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     expect(screen.getByLabelText('Email')).toHaveProperty('disabled', false);
     expect(screen.getByLabelText('Password')).toHaveProperty('disabled', false);
@@ -80,7 +81,7 @@ describe('SignUpForm', () => {
 
   /* VEN-451: frame `12` draws the card description at 12px and the fields on stone-0. */
   it('draws the role descriptions at 12px and the fields on stone-0', () => {
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     const description = screen.getByText('Find and book vendors near you.');
     expect(description.className.split(' ')).toContain('text-[12px]');
@@ -95,7 +96,7 @@ describe('SignUpForm', () => {
    */
   it('blocks submission until a role is chosen, then stops blocking', async () => {
     const user = userEvent.setup();
-    const { container } = render(<SignUpForm initialRole={null} />);
+    const { container } = render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
@@ -112,7 +113,7 @@ describe('SignUpForm', () => {
 
   it('blocks the Enter key the same way as the button', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     fireEvent.submit(screen.getByLabelText('Email').closest('form') as HTMLFormElement);
@@ -122,7 +123,7 @@ describe('SignUpForm', () => {
 
   it('drops the pending hint once a role is chosen', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
 
@@ -136,7 +137,7 @@ describe('SignUpForm', () => {
    */
   it('keeps both roles visible and selectable after one is chosen', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     await user.click(screen.getByRole('radio', { name: new RegExp(VENDOR) }));
 
@@ -155,7 +156,7 @@ describe('SignUpForm', () => {
 
   it('creates the account with the address, the password and a name from the address', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole="vendor" />);
+    render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
@@ -170,7 +171,7 @@ describe('SignUpForm', () => {
 
   it('asks for the emailed code once the account exists, and hides the role question', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole="customer" />);
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
@@ -182,7 +183,7 @@ describe('SignUpForm', () => {
 
   it('remembers the chosen role for the accept-terms screen once the account exists', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole="vendor" />);
+    render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
@@ -194,7 +195,7 @@ describe('SignUpForm', () => {
   it('does not remember a role, or leave the form, when the sign-up is refused', async () => {
     signUpWithEmail.mockResolvedValue('rejected');
     const user = userEvent.setup();
-    render(<SignUpForm initialRole="vendor" />);
+    render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
@@ -206,7 +207,7 @@ describe('SignUpForm', () => {
 
   it('signs in and lands on /after-sign-in after a good code', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole="customer" />);
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
@@ -224,7 +225,7 @@ describe('SignUpForm', () => {
   it('shows the error and stays on the code step after a wrong code', async () => {
     verifyEmailCode.mockResolvedValue('rejected');
     const user = userEvent.setup();
-    render(<SignUpForm initialRole="customer" />);
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
@@ -241,7 +242,7 @@ describe('SignUpForm', () => {
 
   it('asks for a fresh code on request', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole="customer" />);
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
@@ -252,7 +253,7 @@ describe('SignUpForm', () => {
   });
 
   it('groups the two roles under one labelled choice', () => {
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     expect(screen.getByRole('group', { name: 'Which one are you?' })).toBeDefined();
     expect(screen.getAllByRole('radio')).toHaveLength(2);
@@ -264,7 +265,7 @@ describe('SignUpForm', () => {
    * card is still one click away.
    */
   it('pre-selects the role it was given and shows the form straight away', () => {
-    render(<SignUpForm initialRole="vendor" />);
+    render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
 
     expect(screen.getByRole('radio', { name: new RegExp(VENDOR) })).toHaveProperty('checked', true);
     expect(screen.getByRole('radio', { name: new RegExp(CUSTOMER) })).toHaveProperty(
@@ -280,12 +281,12 @@ describe('SignUpForm', () => {
    * everyone says nothing to either.
    */
   it('labels each line of the default panel with the side it belongs to', () => {
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     for (const [label, line] of [
       ['Booking', "See what a vendor charges and when they're free"],
       ['Vending', 'Publish your prices and own your calendar'],
-      ['Both', 'Payment held until after the event'],
+      ['Both', 'Payment held until the event is complete'],
     ]) {
       expect(screen.getByText(label), label).toBeDefined();
       expect(screen.getByText(line), line).toBeDefined();
@@ -294,12 +295,12 @@ describe('SignUpForm', () => {
 
   it('states the three customer guarantees and no platform statistics', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
 
     expect(screen.getByText('Live calendars — if a date shows open, it is')).toBeDefined();
-    expect(screen.getByText('Payment held until after the event')).toBeDefined();
+    expect(screen.getByText('Payment held until the event is complete')).toBeDefined();
     expect(screen.getByText('Published prices, and no service fee on top')).toBeDefined();
 
     // Nothing on this screen may claim a scale the product does not have.
@@ -308,7 +309,7 @@ describe('SignUpForm', () => {
   });
 
   it('leads the default panel with its own three-line headline', () => {
-    const { container } = render(<SignUpForm initialRole={null} />);
+    const { container } = render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     const headline = headlineStartingWith(container, 'Clear prices.');
 
@@ -321,7 +322,7 @@ describe('SignUpForm', () => {
 
   it('leads the customer panel with the three-line headline, closing in italic', async () => {
     const user = userEvent.setup();
-    const { container } = render(<SignUpForm initialRole={null} />);
+    const { container } = render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
 
@@ -338,7 +339,7 @@ describe('SignUpForm', () => {
 
   it('demonstrates published pricing rather than calling it transparent', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
 
@@ -355,7 +356,7 @@ describe('SignUpForm', () => {
    */
   it('swaps the marketing panel to the vendor pitch when the vendor role is chosen', async () => {
     const user = userEvent.setup();
-    const { container } = render(<SignUpForm initialRole={null} />);
+    const { container } = render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     await user.click(screen.getByRole('radio', { name: new RegExp(VENDOR) }));
 
@@ -382,7 +383,7 @@ describe('SignUpForm', () => {
    */
   it('makes no fee claim anywhere on the vendor panel', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     await user.click(screen.getByRole('radio', { name: new RegExp(VENDOR) }));
 
@@ -393,7 +394,7 @@ describe('SignUpForm', () => {
 
   it('accents the selected card to match the panel beside it', async () => {
     const user = userEvent.setup();
-    render(<SignUpForm initialRole={null} />);
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
     const cardOf = (name: string): HTMLElement => {
       const label = screen.getByRole('radio', { name: new RegExp(name) }).closest('label');
@@ -414,5 +415,105 @@ describe('SignUpForm', () => {
     expect(cardOf(VENDOR).className).toContain('bg-sage-50');
     // The unselected card drops back to the plain stone treatment.
     expect(cardOf(CUSTOMER).className).toContain('border-stone-300');
+  });
+
+  /*
+   * VEN-515. The notice is true only for a vendor while the gate is on, so each
+   * other combination asserts its absence; the agreement line is for everyone.
+   */
+  describe('invitation notice and agreement line', () => {
+    const NOTICE = `Vendors join ${BRAND_NAME} by invitation for now. Sign up and we'll add you to the waitlist.`;
+
+    it('tells a vendor about the waitlist while the gate is on', () => {
+      render(<SignUpForm initialRole="vendor" vendorInviteOnly />);
+
+      expect(screen.getByText(NOTICE)).toBeTruthy();
+    });
+
+    it('follows the chosen card after load', async () => {
+      const user = userEvent.setup();
+
+      render(<SignUpForm initialRole={null} vendorInviteOnly />);
+      expect(screen.queryByText(NOTICE)).toBeNull();
+
+      await user.click(screen.getByRole('radio', { name: new RegExp(VENDOR) }));
+      expect(screen.getByText(NOTICE)).toBeTruthy();
+
+      await user.click(screen.getByRole('radio', { name: new RegExp(CUSTOMER) }));
+      expect(screen.queryByText(NOTICE)).toBeNull();
+    });
+
+    it.each([
+      ['a customer, gate on', 'customer', true],
+      ['no role, gate on', null, true],
+      ['a vendor, gate off or unreadable', 'vendor', false],
+      ['a customer, gate off', 'customer', false],
+      ['no role, gate off', null, false],
+    ] as const)('shows no notice for %s', (_label, initialRole, vendorInviteOnly) => {
+      render(<SignUpForm initialRole={initialRole} vendorInviteOnly={vendorInviteOnly} />);
+
+      expect(screen.queryByText(NOTICE)).toBeNull();
+      expect(document.querySelector('[data-invite-notice]')).toBeNull();
+    });
+
+    it.each([
+      ['a customer', 'customer', true],
+      ['a vendor', 'vendor', true],
+      ['no role', null, true],
+      ['a customer', 'customer', false],
+      ['a vendor', 'vendor', false],
+      ['no role', null, false],
+    ] as const)('shows the agreement line for %s (gate on: %j)', (_label, initialRole, gateOn) => {
+      const { container } = render(
+        <SignUpForm initialRole={initialRole} vendorInviteOnly={gateOn} />,
+      );
+
+      const line = [...container.querySelectorAll('p')].find((p) =>
+        p.textContent?.startsWith('By signing up'),
+      );
+
+      expect(line?.textContent).toBe(
+        'By signing up, you agree to the Terms of Service and Privacy Policy.',
+      );
+      expect(screen.getByRole('link', { name: 'Terms of Service' }).getAttribute('href')).toBe(
+        '/terms',
+      );
+      expect(screen.getByRole('link', { name: 'Privacy Policy' }).getAttribute('href')).toBe(
+        '/privacy',
+      );
+    });
+
+    /*
+     * The line is a notice. Acceptance is the versioned, audited write on the
+     * Terms screen, and the form's only network call is the auth provider's
+     * (mocked above), so submitting reaches nothing that could record one.
+     */
+    it('writes no acceptance when the account is created', async () => {
+      const user = userEvent.setup();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+      render(<SignUpForm initialRole="vendor" vendorInviteOnly />);
+      await fillCredentials(user);
+      await user.click(screen.getByRole('button', { name: CREATE }));
+
+      expect(await screen.findByLabelText('Verification code')).toBeDefined();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      fetchSpy.mockRestore();
+    });
+
+    it('sits between the submit button and the sign-in line', () => {
+      render(<SignUpForm initialRole="vendor" vendorInviteOnly />);
+
+      const notice = screen.getByText(NOTICE);
+      const submit = screen.getByRole('button', { name: CREATE });
+      const terms = screen.getByRole('link', { name: 'Terms of Service' });
+      const signIn = screen.getByRole('link', { name: 'Sign in' });
+      const follows = (a: Node, b: Node): boolean =>
+        Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+      expect(follows(notice, submit)).toBe(true);
+      expect(follows(submit, terms)).toBe(true);
+      expect(follows(terms, signIn)).toBe(true);
+    });
   });
 });

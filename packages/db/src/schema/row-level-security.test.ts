@@ -74,14 +74,14 @@ describe('row level security on every public table', () => {
     }
   });
 
-  it('does not force it, so the owning connection is unaffected', async () => {
-    const result = await testDb.client.query<{ forced: number }>(
-      `select count(*)::int as forced from pg_class c
+  it('forces it on messages only (VEN-505), so every other owning connection is unaffected', async () => {
+    const result = await testDb.client.query<{ name: string }>(
+      `select c.relname as name from pg_class c
          join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relkind = 'r' and c.relforcerowsecurity`,
     );
 
-    expect(result.rows[0]?.forced).toBe(0);
+    expect(result.rows).toEqual([{ name: 'messages' }]);
   });
 });
 

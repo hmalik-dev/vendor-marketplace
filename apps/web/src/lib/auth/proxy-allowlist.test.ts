@@ -27,6 +27,8 @@ describe('isProxiedAuthCall', () => {
     ['POST', ['email-otp', 'check-verification-otp']],
     ['POST', ['update-user']],
     ['GET', ['list-sessions']],
+    ['POST', ['revoke-sessions']],
+    ['POST', ['revoke-other-sessions']],
     ['POST', ['admin', 'set-role']],
     ['GET', ['sign-in', 'email']],
     ['POST', ['token']],

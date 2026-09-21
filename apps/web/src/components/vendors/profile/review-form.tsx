@@ -158,8 +158,8 @@ export function ReviewForm({
               key={value}
               className={cn(
                 'flex size-11 cursor-pointer items-center justify-center rounded-md text-[26px] transition-colors',
-                'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-clay-400/40 has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-stone-50',
-                rating !== null && value <= rating ? 'text-gold-400' : 'text-stone-400',
+                'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-clay-400 has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-stone-50',
+                rating !== null && value <= rating ? 'text-gold-600' : 'text-stone-560',
               )}
             >
               <input

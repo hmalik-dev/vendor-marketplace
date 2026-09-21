@@ -43,6 +43,7 @@ function rights(overrides: Partial<WireAdminUserDataRights> = {}): WireAdminUser
       legalAcceptances: 1,
     },
     closeBlockers: [],
+    unwindPending: 0,
     bookingsRefundedOnClose: 0,
     legalAcceptances: [
       {

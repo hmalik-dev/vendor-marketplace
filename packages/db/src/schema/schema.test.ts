@@ -3,6 +3,7 @@ import {
   BOOKING_REQUEST_STATUSES,
   BUDGET_TIERS,
   CATEGORY_SEEDS,
+  EXPIRABLE_BOOKING_REQUEST_STATUSES,
   LIVE_BOOKING_REQUEST_STATUSES,
   TAG_CATEGORIES,
   USER_ROLES,
@@ -38,10 +39,12 @@ const EXPECTED_TABLES = [
   'review_tombstones',
   'reviews',
   'service_packages',
+  'stream_tickets',
   'stripe_webhook_failures',
   'support_cases',
   'tag_suggestions',
   'tags',
+  'throttle_hits',
   'us_cities',
   'users',
   'vendor_applications',
@@ -63,7 +66,7 @@ afterAll(async () => {
 });
 
 describe('migrations', () => {
-  it('creates all 20 tables from the data model', async () => {
+  it('creates every table from the data model', async () => {
     const result = await testDb.db.execute<{ table_name: string }>(
       sql`SELECT table_name FROM information_schema.tables
           WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
@@ -487,5 +490,57 @@ describe('the live booking request indexes', () => {
       );
       expect(mentioned.sort(), row.indexname).toEqual([...LIVE_BOOKING_REQUEST_STATUSES].sort());
     }
+  });
+
+  describe('the expiry sweep index', () => {
+    it('is predicated on exactly the statuses the shared constant calls expirable', async () => {
+      const result = await testDb.db.execute<{ indexdef: string }>(
+        sql`SELECT indexdef FROM pg_indexes
+            WHERE tablename = 'booking_requests' AND indexname = 'booking_requests_expires_at_idx'`,
+      );
+
+      expect(result.rows).toHaveLength(1);
+      const mentioned = [...new Set(BOOKING_REQUEST_STATUSES)].filter((status) =>
+        result.rows[0]!.indexdef.includes(`'${status}'`),
+      );
+      expect(mentioned.sort()).toEqual([...EXPIRABLE_BOOKING_REQUEST_STATUSES].sort());
+    });
+
+    it('is the index the lapsed-request query plans on, over more than 10k mixed-status rows', async () => {
+      const actors = await seedBookingActors(testDb.db, 'expiry-plan');
+      // 12k rows, almost all settled: the sweep must skip them, so a scan reads them all.
+      await testDb.db.execute(sql`
+        INSERT INTO booking_requests
+          (customer_id, vendor_id, package_id, event_date, status, expires_at)
+        SELECT ${actors.customerId}::uuid, ${actors.vendorId}::uuid, ${actors.packageId}::uuid,
+               DATE '2040-01-01' + g,
+               (CASE WHEN g % 200 < 3
+                     THEN (ARRAY['pending','quoted','accepted'])[1 + g % 3]
+                     ELSE (ARRAY['declined','expired','cancelled'])[1 + g % 3]
+                END)::booking_request_status,
+               TIMESTAMPTZ '2040-01-01' + (g || ' minutes')::interval
+        FROM generate_series(1, 12000) g`);
+      await testDb.db.execute(sql`ANALYZE booking_requests`);
+
+      const counted = await testDb.db.execute<{ total: number }>(
+        sql`SELECT count(*)::int AS total FROM booking_requests`,
+      );
+      expect(counted.rows[0]!.total).toBeGreaterThan(10_000);
+
+      // The predicate of `hasLapsed` in booking-requests.dao.ts, bound at mid-range.
+      const expirable = sql.raw(EXPIRABLE_BOOKING_REQUEST_STATUSES.map((s) => `'${s}'`).join(', '));
+      const plan = await testDb.db.execute<{ 'QUERY PLAN': string }>(
+        sql`EXPLAIN SELECT * FROM booking_requests r
+            WHERE r.status IN (${expirable})
+              AND r.expires_at IS NOT NULL AND r.expires_at <= TIMESTAMPTZ '2040-01-05'
+              AND (r.status <> 'accepted'
+                   OR NOT EXISTS (SELECT 1 FROM bookings b WHERE b.request_id = r.id))
+            ORDER BY r.expires_at ASC LIMIT 50`,
+      );
+      const text = plan.rows.map((row) => row['QUERY PLAN']).join('\n');
+
+      expect(text).toContain('booking_requests_expires_at_idx');
+      expect(text).not.toContain('Seq Scan on booking_requests');
+    });
   });
 });

@@ -113,6 +113,19 @@ export const errorHandlerPlugin = fp<ErrorHandlerOptions>(
         return reply.status(500).send(body);
       }
 
+      /*
+       * A body the client never finished delivering: the request deadline (or the
+       * client itself) destroyed the socket mid-read, so the stream error is the
+       * defence working. Nothing to page, and no one left to answer.
+       */
+      if (request.raw.destroyed && !request.raw.readableEnded) {
+        request.log.info(
+          { method: request.method, route: request.routeOptions.url },
+          'Request body abandoned',
+        );
+        return reply.status(408).send();
+      }
+
       if (error instanceof AppError) {
         const body: ApiError = {
           statusCode: error.statusCode,

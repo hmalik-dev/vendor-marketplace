@@ -20,7 +20,9 @@ import {
   acceptVendorAgreementAs,
 } from '../../testing/test-server.js';
 import {
+  addDays,
   SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE,
+  toDateString,
   VENDOR_PROFILE_MODERATION_HOLD_MESSAGE,
 } from '@vendor-marketplace/shared';
 import { updatePackageById } from '../packages/packages.dao.js';
@@ -99,9 +101,13 @@ describe('admin graduated moderation', () => {
     return { id: body.id as string, slug: body.slug as string, packageIds };
   }
 
+  let futureDay = 0;
+
   /** A confirmed, paid booking in the future — what a ban would have unwound. */
   async function confirmedBooking(customerId: string, vendorId: string): Promise<string> {
-    const eventDate = '2099-06-01';
+    // One accepted request per vendor date is a database rule (VEN-482).
+    futureDay += 1;
+    const eventDate = toDateString(addDays(new Date('2099-05-31T12:00:00Z'), futureDay));
     const requestRows = await harness.database.db
       .insert(bookingRequests)
       .values({

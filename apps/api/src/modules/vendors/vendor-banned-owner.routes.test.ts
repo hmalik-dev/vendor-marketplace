@@ -217,10 +217,18 @@ describe('a vendor whose owner is banned', () => {
 
     // Straight to the service: the auth hook would refuse a banned caller first.
     await expect(
-      updateVendorProfile(harness.database.db, harness.app.storage, owner!.id, {
-        isPublished: true,
-      }),
-    ).rejects.toMatchObject({ statusCode: 403, message: 'This account has been suspended' });
+      updateVendorProfile(
+        harness.database.db,
+        harness.app.storage,
+        owner!.id,
+        { isPublished: true },
+        harness.app.storagePublicUrl,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'ACCOUNT_SUSPENDED',
+      message: 'This account has been suspended',
+    });
 
     const [row] = await harness.database.db
       .select({ isPublished: vendorProfiles.isPublished })

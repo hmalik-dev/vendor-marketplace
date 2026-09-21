@@ -385,6 +385,44 @@ describe('/vendor/portfolio', () => {
       expect(items.json()).toEqual([]);
     });
 
+    it.each([
+      ['an encoded prefix letter', `%70ortfolio/${FOREIGN_OWNER}/1111.webp`],
+      ['an upper-cased prefix', `PORTFOLIO/${FOREIGN_OWNER}/1111.webp`],
+    ])('refuses a foreign key spelled with %s', async (_label, imageUrl) => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/portfolio',
+        headers: bearer(VENDOR),
+        payload: { imageUrl },
+      });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it.each([
+      ['image', () => ({ imageUrl: 'https://evil.example/a.webp' })],
+      [
+        'thumbnail',
+        (ownerId: string) => ({
+          imageUrl: `portfolio/${ownerId}/a.webp`,
+          thumbnailUrl: 'https://evil.example/a-thumb.webp',
+        }),
+      ],
+    ])('refuses a foreign-host %s URL with a 400', async (_label, payloadFor) => {
+      await createProfile(VENDOR, 'Sunlit Studio');
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/vendor/portfolio',
+        headers: bearer(VENDOR),
+        payload: payloadFor(await ownerIdOf(VENDOR)),
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
     /** The thumbnail is a second key on the same row, and carries the same owner. */
     it('refuses a foreign key named only as the thumbnail', async () => {
       await createProfile(VENDOR, 'Sunlit Studio');

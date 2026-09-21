@@ -8,7 +8,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { normalizeImageRefPath, UPLOAD_PREFIXES, type UserRole } from '@vendor-marketplace/shared';
 import type { ApiEnv } from '../config/env.js';
-import { forbidden } from './errors.js';
+import { forbidden, validationFailed } from './errors.js';
 
 /** Object namespaces the API writes into, kept to a closed set. */
 /**
@@ -37,6 +37,13 @@ export const STORAGE_PREFIX_ROLES: Record<StoragePrefix, readonly UserRole[]> = 
 /**
  * How long a stored object may be cached. Keys are unique per upload and never
  * overwritten, so the objects themselves are immutable.
+ *
+ * Every prefix is public, `customer-profile` included (VEN-464). The bucket is
+ * one `public_read` bucket, so no prefix can be hidden inside it, and a private
+ * one would need a second bucket, signed URLs and a bypass of the image
+ * optimizer cache. That is worth paying only for a photo meant to be
+ * owner-only; a customer avatar is not, and its key is an unguessable
+ * `prefix/ownerId/uuid.webp`. Revisit if a customer photo ever becomes private.
  */
 const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
@@ -196,17 +203,9 @@ export function ownsObjectKey(key: string, ownerId: string): boolean {
  * publishes.
  */
 export function referencedPathSegments(ref: string): string[] {
-  const path = normalizeImageRefPath(ref)
-    .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, '')
-    .replace(/[?#][\s\S]*$/, '')
-    .replace(/%2f/gi, '/');
   const resolved: string[] = [];
 
-  for (const segment of path.split('/')) {
-    if (segment === '' || segment === '.') {
-      continue;
-    }
-
+  for (const segment of unresolvedPathSegments(ref)) {
     if (segment === '..') {
       resolved.pop();
       continue;
@@ -216,6 +215,25 @@ export function referencedPathSegments(ref: string): string[] {
   }
 
   return resolved;
+}
+
+/**
+ * The path segments as written, decoded to a fixed point: empty and `.`
+ * segments gone, `..` kept. The reference is decoded **as a whole and
+ * repeatedly** by `normalizeImageRefPath` before it is cut up (VEN-537), so
+ * `%70ortfolio` and `%252e%252e` are read as what a decoding host reads.
+ */
+function unresolvedPathSegments(ref: string): string[] {
+  return normalizeImageRefPath(ref)
+    .replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]*/i, '')
+    .replace(/[?#][\s\S]*$/, '')
+    .split('/')
+    .filter((segment) => segment !== '' && segment !== '.');
+}
+
+/** Prefixes compare case-insensitively: a case-folding host serves `PORTFOLIO/…` as `portfolio/…`. */
+function isStoragePrefix(segment: string): boolean {
+  return (STORAGE_PREFIXES as readonly string[]).includes(segment.toLowerCase());
 }
 
 /**
@@ -244,11 +262,31 @@ export function referencedPathSegments(ref: string): string[] {
 function referencedObjectKeyOwner(ref: string): string | null {
   const segments = referencedPathSegments(ref);
   const prefixAt = segments.findIndex(
-    (segment, index) =>
-      (STORAGE_PREFIXES as readonly string[]).includes(segment) && segments.length - index === 3,
+    (segment, index) => isStoragePrefix(segment) && segments.length - index === 3,
   );
 
   return prefixAt === -1 ? null : (segments[prefixAt + 1] ?? null);
+}
+
+/**
+ * The owners named by a reference that *walks back* out of a key, such as
+ * `portfolio/<victim>/a.webp/../..` or `portfolio/../<victim>/a.webp`. Resolved,
+ * these leave no key shape to read; unresolved, the segment after a prefix
+ * (skipping the dot-dots) is the object a lenient host still reaches. The schema
+ * refuses a `..` outright, so this is the guard not depending on it.
+ */
+function walkedBackOwners(ref: string): string[] {
+  const segments = unresolvedPathSegments(ref);
+
+  if (!segments.includes('..')) {
+    return [];
+  }
+
+  return segments.flatMap((segment, index) => {
+    const owner = segments.slice(index + 1).find((next) => next !== '..');
+
+    return isStoragePrefix(segment) && owner !== undefined ? [owner] : [];
+  });
 }
 
 /**
@@ -268,7 +306,11 @@ function referencedObjectKeyOwner(ref: string): string | null {
 function isForeignObjectKey(ref: string, ownerId: string): boolean {
   const owner = referencedObjectKeyOwner(ref);
 
-  return owner !== null && owner !== ownerId;
+  if (owner !== null && owner !== ownerId) {
+    return true;
+  }
+
+  return walkedBackOwners(ref).some((walked) => walked !== ownerId);
 }
 
 /**
@@ -415,4 +457,37 @@ export function createS3Storage(env: ApiEnv): ObjectStorage {
       await client.send(new HeadBucketCommand({ Bucket: env.STORAGE_BUCKET }));
     },
   };
+}
+
+/**
+ * Refuses an absolute image URL on any origin but the configured storage one.
+ *
+ * For vendor and portfolio writes, whose images are always our own uploads: a
+ * foreign host there is a broken image on a public storefront at best. The
+ * customer avatar write does not call this — an auth avatar legitimately lives
+ * on the provider's host (VEN-537).
+ */
+export function assertStorageOriginRefs(
+  refs: readonly (string | null | undefined)[],
+  publicBaseUrl: string,
+): void {
+  const storageOrigin = new URL(publicBaseUrl).origin;
+
+  for (const ref of refs) {
+    if (typeof ref !== 'string' || !/^[a-z][a-z0-9+.-]*:/i.test(ref)) {
+      continue;
+    }
+
+    let origin: string | null = null;
+
+    try {
+      origin = new URL(ref).origin;
+    } catch {
+      // Unparseable is refused below, the same as a foreign host.
+    }
+
+    if (origin !== storageOrigin) {
+      throw validationFailed('Images must be uploaded to this service');
+    }
+  }
 }

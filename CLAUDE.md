@@ -69,8 +69,12 @@ Dependency direction is one-way: `apps -> packages`.
   A value that fired the scan is rotated, not deleted.
 - **Local development and every lane run on the Docker Postgres.** Staging and
   production are Neon branches; never point local work at them.
-- **Never commit generated output**: `packages/db/drizzle/`, `.env.example`,
-  `turbo.json` passthrough — edit the source and regenerate.
+- **Generated output is regenerated, never hand-edited.** `packages/db/drizzle/`
+  (migrations and snapshots) **is committed** — the deploy runs it — and comes
+  from `pnpm db:generate` after editing the schema. `.env.example` and the
+  `turbo.json` passthrough are generated and **not** edited by hand either.
+  `pnpm migrations:check` fails a migration after the recorded baseline that
+  drops, deletes, retypes or `SET NOT NULL`s without `-- allow-destructive: <reason>`.
 - **A development default must never reach production**: derive it from what the
   platform sets, or throw; assert the production branch in a test.
 - **One ticket per worktree.** The commit hook refuses a dirty tree, so two
@@ -84,13 +88,12 @@ Dependency direction is one-way: `apps -> packages`.
 
 ## Releasing
 
-`.github/workflows/deploy.yml` (VEN-397) runs after `CI` succeeds on `main`:
-gate (still `main`'s tip) → preflight (every input configured, or red by name)
+`.github/workflows/deploy.yml` (VEN-397) runs after `CI` succeeds on a push to
+`staging` or `production`: gate (still that branch's tip) → preflight (every input configured, or red by name)
 → migrate over `DATABASE_URL_UNPOOLED` + reference seed → API → web (prebuilt
 Vercel, source maps to Sentry) → `/ready` must name the commit within ten
-minutes. `SENTRY_RELEASE` is that commit end to end. **Inert until VEN-377**
-provisions its secrets and decides the API host (`vars.API_HOST`, D10), so it
-fails at preflight on every merge — expected, like the smoke check. Every
+minutes. `SENTRY_RELEASE` is that commit end to end. Railway is the API host
+(D10); a missing input fails preflight by name and never skips. Every
 migration must stay backwards-compatible with the release still serving.
 
 ## Merging

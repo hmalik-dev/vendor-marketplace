@@ -33,6 +33,8 @@ export interface LaunchDatabase {
   pendingMigrations(): Promise<readonly string[]>;
   /** `platform_settings.max_booking_cents`; `null` when uncapped or the row was never written. */
   maxBookingCents(): Promise<number | null>;
+  /** `platform_settings.vendor_invite_only`; `null` when the row was never written. */
+  vendorInviteOnly(): Promise<boolean | null>;
 }
 
 export interface PostgresLaunchDatabaseOptions {
@@ -86,6 +88,12 @@ export function postgresLaunchDatabase(
         select max_booking_cents from platform_settings limit 1
       `;
       return row?.max_booking_cents ?? null;
+    },
+    async vendorInviteOnly() {
+      const [row] = await sql<{ vendor_invite_only: boolean }[]>`
+        select vendor_invite_only from platform_settings limit 1
+      `;
+      return row?.vendor_invite_only ?? null;
     },
     close: () => sql.end(),
   };
@@ -169,6 +177,23 @@ export function databaseProbes({ env, database }: LaunchOptions): Probe[] {
             cap === null ? 'unset' : String(cap),
             cap !== null,
             'a booking cap for a beta release',
+          ),
+        ];
+      },
+    },
+    {
+      // VEN-406's vendor gate. A closed beta curates its vendors by invitation.
+      group: 'database',
+      name: 'platform_settings.vendorInviteOnly',
+      async run() {
+        const inviteOnly = await database.vendorInviteOnly();
+        return [
+          judge(
+            'database',
+            'platform_settings.vendorInviteOnly',
+            inviteOnly === null ? 'unset' : String(inviteOnly),
+            inviteOnly === true,
+            'true, so vendors join by invitation',
           ),
         ];
       },

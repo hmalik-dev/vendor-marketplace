@@ -26,6 +26,12 @@ export interface PostgresTestDatabase {
   db: PostgresJsDatabase<typeof schema>;
   /** The throwaway database's name, so a suite can assert it was cleaned up. */
   name: string;
+  /**
+   * A single-connection handle whose every connection runs as `role`, the way a
+   * deployed API's would (a startup `role`, so the owner's privileges, and its
+   * bypass of row-level security, are not in play). Closed by `close()`.
+   */
+  connectAs: (role: string) => PostgresJsDatabase<typeof schema>;
   /** Closes the pool and drops the throwaway database. */
   close: () => Promise<void>;
 }
@@ -111,6 +117,14 @@ export async function createPostgresTestDatabase(
   const client = postgres(target.toString(), { max: options.poolSize ?? 4 });
   const db = drizzle(client, { schema });
 
+  const roleClients: postgres.Sql[] = [];
+  const connectAs = (role: string): PostgresJsDatabase<typeof schema> => {
+    const roleClient = postgres(target.toString(), { max: 1, connection: { role } });
+    roleClients.push(roleClient);
+
+    return drizzle(roleClient, { schema });
+  };
+
   const drop = async (): Promise<void> => {
     // `with (force)` because a connection the suite failed to close would
     // otherwise leave the database behind on every run.
@@ -136,12 +150,14 @@ export async function createPostgresTestDatabase(
   return {
     db,
     name,
+    connectAs,
     close: async () => {
       if (closed) {
         return;
       }
 
       closed = true;
+      await Promise.all(roleClients.map((roleClient) => roleClient.end()));
       await client.end();
       await drop();
     },

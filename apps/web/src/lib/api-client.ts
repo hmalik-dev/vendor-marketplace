@@ -160,9 +160,10 @@ async function visitorHeaders(secret: string): Promise<Record<string, string>> {
     // Imported here, not at the top: this module is also bundled for the browser.
     const { headers: requestHeaders } = await import('next/headers');
     const incoming = await requestHeaders();
-    // The rightmost entry, the one the nearest proxy appended: the leftmost is
-    // written by the caller, and this value is vouched for with the shared key.
-    const visitor = incoming.get('x-forwarded-for')?.split(',').at(-1)?.trim();
+    // Also imported here: it reads the deployment registry, which is server-only.
+    const { visitorAddress } = await import('@/lib/visitor-address');
+    // The same rule as the auth throttle, and this value is vouched for with the shared key.
+    const visitor = visitorAddress(incoming);
     return visitor ? { [WEB_TIER_KEY_HEADER]: secret, [VISITOR_IP_HEADER]: visitor } : {};
   } catch {
     // Outside a request scope (a build-time render, a script): nobody to name.

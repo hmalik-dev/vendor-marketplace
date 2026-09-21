@@ -1,6 +1,7 @@
 import type { EventType } from '@vendor-marketplace/shared';
 import { sql } from 'drizzle-orm';
 import {
+  check,
   date,
   index,
   integer,
@@ -82,17 +83,71 @@ export const bookingRequests = pgTable(
      * — there would be nothing to ask Stripe about.
      */
     stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
+    /**
+     * How many canceled intents this request has replaced (VEN-547). The
+     * creation idempotency key is built from it, so callers racing over one
+     * replacement share a key, and the replacement after a cancellation gets a
+     * new one (D36: Stripe replays a canceled intent for the same key for 24
+     * hours). Moved only together with the intent id, by compare-and-set on the
+     * canceled id, in `recordReplacementIntent`.
+     */
+    paymentIntentReplacements: integer('payment_intent_replacements').notNull().default(0),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
+    /**
+     * Ticks or reads that held this request's expiry because its payment intent
+     * was processing or unreadable (VEN-551). At `EXPIRY_HOLD_MAX_ATTEMPTS` the
+     * hold ends and the request expires. Null until the first hold.
+     */
+    expiryCheckAttempts: integer('expiry_check_attempts'),
+    /** When the last hold was counted; the sweep works never-held rows first. */
+    expiryLastAttemptAt: timestamp('expiry_last_attempt_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check(
+      'booking_requests_payment_intent_replacements_non_negative',
+      sql`${table.paymentIntentReplacements} >= 0`,
+    ),
+    check(
+      'booking_requests_expiry_check_attempts_non_negative',
+      sql`${table.expiryCheckAttempts} IS NULL OR ${table.expiryCheckAttempts} >= 0`,
+    ),
+    // Cents and counts are never negative; the wire ranges are stricter (VEN-550).
+    check(
+      'booking_requests_quoted_price_cents_non_negative',
+      sql`${table.quotedPriceCents} IS NULL OR ${table.quotedPriceCents} >= 0`,
+    ),
+    check(
+      'booking_requests_final_price_cents_non_negative',
+      sql`${table.finalPriceCents} IS NULL OR ${table.finalPriceCents} >= 0`,
+    ),
+    check(
+      'booking_requests_guest_count_non_negative',
+      sql`${table.guestCount} IS NULL OR ${table.guestCount} >= 0`,
+    ),
     index('booking_requests_customer_status_idx').on(table.customerId, table.status),
     index('booking_requests_vendor_status_idx').on(table.vendorId, table.status),
-    // Serves the lazy expiry sweep, which only ever scans pending requests.
+    // The `ON DELETE SET NULL` scan when a package row goes with its vendor.
+    index('booking_requests_package_idx').on(table.packageId),
+    /*
+     * Serves the lazy expiry sweep, which scans every status that can lapse:
+     * `pending`, `quoted` and `accepted` (the payment deadline). A predicate
+     * narrower than the sweep's `status IN (...)` cannot be used by it, so the
+     * planner would scan the table. `EXPIRABLE_BOOKING_REQUEST_STATUSES` is the
+     * same list, and `schema.test.ts` holds the two together.
+     */
+    /*
+     * The sweep's order (VEN-551): never-held rows first, then by deadline. The
+     * same predicate as the index above, so a backlog is read from here in order
+     * and the batch stops at its limit.
+     */
+    index('booking_requests_expiry_sweep_order_idx')
+      .on(sql`${table.expiryLastAttemptAt} asc nulls first`, table.expiresAt)
+      .where(sql`${table.status} in ('pending', 'quoted', 'accepted')`),
     index('booking_requests_expires_at_idx')
       .on(table.expiresAt)
-      .where(sql`${table.status} = 'pending'`),
+      .where(sql`${table.status} in ('pending', 'quoted', 'accepted')`),
     /*
      * One live request per natural key, so a repeat submission — a client
      * retry, a mobile touch-and-click double fire, a network-level retry —
@@ -117,6 +172,14 @@ export const bookingRequests = pgTable(
     uniqueIndex('booking_requests_live_custom_key')
       .on(table.customerId, table.vendorId, table.eventDate)
       .where(sql`${table.status} in ('pending', 'quoted') and ${table.packageId} is null`),
+    /*
+     * One commitment per vendor date, settled by the database (VEN-482). The
+     * accept path already serialises on `lockHeldDate`; this is what holds when
+     * a writer skips it — a seed, an admin tool, a future path.
+     */
+    uniqueIndex('booking_requests_accepted_date_key')
+      .on(table.vendorId, table.eventDate)
+      .where(sql`${table.status} = 'accepted'`),
   ],
 ).enableRLS();
 
@@ -324,6 +387,27 @@ export const bookings = pgTable(
       .where(
         sql`${table.paidAt} is not null and ${table.payoutReleasedAt} is null and ${table.payoutAttempts} > 0`,
       ),
+    /*
+     * Impossible amounts (VEN-550). The sum `platform_fee + vendor_payout =
+     * total` is deliberately not a check: a cancellation rewrites the payout.
+     * The refund bound holds on every writer: a cancellation refunds at most
+     * the total, the unwind and dispute paths top up to it, and Stripe cannot
+     * refund a charge past the amount received, which is the total.
+     */
+    check('bookings_total_amount_cents_positive', sql`${table.totalAmountCents} > 0`),
+    check('bookings_platform_fee_cents_non_negative', sql`${table.platformFeeCents} >= 0`),
+    check('bookings_vendor_payout_cents_non_negative', sql`${table.vendorPayoutCents} >= 0`),
+    check(
+      'bookings_refund_amount_cents_range',
+      sql`${table.refundAmountCents} IS NULL OR (${table.refundAmountCents} >= 0 AND ${table.refundAmountCents} <= ${table.totalAmountCents})`,
+    ),
+    check('bookings_external_refund_cents_non_negative', sql`${table.externalRefundCents} >= 0`),
+    // The same guarantee as `booking_requests_accepted_date_key`, for the row
+    // that outlives the request: a cancelled or completed booking frees the
+    // constraint, a confirmed one holds the date (VEN-482).
+    uniqueIndex('bookings_confirmed_date_key')
+      .on(table.vendorId, table.eventDate)
+      .where(sql`${table.status} = 'confirmed'`),
   ],
 ).enableRLS();
 

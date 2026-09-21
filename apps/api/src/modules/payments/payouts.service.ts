@@ -14,6 +14,8 @@ import {
   payoutFailedAlert,
   type OperatorAlerts,
 } from '../operator-alerts/operator-alerts.service.js';
+import { findVendorUserId } from '../booking-requests/booking-requests.dao.js';
+import { notifyVendorUser, PAYOUT_NOTICES, type NotifyDeps } from '../notifications/notify-user.js';
 import { readPlatformSwitchesUncached } from '../platform-settings/platform-settings.service.js';
 import { findBookingById } from './payments.dao.js';
 import {
@@ -49,6 +51,8 @@ export interface PayoutContext {
    * already looking at the result.
    */
   alerts?: Pick<OperatorAlerts, 'dispatch'>;
+  /** How the vendor is told a payout went out (VEN-525). Absent in a suite that does not read the bell. */
+  notify?: NotifyDeps;
 }
 
 /** What one sweep did, for the log line and for the tests to assert on. */
@@ -298,6 +302,7 @@ async function releaseOnePayout(
    */
   let failure: string | null = null;
   let owedCents = 0;
+  let releasedVendorId: string | null = null;
   /** Refunds made outside the platform that this claim found; told to the operator once the transaction has committed. */
   const findings: ExternalRefundFinding[] = [];
 
@@ -447,6 +452,8 @@ async function releaseOnePayout(
         releasedAt: now,
       });
 
+      releasedVendorId = booking.vendorId;
+
       return 'released';
     } catch (error) {
       /*
@@ -462,6 +469,10 @@ async function releaseOnePayout(
       return 'failed';
     }
   });
+
+  if (releasedVendorId !== null && context.notify) {
+    await announcePayout(context.notify, releasedVendorId, bookingId);
+  }
 
   for (const finding of findings) {
     announceExternalRefund(context.alerts, bookingId, finding);
@@ -491,4 +502,22 @@ async function releaseOnePayout(
   }
 
   return outcome;
+}
+
+/** After the release has committed, so a notice that fails cannot un-send the money. */
+async function announcePayout(
+  notify: NotifyDeps,
+  vendorId: string,
+  bookingId: string,
+): Promise<void> {
+  try {
+    const userId = await findVendorUserId(notify.mail.db, vendorId);
+
+    if (userId) {
+      await notifyVendorUser(notify, userId, { ...PAYOUT_NOTICES.sent, data: { bookingId } });
+    }
+  } catch (error) {
+    // The transfer is committed; a lookup that fails here must not abandon the sweep.
+    notify.mail.log.error({ bookingId, err: error }, 'Could not tell the vendor about a payout');
+  }
 }

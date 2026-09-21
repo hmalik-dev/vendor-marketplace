@@ -2,12 +2,15 @@ import { getServerSession } from './auth/server';
 import {
   adminActivityActorListSchema,
   adminCategoryListSchema,
+  adminOperatorListSchema,
   type AdminActivityActorList,
   type AdminCategoryList,
+  type AdminOperatorList,
 } from '@vendor-marketplace/shared';
 import { redirect } from 'next/navigation';
 import type { z } from 'zod';
 import { ApiClientError, apiRequest } from './api-client';
+import { requireRole } from './current-user';
 import { redirectIfTermsRequired } from './terms-gate';
 import { signInPathReturningHere } from './requested-path';
 import {
@@ -70,6 +73,14 @@ interface AdminSession {
 }
 
 async function adminSession(): Promise<AdminSession> {
+  /*
+   * The role check lives next to the data, not only in the layout: a layout
+   * does not re-run on client navigation, so a page rendered without it would
+   * otherwise be role-checked by nothing but the API's 403. `getCurrentUser` is
+   * request-cached, so the layout's own call and this one cost one read.
+   */
+  await requireRole('admin');
+
   const signInPath = await signInPathReturningHere();
   const token = (await getServerSession())?.token ?? null;
 
@@ -86,9 +97,10 @@ async function adminSession(): Promise<AdminSession> {
  * A **403 here is not `/suspended`.** On a vendor read it means a banned
  * account; on `/admin` it is far more often a signed-in non-admin who typed the
  * URL, and sending them to a suspension notice would tell them their account
- * was disabled when it was not. The layout's `requireRole('admin')` bounces
- * those before any read runs, so a 403 reaching here is the narrow case of a
- * role changing mid-render — `/` is the honest destination for both.
+ * was disabled when it was not. `adminSession`'s `requireRole('admin')` bounces
+ * those before any read runs (a suspended operator to `/suspended`, as the
+ * layout does), so a 403 reaching here is the narrow case of a role changing
+ * mid-render — `/` is the honest destination for both.
  */
 async function rethrowUnlessSessionFailure(error: unknown, signInPath: string): Promise<never> {
   if (!(error instanceof ApiClientError)) {
@@ -265,6 +277,11 @@ export async function getAdminActivityActors(): Promise<AdminActivityActorList> 
 /** The launch switches and the vendors whose payouts are held (VEN-404). */
 export async function getAdminPlatformSettings(): Promise<WireAdminPlatformSettings> {
   return adminRead('/admin/settings', wireAdminPlatformSettingsSchema);
+}
+
+/** Every operator who can be seen in the console, with who granted them (VEN-506). */
+export async function getAdminOperators(): Promise<AdminOperatorList> {
+  return adminRead('/admin/operators', adminOperatorListSchema);
 }
 
 /** The vendor waitlist, newest first (VEN-406). */

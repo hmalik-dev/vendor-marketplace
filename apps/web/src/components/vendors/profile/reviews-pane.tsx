@@ -41,7 +41,7 @@ function StarRow({
   const filled = Math.round(rating);
 
   return (
-    <span className={cn('text-gold-400', className)}>
+    <span className={cn('text-gold-600', className)}>
       <span aria-hidden="true">
         {REVIEW_RATINGS.map((value) => (value <= filled ? '★' : '☆')).join('')}
       </span>
@@ -256,7 +256,7 @@ export function ReviewsPane({
             return (
               <li key={rating} className="flex items-center gap-2.5 py-0.5 text-sm text-stone-600">
                 <span className="w-3 shrink-0 text-right tabular-nums">{rating}</span>
-                <span aria-hidden="true" className="text-gold-400">
+                <span aria-hidden="true" className="text-gold-600">
                   ★
                 </span>
                 <span className="h-2 flex-1 overflow-hidden rounded-full bg-stone-200">

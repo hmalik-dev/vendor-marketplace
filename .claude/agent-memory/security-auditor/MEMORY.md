@@ -32,6 +32,7 @@
 - [safeReturnPath is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise, 894k-case fuzz clean; do not re-report
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — the matcher skips dotted paths
 - [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — `roleCanReach` is a redirect hint and must never become a gate
+- [Every `FORBIDDEN` is read as a suspension](every-forbidden-is-read-as-a-suspension.md) — `terminalRefusal` has no suspension-specific code, so widening its funnel sends stale-tab and tenancy 403s to a static "you are suspended" page
 
 ## Vendor visibility, moderation and PII
 
@@ -67,6 +68,7 @@
 - [Launch switches gate new intents, not open ones](launch-switches-gate-new-intents-not-open-ones.md) — an issued client secret survives the pause
 - [Idempotency guards orphan their side effects](idempotency-guards-orphan-side-effects.md) — every `ON CONFLICT DO NOTHING` here fronts non-transactional follow-on writes
 - [The background queue carries no session](background-work-queue-carries-no-session.md) — re-derive the recipient; never close over `request.auth` or a `tx`
+- [`metadata.env` is the cross-deployment filter](env-tag-is-the-cross-deployment-filter.md) — VEN-529: one shared test account, a branched DB, so the intent tag is the only tier signal; filter order is load-bearing and the retrieve can 500 an alert path
 - [The e2e fixture now calls Stripe for real](e2e-fixture-creates-real-stripe-accounts.md) — one `sk_test_` prefix check keeps a live key out
 - [`stripe_onboarded` entails an account id](stripe-onboarded-entails-account-id.md) — a CHECK; the `acct_` format check was refused as a product decision
 
@@ -74,6 +76,7 @@
 
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking with an empty `closeBlockers`
 - [The unwind's full refund is the ban's argument](account-unwind-full-refund-is-the-ban-argument.md) — superseded by D39: closure refused while a future confirmed booking exists
+- [Ban and closure are resumable endpoints now](unwind-resume-is-a-repeatable-endpoint.md) — VEN-478; the derived pending gate never clears on a legacy/unrefundable booking, and double refund is settled
 - [An unwind spares a request with a booking behind it](unwind-decline-spares-requests-with-a-booking.md) — unarrangeable; it closes a post-unban double-booking window
 - [`cancelled_by` names the actor, not the suspended side](cancelled-by-does-not-say-which-side.md) — "the other account was suspended" is false to an unbanned customer
 - [The acceptance record is undeletable PII](legal-acceptance-record-is-undeletable-pii.md) — closure is a soft delete, so the trigger's delete branch never fires
@@ -89,11 +92,12 @@
 - [URL params are validated in the nuqs hook](url-params-validated-in-the-nuqs-hook.md) — the hook is the boundary, not the screen
 - [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — probe with the bucket-path base; `/_next/image`'s remote patterns are an anonymous fetcher and must derive from the storage env var
 - [Every image-ref bypass is FIXED; the host is not](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — `https://evil.example/x.png` was never closed
+- [The image pipeline is one process-wide 2-slot queue](image-pipeline-is-one-process-wide-queue.md) — VEN-464: hand-off is sound, the unbounded FIFO of 12 MB buffers is the ceiling; `failOn: 'error'` loosens sharp's default
 - [`freeText()` lets NUL through](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — Postgres 22021 lets a caller pick which branch runs
 - [Webhook payload text bypasses the bidi strip](provider-payload-text-bypasses-the-bidi-strip.md) — a hand-`safeParse`d schema is invisible to the free-text guard
 - [Reviews: profanity floor, eligibility and tombstones](review-profanity-filter-is-a-hard-reject-floor.md) — tombstone finality rests on read order; a review can outlive a cancel
 - [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino's three doors, `PostgresError.detail` and bound params all closed; do not re-report
-- [Sentry is a second log sink](sentry-is-a-second-log-sink.md) — `captureException` bypasses the bound-param strip; `scrubErrorEvent` keeps `request.url`
+- [Sentry is a second log sink](sentry-is-a-second-log-sink.md) — VEN-522 made `request.url` path-only; what escapes now is a header name the list misses and a shape no regex knows
 - [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `log.warn({err})` re-emits `stripe-signature` and the raw body
 - [Log redaction covers the query, not the path](log-redaction-covers-query-not-path.md) — a credential in a path segment is logged whole
 - [Two failure-reason columns store the gateway's raw message](failure-reason-columns-rest-on-a-status-only-gateway.md) — admins read one; the only guard is `Resend refused the send (status)` carrying no address

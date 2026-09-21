@@ -9,6 +9,19 @@
  * exactly the kind of thing that is silently wrong for months.
  */
 
+/**
+ * Where the middleware puts the per-request nonce on the request, so a server
+ * component can stamp it on a `<script>` it renders itself (JSON-LD).
+ */
+export const CSP_NONCE_HEADER = 'x-nonce';
+
+/**
+ * What `contentSecurityPolicy` writes in place of the nonce when it is called
+ * at build time. `next.config.ts` computes the policy once, inlines it, and the
+ * middleware swaps this for a fresh nonce on every request.
+ */
+export const CSP_NONCE_PLACEHOLDER = '__CSP_NONCE__';
+
 export interface HeaderRule {
   key: string;
   value: string;
@@ -37,6 +50,12 @@ export interface CspOrigins {
    * enforcing the policy locally would look like a CSP bug that is not there.
    */
   https?: boolean;
+  /**
+   * The per-request nonce, or `CSP_NONCE_PLACEHOLDER` when the policy is built
+   * as a template. `null` builds the baseline for responses that are not
+   * documents (`/_next/*`): `'self'` and the Stripe hosts, no nonce.
+   */
+  nonce: string | null;
   /** Development only — webpack's HMR runtime needs `eval`. */
   allowEval?: boolean;
 }
@@ -93,30 +112,27 @@ const STRIPE_HOSTS = {
 const PAYMENT_ALLOWLIST = ['self', ...STRIPE_HOSTS.script.map((host) => `"${host}"`)].join(' ');
 
 /**
- * `unsafe-inline` is present on **both** `style-src` and `script-src`, and it
- * is worth being plain about that rather than implying a stricter policy than
- * this is.
+ * `script-src` carries no `unsafe-inline`: it allows `'self'`, the request's
+ * nonce and `'strict-dynamic'`, so the only inline script that runs is one the
+ * server stamped with this response's nonce (Next's bootstrap and flight data,
+ * which read the nonce from the request's CSP header, and the JSON-LD blocks).
+ * With `strict-dynamic` a browser that understands it ignores the host list;
+ * the Stripe hosts stay for a browser that does not.
  *
- * Styles: Next injects critical CSS as a `<style>` element and next/font
- * writes inline `@font-face` blocks. There is no way around it.
+ * `style-src 'unsafe-inline'` stays, deliberately (VEN-523 non-goal): Next
+ * injects critical CSS as a `<style>` element and next/font writes inline
+ * `@font-face` blocks.
  *
- * Scripts: the App Router emits inline bootstrap and flight-data scripts. The
- * alternative is a per-request nonce, which needs a nonce-emitting middleware
- * and forces **every page to render dynamically** — it opts the whole site out
- * of static generation, which is a real cost to a marketplace whose landing
- * and profile pages should be cached. That trade deserves its own ticket
- * rather than being smuggled into the one that adds the headers.
- *
- * So this policy's value is in the directives that *are* tight —
- * `frame-ancestors`, `object-src`, `base-uri`, `form-action`, and an
- * allow-list on `connect-src`, `img-src` and `frame-src`. `strict-dynamic` is
- * absent for the same reason as the nonce.
+ * The rest of the policy is tight: `frame-ancestors`, `object-src`,
+ * `base-uri`, `form-action`, and allow-lists on `connect-src`, `img-src` and
+ * `frame-src`.
  */
 export function contentSecurityPolicy({
   apiOrigin,
   imageOrigin,
   errorIngestOrigin,
   https,
+  nonce,
   allowEval,
 }: CspOrigins): string {
   const connect = [
@@ -140,7 +156,7 @@ export function contentSecurityPolicy({
    */
   const script = [
     "'self'",
-    "'unsafe-inline'",
+    ...(nonce === null ? [] : [`'nonce-${nonce}'`, "'strict-dynamic'"]),
     ...(allowEval === true ? ["'unsafe-eval'"] : []),
     ...STRIPE_HOSTS.script,
   ];
@@ -178,13 +194,17 @@ export function shouldEnforceCsp(env: {
   return env.nodeEnv === 'production' || env.cspEnforce === '1';
 }
 
-export interface SecurityHeaderOptions extends CspOrigins {
-  /**
-   * Report-only until the policy has been driven through auth, upload and
-   * search in a real browser. A CSP that breaks sign-in is worse than none,
-   * and the report-only header is how you find that out without an outage.
-   */
-  enforceCsp: boolean;
+/** The header a policy travels in: enforced, or report-only outside production. */
+export function cspHeaderName(enforceCsp: boolean): string {
+  return enforceCsp ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only';
+}
+
+/** Puts a request's nonce into a policy built with `CSP_NONCE_PLACEHOLDER`. */
+export function withNonce(template: string, nonce: string): string {
+  return template.replaceAll(CSP_NONCE_PLACEHOLDER, nonce);
+}
+
+export interface SecurityHeaderOptions {
   /**
    * HSTS is omitted off HTTPS. Sending it from `http://localhost` would pin
    * the browser to a scheme the dev server does not speak, and the pin
@@ -193,6 +213,7 @@ export interface SecurityHeaderOptions extends CspOrigins {
   https: boolean;
 }
 
+/** The headers that are the same on every response. The CSP is per-request: see `middleware.ts`. */
 export function securityHeaders(options: SecurityHeaderOptions): HeaderRule[] {
   const headers: HeaderRule[] = [
     { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -220,10 +241,6 @@ export function securityHeaders(options: SecurityHeaderOptions): HeaderRule[] {
     {
       key: 'Permissions-Policy',
       value: `camera=(), microphone=(), geolocation=(), payment=(${PAYMENT_ALLOWLIST}), interest-cohort=()`,
-    },
-    {
-      key: options.enforceCsp ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only',
-      value: contentSecurityPolicy(options),
     },
   ];
 

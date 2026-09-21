@@ -394,6 +394,73 @@ Zero visible resizes on every other ledger route, including `28` open, `22`
 submitted and `23` offline. A pass measuring any number above is reading this
 ruling; a width in `ch` or `em` on an unsized block is the class to look for.
 
+**Four input screens, ruled on VEN-558 (2026-09-21).** Frames `12`, `04` and `09`
+were measured against the app after VEN-541. Fixed: the auth submit's 13px
+vertical padding, the 13px alternate-route line, `Payment held until the event is
+complete` (`12`, `12b` and `21-sign-up.md` all agree), the booking container's
+1440px cap (content inset 40, not 80), the 14px booking subtitle, the occasion
+trigger's `data-focus-own`, the cover zone's 14px radius, the selected chip's
+1.5px border, the About textarea's 10/13 padding, the rail's `stone-150` and its
+12px toggle. Three are decisions, not drift:
+
+- **The request rail does not promise `48 hours`.** Frame `04` and `13-booking-request.md`
+  draw it; the app states what the vendor can do and no duration, because the
+  window is capped at the event date (#401) and a fixed number is false. The
+  comment in `request-summary-rail.tsx` records it.
+- **The vendor header draws no `Preview as customer`.** Frame `09` alone draws
+  it; frames `08`, `10`, `11` and the 768 view of `09` draw the same vendor header
+  without it, so it is D30 transcription drift. The editor's footer `Preview`
+  button is the route to the public profile.
+- **The preview rail is `stone-150` (`#F1ECE4`).** Both `09` at 1440 and its 768
+  view draw it; `17-vendor-profile-editor.md` says `stone-100`, and the plan is
+  what is stale.
+
+The parity pass also fixed the stepper numerals (12px), the rail's vendor line
+(12px) and package block (13/12px), the About counter (11.5px), the preview
+toggle's `#E6DFD3` track and the rail's 24px side padding. More decisions:
+
+- **The rail's notice keeps `gold-600` text and its own wording** (`#7A5A12`,
+  `confirm the date or decline` / `confirm or send a quote`, where the frame draws
+  `#5C4A18` and `confirm or send a revised quote`). The wording is the same
+  truthfulness ruling as the missing `48 hours`: a package request has a locked
+  price and cannot be revised.
+- **The preview card is the real `VendorCard`, not the frame's static one.** The
+  frame's 14px radius, 30px avatar, 17px name and 11/13 padding belong to a
+  hand-drawn stand-in; the component that draws it is the one thing the preview
+  exists to mirror (`storefront-preview.tsx`), and it carries the category chip.
+- **The empty drop zone keeps `Drop a photo or browse` in `clay-600` at 11px and
+  its constraint line in sans.** The frame's `#A34A28` is the contrast-table
+  role `clay-600` names, and the 12.5px / 9.5px-mono lines are the frame's
+  transcription of a zone that has no `Add photo` state; `Add photo` on the round
+  zone stands for the same reason.
+- **The submit is 42px against the frame's ~43px** (body-strut, VEN-389) and the
+  disabled label is `stone-500`, the sanctioned inert colour.
+- **The header avatar is shared chrome** and not this ticket's four screens.
+
+The darker field border VEN-541 set stands; nothing here touches it.
+
+**`Banner` and `Button` were measured against frames `16` and `26` and need no
+code change (VEN-560, 2026-09-21).** Each difference the ticket listed is a
+ruling or a frame-`16` outlier, not drift. A pass that re-finds one is reading
+this record.
+
+- **`Banner` computes frame `26`'s box exactly.** The vocabulary tile draws
+  `gap:11px`, `border:1px solid`, `border-radius:12px`, `padding:13px 15px` and
+  the sentence at `400 12.5px/1.55`; the component has `gap-2.75`, `border`,
+  `rounded-panel`, `px-3.75 py-3.25` and the same type. The 10px radius, 11px
+  16px padding, no border, 10px gap and weight 500 belong to frame `16`'s
+  money-position strip alone. That is the outlier ruled in #372
+  (`03-components.md` § Inline banners): the component wins, one `Banner`,
+  bordered, and a borderless 47px-to-38px variant for one screen is refused.
+  CheckoutUnavailable's 47.4px strip is therefore correct.
+- **`Button`'s focus ring stays `ring-2 ring-clay-400` at full opacity, not
+  `ring-clay-400/30`.** `04-laws.md`'s older `/30` wording predates VEN-541
+  (#366), which raised every focus indicator to at least 3:1 on `stone-50`:
+  `clay-400` is 4.51:1 where the `/40` alpha was 1.72:1. The law now reads
+  `ring-2 ring-clay-400 ring-offset-2 ring-offset-stone-50`, and `Button` owns
+  no ring of its own: `apps/web/src/app/focus-ring.test.ts` guards the one declaration in `globals.css`.
+  Reintroducing a translucent ring would break VEN-541's contrast test.
+
 ## A one-shot read is a sample, not a measurement
 
 An animated property has no single computed value. Read it once, in the same

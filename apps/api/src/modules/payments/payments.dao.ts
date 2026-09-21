@@ -1,10 +1,11 @@
-import { and, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lt, ne, notExists, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
   bookings,
   legalAcceptances,
   servicePackages,
+  users,
   vendorProfiles,
   type BookingRow,
   type NewBookingRow,
@@ -16,6 +17,7 @@ import {
   type LegalAcceptanceDocument,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { VENDOR_CLOSED, VENDOR_SELLABLE } from '../vendors/vendor-visibility.js';
 
 /**
  * Typed rather than written into the SQL as a bare string, so a rename of the
@@ -53,6 +55,8 @@ export interface PayableRequestRow {
   acceptedAt: Date | null;
   /** The intent recorded when checkout was opened, for reconciliation. */
   stripePaymentIntentId: string | null;
+  /** Canceled intents replaced so far; the creation key is built from it (VEN-547). */
+  paymentIntentReplacements: number;
   vendorSlug: string;
   vendorBusinessName: string;
   vendorAvatarUrl: string | null;
@@ -68,6 +72,18 @@ export interface PayableRequestRow {
    * multiply the request row by however many times they have accepted.
    */
   vendorHoldsCurrentAgreement: boolean;
+  /**
+   * The vendor's user is banned or retired (VEN-479). On the row for the same
+   * reason as the flags above: the refusal and the read must not disagree.
+   */
+  vendorUserUnavailable: boolean;
+  /**
+   * The vendor was unpublished or put on a moderation hold (VEN-556). Read with
+   * the row for the same reason as the flag above.
+   */
+  vendorPulled: boolean;
+  /** Retired or owned by a banned or deleted account: no retry can help (VEN-559). */
+  vendorClosed: boolean;
 }
 
 export async function findPayableRequest(
@@ -91,11 +107,15 @@ export async function findPayableRequest(
       packageDurationHours: servicePackages.durationHours,
       acceptedAt: bookingRequests.acceptedAt,
       stripePaymentIntentId: bookingRequests.stripePaymentIntentId,
+      paymentIntentReplacements: bookingRequests.paymentIntentReplacements,
       vendorSlug: vendorProfiles.slug,
       vendorBusinessName: vendorProfiles.businessName,
       vendorAvatarUrl: vendorProfiles.profileImageUrl,
       vendorStripeAccountId: vendorProfiles.stripeAccountId,
       vendorStripeOnboarded: vendorProfiles.stripeOnboarded,
+      vendorUserUnavailable: sql<boolean>`(${users.isBanned} OR ${users.deletedAt} IS NOT NULL)`,
+      vendorPulled: sql<boolean>`NOT (${VENDOR_SELLABLE})`,
+      vendorClosed: sql<boolean>`${VENDOR_CLOSED}`,
       vendorHoldsCurrentAgreement: sql<boolean>`EXISTS (
         SELECT 1 FROM ${legalAcceptances}
         WHERE ${legalAcceptances.vendorId} = ${vendorProfiles.id}
@@ -105,11 +125,41 @@ export async function findPayableRequest(
     })
     .from(bookingRequests)
     .innerJoin(vendorProfiles, eq(bookingRequests.vendorId, vendorProfiles.id))
+    .innerJoin(users, eq(users.id, vendorProfiles.userId))
     .leftJoin(servicePackages, eq(bookingRequests.packageId, servicePackages.id))
     .where(eq(bookingRequests.id, requestId))
     .limit(1);
 
   return rows?.[0] ?? null;
+}
+
+/**
+ * Settles an accepted request whose charge was refunded because its vendor is
+ * banned or retired (VEN-479). Without it the request stays `accepted` beside a
+ * succeeded intent, and an unban (or an unwind that rolled its ban back) would
+ * let a later reconcile book money already returned. Never touches a request
+ * that has a booking behind it.
+ */
+export async function declineRefundedRequest(
+  db: AppDatabase,
+  requestId: string,
+  now: Date,
+): Promise<void> {
+  await db
+    .update(bookingRequests)
+    .set({ status: 'declined', updatedAt: now })
+    .where(
+      and(
+        eq(bookingRequests.id, requestId),
+        eq(bookingRequests.status, 'accepted'),
+        notExists(
+          db
+            .select({ present: sql`1` })
+            .from(bookings)
+            .where(eq(bookings.requestId, requestId)),
+        ),
+      ),
+    );
 }
 
 /** A booking with the occasion the confirmed screen renders beside the venue. */
@@ -185,6 +235,22 @@ export async function findBookingById(
 }
 
 /**
+ * The booking, read under a row lock that lasts until `tx` commits.
+ *
+ * For a caller that must decide from the row and then move money on the strength
+ * of it (VEN-545): a competing writer queues behind the lock instead of changing
+ * the row between the decision and the write.
+ */
+export async function lockBookingById(
+  tx: AppDatabase,
+  bookingId: string,
+): Promise<BookingRow | null> {
+  const rows = await tx.select().from(bookings).where(eq(bookings.id, bookingId)).for('update');
+
+  return rows?.[0] ?? null;
+}
+
+/**
  * Records the intent on the request so a webhook that never arrives can still
  * be reconciled: without this, a paid customer and an unpaid-looking request
  * are indistinguishable from a customer who opened checkout and walked away.
@@ -201,6 +267,43 @@ export async function recordPaymentIntent(
     .update(bookingRequests)
     .set({ stripePaymentIntentId: paymentIntentId, updatedAt: sql`now()` })
     .where(and(eq(bookingRequests.id, requestId), eq(bookingRequests.status, 'accepted')));
+}
+
+/**
+ * Swaps a canceled intent for its replacement and moves the replacement count
+ * with it (VEN-547).
+ *
+ * A compare-and-set on the canceled id: callers racing over one replacement all
+ * derived the same key from the same count, so all made the same intent, and
+ * exactly one write lands. The count and the id move in one statement, so a
+ * caller that reads between the two writes never sees a live id beside a stale
+ * count and never bumps the key for an intent that is already the replacement.
+ * `false` when the row moved first.
+ */
+export async function recordReplacementIntent(
+  db: AppDatabase,
+  requestId: string,
+  replaced: { intentId: string; replacements: number },
+  paymentIntentId: string,
+): Promise<boolean> {
+  const updated = await db
+    .update(bookingRequests)
+    .set({
+      stripePaymentIntentId: paymentIntentId,
+      paymentIntentReplacements: replaced.replacements + 1,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(bookingRequests.id, requestId),
+        eq(bookingRequests.status, 'accepted'),
+        eq(bookingRequests.stripePaymentIntentId, replaced.intentId),
+        eq(bookingRequests.paymentIntentReplacements, replaced.replacements),
+      ),
+    )
+    .returning({ id: bookingRequests.id });
+
+  return updated.length > 0;
 }
 
 /** What a successful charge writes, as one row. */
@@ -412,6 +515,20 @@ export interface CancellationRecord {
    * wrong for every upheld dispute.
    */
   disputeReason: null;
+}
+
+/**
+ * Owes the vendor nothing on a booking whose customer was refunded in full
+ * while its cancel was lost. Never touches a payout the sweep already released.
+ */
+export async function zeroUnreleasedVendorPayout(
+  db: AppDatabase,
+  bookingId: string,
+): Promise<void> {
+  await db
+    .update(bookings)
+    .set({ vendorPayoutCents: 0, updatedAt: sql`now()` })
+    .where(and(eq(bookings.id, bookingId), isNull(bookings.payoutReleasedAt)));
 }
 
 export async function cancelBookingAndFreeDate(

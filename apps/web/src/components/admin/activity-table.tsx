@@ -56,8 +56,12 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   support_case_resolved: 'Closed a case',
   payout_retried: 'Retried a payout',
   user_data_exported: 'Exported an account record',
+  admin_exported: 'Exported a CSV',
+  admin_data_read: 'Read customer data',
   user_closed: 'Closed an account',
   operator_account_closed: 'Closed an operator account',
+  operator_granted: 'Granted operator access',
+  operator_revoked: 'Revoked operator access',
   /*
    * Graduated moderation (#435). Written in the same register as the seven above
    * — what the operator did, past tense — and deliberately **not** using the
@@ -85,6 +89,7 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   vendor_invited: 'Invited a vendor',
   vendor_invite_revoked: 'Revoked a vendor invite',
   vendor_application_declined: 'Declined a vendor application',
+  account_unwind_finished: 'Finished unwinding an account',
 };
 
 /** The noun the subject id points at, so a bare uuid says what it is. */
