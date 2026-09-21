@@ -469,6 +469,12 @@ export interface FakeStripe extends StripeConnectGateway {
    */
   transfersToRefuse: Set<string>;
   /**
+   * Transfer ids whose reversal the fake refuses as Stripe does — an answered
+   * refusal, replayed for 24 hours under the same key (VEN-499). Delete the id
+   * to let the next attempt through.
+   */
+  reversalsToRefuse: Set<string>;
+  /**
    * Idempotency keys whose result was a **failure**, replayed as Stripe does.
    *
    * Exposed so a suite can clear it between tests alongside `transfers`. Booking
@@ -521,11 +527,14 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   paymentIntents.clear = () => {
     forgetIntents();
     failedRefundKeys.clear();
+    failedReversalKeys.clear();
     refundIdsByKey.clear();
   };
   const transfers: FakeStripe['transfers'] = [];
   const reversals: FakeStripe['reversals'] = [];
   const transfersToRefuse = new Set<string>();
+  const reversalsToRefuse = new Set<string>();
+  const failedReversalKeys = new Map<string, string>();
   /** Idempotency keys whose result was a failure, replayed as Stripe does. */
   const failedTransferKeys = new Map<string, string>();
   const disputes = new Map<string, StripeDisputeSnapshot>();
@@ -562,6 +571,7 @@ function createFakeStripe(deployEnv: string): FakeStripe {
     transfers,
     reversals,
     transfersToRefuse,
+    reversalsToRefuse,
     failedTransferKeys,
     disputes,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
@@ -827,6 +837,18 @@ function createFakeStripe(deployEnv: string): FakeStripe {
 
       if (replayed) {
         return { reversalId: replayed.reversalId, amountCents: replayed.amountCents };
+      }
+
+      const replayedFailure = failedReversalKeys.get(input.idempotencyKey);
+
+      if (replayedFailure) {
+        throw new RefundRefusedError(replayedFailure);
+      }
+
+      if (reversalsToRefuse.has(input.transferId)) {
+        const message = `Fake Stripe refused a reversal of ${input.transferId}`;
+        failedReversalKeys.set(input.idempotencyKey, message);
+        throw new RefundRefusedError(message);
       }
 
       const transfer = transfers.find((candidate) => candidate.transferId === input.transferId);

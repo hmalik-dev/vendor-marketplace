@@ -21,6 +21,8 @@ import {
   vendorTags,
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { bookingContextFor } from '../payments/payments.service.js';
+import { SUSPENSION_UNWIND, unwindAccountBookings } from './account-unwind.js';
 import {
   bearer,
   createTestHarness,
@@ -751,6 +753,43 @@ describe('admin routes', () => {
 
       const [booking] = await harness.database.db.select().from(bookings);
       expect(booking?.status).toBe('confirmed');
+    });
+
+    /*
+     * VEN-499, D36. Stripe replays a refused refund for 24 hours under its key,
+     * so the unwind's retry has to send a new one for the same intent.
+     */
+    it('retries a refused unwind refund under a new key for the same intent', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const bookingId = await createFutureBooking(customerId, vendor.profileId);
+      /* A ban is taken once, so the unwind is re-run as an operator's retry would. */
+      const unwind = () =>
+        unwindAccountBookings(
+          bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+          vendor.userId,
+          vendor.profileId,
+          new Date(),
+          SUSPENSION_UNWIND,
+        );
+      harness.stripe.refundsToRefuse.add('pi_test_ban');
+
+      expect(await unwind()).toMatchObject({ refundsFailed: 1, refundsIssued: 0 });
+      expect(harness.stripe.refunds).toEqual([]);
+
+      harness.stripe.refundsToRefuse.clear();
+      const retried = await unwind();
+
+      expect(retried).toMatchObject({ refundsFailed: 0, refundsIssued: 1 });
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(harness.stripe.refunds[0]).toMatchObject({
+        paymentIntentId: 'pi_test_ban',
+        amountCents: 120_000,
+        idempotencyKey: `ban-refund:direct:marked:${bookingId}_1`,
+      });
+      const [booking] = await harness.database.db.select().from(bookings);
+      expect(booking).toMatchObject({ status: 'cancelled', refundAmountCents: 120_000 });
     });
 
     /*

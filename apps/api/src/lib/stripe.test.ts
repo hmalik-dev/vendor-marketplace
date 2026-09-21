@@ -723,6 +723,21 @@ describe('pickTransfer', () => {
       )?.transferId,
     ).toBe('tr_platform');
   });
+
+  /* VEN-499: `data[0]` was whichever transfer Stripe listed first. */
+  it('prefers the platform transfer over a manual one that is listed first, live or not', () => {
+    const listed = [
+      transfer('tr_manual', 50_000, 50_000),
+      transfer('tr_platform', 127_600, 63_800, { bookingId: 'bk_1' }),
+    ];
+
+    expect(pickTransfer(listed)).toEqual({
+      transferId: 'tr_platform',
+      amountCents: 127_600,
+      reversedCents: 63_800,
+    });
+    expect(pickTransfer(listed, { live: true })?.transferId).toBe('tr_platform');
+  });
 });
 
 describe('the Stripe API version', () => {

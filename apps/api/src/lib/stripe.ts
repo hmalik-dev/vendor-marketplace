@@ -203,7 +203,7 @@ export interface FoundRefunds {
 export const PLATFORM_REFUND_METADATA = { orla_refund: '1' } as const;
 
 /**
- * Stripe answered a refund with a refusal, or with a refund that returns nothing.
+ * Stripe answered a refund or a transfer reversal with a refusal, or with a refund that returns nothing.
  *
  * Distinct from a connection failure on purpose: Stripe caches the answer to a
  * request it executed under its idempotency key for 24 hours, so only this kind
@@ -990,7 +990,9 @@ export interface FindTransferOptions {
  * ones, one carrying a `bookingId` (made by `createTransfer`) wins over a
  * manual Dashboard transfer. A partly reversed transfer is returned with what
  * was reversed, because the caller nets that off. `null` means nothing live, so
- * the sweep makes one. Without `live`, the first transfer is returned as ever.
+ * the sweep makes one. Without `live` the same preference holds over every
+ * transfer, so a manual Dashboard transfer listed first is not read as the
+ * booking's own (VEN-499).
  */
 export function pickTransfer(
   transfers: readonly Pick<Stripe.Transfer, 'id' | 'amount' | 'amount_reversed' | 'metadata'>[],
@@ -999,9 +1001,7 @@ export function pickTransfer(
   const candidates = options.live
     ? transfers.filter((transfer) => transfer.amount_reversed < transfer.amount)
     : transfers;
-  const transfer = options.live
-    ? (candidates.find((candidate) => candidate.metadata?.bookingId) ?? candidates[0])
-    : candidates[0];
+  const transfer = candidates.find((candidate) => candidate.metadata?.bookingId) ?? candidates[0];
 
   return transfer
     ? {
@@ -1202,11 +1202,11 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
     },
 
     async reverseTransfer(input) {
-      const reversal = await stripe.transfers.createReversal(
-        input.transferId,
-        reversalParams(input),
-        { idempotencyKey: input.idempotencyKey },
-      );
+      const reversal = await stripe.transfers
+        .createReversal(input.transferId, reversalParams(input), {
+          idempotencyKey: input.idempotencyKey,
+        })
+        .catch(rethrowRefusal);
 
       return { reversalId: reversal.id, amountCents: reversal.amount };
     },
@@ -1217,22 +1217,7 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
           refundParams(input),
           input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
         )
-        .catch((error: unknown) => {
-          /*
-           * Only a refusal that is deterministic and was executed. A 5xx may have
-           * made the refund, a 429 never ran, and `idempotency_error` proves a
-           * request already ran under this key — the very thing that stops two
-           * racers refunding twice — so none of them may move the key.
-           */
-          if (
-            error instanceof Stripe.errors.StripeError &&
-            (error.rawType === 'invalid_request_error' || error.rawType === 'card_error')
-          ) {
-            throw new RefundRefusedError(error.message, { cause: error });
-          }
-
-          throw error;
-        });
+        .catch(rethrowRefusal);
 
       assertUsableRefund(refund.id, refund.status);
 
@@ -1291,6 +1276,23 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
       return sumUsableRefunds(refunds);
     },
   };
+}
+
+/**
+ * Only a refusal that is deterministic and was executed. A 5xx may have made
+ * the refund, a 429 never ran, and `idempotency_error` proves a request already
+ * ran under this key — the very thing that stops two racers refunding twice — so
+ * none of them may move the key.
+ */
+function rethrowRefusal(error: unknown): never {
+  if (
+    error instanceof Stripe.errors.StripeError &&
+    (error.rawType === 'invalid_request_error' || error.rawType === 'card_error')
+  ) {
+    throw new RefundRefusedError(error.message, { cause: error });
+  }
+
+  throw error;
 }
 
 /**
