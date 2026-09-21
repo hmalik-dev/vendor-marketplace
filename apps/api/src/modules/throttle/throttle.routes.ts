@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
+import { throttleChargeSchema, WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
 import { notFound, unauthorized } from '../../lib/errors.js';
 import { chargeThrottle } from '../../lib/throttle.js';
 
@@ -9,14 +9,6 @@ export interface ThrottleRoutesOptions {
   /** `WEB_TIER_KEY`. Unset (local only) and the route does not exist. */
   webTierKey: string | undefined;
 }
-
-const chargeSchema = z.object({
-  bucket: z.string().min(1).max(300),
-  windowMs: z.number().int().min(1_000).max(86_400_000),
-  limit: z.number().int().min(1).max(1_000),
-  /** False reads the count without adding a hit: a check before the outcome is known. */
-  record: z.boolean().default(true),
-});
 
 function keyMatches(presented: unknown, secret: string): boolean {
   if (typeof presented !== 'string') {
@@ -61,7 +53,10 @@ export const throttleRoutes: FastifyPluginAsyncZod<ThrottleRoutesOptions> = asyn
           throw unauthorized();
         }
       },
-      schema: { body: chargeSchema, response: { 200: z.object({ throttled: z.boolean() }) } },
+      schema: {
+        body: throttleChargeSchema,
+        response: { 200: z.object({ throttled: z.boolean() }) },
+      },
     },
     async (request) => {
       const { bucket, windowMs, limit, record } = request.body;
