@@ -1,6 +1,6 @@
 'use client';
 
-import { BRAND_NAME, toDateString } from '@vendor-marketplace/shared';
+import { BRAND_NAME, ERROR_CODES, toDateString } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
@@ -15,7 +15,9 @@ import { useState, useTransition } from 'react';
  */
 import { formatEventDate } from '@/lib/booking-entries';
 import { ConfirmAction } from '@/components/admin/confirm-action';
+import { StepUpPanel } from '@/components/admin/step-up-panel';
 import { Button } from '@/components/ui/button';
+import { ApiClientError } from '@/lib/api-client';
 import { useApi } from '@/lib/use-api';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import {
@@ -115,6 +117,7 @@ export function DataRightsActions({
   const [busy, setBusy] = useState(false);
   const [refreshing, startRefresh] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [stepUpNeeded, setStepUpNeeded] = useState(false);
 
   async function exportRecord(): Promise<void> {
     setBusy(true);
@@ -210,6 +213,7 @@ export function DataRightsActions({
         refundsFailed = banned.refundsFailed;
       }
 
+      setStepUpNeeded(false);
       setError(
         refundsFailed > 0
           ? 'Some bookings are still confirmed: Stripe refused a refund. This needs a person.'
@@ -218,6 +222,12 @@ export function DataRightsActions({
       /* In a transition, so the page re-renders with the refreshed props rather than beside them. */
       startRefresh(() => router.refresh());
     } catch (failure) {
+      /* Both endpoints are irreversible actions (VEN-500): ask for the code, then retry this press. */
+      if (failure instanceof ApiClientError && failure.code === ERROR_CODES.STEP_UP_REQUIRED) {
+        setStepUpNeeded(true);
+        return;
+      }
+
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
       setBusy(false);
@@ -276,6 +286,7 @@ export function DataRightsActions({
               Refunds each remaining booking in full, once, and cancels it. Nothing already done is
               repeated.
             </p>
+            {stepUpNeeded ? <StepUpPanel onVerified={finishUnwind} /> : null}
           </div>
         </>
       ) : null}
