@@ -64,6 +64,7 @@ import {
   cancelBookingAndFreeDate,
   confirmBooking,
   findBookingById,
+  lockBookingById,
   findAnyBookingByRequest,
   findBookingByRequest,
   findPayableRequest,
@@ -1900,33 +1901,91 @@ export async function resolveDispute(
     return toBookingView(restored);
   }
 
-  const refund = await refundAndUnwind(context, booking, booking.totalAmountCents, 'dispute');
-
   /*
-   * `admin`, because an operator ended it and not the customer. The distinction
-   * is what the customer's own screen reads to choose its words (#415), and a
-   * booking somebody asked to have reviewed is not one they cancelled.
+   * **The row is locked before Stripe is asked anything** (VEN-545). Two
+   * operators ruling at once, or a ruling racing the sweep, used to both pass the
+   * `disputed` check above; the vendor ruling then lifted the hold while this one
+   * was mid-refund, and the row write here matched nothing — a customer refunded
+   * in full on a booking whose vendor the sweep then paid in full.
+   *
+   * Held for the refund and the row write together, so a competing writer queues
+   * behind it and finds the booking cancelled. The status is re-read under the
+   * lock, because the read above is from before any wait.
+   *
+   * A refund Stripe refused is *returned*, not thrown, so the transaction still
+   * commits: `refundAndUnwind` records the refusal against the booking, and D36's
+   * retry key depends on that record surviving.
    */
-  const cancelled = await cancelBookingAndFreeDate(
-    context.db,
-    bookingId,
-    {
-      cancelledAt: now,
-      cancellationReason: "Resolved in the customer's favour after a reported problem",
-      cancelledBy: 'admin',
-      refundAmountCents: refund.amountCents,
-      // A full refund, so the vendor keeps nothing and the sweep never pays it.
-      vendorPayoutCents: refund.retainedPayoutCents,
-      disputeReason: null,
-    },
-    'disputed',
-    booking.payoutReleasedAt,
-  );
+  const settled = await context.db.transaction(async (tx) => {
+    const locked = await lockBookingById(tx, bookingId);
+
+    if (locked?.status !== 'disputed') {
+      return { kind: 'changed' as const };
+    }
+
+    let refund: UnwoundRefund;
+
+    try {
+      refund = await refundAndUnwind(
+        { ...context, db: tx },
+        locked,
+        locked.totalAmountCents,
+        'dispute',
+      );
+    } catch (error) {
+      return { kind: 'refused' as const, error };
+    }
+
+    /*
+     * `admin`, because an operator ended it and not the customer. The distinction
+     * is what the customer's own screen reads to choose its words (#415), and a
+     * booking somebody asked to have reviewed is not one they cancelled.
+     */
+    const cancelled = await cancelBookingAndFreeDate(
+      tx,
+      bookingId,
+      {
+        cancelledAt: now,
+        cancellationReason: "Resolved in the customer's favour after a reported problem",
+        cancelledBy: 'admin',
+        refundAmountCents: refund.amountCents,
+        // A full refund, so the vendor keeps nothing and the sweep never pays it.
+        vendorPayoutCents: refund.retainedPayoutCents,
+        disputeReason: null,
+      },
+      'disputed',
+      locked.payoutReleasedAt,
+    );
+
+    return { kind: 'settled' as const, refund, cancelled };
+  });
+
+  if (settled.kind === 'refused') {
+    throw settled.error;
+  }
+
+  if (settled.kind === 'changed') {
+    throw conflict('That booking changed while you were resolving it');
+  }
+
+  const { refund, cancelled } = settled;
 
   if (!cancelled) {
+    /*
+     * The lock makes this unreachable through the routes. It stays because the
+     * one thing worse than the old silence is a refund with no alert: the
+     * customer is repaid and the row may still say payable.
+     */
     context.log.error(
       { bookingId, refundId: refund.refundId, refundCents: refund.amountCents },
       'Refunded a disputed booking whose row could not be cancelled',
+    );
+    context.alerts?.dispatch(
+      refundFailedAlert({
+        bookingId,
+        during: 'an upheld dispute',
+        refundId: refund.refundId,
+      }),
     );
     throw conflict('That booking changed while you were resolving it');
   }
