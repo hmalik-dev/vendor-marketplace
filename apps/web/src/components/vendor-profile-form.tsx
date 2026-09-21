@@ -846,11 +846,11 @@ export function VendorProfileForm({
                     onChange={(event) => update('bio', event.target.value)}
                     placeholder="What you do, who you do it for, and what makes a day with you feel different."
                     maxLength={MAX_VENDOR_BIO_LENGTH}
-                    className="mt-1.5 min-h-[140px] bg-stone-0"
+                    className="mt-1.5 min-h-[140px] bg-stone-0 px-3.25 py-2.5"
                     {...errorProps(validation.issueFor('bio'))}
                   />
                   <FieldMessage issue={validation.issueFor('bio')} />
-                  <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
+                  <div className="mt-1 flex items-baseline justify-between gap-3 text-helper">
                     <p
                       // Warns before the cap rather than only on reaching it, so a
                       // vendor can finish the sentence instead of being cut off.
@@ -895,7 +895,7 @@ export function VendorProfileForm({
                     {...errorProps(validation.issueFor('tagline'))}
                   />
                   <FieldMessage issue={validation.issueFor('tagline')} />
-                  <div className="mt-1 flex items-baseline justify-end gap-3 text-xs">
+                  <div className="mt-1 flex items-baseline justify-end gap-3 text-helper">
                     <p className="shrink-0 tabular-nums text-stone-600">
                       {form.tagline.length} / {MAX_TAGLINE_LENGTH}
                     </p>
