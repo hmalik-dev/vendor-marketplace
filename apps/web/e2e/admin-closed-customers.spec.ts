@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 
 import { expect, expectSignedIn, storageStatePath, test } from './fixtures';
+import { completeStepUp } from './step-up';
 
 /**
  * VEN-382: a closed account stays reachable from `/admin/customers`.
@@ -72,7 +73,9 @@ test('an operator closes an account, then reaches its data-rights page from the 
 
   await page.goto(href);
   await closeButton.click();
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Close account' }).click();
+  const dialog = page.getByRole('alertdialog');
+  await dialog.getByRole('button', { name: 'Close account' }).click();
+  await completeStepUp(page, dialog);
   await expect(page.getByText(/^Closed \d{4}-\d{2}-\d{2}$/)).toBeVisible();
 
   // The default view is live accounts only, so the closed row is gone from it.

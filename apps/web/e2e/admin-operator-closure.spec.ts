@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { promisify } from 'node:util';
 
 import { AUTH_DIR, expect, expectSignedIn, storageStatePath, test } from './fixtures';
+import { completeStepUp } from './step-up';
 
 /**
  * VEN-391: an operator closes **another operator's** account, past a typed
@@ -78,6 +79,7 @@ test('an operator closes another operator only after typing their address exactl
     await typed.fill(email);
     await expect(confirm).toBeEnabled();
     await confirm.click();
+    await completeStepUp(page, dialog);
 
     await expect(page.getByText(/^Closed \d{4}-\d{2}-\d{2}$/)).toBeVisible();
     // Not `getByRole('alert')`: Next's route announcer carries that role on every page.

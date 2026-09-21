@@ -1,6 +1,11 @@
+import { isDeployedRuntime } from '@vendor-marketplace/shared/env';
 import fp from 'fastify-plugin';
 import { createEmailGateway } from '../lib/email.js';
 import type { EmailGateway } from '../lib/email.js';
+import { withLaneMailbox } from '../lib/lane-mailbox.js';
+
+/** Where a lane's E2E specs read the last email sent; registered on `local` only. */
+export const LANE_MAILBOX_PATH = '/__lane/mailbox/latest';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -28,7 +33,24 @@ export interface EmailPluginOptions {
  */
 export const emailPlugin = fp<EmailPluginOptions>(
   async (app, options) => {
-    app.decorate('email', options.gateway ?? createEmailGateway({ ...options, log: app.log }));
+    const gateway = options.gateway ?? createEmailGateway({ ...options, log: app.log });
+
+    // Both signals: an explicit `DEPLOY_ENV=local` on a process the env layer treats as deployed stays closed.
+    if (options.deployEnv !== 'local' || isDeployedRuntime()) {
+      app.decorate('email', gateway);
+      return;
+    }
+
+    // A lane has no inbox, so its E2E specs read the step-up code here (VEN-553).
+    const lane = withLaneMailbox(gateway);
+    app.decorate('email', lane.gateway);
+    app.get<{ Querystring: { to?: string } }>(LANE_MAILBOX_PATH, async (request, reply) => {
+      const message = lane.mailbox.latest(request.query.to);
+
+      return message
+        ? { to: message.to, subject: message.subject, text: message.text }
+        : reply.code(404).send({ error: 'No email has been sent' });
+    });
   },
   { name: 'email' },
 );
