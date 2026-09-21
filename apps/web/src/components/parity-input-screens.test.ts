@@ -19,9 +19,11 @@ describe('sign-up and sign-in (frame 12)', () => {
   });
 
   it('sets the alternate-route line at 13px, not the 14px `text-cta`', () => {
+    // Sign-up's sits 13px under the agreement line (frame 35), sign-in's 20px under the button.
+    expect(signUp).toContain('mt-3.25 text-center text-action text-stone-700');
+    expect(signIn).toContain('mt-5 text-center text-action text-stone-700');
     for (const source of [signUp, signIn]) {
-      expect(source).toContain('mt-5 text-center text-action text-stone-700');
-      expect(source).not.toContain('mt-5 text-center text-cta');
+      expect(source).not.toContain('text-center text-cta');
     }
   });
 

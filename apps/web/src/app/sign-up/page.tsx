@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { pageTitle } from '@vendor-marketplace/shared';
+import { getVendorSignUpGate } from '@/lib/vendor-data';
 import { SignUpForm, type SignUpRole } from '@/components/auth/sign-up-form';
 
 export const metadata: Metadata = { title: pageTitle('Sign up') };
@@ -28,6 +29,7 @@ export default async function SignUpPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<React.ReactElement> {
   const { role } = await searchParams;
+  const { vendorInviteOnly } = await getVendorSignUpGate();
 
-  return <SignUpForm initialRole={readRole(role)} />;
+  return <SignUpForm initialRole={readRole(role)} vendorInviteOnly={vendorInviteOnly} />;
 }
