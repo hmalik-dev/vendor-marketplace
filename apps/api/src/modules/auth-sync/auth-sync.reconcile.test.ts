@@ -94,6 +94,19 @@ describe('reconcileAuthUsers', () => {
     expect(row?.email).toBe('katherine@example.com');
   });
 
+  it('reports no drift for an identity image it would refuse to store (VEN-538)', async () => {
+    await seed('user_a', { email: 'katherine@example.com' });
+
+    const summary = await reconcileAuthUsers(
+      context(),
+      sourceHolding(identity('user_a', { image: 'javascript:x' })),
+    );
+
+    expect(summary).toMatchObject({ examined: 1, updated: 0, deleted: 0, unchanged: 1 });
+    const [row] = await read('user_a');
+    expect(row?.avatarUrl).toBe('https://img.example.test/katherine.png');
+  });
+
   it('corrects a changed provider avatar', async () => {
     await seed('user_a', {
       email: 'katherine@example.com',
