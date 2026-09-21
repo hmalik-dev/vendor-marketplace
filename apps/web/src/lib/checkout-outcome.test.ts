@@ -101,15 +101,16 @@ describe('openCheckout', () => {
 
   /*
    * VEN-479: a banned or retired vendor answers 409 with VENDOR_UNAVAILABLE. The
-   * code must win over the generic 409 → not-payable branch, or the customer is
-   * told the booking is closed rather than that the vendor cannot take payment.
+   * code must win over the generic 409 → not-payable branch, and it is a
+   * permanent state of its own (VEN-555): folding it into the temporary 402
+   * state offered a retry that can never succeed.
    */
-  it('reports 409 VENDOR_UNAVAILABLE as a vendor who cannot take payment, not as not payable', async () => {
+  it('reports 409 VENDOR_UNAVAILABLE as a vendor who is closed, not as temporary or not payable', async () => {
     apiRequest.mockRejectedValue(
       new ApiClientError(409, ERROR_CODES.VENDOR_UNAVAILABLE, 'vendor unavailable'),
     );
 
-    await expect(openCheckout(REQUEST_ID)).resolves.toEqual({ state: 'vendor-unavailable' });
+    await expect(openCheckout(REQUEST_ID)).resolves.toEqual({ state: 'vendor-closed' });
   });
 
   it('sends an unauthenticated caller to sign in', async () => {
