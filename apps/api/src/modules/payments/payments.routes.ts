@@ -8,7 +8,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuth } from '../../lib/guards.js';
+import { authenticated, requireAuthBeforeValidation } from '../../lib/guards.js';
 import { notFound } from '../../lib/errors.js';
 import {
   bookingContextFor,
@@ -46,7 +46,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
   app.post(
     '/customer/booking-requests/:requestId/checkout',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { params: requestParamsSchema, response: { 200: checkoutIntentSchema } },
     },
     async (request) =>
@@ -69,7 +69,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
   app.get(
     '/customer/booking-requests/:requestId/booking',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { params: requestParamsSchema, response: { 200: bookingWithContextSchema } },
     },
     async (request) => {
@@ -99,7 +99,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
   app.get(
     '/customer/bookings/:bookingId',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { params: bookingParamsSchema, response: { 200: bookingSchema } },
     },
     async (request) =>
@@ -114,7 +114,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
   app.put(
     '/vendor/bookings/:bookingId/complete',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: { params: bookingParamsSchema, response: { 200: bookingSchema } },
     },
     async (request) =>
@@ -129,7 +129,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
   app.put(
     '/customer/bookings/:bookingId/cancel',
     {
-      preHandler: requireAuth,
+      onRequest: requireAuthBeforeValidation,
       schema: {
         params: bookingParamsSchema,
         body: cancelBookingSchema,
