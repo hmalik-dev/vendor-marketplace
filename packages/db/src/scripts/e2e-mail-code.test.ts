@@ -12,8 +12,15 @@ const SERVER = 'abc1de23';
 const ADDRESS = `e2e-507-1@${SERVER}.mailosaur.net`;
 const env = { E2E_MAIL_API_KEY: KEY, E2E_MAIL_SERVER: SERVER } as NodeJS.ProcessEnv;
 
+const MESSAGE_ID = 'msg-1';
+
+/** A 200 answers the search with one summary, then the fetch with `body`; any other status fails the search. */
 function answer(status: number, body: unknown): ReturnType<typeof vi.fn> {
-  return vi.fn(async () => new Response(JSON.stringify(body), { status }));
+  return vi.fn(async (url: string) =>
+    status === 200 && url.includes('/api/messages/search')
+      ? new Response(JSON.stringify({ items: [{ id: MESSAGE_ID }] }), { status })
+      : new Response(JSON.stringify(body), { status }),
+  );
 }
 
 function asFetch(mock: ReturnType<typeof vi.fn>): typeof fetch {
@@ -36,15 +43,35 @@ describe('readMailCode', () => {
     const code = await readMailCode({ address: ADDRESS }, env, asFetch(fetchMock));
 
     expect(code).toBe('482913');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const headers = {
+      authorization: `Basic ${Buffer.from(`${KEY}:`).toString('base64')}`,
+      'content-type': 'application/json',
+    };
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const parsed = new URL(url);
-    expect(parsed.origin + parsed.pathname).toBe('https://mailosaur.com/api/messages/await');
-    expect(parsed.searchParams.get('sentTo')).toBe(ADDRESS);
-    expect(parsed.searchParams.get('server')).toBe(SERVER);
-    expect(parsed.searchParams.get('timeout')).toBe(String(DEFAULT_WAIT_MS));
-    expect((init.headers as Record<string, string>).authorization).toBe(
-      `Basic ${Buffer.from(`${KEY}:`).toString('base64')}`,
-    );
+    expect(init.method).toBe('POST');
+    expect(parsed.origin + parsed.pathname).toBe('https://mailosaur.com/api/messages/search');
+    expect([...parsed.searchParams.entries()]).toEqual([
+      ['server', SERVER],
+      ['timeout', String(DEFAULT_WAIT_MS)],
+      ['errorOnTimeout', 'false'],
+    ]);
+    expect(init.body).toBe(JSON.stringify({ sentTo: ADDRESS }));
+    expect(init.headers).toEqual(headers);
+    const [fetchUrl, fetchInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(fetchUrl).toBe(`https://mailosaur.com/api/messages/${MESSAGE_ID}`);
+    expect(fetchInit.method).toBe('GET');
+    expect(fetchInit.headers).toEqual(headers);
+  });
+
+  it('reports no mail when the wait ends with nothing found', async () => {
+    const empty = vi.fn(async () => new Response(JSON.stringify({ items: [] }), { status: 200 }));
+
+    const error = await failure(readMailCode({ address: ADDRESS }, env, asFetch(empty)));
+
+    expect(error.message).toBe('No mail arrived for that address.');
+    expect(empty).toHaveBeenCalledTimes(1);
   });
 
   it('passes --after as receivedAfter and falls back to the subject', async () => {
@@ -59,6 +86,7 @@ describe('readMailCode', () => {
     expect(code).toBe('123456');
     const url = new URL((fetchMock.mock.calls[0] as [string])[0]);
     expect(url.searchParams.get('receivedAfter')).toBe('2026-09-21T21:00:00.000Z');
+    expect(url.searchParams.has('sentTo')).toBe(false);
   });
 
   it('reads the code from an HTML-only message', async () => {
@@ -176,6 +204,44 @@ describe('readMailCode', () => {
     const error = await failure(readMailCode({ address: ADDRESS }, env, asFetch(answer(404, {}))));
 
     expect(error.message).toBe('No mail arrived for that address (mail API 404).');
+  });
+
+  it('tells a 400 from a 401 by status and Mailosaur message, and nothing else', async () => {
+    const leak = `${KEY} ${SERVER} Your code is 482913`;
+    const bad = await failure(
+      readMailCode(
+        { address: ADDRESS },
+        env,
+        asFetch(answer(400, { message: 'Invalid criteria', text: { body: leak } })),
+      ),
+    );
+    const unauthorized = await failure(
+      readMailCode(
+        { address: ADDRESS },
+        env,
+        asFetch(answer(401, { message: 'Invalid API key', text: { body: leak } })),
+      ),
+    );
+
+    expect(bad.message).toBe('The mail API refused the request (400): Invalid criteria');
+    expect(unauthorized.message).toBe('The mail API refused the request (401): Invalid API key');
+    for (const error of [bad, unauthorized]) {
+      expect(error.message).not.toContain(KEY);
+      expect(error.message).not.toContain(SERVER);
+      expect(error.message).not.toContain('482913');
+    }
+  });
+
+  it('drops a Mailosaur message that carries the key or the server', async () => {
+    const error = await failure(
+      readMailCode(
+        { address: ADDRESS },
+        env,
+        asFetch(answer(401, { message: `bad key ${KEY} on ${SERVER}` })),
+      ),
+    );
+
+    expect(error.message).toBe('The mail API refused the request (401).');
   });
 
   it('caps the requested wait', async () => {
