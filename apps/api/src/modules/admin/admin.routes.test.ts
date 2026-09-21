@@ -284,6 +284,10 @@ describe('admin routes', () => {
       { method: 'GET', url: '/admin/requests' },
       /* VEN-400. One customer's contact details, bookings, reviews and notifications. */
       { method: 'GET', url: `/admin/customers/${NIL}` },
+      /* VEN-506. Whoever holds the console: granting and revoking it is privilege escalation. */
+      { method: 'GET', url: '/admin/operators' },
+      { method: 'POST', url: '/admin/operators' },
+      { method: 'DELETE', url: `/admin/operators/${NIL}` },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {
