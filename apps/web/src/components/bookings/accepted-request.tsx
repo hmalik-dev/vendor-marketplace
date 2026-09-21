@@ -4,6 +4,7 @@ import {
   EVENT_TYPE_LABELS,
   FULL_REFUND_CUTOFF_HOURS,
   calculateRefund,
+  expiryCountdown,
   formatPrice,
   isUniversallyFutureDate,
 } from '@vendor-marketplace/shared';
@@ -92,6 +93,22 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
       setConfirming(false);
     }
   }
+
+  /*
+   * A vendor who cannot currently be paid (VEN-559): explained here rather than
+   * left for the customer to learn by clicking through to a refusal. A pause
+   * names the running deadline; a closure is permanent and says so.
+   */
+  const availability = request.vendor.availability;
+  const deadline = expiryCountdown(request.expiresAt, new Date());
+  const pulled =
+    booking !== null
+      ? null
+      : availability === 'paused'
+        ? `${request.vendor.businessName} isn't taking bookings right now. This is temporary — check back a little later.${deadline && deadline !== 'expired' ? ` Your booking ${deadline}.` : ''}`
+        : availability === 'closed'
+          ? `${request.vendor.businessName} is no longer taking bookings, so this can't be paid for.`
+          : null;
 
   return (
     <section
@@ -186,12 +203,16 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
                 </Button>
               )}
             </>
-          ) : (
+          ) : pulled === null ? (
             <Button asChild variant="primary" disabled={price === null}>
               <Link href={`/bookings/${request.id}/checkout`}>
                 Pay {price === null ? 'now' : formatPrice(price)}
               </Link>
             </Button>
+          ) : (
+            <p role="status" className="text-[12.5px] leading-[1.55] text-stone-700">
+              {pulled}
+            </p>
           )}
         </div>
       </div>

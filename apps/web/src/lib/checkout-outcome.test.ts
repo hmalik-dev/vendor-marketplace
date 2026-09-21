@@ -113,6 +113,15 @@ describe('openCheckout', () => {
     await expect(openCheckout(REQUEST_ID)).resolves.toEqual({ state: 'vendor-closed' });
   });
 
+  /* VEN-559: reversible, so it must not fall into the permanent branch or the generic 409. */
+  it('reports 409 VENDOR_PAUSED as a paused vendor', async () => {
+    apiRequest.mockRejectedValue(
+      new ApiClientError(409, ERROR_CODES.VENDOR_PAUSED, 'vendor paused'),
+    );
+
+    await expect(openCheckout(REQUEST_ID)).resolves.toEqual({ state: 'vendor-paused' });
+  });
+
   it('sends an unauthenticated caller to sign in', async () => {
     refuseWith(401);
 

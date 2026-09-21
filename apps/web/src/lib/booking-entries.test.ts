@@ -64,6 +64,7 @@ function vendorWith(categoryName: string | null, id: string): WireBookingRequest
     categoryName,
     avgRating: 4.5,
     reviewCount: 10,
+    availability: 'available',
   };
 }
 

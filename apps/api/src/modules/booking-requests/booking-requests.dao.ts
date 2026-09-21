@@ -37,10 +37,11 @@ import {
   type BookingRequestStatus,
   type BookingSettlement,
   type PageWindow,
+  type VendorAvailability,
 } from '@vendor-marketplace/shared';
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import type { AppDatabase } from '../../lib/database.js';
-import { VENDOR_SELLABLE, VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
+import { VENDOR_AVAILABILITY, VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
 
 /** Newest first — both hubs read a request queue, and the queue is a stack. */
 const newestFirst = [desc(bookingRequests.createdAt)];
@@ -53,7 +54,10 @@ const newestFirst = [desc(bookingRequests.createdAt)];
  * vendor block carried no category, so the bookings hub hardcoded it to null and
  * its category filter had nothing to filter on (#302/#187).
  */
-export type VendorSummaryRow = VendorProfileRow & { categoryName: string | null };
+export type VendorSummaryRow = VendorProfileRow & {
+  categoryName: string | null;
+  availability: VendorAvailability;
+};
 
 /**
  * The vendor's primary category, as a correlated subquery.
@@ -90,6 +94,7 @@ const primaryCategoryName = sql<string | null>`(
 const vendorSummaryColumns = {
   ...getTableColumns(vendorProfiles),
   categoryName: primaryCategoryName,
+  availability: VENDOR_AVAILABILITY,
 };
 
 export async function findRequestById(
@@ -485,15 +490,18 @@ export async function findBookableVendorById(
   return rows?.[0] ?? null;
 }
 
-/** Whether the vendor may still be sold to: visible and not on a moderation hold (VEN-556). */
-export async function isVendorSellable(db: AppDatabase, vendorId: string): Promise<boolean> {
+/** Whether the vendor can be sold to, and if not whether that can be undone (VEN-556, VEN-559). */
+export async function findVendorAvailability(
+  db: AppDatabase,
+  vendorId: string,
+): Promise<VendorAvailability> {
   const rows = await db
-    .select({ id: vendorProfiles.id })
+    .select({ availability: VENDOR_AVAILABILITY })
     .from(vendorProfiles)
-    .where(and(eq(vendorProfiles.id, vendorId), VENDOR_SELLABLE))
+    .where(eq(vendorProfiles.id, vendorId))
     .limit(1);
 
-  return rows.length > 0;
+  return rows[0]?.availability ?? 'closed';
 }
 
 export async function findVendorsByIds(

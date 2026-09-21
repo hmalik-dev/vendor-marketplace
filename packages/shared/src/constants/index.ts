@@ -1805,6 +1805,14 @@ export const MAX_TAG_SLUG_LENGTH = MAX_NAME_LENGTH + 28;
 // --- Error codes -----------------------------------------------------------
 
 /**
+ * Whether a customer may still be sold to this vendor (VEN-559). `paused` is an
+ * unpublish or a moderation hold, which an operator or the vendor can undo;
+ * `closed` is a ban or a retirement, which nothing undoes.
+ */
+export const VENDOR_AVAILABILITIES = ['available', 'paused', 'closed'] as const;
+export type VendorAvailability = (typeof VENDOR_AVAILABILITIES)[number];
+
+/**
  * Machine-readable `error` field on every structured API error response.
  * The human-readable `message` is written at the throw site.
  */
@@ -1840,7 +1848,10 @@ export const ERROR_CODES = {
   CONFLICT: 'CONFLICT',
   RATE_LIMITED: 'RATE_LIMITED',
   PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
+  /** The vendor is banned or retired: permanent, so a client offers no retry. */
   VENDOR_UNAVAILABLE: 'VENDOR_UNAVAILABLE',
+  /** The vendor is unpublished or on a moderation hold (VEN-559): reversible, so a client may offer a retry. */
+  VENDOR_PAUSED: 'VENDOR_PAUSED',
   PAYMENT_FAILED: 'PAYMENT_FAILED',
   INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
   UPLOAD_FAILED: 'UPLOAD_FAILED',

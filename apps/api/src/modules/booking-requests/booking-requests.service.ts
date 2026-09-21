@@ -54,7 +54,7 @@ import {
   findRequests,
   findBookableVendorById,
   findVendorById,
-  isVendorSellable,
+  findVendorAvailability,
   findVendorByUserId,
   findVendorUserId,
   findCustomerNames,
@@ -162,6 +162,7 @@ function toVendorSummary(vendor: VendorSummaryRow): BookingRequestDetail['vendor
     categoryName: vendor.categoryName,
     avgRating: parseRating(vendor.avgRating),
     reviewCount: vendor.reviewCount,
+    availability: vendor.availability,
   };
 }
 
@@ -1147,10 +1148,11 @@ async function prepareTransition({
    * an operator pulled after the quote still takes the booking (VEN-556). The
    * request stays as it was: unpublishing is reversible, so nothing is declined.
    */
-  if (!(await isVendorSellable(db, row.vendorId))) {
+  const availability = await findVendorAvailability(db, row.vendorId);
+  if (availability !== 'available') {
     throw new AppError(
       409,
-      ERROR_CODES.VENDOR_UNAVAILABLE,
+      availability === 'paused' ? ERROR_CODES.VENDOR_PAUSED : ERROR_CODES.VENDOR_UNAVAILABLE,
       party === 'vendor'
         ? 'Publish your storefront again before accepting bookings'
         : `${vendor.businessName} is no longer taking bookings`,

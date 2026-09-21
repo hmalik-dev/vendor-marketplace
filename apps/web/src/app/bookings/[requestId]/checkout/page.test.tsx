@@ -50,4 +50,22 @@ describe('CheckoutPage', () => {
     expect(screen.queryByText(/isn't open any more/)).toBeNull();
     expect(screen.queryByRole('link', { name: 'Try this payment again' })).toBeNull();
   });
+
+  /* VEN-559: a pulled vendor is temporary, so the screen retries and names the deadline. */
+  it('renders the temporary vendor-paused screen with a retry and the deadline', async () => {
+    openCheckout.mockResolvedValue({ state: 'vendor-paused' });
+    getOwnBookingRequest.mockResolvedValue({
+      status: 'accepted',
+      expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      vendor: { businessName: 'E2E Test Studio' },
+    });
+
+    render(await CheckoutPage({ params: Promise.resolve({ requestId: REQUEST_ID }) }));
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      "E2E Test Studio isn't taking bookings right now",
+    );
+    expect(screen.getByText(/Your booking expires in 3d/)).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Try this payment again' })).toBeDefined();
+  });
 });

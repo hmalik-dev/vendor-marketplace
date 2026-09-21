@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
-import { pageTitle, uuidSchema } from '@vendor-marketplace/shared';
+import { expiryCountdown, pageTitle, uuidSchema } from '@vendor-marketplace/shared';
 import { CheckoutScreen } from '@/components/checkout/checkout-screen';
 import {
   CheckoutUnavailable,
@@ -85,8 +85,21 @@ export default async function CheckoutPage({ params }: PageProps): Promise<React
  * A request that cannot be read falls back to `closed`, which is the safer of
  * the two: it promises the customer nothing.
  */
+function paymentDeadlineWords(expiresAt: Date | null): string | null {
+  const words = expiryCountdown(expiresAt);
+
+  return words === 'expired' ? null : words;
+}
+
 async function unavailableScreen(
-  state: 'not-payable' | 'vendor-unavailable' | 'vendor-closed' | 'failed' | 'paused' | 'over-cap',
+  state:
+    | 'not-payable'
+    | 'vendor-unavailable'
+    | 'vendor-paused'
+    | 'vendor-closed'
+    | 'failed'
+    | 'paused'
+    | 'over-cap',
   requestId: string,
 ): Promise<React.ReactElement> {
   if (state === 'failed' || state === 'paused' || state === 'over-cap') {
@@ -107,7 +120,7 @@ async function unavailableScreen(
   const notAccepted = request?.status === 'pending' || request?.status === 'quoted';
   let reason: CheckoutUnavailableReason = notAccepted ? 'not-accepted' : 'closed';
 
-  if (state === 'vendor-unavailable' || state === 'vendor-closed') {
+  if (state === 'vendor-unavailable' || state === 'vendor-paused' || state === 'vendor-closed') {
     reason = state;
   }
 
@@ -116,6 +129,7 @@ async function unavailableScreen(
       reason={reason}
       requestId={requestId}
       vendorName={request?.vendor.businessName ?? null}
+      deadline={state === 'vendor-paused' ? paymentDeadlineWords(request?.expiresAt ?? null) : null}
     />
   );
 }

@@ -308,8 +308,10 @@ export async function openCheckout(
   if (row.vendorPulled) {
     throw new AppError(
       409,
-      ERROR_CODES.VENDOR_UNAVAILABLE,
-      `${row.vendorBusinessName} is no longer taking bookings`,
+      row.vendorClosed ? ERROR_CODES.VENDOR_UNAVAILABLE : ERROR_CODES.VENDOR_PAUSED,
+      row.vendorClosed
+        ? `${row.vendorBusinessName} is no longer taking bookings`
+        : `${row.vendorBusinessName} isn't taking bookings right now`,
     );
   }
 
