@@ -507,6 +507,20 @@ export interface CancellationRecord {
   disputeReason: null;
 }
 
+/**
+ * Owes the vendor nothing on a booking whose customer was refunded in full
+ * while its cancel was lost. Never touches a payout the sweep already released.
+ */
+export async function zeroUnreleasedVendorPayout(
+  db: AppDatabase,
+  bookingId: string,
+): Promise<void> {
+  await db
+    .update(bookings)
+    .set({ vendorPayoutCents: 0, updatedAt: sql`now()` })
+    .where(and(eq(bookings.id, bookingId), isNull(bookings.payoutReleasedAt)));
+}
+
 export async function cancelBookingAndFreeDate(
   db: AppDatabase,
   bookingId: string,

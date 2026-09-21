@@ -21,6 +21,7 @@ import {
   vendorTags,
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import type { AlertSource } from '../operator-alerts/operator-alerts.service.js';
 import { bookingContextFor } from '../payments/payments.service.js';
 import { SUSPENSION_UNWIND, unwindAccountBookings } from './account-unwind.js';
 import {
@@ -831,6 +832,48 @@ describe('admin routes', () => {
           { id: late, status: 'cancelled' },
         ].sort((a, b) => a.id.localeCompare(b.id)),
       );
+    });
+
+    /*
+     * VEN-546. The refund is out and the cancel finds the row moved on (here a
+     * Dashboard refund holding it `disputed`, inside the refund call). The unwind
+     * must say so, not count the refund as clean, and owe the vendor nothing.
+     */
+    it('alerts and zeroes the payout when a refunded booking cannot be cancelled', async () => {
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const bookingId = await createFutureBooking(customerId, vendor.profileId);
+      const dispatched: AlertSource[] = [];
+      harness.stripe.duringNextRefund = async () => {
+        await harness.database.db
+          .update(bookings)
+          .set({ status: 'disputed' })
+          .where(eq(bookings.id, bookingId));
+      };
+
+      const result = await unwindAccountBookings(
+        {
+          ...bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
+          alerts: { dispatch: (alert) => void dispatched.push(alert) },
+        },
+        vendor.userId,
+        vendor.profileId,
+        new Date(),
+        SUSPENSION_UNWIND,
+      );
+
+      expect(result).toMatchObject({ bookingsCancelled: 0, refundsIssued: 0, refundsFailed: 1 });
+      expect(harness.stripe.refunds).toHaveLength(1);
+      expect(dispatched).toHaveLength(1);
+      expect(dispatched[0]).toMatchObject({
+        kind: 'refund_failed',
+        subjectId: `${bookingId}:unreconciled`,
+      });
+      const [booking] = await harness.database.db
+        .select({ status: bookings.status, vendorPayoutCents: bookings.vendorPayoutCents })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+      expect(booking).toEqual({ status: 'disputed', vendorPayoutCents: 0 });
     });
 
     /*
