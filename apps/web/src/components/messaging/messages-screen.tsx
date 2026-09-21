@@ -901,6 +901,8 @@ export function MessagesScreen({
                 and the profile tablist take, for the same reason.
               */
               data-focus-own
+              role="region"
+              aria-label="Message history"
               className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5.5 py-4.5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-clay-400"
             >
               {/*

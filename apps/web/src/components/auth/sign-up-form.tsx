@@ -125,6 +125,9 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
     setFailure(outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.signUpFailed);
   }
 
+  // A network failure says nothing about what the reader typed, so only a refusal marks the fields.
+  const credentialsRefused = failure !== null && failure !== AUTH_COPY.unreachable;
+
   return (
     <AuthScreen
       headline="Let's get you set up"
@@ -224,7 +227,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
           data-role-pending={role === null ? '' : undefined}
         >
           {failure ? (
-            <Banner status="failed" className="mb-4">
+            <Banner status="failed" role="alert" className="mb-4">
               {failure}
             </Banner>
           ) : null}
@@ -235,6 +238,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             placeholder="you@example.com"
             name="email"
             autoComplete="email"
+            aria-invalid={credentialsRefused ? true : undefined}
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -246,6 +250,7 @@ export function SignUpForm({ initialRole }: SignUpFormProps): React.ReactElement
             placeholder="••••••••••"
             name="password"
             autoComplete="new-password"
+            aria-invalid={credentialsRefused ? true : undefined}
             minLength={10}
             required
             value={password}

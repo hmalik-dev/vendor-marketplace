@@ -300,3 +300,29 @@ describe('a mark-read the API refuses', () => {
     );
   });
 });
+
+describe('the bell announcements (VEN-542)', () => {
+  it('says the unread count in a live region and points aria-controls at the open panel', async () => {
+    call.mockResolvedValueOnce({
+      items: [
+        { id: 'n1', title: 'Hello', body: 'b', readAt: null, createdAt: new Date(), href: null },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    } as never);
+    render(<NotificationBell />);
+
+    const region = await screen.findByRole('status');
+    await waitFor(() => expect(region.textContent).toBe('1 unread notification'));
+
+    const button = screen.getByRole('button', { name: /Notifications/ });
+    expect(button.getAttribute('aria-haspopup')).toBe('dialog');
+
+    await userEvent.click(button);
+
+    const controls = button.getAttribute('aria-controls');
+    expect(controls).toBeTruthy();
+    expect(document.getElementById(controls ?? '')).not.toBeNull();
+  });
+});
