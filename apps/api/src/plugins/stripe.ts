@@ -10,6 +10,8 @@ declare module 'fastify' {
 
 export interface StripePluginOptions {
   secretKey: string;
+  /** `DEPLOY_ENV`, stamped on every intent so a shared test account can tell tiers apart. */
+  deployEnv: string;
   webhookSecret: string;
   connectWebhookSecret?: string;
   /** Overridden by the route suites so they need no Stripe account at all. */

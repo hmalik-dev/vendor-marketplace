@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createStripeConnectGateway,
   describeAccountEvent,
+  isForeignEnvIntent,
   isMissingPayoutsOnly,
   isOnboarded,
   paymentIntentParams,
@@ -36,7 +37,7 @@ describe('paymentIntentParams', () => {
    * meaningless without one.
    */
   it('charges into the platform balance, with no fee and no destination', () => {
-    const params = paymentIntentParams(INPUT);
+    const params = paymentIntentParams(INPUT, 'staging');
 
     expect(params.transfer_data).toBeUndefined();
     expect(params.application_fee_amount).toBeUndefined();
@@ -44,9 +45,25 @@ describe('paymentIntentParams', () => {
     expect(params.transfer_group).toBe('booking_req_one');
   });
 
+  /** VEN-529: staging and production share one test account, so the tier rides on the intent. */
+  it.each(['staging', 'production'])('tags the intent with its %s environment', (tier) => {
+    expect(paymentIntentParams(INPUT, tier).metadata).toEqual({
+      requestId: 'req_one',
+      customerId: 'cus_one',
+      vendorId: 'ven_one',
+      env: tier,
+    });
+  });
+
+  it('recognises only a tag naming another environment as foreign', () => {
+    expect(isForeignEnvIntent({ metadata: { env: 'production' } }, 'staging')).toBe(true);
+    expect(isForeignEnvIntent({ metadata: { env: 'staging' } }, 'staging')).toBe(false);
+    expect(isForeignEnvIntent({ metadata: {} }, 'staging')).toBe(false);
+  });
+
   /** The group is what ties the charge to the transfer it eventually funds. */
   it('labels the charge with the transfer group the release will search on', () => {
-    expect(paymentIntentParams(INPUT).transfer_group).toBe(transferGroupFor('req_one'));
+    expect(paymentIntentParams(INPUT, 'staging').transfer_group).toBe(transferGroupFor('req_one'));
   });
 });
 
@@ -578,6 +595,7 @@ describe('parseEventNotification', () => {
   const gateway = (extra?: string): StripeConnectGateway =>
     createStripeConnectGateway({
       secretKey: 'sk_test_unused',
+      deployEnv: 'staging',
       webhookSecret: own,
       ...(extra ? { connectWebhookSecret: extra } : {}),
     });

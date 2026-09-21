@@ -72,6 +72,13 @@ describe('the case queue under contention, against a real Postgres', () => {
 
   /** One `charge.dispute.created` delivery, as Stripe makes it. */
   async function deliverChargeback(disputeId: string) {
+    harness!.stripe.paymentIntents.set(PAYMENT_INTENT_ID, {
+      id: PAYMENT_INTENT_ID,
+      status: 'succeeded',
+      amountReceivedCents: TOTAL_CENTS,
+      clientSecret: null,
+      metadata: {},
+    });
     harness!.stripe.disputes.set(disputeId, {
       id: disputeId,
       status: 'needs_response',

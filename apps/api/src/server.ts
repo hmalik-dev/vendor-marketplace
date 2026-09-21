@@ -394,6 +394,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(storagePlugin, { storage, publicUrl: env.STORAGE_PUBLIC_URL });
   await app.register(stripePlugin, {
     secretKey: env.STRIPE_SECRET_KEY,
+    deployEnv: env.DEPLOY_ENV,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
     ...(env.STRIPE_CONNECT_WEBHOOK_SECRET
       ? { connectWebhookSecret: env.STRIPE_CONNECT_WEBHOOK_SECRET }
@@ -515,6 +516,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
     webOrigin: canonicalWebOrigin(env),
     keyMode: stripeKeyMode(env.STRIPE_SECRET_KEY),
+    deployEnv: env.DEPLOY_ENV,
   });
 
   await app.ready();

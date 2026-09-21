@@ -169,6 +169,15 @@ describe('the operations case queue (#431)', () => {
       })
       .returning({ id: bookings.id });
 
+    /* The intent Stripe would answer for; the webhook reads its environment tag first (VEN-529). */
+    harness.stripe.paymentIntents.set(paymentIntentId, {
+      id: paymentIntentId,
+      status: 'succeeded',
+      amountReceivedCents: TOTAL_CENTS,
+      clientSecret: null,
+      metadata: {},
+    });
+
     return { adminId, customerId, vendorProfileId, bookingId: bookingRows[0]!.id, paymentIntentId };
   }
 
@@ -864,8 +873,38 @@ describe('the operations case queue (#431)', () => {
     });
   });
 
+  it('ignores a dispute on another environment’s charge even when a copied booking matches it', async () => {
+    const fixture = await seed();
+    harness.stripe.paymentIntents.set(fixture.paymentIntentId, {
+      id: fixture.paymentIntentId,
+      status: 'succeeded',
+      amountReceivedCents: TOTAL_CENTS,
+      clientSecret: null,
+      metadata: { env: 'production' },
+    });
+
+    const delivered = await deliverDispute('charge.dispute.created', {
+      id: 'dp_test_copied',
+      status: 'needs_response',
+      reason: 'fraudulent',
+      amountCents: TOTAL_CENTS,
+      intentId: fixture.paymentIntentId,
+    });
+
+    expect(delivered.statusCode).toBe(200);
+    expect(delivered.json().outcome).toBe('ignored');
+    expect((await readCases()).total).toBe(0);
+  });
+
   it('ignores a dispute on a charge this platform did not make', async () => {
     await seed();
+    harness.stripe.paymentIntents.set('pi_not_ours', {
+      id: 'pi_not_ours',
+      status: 'succeeded',
+      amountReceivedCents: 5_000,
+      clientSecret: null,
+      metadata: {},
+    });
 
     const delivered = await deliverDispute('charge.dispute.created', {
       id: 'dp_test_foreign',

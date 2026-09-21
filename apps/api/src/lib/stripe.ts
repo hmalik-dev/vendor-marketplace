@@ -450,6 +450,7 @@ export function refusedRefundParams(params: Stripe.RefundCreateParams): string |
  */
 export function paymentIntentParams(
   input: CreatePaymentIntentInput,
+  deployEnv: string,
 ): Stripe.PaymentIntentCreateParams {
   return {
     amount: input.amountCents,
@@ -466,8 +467,34 @@ export function paymentIntentParams(
       requestId: input.requestId,
       customerId: input.customerId,
       vendorId: input.vendorId,
+      /* Staging and production share one test account; this is what tells their events apart (VEN-529). */
+      env: deployEnv,
     },
   };
+}
+
+/**
+ * Whether an intent was created by a different deployment on the same Stripe
+ * account (VEN-529). Only a tag that names another tier counts: an untagged
+ * intent predates the tag or came from outside the platform, which the callers
+ * judge by whether it matches a request.
+ */
+export function isForeignEnvIntent(
+  intent: Pick<PaymentIntentSnapshot, 'metadata'>,
+  deployEnv: string,
+): boolean {
+  const tagged = intent.metadata.env;
+
+  return tagged !== undefined && tagged !== deployEnv;
+}
+
+/** The same question for a dispute's or refund's charge, which carries no tag of its own. */
+export async function isForeignEnvPaymentIntent(
+  gateway: Pick<StripeConnectGateway, 'retrievePaymentIntent'>,
+  paymentIntentId: string,
+  deployEnv: string,
+): Promise<boolean> {
+  return isForeignEnvIntent(await gateway.retrievePaymentIntent(paymentIntentId), deployEnv);
 }
 
 /**
@@ -562,7 +589,7 @@ export interface PaymentIntentSnapshot {
   amountReceivedCents: number;
   /** `null` once the intent is terminal — there is nothing left to confirm. */
   clientSecret: string | null;
-  /** `requestId`, `customerId` and `vendorId`, as sent at creation. */
+  /** `requestId`, `customerId`, `vendorId` and `env`, as sent at creation. */
   metadata: Record<string, string>;
 }
 
@@ -860,6 +887,8 @@ export function readAccountStatusFrom(account: Stripe.V2.Core.Account): StripeAc
 
 export interface StripeCredentials {
   secretKey: string;
+  /** Stamped on every intent as `metadata.env`. */
+  deployEnv: string;
   /** Signs the endpoint that receives the platform account's own events. */
   webhookSecret: string;
   /** Signs the endpoint that receives connected accounts' events, when there is a second one. */
@@ -1025,7 +1054,7 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
          * The absence is asserted against `paymentIntentParams` itself, which
          * is why the object is built there rather than inline here.
          */
-        paymentIntentParams(input),
+        paymentIntentParams(input, credentials.deployEnv),
         /*
          * The request id, not a random key. Stripe replays the *same* intent
          * for a repeated key for 24 hours, so a double-submitted checkout — or
