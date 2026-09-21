@@ -25,6 +25,8 @@ export interface LaunchOptions {
   readonly database: LaunchDatabase | null;
   /** `HANDLED_STRIPE_EVENT_TYPES` from the Stripe webhook route module. */
   readonly handledStripeEvents: readonly string[];
+  /** `STRIPE_API_VERSION` from the Stripe gateway: the version every request is made at. */
+  readonly stripeApiVersion: string;
 }
 
 /** One provider read. A probe that throws becomes a single `FAIL` under its name. */

@@ -4,7 +4,7 @@ import { REPO_ROOT } from '../context.js';
 import type { LaunchDatabase } from './database.js';
 import { readOnlyGet, type HttpGet } from './http.js';
 import { mask } from './mask.js';
-import { loadHandledStripeEvents, loadSeedMarkers } from './repo-modules.js';
+import { loadHandledStripeEvents, loadSeedMarkers, loadStripeApiVersion } from './repo-modules.js';
 import { renderLaunchReport, runLaunchChecks, type LaunchOptions } from './run.js';
 import type { LaunchResult } from './types.js';
 
@@ -12,6 +12,7 @@ const API = 'https://api.orla.test';
 const WEB = 'https://orla.test';
 const NEON_UPLOADS = 'https://br-x.storage.c-4.us-east-2.aws.neon.tech/uploads';
 const AUTH_HOST = 'ep-x.neonauth.orla.test';
+const STRIPE_VERSION = '2026-08-26.dahlia';
 const HANDLED = ['account.updated', 'payment_intent.succeeded', 'charge.dispute.created'];
 
 /** Assembled at runtime so no literal in this file reads as a real credential. */
@@ -68,7 +69,11 @@ function json(body: unknown, status = 200): Response {
 }
 
 /** Provider doubles: one fake `fetch` answering Neon Auth, Stripe, Resend and the app. */
-function doubles(mode: Mode, events: readonly string[] = HANDLED): { get: HttpGet; calls: Call[] } {
+function doubles(
+  mode: Mode,
+  events: readonly string[] = HANDLED,
+  apiVersion: string = STRIPE_VERSION,
+): { get: HttpGet; calls: Call[] } {
   const live = mode === 'live';
   const calls: Call[] = [];
 
@@ -85,6 +90,7 @@ function doubles(mode: Mode, events: readonly string[] = HANDLED): { get: HttpGe
           {
             url: live ? `${API}/webhooks/stripe` : 'https://old.example/webhooks/stripe',
             status: 'enabled',
+            api_version: apiVersion,
             enabled_events: events,
           },
         ],
@@ -129,6 +135,7 @@ function options(mode: Mode, overrides: Partial<LaunchOptions> = {}): LaunchOpti
     get: doubles(mode).get,
     database: databaseDouble(mode),
     handledStripeEvents: HANDLED,
+    stripeApiVersion: STRIPE_VERSION,
     ...overrides,
   };
 }
@@ -335,10 +342,13 @@ describe('the Stripe webhook subscription', () => {
     });
   });
 
-  const endpointsGet = (...events: string[][]): HttpGet => {
+  const endpointsGet = (...events: string[][]): HttpGet => endpointsAt([], ...events);
+
+  const endpointsAt = (versions: string[], ...events: string[][]): HttpGet => {
     const data = events.map((enabled_events) => ({
       url: `${API}/webhooks/stripe`,
       status: 'enabled',
+      api_version: versions.shift() ?? STRIPE_VERSION,
       enabled_events,
     }));
 
@@ -399,6 +409,54 @@ describe('the Stripe webhook subscription', () => {
     expect(find(results, 'stripe webhook endpoint')).toMatchObject({
       status: 'FAIL',
       detail: `1 enabled endpoints at ${API}/webhooks/stripe (expected 2 — the API verifies STRIPE_WEBHOOK_SECRET and STRIPE_CONNECT_WEBHOOK_SECRET, one per endpoint)`,
+    });
+  });
+
+  it('names an endpoint delivering at a different API version than the pin', async () => {
+    const results = await runLaunchChecks(
+      options('live', { get: doubles('live', HANDLED, '2026-05-27.dahlia').get }),
+    );
+
+    expect(find(results, 'stripe webhook endpoint')).toMatchObject({
+      status: 'FAIL',
+      detail: `${API}/webhooks/stripe delivers at API version 2026-05-27.dahlia, the API is pinned to ${STRIPE_VERSION} — recreate the endpoint at that version`,
+    });
+  });
+
+  it('fails an endpoint whose version is null, following the account default', async () => {
+    const get: HttpGet = async () => ({
+      status: 200,
+      headers: new Headers(),
+      body: {
+        data: [
+          {
+            url: `${API}/webhooks/stripe`,
+            status: 'enabled',
+            api_version: null,
+            enabled_events: HANDLED,
+          },
+        ],
+      },
+    });
+    const results = await runLaunchChecks(options('live', { get }));
+
+    expect(find(results, 'stripe webhook endpoint')).toMatchObject({
+      status: 'FAIL',
+      detail: `${API}/webhooks/stripe delivers at API version the account default (api_version is null), the API is pinned to ${STRIPE_VERSION} — recreate the endpoint at that version`,
+    });
+  });
+
+  it('fails when only one of two endpoints is on another version', async () => {
+    const results = await runLaunchChecks(
+      options('live', {
+        env: withSecondEndpoint(),
+        get: endpointsAt([STRIPE_VERSION, '2026-05-27.dahlia'], HANDLED, ['*']),
+      }),
+    );
+
+    expect(find(results, 'stripe webhook endpoint')).toMatchObject({
+      status: 'FAIL',
+      detail: expect.stringContaining('delivers at API version 2026-05-27.dahlia'),
     });
   });
 
@@ -469,6 +527,10 @@ describe('the Stripe webhook subscription', () => {
       expect(find(results, 'stripe webhook endpoint').detail).toBe('missing invoice.paid');
     },
   );
+
+  it('reads the pinned API version from the gateway module', IMPORTS_REPO_SOURCE, async () => {
+    await expect(loadStripeApiVersion(REPO_ROOT)).resolves.toBe('2026-08-26.dahlia');
+  });
 
   it('reads the seed markers from the seed modules', IMPORTS_REPO_SOURCE, async () => {
     await expect(loadSeedMarkers(REPO_ROOT)).resolves.toEqual({

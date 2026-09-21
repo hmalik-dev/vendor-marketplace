@@ -94,6 +94,7 @@ function webhookSubscription(
   target: string,
   handled: readonly string[],
   expected: number,
+  apiVersion: string,
 ): LaunchResult {
   const name = 'stripe webhook endpoint';
   const endpoints: unknown = field(reply.body, 'data');
@@ -126,6 +127,24 @@ function webhookSubscription(
           ? 'the API verifies one STRIPE_WEBHOOK_SECRET; set STRIPE_CONNECT_WEBHOOK_SECRET for a connected-account endpoint'
           : 'the API verifies STRIPE_WEBHOOK_SECRET and STRIPE_CONNECT_WEBHOOK_SECRET, one per endpoint'
       })`,
+    );
+  }
+
+  // An event is shaped by its endpoint's version, not the client's: an endpoint
+  // on another version delivers payloads the handlers were not written against.
+  const drifted = matching.filter((endpoint) => field(endpoint, 'api_version') !== apiVersion);
+
+  if (drifted.length > 0) {
+    // A null version means the endpoint follows the account default, which can
+    // move without any change here, so it is not the pin either.
+    const versions = drifted.map((endpoint) => {
+      const version = field(endpoint, 'api_version');
+      return isString(version) ? version : 'the account default (api_version is null)';
+    });
+    return failed(
+      'stripe',
+      name,
+      `${target} delivers at API version ${versions.join(', ')}, the API is pinned to ${apiVersion} — recreate the endpoint at that version`,
     );
   }
 
@@ -176,7 +195,7 @@ function accountResults(body: unknown): LaunchResult[] {
   ];
 }
 
-function stripeProbes({ env, get, handledStripeEvents }: LaunchOptions): Probe[] {
+function stripeProbes({ env, get, handledStripeEvents, stripeApiVersion }: LaunchOptions): Probe[] {
   const auth = bearer(env.STRIPE_SECRET_KEY);
 
   return [
@@ -212,6 +231,7 @@ function stripeProbes({ env, get, handledStripeEvents }: LaunchOptions): Probe[]
           target,
           handledStripeEvents,
           connectConfigured ? 2 : 1,
+          stripeApiVersion,
         );
         const connectedName = 'stripe connected-account events';
 
