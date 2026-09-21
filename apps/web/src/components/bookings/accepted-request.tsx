@@ -4,6 +4,7 @@ import {
   EVENT_TYPE_LABELS,
   FULL_REFUND_CUTOFF_HOURS,
   calculateRefund,
+  expiryCountdown,
   formatPrice,
   isUniversallyFutureDate,
 } from '@vendor-marketplace/shared';
@@ -21,6 +22,22 @@ export interface AcceptedRequestProps {
   request: WireBookingRequest;
   /** The booking, once payment has landed. `null` means "not paid yet". */
   booking: WireBooking | null;
+}
+
+function pulledVendorMessage(request: WireBookingRequest): string | null {
+  const { availability, businessName } = request.vendor;
+
+  if (availability === 'closed') {
+    return `${businessName} is no longer taking bookings, so this can't be paid for.`;
+  }
+  if (availability !== 'paused') {
+    return null;
+  }
+
+  const deadline = expiryCountdown(request.expiresAt, new Date());
+  const deadlineSentence = deadline && deadline !== 'expired' ? ` Your booking ${deadline}.` : '';
+
+  return `${businessName} isn't taking bookings right now. This is temporary — check back a little later.${deadlineSentence}`;
 }
 
 /**
@@ -93,6 +110,13 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
     }
   }
 
+  /*
+   * A vendor who cannot currently be paid (VEN-559): explained here rather than
+   * left for the customer to learn by clicking through to a refusal. A pause
+   * names the running deadline; a closure is permanent and says so.
+   */
+  const pulled = booking === null ? pulledVendorMessage(request) : null;
+
   return (
     <section
       aria-labelledby="accepted-heading"
@@ -134,7 +158,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
               ? `Cancel more than ${FULL_REFUND_CUTOFF_HOURS} hours before the event and you're refunded in full — ${formatPrice(quote.refundCents)}.`
               : `The event is inside ${FULL_REFUND_CUTOFF_HOURS} hours, so cancelling now refunds ${formatPrice(quote?.refundCents ?? 0)} of ${formatPrice(booking.totalAmountCents)}.`}
           </p>
-        ) : (
+        ) : pulled !== null ? null : (
           <p className="text-[12.5px] leading-[1.55] text-stone-600">
             The date is held. Paying now confirms it — you&apos;re refunded in full if you cancel at
             least {FULL_REFUND_CUTOFF_HOURS} hours before the event.
@@ -186,12 +210,16 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
                 </Button>
               )}
             </>
-          ) : (
+          ) : pulled === null ? (
             <Button asChild variant="primary" disabled={price === null}>
               <Link href={`/bookings/${request.id}/checkout`}>
                 Pay {price === null ? 'now' : formatPrice(price)}
               </Link>
             </Button>
+          ) : (
+            <p role="status" className="text-[12.5px] leading-[1.55] text-stone-700">
+              {pulled}
+            </p>
           )}
         </div>
       </div>

@@ -1425,11 +1425,49 @@ describe('/booking-requests', () => {
       const response = await post(CUSTOMER, `/booking-requests/${requestId}/accept`);
 
       expect(response.statusCode).toBe(409);
-      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_PAUSED);
+      expect(response.json().message).toBe("Sunlit Studio isn't taking bookings right now");
       const [row] = await harness.database.db
         .select({ status: bookingRequests.status })
         .from(bookingRequests);
       expect(row?.status).toBe('quoted');
+    });
+
+    /* VEN-559: the customer read says which of the two a pulled vendor is. */
+    it.each([
+      ['available', { isPublished: true }],
+      ['paused', { moderationHold: true }],
+      ['closed', { isDeleted: true }],
+    ] as const)('reads a %s vendor on the request', async (availability, change) => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId: string = created.json().id;
+      await harness.database.db.update(vendorProfiles).set(change);
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: `/booking-requests/${requestId}`,
+        headers: bearer(CUSTOMER),
+      });
+
+      expect(response.json().vendor.availability).toBe(availability);
+    });
+
+    it('refuses to accept a quote from a retired vendor with the permanent code', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, {
+        customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+      });
+      const requestId: string = created.json().id;
+      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await harness.database.db.update(vendorProfiles).set({ isDeleted: true });
+
+      const response = await post(CUSTOMER, `/booking-requests/${requestId}/accept`);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
     });
 
     it('tells a vendor whose storefront is unpublished to publish it before accepting', async () => {
@@ -1441,7 +1479,7 @@ describe('/booking-requests', () => {
       const response = await post(VENDOR, `/booking-requests/${requestId}/accept`);
 
       expect(response.statusCode).toBe(409);
-      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_PAUSED);
       expect(response.json().message).toBe(
         'Publish your storefront again before accepting bookings',
       );

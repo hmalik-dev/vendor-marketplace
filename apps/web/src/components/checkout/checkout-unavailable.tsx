@@ -24,6 +24,7 @@ export type CheckoutUnavailableReason =
   | 'paused'
   | 'over-cap'
   | 'vendor-unavailable'
+  | 'vendor-paused'
   | 'vendor-closed';
 
 export interface CheckoutUnavailableProps {
@@ -32,6 +33,11 @@ export interface CheckoutUnavailableProps {
   requestId: string;
   /** Named where the copy addresses them; `null` when the read failed. */
   vendorName: string | null;
+  /**
+   * The payment deadline as `expiryCountdown` words it ("expires in 3d"), so the
+   * temporary states can say the clock is running. `null` when there is none.
+   */
+  deadline?: string | null;
 }
 
 interface Copy {
@@ -51,6 +57,7 @@ function copyFor(
   reason: CheckoutUnavailableReason,
   requestId: string,
   vendorName: string | null,
+  deadline: string | null,
 ): Copy {
   const booking = `/bookings/${requestId}`;
   const vendor = vendorName ?? 'This vendor';
@@ -118,6 +125,22 @@ function copyFor(
       eyebrow: 'Payment unavailable',
       heading: `${vendor} can't take payment right now`,
       body: `${vendor} needs to finish a step on their side before they can accept payment. This is temporary and nothing is wrong with your account. Try again a little later.`,
+      money: 'No payment was taken and your booking is still accepted.',
+      action: { label: 'Try this payment again', href: `${booking}/checkout` },
+      secondary: { label: 'Back to this booking', href: booking },
+    };
+  }
+
+  /*
+   * An unpublished vendor or one on a moderation hold (409 `VENDOR_PAUSED`,
+   * VEN-559). Reversible, so it reuses the 402 case's temporary copy and retry
+   * link, and names the payment deadline because that clock keeps running.
+   */
+  if (reason === 'vendor-paused') {
+    return {
+      eyebrow: 'Payment unavailable',
+      heading: `${vendor} isn't taking bookings right now`,
+      body: `${vendor} is paused at the moment, so this can't be paid yet. This is temporary and nothing is wrong with your account. Try again a little later.${deadline ? ` Your booking ${deadline}.` : ''}`,
       money: 'No payment was taken and your booking is still accepted.',
       action: { label: 'Try this payment again', href: `${booking}/checkout` },
       secondary: { label: 'Back to this booking', href: booking },
@@ -200,8 +223,9 @@ export function CheckoutUnavailable({
   reason,
   requestId,
   vendorName,
+  deadline = null,
 }: CheckoutUnavailableProps): React.ReactElement {
-  const copy = copyFor(reason, requestId, vendorName);
+  const copy = copyFor(reason, requestId, vendorName, deadline);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-4 py-16 text-center sm:px-6">

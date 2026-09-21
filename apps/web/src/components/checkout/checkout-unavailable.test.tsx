@@ -49,6 +49,40 @@ describe('CheckoutUnavailable', () => {
     expect(screen.getByRole('link', { name: 'Browse vendors' })).toBeDefined();
   });
 
+  /* VEN-559: unpublished or on a hold, which is reversible and says so. */
+  it('tells a customer a paused vendor is temporary, names the deadline, and offers a retry', () => {
+    render(
+      <CheckoutUnavailable
+        reason="vendor-paused"
+        requestId={REQUEST_ID}
+        vendorName="Kessler & Co."
+        deadline="expires in 3d"
+      />,
+    );
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      "Kessler & Co. isn't taking bookings right now",
+    );
+    expect(screen.getByText(/This is temporary/)).toBeDefined();
+    expect(screen.getByText(/Your booking expires in 3d/)).toBeDefined();
+    expect(screen.queryByText(/no longer taking bookings/)).toBeNull();
+    const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
+    expect(hrefs).toEqual([`/bookings/${REQUEST_ID}/checkout`, `/bookings/${REQUEST_ID}`]);
+  });
+
+  it('says nothing about a deadline when there is none to name', () => {
+    const { container } = render(
+      <CheckoutUnavailable
+        reason="vendor-paused"
+        requestId={REQUEST_ID}
+        vendorName="Kessler & Co."
+        deadline={null}
+      />,
+    );
+
+    expect(container.textContent).not.toMatch(/Your booking/);
+  });
+
   /* VEN-404: over the beta cap, where a retry can never succeed. */
   it('sends a customer over the beta cap to support rather than a retry', () => {
     render(<CheckoutUnavailable reason="over-cap" requestId={REQUEST_ID} vendorName={null} />);
