@@ -10,9 +10,28 @@ import type { WireAdminCloseAccountResult, WireAdminCloseBlocker } from '@/lib/w
  */
 let closeResult: WireAdminCloseAccountResult = {} as WireAdminCloseAccountResult;
 
-vi.mock('@/lib/use-api', () => ({
-  useApi: () => async () => closeResult,
-}));
+/** Every request the component made, as `[path, method]`. */
+const requests: Array<[string, string | undefined]> = [];
+
+/** Paths whose next request is refused with a step-up demand (VEN-500), once. */
+const stepUpOnce = new Set<string>();
+
+vi.mock('@/lib/use-api', async () => {
+  const { ApiClientError } = await import('@/lib/api-client');
+  const { ERROR_CODES } = await import('@vendor-marketplace/shared');
+
+  return {
+    useApi: () => async (path: string, init?: { method?: string }) => {
+      requests.push([path, init?.method]);
+
+      if (stepUpOnce.delete(path)) {
+        throw new ApiClientError(403, ERROR_CODES.STEP_UP_REQUIRED, 'Confirm it is you');
+      }
+
+      return closeResult;
+    },
+  };
+});
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const { DataRightsActions } = await import('./data-rights-actions');
@@ -32,6 +51,8 @@ const CLEAN_CLOSURE: WireAdminCloseAccountResult = {
 };
 
 beforeEach(() => {
+  requests.length = 0;
+  stepUpOnce.clear();
   closeResult = CLEAN_CLOSURE;
 });
 
@@ -64,6 +85,8 @@ function renderActions(
     bookingsRefundedOnClose: number;
     isSelf: boolean;
     isOperator: boolean;
+    isBanned: boolean;
+    unwindPending: number;
   }>,
 ): void {
   render(
@@ -76,6 +99,8 @@ function renderActions(
       isSelf={overrides.isSelf ?? false}
       email={OPERATOR_EMAIL}
       isOperator={overrides.isOperator ?? false}
+      isBanned={overrides.isBanned ?? false}
+      unwindPending={overrides.unwindPending ?? 0}
     />,
   );
 }
@@ -338,6 +363,89 @@ describe('the data-rights closure control', () => {
  * The near miss is the case under test: a guard proven only by the exact match
  * would pass with the comparison deleted.
  */
+describe('an unfinished unwind (VEN-478)', () => {
+  it('draws nothing for an account whose unwind finished', () => {
+    renderActions({ isBanned: true, unwindPending: 0 });
+
+    expect(screen.queryByTestId('unwind-unfinished')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Finish' })).toBeNull();
+  });
+
+  it('names the standing bookings on a suspended account and re-runs the ban', async () => {
+    closeResult = { userId: 'u', refundsFailed: 0 } as unknown as WireAdminCloseAccountResult;
+    renderActions({ isBanned: true, unwindPending: 2 });
+
+    expect(screen.getByTestId('unwind-unfinished').textContent).toContain(
+      'The account is suspended, but 2 confirmed bookings are still standing',
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    });
+
+    expect(requests).toEqual([['/admin/users/33333333-3333-4333-8333-333333333333/ban', 'PUT']]);
+    expect(screen.queryByRole('alert')).toBeNull();
+    /* Gone at once, without waiting on the refresh that reconciles the page. */
+    expect(screen.queryByTestId('unwind-unfinished')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Finish' })).toBeNull();
+  });
+
+  it('re-runs the closure on a closed account, and says what is still owed', async () => {
+    closeResult = { ...CLEAN_CLOSURE, refundsFailed: 1 };
+    renderActions({ closedAt: new Date('2026-09-07T11:31:00.000Z'), unwindPending: 1 });
+
+    expect(screen.getByTestId('unwind-unfinished').textContent).toContain(
+      'The account is closed, but 1 confirmed booking is still standing',
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    });
+
+    expect(requests).toEqual([['/admin/users/33333333-3333-4333-8333-333333333333/close', 'POST']]);
+    expect(screen.getByRole('alert').textContent).toContain('Stripe refused a refund');
+    /* A refused refund is not finished: the note and the control stay. */
+    expect(screen.getByTestId('unwind-unfinished')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Finish' })).toBeTruthy();
+  });
+});
+
+describe('Finish on an unfinished unwind needs the step-up (VEN-500)', () => {
+  it('offers the code step instead of an error, and retries the ban once it is verified', async () => {
+    const ban = '/admin/users/33333333-3333-4333-8333-333333333333/ban';
+
+    closeResult = { userId: 'u', refundsFailed: 0 } as unknown as WireAdminCloseAccountResult;
+    stepUpOnce.add(ban);
+    renderActions({ isBanned: true, unwindPending: 2 });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    });
+
+    expect(requests).toEqual([[ban, 'PUT']]);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Email me a code' })).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Email me a code' }));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Six-digit code'), { target: { value: '123456' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm code' }));
+    });
+
+    expect(requests).toEqual([
+      [ban, 'PUT'],
+      ['/admin/step-up/challenge', 'POST'],
+      ['/admin/step-up/verify', 'POST'],
+      [ban, 'PUT'],
+    ]);
+    expect(screen.queryByRole('button', { name: 'Confirm code' })).toBeNull();
+  });
+});
+
 describe('an operator closure', () => {
   function typedField(dialog: HTMLElement): HTMLInputElement {
     return within(dialog).getByLabelText(`Type ${OPERATOR_EMAIL} to confirm`) as HTMLInputElement;
