@@ -17,7 +17,7 @@ import {
   type LegalAcceptanceDocument,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
-import { VENDOR_SELLABLE } from '../vendors/vendor-visibility.js';
+import { VENDOR_CLOSED, VENDOR_SELLABLE } from '../vendors/vendor-visibility.js';
 
 /**
  * Typed rather than written into the SQL as a bare string, so a rename of the
@@ -82,6 +82,8 @@ export interface PayableRequestRow {
    * the row for the same reason as the flag above.
    */
   vendorPulled: boolean;
+  /** Retired or owned by a banned or deleted account: no retry can help (VEN-559). */
+  vendorClosed: boolean;
 }
 
 export async function findPayableRequest(
@@ -113,6 +115,7 @@ export async function findPayableRequest(
       vendorStripeOnboarded: vendorProfiles.stripeOnboarded,
       vendorUserUnavailable: sql<boolean>`(${users.isBanned} OR ${users.deletedAt} IS NOT NULL)`,
       vendorPulled: sql<boolean>`NOT (${VENDOR_SELLABLE})`,
+      vendorClosed: sql<boolean>`${VENDOR_CLOSED}`,
       vendorHoldsCurrentAgreement: sql<boolean>`EXISTS (
         SELECT 1 FROM ${legalAcceptances}
         WHERE ${legalAcceptances.vendorId} = ${vendorProfiles.id}

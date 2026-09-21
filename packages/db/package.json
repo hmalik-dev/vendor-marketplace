@@ -42,6 +42,7 @@
     "seed:demo": "tsx src/scripts/seed-demo.ts",
     "e2e:dates": "tsx src/scripts/e2e-booking-dates.ts",
     "e2e:operator": "tsx src/scripts/e2e-operator.ts",
+    "e2e:mail-code": "tsx src/scripts/e2e-mail-code-cli.ts",
     "studio": "drizzle-kit studio",
     "keys:from-urls": "tsx src/scripts/keys-from-urls.ts",
     "cover:from-portfolio": "tsx src/scripts/cover-from-portfolio.ts",

@@ -28,7 +28,12 @@ function acceptedRequest(overrides: Partial<WireBookingRequest> = {}): WireBooki
     quotedPriceCents: null,
     quoteNote: null,
     expiresAt: null,
-    vendor: { slug: 'kessler-co', businessName: 'Kessler & Co.', avatarUrl: null },
+    vendor: {
+      slug: 'kessler-co',
+      businessName: 'Kessler & Co.',
+      avatarUrl: null,
+      availability: 'available',
+    },
     ...overrides,
   } as unknown as WireBookingRequest;
 }
@@ -72,6 +77,50 @@ describe('AcceptedRequest', () => {
     expect(pay.getAttribute('href')).toBe('/bookings/req-1/checkout');
     // Nothing is cancellable before there is a payment to refund.
     expect(screen.queryByRole('button', { name: 'Cancel booking' })).toBeNull();
+  });
+
+  /* VEN-559: a Pay link that leads straight to a refusal is a dead end. */
+  it('explains a paused vendor instead of offering a Pay link, naming the deadline', () => {
+    const request = acceptedRequest({
+      expiresAt: new Date('2027-01-04T12:00:00Z'),
+      vendor: {
+        slug: 'kessler-co',
+        businessName: 'Kessler & Co.',
+        avatarUrl: null,
+        availability: 'paused',
+      },
+    } as Partial<WireBookingRequest>);
+    render(<AcceptedRequest request={request} booking={null} />);
+
+    expect(screen.queryByRole('link', { name: /^Pay/ })).toBeNull();
+    expect(screen.queryByText(/Paying now confirms it/)).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain(
+      "Kessler & Co. isn't taking bookings right now",
+    );
+    expect(screen.getByRole('status').textContent).toContain('expires in 3d');
+  });
+
+  it('says a closed vendor cannot be paid, permanently, with no Pay link', () => {
+    const request = acceptedRequest({
+      vendor: {
+        slug: 'kessler-co',
+        businessName: 'Kessler & Co.',
+        avatarUrl: null,
+        availability: 'closed',
+      },
+    } as Partial<WireBookingRequest>);
+    render(<AcceptedRequest request={request} booking={null} />);
+
+    expect(screen.queryByRole('link', { name: /^Pay/ })).toBeNull();
+    expect(screen.queryByText(/Paying now confirms it/)).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('no longer taking bookings');
+  });
+
+  it('keeps the Pay link for an available vendor', () => {
+    render(<AcceptedRequest request={acceptedRequest()} booking={null} />);
+
+    expect(screen.getByRole('link', { name: 'Pay $1,450' })).toBeDefined();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   /** #412's seventh finding — the same summary line as `QuoteReview`. */

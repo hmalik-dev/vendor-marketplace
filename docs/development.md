@@ -137,6 +137,20 @@ one) has not been read from the Neon console; it is for the account holder to
 record under VEN-377. Until then, sign up on dev and staging only with addresses
 you control.
 
+**Reading a test-mailbox code.** Dev Neon Auth mails a six-digit code at sign-up
+and password reset. For a disposable Mailosaur address, `pnpm e2e:mail-code
+<address> [--after <iso>]` prints that code and nothing else (exit 1 with one
+plain line on no mail within 60 s, or on any refusal; pnpm's own two-line
+banner precedes it on stdout, so read the last line, or run it as
+`pnpm --silent e2e:mail-code`). It reads
+`E2E_MAIL_API_KEY` and `E2E_MAIL_SERVER` from the environment, loaded from the
+gitignored `.env.e2e.local`; both are lane-only and optional, so they are not in
+`.env.example`. It refuses any address other than
+`<local>@<E2E_MAIL_SERVER>.mailosaur.net` and any `DEPLOY_ENV` but `local`, and
+never prints the key, the server or the message. The account holder allows it by
+a Bash permission rule for exactly `pnpm e2e:mail-code:*`; a lane never reads the
+key itself.
+
 ## Environment variables
 
 `packages/shared/src/env/registry.ts` is the single list of every variable.

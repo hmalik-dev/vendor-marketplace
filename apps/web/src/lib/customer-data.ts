@@ -145,6 +145,11 @@ export type CheckoutOutcome =
    * this never clears, so it is its own state and the screen offers no retry.
    */
   | { state: 'vendor-closed' }
+  /**
+   * The vendor is unpublished or on a moderation hold — 409 `VENDOR_PAUSED`
+   * (VEN-559). Reversible, so the screen offers a retry.
+   */
+  | { state: 'vendor-paused' }
   /** The request left `accepted` underneath the customer — 409. */
   | { state: 'not-payable' }
   /**
@@ -201,6 +206,9 @@ export async function openCheckout(requestId: string): Promise<CheckoutOutcome> 
     }
     if (error.statusCode === 404) {
       return { state: 'not-found' };
+    }
+    if (error.code === ERROR_CODES.VENDOR_PAUSED) {
+      return { state: 'vendor-paused' };
     }
     if (error.code === ERROR_CODES.VENDOR_UNAVAILABLE) {
       return { state: 'vendor-closed' };

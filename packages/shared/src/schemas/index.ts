@@ -66,6 +66,7 @@ import {
   REVIEW_CONTENT_MAX_LENGTH,
   REVIEW_CONTENT_MIN_LENGTH,
   REVIEW_RATING_MAX,
+  VENDOR_AVAILABILITIES,
   REVIEW_RATINGS,
   REVIEW_RATING_MIN,
   RESPONSE_TIME_HOURS_OPTIONS,
@@ -933,6 +934,11 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
     categoryName: z.string().max(MAX_NAME_LENGTH).nullable(),
     avgRating: z.number().min(0).max(REVIEW_RATING_MAX),
     reviewCount: z.int().min(0),
+    /**
+     * Whether this vendor can currently be paid (VEN-559), so the accepted state
+     * can explain a pulled vendor instead of linking to a checkout that refuses.
+     */
+    availability: z.enum(VENDOR_AVAILABILITIES),
   }),
   /**
    * Who sent it. Before acceptance the vendor sees a first name and a last

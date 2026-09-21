@@ -732,8 +732,41 @@ describe('payments', () => {
       );
 
       expect(response.statusCode).toBe(409);
-      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_PAUSED);
+      expect(response.json().message).toBe("Sunlit Studio isn't taking bookings right now");
       expect(harness.stripe.paymentIntents.size).toBe(0);
+    });
+
+    /* VEN-559: a retired profile under a live owner is the state only `vendorClosed` sees. */
+    it('answers a retired profile with a live owner with the permanent code', async () => {
+      const requestId = await acceptedRequest();
+      await harness.database.db.update(vendorProfiles).set({ isDeleted: true });
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
+      expect(response.json().message).toBe('Sunlit Studio is no longer taking bookings');
+    });
+
+    /* VEN-559: a ban that also unpublished the vendor stays the permanent answer. */
+    it('answers a banned and unpublished vendor with the permanent code', async () => {
+      const requestId = await acceptedRequest();
+      await harness.database.db.update(vendorProfiles).set({ isPublished: false });
+      await changeVendorUser(requestId, { isBanned: true });
+
+      const response = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
     });
 
     it('keeps answering succeeded for a paid request whose vendor was pulled since', async () => {

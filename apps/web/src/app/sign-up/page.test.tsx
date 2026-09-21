@@ -10,6 +10,12 @@ vi.mock('@/components/auth/sign-up-form', () => ({
   },
 }));
 
+const gate = vi.hoisted(() => ({ vendorInviteOnly: false }));
+
+vi.mock('@/lib/vendor-data', () => ({
+  getVendorSignUpGate: async () => ({ vendorInviteOnly: gate.vendorInviteOnly }),
+}));
+
 const { default: SignUpPage } = await import('./page');
 
 async function renderWith(params: Record<string, string | string[] | undefined>): Promise<unknown> {
@@ -20,6 +26,16 @@ describe('SignUpPage', () => {
   afterEach(() => {
     cleanup();
     formProps.mockClear();
+    gate.vendorInviteOnly = false;
+  });
+
+  /* Read on the server so the notice is in the first paint (VEN-515). */
+  it.each([true, false])('passes the invite gate (%s) to the form', async (on) => {
+    gate.vendorInviteOnly = on;
+
+    await renderWith({ role: 'vendor' });
+
+    expect(formProps).toHaveBeenCalledWith({ initialRole: 'vendor', vendorInviteOnly: on });
   });
 
   /*
@@ -33,13 +49,13 @@ describe('SignUpPage', () => {
   ] as const)('pre-selects the %s role from ?role=', async (param, expected) => {
     await renderWith({ role: param });
 
-    expect(formProps).toHaveBeenCalledWith({ initialRole: expected });
+    expect(formProps).toHaveBeenCalledWith({ initialRole: expected, vendorInviteOnly: false });
   });
 
   it('asks the question outright when no role is given', async () => {
     await renderWith({});
 
-    expect(formProps).toHaveBeenCalledWith({ initialRole: null });
+    expect(formProps).toHaveBeenCalledWith({ initialRole: null, vendorInviteOnly: false });
   });
 
   /*
@@ -53,6 +69,6 @@ describe('SignUpPage', () => {
   ])('falls back to no pre-selection for %s', async (_label, params) => {
     await renderWith(params);
 
-    expect(formProps).toHaveBeenCalledWith({ initialRole: null });
+    expect(formProps).toHaveBeenCalledWith({ initialRole: null, vendorInviteOnly: false });
   });
 });
