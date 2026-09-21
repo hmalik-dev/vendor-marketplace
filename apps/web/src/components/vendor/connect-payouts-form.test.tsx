@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectPayoutsForm } from './connect-payouts-form';
@@ -67,6 +67,33 @@ describe('ConnectPayoutsForm', () => {
     expect(button.disabled).toBe(true);
     expect(button.textContent).toContain('Opening Stripe…');
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * VEN-540. Back from Stripe restores the page from the bfcache with the
+   * button still busy; only `pageshow` with `persisted` says so.
+   */
+  it('offers the action again when Back restores the page from the cache', async () => {
+    request.mockResolvedValue({ url: 'https://connect.stripe.com/setup/e/acct_1/abc' });
+    render(<ConnectPayoutsForm isResuming={false} />);
+
+    await userEvent.click(screen.getByRole('button'));
+    await waitFor(() => expect(assign).toHaveBeenCalled());
+    const button = screen.getByRole('button') as HTMLButtonElement;
+    expect(button.textContent).toContain('Opening Stripe…');
+
+    // A first load is not a restore.
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }));
+    });
+    expect(button.textContent).toContain('Opening Stripe…');
+
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    });
+
+    expect(button.textContent).toBe('Set up payouts');
+    expect(button.disabled).toBe(false);
   });
 
   it('reports a failure in the product’s words, never the API’s', async () => {
