@@ -119,6 +119,14 @@ export const bookingRequests = pgTable(
     uniqueIndex('booking_requests_live_custom_key')
       .on(table.customerId, table.vendorId, table.eventDate)
       .where(sql`${table.status} in ('pending', 'quoted') and ${table.packageId} is null`),
+    /*
+     * One commitment per vendor date, settled by the database (VEN-482). The
+     * accept path already serialises on `lockHeldDate`; this is what holds when
+     * a writer skips it — a seed, an admin tool, a future path.
+     */
+    uniqueIndex('booking_requests_accepted_date_key')
+      .on(table.vendorId, table.eventDate)
+      .where(sql`${table.status} = 'accepted'`),
   ],
 ).enableRLS();
 
@@ -326,6 +334,12 @@ export const bookings = pgTable(
       .where(
         sql`${table.paidAt} is not null and ${table.payoutReleasedAt} is null and ${table.payoutAttempts} > 0`,
       ),
+    // The same guarantee as `booking_requests_accepted_date_key`, for the row
+    // that outlives the request: a cancelled or completed booking frees the
+    // constraint, a confirmed one holds the date (VEN-482).
+    uniqueIndex('bookings_confirmed_date_key')
+      .on(table.vendorId, table.eventDate)
+      .where(sql`${table.status} = 'confirmed'`),
   ],
 ).enableRLS();
 

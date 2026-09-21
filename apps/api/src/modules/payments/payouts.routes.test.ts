@@ -715,11 +715,13 @@ describe('payouts', () => {
         })
         .returning({ id: vendorProfiles.id });
 
-      const earlier = toDateString(addDays(START, 20));
       const { id: _requestId, ...requestColumns } = request!;
       const { id: _bookingId, ...bookingColumns } = payable;
 
       for (let index = 0; index < 101; index += 1) {
+        // One accepted request per vendor date is a database rule (VEN-482), so
+        // each unpayable row gets a day of its own, all still due.
+        const earlier = toDateString(addDays(START, 20 - index));
         const [stuckRequest] = await harness.database.db
           .insert(bookingRequests)
           .values({

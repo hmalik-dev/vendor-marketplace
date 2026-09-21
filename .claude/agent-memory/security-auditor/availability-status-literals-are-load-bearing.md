@@ -7,8 +7,20 @@ metadata:
 
 `availability.status` is a cross-module contract enforced only by string
 literals, with no DB constraint behind it — `availability_vendor_date_key` is
-unique on `(vendor_id, date)` and nothing stops two `accepted` booking requests
-on one date.
+unique on `(vendor_id, date)`.
+
+**VEN-482 (audited clean) put the date rule in the database**: partial unique
+indexes `booking_requests_accepted_date_key` (status = 'accepted') and
+`bookings_confirmed_date_key` (status = 'confirmed'), both on
+`(vendor_id, event_date)`. Only the accept path maps them —
+`isAcceptedDateTaken` → the same generic 409 as `hasRivalAcceptanceOn`. The
+confirmed-date index is **unmapped on the money path**: `confirmBooking`'s
+`onConflictDoNothing` targets `bookings.request_id` only, so a date collision
+there rolls the whole transaction back into an opaque 500 while Stripe has the
+charge and redelivers for three days. Unreachable only because two requests
+cannot both be `accepted` on one date; anything that changes that (a direct
+booking writer, a status whose meaning moves) turns it into money captured with
+no booking row.
 
 The guards that do stop it both test the literal `'booked'`:
 

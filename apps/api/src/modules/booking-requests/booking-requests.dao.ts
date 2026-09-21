@@ -38,6 +38,7 @@ import {
   type BookingSettlement,
   type PageWindow,
 } from '@vendor-marketplace/shared';
+import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import type { AppDatabase } from '../../lib/database.js';
 import { VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
 
@@ -340,6 +341,19 @@ export async function insertRequest(
     .returning();
 
   return inserted?.[0] ?? null;
+}
+
+/** The partial unique indexes behind "one commitment per vendor date" (VEN-482). */
+export const ACCEPTED_DATE_KEY = 'booking_requests_accepted_date_key';
+export const CONFIRMED_DATE_KEY = 'bookings_confirmed_date_key';
+
+/**
+ * Whether a write failed because another request already holds this vendor's
+ * date as `accepted` — the database's answer when `hasRivalAcceptanceOn` was
+ * skipped or lost a race.
+ */
+export function isAcceptedDateTaken(error: unknown): boolean {
+  return violatesUniqueConstraint(error, ACCEPTED_DATE_KEY);
 }
 
 /**
