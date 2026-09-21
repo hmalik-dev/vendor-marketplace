@@ -286,7 +286,9 @@ export async function openCheckout(
    * since passed could be paid for, and the payout sweep would release the
    * vendor's share for an event that never happened (VEN-433). After the
    * booking lookup above, because a request that was already paid keeps
-   * answering `succeeded` however long ago its event was.
+   * answering `succeeded` however long ago its event was. Since VEN-528 the
+   * payment deadline is capped at this same instant, so it is a backstop for a
+   * row with no deadline rather than the usual refusal.
    */
   if (isUniversallyPastDate(row.eventDate, now)) {
     throw conflict('That date has passed, so this booking can no longer be paid for');
