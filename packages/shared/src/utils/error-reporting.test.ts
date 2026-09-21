@@ -209,3 +209,106 @@ describe('scrubErrorEvent: what the scrub fixture must never carry', () => {
     expect(scrubbed.message).toBe('at 1726790000000 for 2026-09-20 booking 1234567');
   });
 });
+
+describe('scrubErrorEvent: surfaces beyond `request` (VEN-522)', () => {
+  const OPAQUE = 'OPAQUE123';
+  const IPV4_ADDRESS = '198.51.100.7';
+  const IPV6_ADDRESS = '2001:db8::8a2e:370:7334';
+
+  function surfaceEvent() {
+    return {
+      message: `Refused ${IPV4_ADDRESS} and ${IPV6_ADDRESS} at 12:30:45`,
+      request: {
+        url: 'https://api.example.test/customer/bookings/1',
+        headers: {
+          'x-vercel-forwarded-for': IPV4_ADDRESS,
+          'cf-connecting-ip': IPV4_ADDRESS,
+          'true-client-ip': IPV4_ADDRESS,
+          'x-vercel-ip-city': 'Springfield',
+          'x-vercel-ip-country': 'US',
+          'x-vercel-ip-country-region': 'IL',
+          'cf-ipcountry': 'US',
+          'cf-ray': '8a1b2c3d4e5f-LHR',
+          'x-request-id': 'req_1',
+        },
+        env: { REMOTE_ADDR: IPV4_ADDRESS, SERVER_NAME: 'api' },
+      },
+      breadcrumbs: [{ data: { url: `https://api/x/stream?ticket=${OPAQUE}` } }],
+      spans: [
+        {
+          data: {
+            'url.full': `https://api/x/stream?ticket=${OPAQUE}`,
+            'http.query': `ticket=${OPAQUE}`,
+          },
+        },
+      ],
+      contexts: { trace: { data: { 'http.query': `ticket=${OPAQUE}&after=3` } } },
+      transaction: `GET /invite/${OPAQUE}`,
+      exception: { values: [{ type: 'Error', value: `no such /invite/${OPAQUE}/accept` }] },
+      extra: { token: OPAQUE, note: 'kept', nested: { inviteTicket: OPAQUE, count: 3 } },
+    };
+  }
+
+  it('leaves no opaque value or address anywhere in the serialised event', () => {
+    const serialized = JSON.stringify(scrubErrorEvent(surfaceEvent()));
+
+    expect(serialized).not.toContain(OPAQUE);
+    expect(serialized).not.toContain(IPV4_ADDRESS);
+    expect(serialized).not.toContain(IPV6_ADDRESS);
+  });
+
+  it('cleans breadcrumb, span and trace URLs and queries', () => {
+    const scrubbed = scrubErrorEvent(surfaceEvent());
+
+    expect(scrubbed.breadcrumbs).toEqual([
+      { data: { url: `https://api/x/stream?ticket=${REDACTED}` } },
+    ]);
+    expect(scrubbed.spans).toEqual([
+      { data: { 'url.full': `https://api/x/stream?ticket=${REDACTED}`, 'http.query': REDACTED } },
+    ]);
+    expect(scrubbed.contexts).toEqual({ trace: { data: { 'http.query': REDACTED } } });
+  });
+
+  it('withholds the IP and location headers and drops request.env', () => {
+    const { request } = scrubErrorEvent(surfaceEvent());
+
+    expect(request).toEqual({
+      url: 'https://api.example.test/customer/bookings/1',
+      headers: {
+        'x-vercel-forwarded-for': REDACTED,
+        'cf-connecting-ip': REDACTED,
+        'true-client-ip': REDACTED,
+        'x-vercel-ip-city': REDACTED,
+        'x-vercel-ip-country': REDACTED,
+        'x-vercel-ip-country-region': REDACTED,
+        'cf-ipcountry': REDACTED,
+        'cf-ray': REDACTED,
+        'x-request-id': 'req_1',
+      },
+    });
+  });
+
+  it('redacts an IPv6 address that follows a colon', () => {
+    const scrubbed = scrubErrorEvent({
+      ...surfaceEvent(),
+      message: `remoteAddress:${IPV6_ADDRESS} at 1:02:03`,
+    });
+
+    expect(scrubbed.message).toBe(`remoteAddress:${REDACTED} at 1:02:03`);
+  });
+
+  it('redacts addresses in text but not a clock time, and path and key-named credentials', () => {
+    const scrubbed = scrubErrorEvent(surfaceEvent());
+
+    expect(scrubbed.message).toBe(`Refused ${REDACTED} and ${REDACTED} at 12:30:45`);
+    expect(scrubbed.transaction).toBe(`GET /invite/${REDACTED}`);
+    expect(scrubbed.exception).toEqual({
+      values: [{ type: 'Error', value: `no such /invite/${REDACTED}/accept` }],
+    });
+    expect(scrubbed.extra).toEqual({
+      token: REDACTED,
+      note: 'kept',
+      nested: { inviteTicket: REDACTED, count: 3 },
+    });
+  });
+});
