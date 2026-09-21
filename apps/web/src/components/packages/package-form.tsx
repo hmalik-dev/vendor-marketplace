@@ -10,13 +10,15 @@ import {
   type PriceType,
 } from '@vendor-marketplace/shared';
 import { Plus, X } from 'lucide-react';
-import { useId, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { PRICE_TYPE_LABELS } from '@/lib/package-labels';
 
 export { PRICE_TYPE_LABELS };
 import { NO_PACKAGE_PROBLEM, packageProblemFrom } from '@/lib/package-issues';
 import { STALE_EDIT_NOTICE, currentFromStaleEdit } from '@/lib/stale-edit';
+import { useUnsavedChangesGuard } from '@/lib/use-unsaved-changes-guard';
 import { userFacingError } from '@/lib/user-facing-error';
 import { useSubmitValidation } from '@/lib/use-submit-validation';
 import { useApi } from '@/lib/use-api';
@@ -28,6 +30,7 @@ import {
   FormErrorCard,
   FormErrorSummary,
 } from '@/components/form-error-summary';
+import { UnsavedChangesDialog } from '@/components/unsaved-changes-dialog';
 import { Button } from '@/components/ui/button';
 import { Input, INPUT_TOUCH_HEIGHT } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
@@ -50,6 +53,8 @@ export interface PackageFormProps {
   servicePackage: WireServicePackage | null;
   onSaved: (saved: WireServicePackage) => void;
   onCancel: () => void;
+  /** Reports whether the form holds edits the server has not acknowledged. */
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
 interface FormState {
@@ -121,11 +126,28 @@ export function PackageForm({
   servicePackage,
   onSaved,
   onCancel,
+  onDirtyChange,
 }: PackageFormProps): React.ReactElement {
   const request = useApi();
   const fieldId = useId();
+  const router = useRouter();
   const [form, setForm] = useState<FormState>(() => initialState(servicePackage));
+  /*
+   * What the server last acknowledged. Dirty is the form compared against it, so
+   * a refusal's typed text stays dirty while "Load the current values" and a
+   * successful save both move the baseline and read clean (VEN-481, VEN-521).
+   */
+  const [saved, setSaved] = useState<FormState>(form);
+  const isDirty = JSON.stringify(form) !== JSON.stringify(saved);
+  const guard = useUnsavedChangesGuard(isDirty, { navigate: (href) => router.push(href) });
+
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   /*
    * The version a save is judged against is the row the manager holds, which it
    * replaces after every save and every bookable toggle. After a refusal it is the
@@ -216,7 +238,7 @@ export function PackageForm({
 
     setIsSaving(true);
     try {
-      const saved = await request(
+      const result = await request(
         isNew ? '/vendor/packages' : `/vendor/packages/${servicePackage.id}`,
         {
           method: isNew ? 'POST' : 'PUT',
@@ -226,8 +248,9 @@ export function PackageForm({
       );
 
       setChangedTo(null);
+      setSaved(form);
       toast.success(isNew ? 'Package added.' : 'Package saved.');
-      onSaved(saved);
+      onSaved(result);
     } catch (error) {
       const current = currentFromStaleEdit(error, wireServicePackageSchema);
       if (current !== null) {
@@ -294,7 +317,9 @@ export function PackageForm({
                   size="sm"
                   className="mt-2"
                   onClick={() => {
-                    setForm(initialState(changedTo));
+                    const reloaded = initialState(changedTo);
+                    setForm(reloaded);
+                    setSaved(reloaded);
                     setChangedTo(null);
                   }}
                 >
@@ -489,6 +514,8 @@ export function PackageForm({
           {isSaving ? 'Saving…' : isNew ? 'Add package' : 'Save package'}
         </Button>
       </div>
+
+      <UnsavedChangesDialog guard={guard} noun="package" />
     </form>
   );
 }

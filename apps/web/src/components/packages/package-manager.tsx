@@ -3,14 +3,16 @@
 import { formatPrice } from '@vendor-marketplace/shared';
 import { ArrowDown, ArrowUp, GripVertical, Package, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
+import type { UnsavedChangesGuard } from '@/lib/use-unsaved-changes-guard';
 import { userFacingError } from '@/lib/user-facing-error';
 import { moveItem } from '@/lib/reorder';
 import { useApi } from '@/lib/use-api';
 import { cn } from '@/lib/utils';
 import { wireServicePackageListSchema, type WireServicePackage } from '@/lib/wire-schemas';
 import { PackageForm, PRICE_TYPE_LABELS } from '@/components/packages/package-form';
+import { UnsavedChangesDialog } from '@/components/unsaved-changes-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -60,6 +62,9 @@ export function PackageManager({
   const [packages, setPackages] = useState<readonly WireServicePackage[]>(initialPackages);
   const [selection, setSelection] = useState<Selection>(null);
   const [pendingDeactivation, setPendingDeactivation] = useState<WireServicePackage | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  /** Where the vendor was heading when unsaved edits held them back. */
+  const [pendingSelection, setPendingSelection] = useState<{ to: Selection } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
@@ -68,6 +73,45 @@ export function PackageManager({
     selection === null || selection === NEW_PACKAGE
       ? null
       : (packages.find((row) => row.id === selection) ?? null);
+
+  /*
+   * Every way out of the editor that stays in the page — another package, Add a
+   * package, Cancel — goes through here. A clean form leaves at once; a dirty one
+   * asks with the dialog the profile forms use. Router links and tab close are
+   * the form's own guard.
+   */
+  const requestSelection = (to: Selection): void => {
+    if (to === selection) {
+      return;
+    }
+
+    if (isDirty) {
+      setPendingSelection({ to });
+      return;
+    }
+
+    setSelection(to);
+  };
+
+  const selectionGuard: UnsavedChangesGuard = {
+    // The dialog only asks whether something is held; there is no href to follow.
+    pendingHref: pendingSelection === null ? null : '',
+    confirmLeave: () => {
+      if (pendingSelection !== null) {
+        setSelection(pendingSelection.to);
+        setPendingSelection(null);
+      }
+    },
+    cancelLeave: () => setPendingSelection(null),
+  };
+
+  // A save that lands while the dialog is open makes its question moot.
+  const handleDirtyChange = useCallback((next: boolean): void => {
+    setIsDirty(next);
+    if (!next) {
+      setPendingSelection(null);
+    }
+  }, []);
 
   const handleSaved = (saved: WireServicePackage): void => {
     setPackages((previous) =>
@@ -181,7 +225,7 @@ export function PackageManager({
 
                   <button
                     type="button"
-                    onClick={() => setSelection(servicePackage.id)}
+                    onClick={() => requestSelection(servicePackage.id)}
                     className="min-w-0 flex-1 text-left"
                   >
                     <span className="block truncate text-sm font-medium text-stone-800">
@@ -237,7 +281,7 @@ export function PackageManager({
           <div className="shrink-0 p-3">
             <button
               type="button"
-              onClick={() => setSelection(NEW_PACKAGE)}
+              onClick={() => requestSelection(NEW_PACKAGE)}
               className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-stone-200 px-4 py-4 text-sm font-medium text-stone-600 transition-colors duration-(--duration-fast) hover:border-clay-400 hover:bg-clay-100 hover:text-clay-600"
             >
               <Plus aria-hidden="true" className="size-4" />
@@ -271,11 +315,14 @@ export function PackageManager({
               key={selection}
               servicePackage={selected}
               onSaved={handleSaved}
-              onCancel={() => setSelection(null)}
+              onCancel={() => requestSelection(null)}
+              onDirtyChange={handleDirtyChange}
             />
           )}
         </div>
       </div>
+
+      <UnsavedChangesDialog guard={selectionGuard} noun="package" />
 
       <Dialog
         open={pendingDeactivation !== null}
