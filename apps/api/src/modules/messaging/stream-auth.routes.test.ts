@@ -211,7 +211,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
 
     try {
       expect(response.statusCode).toBe(403);
-      expect(response.json().error).toBe('FORBIDDEN');
+      expect(response.json().error).toBe('ACCOUNT_SUSPENDED');
     } finally {
       // Restored even when the assertion fails, so a failure here does not
       // leave the row banned for everything appended to this describe.
