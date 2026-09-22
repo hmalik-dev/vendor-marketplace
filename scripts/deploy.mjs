@@ -125,9 +125,17 @@ function urlHost(value) {
   }
 }
 
-/** `WEB_URL` may be a comma-separated allow-list (it doubles as CORS); its first entry is the staging host. */
+/**
+ * `WEB_URL` may be a comma-separated allow-list (it doubles as CORS); its first
+ * entry is the canonical origin, trimmed and without a trailing slash.
+ */
+function webOrigin(env) {
+  return env.WEB_URL.split(',')[0].trim().replace(/\/+$/, '');
+}
+
+/** The staging/production host that a build gets aliased to. */
 function aliasHost(env) {
-  return urlHost(env.WEB_URL.split(',')[0].trim());
+  return urlHost(webOrigin(env));
 }
 
 /** `names` copied out of `env`, and nothing else. */
@@ -301,7 +309,7 @@ async function webNamesRelease(env, io) {
   const now = io.now ?? Date.now;
   const parsed = Number(env.SMOKE_DEADLINE_MS ?? '600000');
   const deadline = Number.isFinite(parsed) ? parsed : 600_000;
-  const web = env.WEB_URL.split(',')[0].trim().replace(/\/+$/, '');
+  const web = webOrigin(env);
   const startedAt = now();
   let serving = null;
   let detail = '';
@@ -523,7 +531,12 @@ export const PHASES = {
       ...buildSecrets.map((name) => env[name]),
     ]);
     const child = pick(env, [...TOOL_ENV, ...vercel]);
-    const build = pick(env, [...TOOL_ENV, ...vercel, ...upload, ...buildSecrets]);
+    // servesOverTls (apps/web/src/config/env.ts) needs the platform's own announcement;
+    // WEB_URL's first entry is that origin, already https:// for both environments.
+    const build = {
+      ...pick(env, [...TOOL_ENV, ...vercel, ...upload, ...buildSecrets]),
+      DEPLOYMENT_ORIGIN: webOrigin(env),
+    };
     const cli = ['--yes', VERCEL_CLI];
     const target = production ? ['--prod'] : [];
 

@@ -343,6 +343,7 @@ test('web: builds under the release and upload credential, and deploys without t
       SENTRY_WEB_PROJECT: 'orla-web',
       SENTRY_RELEASE: SHA,
       DATABASE_URL_UNPOOLED: UNPOOLED,
+      WEB_URL: 'https://orla.test',
       ...credentials,
     },
     io,
@@ -1021,6 +1022,7 @@ test('web: production stays a production deployment and is not aliased', async (
       ...BUILD_SECRETS,
       SENTRY_WEB_PROJECT: 'orla-web',
       SENTRY_RELEASE: SHA,
+      WEB_URL: 'https://orla.test',
     },
     io,
   );
@@ -1036,6 +1038,41 @@ test('web: production stays a production deployment and is not aliased', async (
 });
 
 for (const target of ['staging', 'production']) {
+  test(`web: ${target} sets DEPLOYMENT_ORIGIN to WEB_URL's canonical origin on vercel build`, async () => {
+    const { io: recording, calls } = recordingIo();
+    const io = {
+      ...recording,
+      run: async (command, args, options) => {
+        await recording.run(command, args, options);
+        if (args[2] === 'deploy') options.write('https://orla-abc123-team.vercel.app\n');
+      },
+    };
+    await PHASES.web(
+      {
+        PATH: '/bin',
+        DEPLOY_TARGET: target,
+        VERCEL_TOKEN: fake('vercel'),
+        VERCEL_ORG_ID: 'org',
+        VERCEL_PROJECT_ID: 'prj',
+        SENTRY_AUTH_TOKEN: fake('sentry'),
+        SENTRY_WEB_PROJECT: 'orla-web',
+        SENTRY_RELEASE: SHA,
+        WEB_URL: 'https://orla-staging.vercel.app/,https://staging.orla.test',
+        ...BUILD_SECRETS,
+      },
+      io,
+    );
+
+    for (const call of calls) {
+      const isBuild = call.args[2] === 'build';
+      assert.equal(
+        call.env.DEPLOYMENT_ORIGIN,
+        isBuild ? 'https://orla-staging.vercel.app' : undefined,
+        `${call.args[2]} DEPLOYMENT_ORIGIN`,
+      );
+    }
+  });
+
   test(`web: ${target} hands the two build secrets to vercel build only, never argv`, async () => {
     const { io: recording, calls } = recordingIo();
     const io = {
