@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { AUTH_COPY } from '@/app/auth-copy';
+import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { VerifyEmailStep } from '@/components/auth/verify-email-step';
 import { Banner } from '@/components/ui/banner';
@@ -53,11 +53,12 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
       return;
     }
 
-    setFailure(outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.signInFailed);
+    setFailure(failureCopy(outcome, AUTH_COPY.signInFailed));
   }
 
-  // A network failure says nothing about what the reader typed, so only a refusal marks the fields.
-  const credentialsRefused = failure !== null && failure !== AUTH_COPY.unreachable;
+  // Neither a network failure nor a throttle says anything about what the reader typed.
+  const credentialsRefused =
+    failure !== null && failure !== AUTH_COPY.unreachable && failure !== AUTH_COPY.throttled;
 
   if (verifying) {
     return (

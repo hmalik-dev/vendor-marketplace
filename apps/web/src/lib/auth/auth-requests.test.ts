@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { signInWithEmail, signUpWithEmail } from './auth-requests';
+import { signInWithEmail, signUpWithEmail, verifyEmailCode } from './auth-requests';
 
 const INPUT = { email: 'new@example.com', password: 'a-long-password', name: 'new' };
 
@@ -49,6 +49,54 @@ describe('signUpWithEmail', () => {
 
     await expect(signUpWithEmail(INPUT)).resolves.toBe('rejected');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('verifyEmailCode', () => {
+  /*
+   * The proxy's per-address budget on this path answers 429 (proxy-throttle.ts).
+   * `outcomeOf` used to fold that into the same 'rejected' bucket as an
+   * actually wrong code, so a throttled call must read as 'throttled' here,
+   * distinct from a genuine refusal.
+   */
+  it('reports throttled for a 429, distinct from a rejected code', async () => {
+    stubFetch(429);
+
+    await expect(verifyEmailCode({ email: 'new@example.com', otp: '000000' })).resolves.toBe(
+      'throttled',
+    );
+  });
+
+  it('still reports rejected for an actual refusal', async () => {
+    stubFetch(400);
+
+    await expect(verifyEmailCode({ email: 'new@example.com', otp: '000000' })).resolves.toBe(
+      'rejected',
+    );
+  });
+
+  /*
+   * Observed live: Better Auth's own per-code attempt limiter answers 403 with
+   * this body, a second throttle independent of the proxy's address-level 429
+   * (proxy-throttle.ts) — five wrong codes in a row can draw one before that
+   * budget is spent. Without the body check this fell into the same 403
+   * bucket as `EMAIL_NOT_VERIFIED` and read as 'unverified', which the code
+   * step's `codeWrong` fallback then showed as a wrong code.
+   */
+  it('reports throttled for a 403 carrying Better Auth’s own attempt-limit code', async () => {
+    stubFetchBody(403, { code: 'TOO_MANY_ATTEMPTS' });
+
+    await expect(verifyEmailCode({ email: 'new@example.com', otp: '000000' })).resolves.toBe(
+      'throttled',
+    );
+  });
+
+  it('still reports unverified for an ordinary 403', async () => {
+    stubFetchBody(403, { code: 'SOME_OTHER_REASON' });
+
+    await expect(verifyEmailCode({ email: 'new@example.com', otp: '000000' })).resolves.toBe(
+      'unverified',
+    );
   });
 });
 

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { BRAND_NAME, LEGAL_PATHS } from '@vendor-marketplace/shared';
-import { AUTH_COPY } from '@/app/auth-copy';
+import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { AuthScreen } from '@/components/auth/auth-screen';
 import { VerifyEmailStep } from '@/components/auth/verify-email-step';
@@ -129,11 +129,12 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
       return;
     }
 
-    setFailure(outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.signUpFailed);
+    setFailure(failureCopy(outcome, AUTH_COPY.signUpFailed));
   }
 
-  // A network failure says nothing about what the reader typed, so only a refusal marks the fields.
-  const credentialsRefused = failure !== null && failure !== AUTH_COPY.unreachable;
+  // Neither a network failure nor a throttle says anything about what the reader typed.
+  const credentialsRefused =
+    failure !== null && failure !== AUTH_COPY.unreachable && failure !== AUTH_COPY.throttled;
 
   return (
     <AuthScreen
