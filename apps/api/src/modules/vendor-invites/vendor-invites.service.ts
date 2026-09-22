@@ -29,6 +29,14 @@ import type { EmailGateway } from '../../lib/email.js';
 import { AppError, conflict, notFound, validationFailed } from '../../lib/errors.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
+import {
+  button,
+  emphasis,
+  factBox,
+  paragraph,
+  renderVendorEmailLayout,
+  smallParagraph,
+} from './vendor-invite-email-layout.js';
 import { findActiveCategoryIds } from '../vendors/vendors.dao.js';
 import {
   readPlatformSwitches,
@@ -394,7 +402,6 @@ export function renderVendorInviteEmail(
   html: string;
 } {
   const link = `${webOrigin}${hasApplication ? VENDOR_SIGN_IN_PATH : VENDOR_SIGN_UP_PATH}`;
-  const href = escapeHtml(link);
   const intro = `You're invited to join ${BRAND_NAME} as a vendor.`;
   // The sign-up sentence quotes the address; its html variant just bolds the
   // same quoted text, so both are built from the one template below.
@@ -404,9 +411,7 @@ export function renderVendorInviteEmail(
   const how = hasApplication
     ? "Sign in with the email address and password you already made, and you'll land in your new vendor account."
     : signUpHow(email);
-  const howHtml = hasApplication
-    ? escapeHtml(how)
-    : signUpHow(`<strong>${escapeHtml(email)}</strong>`);
+  const howHtml = hasApplication ? escapeHtml(how) : signUpHow(emphasis(email));
   const next =
     'The first thing to do there is set your prices, put up your work and open the dates you want to be booked on.';
   const buttonLabel = hasApplication ? `Sign in to ${BRAND_NAME}` : 'Sign up as a vendor';
@@ -417,13 +422,15 @@ export function renderVendorInviteEmail(
   return {
     subject: `You're invited to join ${BRAND_NAME} as a vendor`,
     text: [intro, '', how, next, '', link, '', footer].join('\n'),
-    html: [
-      `<p>${escapeHtml(intro)}</p>`,
-      `<p>${howHtml}</p>`,
-      `<p>${escapeHtml(next)}</p>`,
-      `<p><a href="${href}">${escapeHtml(buttonLabel)}</a></p>`,
-      `<p>${escapeHtml(footer)}</p>`,
-    ].join(''),
+    html: renderVendorEmailLayout({
+      headline: 'Your invitation is here',
+      bodyHtml: [
+        paragraph(`${escapeHtml(intro)} ${howHtml}`, 14),
+        paragraph(escapeHtml(next), 12),
+        button(buttonLabel, link),
+      ].join(''),
+      footer,
+    }),
   };
 }
 
@@ -463,12 +470,15 @@ export function renderVendorApplicationConfirmationEmail(details: {
       '',
       footer,
     ].join('\n'),
-    html: [
-      `<p>${escapeHtml(intro)}</p>`,
-      `<p>${facts.map(([label, value]) => `${escapeHtml(label)}: ${escapeHtml(value)}`).join('<br>')}</p>`,
-      `<p>${escapeHtml(correction)}</p>`,
-      `<p>${escapeHtml(footer)}</p>`,
-    ].join(''),
+    html: renderVendorEmailLayout({
+      headline: "You're on the waitlist",
+      bodyHtml: [
+        paragraph(escapeHtml(intro), 14),
+        factBox(facts),
+        smallParagraph(escapeHtml(correction), 18),
+      ].join(''),
+      footer,
+    }),
   };
 }
 
