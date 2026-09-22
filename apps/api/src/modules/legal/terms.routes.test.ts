@@ -1,14 +1,18 @@
 import { eq } from 'drizzle-orm';
 import {
+  categories,
   legalAcceptances,
   platformSettings,
   users,
   vendorApplications,
+  vendorCategories,
   vendorInvites,
+  vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import { forgetPlatformSwitches } from '../platform-settings/platform-settings.service.js';
 import {
   CURRENT_TERMS_VERSION,
+  generateSlug,
   legalDocumentSha256,
   type LegalAcceptanceMethod,
 } from '@vendor-marketplace/shared';
@@ -669,6 +673,243 @@ describe('the Terms of Service acceptance gate', () => {
 
         expect(response.statusCode).toBe(400);
         expect(await counts()).toEqual({ users: 0, acceptances: 0 });
+      });
+    });
+
+    /**
+     * VEN-514: a vendor's first acceptance builds their profile from the
+     * waitlist application they already gave, so they land in the editor
+     * without retyping it. The application row is written by VEN-512's own
+     * paths; this suite writes it directly, the way that row actually arrives.
+     */
+    describe('the draft profile (VEN-514)', () => {
+      const VENDOR_2 = 'terms_vendor_2';
+      let categoryId: string;
+
+      beforeAll(async () => {
+        const rows = await harness.database.db
+          .select()
+          .from(categories)
+          .where(eq(categories.slug, 'photography'));
+        categoryId = rows[0]!.id;
+
+        harness.authUsers.set(VENDOR_2, {
+          authUserId: VENDOR_2,
+          email: `${VENDOR_2}@example.com`,
+          firstName: 'Bea',
+          lastName: 'Ortiz',
+          roleHint: 'vendor',
+          avatarUrl: null,
+        });
+      });
+
+      afterEach(async () => {
+        await harness.database.db.delete(vendorApplications);
+      });
+
+      async function application(
+        email: string,
+        overrides: Partial<{
+          businessName: string | null;
+          category: string | null;
+          city: string | null;
+          state: 'TX' | null;
+        }> = {},
+      ): Promise<void> {
+        await harness.database.db.insert(vendorApplications).values({
+          email,
+          businessName: 'Ada Photography',
+          category: categoryId,
+          city: 'Austin',
+          state: 'TX',
+          status: 'new',
+          ...overrides,
+        });
+      }
+
+      async function ownProfile(email: string) {
+        const [user] = await harness.database.db.select().from(users).where(eq(users.email, email));
+
+        if (!user) {
+          return { user: null, profile: null };
+        }
+
+        const [profile] = await harness.database.db
+          .select()
+          .from(vendorProfiles)
+          .where(eq(vendorProfiles.userId, user.id));
+
+        return { user, profile: profile ?? null };
+      }
+
+      it('fills the draft profile from a complete application, unpublished (acceptance 1)', async () => {
+        await application(`${VENDOR}@example.com`);
+
+        const response = await accept(VENDOR);
+        expect(response.statusCode).toBe(200);
+
+        const { profile } = await ownProfile(`${VENDOR}@example.com`);
+        expect(profile).not.toBeNull();
+        expect({
+          businessName: profile?.businessName,
+          city: profile?.city,
+          state: profile?.state,
+          slug: profile?.slug,
+          isPublished: profile?.isPublished,
+        }).toEqual({
+          businessName: 'Ada Photography',
+          city: 'Austin',
+          state: 'TX',
+          slug: generateSlug('Ada Photography'),
+          isPublished: false,
+        });
+
+        const links = await harness.database.db
+          .select()
+          .from(vendorCategories)
+          .where(eq(vendorCategories.vendorId, profile!.id));
+        expect(links.map((row) => row.categoryId)).toEqual([categoryId]);
+      });
+
+      it('gives two applicants with the same business name distinct slugs (acceptance 2)', async () => {
+        await application(`${VENDOR}@example.com`);
+        await application(`${VENDOR_2}@example.com`);
+
+        expect((await accept(VENDOR)).statusCode).toBe(200);
+        expect(
+          (
+            await accept(VENDOR_2, {
+              version: CURRENT_TERMS_VERSION,
+              accepted: true,
+              role: 'vendor',
+            })
+          ).statusCode,
+        ).toBe(200);
+
+        const [{ profile: first }, { profile: second }] = await Promise.all([
+          ownProfile(`${VENDOR}@example.com`),
+          ownProfile(`${VENDOR_2}@example.com`),
+        ]);
+
+        expect(first?.slug).toBe(generateSlug('Ada Photography'));
+        expect(second?.slug).not.toBe(first?.slug);
+        expect(second?.businessName).toBe('Ada Photography');
+      });
+
+      it('creates the account with no profile when there is no application (acceptance 3)', async () => {
+        expect((await accept(VENDOR)).statusCode).toBe(200);
+
+        const { user, profile } = await ownProfile(`${VENDOR}@example.com`);
+        expect(user).not.toBeNull();
+        expect(profile).toBeNull();
+      });
+
+      /**
+       * A stray application row on file is never itself an invitation. The
+       * gate stays on `user.role === 'vendor'` — the role this acceptance
+       * actually stored, not a hint drawn from what the address once told the
+       * waitlist — or a customer address that happened to have applied first
+       * would get a vendor storefront it never asked for.
+       */
+      it('never builds a profile for an acceptance that stores the customer role, application or not', async () => {
+        await application(`${CUSTOMER}@example.com`);
+
+        expect((await accept(CUSTOMER)).statusCode).toBe(200);
+
+        const { user, profile } = await ownProfile(`${CUSTOMER}@example.com`);
+        expect(user?.role).toBe('customer');
+        expect(profile).toBeNull();
+      });
+
+      it.each([
+        ['a missing business name', { businessName: null }],
+        ['a missing category', { category: null }],
+        ['a missing city', { city: null }],
+        ['a legacy free-text category', { category: 'Photographer' }],
+      ] as const)(
+        'creates the account with no profile for an incomplete application: %s (acceptance 3)',
+        async (_label, overrides) => {
+          await application(`${VENDOR}@example.com`, overrides);
+
+          expect((await accept(VENDOR)).statusCode).toBe(200);
+
+          const { user, profile } = await ownProfile(`${VENDOR}@example.com`);
+          expect(user).not.toBeNull();
+          expect(profile).toBeNull();
+        },
+      );
+
+      it('creates the account with no profile when the applied category no longer exists, and the vendor can still create one by hand (acceptance 4)', async () => {
+        await application(`${VENDOR}@example.com`, {
+          category: '00000000-0000-4000-8000-000000000000',
+        });
+
+        expect((await accept(VENDOR)).statusCode).toBe(200);
+
+        const { user, profile } = await ownProfile(`${VENDOR}@example.com`);
+        expect(user).not.toBeNull();
+        expect(profile).toBeNull();
+
+        const created = await harness.app.inject({
+          method: 'POST',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR),
+          payload: {
+            businessName: 'Ada Photography',
+            categoryIds: [categoryId],
+            city: 'Austin',
+            state: 'TX',
+          },
+        });
+        expect(created.statusCode).toBe(201);
+      });
+
+      /*
+       * A re-acceptance (an account that already holds an *earlier* version and
+       * is asked for the current one, VEN-507) never reaches `admitVendor` or
+       * the draft build — both sit behind `!status.explicitTickRequired` in
+       * `terms.service.ts`. `legal_acceptances` is append-only, so this is built
+       * the way `accountWithEarlierVersion` above builds it: a direct insert of
+       * the stale row, not a mutation of one `accept()` already wrote.
+       */
+      it('creates no profile on a re-acceptance for a new Terms version, even with a complete application (acceptance 5)', async () => {
+        await application(`${VENDOR}@example.com`);
+
+        const [existingUser] = await harness.database.db
+          .insert(users)
+          .values({
+            authUserId: VENDOR,
+            email: `${VENDOR}@example.com`,
+            role: 'vendor',
+            firstName: 'Ada',
+            lastName: 'Reyes',
+          })
+          .returning({ id: users.id });
+
+        await harness.database.db.insert(legalAcceptances).values({
+          vendorId: null,
+          document: 'terms_of_service',
+          version: 'v0.9',
+          documentSha256: 'b'.repeat(64),
+          acceptanceMethod: 'clickwrap_checkbox',
+          acceptedByUserId: existingUser!.id,
+          acceptedByName: 'Ada Reyes',
+          businessName: null,
+          ip: null,
+          userAgent: null,
+        });
+
+        const response = await accept(VENDOR, {
+          version: CURRENT_TERMS_VERSION,
+          accepted: true,
+          role: 'vendor',
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ accepted: true });
+
+        const { user, profile } = await ownProfile(`${VENDOR}@example.com`);
+        expect(user?.id).toBe(existingUser!.id);
+        expect(profile).toBeNull();
       });
     });
   });

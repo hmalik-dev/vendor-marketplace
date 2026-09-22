@@ -53,6 +53,30 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
   }
 
   /*
+   * VEN-514: a vendor's first acceptance can now create their profile as an
+   * unpublished draft, so `!profile` above no longer catches every vendor who
+   * has not really started — one lands here with a profile but no packages,
+   * to a dashboard with nothing to manage and an empty requests pane.
+   *
+   * Gated on all three of `packages`, `bio` and `responseTime` together, not
+   * `packages` alone: an established vendor who deactivates their one package
+   * to rewrite it is *also* unpublished with no packages, and `packages` alone
+   * would send that vendor here too, with no way back to the dashboard until
+   * they reactivate one — trading a brief detour for a real dead end. A vendor
+   * cannot have published without a bio and a response time (both are publish
+   * blockers), so this triple is true only for a profile that has never had
+   * any of the three — the shape VEN-514's own draft leaves, and the shape the
+   * pre-VEN-514 "create your profile" step always redirected on too.
+   */
+  const neverStarted = (['packages', 'bio', 'responseTime'] as const).every((key) =>
+    dashboard.publishBlockers.includes(key),
+  );
+
+  if (!dashboard.isPublished && neverStarted) {
+    redirect(PROFILE_EDIT_PATH);
+  }
+
+  /*
    * The UTC day, matching the API's. #391.
    *
    * This is a server component, so `todayDateString()` here read the **Next.js

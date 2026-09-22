@@ -426,6 +426,30 @@ export async function findApplicationByEmail(
   return row ? { ...row, complete: isVendorApplicationComplete(row) } : null;
 }
 
+/**
+ * The application's fields in their real column types (VEN-514) — never
+ * {@link findApplicationByEmail}'s `MyVendorApplication`, whose `state` is
+ * widened to a bare string for the wire and would need a cast back to
+ * `vendor_profiles.state`'s enum to build a draft profile from.
+ */
+export async function findApplicationForDraftProfile(
+  db: AppDatabase,
+  email: string,
+): Promise<Pick<VendorApplicationRow, 'businessName' | 'category' | 'city' | 'state'> | null> {
+  const rows = await db
+    .select({
+      businessName: vendorApplications.businessName,
+      category: vendorApplications.category,
+      city: vendorApplications.city,
+      state: vendorApplications.state,
+    })
+    .from(vendorApplications)
+    .where(eq(vendorApplications.email, inviteKey(email)))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
 export async function countAdminInvites(db: AppDatabase): Promise<number> {
   const rows = await db.select({ total: count() }).from(vendorInvites);
 

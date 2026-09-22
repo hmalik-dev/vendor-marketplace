@@ -9,6 +9,7 @@ import { users, vendorProfiles } from '../schema/index.js';
 import { seedE2eFixtures } from '../seed-e2e.js';
 import { resolveNeonAccount } from './e2e-neon-account.js';
 import { createStripeFixtureGateway, ensureE2eConnectedAccount } from './e2e-stripe-account.js';
+import { readVendorInviteOnlyFlag } from './e2e-vendor-invite-flag.js';
 import { assertSafeTarget } from './safe-target.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -278,6 +279,7 @@ async function main(): Promise<void> {
    * second account. It does not.
    */
   const draft = process.argv.includes('--draft');
+  const vendorInviteOnly = readVendorInviteOnlyFlag();
 
   const { db, client } = createDatabase({ max: 1 });
 
@@ -291,6 +293,7 @@ async function main(): Promise<void> {
       stripeAccountId: payouts.accountId,
       payoutsReady: payouts.onboarded,
       storefront: draft ? 'draft' : 'published',
+      ...(vendorInviteOnly === undefined ? {} : { vendorInviteOnly }),
     });
 
     if (draft) {
@@ -300,6 +303,9 @@ async function main(): Promise<void> {
           'Re-run without --draft to restore the published one.',
       );
       console.log(`  vendor profile ${result.vendorProfileId}`);
+      if (vendorInviteOnly !== undefined) {
+        console.log(`  vendor invite gate ${vendorInviteOnly ? 'ON' : 'OFF'}`);
+      }
       return;
     }
 
@@ -317,6 +323,9 @@ async function main(): Promise<void> {
         ? '  no admin account — set E2E_ADMIN_EMAIL to make /admin reachable'
         : `  admin ${result.adminUserId}`,
     );
+    if (vendorInviteOnly !== undefined) {
+      console.log(`  vendor invite gate ${vendorInviteOnly ? 'ON' : 'OFF'}`);
+    }
   } finally {
     await client.end();
   }

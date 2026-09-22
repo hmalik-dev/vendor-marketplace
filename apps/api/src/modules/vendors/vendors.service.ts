@@ -3,6 +3,8 @@ import {
   MAX_SLUG_LENGTH,
   RESERVED_VENDOR_SLUGS,
   generateSlug,
+  isVendorApplicationComplete,
+  uuidSchema,
   vendorSearchResultSchema,
   type CreateVendorProfileInput,
   type PublishBlockerKey,
@@ -13,8 +15,14 @@ import {
   type VendorProfileDetail,
   type FieldErrorDetails,
 } from '@vendor-marketplace/shared';
-import type { NewVendorProfileRow, TagRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
+import type {
+  NewVendorProfileRow,
+  TagRow,
+  VendorApplicationRow,
+  VendorProfileRow,
+} from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import { findApplicationForDraftProfile } from '../vendor-invites/vendor-invites.dao.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import {
@@ -433,6 +441,98 @@ export async function createVendorProfile(
     });
 
   return loadDetail(db, row);
+}
+
+/**
+ * Narrows a draft application to one that can actually build a profile:
+ * {@link isVendorApplicationComplete}'s three fields present, and `category` a
+ * category id rather than the free text a pre-VEN-512 row can still carry —
+ * that shape predates the real category picker and was never eligible.
+ */
+function isDraftableApplication(
+  application: Pick<VendorApplicationRow, 'businessName' | 'category' | 'city' | 'state'>,
+): application is {
+  businessName: string;
+  category: string;
+  city: string;
+  state: VendorApplicationRow['state'];
+} {
+  return (
+    isVendorApplicationComplete(application) && uuidSchema.safeParse(application.category).success
+  );
+}
+
+/**
+ * The draft profile a vendor's first terms acceptance builds from their
+ * waitlist application (VEN-514), in the caller's transaction, so they land in
+ * the editor with the business name, category and city they already gave
+ * rather than retyping them. Unpublished; the vendor publishes it.
+ *
+ * **Silent on anything that cannot build one**: no application, an incomplete
+ * one, a legacy free-text category, or a category since deactivated all leave
+ * no profile and change nothing else — the vendor creates it by hand as today.
+ * A failure inside the write itself (a slug race, an unexpected constraint) is
+ * caught here rather than left to `tx`'s caller: it runs inside the same
+ * transaction that creates the account, and this build must never be why that
+ * account does not exist. The write itself runs in a savepoint (`tx.transaction`
+ * nested), so a caught failure rolls back only the draft, not the account or
+ * its acceptance.
+ */
+export async function createDraftVendorProfile(
+  tx: AppDatabase,
+  userId: string,
+  email: string,
+  log?: { warn: (details: unknown, message: string) => void },
+): Promise<void> {
+  if (await findVendorProfileByUserId(tx, userId)) {
+    return;
+  }
+
+  const application = await findApplicationForDraftProfile(tx, email);
+
+  if (!application || !isDraftableApplication(application)) {
+    return;
+  }
+
+  try {
+    // Shadows the outer `tx`: `replace-in-transaction-guard.test.ts` requires
+    // every wholesale-replace writer's caller to be named `tx`, and this one
+    // genuinely is one — the savepoint, not the outer transaction.
+    await tx.transaction(async (tx) => {
+      const categoryIds = await findActiveCategoryIds(tx, [application.category]);
+
+      if (categoryIds.length === 0) {
+        // The category the applicant chose was later deactivated or removed.
+        return;
+      }
+
+      const slug = await resolveSlug(tx, application.businessName);
+      const inserted = await insertVendorProfile(tx, {
+        userId,
+        businessName: application.businessName,
+        slug,
+        city: application.city,
+        state: application.state,
+        bio: null,
+        tagline: null,
+        yearsInBusiness: null,
+        address: null,
+        latitude: null,
+        longitude: null,
+        serviceRadiusKm: null,
+        responseTimeHours: null,
+        profileImageUrl: null,
+        coverImageUrl: null,
+      });
+
+      await replaceVendorCategories(tx, inserted.id, categoryIds);
+    });
+  } catch (error) {
+    log?.warn(
+      { err: error, userId },
+      'Could not build a draft vendor profile from the application',
+    );
+  }
 }
 
 /**
