@@ -97,7 +97,7 @@
 - [`freeText()` lets NUL through](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — Postgres 22021 lets a caller pick which branch runs
 - [Webhook payload text bypasses the bidi strip](provider-payload-text-bypasses-the-bidi-strip.md) — a hand-`safeParse`d schema is invisible to the free-text guard
 - [Reviews: profanity floor, eligibility and tombstones](review-profanity-filter-is-a-hard-reject-floor.md) — tombstone finality rests on read order; a review can outlive a cancel
-- [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino's three doors, `PostgresError.detail` and bound params all closed; do not re-report
+- [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino's three doors and bound params closed; the fields _beside_ `err` are verbatim, and the convention is an opaque id
 - [Sentry is a second log sink](sentry-is-a-second-log-sink.md) — VEN-522 made `request.url` path-only; what escapes now is a header name the list misses and a shape no regex knows
 - [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `log.warn({err})` re-emits `stripe-signature` and the raw body
 - [Log redaction covers the query, not the path](log-redaction-covers-query-not-path.md) — a credential in a path segment is logged whole
