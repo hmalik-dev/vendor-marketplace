@@ -10,7 +10,11 @@ import {
   vendorInvites,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { CURRENT_TERMS_VERSION, VENDOR_SIGN_UP_PATH } from '@vendor-marketplace/shared';
+import {
+  CURRENT_TERMS_VERSION,
+  VENDOR_SIGN_IN_PATH,
+  VENDOR_SIGN_UP_PATH,
+} from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   bearer,
@@ -19,7 +23,12 @@ import {
   type TestHarness,
 } from '../../testing/test-server.js';
 import { forgetPlatformSwitches } from '../platform-settings/platform-settings.service.js';
-import { renderVendorInviteEmail, vendorNotInvited } from './vendor-invites.service.js';
+import {
+  renderVendorApplicationConfirmationEmail,
+  renderVendorInviteEmail,
+  retryFailedApplicationConfirmationEmails,
+  vendorNotInvited,
+} from './vendor-invites.service.js';
 
 /**
  * The vendor gate (VEN-406): while `vendorInviteOnly` is on, the Terms
@@ -647,9 +656,13 @@ describe('the vendor gate', () => {
       ).toBe(401);
     });
 
-    it('invites an applicant: invite row, status, audit and the email', async () => {
+    it('invites an applicant who has a waitlist application: the sign-in variant (AC1)', async () => {
       const vendor = await refusedVendor('newcomer@example.com');
       await apply(vendor.actor, application(vendor.email));
+      // The application's own confirmation email, settled and cleared: this test's
+      // assertions are about the invite the decision below sends, not that one.
+      await harness.flushEmail();
+      harness.email.sent.length = 0;
       const listed = await inject('GET', '/admin/vendor-applications', ADMIN);
       expect(listed.statusCode).toBe(200);
       const [row] = listed.json().items;
@@ -673,7 +686,8 @@ describe('the vendor gate', () => {
       expect(audit.map((action) => action.action)).toEqual(['vendor_invited']);
       expect(harness.email.sent).toHaveLength(1);
       expect(harness.email.sent[0]).toMatchObject({ to: 'newcomer@example.com' });
-      expect(harness.email.sent[0]!.text).toContain(`${TEST_ENV.WEB_URL}${VENDOR_SIGN_UP_PATH}`);
+      expect(harness.email.sent[0]!.text).toContain(`${TEST_ENV.WEB_URL}${VENDOR_SIGN_IN_PATH}`);
+      expect(harness.email.sent[0]!.text).not.toContain('Sign up');
 
       const again = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
         decision: 'invite',
@@ -700,6 +714,10 @@ describe('the vendor gate', () => {
     it('declines an applicant without inviting or emailing them', async () => {
       const vendor = await refusedVendor('declined@example.com');
       await apply(vendor.actor, application(vendor.email));
+      // Settle and clear the application's own confirmation email before the
+      // assertion below, which is about the decline sending no *invite* email.
+      await harness.flushEmail();
+      harness.email.sent.length = 0;
       const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
 
       const decided = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
@@ -852,21 +870,78 @@ describe('the vendor gate', () => {
       expect(row?.status).toBe('new');
     });
 
-    it('tells a refused vendor they are on the waitlist, and an invitee that signing in is the path', () => {
+    it('tells a refused vendor they are on the waitlist', () => {
       expect(vendorNotInvited().message).toBe(
         "Vendor accounts are by invitation for now. No account was created, but you're on the waitlist — tell us about your business and we'll invite you.",
       );
+    });
 
-      const mail = renderVendorInviteEmail('https://orla.test');
-      expect(mail.text).toBe(
-        [
-          "You're invited to open a vendor account on Orla.",
-          '',
-          'Sign up with this email address and choose vendor to list your services. If you already signed up with it, sign in instead: your vendor account opens then.',
-          '',
-          `https://orla.test${VENDOR_SIGN_UP_PATH}`,
-        ].join('\n'),
-      );
+    it('renders the sign-in variant for an address that has a waitlist application (AC1)', () => {
+      const mail = renderVendorInviteEmail('https://orla.test', 'mara@example.com', true);
+
+      expect(mail.subject).toBe("You're invited to join Orla as a vendor");
+      expect(mail.text).toContain(`https://orla.test${VENDOR_SIGN_IN_PATH}`);
+      expect(mail.html).toContain(`https://orla.test${VENDOR_SIGN_IN_PATH}`);
+      expect(mail.text).not.toContain('Sign up');
+      expect(mail.html).not.toContain('Sign up');
+      expect(mail.text).not.toContain(VENDOR_SIGN_UP_PATH);
+    });
+
+    it('renders the sign-up variant, with the address quoted, for one with no application (AC2)', () => {
+      const mail = renderVendorInviteEmail('https://orla.test', 'mara@example.com', false);
+
+      expect(mail.subject).toBe("You're invited to join Orla as a vendor");
+      expect(mail.text).toContain(`https://orla.test${VENDOR_SIGN_UP_PATH}`);
+      expect(mail.html).toContain(`https://orla.test${VENDOR_SIGN_UP_PATH}`);
+      expect(mail.text).toContain('mara@example.com');
+      expect(mail.html).toContain('mara@example.com');
+      expect(mail.text).not.toContain('Sign in');
+    });
+
+    it('carries the prices/work/dates sentence in both variants, and no date, count, position or expiry language (AC3)', () => {
+      const banned = [
+        /\bday(?:s)?\b/i,
+        /\bwithin\b/i,
+        /\bexpir\w*/i,
+        /\bposition\b/i,
+        /\bqueue\b/i,
+        /\bone of \d/i,
+      ];
+
+      for (const hasApplication of [true, false]) {
+        const mail = renderVendorInviteEmail(
+          'https://orla.test',
+          'mara@example.com',
+          hasApplication,
+        );
+
+        expect(mail.text).toContain(
+          'set your prices, put up your work and open the dates you want to be booked on',
+        );
+        for (const pattern of banned) {
+          expect(mail.text).not.toMatch(pattern);
+          expect(mail.html).not.toMatch(pattern);
+        }
+      }
+    });
+
+    it('renders the waitlist confirmation with the four saved facts, no button', () => {
+      const mail = renderVendorApplicationConfirmationEmail({
+        businessName: 'Hopper Florals',
+        categoryName: 'Florist',
+        city: 'Austin',
+        state: 'TX',
+        email: 'mara@example.com',
+      });
+
+      expect(mail.subject).toBe("You're on the Orla waitlist");
+      expect(mail.text).toContain('Hopper Florals');
+      expect(mail.text).toContain('Florist');
+      expect(mail.text).toContain('Austin, Texas');
+      expect(mail.text).toContain('mara@example.com');
+      expect(mail.text).not.toContain('href');
+      expect(mail.html).not.toContain('<a ');
+      expect(mail.text).toContain('reply to this email');
     });
 
     it('walks past 200 applications, with server-side totals for both lists', async () => {
@@ -918,6 +993,10 @@ describe('the vendor gate', () => {
         await apply(vendor.actor, application(email));
       }
       const items = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      // Each `apply` above queued its own waitlist confirmation; settle and clear
+      // them so a test's own email assertions read only the invite it sent.
+      await harness.flushEmail();
+      harness.email.sent.length = 0;
       return emails.map(
         (email) => items.find((row: { email: string; id: string }) => row.email === email).id,
       );
@@ -1064,6 +1143,74 @@ describe('the vendor gate', () => {
         expect(response.json()).toMatchObject({ error: 'VALIDATION_ERROR' });
       }
       expect(await harness.database.db.select().from(vendorInvites)).toHaveLength(0);
+    });
+  });
+
+  describe('the waitlist confirmation email (VEN-516, AC4)', () => {
+    function confirmationDeps(): Parameters<typeof retryFailedApplicationConfirmationEmails>[0] {
+      return {
+        db: harness.database.db,
+        email: harness.email,
+        background: harness.app.background,
+        log: harness.app.log,
+        webOrigin: TEST_ENV.WEB_URL,
+        now: () => new Date(),
+      };
+    }
+
+    it('sends once on the first submit, and a resubmit sends nothing', async () => {
+      const vendor = await refusedVendor('confirm-once@example.com');
+
+      await apply(vendor.actor, application(vendor.email));
+      await harness.flushEmail();
+
+      expect(harness.email.sent).toHaveLength(1);
+      expect(harness.email.sent[0]).toMatchObject({
+        to: 'confirm-once@example.com',
+        subject: "You're on the Orla waitlist",
+      });
+      const [row] = await harness.database.db.select().from(vendorApplications);
+      expect(row).toMatchObject({ confirmationEmailAttempts: 1 });
+      expect(row?.confirmationEmailSentAt).toBeInstanceOf(Date);
+
+      await apply(vendor.actor, application(vendor.email));
+      await harness.flushEmail();
+
+      expect(harness.email.sent).toHaveLength(1);
+    });
+
+    it('records a failed send and still returns 200; the retry sweep sends it once, same idempotency key', async () => {
+      const vendor = await refusedVendor('confirm-fails@example.com');
+      harness.email.failNext = true;
+
+      const response = await apply(vendor.actor, application(vendor.email));
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(200);
+      expect(harness.email.sent).toHaveLength(0);
+      const [failed] = await harness.database.db.select().from(vendorApplications);
+      expect(failed).toMatchObject({
+        confirmationEmailAttempts: 1,
+        confirmationEmailSentAt: null,
+        confirmationEmailFailureReason: 'Resend refused the send (500)',
+      });
+
+      const tried = await retryFailedApplicationConfirmationEmails(confirmationDeps());
+      expect(tried).toBe(1);
+      expect(harness.email.sent).toHaveLength(1);
+      expect(harness.email.sent[0]?.idempotencyKey).toBe(
+        `vendor-application-confirmation-${failed!.id}`,
+      );
+      const [sent] = await harness.database.db.select().from(vendorApplications);
+      expect(sent).toMatchObject({
+        confirmationEmailAttempts: 2,
+        confirmationEmailFailureReason: null,
+      });
+      expect(sent?.confirmationEmailSentAt).toBeInstanceOf(Date);
+
+      // A second tick finds nothing left to retry: already sent.
+      expect(await retryFailedApplicationConfirmationEmails(confirmationDeps())).toBe(0);
+      expect(harness.email.sent).toHaveLength(1);
     });
   });
 });

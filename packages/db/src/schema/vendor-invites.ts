@@ -106,6 +106,21 @@ export const vendorApplications = pgTable(
     statusBeforeInvite: vendorApplicationStatusEnum('status_before_invite'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /*
+     * The waitlist confirmation email's own record (VEN-516), the same shape as
+     * `vendor_invites`' own attempt columns and gated the same way: **failed**
+     * is `confirmation_email_attempts > 0 and confirmation_email_sent_at is
+     * null`. Attempted at most once per row outside the retry sweep — the
+     * first successful details submit — so a resubmit sends nothing.
+     */
+    confirmationEmailAttempts: integer('confirmation_email_attempts').notNull().default(0),
+    confirmationEmailLastAttemptAt: timestamp('confirmation_email_last_attempt_at', {
+      withTimezone: true,
+    }),
+    confirmationEmailSentAt: timestamp('confirmation_email_sent_at', { withTimezone: true }),
+    confirmationEmailFailureReason: varchar('confirmation_email_failure_reason', {
+      length: MAX_EMAIL_FAILURE_REASON_LENGTH,
+    }),
   },
   (table) => [
     uniqueIndex('vendor_applications_email_key').on(table.email),

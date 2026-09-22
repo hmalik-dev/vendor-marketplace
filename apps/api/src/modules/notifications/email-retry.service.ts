@@ -1,6 +1,7 @@
 import { EMAIL_RETRY_MAX_ATTEMPTS, EMAIL_RETRY_WINDOW_MS } from '@vendor-marketplace/shared';
 import type { Clock } from '../../plugins/clock.js';
 import {
+  retryFailedApplicationConfirmationEmails,
   retryFailedInviteEmails,
   type VendorInviteMailDeps,
 } from '../vendor-invites/vendor-invites.service.js';
@@ -73,13 +74,14 @@ export interface EmailRetryDeps {
   invites: VendorInviteMailDeps;
 }
 
-/** One sweep tick: notification emails, then vendor invites. */
+/** One sweep tick: notification emails, then vendor invites, then waitlist confirmations. */
 export async function retryFailedEmails(
   deps: EmailRetryDeps,
   now: Clock,
-): Promise<{ notifications: number; invites: number }> {
+): Promise<{ notifications: number; invites: number; applicationConfirmations: number }> {
   const notifications = await retryFailedNotificationEmails(deps.notifications, now);
   const invites = await retryFailedInviteEmails(deps.invites);
+  const applicationConfirmations = await retryFailedApplicationConfirmationEmails(deps.invites);
 
-  return { notifications, invites };
+  return { notifications, invites, applicationConfirmations };
 }
