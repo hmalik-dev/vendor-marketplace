@@ -1,9 +1,19 @@
-import { render } from '@testing-library/react';
+import { CSP_NONCE_HEADER } from '@/config/security-headers';
+import { act, render } from '@testing-library/react';
 import { NuqsTestingAdapter } from 'nuqs/adapters/testing';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const push = vi.fn();
+
+// VEN-578: see `page.test.tsx` — unmocked, `cspNonce()`'s `headers()` throws
+// outside a request and the script renders no nonce, hiding a real mismatch.
+const TEST_NONCE = 'ven-578-test-nonce';
+
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ [CSP_NONCE_HEADER]: TEST_NONCE }),
+}));
 
 /*
  * The page itself only needs `notFound`; `BookingRail` and `ReviewsPane` hold a
@@ -255,6 +265,35 @@ describe('the vendor page with a hostile business name and bio', () => {
 
     expect(heading?.textContent).toContain(BREAKOUT);
     expect(heading?.querySelector('script')).toBeNull();
+  });
+});
+
+// VEN-578: see `page.test.tsx` for why this hydrates and spies on console.error
+// rather than comparing two independent, non-hydrating renders.
+describe('the JSON-LD nonce', () => {
+  it('does not warn about the JSON-LD nonce when hydrating over the browser-hidden attribute', async () => {
+    const element = (
+      <NuqsTestingAdapter>
+        {await VendorProfilePage({ params: Promise.resolve({ slug: 'hostile-studio' }) })}
+      </NuqsTestingAdapter>
+    );
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(element);
+    container.querySelector('script[type="application/ld+json"]')?.setAttribute('nonce', '');
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await act(async () => {
+        hydrateRoot(container, element);
+      });
+
+      const nonceWarnings = consoleError.mock.calls.filter((args) =>
+        args.some((arg) => typeof arg === 'string' && arg.includes('nonce')),
+      );
+      expect(nonceWarnings).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });
 

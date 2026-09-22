@@ -327,6 +327,15 @@ export default async function HomePage(): Promise<React.ReactElement> {
           about the sink rather than about which payloads someone judged safe.
         */
         dangerouslySetInnerHTML={{ __html: serialiseJsonLd(STRUCTURED_DATA) }}
+        /*
+          VEN-578: once this node is in the document, the browser itself hides
+          the `nonce` content attribute (`getAttribute` reads back ""), as a
+          defence against reading it via a CSS attribute selector. Hydration
+          compares against that hidden value and reports a mismatch on a nonce
+          that never actually changed — the DOM's `.nonce` property, which CSP
+          reads, is correct throughout.
+        */
+        suppressHydrationWarning
       />
 
       {/* Full-bleed so the gradient runs edge to edge behind the headline. */}

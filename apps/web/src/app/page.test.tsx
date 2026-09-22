@@ -8,8 +8,11 @@ import {
   type Category,
   type VendorCard as VendorCardData,
 } from '@vendor-marketplace/shared';
+import { CSP_NONCE_HEADER } from '@/config/security-headers';
 import type { WireBooking, WireBookingRequest } from '@/lib/wire-schemas';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type AuthState = 'signed-in' | 'signed-out';
@@ -31,6 +34,17 @@ const getFeaturedVendors = vi.fn<() => Promise<VendorCardData[]>>();
 let currentRole: 'customer' | 'vendor' | 'admin' | null = null;
 const getOwnBookingRequests = vi.fn<() => Promise<WireBookingRequest[]>>();
 const getOwnBookings = vi.fn<() => Promise<WireBooking[]>>();
+
+/*
+ * VEN-578: `cspNonce()` reads this via `headers()`; unmocked, `headers()`
+ * throws outside a request and the JSON-LD script renders no nonce at all,
+ * which would hide a real mismatch between the server and client value.
+ */
+const TEST_NONCE = 'ven-578-test-nonce';
+
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ [CSP_NONCE_HEADER]: TEST_NONCE }),
+}));
 
 vi.mock('@/lib/auth/server', () => ({
   getServerSession: async () => (authState === 'signed-in' ? { userId: 'u1', token: 't' } : null),
@@ -747,6 +761,40 @@ describe('HomePage', () => {
     expect(data['@type']).toBe('LocalBusiness');
     expect(data.name).toBe(BRAND_NAME);
     expect(data.areaServed).toMatchObject({ '@type': 'City', name: 'Austin' });
+  });
+
+  /*
+   * VEN-578. `renderToStaticMarkup` and a fresh client `render()` both only
+   * ever read the one `nonce` prop this component builds once — neither is a
+   * hydration, so neither exercises the code path `suppressHydrationWarning`
+   * touches. This test performs a real `hydrateRoot` instead, and reproduces
+   * the actual trigger: the browser hides a `<script nonce>` element's nonce
+   * *content attribute* (`getAttribute` reads back "") once it is connected to
+   * the document, as a defence against reading it via a CSS attribute
+   * selector — jsdom does not do this on its own, so it is forced here.
+   * Without `suppressHydrationWarning` on the JSON-LD block, React logs a
+   * "Prop `nonce` did not match" warning against that cleared attribute; this
+   * asserts no such warning fires.
+   */
+  it('does not warn about the JSON-LD nonce when hydrating over the browser-hidden attribute', async () => {
+    const element = await HomePage();
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(element);
+    container.querySelector('script[type="application/ld+json"]')?.setAttribute('nonce', '');
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await act(async () => {
+        hydrateRoot(container, element);
+      });
+
+      const nonceWarnings = consoleError.mock.calls.filter((args) =>
+        args.some((arg) => typeof arg === 'string' && arg.includes('nonce')),
+      );
+      expect(nonceWarnings).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('anchors both header nav destinations, so neither link lands nowhere', async () => {
