@@ -52,7 +52,15 @@ each has its own secrets and variables.
 5. **Web**: a prebuilt Vercel deploy: production as a production deployment,
    staging as a preview deployment aliased to `WEB_URL`'s host. Staging's Vercel
    variables are scoped to the Preview `staging` branch, and the release pulls
-   them by branch (`--git-branch=staging`).
+   them by branch (`--git-branch=staging`). `WEB_TIER_KEY` and
+   `NEON_AUTH_COOKIE_SECRET` are Secret-type Vercel variables, which `vercel
+pull` cannot read (it writes them as empty strings, and the web build
+   validates them), so the release takes them from GitHub environment secrets
+   of the same names (`staging` and `production`, the same values as the
+   runtime ones, entered once by the account holder) and hands them to `vercel
+build` alone (VEN-575). Preflight fails by name when either is missing. When
+   rotating either, rotate it in all three places: Vercel, Railway (for
+   `WEB_TIER_KEY`) and the GitHub environment secret.
 6. **Ready**: `/ready` on the API must name the pushed commit within ten
    minutes, or the run fails.
 
@@ -62,7 +70,8 @@ the previous release's code and must stay backwards-compatible with it.
 
 Set on each GitHub environment (`staging`, `production`) by the account holder
 (VEN-377): secrets `DATABASE_URL_UNPOOLED`, `API_HOST_TOKEN` (a Railway project
-token scoped to that environment), `VERCEL_TOKEN`, `SENTRY_AUTH_TOKEN`;
+token scoped to that environment), `VERCEL_TOKEN`, `SENTRY_AUTH_TOKEN`, `WEB_TIER_KEY`, `NEON_AUTH_COOKIE_SECRET`
+(the last two: the web build's Secret variables, above);
 variables `NEON_BRANCH` (`staging` or `production`), `NEON_HOST` (that
 branch's direct endpoint host), `API_HOST`, `API_SERVICE`, `API_URL`, `WEB_URL`
 (staging's first entry must be a host containing `staging`, since it is the

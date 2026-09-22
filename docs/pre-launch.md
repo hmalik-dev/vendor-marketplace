@@ -83,6 +83,14 @@ first. Both branches were empty of user rows and both held 0000–0009.
 
 ## What only a person can do
 
+- [ ] **Release build secrets** (VEN-575). Add the GitHub environment secrets
+      `WEB_TIER_KEY` and `NEON_AUTH_COOKIE_SECRET` to both `staging` and
+      `production` (on each environment, never at repository or organization
+      level), with the same values as the runtime ones. Vercel Secret
+      variables are unreadable to `vercel pull`, so the release build cannot
+      see them otherwise, and preflight fails by name without them. On
+      rotation, change all three places: Vercel, Railway (`WEB_TIER_KEY`) and
+      GitHub.
 - [ ] **Legal wording** (VEN-378). The terms, privacy and cookie pages exist, but
       their wording is placeholder nobody has relied on. A lawyer reads them —
       above all the staff-message-access clause (#436) under _Who else sees it_
