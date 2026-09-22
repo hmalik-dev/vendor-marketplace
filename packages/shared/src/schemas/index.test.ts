@@ -9,6 +9,7 @@ import {
   phoneSchema,
   reorderPortfolioSchema,
   reorderServicePackagesSchema,
+  isVendorApplicationComplete,
   vendorApplicationInputSchema,
   createServicePackageSchema,
   updateServicePackageSchema,
@@ -1191,8 +1192,9 @@ describe('VEN-544 input rules', () => {
       vendorApplicationInputSchema.safeParse({
         email: 'a@example.com',
         businessName: name,
-        category: 'Catering',
+        category: id,
         city: 'Austin',
+        state: 'TX',
         message: 'Hello there',
       }).success,
     ).toBe(true);
@@ -1204,6 +1206,30 @@ describe('VEN-544 input rules', () => {
         state: 'TX',
       }).success,
     ).toBe(true);
+  });
+
+  it('refuses a state outside the list on a vendor application (VEN-512)', () => {
+    expect(
+      vendorApplicationInputSchema.safeParse({
+        email: 'a@example.com',
+        businessName: 'Hopper Florals',
+        category: id,
+        city: 'Austin',
+        state: 'ZZ',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('is complete only once business name, category and city are all present (VEN-512)', () => {
+    expect(isVendorApplicationComplete({ businessName: 'x', category: id, city: 'Austin' })).toBe(
+      true,
+    );
+    expect(isVendorApplicationComplete({ businessName: null, category: id, city: 'Austin' })).toBe(
+      false,
+    );
+    expect(isVendorApplicationComplete({ businessName: 'x', category: null, city: null })).toBe(
+      false,
+    );
   });
 
   it('refuses a review headline that is only whitespace', () => {

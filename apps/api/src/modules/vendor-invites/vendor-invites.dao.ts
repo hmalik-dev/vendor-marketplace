@@ -1,5 +1,6 @@
 import { and, count, desc, eq, gt, isNull, lt, notInArray, sql, type SQL } from 'drizzle-orm';
 import {
+  categories,
   users,
   vendorApplications,
   vendorInvites,
@@ -8,8 +9,10 @@ import {
 } from '@vendor-marketplace/db/schema';
 import { truncateFailureReason } from '../notifications/email-delivery.dao.js';
 import {
+  isVendorApplicationComplete,
   type AdminVendorApplicationRow,
   type AdminVendorInviteRow,
+  type MyVendorApplication,
   type VendorApplicationInput,
   type VendorApplicationStatus,
 } from '@vendor-marketplace/shared';
@@ -242,9 +245,15 @@ export async function upsertApplication(
   status: VendorApplicationStatus,
   verified: boolean,
 ): Promise<void> {
-  const insert = db
-    .insert(vendorApplications)
-    .values({ ...input, email: inviteKey(input.email), status });
+  const insert = db.insert(vendorApplications).values({
+    email: inviteKey(input.email),
+    businessName: input.businessName,
+    category: input.category,
+    city: input.city,
+    state: input.state ?? null,
+    message: input.message ?? null,
+    status,
+  });
 
   if (!verified) {
     await insert.onConflictDoNothing({ target: vendorApplications.email });
@@ -257,11 +266,56 @@ export async function upsertApplication(
       businessName: input.businessName,
       category: input.category,
       city: input.city,
-      message: input.message,
+      state: input.state ?? null,
+      message: input.message ?? null,
+      /*
+       * The row usually pre-exists now (seeded on refusal or arrival, VEN-512),
+       * so this is the only write that can ever turn a seeded `new` row
+       * `invited` for an address invited in between. Safe to set
+       * unconditionally: `setWhere` already restricts the update to a row
+       * still `new`, so this can only ever leave it `new` or promote it.
+       */
+      status,
       updatedAt: sql`now()`,
     },
     setWhere: eq(vendorApplications.status, 'new'),
   });
+}
+
+/**
+ * Writes the waitlist row the moment an address is known and nothing else is
+ * — the refusal, or the first arrival at the details screen (VEN-512). A
+ * repeat call writes nothing: the row, once seeded, is only ever completed
+ * through `upsertApplication`'s verified path.
+ */
+export async function seedApplication(db: AppDatabase, email: string): Promise<void> {
+  await db
+    .insert(vendorApplications)
+    .values({ email: inviteKey(email), status: 'new' })
+    .onConflictDoNothing({ target: vendorApplications.email });
+}
+
+/** The caller's own application row, for the details/waitlist routing decision. */
+export async function findApplicationByEmail(
+  db: AppDatabase,
+  email: string,
+): Promise<MyVendorApplication | null> {
+  const rows = await db
+    .select({
+      email: vendorApplications.email,
+      businessName: vendorApplications.businessName,
+      category: vendorApplications.category,
+      city: vendorApplications.city,
+      state: vendorApplications.state,
+      message: vendorApplications.message,
+    })
+    .from(vendorApplications)
+    .where(eq(vendorApplications.email, inviteKey(email)))
+    .limit(1);
+
+  const row = rows[0];
+
+  return row ? { ...row, complete: isVendorApplicationComplete(row) } : null;
 }
 
 export async function countAdminInvites(db: AppDatabase): Promise<number> {
@@ -286,26 +340,64 @@ export async function countAdminApplications(
   return { total: rows[0]?.total ?? 0, waiting: rows[0]?.waiting ?? 0 };
 }
 
+/**
+ * A stored `category` is a category id since VEN-512, and free text on a row
+ * that predates it. The join guards the cast with a `CASE`, not `AND`: a join
+ * condition's operands are not guaranteed left-to-right short-circuit the way
+ * a plain `WHERE` boolean is, and a hash join built the cast eagerly to key
+ * the join before the regex ever ran, throwing `invalid input syntax for type
+ * uuid` on the first free-text row — reproduced against PGlite. `CASE` is
+ * where Postgres does guarantee only the matching branch is evaluated.
+ */
+const UUID_PATTERN =
+  '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+
+/** `category`, resolved to its name for a single row — the `PUT` decision's own response. */
+export async function resolveCategoryName(
+  db: AppDatabase,
+  category: string | null,
+): Promise<string | null> {
+  if (category === null || !new RegExp(UUID_PATTERN).test(category)) {
+    return null;
+  }
+
+  const rows = await db
+    .select({ name: categories.name })
+    .from(categories)
+    .where(eq(categories.id, category))
+    .limit(1);
+
+  return rows[0]?.name ?? null;
+}
+
 export async function findAdminApplications(
   db: AppDatabase,
   limit: number,
   offset: number,
 ): Promise<AdminVendorApplicationRow[]> {
-  return db
+  const rows = await db
     .select({
       id: vendorApplications.id,
       email: vendorApplications.email,
       businessName: vendorApplications.businessName,
       category: vendorApplications.category,
+      categoryName: categories.name,
       city: vendorApplications.city,
+      state: vendorApplications.state,
       message: vendorApplications.message,
       status: vendorApplications.status,
       createdAt: vendorApplications.createdAt,
     })
     .from(vendorApplications)
+    .leftJoin(
+      categories,
+      sql`${categories.id} = (case when ${vendorApplications.category} ~ ${UUID_PATTERN} then ${vendorApplications.category}::uuid else null end)`,
+    )
     .orderBy(desc(vendorApplications.createdAt), desc(vendorApplications.id))
     .limit(limit)
     .offset(offset);
+
+  return rows.map((row) => ({ ...row, complete: isVendorApplicationComplete(row) }));
 }
 
 /** The application, locked for the caller's transaction. */

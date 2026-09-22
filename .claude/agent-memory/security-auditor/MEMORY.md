@@ -51,7 +51,7 @@
 - [Vendor selection writes are transaction-only](vendor-selection-writes-are-transaction-only.md) — `replaceVendorTags`/`Categories` no longer self-transact
 - [The `updatedAt` precondition is not a gate](edit-version-precondition-is-not-a-gate.md) — VEN-481 audited clean; the 409 body is the 200's projection, and an explicit `null` coerces to the epoch
 - [The vendor agreement gate has four definitions](vendor-agreement-gate-has-four-definitions.md) — VEN-509 audited clean; publish/checkout/accept want the current version, payout takes any, and both EXISTS need `vendor_profiles` unaliased
-- [Vendor invite gate checks before the row it creates](vendor-invite-gate-checks-before-the-row-it-creates.md) — snapshot role judged, webhook row committed; waitlist email squattable
+- [Vendor invite gate checks before the row it creates](vendor-invite-gate-checks-before-the-row-it-creates.md) — VEN-512: a `vendor_applications` row now diverts `/accept-terms` for ever, and a GET writes one
 
 ## Money, bookings and background work
 

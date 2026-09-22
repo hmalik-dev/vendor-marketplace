@@ -36,6 +36,7 @@ function status(overrides: Partial<TermsAcceptanceStatus> = {}): TermsAcceptance
     explicitTickRequired: false,
     account: { exists: false, role: null },
     suggestedRole: null,
+    vendorWaitlist: { exists: false, complete: false },
     ...overrides,
   };
 }
@@ -253,7 +254,7 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/after-sign-in'));
   });
 
-  it('stays put on a refused vendor, keeps the hint and the session, and offers customer or apply (VEN-406)', async () => {
+  it('sends a refused vendor on to the details screen, keeping the hint and the session (VEN-512)', async () => {
     const user = userEvent.setup();
     post.mockRejectedValueOnce(
       new ApiClientError(403, 'vendor_not_invited', 'Vendor accounts are by invitation for now.'),
@@ -261,25 +262,22 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     rememberSignUpRole('vendor');
     render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
 
+    await user.click(radio(VENDOR_RADIO));
     await user.click(submit());
 
-    await waitFor(() =>
-      expect(screen.getByText('Vendor accounts are by invitation for now')).toBeDefined(),
-    );
-    expect(replace).not.toHaveBeenCalled();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/sign-up/vendor-details'));
     expect(signOut).not.toHaveBeenCalled();
     expect(readSignUpRole()).toBe('vendor');
-    expect(
-      screen.getByRole('link', { name: 'apply to become a vendor' }).getAttribute('href'),
-    ).toBe('/vendors/apply');
+  });
 
-    await user.click(radio(CUSTOMER_RADIO));
-    await user.click(submit());
+  it('never skips this screen on a browser hint alone, even one the gate would refuse (VEN-512)', async () => {
+    rememberSignUpRole('vendor');
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
 
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
-    expect((post.mock.calls[1]?.[1] as { body: Record<string, unknown> }).body.role).toBe(
-      'customer',
-    );
+    // Preselected from the hint, but shown and left for the person to submit — a client value never redirects by itself.
+    await waitFor(() => expect(radio(VENDOR_RADIO).checked).toBe(true));
+    expect(replace).not.toHaveBeenCalled();
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('has no checkbox and shows the notice with working Terms and Privacy links under the submit', () => {

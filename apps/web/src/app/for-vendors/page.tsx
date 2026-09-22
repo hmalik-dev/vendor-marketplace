@@ -9,7 +9,6 @@ import {
   pageTitle,
   LEGAL_PATHS,
   PAYOUT_RELEASE_HOURS,
-  VENDOR_APPLY_PATH,
   VENDOR_SIGN_UP_PATH,
 } from '@vendor-marketplace/shared';
 import { Button } from '@/components/ui/button';
@@ -132,12 +131,15 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
   await redirectVendorToDashboard();
 
   /*
-   * While the vendor gate is on (VEN-406) a sign-up would only be refused at
-   * the Terms, so both calls to action go straight to the application form.
+   * While the vendor gate is on (VEN-512), joining is still by sign-up — the
+   * one way onto the waitlist, so every address there is verified and already
+   * has a login (VEN-512's "one way in"). It reads "Join the waitlist" rather
+   * than "Apply", because nothing is applied for: signing up as a vendor
+   * writes the row by itself.
    */
   const { vendorInviteOnly } = await getVendorSignUpGate();
   const cta = vendorInviteOnly
-    ? { href: VENDOR_APPLY_PATH, label: 'Apply to join' }
+    ? { href: VENDOR_SIGN_UP_PATH, label: 'Join the waitlist' }
     : { href: VENDOR_SIGN_UP_PATH, label: 'Start taking bookings' };
   const steps = payoutSteps();
   const fees = calculateFees(EXAMPLE_PRICE_CENTS, DEFAULT_PLATFORM_FEE_RATE);

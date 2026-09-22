@@ -554,6 +554,13 @@
       "when": 1790038167973,
       "tag": "0078_dark_lightspeed",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1790060878095,
+      "tag": "0079_curly_captain_universe",
+      "breakpoints": true
     }
   ]
 }

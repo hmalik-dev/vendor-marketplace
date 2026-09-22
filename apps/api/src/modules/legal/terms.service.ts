@@ -9,7 +9,12 @@ import type { AppDatabase } from '../../lib/database.js';
 import { conflict, unauthorized, validationFailed } from '../../lib/errors.js';
 import { findUserByAuthId, findUserByAuthIdIncludingRetired } from '../users/users.dao.js';
 import { displayName, normalizeRole, syncUserFromAuth } from '../users/users.service.js';
-import { admitVendor, invitedRoleHint } from '../vendor-invites/vendor-invites.service.js';
+import {
+  admitVendor,
+  invitedRoleHint,
+  readVendorWaitlistStatus,
+  seedApplicationOnRefusal,
+} from '../vendor-invites/vendor-invites.service.js';
 import type { AuthUserSnapshot } from '../users/users.service.js';
 import {
   findAcceptanceOfVersion,
@@ -67,10 +72,16 @@ export async function readTermsStatus(
     () => null,
   );
 
-  return {
-    ...unacceptedTermsStatus(),
-    suggestedRole: email === null ? null : ((await invitedRoleHint(db, email)) ?? null),
-  };
+  if (email === null) {
+    return unacceptedTermsStatus();
+  }
+
+  const [suggestedRole, vendorWaitlist] = await Promise.all([
+    invitedRoleHint(db, email).then((hint) => hint ?? null),
+    readVendorWaitlistStatus(db, email),
+  ]);
+
+  return { ...unacceptedTermsStatus(), suggestedRole, vendorWaitlist };
 }
 
 /** The status of an account that exists: its acceptance and the role the server stored. */
@@ -109,6 +120,7 @@ function unacceptedTermsStatus(): TermsAcceptanceStatus {
     explicitTickRequired: false,
     account: { exists: false, role: null },
     suggestedRole: null,
+    vendorWaitlist: { exists: false, complete: false },
   };
 }
 
@@ -224,20 +236,24 @@ export async function acceptTerms(
      * below. An account that has accepted *any* version already exists and is
      * not re-gated by a new version of the Terms.
      */
-    await db.transaction(async (tx) => {
-      if (!status.explicitTickRequired) {
-        await admitVendor(tx, existing.role, existing.email);
-      }
+    try {
+      await db.transaction(async (tx) => {
+        if (!status.explicitTickRequired) {
+          await admitVendor(tx, existing.role, existing.email);
+        }
 
-      await insertAcceptance(
-        tx,
-        termsAcceptanceRow(
-          existing,
-          context,
-          status.explicitTickRequired ? 'clickwrap_checkbox' : 'continue_notice',
-        ),
-      );
-    });
+        await insertAcceptance(
+          tx,
+          termsAcceptanceRow(
+            existing,
+            context,
+            status.explicitTickRequired ? 'clickwrap_checkbox' : 'continue_notice',
+          ),
+        );
+      });
+    } catch (error) {
+      await seedApplicationOnRefusal(db, error, existing.email);
+    }
 
     return termsStatusOf(db, existing);
   }
@@ -259,26 +275,33 @@ export async function acceptTerms(
    */
   const snapshot = { ...(await loadSnapshot()), roleHint: role };
 
-  const user = await db.transaction(async (tx) => {
-    const row = await syncUserFromAuth(tx, snapshot);
+  let user: UserRow;
 
-    if (!row) {
-      throw new Error('legal acceptance: the account row could not be resolved');
-    }
+  try {
+    user = await db.transaction(async (tx) => {
+      const row = await syncUserFromAuth(tx, snapshot);
 
-    /*
-     * The vendor gate (VEN-406), on the row as saved rather than the choice:
-     * a concurrent accept for this identity can win the insert, and then the
-     * row returned carries **its** role — first commit wins, and this request
-     * reports it. A refusal rolls the whole transaction back, so no account this
-     * path wrote and no acceptance survives it.
-     */
-    await admitVendor(tx, row.role, row.email);
+      if (!row) {
+        throw new Error('legal acceptance: the account row could not be resolved');
+      }
 
-    await insertAcceptance(tx, termsAcceptanceRow(row, context, 'continue_notice'));
+      /*
+       * The vendor gate (VEN-406), on the row as saved rather than the choice:
+       * a concurrent accept for this identity can win the insert, and then the
+       * row returned carries **its** role — first commit wins, and this request
+       * reports it. A refusal rolls the whole transaction back, so no account this
+       * path wrote and no acceptance survives it.
+       */
+      await admitVendor(tx, row.role, row.email);
 
-    return row;
-  });
+      await insertAcceptance(tx, termsAcceptanceRow(row, context, 'continue_notice'));
+
+      return row;
+    });
+  } catch (error) {
+    await seedApplicationOnRefusal(db, error, snapshot.email);
+    throw error;
+  }
 
   return termsStatusOf(db, user);
 }

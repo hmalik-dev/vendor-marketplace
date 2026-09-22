@@ -82,17 +82,18 @@ describe('/for-vendors', () => {
     }
   });
 
-  it('points both calls to action at the application form while the vendor gate is on (VEN-406)', async () => {
+  it('points both calls to action at sign-up, reading "Join the waitlist" while the vendor gate is on (VEN-512)', async () => {
     gate.vendorInviteOnly = true;
     await renderPage();
 
-    const ctas = screen.getAllByRole('link', { name: 'Apply to join' });
+    const ctas = screen.getAllByRole('link', { name: 'Join the waitlist' });
 
     expect(ctas.map((cta) => cta.getAttribute('href'))).toEqual([
-      '/vendors/apply',
-      '/vendors/apply',
+      '/sign-up?role=vendor',
+      '/sign-up?role=vendor',
     ]);
     expect(screen.queryByRole('link', { name: 'Start taking bookings' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Apply to join' })).toBeNull();
   });
 
   it('states the commission exactly once, as the subtraction in the worked example', async () => {

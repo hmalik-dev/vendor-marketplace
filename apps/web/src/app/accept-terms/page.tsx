@@ -1,4 +1,4 @@
-import { pageTitle } from '@vendor-marketplace/shared';
+import { pageTitle, VENDOR_DETAILS_PATH, WAITLIST_PATH } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { AcceptTermsScreen } from '@/components/legal/accept-terms-screen';
@@ -54,6 +54,20 @@ export default async function AcceptTermsPage({
    */
   if (status.accepted) {
     redirect(pathReturningTo('/after-sign-in', returnTo));
+  }
+
+  /*
+   * A returning refused vendor (VEN-512): no account exists for this address
+   * (it never can, while the gate refuses it) and a waitlist row already does
+   * — from an earlier refusal or an earlier visit to the details screen. Sent
+   * straight on rather than asked to confirm a role that would only be
+   * refused again. Every protected route's `TERMS_REQUIRED` funnels here
+   * (`redirectIfTermsRequired`, `signedInFailurePath`), so this is also what
+   * makes AC18 true: a waitlisted session redirected to `/accept-terms` from
+   * anywhere lands on `/waitlist`, not a screen it can never clear.
+   */
+  if (status.vendorWaitlist.exists) {
+    redirect(status.vendorWaitlist.complete ? WAITLIST_PATH : VENDOR_DETAILS_PATH);
   }
 
   return <AcceptTermsScreen status={status} terms={terms} returnTo={returnTo} />;
