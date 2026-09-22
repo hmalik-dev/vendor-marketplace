@@ -1,5 +1,11 @@
-import { eq } from 'drizzle-orm';
-import { categories, legalAcceptances, users } from '@vendor-marketplace/db/schema';
+import { eq, inArray } from 'drizzle-orm';
+import {
+  categories,
+  legalAcceptances,
+  users,
+  vendorApplications,
+  vendorProfiles,
+} from '@vendor-marketplace/db/schema';
 import {
   CURRENT_TERMS_VERSION,
   CURRENT_VENDOR_AGREEMENT_VERSION,
@@ -273,5 +279,91 @@ describe('several acceptances of one document at once, against a real Postgres',
 
     expect(held?.version).toBe(CURRENT_TERMS_VERSION);
     expect(await rowsOf('terms_of_service')).toHaveLength(1);
+  });
+
+  /**
+   * VEN-514's draft profile. `createDraftVendorProfile` checks `slugExists`
+   * and inserts inside a `tx.transaction()` savepoint, caught around the whole
+   * write, precisely so a lost race on `vendor_profiles_slug_key` cannot take
+   * the surrounding `acceptTerms` transaction — the one that creates the
+   * `users` row and writes the acceptance — down with it. Two different
+   * vendors whose applications name the same business name compute the same
+   * base slug, so accepting at once is the one scenario that can actually make
+   * that insert fail after the check passed. **PGlite cannot see this**: one
+   * connection runs each request's statements to completion before the next
+   * begins, so the check and the insert never truly interleave there — the
+   * race, and the savepoint it needs, only exist on a second connection.
+   */
+  describe('the draft profile two vendors race for', () => {
+    const VENDOR_A = 'race_draft_vendor_a';
+    const VENDOR_B = 'race_draft_vendor_b';
+
+    beforeAll(() => {
+      for (const authUserId of [VENDOR_A, VENDOR_B]) {
+        harness.authUsers.set(authUserId, {
+          authUserId,
+          email: `${authUserId}@example.com`,
+          firstName: 'Ada',
+          lastName: 'Reyes',
+          roleHint: 'vendor',
+          avatarUrl: null,
+        });
+      }
+    });
+
+    beforeEach(async () => {
+      await harness.database.db.delete(vendorApplications);
+    });
+
+    async function application(authUserId: string): Promise<void> {
+      await harness.database.db.insert(vendorApplications).values({
+        email: `${authUserId}@example.com`,
+        businessName: 'Ada Photography',
+        category: photographyId,
+        city: 'Austin',
+        state: 'TX',
+        status: 'new',
+      });
+    }
+
+    it('creates both accounts, with no crossed slug, when two same-named applications accept at once', async () => {
+      await Promise.all([application(VENDOR_A), application(VENDOR_B)]);
+
+      const answers = await Promise.all(
+        [VENDOR_A, VENDOR_B].map((as) =>
+          harness.app.inject({
+            method: 'POST',
+            url: '/legal/terms/accept',
+            headers: bearer(as),
+            payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'vendor' },
+          }),
+        ),
+      );
+
+      // Neither request may 500: a lost slug race is the draft's problem to
+      // swallow, never the account's or the acceptance's to fail on.
+      expect(answers.map((answer) => answer.statusCode)).toEqual([200, 200]);
+
+      const accounts = await harness.database.db
+        .select()
+        .from(users)
+        .where(inArray(users.email, [`${VENDOR_A}@example.com`, `${VENDOR_B}@example.com`]));
+      expect(accounts).toHaveLength(2);
+      expect(await rowsOf('terms_of_service')).toHaveLength(2);
+
+      const profiles = await harness.database.db
+        .select()
+        .from(vendorProfiles)
+        .where(
+          inArray(
+            vendorProfiles.userId,
+            accounts.map((row) => row.id),
+          ),
+        );
+
+      // Whichever of the two builds wins the slug, and whichever loses it and
+      // is swallowed, no two rows ever share one.
+      expect(new Set(profiles.map((row) => row.slug)).size).toBe(profiles.length);
+    });
   });
 });

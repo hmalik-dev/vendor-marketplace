@@ -15,6 +15,7 @@ import {
   readVendorWaitlistStatus,
   seedApplicationOnRefusal,
 } from '../vendor-invites/vendor-invites.service.js';
+import { createDraftVendorProfile } from '../vendors/vendors.service.js';
 import type { AuthUserSnapshot } from '../users/users.service.js';
 import {
   findAcceptanceOfVersion,
@@ -124,6 +125,24 @@ function unacceptedTermsStatus(): TermsAcceptanceStatus {
   };
 }
 
+/**
+ * The vendor gate, and — for a vendor it just admitted — the draft profile
+ * built from their waitlist application (VEN-514). A no-op for any other role,
+ * same as {@link admitVendor} itself; kept together because both callers below
+ * need exactly this pair, in this order, inside the same transaction.
+ */
+async function admitVendorWithDraftProfile(
+  tx: AppDatabase,
+  user: UserRow,
+  log: { warn: (details: unknown, message: string) => void } | undefined,
+): Promise<void> {
+  await admitVendor(tx, user.role, user.email);
+
+  if (user.role === 'vendor') {
+    await createDraftVendorProfile(tx, user.id, user.email, log);
+  }
+}
+
 /** The row this module writes, assembled once for both of its callers. */
 function termsAcceptanceRow(
   user: UserRow,
@@ -179,6 +198,7 @@ export async function acceptTerms(
   loadSnapshot: () => Promise<AuthUserSnapshot>,
   input: { version: string; accepted?: boolean | undefined; role?: SignUpRole | undefined },
   context: AcceptanceContext,
+  log?: { warn: (details: unknown, message: string) => void },
 ): Promise<TermsAcceptanceStatus> {
   if (input.accepted === false) {
     throw validationFailed('Tick the box to accept the Terms of Service.');
@@ -239,7 +259,7 @@ export async function acceptTerms(
     try {
       await db.transaction(async (tx) => {
         if (!status.explicitTickRequired) {
-          await admitVendor(tx, existing.role, existing.email);
+          await admitVendorWithDraftProfile(tx, existing, log);
         }
 
         await insertAcceptance(
@@ -292,7 +312,7 @@ export async function acceptTerms(
        * reports it. A refusal rolls the whole transaction back, so no account this
        * path wrote and no acceptance survives it.
        */
-      await admitVendor(tx, row.role, row.email);
+      await admitVendorWithDraftProfile(tx, row, log);
 
       await insertAcceptance(tx, termsAcceptanceRow(row, context, 'continue_notice'));
 

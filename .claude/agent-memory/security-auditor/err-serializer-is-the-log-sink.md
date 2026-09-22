@@ -55,6 +55,14 @@ Settled non-leaks, do not re-report:
 - `_err.raw` is non-enumerable on `pinoErrProto` and holds the sanitised clone.
 - zod 4.4.3 `ZodError` has no `errors` array and its issues carry no `input`.
 
+**The fields _beside_ `err` are verbatim.** `redactLogRecord` (server.ts) visits
+only error-_like_ values, and no pino `redact` path list exists, so any plain
+string in the merge object is written as given. The API's own convention is an
+opaque id — `inviteId`, `adminId`, `idempotencyKey` — and until VEN-514 no
+non-test call site logged an email address. An identifying value in the merge
+object is therefore a finding on its own, independent of the `err` beside it;
+the fix is always the id already in scope (`userId`), never a redactor.
+
 **pino does not catch a throwing serialiser** (`pino/lib/tools.js` calls
 `serializers[key](value)` bare). A throw out of `request.log.error` in
 `error-handler.ts` is caught by Fastify as `reply.send(err)`, which replies with

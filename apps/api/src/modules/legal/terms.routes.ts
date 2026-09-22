@@ -50,6 +50,7 @@ export const termsRoutes: FastifyPluginAsyncZod = async (app) => {
         identity.loadSnapshot,
         request.body,
         acceptanceContext(request),
+        app.log,
       );
     },
   );
