@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { AUTH_COPY } from '@/app/auth-copy';
+import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -53,7 +53,7 @@ export function ResetPasswordForm({ initialEmail }: ResetPasswordFormProps): Rea
 
     setMessage({
       status: 'failed',
-      text: outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.resetFailed,
+      text: failureCopy(outcome, AUTH_COPY.resetFailed),
     });
   }
 
@@ -73,7 +73,7 @@ export function ResetPasswordForm({ initialEmail }: ResetPasswordFormProps): Rea
 
     setMessage({
       status: 'failed',
-      text: outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.resetThrottled,
+      text: failureCopy(outcome, AUTH_COPY.unreachable),
     });
   }
 

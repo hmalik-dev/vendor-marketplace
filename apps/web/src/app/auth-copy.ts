@@ -1,3 +1,5 @@
+import type { AuthOutcome } from '@/lib/auth/auth-requests';
+
 /**
  * The strings the sign-in and sign-up forms write, from frame `12 Sign up` and
  * `21-sign-up.md`. App-owned: no provider supplies or overrides any of them, and
@@ -29,6 +31,23 @@ export const AUTH_COPY = {
   resetSubmit: 'Set new password',
   resetDone: 'Your password is changed. Sign in with the new one.',
   resetFailed: 'That code did not work, or it has expired. Check it, or ask for a new one.',
-  resetThrottled: 'Too many attempts. Wait a minute and try again.',
+  throttled: 'Too many attempts. Wait a few minutes and try again.',
   unreachable: 'We could not reach the sign-in service. Try again in a moment.',
 } as const;
+
+/**
+ * `unreachable` and `throttled` always read the same way; `fallback` is the
+ * caller's copy for whatever specific outcome is left (a wrong code, a
+ * refused password, ...).
+ */
+export function failureCopy(outcome: Exclude<AuthOutcome, 'ok'>, fallback: string): string {
+  if (outcome === 'unreachable') {
+    return AUTH_COPY.unreachable;
+  }
+
+  if (outcome === 'throttled') {
+    return AUTH_COPY.throttled;
+  }
+
+  return fallback;
+}
