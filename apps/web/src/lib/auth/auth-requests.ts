@@ -51,14 +51,28 @@ export async function signUpWithEmail(input: {
   return outcome;
 }
 
-/** `unverified` is Neon's 403 EMAIL_NOT_VERIFIED: the caller routes to the code step. */
+/**
+ * `unverified` is Neon's 403 `EMAIL_NOT_VERIFIED` on most branches — the caller
+ * routes to the code step. **This dev branch instead answers 200** for an
+ * unverified sign-in, with `user.emailVerified: false` in the body and a
+ * session the API refuses on every subsequent call: unchecked, that reads as
+ * `'ok'` and silently strands the caller at `/after-sign-in`. Treat the body
+ * the same as the 403, so both branches route the same address the same way.
+ */
 export async function signInWithEmail(input: {
   email: string;
   password: string;
 }): Promise<AuthOutcome> {
-  const outcome = outcomeOf(await post('/sign-in/email', input));
+  const response = await post('/sign-in/email', input);
+  const outcome = outcomeOf(response);
   clearSessionToken();
-  return outcome;
+
+  if (outcome !== 'ok' || !response) {
+    return outcome;
+  }
+
+  const body: { user?: { emailVerified?: unknown } } = await response.json().catch(() => ({}));
+  return body.user?.emailVerified === false ? 'unverified' : 'ok';
 }
 
 export async function verifyEmailCode(input: { email: string; otp: string }): Promise<AuthOutcome> {

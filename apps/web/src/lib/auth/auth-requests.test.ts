@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { signUpWithEmail } from './auth-requests';
+import { signInWithEmail, signUpWithEmail } from './auth-requests';
 
 const INPUT = { email: 'new@example.com', password: 'a-long-password', name: 'new' };
 
@@ -8,6 +8,12 @@ function stubFetch(...statuses: number[]): ReturnType<typeof vi.fn> {
   for (const status of statuses) {
     fetchMock.mockResolvedValueOnce(new Response('{}', { status }));
   }
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+function stubFetchBody(status: number, body: unknown): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
@@ -43,5 +49,39 @@ describe('signUpWithEmail', () => {
 
     await expect(signUpWithEmail(INPUT)).resolves.toBe('rejected');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('signInWithEmail', () => {
+  /*
+   * This dev Neon Auth branch answers 200 for an unverified sign-in instead of
+   * the 403 `outcomeOf` otherwise relies on — reproduced live against the lane
+   * (VEN-507): `user.emailVerified: false` in an `ok`-shaped body. Unchecked,
+   * that reads as `'ok'` and the caller lands the person on `/after-sign-in`
+   * with a session the API refuses on every following call — a silent dead
+   * end, never the code step the docstring promises.
+   */
+  it('reports unverified for a 200 whose body says the email is not verified', async () => {
+    stubFetchBody(200, { user: { emailVerified: false } });
+
+    await expect(
+      signInWithEmail({ email: 'new@example.com', password: 'a-long-password' }),
+    ).resolves.toBe('unverified');
+  });
+
+  it('still reports ok for a verified sign-in', async () => {
+    stubFetchBody(200, { user: { emailVerified: true } });
+
+    await expect(
+      signInWithEmail({ email: 'new@example.com', password: 'a-long-password' }),
+    ).resolves.toBe('ok');
+  });
+
+  it('reports unverified for the 403 shape too', async () => {
+    stubFetch(403);
+
+    await expect(
+      signInWithEmail({ email: 'new@example.com', password: 'a-long-password' }),
+    ).resolves.toBe('unverified');
   });
 });
