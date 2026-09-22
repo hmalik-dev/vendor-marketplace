@@ -514,11 +514,19 @@ export const PHASES = {
     const cli = ['--yes', VERCEL_CLI];
     const target = production ? ['--prod'] : [];
 
-    await io.run(
-      'npx',
-      [...cli, 'pull', '--yes', `--environment=${production ? 'production' : 'preview'}`],
-      { env: child, redact, write: io.write },
-    );
+    /*
+     * Staging's variables are scoped to the Preview `staging` branch, and a pull
+     * without the branch returns only the all-branch Preview ones. `vercel build`
+     * then reads the `.vercel/.env.preview.local` this writes, with no flag.
+     */
+    const scope = production
+      ? ['--environment=production']
+      : ['--environment=preview', `--git-branch=${env.DEPLOY_TARGET}`];
+    await io.run('npx', [...cli, 'pull', '--yes', ...scope], {
+      env: child,
+      redact,
+      write: io.write,
+    });
     await io.run('npx', [...cli, 'build', ...target], { env: build, redact, write: io.write });
 
     let printed = '';

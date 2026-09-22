@@ -50,7 +50,9 @@ each has its own secrets and variables.
    auto-deploy must stay **off**, since it cannot be ordered after a GitHub job
    and would ship code before its migration.
 5. **Web**: a prebuilt Vercel deploy: production as a production deployment,
-   staging as a preview deployment aliased to `WEB_URL`'s host.
+   staging as a preview deployment aliased to `WEB_URL`'s host. Staging's Vercel
+   variables are scoped to the Preview `staging` branch, and the release pulls
+   them by branch (`--git-branch=staging`).
 6. **Ready**: `/ready` on the API must name the pushed commit within ten
    minutes, or the run fails.
 
