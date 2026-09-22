@@ -80,6 +80,14 @@
     "test": {
       "dependsOn": ["^build"]
     },
+    "@vendor-marketplace/shared#test": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.claude/memory/**",
+        "$TURBO_ROOT$/.claude/agent-memory/**"
+      ]
+    },
     "test:contention": {
       "dependsOn": ["^build"],
       "cache": false
