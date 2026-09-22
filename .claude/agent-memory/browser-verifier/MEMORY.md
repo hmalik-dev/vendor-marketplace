@@ -24,3 +24,4 @@
 - [Mailosaur gives a real disposable E2E identity](mailosaur-gives-a-real-disposable-e2e-identity.md) — `pnpm e2e:mail-code` + any `<local>@<E2E_MAIL_SERVER>.mailosaur.net` address drives a genuinely fresh sign-up, no shared-identity trap
 - [Gate-exempt paths misses client-side ambient fetches](gate-exempt-paths-misses-client-side-ambient-fetches.md) — SUPERSEDED by VEN-586: the redirect is fixed; see the entry below for the surviving console-noise half
 - [Terms-gate exemption stops the redirect, not the fetch](ven586-terms-gate-fetch-still-403s.md) — FIXED same-day via a `gated` prop on NotificationBell; re-verified clean, ungated accounts unaffected
+- [Shared browser can navigate mid-check](shared-browser-can-navigate-mid-check.md) — URL drifted between two tool calls with no action of mine; assert `location.href` inside every evaluate, don't trust the last navigate's response

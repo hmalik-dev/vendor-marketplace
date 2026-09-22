@@ -4,10 +4,31 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { deltaFrame } from '@/testing/design-frames';
-import { Logo, LOGO_SIZES, WORDMARK_GAPS, WORDMARK_SIZES } from './logo';
+import {
+  Logo,
+  LOGO_SIZES,
+  MARK_OFFSETS,
+  MARK_WIDTHS,
+  STROKE_WIDTHS,
+  WORDMARK_GAPS,
+  WORDMARK_SIZES,
+} from './logo';
 
 /** The six diameters design/design-plan/02-brand-and-logo.md specifies. */
 const EVERY_SIZE = Object.values(LOGO_SIZES);
+/**
+ * Diameters whose stroke-circle geometry the frames measured directly, not by
+ * ratio — a size in any one of the three override tables is excluded, so a
+ * future override that fills only one or two of them still drops out of the
+ * generic ratio test entirely, rather than leaving its other dimensions
+ * unasserted anywhere.
+ */
+const RATIO_SIZES = EVERY_SIZE.filter(
+  (size) =>
+    MARK_OFFSETS[size] === undefined &&
+    MARK_WIDTHS[size] === undefined &&
+    STROKE_WIDTHS[size] === undefined,
+);
 
 describe('Logo', () => {
   afterEach(() => {
@@ -28,7 +49,7 @@ describe('Logo', () => {
     expect(screen.getByTestId('logo-mark').getAttribute('aria-hidden')).toBe('true');
   });
 
-  it.each(EVERY_SIZE)('derives every dimension from size %ipx', (size) => {
+  it.each(RATIO_SIZES)('derives every dimension from size %ipx', (size) => {
     render(<Logo size={size} />);
 
     const mark = screen.getByTestId('logo-mark');
@@ -45,6 +66,35 @@ describe('Logo', () => {
     // Stroke is 8% of the diameter.
     expect(stroke.style.borderWidth).toBe(`${size * 0.08}px`);
     cleanup();
+  });
+
+  /*
+   * VEN-588. The screens document's `12 Sign up` frame and both
+   * `delta-waitlist` lockups (frames 36 and 37) draw the auth panel's stroke
+   * circle at `left:8px`, `border:1.4px`, in a `26x19` box — not the ratios'
+   * 8.55, 1.52 and 27.55. The fill circle is untouched by any of this.
+   */
+  it('measures the auth panel stroke circle from the frames, not the ratios', () => {
+    const size = LOGO_SIZES.authPanel;
+
+    expect(MARK_OFFSETS[size], `D=${size} no longer overrides the offset`).toBe(8);
+    expect(MARK_WIDTHS[size], `D=${size} no longer overrides the mark width`).toBe(26);
+    expect(STROKE_WIDTHS[size], `D=${size} no longer overrides the stroke width`).toBe(1.4);
+
+    render(<Logo size={size} />);
+
+    const mark = screen.getByTestId('logo-mark');
+    const fill = screen.getByTestId('logo-mark-fill');
+    const stroke = screen.getByTestId('logo-mark-stroke');
+
+    expect(mark.style.width).toBe('26px');
+    expect(mark.style.height).toBe('19px');
+    expect(stroke.style.left).toBe('8px');
+    expect(stroke.style.borderWidth).toBe('1.4px');
+    // The fill circle is unaffected — same size as every other diameter, pinned
+    // to the mark's top-left corner by class rather than inline style.
+    expect(fill.style.width).toBe('19px');
+    expect(fill.className).toContain('left-0');
   });
 
   /* VEN-451: `12 Sign up` draws the auth lockup's wordmark at 29px, not 1.60 D = 30.4. */

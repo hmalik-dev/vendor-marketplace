@@ -181,9 +181,21 @@ twice. All three of these are decisions, not drift:
 **The logo mark paints a 19px outline circle where a delta frame draws 17
 (#449, ruled 2026-09-07).** `box-content` stands and **#250 is upheld** — the
 screens document is the primary contract and the delta bundles are supplements
-to it, so `logo.tsx` does not change and the mark does not move on the desktop
-header, the auth panel, the favicon or the app icon. **A `delta-band` parity read
-measuring 19-against-17 is looking at this ruling. Do not re-file it.**
+to it, so `logo.tsx`'s box-sizing does not change and the mark does not move on
+the desktop header, the favicon or the app icon on that account. **A
+`delta-band` parity read measuring 19-against-17 is looking at this ruling. Do
+not re-file it.**
+
+**The auth panel's stroke offset, border-width and mark-width are measured
+values at D=19, not #449's ratios (VEN-588, 2026-09-22).** This does not
+reopen #449 — no box-sizing changed, and the diameters #449 actually ruled on
+(D=15, D=17, D=24, D=16) are untouched. `design/Orla - Screens.dc.html:1424`
+and both `delta-waitlist` lockups (frames 36 and 37) draw the D=19 auth-panel
+mark at `left:8px`, `border:1.4px`, in a `26x19` box — three corroborating
+frames against `OFFSET_RATIO`/`STROKE_RATIO`'s 8.55/1.52/27.55. `logo.tsx`
+holds these three numbers in `MARK_OFFSETS`/`STROKE_WIDTHS`/`MARK_WIDTHS`,
+keyed to D=19 only. A parity pass reading `left:8px` against `1.45 D` on
+`/sign-in` or `/waitlist` is reading this ruling, not drift.
 
 The mechanism, which still governs every bordered box: `Orla - Screens.dc.html`
 ships no `*` reset, so it is content-box, which is what #250 measured;
