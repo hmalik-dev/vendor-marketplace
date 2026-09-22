@@ -73,7 +73,7 @@ export default async function WaitlistPage(): Promise<React.ReactElement> {
       photo={false}
       beforeHeadline={<SettledMark />}
     >
-      <div className="flex justify-center border-t border-stone-300 pt-5.5 text-sm">
+      <div className="mt-7.5 flex justify-center border-t border-stone-300 pt-5.5 text-base">
         <WaitlistHomeLink>Back to {BRAND_NAME}</WaitlistHomeLink>
       </div>
     </AuthScreen>
