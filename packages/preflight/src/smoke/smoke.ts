@@ -90,6 +90,15 @@ async function fetchWithTimeout(
  *    API proves the two halves are talking. The vendor's own page is used
  *    rather than the landing page because the landing page shows a curated
  *    subset, and a vendor dropping out of it is not an outage.
+ *
+ * Step 2 is advisory when the API answers but simply has no published vendor
+ * yet (VEN-598): `staging`/`production` seed no vendor of their own — "real
+ * sign-ups only" — so the very first release onto a freshly-migrated
+ * environment, or any environment reset from empty, cannot have one before a
+ * real vendor publishes. That is not a broken release; the release itself is
+ * what `/ready` already proved. An **HTTP failure** from `/vendors` is still a
+ * hard failure — only a healthy, empty answer is advisory — and step 3 only
+ * runs once step 2 actually found a vendor to check.
  */
 export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -166,7 +175,7 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
     return { ok: false, checks };
   }
 
-  const vendor = await untilDeadline<{ name: string; slug: string }>(async () => {
+  const vendor = await untilDeadline<{ name: string; slug: string } | null>(async () => {
     const response = await fetchWithTimeout(
       `${api}/vendors?pageSize=1`,
       requestTimeoutMs,
@@ -180,14 +189,34 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
     const name = /"businessName"\s*:\s*"([^"]+)"/.exec(response.body)?.[1];
     const slug = /"slug"\s*:\s*"([^"]+)"/.exec(response.body)?.[1];
 
-    return name && slug
-      ? { ok: true, value: { name, slug }, detail: `read "${name}" from the API` }
-      : { ok: false, detail: 'no published vendor to assert on' };
+    if (name && slug) {
+      return { ok: true, value: { name, slug }, detail: `read "${name}" from the API` };
+    }
+
+    // Advisory only for a genuinely empty list — a fresh environment, not an
+    // outage. Anything else that fails to yield a name and slug (a renamed
+    // field, a malformed body) is a real break and must still fail hard, or
+    // this stage would silently stop checking forever.
+    if (/"items"\s*:\s*\[\s*\]/.test(response.body)) {
+      return {
+        ok: true,
+        value: null,
+        detail: 'no published vendor yet — advisory on a fresh environment with no real sign-ups',
+      };
+    }
+
+    return { ok: false, detail: 'no readable vendor name/slug in a non-empty response' };
   });
   checks.push({ name: 'API has real data', ok: vendor.ok, detail: vendor.detail });
 
-  if (!vendor.ok || !vendor.value) {
+  if (!vendor.ok) {
     return { ok: false, checks };
+  }
+
+  if (!vendor.value) {
+    // Both checks pushed so far are `ok` — either would have returned early
+    // above otherwise — so there is nothing left to fail on.
+    return { ok: true, checks };
   }
 
   const { name, slug } = vendor.value;
