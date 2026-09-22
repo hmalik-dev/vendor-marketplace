@@ -112,9 +112,9 @@ describe('SearchShell loading state — frame 17', () => {
    * announced too, which is why it is not conditional on anything.
    */
   function announcer(): HTMLElement | null {
-    // By slot, not by shape: the query bar's two comboboxes each render a
-    // `p[aria-live=polite][aria-atomic].sr-only` of their own, so the shape
-    // selector found one of theirs — empty — and called this one silent.
+    // By slot, not by shape: `City`'s combobox renders its own
+    // `p[aria-live=polite][aria-atomic].sr-only`, so a shape selector can
+    // find that one — empty — and call this one silent.
     return document.querySelector('[data-slot="search-announcer"]');
   }
 
