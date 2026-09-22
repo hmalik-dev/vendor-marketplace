@@ -110,6 +110,26 @@ describe('ComboboxDropdown — the sheet mount', () => {
     expect(screen.getByRole('button', { name: 'Vendor type' })).toBeDefined();
     expect(screen.queryByRole('combobox')).toBeNull();
   });
+
+  /*
+   * VEN-605. A fresh `onOpenChange` closure per render made the sheet's focus
+   * trap rerun on every keystroke, and its cleanup focused the trigger — which
+   * blurred the field and closed the sheet on the second character. Shaped as
+   * `City`, the field that hit it: no open on focus, so typing is what opens.
+   */
+  it('keeps the sheet open and the field focused while the customer types', async () => {
+    const user = userEvent.setup();
+    renderCombobox({ openOnFocus: false, label: 'City', id: 'city', placeholder: 'Anywhere' });
+
+    await user.click(screen.getByRole('button', { name: 'City' }));
+    const field = await screen.findByRole('combobox', { name: 'City' });
+    await user.type(field, 'ph');
+
+    expect(screen.getByRole('combobox', { name: 'City' })).toBe(field);
+    expect(document.activeElement).toBe(field);
+    expect((field as HTMLInputElement).value).toBe('ph');
+    expect(field.getAttribute('aria-expanded')).toBe('true');
+  });
 });
 
 describe('ComboboxDropdown — the anchored mount', () => {
