@@ -7,9 +7,28 @@ const calls: { path: string; method?: string; body?: unknown }[] = [];
 vi.mock('@/lib/use-api', () => ({
   useApi: () => async (path: string, options: { method?: string; body?: unknown }) => {
     calls.push({ path, method: options.method, body: options.body });
+
+    // The real API returns the confirmed row from a settings write, and just
+    // `{ vendorId, payoutHold }` from a hold write — never the settings prop.
+    if (path === '/admin/settings' && options.method === 'PUT') {
+      return { ...SETTINGS, ...(options.body as object) };
+    }
+    if (path.endsWith('/payout-hold')) {
+      const [, , , vendorId] = path.split('/');
+      return { vendorId, payoutHold: (options.body as { payoutHold: boolean }).payoutHold };
+    }
+    if (path.startsWith('/admin/vendors?')) {
+      return { items: [SEARCH_RESULT], page: 1, pageSize: 5, total: 1 };
+    }
     return {};
   },
 }));
+/*
+ * `refresh` is a no-op here on purpose: it never re-renders the component
+ * with a new `settings` prop, which is exactly what CI saw a dropped
+ * transition do (VEN-576). Every assertion below has to hold with a refresh
+ * that never lands.
+ */
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const { PlatformSettingsPanel } = await import('./platform-settings-panel');
@@ -25,6 +44,12 @@ const SETTINGS: WireAdminPlatformSettings = {
   heldVendors: [
     { id: '11111111-1111-4111-8111-111111111111', businessName: 'Sunlit Studio', slug: 'sunlit' },
   ],
+};
+
+const SEARCH_RESULT = {
+  id: '22222222-2222-4222-8222-222222222222',
+  businessName: 'Garden Co',
+  slug: 'garden-co',
 };
 
 afterEach(() => {
@@ -99,5 +124,55 @@ describe('PlatformSettingsPanel', () => {
         body: { payoutHold: false },
       },
     ]);
+  });
+
+  /*
+   * VEN-576. `refresh` above is a no-op, standing in for a transition CI saw
+   * commit server-side and never land in the browser. A test that only
+   * checked `calls`, as every test above does, cannot tell that regression
+   * from a fix — it has to read the switch itself.
+   */
+  it('flips the switch from the PUT response, not from a refresh that never lands', async () => {
+    render(<PlatformSettingsPanel settings={SETTINGS} />);
+
+    const toggle = screen.getByRole('switch', { name: 'Pause checkout' });
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('releases a held vendor from the PUT response, not from a refresh that never lands', async () => {
+    render(<PlatformSettingsPanel settings={SETTINGS} />);
+
+    expect(screen.getByText('Sunlit Studio')).toBeDefined();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Release hold' }));
+    });
+
+    expect(screen.queryByText('Sunlit Studio')).toBeNull();
+    expect(screen.getByText("No vendor's payouts are held.")).toBeDefined();
+  });
+
+  it('holds a vendor found by search from the PUT response, not from a refresh that never lands', async () => {
+    render(<PlatformSettingsPanel settings={SETTINGS} />);
+
+    fireEvent.change(screen.getByLabelText('Find a vendor to hold'), {
+      target: { value: 'garden' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Find vendor' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Hold payouts' }));
+    });
+
+    expect(screen.getByText('Held')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Hold payouts' })).toBeNull();
+    // Once in the held-vendors list above, and once in the search row it came from.
+    expect(screen.getAllByText('Garden Co')).toHaveLength(2);
   });
 });
