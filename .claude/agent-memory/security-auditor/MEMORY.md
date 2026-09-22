@@ -122,6 +122,7 @@
 - [launch:check bearer hosts are fixed](launch-check-bearer-hosts-are-fixed.md) — re-open only if `bearer()` meets an env-built URL
 - [Admin booking detail + requests funnel](admin-booking-detail-and-requests-reads.md) — PASS; reopen if the funnel ages rows or lists contact
 - [Admin vendor detail is a gated aggregate](admin-vendor-detail-is-a-gated-aggregate.md) — widening notifications to `body` bypasses the case-row read grant
+- [The staging probe spec's guard is the URL, not DEPLOY_ENV](staging-probe-spec-guard.md) — VEN-562: separate config and a required `STAGING_WEB_URL`; runs leave storefronts public
 - [Admin category writes](admin-category-writes.md) — PASS; the toggle can double-write its audit row under a concurrent repeat
 - [RLS is enabled, never forced](rls-is-enabled-not-forced-owner-bypasses.md) — VEN-504: the owner bypasses, so a future non-owner role reads zero rows silently; the guard is `relkind='r'` in `public`
 

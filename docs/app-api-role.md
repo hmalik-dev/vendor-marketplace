@@ -27,6 +27,24 @@ Row-level security binds only a role that neither owns the tables nor carries `B
    select rolbypassrls from pg_roles where rolname = 'app_api';
    ```
 
-6. Sign in as a customer and a vendor and open `/messages`; both lists and threads must load.
+6. Prove `/messages` works under the role, unattended, with the committed spec (VEN-562) rather than by hand:
 
-Rollback: set `DATABASE_URL` back to the owner's pooled string and redeploy. Nothing in the schema needs undoing.
+   ```
+   STAGING_WEB_URL=https://<staging-web-host> DEPLOY_ENV=local \
+     pnpm --filter @vendor-marketplace/web test:e2e:staging
+   ```
+
+   It signs up two fresh customer/vendor pairs on staging, publishes each
+   vendor's storefront, sends and replies to a message, and asserts both
+   inboxes load, a reply is delivered, the two pairs' conversations stay
+   isolated, and a signed-out visitor is sent to sign-in. The accounts it
+   creates (`orla-stg-…@<mail server>.mailosaur.net`) are left in place —
+   nobody edits the database by hand. `apps/web/e2e/staging-messages-rls.staging.spec.ts`
+   refuses to run anywhere but a local shell pointed at a host that names
+   staging, and never runs in the lane or CI suites. Every assertion message
+   on failure names the page and carries the rollback line below; non-2xx
+   responses each page received are attached to the run's report.
+
+Rollback, whether the console step above or the spec surfaces the failure: set
+`DATABASE_URL` back to the owner's pooled string and redeploy. Nothing in the
+schema needs undoing.

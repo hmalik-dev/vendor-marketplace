@@ -17,6 +17,13 @@ import { resolveE2EBaseUrl } from './e2e/base-url.js';
 const baseURL = resolveE2EBaseUrl();
 
 /**
+ * A project's own `testIgnore` replaces the top-level one rather than
+ * merging with it, so every project below that sets its own `testIgnore`
+ * spreads this in too — see the comment on the top-level `testIgnore`.
+ */
+const STAGING_SPEC_IGNORE = /.*\.staging\.spec\.ts$/;
+
+/**
  * The reference viewport is the design contract's: `design/Orla - Screens.dc.html`
  * draws every frame at 1440x900 and that is the parity goal, so it is where the
  * whole suite runs. The narrower widths run only the specs that assert
@@ -26,6 +33,20 @@ const baseURL = resolveE2EBaseUrl();
 export default defineConfig({
   testDir: './e2e',
   testMatch: /.*\.spec\.ts$/,
+  /*
+   * `staging-messages-rls.staging.spec.ts` (VEN-562) signs up real accounts
+   * against a live deployment and must never run here, in the lane or in CI —
+   * `playwright.staging.config.ts` is its own entry point, matched by the same
+   * `.staging.spec.ts` suffix this excludes.
+   *
+   * This alone is not enough: a project's own `testIgnore` **replaces** this
+   * top-level one rather than adding to it, so `STAGING_SPEC_IGNORE` below is
+   * also spread into every project that sets its own `testIgnore` — confirmed
+   * by driving `playwright test --list` under the `desktop-1440` project
+   * before that project also carried the pattern, which loaded (and ran) this
+   * spec's module-level `assertStagingEnvironment()`.
+   */
+  testIgnore: STAGING_SPEC_IGNORE,
   // A journey drives several pages; the default 30s is tight once a cold Next
   // route compiles on first hit.
   timeout: 90_000,
@@ -91,7 +112,7 @@ export default defineConfig({
     {
       name: 'desktop-1440',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
-      testIgnore: /.*\.responsive\.spec\.ts$/,
+      testIgnore: [/.*\.responsive\.spec\.ts$/, STAGING_SPEC_IGNORE],
     },
     {
       name: 'responsive-1024',
