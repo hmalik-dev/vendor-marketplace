@@ -25,16 +25,29 @@ runs off it, which is why mobile switches rather than shrinks.
 
 ## Bodies
 
-1. **Single-select** (event type, and any short enumerable list) — commits and
-   closes on click. **No search field _inside the panel_**, and that is not
+1. **Single-select** (vendor type, event type, and any short enumerable list) —
+   commits and closes on click. **No search field _inside the panel_**, and that is not
    negotiable: a filter box on a list this short is friction rather than help,
    and because such a field is autofocused its focus ring would appear every
    single time the panel opened — permanent decoration, not feedback. **Typing
-   narrows the list in place.**
-2. **Combobox** (vendor type) and **typeahead** (city) — **the field itself is
-   the text input**, and the panel hangs off it. Ruled by the account holder on
-   2026-08-31 and recorded as **D28**; `11-search.md` has specified both
-   controls this way since it was written.
+   narrows the list in place** where the trigger keeps a native/browser-level
+   typeahead; **vendor type has no text input of any kind** — a plain click/tap
+   list, full taxonomy visible the moment it opens.
+
+   **Vendor type moved here from body 2 on 2026-09-22, recorded as D43,
+   superseding D28 for this control only** (city is unaffected — see body 2).
+   The typing-filter combobox was summoning the mobile OS keyboard just to open
+   eleven items, covering the very list it was meant to help scan; a plain
+   select needs no such workaround because a non-text control never requests a
+   keyboard. **Vendor type still opens on the full taxonomy**, because eleven
+   categories are worth seeing and teaching — that part of the original D28
+   rationale survives the move.
+
+2. **Typeahead** (city) — **the field itself is the text input**, and the panel
+   hangs off it. Ruled by the account holder on 2026-08-31 and recorded as
+   **D28**; `11-search.md` has specified city this way since it was written,
+   and originally specified vendor type the same way until D43 moved it to
+   body 1 above.
 
    This does **not** contradict body 1, and the distinction is the whole of it:
    body 1 forbids a **second, autofocused** field inside the panel, and there is
@@ -43,8 +56,6 @@ runs off it, which is why mobile switches rather than shrinks.
    body 1's own — see Behaviour below, which has said "typing narrows the list
    in place" since the 2026-08-30 import.
 
-   The two differ in one behaviour and it is deliberate. **Vendor type opens on
-   the full taxonomy**, because eleven categories are worth seeing and teaching.
    **City opens nothing until something is typed** — "cities can vary
    drastically", so a scroll list is not the affordance. City caps at eight
    suggestions.
