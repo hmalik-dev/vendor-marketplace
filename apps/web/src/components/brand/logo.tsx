@@ -19,6 +19,27 @@ const OFFSET_RATIO = 0.45;
 /** Stroke on the right-hand circle, as a fraction of the diameter. */
 const STROKE_RATIO = 0.08;
 /**
+ * The stroke circle's left offset, the mark's own container width, and the
+ * stroke's border-width, in px, by diameter — the same shape as
+ * `WORDMARK_GAPS`: the frames draw whole pixels, not a ratio of D, and here
+ * the container is its own drawn number rather than offset + size (frame 12
+ * / 37 both draw a 26px box holding an 8px-offset, 19px circle — 27, not 26).
+ *
+ * VEN-588: at D=19 (`authPanel`), `design/Orla - Screens.dc.html:1424` and
+ * `design/delta-waitlist/Orla-Vendor-Waitlist.html:224,338` all draw
+ * `left:8px`, `border:1.4px` and a `26x19` box, against the ratios' 8.55,
+ * 1.52 and 27.55 — three corroborating frames at one diameter (D=19).
+ */
+export const MARK_OFFSETS: Partial<Record<number, number>> = {
+  19: 8,
+};
+export const MARK_WIDTHS: Partial<Record<number, number>> = {
+  19: 26,
+};
+export const STROKE_WIDTHS: Partial<Record<number, number>> = {
+  19: 1.4,
+};
+/**
  * Gap between the mark and the wordmark, as a fraction of the diameter — for
  * the diameters no frame draws.
  *
@@ -147,7 +168,7 @@ export function Logo({
   className,
 }: LogoProps): React.ReactElement {
   const tokens = TONE_CLASSES[tone];
-  const markWidth = size * (1 + OFFSET_RATIO);
+  const markWidth = MARK_WIDTHS[size] ?? size * (1 + OFFSET_RATIO);
   const showWordmark = variant === 'full';
 
   return (
@@ -184,7 +205,9 @@ export function Logo({
           The stroke therefore overflows the mark's declared box by one used
           pixel per edge, exactly as it does in the frame — whose 22px box holds
           ink out to 23px. The box stays 1.45 D so the wordmark gap keeps
-          measuring from the same place.
+          measuring from the same place — except at D=19 (VEN-588), where
+          `MARK_WIDTHS` pins the box to the 26px three frames draw instead of
+          the ratio's 27.55, and the gap measures from there.
 
           **Ruled 2026-09-07 (#449): `box-content` stands and #250 is upheld.**
           The screens document has no `*` reset — its `box-sizing` hits are
@@ -205,10 +228,10 @@ export function Logo({
           data-testid="logo-mark-stroke"
           className={cn('absolute top-0 box-content rounded-full border', tokens.stroke)}
           style={{
-            left: `${size * OFFSET_RATIO}px`,
+            left: `${MARK_OFFSETS[size] ?? size * OFFSET_RATIO}px`,
             width: `${size}px`,
             height: `${size}px`,
-            borderWidth: `${size * STROKE_RATIO}px`,
+            borderWidth: `${STROKE_WIDTHS[size] ?? size * STROKE_RATIO}px`,
           }}
         />
       </span>
