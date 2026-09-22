@@ -561,6 +561,13 @@
       "when": 1790060878095,
       "tag": "0079_curly_captain_universe",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1790073337581,
+      "tag": "0080_cool_kitty_pryde",
+      "breakpoints": true
     }
   ]
 }

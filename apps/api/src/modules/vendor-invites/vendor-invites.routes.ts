@@ -51,8 +51,22 @@ const APPLICATION_RATE_LIMIT = { max: 6, timeWindow: '1 hour' } as const;
 const inviteParamsSchema = z.object({ inviteId: z.uuid() });
 const applicationParamsSchema = z.object({ applicationId: z.uuid() });
 
+function mailDeps(app: FastifyInstance, webOrigin: string): VendorInviteMailDeps {
+  return {
+    db: app.db,
+    email: app.email,
+    background: app.background,
+    log: app.log,
+    webOrigin,
+    now: app.clock,
+  };
+}
+
 /** The vendor gate's public half (VEN-406): whether it is on, and the waitlist form. */
-export const vendorApplicationRoutes: FastifyPluginAsyncZod = async (app) => {
+export const vendorApplicationRoutes: FastifyPluginAsyncZod<VendorInviteRoutesOptions> = async (
+  app,
+  options,
+) => {
   app.get(
     '/vendor-applications/gate',
     { schema: { response: { 200: vendorSignUpGateSchema } } },
@@ -106,21 +120,10 @@ export const vendorApplicationRoutes: FastifyPluginAsyncZod = async (app) => {
       const identity = authSubject(request.authIdentity);
       const { email } = await identity.loadSnapshot();
 
-      return submitVendorApplication(app.db, request.body, email);
+      return submitVendorApplication(mailDeps(app, options.webOrigin), request.body, email);
     },
   );
 };
-
-function mailDeps(app: FastifyInstance, webOrigin: string): VendorInviteMailDeps {
-  return {
-    db: app.db,
-    email: app.email,
-    background: app.background,
-    log: app.log,
-    webOrigin,
-    now: app.clock,
-  };
-}
 
 /**
  * The vendor gate's console half (VEN-406): the waitlist, and the invites.

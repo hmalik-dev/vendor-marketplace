@@ -177,11 +177,11 @@ export async function lockInviteById(
   return rows[0] ?? null;
 }
 
-export interface RetryableInviteQuery {
+export interface RetryableEmailQuery {
   now: Date;
   maxAttempts: number;
   windowMs: number;
-  /** Invites already tried this tick, so a failed retry is not retried again in the same sweep. */
+  /** Rows already tried this tick, so a failed retry is not retried again in the same sweep. */
   exclude: readonly string[];
 }
 
@@ -193,7 +193,7 @@ export interface RetryableInviteQuery {
  */
 export async function lockRetryableInvite(
   tx: AppDatabase,
-  query: RetryableInviteQuery,
+  query: RetryableEmailQuery,
 ): Promise<VendorInviteRow | null> {
   const rows = await tx
     .select()
@@ -238,13 +238,17 @@ export async function recordInviteEmailAttempt(
  * caller's own session email: then it replaces details still waiting on a
  * decision, so a stranger who filed first under that address cannot speak for
  * its owner.
+ *
+ * Returns the row's id, or `undefined` when nothing was written (the
+ * unverified path's conflict, or a verified resubmit whose `setWhere` no
+ * longer matches).
  */
 export async function upsertApplication(
   db: AppDatabase,
   input: VendorApplicationInput,
   status: VendorApplicationStatus,
   verified: boolean,
-): Promise<void> {
+): Promise<string | undefined> {
   const insert = db.insert(vendorApplications).values({
     email: inviteKey(input.email),
     businessName: input.businessName,
@@ -256,30 +260,134 @@ export async function upsertApplication(
   });
 
   if (!verified) {
-    await insert.onConflictDoNothing({ target: vendorApplications.email });
-    return;
+    const rows = await insert
+      .onConflictDoNothing({ target: vendorApplications.email })
+      .returning({ id: vendorApplications.id });
+    return rows[0]?.id;
   }
 
-  await insert.onConflictDoUpdate({
-    target: vendorApplications.email,
-    set: {
-      businessName: input.businessName,
-      category: input.category,
-      city: input.city,
-      state: input.state ?? null,
-      message: input.message ?? null,
-      /*
-       * The row usually pre-exists now (seeded on refusal or arrival, VEN-512),
-       * so this is the only write that can ever turn a seeded `new` row
-       * `invited` for an address invited in between. Safe to set
-       * unconditionally: `setWhere` already restricts the update to a row
-       * still `new`, so this can only ever leave it `new` or promote it.
-       */
-      status,
-      updatedAt: sql`now()`,
-    },
-    setWhere: eq(vendorApplications.status, 'new'),
-  });
+  const rows = await insert
+    .onConflictDoUpdate({
+      target: vendorApplications.email,
+      set: {
+        businessName: input.businessName,
+        category: input.category,
+        city: input.city,
+        state: input.state ?? null,
+        message: input.message ?? null,
+        /*
+         * The row usually pre-exists now (seeded on refusal or arrival, VEN-512),
+         * so this is the only write that can ever turn a seeded `new` row
+         * `invited` for an address invited in between. Safe to set
+         * unconditionally: `setWhere` already restricts the update to a row
+         * still `new`, so this can only ever leave it `new` or promote it.
+         */
+        status,
+        updatedAt: sql`now()`,
+      },
+      setWhere: eq(vendorApplications.status, 'new'),
+    })
+    .returning({ id: vendorApplications.id });
+
+  return rows[0]?.id;
+}
+
+/**
+ * Claims the one confirmation-email attempt a first submit is owed: an atomic
+ * compare-and-swap that bumps `confirmation_email_attempts` from 0 to 1 and
+ * stamps `confirmation_email_last_attempt_at`, but only for a caller that gets
+ * there first. Race-free without a separate row lock — Postgres serialises
+ * two concurrent `UPDATE ... WHERE confirmation_email_attempts = 0` on the
+ * same row, so at most one returns a row — the same shape
+ * `insertInviteIfAbsent`'s unique index gives the invite email's own claim.
+ * Returns whether this call won it.
+ */
+export async function claimApplicationConfirmationAttempt(
+  tx: AppDatabase,
+  applicationId: string,
+  at: Date,
+): Promise<boolean> {
+  const rows = await tx
+    .update(vendorApplications)
+    .set({ confirmationEmailAttempts: 1, confirmationEmailLastAttemptAt: at })
+    .where(
+      and(
+        eq(vendorApplications.id, applicationId),
+        eq(vendorApplications.confirmationEmailAttempts, 0),
+      ),
+    )
+    .returning({ id: vendorApplications.id });
+
+  return rows.length > 0;
+}
+
+/**
+ * Records the outcome of the attempt {@link claimApplicationConfirmationAttempt}
+ * already claimed — sent-or-failed only, no further increment, since the claim
+ * itself is the one attempt a first submit counts.
+ */
+export async function recordClaimedApplicationEmailOutcome(
+  tx: AppDatabase,
+  applicationId: string,
+  outcome: { at: Date; failureReason: string | null },
+): Promise<void> {
+  await tx
+    .update(vendorApplications)
+    .set({
+      confirmationEmailLastAttemptAt: outcome.at,
+      confirmationEmailSentAt: outcome.failureReason === null ? outcome.at : null,
+      confirmationEmailFailureReason: truncateFailureReason(outcome.failureReason),
+    })
+    .where(eq(vendorApplications.id, applicationId));
+}
+
+/** Records one retried confirmation-email attempt on the application the caller holds locked. */
+export async function recordApplicationEmailAttempt(
+  tx: AppDatabase,
+  applicationId: string,
+  attempt: { at: Date; failureReason: string | null },
+): Promise<void> {
+  await tx
+    .update(vendorApplications)
+    .set({
+      confirmationEmailAttempts: sql`${vendorApplications.confirmationEmailAttempts} + 1`,
+      confirmationEmailLastAttemptAt: attempt.at,
+      confirmationEmailSentAt: attempt.failureReason === null ? attempt.at : null,
+      confirmationEmailFailureReason: truncateFailureReason(attempt.failureReason),
+    })
+    .where(eq(vendorApplications.id, applicationId));
+}
+
+/**
+ * The next application whose confirmation email failed and is still inside the
+ * retry budget, locked with `SKIP LOCKED` — `lockRetryableInvite`'s own shape.
+ */
+export async function lockRetryableApplication(
+  tx: AppDatabase,
+  query: RetryableEmailQuery,
+): Promise<VendorApplicationRow | null> {
+  const rows = await tx
+    .select()
+    .from(vendorApplications)
+    .where(
+      and(
+        isNull(vendorApplications.confirmationEmailSentAt),
+        gt(vendorApplications.confirmationEmailAttempts, 0),
+        lt(vendorApplications.confirmationEmailAttempts, query.maxAttempts),
+        gt(
+          vendorApplications.confirmationEmailLastAttemptAt,
+          new Date(query.now.getTime() - query.windowMs),
+        ),
+        query.exclude.length > 0
+          ? notInArray(vendorApplications.id, [...query.exclude])
+          : undefined,
+      ),
+    )
+    .orderBy(vendorApplications.confirmationEmailLastAttemptAt)
+    .for('update', { skipLocked: true })
+    .limit(1);
+
+  return rows[0] ?? null;
 }
 
 /**

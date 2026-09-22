@@ -59,6 +59,21 @@ no id-addressable application read or write exists; the `category` UUID check
 precedes the write and the value is `uuidSchema` so it cannot 500 the cast;
 `decideVendorApplication`'s completeness guard composes with admin-only.
 
+**VEN-516's two emails audited clean.** Both recipients are un-influenceable by
+a body: the invite sends to `invite.email` (admin-chosen), the waitlist
+confirmation to `input.email` = the session address, and the confirmation's
+facts are the caller's own just-submitted values snapshotted before
+`background.run`. `hasApplication` in `renderVendorInviteEmail` is read at send
+time and only ever reaches the address it describes, so it enumerates nothing.
+Duplicate delivery from a resubmit racing the attempt stamp rests on the
+provider: `idempotency-key: vendor-application-confirmation-<applicationId>`,
+which is why that key must stay the row id and never the attempt. The submit
+path now takes `lockApplicationByEmail` **FOR UPDATE**, and the confirmation
+sweep sends _inside_ its own lock — bounded by `EMAIL_SEND_TIMEOUT_MS` 10s, and
+no deadlock only because the cross-table reads (`findInviteByEmail`,
+`findApplicationByEmail`) are non-locking. Give either of them a `.for('update')`
+and submit/sweep become a cycle.
+
 **`preParsing`, not `onRequest`, is settled for any rate-limited route**
 (`lib/rate-limit.ts`): @fastify/rate-limit **appends** its route hook after any
 route-level `onRequest`, so a guard there refuses a signed-out caller uncounted.

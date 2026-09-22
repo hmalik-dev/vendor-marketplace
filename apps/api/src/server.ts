@@ -548,7 +548,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(adminCategoryRoutes);
   await app.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });
-  await app.register(vendorApplicationRoutes);
+  await app.register(vendorApplicationRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(categoryRoutes);
   await app.register(tagRoutes);
   await app.register(placeRoutes);

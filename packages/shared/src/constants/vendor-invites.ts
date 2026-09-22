@@ -21,8 +21,11 @@ export const VENDOR_DETAILS_PATH = '/sign-up/vendor-details';
 /** The waitlist's terminal screen: nothing to do until the operator invites them. */
 export const WAITLIST_PATH = '/waitlist';
 
-/** Where an invite email sends the invitee: sign-up with the vendor card pre-selected. */
+/** Where an invite email sends an invitee with no application yet: sign-up, vendor card pre-selected. */
 export const VENDOR_SIGN_UP_PATH = '/sign-up?role=vendor';
+
+/** Where an invite email sends an invitee who already has a login (VEN-516). */
+export const VENDOR_SIGN_IN_PATH = '/sign-in';
 
 /**
  * Storefront slugs a vendor can never be given, because a static route under
