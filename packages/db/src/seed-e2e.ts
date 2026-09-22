@@ -10,6 +10,7 @@ import {
   type LegalAcceptanceDocument,
   EMAIL_RETRY_MAX_ATTEMPTS,
   parseDurationHours,
+  PLATFORM_SETTINGS_ID,
   SUPPORT_REFERENCE_PREFIX,
   toDateString,
 } from '@vendor-marketplace/shared';
@@ -23,6 +24,7 @@ import {
   bookings,
   categories,
   legalAcceptances,
+  platformSettings,
   reviews,
   servicePackages,
   supportCases,
@@ -183,6 +185,23 @@ export interface E2eSeedInput {
    * by the same command every other ticket already runs.
    */
   storefront?: 'published' | 'draft';
+  /**
+   * Whether the vendor invite gate (VEN-406) is on in the seeded lane.
+   *
+   * Undefined by default and left untouched: `platform_settings` is a
+   * singleton every operator switch shares (VEN-584), so the fixture must
+   * only ever narrow the one column it owns an opinion about, never stamp the
+   * row over another switch a lane already set. `true`/`false` upsert the
+   * row and set `vendor_invite_only` explicitly, following the same
+   * insert-then-update shape `lockPlatformSettings`/`updatePlatformSettingsRow`
+   * use in `apps/api` — `packages/db` cannot import them without inverting
+   * the dependency direction, so this is the same pattern, not that path.
+   *
+   * The fixture vendor is pre-invited regardless (see the `vendorInvites`
+   * write below), so turning this on never locks the fixture account out of
+   * its own sign-in — only a newcomer identity meets the gate.
+   */
+  vendorInviteOnly?: boolean;
   /** "Today", so the seeded event date is deterministic under test. */
   now?: Date;
 }
@@ -233,6 +252,10 @@ export async function seedE2eFixtures<
   const draft = (input.storefront ?? 'published') === 'draft';
 
   return db.transaction(async (tx) => {
+    if (input.vendorInviteOnly !== undefined) {
+      await ensureVendorInviteOnly(tx, input.vendorInviteOnly);
+    }
+
     const vendorUserId = await upsertAccount(tx, input.vendor, 'vendor');
     const customerUserId = await upsertAccount(tx, input.customer, 'customer');
     /*
@@ -415,6 +438,29 @@ async function ensureConsoleListRows(
       })
       .onConflictDoNothing({ target: adminActions.id });
   }
+}
+
+/**
+ * Sets the vendor invite gate (VEN-406) on the `platform_settings` singleton,
+ * without touching any other switch on the row.
+ *
+ * `onConflictDoNothing` first, exactly as `lockPlatformSettings` does, so a
+ * fresh lane's missing row is created with every other switch at its default
+ * before the single column this fixture owns an opinion about is set.
+ */
+async function ensureVendorInviteOnly(tx: Tx, vendorInviteOnly: boolean): Promise<void> {
+  await tx.insert(platformSettings).values({ id: PLATFORM_SETTINGS_ID }).onConflictDoNothing();
+
+  await tx
+    .update(platformSettings)
+    .set({
+      vendorInviteOnly,
+      // Nobody operated `/admin/settings` here — a seed did, and `updated_by`
+      // must not read as though whichever admin last touched the row did.
+      updatedBy: null,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(platformSettings.id, PLATFORM_SETTINGS_ID));
 }
 
 /**
