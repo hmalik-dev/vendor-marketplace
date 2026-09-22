@@ -37,3 +37,19 @@ nothing in the segment above it will say so.
 **How to apply:** on any diff adding a `route.ts` under a gated segment, read its
 first ten lines for its own auth check before anything else. Do not accept "the
 layout handles it".
+
+**The `route-landing.spec.ts` sweep inherits the same blind spot, and its default
+cell is permissive.** `expectationFor`'s fallthrough returns
+`{renders: true, refusal}` — _both_ outcomes pass, so a page that renders to a
+persona it should refuse fails nothing. The only strictness lever is
+`isSessionGated`, a regex for `requireRole|requireCurrentUser` in the render
+chain. A page that hand-rolls its gate with `getServerSession()` +
+`readIdentityForSupport()` — `/waitlist`, `/vendors/apply`,
+`/sign-up/vendor-details` (VEN-512) — reads as ungated and is swept permissively
+until someone hard-codes its cell (VEN-589 did, `renders: false` + an exact
+target, which is a strengthening). **Widening that regex to the hand-rolled
+shape, not adding more per-path literals, is the real fix.** The pathname-only
+match on `/sign-up` hides nothing: `readRole` allow-lists `vendor|customer` and
+falls back to `null`, so a lost `?role=vendor` degrades to the _less_ privileged
+default, and the API re-narrows before any `users` row — see
+[[signup-role-is-confirmed-not-narrowed]].

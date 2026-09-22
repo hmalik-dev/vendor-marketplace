@@ -4,6 +4,13 @@ import { dirname, join } from 'node:path';
 import type { BrowserContext, ConsoleMessage, Page, Response } from '@playwright/test';
 
 import {
+  VENDOR_APPLY_PATH,
+  VENDOR_DETAILS_PATH,
+  VENDOR_SIGN_UP_PATH,
+  WAITLIST_PATH,
+} from '@vendor-marketplace/shared';
+
+import {
   DASHBOARD_LABEL_BY_ROLE,
   DASHBOARD_PATH_BY_ROLE,
   POST_SIGN_IN_PATH_BY_ROLE,
@@ -63,6 +70,17 @@ type SignedInRole = keyof typeof DASHBOARD_PATH_BY_ROLE;
 
 type Persona =
   { name: 'signed-out' } | { name: SignedInRole; role: SignedInRole } | { name: 'no-row' };
+
+/** `VENDOR_SIGN_UP_PATH` carries `?role=vendor`; the refusal match below is pathname-only. */
+const VENDOR_SIGN_UP_PATHNAME = new URL(VENDOR_SIGN_UP_PATH, 'http://x').pathname;
+
+/**
+ * VEN-512's own routing, not the generic account-gate rule: a signed-out visit
+ * redirects to the vendor sign-up start, and a verified no-row session with an
+ * incomplete application redirects to the details screen — never through
+ * `/sign-in` or `/accept-terms`, which these three screens have no use for.
+ */
+const VENDOR_GATE_PATHS = new Set([VENDOR_DETAILS_PATH, VENDOR_APPLY_PATH, WAITLIST_PATH]);
 
 /** Routes that must stay open to an account still owed the Terms — `terms-gate-paths.ts`. */
 const GATE_EXEMPT = new Set([
@@ -181,6 +199,9 @@ function expectationFor(
   if (persona.name === 'signed-out') {
     if (path === '/after-sign-in')
       return { renders: false, refusal: { to: '/sign-in', returnTo: null } };
+    if (VENDOR_GATE_PATHS.has(path)) {
+      return { renders: false, refusal: { to: VENDOR_SIGN_UP_PATHNAME, returnTo: null } };
+    }
     const toSignIn = { to: '/sign-in', returnTo: path };
     return isRoleGated(target) || isSessionGated(target) || path === '/dashboard'
       ? { renders: false, refusal: toSignIn }
@@ -189,6 +210,9 @@ function expectationFor(
 
   if (persona.name === 'no-row') {
     if (GATE_EXEMPT.has(path)) return { renders: true, refusal: null };
+    if (path === VENDOR_APPLY_PATH || path === WAITLIST_PATH) {
+      return { renders: false, refusal: { to: VENDOR_DETAILS_PATH, returnTo: null } };
+    }
     /*
      * Every auth screen forwards a live session through `redirectIfSignedIn`, so
      * it is read out of the source rather than listed: `/forgot-password` and
