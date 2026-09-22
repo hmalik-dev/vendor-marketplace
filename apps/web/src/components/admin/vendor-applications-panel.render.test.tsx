@@ -173,6 +173,29 @@ describe('VendorApplicationsPanel', () => {
     ]);
   });
 
+  it('renders the Invites table with no duplicate-key warning (VEN-583)', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      render(
+        <VendorApplicationsPanel
+          applications={[]}
+          invites={INVITES}
+          invitesPager={INVITES_PAGER}
+        />,
+      );
+
+      // With rows present: the collision is per-cell, so no rows means no warning either way.
+      expect(screen.getByText('old@example.com')).toBeDefined();
+
+      for (const call of consoleError.mock.calls) {
+        expect(call.join(' ')).not.toContain('same key');
+      }
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('marks a failed invite email and resends only that invite', async () => {
     render(
       <VendorApplicationsPanel applications={[]} invites={INVITES} invitesPager={INVITES_PAGER} />,

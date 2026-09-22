@@ -462,7 +462,7 @@ export function VendorApplicationsPanel({
                 ),
             },
             {
-              key: 'email',
+              key: 'emailStatus',
               width: '.9fr',
               header: 'Email',
               cell: (invite) =>
