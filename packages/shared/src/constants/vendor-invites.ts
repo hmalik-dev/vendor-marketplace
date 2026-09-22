@@ -4,8 +4,22 @@
  * Customers are never gated.
  */
 
-/** Where an un-invited vendor lands, and where `/for-vendors` points while the gate is on. */
+/**
+ * The retired free-text application route. Kept only as a redirect for old
+ * links (VEN-512): the gate now sends an un-invited vendor straight to
+ * {@link VENDOR_DETAILS_PATH}.
+ */
 export const VENDOR_APPLY_PATH = '/vendors/apply';
+
+/**
+ * Where a verified vendor session with no invite lands, gate on: the details
+ * the operator needs to invite them (VEN-512). Their waitlist row is written
+ * the moment they arrive.
+ */
+export const VENDOR_DETAILS_PATH = '/sign-up/vendor-details';
+
+/** The waitlist's terminal screen: nothing to do until the operator invites them. */
+export const WAITLIST_PATH = '/waitlist';
 
 /** Where an invite email sends the invitee: sign-up with the vendor card pre-selected. */
 export const VENDOR_SIGN_UP_PATH = '/sign-up?role=vendor';

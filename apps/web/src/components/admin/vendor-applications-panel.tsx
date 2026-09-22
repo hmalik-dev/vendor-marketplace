@@ -162,7 +162,9 @@ export function VendorApplicationsPanel({
               header: 'Business',
               cell: (application) => (
                 <span className="flex flex-col">
-                  <span className="font-semibold text-stone-900">{application.businessName}</span>
+                  <span className="font-semibold text-stone-900">
+                    {application.businessName ?? '—'}
+                  </span>
                   <span className="text-stone-600">{application.email}</span>
                 </span>
               ),
@@ -171,7 +173,11 @@ export function VendorApplicationsPanel({
               key: 'category',
               width: '1fr',
               header: 'Category · City',
-              cell: (application) => `${application.category} · ${application.city}`,
+              cell: (application) =>
+                application.category || application.city
+                  ? // `categoryName` is null for a pre-VEN-512 free-text row; `category` itself is already readable there.
+                    `${application.categoryName ?? application.category ?? '—'} · ${application.city ?? '—'}`
+                  : '—',
             },
             {
               key: 'message',
@@ -188,12 +194,16 @@ export function VendorApplicationsPanel({
             },
             {
               key: 'status',
-              width: '.7fr',
+              width: '.9fr',
               header: 'Status',
               cell: (application) => (
-                <StatusPill tone={STATUS[application.status].tone}>
-                  {STATUS[application.status].label}
-                </StatusPill>
+                <span className="flex flex-wrap gap-1.5">
+                  <StatusPill tone={STATUS[application.status].tone}>
+                    {STATUS[application.status].label}
+                  </StatusPill>
+                  {/* The row exists before the person has given their details; Invite is blocked, not the whole row. */}
+                  {application.complete ? null : <StatusPill tone="pending">Incomplete</StatusPill>}
+                </span>
               ),
             },
             {
@@ -208,8 +218,13 @@ export function VendorApplicationsPanel({
                       type="button"
                       size="sm"
                       variant="secondary"
-                      disabled={pending}
-                      aria-label={`Invite ${application.businessName}`}
+                      disabled={pending || !application.complete}
+                      title={
+                        application.complete
+                          ? undefined
+                          : 'This applicant has not given a business name, category and city yet.'
+                      }
+                      aria-label={`Invite ${application.businessName ?? application.email}`}
                       onClick={() => void decide(application, 'invite')}
                     >
                       Invite
@@ -220,7 +235,7 @@ export function VendorApplicationsPanel({
                         size="sm"
                         variant="secondary"
                         disabled={pending}
-                        aria-label={`Decline ${application.businessName}`}
+                        aria-label={`Decline ${application.businessName ?? application.email}`}
                         onClick={() => void decide(application, 'decline')}
                       >
                         Decline

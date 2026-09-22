@@ -1385,6 +1385,14 @@ export const termsAcceptanceStatusSchema = z.object({
   account: z.object({ exists: z.boolean(), role: userRoleSchema.nullable() }),
   /** `vendor` for an address holding an unused invite, else `null`; only ever a preselection. */
   suggestedRole: signUpRoleSchema.nullable(),
+  /**
+   * Whether this address already has a waitlist row (VEN-512) — a returning
+   * refused vendor, before any account exists. `exists` false for everyone
+   * else, including an account that already exists: an account was either
+   * never a refused vendor or has since been invited, so its own waitlist row
+   * (if any) is no longer this screen's concern.
+   */
+  vendorWaitlist: z.object({ exists: z.boolean(), complete: z.boolean() }),
 });
 export type TermsAcceptanceStatus = z.infer<typeof termsAcceptanceStatusSchema>;
 
@@ -3207,13 +3215,24 @@ export type AdminVendorPayoutHoldResult = z.infer<typeof adminVendorPayoutHoldRe
 export const vendorSignUpGateSchema = z.object({ vendorInviteOnly: z.boolean() });
 export type VendorSignUpGate = z.infer<typeof vendorSignUpGateSchema>;
 
-/** `POST /vendor-applications`: what the operator vets an applicant from. */
+/**
+ * `POST /vendor-applications`: the details screen's submit (VEN-512). The
+ * caller's verified session email replaces whatever `email` carries — kept on
+ * the wire only so the schema still matches the row it upserts.
+ *
+ * `category` is a category id (`GET /categories`), never free text: the
+ * screen offers a select of the real, active categories so what the operator
+ * reviews is already the shape `createVendorProfileSchema` needs. `state` is
+ * asked but never required to be *complete* — only business name, category and
+ * city are (see `isVendorApplicationComplete`).
+ */
 export const vendorApplicationInputSchema = z.object({
   email: emailSchema,
   businessName: trimmedString(MAX_BUSINESS_NAME_LENGTH),
-  category: trimmedString(MAX_NAME_LENGTH),
+  category: uuidSchema,
   city: trimmedString(MAX_NAME_LENGTH),
-  message: freeText().max(MAX_VENDOR_APPLICATION_MESSAGE_LENGTH),
+  state: usStateCodeSchema.optional(),
+  message: freeText().max(MAX_VENDOR_APPLICATION_MESSAGE_LENGTH).optional(),
 });
 export type VendorApplicationInput = z.infer<typeof vendorApplicationInputSchema>;
 
@@ -3226,17 +3245,54 @@ export type VendorApplicationReceipt = z.infer<typeof vendorApplicationReceiptSc
 
 export const vendorApplicationStatusSchema = z.enum(VENDOR_APPLICATION_STATUSES);
 
+/**
+ * Whether an application is **invitable**, not merely on the list: the row
+ * exists from the refusal or the details screen, and stays incomplete until
+ * the person names who they are. One derivation for the DAO's `complete`
+ * column and the details form's own client-side check.
+ */
+export function isVendorApplicationComplete(fields: {
+  businessName: string | null;
+  category: string | null;
+  city: string | null;
+}): boolean {
+  return fields.businessName !== null && fields.category !== null && fields.city !== null;
+}
+
 export const adminVendorApplicationRowSchema = z.object({
   id: uuidSchema,
   email: z.string(),
-  businessName: z.string(),
-  category: z.string(),
-  city: z.string(),
-  message: z.string(),
+  businessName: z.string().nullable(),
+  /** The stored value: a category id for a row from the details screen, free text for one that predates it. */
+  category: z.string().nullable(),
+  /**
+   * `category` resolved to a name for the operator to read, when it is a
+   * category id that still exists. Null for a pre-VEN-512 free-text row (read
+   * `category` itself there) and for an id that was later deactivated or
+   * deleted.
+   */
+  categoryName: z.string().nullable(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  message: z.string().nullable(),
   status: vendorApplicationStatusSchema,
+  /** `isVendorApplicationComplete` on this row — the admin panel's Incomplete badge and Invite gate. */
+  complete: z.boolean(),
   createdAt: z.date(),
 });
 export type AdminVendorApplicationRow = z.infer<typeof adminVendorApplicationRowSchema>;
+
+/** `GET /vendor-applications/me`: seeds the caller's row (idempotent) and reports where it stands. */
+export const myVendorApplicationSchema = z.object({
+  email: z.string(),
+  businessName: z.string().nullable(),
+  category: z.string().nullable(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  message: z.string().nullable(),
+  complete: z.boolean(),
+});
+export type MyVendorApplication = z.infer<typeof myVendorApplicationSchema>;
 
 /** One page of either waitlist table, walked with `page` like every other console list. */
 export const adminVendorInviteQuerySchema = z.object({ ...adminPaginationShape });

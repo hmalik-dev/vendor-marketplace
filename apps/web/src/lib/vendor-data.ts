@@ -2,9 +2,11 @@ import { cache } from 'react';
 import { getServerSession } from './auth/server';
 import { redirect } from 'next/navigation';
 import {
+  myVendorApplicationSchema,
   slugSchema,
   vendorSignUpGateSchema,
   type Category,
+  type MyVendorApplication,
   type VendorSignUpGate,
 } from '@vendor-marketplace/shared';
 import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
@@ -328,6 +330,22 @@ export async function getVendorSignUpGate(): Promise<VendorSignUpGate> {
 
     return { vendorInviteOnly: false };
   }
+}
+
+/**
+ * `GET /vendor-applications/me` (VEN-512): the details/waitlist screens' own
+ * read. Seeds the caller's waitlist row on arrival, so nobody who reaches
+ * `/sign-up/vendor-details` is lost even if they leave before submitting.
+ * Requires a verified session — the gate is the only door onto this screen.
+ */
+export async function getMyVendorApplication(): Promise<MyVendorApplication> {
+  const token = (await getServerSession())?.token ?? null;
+
+  if (!token) {
+    redirect(await signInPathReturningHere());
+  }
+
+  return apiRequest('/vendor-applications/me', { schema: myVendorApplicationSchema, token });
 }
 
 export async function getActiveTags(options: ReferenceReadOptions = {}): Promise<WireTag[]> {

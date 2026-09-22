@@ -1,5 +1,12 @@
 import { eq } from 'drizzle-orm';
-import { legalAcceptances, users } from '@vendor-marketplace/db/schema';
+import {
+  legalAcceptances,
+  platformSettings,
+  users,
+  vendorApplications,
+  vendorInvites,
+} from '@vendor-marketplace/db/schema';
+import { forgetPlatformSwitches } from '../platform-settings/platform-settings.service.js';
 import {
   CURRENT_TERMS_VERSION,
   legalDocumentSha256,
@@ -107,7 +114,56 @@ describe('the Terms of Service acceptance gate', () => {
         explicitTickRequired: false,
         account: { exists: false, role: null },
         suggestedRole: null,
+        vendorWaitlist: { exists: false, complete: false },
       });
+    });
+
+    it('reports a returning waitlisted vendor read-only, without seeding a row (VEN-512)', async () => {
+      await harness.database.db
+        .insert(platformSettings)
+        .values({ vendorInviteOnly: true })
+        .onConflictDoUpdate({ target: platformSettings.id, set: { vendorInviteOnly: true } });
+      forgetPlatformSwitches(harness.database.db);
+      await harness.database.db
+        .insert(vendorApplications)
+        .values({ email: `${VENDOR}@example.com`, status: 'new' });
+
+      const response = await status(VENDOR);
+
+      expect(response.json()).toMatchObject({
+        vendorWaitlist: { exists: true, complete: false },
+      });
+      expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(1);
+
+      await harness.database.db.delete(vendorApplications);
+      await harness.database.db.delete(platformSettings);
+      forgetPlatformSwitches(harness.database.db);
+    });
+
+    it('does not report a waitlist row once its address is invited, or once the gate is off (VEN-512)', async () => {
+      await harness.database.db
+        .insert(platformSettings)
+        .values({ vendorInviteOnly: true })
+        .onConflictDoUpdate({ target: platformSettings.id, set: { vendorInviteOnly: true } });
+      forgetPlatformSwitches(harness.database.db);
+      await harness.database.db
+        .insert(vendorApplications)
+        .values({ email: `${VENDOR}@example.com`, status: 'new' });
+      await harness.database.db.insert(vendorInvites).values({ email: `${VENDOR}@example.com` });
+
+      const invitedResponse = await status(VENDOR);
+      expect(invitedResponse.json()).toMatchObject({ vendorWaitlist: { exists: false } });
+
+      await harness.database.db.delete(vendorInvites);
+      await harness.database.db.update(platformSettings).set({ vendorInviteOnly: false });
+      forgetPlatformSwitches(harness.database.db);
+
+      const gateOffResponse = await status(VENDOR);
+      expect(gateOffResponse.json()).toMatchObject({ vendorWaitlist: { exists: false } });
+
+      await harness.database.db.delete(vendorApplications);
+      await harness.database.db.delete(platformSettings);
+      forgetPlatformSwitches(harness.database.db);
     });
 
     it('refuses a caller with no session', async () => {

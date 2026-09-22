@@ -1,43 +1,56 @@
 ---
 name: vendor-invite-gate-checks-before-the-row-it-creates
-description: the vendor invite gate decides on an auth provider/Neon snapshot before the row it commits; VEN-441 added hasLiveAccount to all three entry points — where each one runs (tx or not) is the thing to re-check
+description: the vendor invite gate decides on a Neon snapshot before the row it commits; since VEN-512 a vendor_applications row is itself a gate — it diverts /accept-terms, and it is written by a GET
 metadata:
   type: project
 ---
 
-> **The auth provider is retired** (VEN-447/448/449 moved auth to Neon Auth). The auth provider names below describe the pre-cutover code and are historical; do not act on them as live.
+> Auth provider names from VEN-406/441 are pre-Neon-Auth and historical.
 
-VEN-406 review (2026-09-15): `assertVendorMayJoin` in `acceptTerms`' no-row path
-judges `normalizeRole(snapshot.roleHint)`, then `syncUserFromAuth` ->
-`insertUserIfAbsent` returns the **held** row on conflict. A `user.created`
-webhook landing in the window supplies `role='vendor'` while the snapshot, flipped
-via client-writable metadata, said customer. Revoke-vs-accept also races.
+**A gate must decide on the row it commits, inside the transaction that commits
+it.** `admitVendor` runs first inside the acceptance transaction and locks the
+invite; a refusal rolls the account back. `seedApplicationOnRefusal` must stay
+**outside** that transaction or the waitlist row rolls back with it.
 
-**Why:** a gate must decide on the row it commits, inside the transaction that
-commits it.
-
-VEN-441 (2026-09-19) added `hasLiveAccount(db, email)` — `lower(users.email)`,
-`deleted_at is null` — at **three** entry points, and they are not uniform:
+`hasLiveAccount(db, email)` guards three entry points and is not uniform:
 `decideVendorApplication` runs it on `tx` after `lockApplication`;
-`createVendorInvite` runs it on `deps.db` **before** its transaction; the public
-`POST /vendor-applications` runs it on `db` with no lock. Both unlocked ones are
-consequence-free today only because a `users` row implies terms already accepted,
-so a stray invite is inert — **that is the invariant to re-check**, not the race.
+`createVendorInvite` and `POST /vendor-applications` run it unlocked. Inert only
+because a `users` row implies terms already accepted — **that is the invariant to
+re-check**, not the race.
 
-Disclosure shape, reviewed clean: signed-in callers have their body email replaced
-by the session address and `neon-auth.ts:113` refuses a token with
-`emailVerified !== true`, so the 409 only ever speaks about the caller's own
-address; signed-out callers get the uniform `{received:true}` and no row. The
-residual channel is **timing** — the has-account branch skips `findInviteByEmail`
-and the insert — bounded by 6 req/hour/IP.
+**VEN-512 made the waitlist row load-bearing, and that is the live risk.**
+`accept-terms/page.tsx` redirects on `status.vendorWaitlist.exists` alone, before
+the role picker renders. So a `vendor_applications` row is now a permanent
+diversion away from account creation, and three writers can produce one for an
+address that never chose vendor:
 
-**How to apply:** if re-reviewed, check the acceptance gate still reads
-`user.role`/`user.email` after the sync, inside the tx. `upsertApplication` still
-trusts a signed-out body email with `ON CONFLICT DO NOTHING`, so an address with
-no account is squattable on the waitlist (only `verified` session writes overwrite).
-`status_before_invite` goes stale after a decline-then-revoke but self-corrects on
-the next invite. Rendering (React, no raw HTML), admin guards
-(`requireRoleBeforeValidation`), invite email escaping were clean again.
-Related: [[sign-up-role-is-client-written-server-narrowed]],
+- `readMyVendorApplication` seeds on **`GET /vendor-applications/me`** — any
+  verified session, no account required, reached by merely opening
+  `/sign-up/vendor-details` (gate-exempt, linked from `/for-vendors`);
+- the client skip in `accept-terms-screen.tsx` routes there off `readSignUpRole()`,
+  a 24h **localStorage** hint — a reversible client value becoming irreversible
+  server state;
+- pre-VEN-512 rows, written **unauthenticated** for arbitrary typed emails
+  (`upsertApplication(..., verified=false)`, now dead code), are not backfilled.
+
+Result: the address can never accept the Terms, so never gets a `users` row, in
+any role. Reported as VEN-512's blocker; fix is to distinguish a refusal-seeded
+row from an arrival-seeded/legacy one and divert only on the first.
+
+Reviewed clean and not to be re-reported: `neon-auth.ts:114` refuses
+`emailVerified !== true` in `verifiedClaims`, used by both the verifier and the
+loader; the waitlist email is always `snapshot.email`, `existing.email` or
+`sessionEmail` (`{...body, email: sessionEmail}` — spread order is the guard);
+no id-addressable application read or write exists; the `category` UUID check
+precedes the write and the value is `uuidSchema` so it cannot 500 the cast;
+`decideVendorApplication`'s completeness guard composes with admin-only.
+
+**`preParsing`, not `onRequest`, is settled for any rate-limited route**
+(`lib/rate-limit.ts`): @fastify/rate-limit **appends** its route hook after any
+route-level `onRequest`, so a guard there refuses a signed-out caller uncounted.
+Global hooks still precede route hooks, so neon-auth's 401 on a garbage token
+beats the route limiter — `countBearer` at `server.ts:454` is what counts those.
+
+Related: [[signup-role-is-confirmed-not-narrowed]],
 [[email-uniqueness-is-partial-nothing-joins-by-email]],
-[[idempotency-guards-orphan-side-effects]].
+[[closed-account-address-is-released]], [[idempotency-guards-orphan-side-effects]].

@@ -18,6 +18,7 @@ import {
   MAX_NAME_LENGTH,
   VENDOR_APPLICATION_STATUSES,
 } from '@vendor-marketplace/shared';
+import { usStateEnum } from './enums.js';
 import { users } from './users.js';
 
 /*
@@ -82,10 +83,20 @@ export const vendorApplications = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     email: varchar('email', { length: MAX_EMAIL_LENGTH }).notNull(),
-    businessName: varchar('business_name', { length: MAX_BUSINESS_NAME_LENGTH }).notNull(),
-    category: varchar('category', { length: MAX_NAME_LENGTH }).notNull(),
-    city: varchar('city', { length: MAX_NAME_LENGTH }).notNull(),
-    message: text('message').notNull(),
+    /*
+     * Nullable (VEN-512): the row is written the moment the gate refuses an
+     * uninvited vendor, or the moment they land on the details screen, before
+     * any of it is known — nobody is lost by leaving early. `category` holds a
+     * category id for a row written from the details screen; a row from the
+     * retired free-text form (before VEN-512) still holds the text it was
+     * given and is never eligible for VEN-514's draft profile.
+     */
+    businessName: varchar('business_name', { length: MAX_BUSINESS_NAME_LENGTH }),
+    category: varchar('category', { length: MAX_NAME_LENGTH }),
+    city: varchar('city', { length: MAX_NAME_LENGTH }),
+    /** The state the details screen collects; never required for completeness. */
+    state: usStateEnum('state'),
+    message: text('message'),
     status: vendorApplicationStatusEnum('status').notNull().default('new'),
     /**
      * What the application was before an invite marked it `invited`, so revoking

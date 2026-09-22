@@ -8,18 +8,25 @@ import {
   adminVendorInviteRowSchema,
   createVendorInviteSchema,
   decideVendorApplicationSchema,
+  myVendorApplicationSchema,
   vendorApplicationInputSchema,
   vendorApplicationReceiptSchema,
   vendorSignUpGateSchema,
 } from '@vendor-marketplace/shared';
 import type { FastifyInstance } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { assertRole, requireRoleBeforeValidation } from '../../lib/guards.js';
+import {
+  assertRole,
+  authSubject,
+  requireAuthSubject,
+  requireRoleBeforeValidation,
+} from '../../lib/guards.js';
 import {
   createVendorInvite,
   decideVendorApplication,
   listVendorApplications,
   listVendorInvites,
+  readMyVendorApplication,
   readVendorSignUpGate,
   resendVendorInvite,
   revokeVendorInvite,
@@ -49,36 +56,55 @@ export const vendorApplicationRoutes: FastifyPluginAsyncZod = async (app) => {
     async () => readVendorSignUpGate(app.db),
   );
 
+  const applicationKeyGenerator = (request: {
+    authIdentity: { authUserId: string } | null;
+    ip: string;
+    headers: Record<string, string | string[] | undefined>;
+  }): string => request.authIdentity?.authUserId ?? clientAddress(request);
+
+  app.get(
+    '/vendor-applications/me',
+    {
+      /*
+       * A verified session, no account row required: this is exactly the
+       * refused-vendor session `/sign-up/vendor-details` is for. Like the
+       * Terms gate's own routes, this authorises on the Auth subject rather
+       * than on `request.auth` — there may be no local row yet.
+       *
+       * No route-level `rateLimit`: this is a read the details and waitlist
+       * screens make on every visit, not a write, so it takes the global
+       * per-minute limiter like any other authenticated `GET` rather than
+       * `POST`'s stricter per-hour write budget.
+       */
+      onRequest: requireAuthSubject,
+      schema: { response: { 200: myVendorApplicationSchema } },
+    },
+    async (request) => {
+      const identity = authSubject(request.authIdentity);
+      const { email } = await identity.loadSnapshot();
+
+      return readMyVendorApplication(app.db, email);
+    },
+  );
+
   app.post(
     '/vendor-applications',
     {
-      /*
-       * Deliberately unauthenticated: the applicant the gate sends here has a
-       * Auth session and no account, and a visitor from `/for-vendors` has
-       * neither. Keyed by account where there is one, by IP where there is not.
-       */
-      config: {
-        rateLimit: {
-          ...APPLICATION_RATE_LIMIT,
-          keyGenerator: (request: {
-            auth: { id: string } | null;
-            ip: string;
-            headers: Record<string, string | string[] | undefined>;
-          }) => request.auth?.id ?? clientAddress(request),
-        },
-      },
+      // A verified session only (VEN-512): the gate is the sole door onto this route now.
+      preParsing: requireAuthSubject,
+      config: { rateLimit: { ...APPLICATION_RATE_LIMIT, keyGenerator: applicationKeyGenerator } },
       schema: {
         body: vendorApplicationInputSchema,
         response: { 200: vendorApplicationReceiptSchema },
       },
     },
     /* 200, not 201: the caller gets nothing addressable, and a repeat is the same answer. */
-    async (request) =>
-      submitVendorApplication(
-        app.db,
-        request.body,
-        request.authIdentity ? (await request.authIdentity.loadSnapshot()).email : null,
-      ),
+    async (request) => {
+      const identity = authSubject(request.authIdentity);
+      const { email } = await identity.loadSnapshot();
+
+      return submitVendorApplication(app.db, request.body, email);
+    },
   );
 };
 

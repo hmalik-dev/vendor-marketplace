@@ -4,12 +4,11 @@ import {
   BRAND_NAME,
   ERROR_CODES,
   LEGAL_PATHS,
-  VENDOR_APPLY_PATH,
+  VENDOR_DETAILS_PATH,
   termsAcceptanceStatusSchema,
   type TermsAcceptanceStatus,
   type UserRole,
 } from '@vendor-marketplace/shared';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Banner } from '@/components/ui/banner';
@@ -113,7 +112,6 @@ export function AcceptTermsScreen({
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
-  const [notInvited, setNotInvited] = useState(false);
   /* The role the server stored when it differs from the one chosen: shown before continuing. */
   const [landedAs, setLandedAs] = useState<UserRole | null>(null);
 
@@ -123,6 +121,17 @@ export function AcceptTermsScreen({
    * one thing there and another on hydration. Order: the browser hint (under a
    * day old, validated by `readSignUpRole`), then the invite's `vendor`, then
    * nothing — never a default. A choice the person already made is kept.
+   *
+   * **Deliberately never skips this screen on a hint alone** (VEN-512): an
+   * earlier version read a `vendor` hint against an address the gate would
+   * refuse and redirected straight to the details screen before the person
+   * ever confirmed anything. The hint is a client value a browser can write
+   * to itself, so trusting it to decide where an account-creating flow goes
+   * let any signed-in address — including one that never chose vendor — be
+   * routed away from `/accept-terms` and, because the details screen used to
+   * write a row on arrival, permanently. The only thing that may now divert
+   * this screen is an *actual* refusal: `accept`'s catch below, after the
+   * server has genuinely tried and failed to admit this address as a vendor.
    */
   useEffect(() => {
     if (!tickMode && storedRole === null) {
@@ -132,7 +141,6 @@ export function AcceptTermsScreen({
 
   function choose(next: SignUpRole): void {
     setRole(next);
-    setNotInvited(false);
     /* Kept as the hint, so a reload lands on the same choice. It is still only a hint. */
     rememberSignUpRole(next);
   }
@@ -163,7 +171,6 @@ export function AcceptTermsScreen({
     inFlight.current = true;
     setSaving(true);
     setFailed(null);
-    setNotInvited(false);
 
     try {
       const result = await request('/legal/terms/accept', {
@@ -202,17 +209,17 @@ export function AcceptTermsScreen({
 
       continueOn();
     } catch (error) {
-      /*
-       * The vendor gate (VEN-406): no account was created for this address, so
-       * the person stays here, signed in and with the choice intact, to pick
-       * customer instead or to apply. Neither the session nor the hint is
-       * cleared: doing so would let a return visit quietly choose for them.
-       */
       inFlight.current = false;
 
+      /*
+       * The vendor gate (VEN-406): no account was created for this address.
+       * The API has already written the waitlist row for it (VEN-512), so
+       * there is nothing left to ask here — on to the details screen, rather
+       * than staying to explain the refusal. The hint is kept: a return visit
+       * before it expires still reads as "this person is a vendor".
+       */
       if (error instanceof ApiClientError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
-        setSaving(false);
-        setNotInvited(true);
+        router.replace(VENDOR_DETAILS_PATH);
         return;
       }
 
@@ -283,16 +290,6 @@ export function AcceptTermsScreen({
       {failed ? (
         <Banner status="failed" title="That did not save" className="mt-5">
           {failed}
-        </Banner>
-      ) : null}
-
-      {notInvited ? (
-        <Banner status="failed" title="Vendor accounts are by invitation for now" className="mt-5">
-          Nothing was created. Choose customer to continue, or{' '}
-          <Link href={VENDOR_APPLY_PATH} className="font-semibold underline underline-offset-4">
-            apply to become a vendor
-          </Link>
-          .
         </Banner>
       ) : null}
 

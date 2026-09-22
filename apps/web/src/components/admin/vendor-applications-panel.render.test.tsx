@@ -19,21 +19,42 @@ const APPLICATIONS: WireAdminVendorApplicationRow[] = [
     id: '11111111-1111-4111-8111-111111111111',
     email: 'fern@example.com',
     businessName: 'Fern & Gather',
-    category: 'Florist',
+    // A row from the details screen: `category` is the id, `categoryName` is resolved for display.
+    category: '99999999-9999-4999-8999-999999999999',
+    categoryName: 'Florist',
     city: 'Austin',
+    state: 'TX',
     message: 'Weddings, mostly.',
     status: 'new',
+    complete: true,
     createdAt: new Date('2026-09-14T09:00:00.000Z'),
   },
   {
     id: '22222222-2222-4222-8222-222222222222',
     email: 'old@example.com',
     businessName: 'Old Mill Catering',
+    // A pre-VEN-512 free-text row: no id to resolve, so no `categoryName`.
     category: 'Catering',
+    categoryName: null,
     city: 'Dallas',
+    state: 'TX',
     message: '',
     status: 'invited',
+    complete: true,
     createdAt: new Date('2026-09-10T09:00:00.000Z'),
+  },
+  {
+    id: '55555555-5555-4555-8555-555555555555',
+    email: 'unfinished@example.com',
+    businessName: null,
+    category: null,
+    categoryName: null,
+    city: null,
+    state: null,
+    message: null,
+    status: 'new',
+    complete: false,
+    createdAt: new Date('2026-09-15T09:00:00.000Z'),
   },
 ];
 
@@ -85,6 +106,39 @@ describe('VendorApplicationsPanel', () => {
     expect(screen.getByRole('button', { name: 'Decline Fern & Gather' })).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Invite Old Mill Catering' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Decline Old Mill Catering' })).toBeNull();
+  });
+
+  it('shows the resolved category name, falling back to the raw value for a pre-VEN-512 free-text row', () => {
+    render(
+      <VendorApplicationsPanel
+        applications={APPLICATIONS}
+        invites={INVITES}
+        invitesPager={INVITES_PAGER}
+      />,
+    );
+
+    expect(screen.getByText('Florist · Austin')).toBeDefined();
+    expect(screen.getByText('Catering · Dallas')).toBeDefined();
+    expect(screen.queryByText(/99999999-9999/)).toBeNull();
+  });
+
+  it('shows Incomplete and disables Invite on a row missing its details (VEN-512)', () => {
+    render(
+      <VendorApplicationsPanel
+        applications={APPLICATIONS}
+        invites={INVITES}
+        invitesPager={INVITES_PAGER}
+      />,
+    );
+
+    expect(screen.getByText('Incomplete')).toBeDefined();
+    expect(
+      (screen.getByRole('button', { name: 'Invite unfinished@example.com' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Invite Fern & Gather' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 
   it('sends the decision for the row that was pressed', async () => {

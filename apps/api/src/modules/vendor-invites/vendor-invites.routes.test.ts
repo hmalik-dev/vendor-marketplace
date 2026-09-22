@@ -2,6 +2,7 @@ import { setUserRole } from '../../testing/set-user-role.js';
 import { eq, sql } from 'drizzle-orm';
 import {
   adminActions,
+  categories,
   legalAcceptances,
   platformSettings,
   users,
@@ -112,18 +113,47 @@ describe('the vendor gate', () => {
     };
   }
 
+  /** A real, active category id — `category` on the wire is a category id, never free text (VEN-512). */
+  let categoryId: string;
+
   function application(email: string): Record<string, unknown> {
     return {
       email,
       businessName: 'Hopper Florals',
-      category: 'Florist',
+      category: categoryId,
       city: 'Austin',
+      state: 'TX',
       message: 'Weddings, mostly.',
     };
   }
 
+  /** `POST /vendor-applications` now requires a session; the body's `email` is always ignored. */
+  function apply(actor: string, body: Record<string, unknown>): Promise<Response> {
+    return harness.app.inject({
+      method: 'POST',
+      url: '/vendor-applications',
+      ...fromANewVisitor(),
+      headers: bearer(actor),
+      payload: body,
+    });
+  }
+
+  /** A fresh, verified vendor session, refused by the gate, applying with its own address. */
+  async function refusedVendor(email: string): Promise<{ actor: string; email: string }> {
+    const actor = freshIdentity('vendor', email);
+    await setGate(true);
+    expect((await accept(actor)).statusCode).toBe(403);
+    return { actor, email };
+  }
+
   beforeAll(async () => {
     harness = await createTestHarness({ acceptTerms: false });
+
+    const [category] = await harness.database.db
+      .insert(categories)
+      .values({ name: 'Florist', slug: 'florist' })
+      .returning({ id: categories.id });
+    categoryId = category!.id;
 
     harness.authUsers.set(ADMIN, {
       authUserId: ADMIN,
@@ -151,16 +181,73 @@ describe('the vendor gate', () => {
   });
 
   describe('at the Terms acceptance', () => {
-    it('refuses an un-invited vendor with vendor_not_invited and writes nothing', async () => {
+    it('refuses an un-invited vendor with vendor_not_invited, writes no account, and puts them on the waitlist (VEN-512)', async () => {
       await setGate(true);
-      const vendor = freshIdentity('vendor');
+      const vendor = freshIdentity('vendor', 'refused@example.com');
       const before = await counts();
 
       const response = await accept(vendor);
 
       expect(response.statusCode).toBe(403);
       expect(response.json()).toMatchObject({ error: 'vendor_not_invited' });
+      // No `users`, acceptance or `vendor_profiles` row (AC2).
       expect(await counts()).toEqual(before);
+      // The waitlist row exists from the verified session email, not the body (AC1, AC5): nothing was sent to accept.
+      const [row] = await harness.database.db.select().from(vendorApplications);
+      expect(row).toMatchObject({
+        email: 'refused@example.com',
+        status: 'new',
+        businessName: null,
+        category: null,
+        city: null,
+      });
+    });
+
+    it('leaves exactly one waitlist row on a repeated refusal, and does not overwrite details already given (AC3)', async () => {
+      await setGate(true);
+      const vendor = freshIdentity('vendor', 'repeat-refused@example.com');
+      expect((await accept(vendor)).statusCode).toBe(403);
+
+      // The person fills in the details screen after the first refusal.
+      expect((await apply(vendor, application('anyone@example.com'))).statusCode).toBe(200);
+
+      // Signing in and being refused again must not touch what they already gave.
+      expect((await accept(vendor)).statusCode).toBe(403);
+
+      const rows = await harness.database.db.select().from(vendorApplications);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        email: 'repeat-refused@example.com',
+        businessName: 'Hopper Florals',
+        category: categoryId,
+        city: 'Austin',
+      });
+    });
+
+    it('writes no waitlist row for an invited address, or with the gate off (AC4)', async () => {
+      await setGate(true);
+      await invite('already-invited@example.com');
+      const invited = freshIdentity('vendor', 'already-invited@example.com');
+      expect((await accept(invited)).statusCode).toBe(200);
+      expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(0);
+
+      await setGate(false);
+      const ungated = freshIdentity('vendor', 'ungated@example.com');
+      expect((await accept(ungated)).statusCode).toBe(200);
+      expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(0);
+    });
+
+    it('leaves an existing waitlist row exactly as it was once the gate is switched off (AC7)', async () => {
+      const vendor = await refusedVendor('lifted@example.com');
+      const [seeded] = await harness.database.db.select().from(vendorApplications);
+
+      await setGate(false);
+      const response = await accept(vendor.actor);
+
+      expect(response.statusCode).toBe(200);
+      const rows = await harness.database.db.select().from(vendorApplications);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toEqual(seeded);
     });
 
     it('creates a customer exactly as before, gate on and nobody invited', async () => {
@@ -381,101 +468,140 @@ describe('the vendor gate', () => {
   });
 
   describe('POST /vendor-applications', () => {
-    it('adds the applicant once, and answers a repeat the same way', async () => {
-      const visitor = fromANewVisitor();
-      const send = (body: Record<string, unknown>) =>
-        harness.app.inject({
-          method: 'POST',
-          url: '/vendor-applications',
-          ...visitor,
-          payload: body,
-        });
-
-      const first = await send(application('Applicant@Example.com'));
-      const second = await send({ ...application('applicant@example.com'), city: 'Dallas' });
-
-      expect([first.statusCode, first.json()]).toEqual([200, { received: true }]);
-      expect([second.statusCode, second.json()]).toEqual([200, { received: true }]);
-      const rows = await harness.database.db.select().from(vendorApplications);
-      expect(rows.map((row) => [row.email, row.city, row.status])).toEqual([
-        ['applicant@example.com', 'Austin', 'new'],
-      ]);
-    });
-
-    it('takes a 150-character business name and stores it whole (VEN-544)', async () => {
-      const businessName = 'B'.repeat(150);
-
+    it('refuses a signed-out submit and writes nothing (AC15)', async () => {
       const response = await harness.app.inject({
         method: 'POST',
         url: '/vendor-applications',
         ...fromANewVisitor(),
-        payload: { ...application('long@example.com'), businessName },
+        payload: application('drifter@example.com'),
       });
+
+      expect(response.statusCode).toBe(401);
+      expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(0);
+    });
+
+    it('fills in the seeded row from the session, ignoring whatever the body carries', async () => {
+      const vendor = await refusedVendor('applicant@example.com');
+
+      const response = await apply(vendor.actor, {
+        ...application('someone-else@example.com'),
+        city: 'Dallas',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ received: true });
+      const rows = await harness.database.db.select().from(vendorApplications);
+      expect(rows.map((row) => [row.email, row.city, row.status])).toEqual([
+        ['applicant@example.com', 'Dallas', 'new'],
+      ]);
+    });
+
+    it('takes a 150-character business name and stores it whole (VEN-544)', async () => {
+      const vendor = await refusedVendor('long@example.com');
+      const businessName = 'B'.repeat(150);
+
+      const response = await apply(vendor.actor, { ...application(vendor.email), businessName });
 
       expect([response.statusCode, response.json()]).toEqual([200, { received: true }]);
       const rows = await harness.database.db.select().from(vendorApplications);
       expect(rows.map((row) => row.businessName)).toEqual([businessName]);
     });
 
+    it('refuses a category id that does not exist (AC11)', async () => {
+      const vendor = await refusedVendor('bad-category@example.com');
+
+      const response = await apply(vendor.actor, {
+        ...application(vendor.email),
+        category: '00000000-0000-4000-8000-00000000dead',
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
     it('arrives already invited when the address was invited first', async () => {
+      const vendor = await refusedVendor('early@example.com');
       await invite('early@example.com');
 
-      await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...fromANewVisitor(),
-        payload: application('early@example.com'),
-      });
+      await apply(vendor.actor, application(vendor.email));
 
       const [row] = await harness.database.db.select().from(vendorApplications);
       expect(row?.status).toBe('invited');
     });
 
-    it('applies with a session’s own address, replacing what a stranger filed under it', async () => {
-      const owner = freshIdentity('vendor', 'owner@example.com');
-      await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...fromANewVisitor(),
-        payload: { ...application('owner@example.com'), businessName: 'Squatter Co' },
-      });
-
-      const response = await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...fromANewVisitor(),
-        headers: bearer(owner),
-        payload: { ...application('someone-else@example.com'), businessName: 'Owner Florals' },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const rows = await harness.database.db.select().from(vendorApplications);
-      expect(rows.map((row) => [row.email, row.businessName])).toEqual([
-        ['owner@example.com', 'Owner Florals'],
-      ]);
-    });
-
     it('stops one caller after six applications in an hour', async () => {
-      const visitor = fromANewVisitor();
+      const vendor = await refusedVendor('rate-limited@example.com');
 
       for (let attempt = 1; attempt <= 6; attempt += 1) {
-        const response = await harness.app.inject({
-          method: 'POST',
-          url: '/vendor-applications',
-          ...visitor,
-          payload: application(`rate-${attempt}@example.com`),
-        });
+        const response = await apply(vendor.actor, application(vendor.email));
         expect(response.statusCode, `attempt ${attempt}`).toBe(200);
       }
 
-      const seventh = await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...visitor,
-        payload: application('rate-7@example.com'),
-      });
+      const seventh = await apply(vendor.actor, application(vendor.email));
       expect(seventh.statusCode).toBe(429);
       expect(seventh.json()).toMatchObject({ error: 'RATE_LIMITED' });
+    });
+  });
+
+  describe('GET /vendor-applications/me', () => {
+    it('refuses a signed-out call', async () => {
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/vendor-applications/me',
+        ...fromANewVisitor(),
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('never writes a row itself: an eligible session with no prior refusal reads back empty', async () => {
+      const vendor = freshIdentity('vendor', 'never-refused@example.com');
+      await setGate(true);
+
+      const first = await inject('GET', '/vendor-applications/me', vendor);
+      expect(first.statusCode).toBe(200);
+      expect(first.json()).toMatchObject({ email: 'never-refused@example.com', complete: false });
+
+      const second = await inject('GET', '/vendor-applications/me', vendor);
+      expect(second.statusCode).toBe(200);
+      // Landing here twice, with no actual refusal, writes nothing at all (VEN-512).
+      expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(0);
+    });
+
+    it('reflects the row a real refusal already wrote, and twice leaves exactly one row (AC13)', async () => {
+      const vendor = await refusedVendor('arriving@example.com');
+
+      const first = await inject('GET', '/vendor-applications/me', vendor.actor);
+      expect(first.statusCode).toBe(200);
+      expect(first.json()).toMatchObject({ email: 'arriving@example.com', complete: false });
+
+      const second = await inject('GET', '/vendor-applications/me', vendor.actor);
+      expect(second.statusCode).toBe(200);
+      expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(1);
+
+      await apply(vendor.actor, application(vendor.email));
+      const after = await inject('GET', '/vendor-applications/me', vendor.actor);
+      expect(after.json()).toMatchObject({ complete: true });
+    });
+
+    it('reads back empty for an invited address, an address with a live account, or with the gate off (VEN-512)', async () => {
+      const invited = await refusedVendor('now-invited@example.com');
+      await invite('now-invited@example.com');
+      expect((await inject('GET', '/vendor-applications/me', invited.actor)).json()).toMatchObject({
+        complete: false,
+        businessName: null,
+      });
+
+      await setGate(false);
+      const ungated = freshIdentity('vendor', 'gate-is-off@example.com');
+      expect((await inject('GET', '/vendor-applications/me', ungated)).json()).toMatchObject({
+        businessName: null,
+      });
+      await setGate(true);
+
+      const customer = freshIdentity('customer', 'has-an-account@example.com');
+      expect((await accept(customer)).statusCode).toBe(200);
+      expect((await inject('GET', '/vendor-applications/me', customer)).json()).toMatchObject({
+        businessName: null,
+      });
     });
   });
 
@@ -509,16 +635,12 @@ describe('the vendor gate', () => {
     });
 
     it('invites an applicant: invite row, status, audit and the email', async () => {
-      await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...fromANewVisitor(),
-        payload: application('newcomer@example.com'),
-      });
+      const vendor = await refusedVendor('newcomer@example.com');
+      await apply(vendor.actor, application(vendor.email));
       const listed = await inject('GET', '/admin/vendor-applications', ADMIN);
       expect(listed.statusCode).toBe(200);
       const [row] = listed.json().items;
-      expect(row).toMatchObject({ email: 'newcomer@example.com', status: 'new' });
+      expect(row).toMatchObject({ email: 'newcomer@example.com', status: 'new', complete: true });
 
       const decided = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
         decision: 'invite',
@@ -547,12 +669,8 @@ describe('the vendor gate', () => {
     });
 
     it('refuses to decline an applicant whose address is already invited', async () => {
-      await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...fromANewVisitor(),
-        payload: application('both@example.com'),
-      });
+      const vendor = await refusedVendor('both@example.com');
+      await apply(vendor.actor, application(vendor.email));
       await invite('both@example.com');
       await harness.database.db.update(vendorApplications).set({ status: 'new' });
       const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
@@ -567,12 +685,8 @@ describe('the vendor gate', () => {
     });
 
     it('declines an applicant without inviting or emailing them', async () => {
-      await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...fromANewVisitor(),
-        payload: application('declined@example.com'),
-      });
+      const vendor = await refusedVendor('declined@example.com');
+      await apply(vendor.actor, application(vendor.email));
       const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
 
       const decided = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
@@ -583,6 +697,24 @@ describe('the vendor gate', () => {
       expect(decided.json()).toMatchObject({ status: 'declined' });
       expect(await harness.database.db.select().from(vendorInvites)).toHaveLength(0);
       expect(harness.email.sent).toHaveLength(0);
+    });
+
+    it('refuses to invite an incomplete row (409), while a direct invite by email still succeeds (AC9)', async () => {
+      const vendor = freshIdentity('vendor', 'unfinished@example.com');
+      await setGate(true);
+      expect((await accept(vendor)).statusCode).toBe(403);
+      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      expect(row).toMatchObject({ email: 'unfinished@example.com', complete: false });
+
+      const decided = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
+        decision: 'invite',
+      });
+      expect(decided.statusCode).toBe(409);
+
+      const direct = await inject('POST', '/admin/vendor-invites', ADMIN, {
+        email: 'unfinished@example.com',
+      });
+      expect(direct.statusCode).toBe(201);
     });
 
     it('invites by address, refuses a duplicate, and revokes only an unused invite', async () => {
@@ -630,19 +762,13 @@ describe('the vendor gate', () => {
       expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(0);
     });
 
-    it('files nothing for a signed-out application from an address with an account, and says nothing about it', async () => {
+    it('refuses an application from an address with an account signed in as itself', async () => {
       const customer = freshIdentity('customer', 'quiet@example.com');
       expect((await accept(customer)).statusCode).toBe(200);
 
-      const response = await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...fromANewVisitor(),
-        payload: application('quiet@example.com'),
-      });
+      const response = await apply(customer, application('quiet@example.com'));
 
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ received: true });
+      expect(response.statusCode).toBe(409);
       expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(0);
     });
 
@@ -662,12 +788,10 @@ describe('the vendor gate', () => {
     });
 
     it('refuses to invite an existing account through its waiting application too', async () => {
-      await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...fromANewVisitor(),
-        payload: application('late@example.com'),
-      });
+      const vendor = await refusedVendor('late@example.com');
+      await apply(vendor.actor, application(vendor.email));
+      await setGate(false);
+      // The address changes its mind and becomes a customer instead — an account now exists.
       const customer = freshIdentity('customer', 'late@example.com');
       expect((await accept(customer)).statusCode).toBe(200);
       const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
@@ -681,12 +805,8 @@ describe('the vendor gate', () => {
     });
 
     it('puts a declined applicant back to declined when a direct invite is revoked', async () => {
-      await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...fromANewVisitor(),
-        payload: application('declined-twice@example.com'),
-      });
+      const vendor = await refusedVendor('declined-twice@example.com');
+      await apply(vendor.actor, application(vendor.email));
       const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
       await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, { decision: 'decline' });
 
@@ -707,12 +827,8 @@ describe('the vendor gate', () => {
     });
 
     it('puts a waiting applicant back to waiting when their invite is revoked', async () => {
-      await harness.app.inject({
-        method: 'POST',
-        url: '/vendor-applications',
-        ...fromANewVisitor(),
-        payload: application('waiting@example.com'),
-      });
+      const vendor = await refusedVendor('waiting@example.com');
+      await apply(vendor.actor, application(vendor.email));
       const created = await inject('POST', '/admin/vendor-invites', ADMIN, {
         email: 'waiting@example.com',
       });
@@ -723,9 +839,9 @@ describe('the vendor gate', () => {
       expect(row?.status).toBe('new');
     });
 
-    it('tells a refused vendor and an invitee that signing in is the path', () => {
+    it('tells a refused vendor they are on the waitlist, and an invitee that signing in is the path', () => {
       expect(vendorNotInvited().message).toBe(
-        'Vendor accounts are by invitation for now. No account was created — apply to join, then sign in with this same email once you are invited.',
+        "Vendor accounts are by invitation for now. No account was created, but you're on the waitlist — tell us about your business and we'll invite you.",
       );
 
       const mail = renderVendorInviteEmail('https://orla.test');

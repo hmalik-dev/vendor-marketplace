@@ -4,11 +4,13 @@ import {
   EMAIL_RETRY_WINDOW_MS,
   ERROR_CODES,
   VENDOR_SIGN_UP_PATH,
+  isVendorApplicationComplete,
   type AdminVendorApplicationList,
   type AdminVendorApplicationRow,
   type AdminVendorInviteList,
   type AdminVendorInviteQuery,
   type AdminVendorInviteRow,
+  type MyVendorApplication,
   type UserRole,
   type VendorApplicationDecision,
   type VendorApplicationInput,
@@ -19,9 +21,10 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { BackgroundWork } from '../../lib/background.js';
 import type { AppDatabase } from '../../lib/database.js';
 import type { EmailGateway } from '../../lib/email.js';
-import { AppError, conflict, notFound } from '../../lib/errors.js';
+import { AppError, conflict, notFound, validationFailed } from '../../lib/errors.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
+import { findActiveCategoryIds } from '../vendors/vendors.dao.js';
 import {
   readPlatformSwitches,
   readPlatformSwitchesUncached,
@@ -34,6 +37,7 @@ import {
   findAdminApplications,
   findAdminInviteById,
   findAdminInvites,
+  findApplicationByEmail,
   findInviteByEmail,
   findInviteById,
   hasLiveAccount,
@@ -47,7 +51,9 @@ import {
   recordInviteEmailAttempt,
   markApplicationInvited,
   markInviteAccepted,
+  resolveCategoryName,
   restoreApplicationStatus,
+  seedApplication,
   setApplicationStatus,
   upsertApplication,
 } from './vendor-invites.dao.js';
@@ -78,7 +84,7 @@ export function vendorNotInvited(): AppError {
   return new AppError(
     403,
     ERROR_CODES.VENDOR_NOT_INVITED,
-    'Vendor accounts are by invitation for now. No account was created — apply to join, then sign in with this same email once you are invited.',
+    "Vendor accounts are by invitation for now. No account was created, but you're on the waitlist — tell us about your business and we'll invite you.",
   );
 }
 
@@ -108,6 +114,42 @@ export async function admitVendor(tx: AppDatabase, role: UserRole, email: string
 }
 
 /**
+ * Writes the waitlist row for a vendor the gate just refused, and rethrows.
+ *
+ * Call from **outside** the transaction `admitVendor` refused in: that
+ * transaction has already rolled back by the time its rejection reaches the
+ * caller, so a write inside it would roll back too, and nobody would be on
+ * the list the refusal is supposed to put them on. Any other error passes
+ * through untouched — this only recognises the vendor gate's own refusal.
+ */
+export async function seedApplicationOnRefusal(
+  db: AppDatabase,
+  error: unknown,
+  email: string,
+): Promise<never> {
+  if (error instanceof AppError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
+    /*
+     * An address with a live account is refused by `hasLiveAccount` wherever
+     * it later tries to complete the waitlist, so a row for it would sit on
+     * the operator's list unable ever to be invited. The only caller this can
+     * reach for is the existing-account acceptance path (a `users` row with
+     * `role = 'vendor'` and no acceptance yet, refused because its invite was
+     * revoked or never existed) — rare, but cheap to exclude.
+     *
+     * Best effort otherwise: the refusal itself is the outcome the caller is
+     * owed, and a transient failure writing the waitlist row must not turn
+     * their 403 `VENDOR_NOT_INVITED` (which the client keys navigation on)
+     * into an opaque 500.
+     */
+    if (!(await hasLiveAccount(db, email))) {
+      await seedApplication(db, email).catch(() => undefined);
+    }
+  }
+
+  throw error;
+}
+
+/**
  * The role to **preselect** on the acceptance screen: `vendor` for an address
  * with an unused invite, otherwise nothing.
  *
@@ -125,6 +167,58 @@ export async function invitedRoleHint(
   return invite && invite.acceptedAt === null ? 'vendor' : undefined;
 }
 
+/**
+ * Whether `admitVendor` would actually refuse `email` as a vendor **right
+ * now**: the gate is on, nobody has invited the address, and no account
+ * already exists for it.
+ *
+ * This is the one authorization check every door onto the waitlist shares —
+ * `readMyVendorApplication`'s seed, `readVendorWaitlistStatus`'s redirect, and
+ * the web pages that reach either — so a customer, an invited vendor, or an
+ * address with a live account can never be diverted onto it, however they
+ * arrive at the URL. It intentionally does not run inside a transaction: it
+ * is advisory for routing, and `admitVendor` remains the one place that
+ * enforces it with a lock.
+ */
+export async function wouldRefuseVendor(db: AppDatabase, email: string): Promise<boolean> {
+  const { vendorInviteOnly } = await readPlatformSwitches(db);
+
+  if (!vendorInviteOnly) {
+    return false;
+  }
+
+  const [invited, hasAccount] = await Promise.all([
+    invitedRoleHint(db, email),
+    hasLiveAccount(db, email),
+  ]);
+
+  return !invited && !hasAccount;
+}
+
+/**
+ * Whether this address is still stuck on the waitlist, read-only — the Terms
+ * gate's own use, which must never seed one for an address that was only
+ * ever a customer. `readMyVendorApplication` is the seeding read.
+ *
+ * Gated on {@link wouldRefuseVendor}, not merely on the row's existence: an
+ * application does not disappear when it is invited (`markApplicationInvited`
+ * only changes its status) or when the gate is later switched off, and a row
+ * from either state must not go on diverting its owner away from
+ * `/accept-terms` forever.
+ */
+export async function readVendorWaitlistStatus(
+  db: AppDatabase,
+  email: string,
+): Promise<{ exists: boolean; complete: boolean }> {
+  if (!(await wouldRefuseVendor(db, email))) {
+    return { exists: false, complete: false };
+  }
+
+  const row = await findApplicationByEmail(db, email);
+
+  return row ? { exists: true, complete: row.complete } : { exists: false, complete: false };
+}
+
 /** `GET /vendor-applications/gate`. */
 export async function readVendorSignUpGate(db: AppDatabase): Promise<VendorSignUpGate> {
   const { vendorInviteOnly } = await readPlatformSwitches(db);
@@ -133,38 +227,78 @@ export async function readVendorSignUpGate(db: AppDatabase): Promise<VendorSignU
 }
 
 /**
- * `POST /vendor-applications`. The same receipt whether the address was new or
- * already waiting, so the form answers nothing about who else has applied.
+ * `POST /vendor-applications`: the details screen's submit (VEN-512).
  *
- * `sessionEmail` is the caller's auth address when they hold a session — the
- * refused vendor the gate sends here — and it replaces whatever the body says.
+ * Requires a session — a verified vendor address, always, since the gate is
+ * the only door onto this route now (`vendor-invites.routes.ts` refuses a
+ * signed-out call before this runs). The typed-email, signed-out path this
+ * used to serve is gone: a stranger can no longer fill the waitlist with
+ * addresses that were never verified.
  */
 export async function submitVendorApplication(
   db: AppDatabase,
   body: VendorApplicationInput,
-  sessionEmail: string | null,
+  sessionEmail: string,
 ): Promise<VendorApplicationReceipt> {
-  const input = sessionEmail === null ? body : { ...body, email: sessionEmail };
+  const input = { ...body, email: sessionEmail };
 
-  /*
-   * An address with an account can never become a vendor (`users.role` is fixed at
-   * creation), so an application from it could only wait forever. A signed-in
-   * caller is told; a signed-out one gets the uniform receipt, because the form
-   * must not answer whether an address is registered.
-   */
+  // An address with an account can never become a vendor (`users.role` is fixed at creation).
   if (await hasLiveAccount(db, input.email)) {
-    if (sessionEmail !== null) {
-      throw conflict(ACCOUNT_EXISTS_MESSAGE);
-    }
+    throw conflict(ACCOUNT_EXISTS_MESSAGE);
+  }
 
-    return { received: true };
+  if ((await findActiveCategoryIds(db, [input.category])).length === 0) {
+    throw validationFailed(
+      'That category is not available. Reload and choose from the current list.',
+      { field: 'category' },
+    );
   }
 
   // Already invited by address: the application arrives decided, so it cannot be declined past the invite.
   const invited = (await findInviteByEmail(db, input.email)) !== null;
-  await upsertApplication(db, input, invited ? 'invited' : 'new', sessionEmail !== null);
+  await upsertApplication(db, input, invited ? 'invited' : 'new', true);
 
   return { received: true };
+}
+
+/**
+ * `GET /vendor-applications/me`: the details screen's read (VEN-512).
+ *
+ * **Read-only. It never writes a row.** The one and only writer is
+ * {@link seedApplicationOnRefusal}, which fires from an *actual* `admitVendor`
+ * refusal — so by the time a legitimately refused vendor ever reaches this
+ * route, their row already exists, written the moment they were refused
+ * rather than on whichever later visit happens to call this. "Nobody is lost
+ * by leaving early" therefore holds without this route creating anything: the
+ * loss it guards against already happened at the refusal, not at arrival.
+ *
+ * A seeding version of this used to exist and was removed: any verified
+ * session — a customer, an invited vendor, one with a live account, or simply
+ * someone who typed the URL — could reach it with no account yet, and writing
+ * a row for any of them would divert that address away from `/accept-terms`
+ * forever (`readVendorWaitlistStatus` gates the redirect on the same row).
+ * Gated on {@link wouldRefuseVendor} here too, so a row from before the gate
+ * lifted or before an invite landed is not reported back either.
+ */
+export async function readMyVendorApplication(
+  db: AppDatabase,
+  sessionEmail: string,
+): Promise<MyVendorApplication> {
+  const empty: MyVendorApplication = {
+    email: sessionEmail,
+    businessName: null,
+    category: null,
+    city: null,
+    state: null,
+    message: null,
+    complete: false,
+  };
+
+  if (!(await wouldRefuseVendor(db, sessionEmail))) {
+    return empty;
+  }
+
+  return (await findApplicationByEmail(db, sessionEmail)) ?? empty;
 }
 
 export async function listVendorApplications(
@@ -479,6 +613,12 @@ export async function decideVendorApplication(
       return { application: { ...row, status: 'declined' as const }, invite: null };
     }
 
+    if (!isVendorApplicationComplete(row)) {
+      throw conflict(
+        'This applicant has not given a business name, category and city yet — invite by email instead, or wait for them to finish the form.',
+      );
+    }
+
     if (await hasLiveAccount(tx, row.email)) {
       throw conflict(ACCOUNT_EXISTS_MESSAGE);
     }
@@ -502,9 +642,12 @@ export async function decideVendorApplication(
     email: application.email,
     businessName: application.businessName,
     category: application.category,
+    categoryName: await resolveCategoryName(deps.db, application.category),
     city: application.city,
+    state: application.state,
     message: application.message,
     status: application.status,
+    complete: isVendorApplicationComplete(application),
     createdAt: application.createdAt,
   };
 }
