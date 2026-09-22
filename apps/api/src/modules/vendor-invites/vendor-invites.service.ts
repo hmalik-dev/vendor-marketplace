@@ -10,6 +10,8 @@ import {
   type AdminVendorInviteList,
   type AdminVendorInviteQuery,
   type AdminVendorInviteRow,
+  type BulkInviteApplicationsResult,
+  type BulkInviteResultItem,
   type MyVendorApplication,
   type UserRole,
   type VendorApplicationDecision,
@@ -355,13 +357,15 @@ export function renderVendorInviteEmail(webOrigin: string): {
  * failed send** — that is recorded, which is what the operator's list shows and
  * what the sweep retries; only a failed write of the record itself propagates.
  * The idempotency key is the same on every attempt, so a retry cannot deliver
- * twice.
+ * twice. Returns whether the send itself failed, for a caller that reports it
+ * back synchronously (the bulk invite, VEN-513) rather than firing it into the
+ * background.
  */
 async function sendInviteEmail(
   deps: VendorInviteMailDeps,
   handle: AppDatabase,
   invite: { id: string; email: string },
-): Promise<void> {
+): Promise<boolean> {
   let failureReason: string | null = null;
 
   try {
@@ -377,6 +381,8 @@ async function sendInviteEmail(
   }
 
   await recordInviteEmailAttempt(handle, invite.id, { at: deps.now(), failureReason });
+
+  return failureReason !== null;
 }
 
 /** Sends the invite off the request path; a failed send is recorded, never the operator's error. */
@@ -650,4 +656,81 @@ export async function decideVendorApplication(
     complete: isVendorApplicationComplete(application),
     createdAt: application.createdAt,
   };
+}
+
+/**
+ * `POST /admin/vendor-applications/invite`: the operator ticks several waitlist
+ * rows and invites them in one action (VEN-513).
+ *
+ * Each id gets its own transaction and, on success, its own synchronous email
+ * send — never `decideVendorApplication`'s single throw, because a thrown
+ * `AppError` would end the whole request on the first bad id. `inviteAddress`
+ * is reused for the write itself, so the audit trail is identical to inviting
+ * the same ids one at a time through the single-application route. Ids run in
+ * order, one at a time: the risk an email gateway failure is per-address, but
+ * sending the whole selection at once would fan it out at the gateway in one
+ * burst.
+ *
+ * An id's status is read fresh under its own row lock rather than trusted from
+ * whatever the caller's stale page showed, so a row decided by someone else a
+ * moment ago is reported instead of acted on.
+ */
+export async function bulkInviteApplications(
+  deps: VendorInviteMailDeps,
+  actorId: string,
+  applicationIds: readonly string[],
+): Promise<BulkInviteApplicationsResult> {
+  const results: BulkInviteResultItem[] = [];
+
+  for (const applicationId of applicationIds) {
+    results.push(await bulkInviteOne(deps, actorId, applicationId));
+  }
+
+  return { results };
+}
+
+async function bulkInviteOne(
+  deps: VendorInviteMailDeps,
+  actorId: string,
+  applicationId: string,
+): Promise<BulkInviteResultItem> {
+  const outcome = await deps.db.transaction(async (tx) => {
+    const row = await lockApplication(tx, applicationId);
+
+    // Unknown, or declined: the operator's own decision, not overridden by a bulk selection.
+    if (!row || row.status === 'declined') {
+      return { status: 'not_found_or_decided' as const, invite: null };
+    }
+
+    if (row.status === 'invited') {
+      return { status: 'already_invited' as const, invite: null };
+    }
+
+    if (!isVendorApplicationComplete(row)) {
+      return { status: 'incomplete' as const, invite: null };
+    }
+
+    // An address with an account can never become a vendor (`users.role` is fixed at creation).
+    if (await hasLiveAccount(tx, row.email)) {
+      return { status: 'not_found_or_decided' as const, invite: null };
+    }
+
+    const created = await inviteAddress(tx, actorId, row.email);
+
+    // Invited by address already, before this application arrived: only the status was behind.
+    if (!created) {
+      await markApplicationInvited(tx, row.email);
+      return { status: 'already_invited' as const, invite: null };
+    }
+
+    return { status: 'invited' as const, invite: created };
+  });
+
+  if (outcome.status !== 'invited') {
+    return { id: applicationId, status: outcome.status, emailFailed: false };
+  }
+
+  const emailFailed = await sendInviteEmail(deps, deps.db, outcome.invite);
+
+  return { id: applicationId, status: 'invited', emailFailed };
 }

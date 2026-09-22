@@ -1,5 +1,5 @@
 import { setUserRole } from '../../testing/set-user-role.js';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   adminActions,
   categories,
@@ -42,6 +42,11 @@ type Response = Awaited<ReturnType<TestHarness['app']['inject']>>;
 function fromANewVisitor(): { remoteAddress: string } {
   visitors += 1;
   return { remoteAddress: `10.9.${Math.floor(visitors / 250)}.${visitors % 250}` };
+}
+
+/** A syntactically valid uuid that names no row, for the bulk invite's id-shaped tests. */
+function fakeId(n: number): string {
+  return `00000000-0000-4000-8000-${n.toString().padStart(12, '0')}`;
 }
 
 describe('the vendor gate', () => {
@@ -618,6 +623,7 @@ describe('the vendor gate', () => {
         for (const [method, url, payload] of [
           ['GET', '/admin/vendor-applications', undefined],
           ['PUT', `/admin/vendor-applications/${id}`, { decision: 'invite' }],
+          ['POST', '/admin/vendor-applications/invite', { applicationIds: [id] }],
           ['GET', '/admin/vendor-invites', undefined],
           ['POST', '/admin/vendor-invites', { email: 'x@example.com' }],
           ['DELETE', `/admin/vendor-invites/${id}`, undefined],
@@ -632,6 +638,13 @@ describe('the vendor gate', () => {
       }
 
       expect((await inject('GET', '/admin/vendor-invites', null)).statusCode).toBe(401);
+      expect(
+        (
+          await inject('POST', '/admin/vendor-applications/invite', null, {
+            applicationIds: [id],
+          })
+        ).statusCode,
+      ).toBe(401);
     });
 
     it('invites an applicant: invite row, status, audit and the email', async () => {
@@ -889,6 +902,168 @@ describe('the vendor gate', () => {
       const invites = (await inject('GET', '/admin/vendor-invites?page=2', ADMIN)).json();
       expect(invites).toMatchObject({ total: 17, page: 2 });
       expect(invites.items).toHaveLength(17 - invites.pageSize);
+    });
+  });
+
+  describe('POST /admin/vendor-applications/invite (VEN-513)', () => {
+    /** Three fresh, complete, `new` applications, in the order given. */
+    async function threeApplications(prefix: string): Promise<string[]> {
+      const emails = [
+        `${prefix}-1@example.com`,
+        `${prefix}-2@example.com`,
+        `${prefix}-3@example.com`,
+      ];
+      for (const email of emails) {
+        const vendor = await refusedVendor(email);
+        await apply(vendor.actor, application(email));
+      }
+      const items = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      return emails.map(
+        (email) => items.find((row: { email: string; id: string }) => row.email === email).id,
+      );
+    }
+
+    it('invites three applications in one action: invites, audit rows, statuses and emails (AC1)', async () => {
+      const ids = await threeApplications('bulk-invite');
+
+      const response = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+        applicationIds: ids,
+      });
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        results: ids.map((id) => ({ id, status: 'invited', emailFailed: false })),
+      });
+      const invites = await harness.database.db.select().from(vendorInvites);
+      expect(invites).toHaveLength(3);
+      const applications = await harness.database.db.select().from(vendorApplications);
+      expect(applications.map((row) => row.status)).toEqual(['invited', 'invited', 'invited']);
+      const audit = await harness.database.db
+        .select()
+        .from(adminActions)
+        .where(
+          and(
+            eq(adminActions.action, 'vendor_invited'),
+            inArray(
+              adminActions.subjectId,
+              invites.map((invite) => invite.id),
+            ),
+          ),
+        );
+      expect(audit).toHaveLength(3);
+      expect(harness.email.sent).toHaveLength(3);
+    });
+
+    it('reports already_invited for an already-invited applicant, and writes nothing new (AC2)', async () => {
+      const vendor = await refusedVendor('bulk-already@example.com');
+      await apply(vendor.actor, application(vendor.email));
+      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, { decision: 'invite' });
+      await harness.flushEmail();
+      harness.email.sent.length = 0;
+
+      const response = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+        applicationIds: [row.id],
+      });
+
+      expect(response.json()).toEqual({
+        results: [{ id: row.id, status: 'already_invited', emailFailed: false }],
+      });
+      const invites = await harness.database.db.select().from(vendorInvites);
+      expect(invites).toHaveLength(1);
+      const audit = await harness.database.db
+        .select()
+        .from(adminActions)
+        .where(
+          and(
+            eq(adminActions.action, 'vendor_invited'),
+            eq(adminActions.subjectId, invites[0]!.id),
+          ),
+        );
+      expect(audit).toHaveLength(1);
+      expect(harness.email.sent).toHaveLength(0);
+    });
+
+    it('reports a declined or unknown id as not_found_or_decided and an incomplete one as incomplete, without failing the request (AC3)', async () => {
+      const declinedVendor = await refusedVendor('bulk-declined@example.com');
+      await apply(declinedVendor.actor, application(declinedVendor.email));
+      const [declinedRow] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      await inject('PUT', `/admin/vendor-applications/${declinedRow.id}`, ADMIN, {
+        decision: 'decline',
+      });
+
+      await refusedVendor('bulk-incomplete@example.com');
+      const incompleteRow = (await inject('GET', '/admin/vendor-applications', ADMIN))
+        .json()
+        .items.find((row: { email: string }) => row.email === 'bulk-incomplete@example.com');
+      const unknownId = fakeId(1);
+
+      const response = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+        applicationIds: [declinedRow.id, incompleteRow.id, unknownId],
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        results: [
+          { id: declinedRow.id, status: 'not_found_or_decided', emailFailed: false },
+          { id: incompleteRow.id, status: 'incomplete', emailFailed: false },
+          { id: unknownId, status: 'not_found_or_decided', emailFailed: false },
+        ],
+      });
+      const [stored] = await harness.database.db
+        .select()
+        .from(vendorApplications)
+        .where(eq(vendorApplications.id, declinedRow.id));
+      expect(stored?.status).toBe('declined');
+      expect(await harness.database.db.select().from(vendorInvites)).toHaveLength(0);
+    });
+
+    it('marks the one invite whose email fails, and leaves the other two unaffected (AC4)', async () => {
+      const ids = await threeApplications('bulk-partial');
+
+      // `failNext` fires on the first send the service makes, which is the first id in the array.
+      harness.email.failNext = true;
+      const response = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+        applicationIds: ids,
+      });
+      await harness.flushEmail();
+
+      expect(response.json()).toEqual({
+        results: [
+          { id: ids[0], status: 'invited', emailFailed: true },
+          { id: ids[1], status: 'invited', emailFailed: false },
+          { id: ids[2], status: 'invited', emailFailed: false },
+        ],
+      });
+      const invites = await harness.database.db.select().from(vendorInvites);
+      expect(invites).toHaveLength(3);
+      const failed = invites.find((invite) => invite.email === 'bulk-partial-1@example.com');
+      expect(failed?.emailSentAt).toBeNull();
+      expect(failed?.emailFailureReason).toBe('Resend refused the send (500)');
+      const sent = invites.filter((invite) => invite.email !== 'bulk-partial-1@example.com');
+      expect(sent.every((invite) => invite.emailSentAt !== null)).toBe(true);
+      expect(harness.email.sent).toHaveLength(2);
+    });
+
+    it('refuses more than 50 ids, an empty list and a non-uuid, with the standard error shape (AC5)', async () => {
+      const tooMany = Array.from({ length: 51 }, (_, index) => fakeId(index));
+
+      const over = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+        applicationIds: tooMany,
+      });
+      const empty = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+        applicationIds: [],
+      });
+      const malformed = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+        applicationIds: ['not-a-uuid'],
+      });
+
+      for (const response of [over, empty, malformed]) {
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toMatchObject({ error: 'VALIDATION_ERROR' });
+      }
+      expect(await harness.database.db.select().from(vendorInvites)).toHaveLength(0);
     });
   });
 });

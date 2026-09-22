@@ -46,6 +46,8 @@ export default async function AdminVendorApplicationsPage({
       ]}
     >
       <VendorApplicationsPanel
+        // Selection clears on page change (VEN-513): a fresh page of ids is a fresh selection.
+        key={applicationsPage}
         applications={applications.items}
         invites={invites.items}
         invitesPager={{
