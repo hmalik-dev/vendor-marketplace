@@ -82,11 +82,7 @@
     },
     "@vendor-marketplace/shared#test": {
       "dependsOn": ["^build"],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/.claude/memory/**",
-        "$TURBO_ROOT$/.claude/agent-memory/**"
-      ]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/**"]
     },
     "test:contention": {
       "dependsOn": ["^build"],
