@@ -4,9 +4,23 @@
  * via `pnpm test:agents`.
  */
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-import { REQUIRED_SECRETS, renderSummary, secretsVerdict, summarizeReport } from './e2e-ci.mjs';
+import {
+  FULL_SUITE,
+  REQUIRED_SECRETS,
+  renderSelection,
+  renderSummary,
+  selectSpecs,
+  SPEC_SELECTORS,
+  secretsVerdict,
+  summarizeReport,
+} from './e2e-ci.mjs';
+
+const sorted = (list) => [...list].sort();
 
 const ALL_SECRETS = Object.fromEntries(
   REQUIRED_SECRETS.map(([variable]) => [variable, `value-of-${variable}`]),
@@ -128,4 +142,207 @@ test('a clean run reports zero retries and no retry section', () => {
   });
   assert.match(text, /0 passed only on retry/);
   assert.doesNotMatch(text, /Passed only on retry\*\*/);
+});
+
+// VEN-411 AC6-9: which specs a diff and trigger need.
+
+test('a diff touching only admin routes selects the admin specs, not customer or vendor ones', () => {
+  const selection = selectSpecs({
+    ref: 'refs/pull/42/merge',
+    changedPaths: ['apps/web/src/app/admin/customers/[userId]/page.tsx'],
+  });
+  assert.deepEqual(
+    sorted(selection.suite),
+    sorted([
+      'admin-closed-customers.spec.ts',
+      'admin-detail-patterns.spec.ts',
+      'admin-filters.spec.ts',
+      'admin-lists.spec.ts',
+      'admin-operator-closure.spec.ts',
+      // /admin/settings toggles both switches below, so an admin change pulls
+      // them in too — that is still "the admin specs", not the customer or
+      // vendor journeys.
+      'launch-switches.spec.ts',
+      'vendor-refusal-routing.spec.ts',
+      // route-landing.spec.ts sweeps every route at run time, admin's included.
+      'route-landing.spec.ts',
+    ]),
+  );
+  for (const excluded of ['messaging.spec.ts', 'booking-request.spec.ts', 'paid-booking.spec.ts']) {
+    assert.ok(!selection.suite.includes(excluded), `admin diff should not select ${excluded}`);
+  }
+});
+
+test('a diff touching only a customer route selects the customer specs, not admin-*', () => {
+  const selection = selectSpecs({
+    ref: 'refs/pull/42/merge',
+    changedPaths: ['apps/web/src/app/messages/page.tsx'],
+  });
+  assert.deepEqual(
+    sorted(selection.suite),
+    sorted(['messaging.spec.ts', 'focus-indicator.spec.ts', 'route-landing.spec.ts']),
+  );
+  assert.ok(!selection.suite.some((spec) => spec.startsWith('admin-')));
+});
+
+test('a diff touching a vendor route selects the vendor specs', () => {
+  const selection = selectSpecs({
+    ref: 'refs/heads/main',
+    changedPaths: ['apps/web/src/app/vendor/dashboard/page.tsx'],
+  });
+  assert.deepEqual(
+    sorted(selection.suite),
+    sorted([
+      'vendor-refusal-routing.spec.ts',
+      'focus-indicator.spec.ts',
+      'paid-booking.spec.ts',
+      'booking-request.spec.ts',
+      'image-fallback.spec.ts',
+      'route-landing.spec.ts',
+    ]),
+  );
+  assert.ok(!selection.suite.some((spec) => spec.startsWith('admin-')));
+});
+
+test('a changed spec file always selects itself', () => {
+  const selection = selectSpecs({
+    ref: 'refs/pull/42/merge',
+    changedPaths: ['apps/web/e2e/focus-indicator.spec.ts'],
+  });
+  assert.deepEqual(selection.suite, ['focus-indicator.spec.ts']);
+});
+
+test('two diffs union their specs, deduplicated', () => {
+  const selection = selectSpecs({
+    ref: 'refs/pull/42/merge',
+    changedPaths: [
+      'apps/web/src/app/messages/page.tsx',
+      'apps/web/src/app/messages/[threadId]/page.tsx',
+      'apps/web/src/app/vendor/dashboard/page.tsx',
+    ],
+  });
+  assert.deepEqual(
+    sorted(selection.suite),
+    sorted([
+      'messaging.spec.ts',
+      'focus-indicator.spec.ts',
+      'vendor-refusal-routing.spec.ts',
+      'paid-booking.spec.ts',
+      'booking-request.spec.ts',
+      'image-fallback.spec.ts',
+      'route-landing.spec.ts',
+    ]),
+  );
+  // focus-indicator.spec.ts is named by both the messaging and vendor
+  // entries: deduplicated, so it appears once, not twice.
+  assert.equal(selection.suite.filter((spec) => spec === 'focus-indicator.spec.ts').length, 1);
+});
+
+test('a path under bookings/[requestId] unions the hub specs and the payments specs', () => {
+  const selection = selectSpecs({
+    ref: 'refs/pull/42/merge',
+    changedPaths: ['apps/web/src/app/bookings/[requestId]/checkout/page.tsx'],
+  });
+  assert.ok(selection.suite.includes('paid-booking.spec.ts'));
+  assert.ok(selection.suite.includes('launch-switches.spec.ts'));
+});
+
+test('a diff touching packages/shared selects the full suite', () => {
+  const selection = selectSpecs({
+    ref: 'refs/pull/42/merge',
+    changedPaths: ['packages/shared/src/schemas/booking.ts'],
+  });
+  assert.deepEqual(selection, {
+    suite: FULL_SUITE,
+    reason: 'packages/shared/src/schemas/booking.ts is a shared path',
+  });
+});
+
+test('a diff touching packages/db selects the full suite', () => {
+  const selection = selectSpecs({
+    ref: 'refs/pull/42/merge',
+    changedPaths: ['packages/db/src/schema/booking.ts'],
+  });
+  assert.equal(selection.suite, FULL_SUITE);
+});
+
+test('a path the table does not map selects the full suite, fail-safe', () => {
+  const selection = selectSpecs({
+    ref: 'refs/pull/42/merge',
+    changedPaths: ['apps/web/src/app/support/page.tsx'],
+  });
+  assert.deepEqual(selection, {
+    suite: FULL_SUITE,
+    reason: 'apps/web/src/app/support/page.tsx matches no entry in the changed-path table',
+  });
+});
+
+test('one unmapped path in an otherwise-mapped diff still selects the full suite', () => {
+  const selection = selectSpecs({
+    ref: 'refs/pull/42/merge',
+    changedPaths: ['apps/web/src/app/messages/page.tsx', 'apps/web/src/app/support/page.tsx'],
+  });
+  assert.equal(selection.suite, FULL_SUITE);
+});
+
+test('an empty diff selects nothing', () => {
+  const selection = selectSpecs({ ref: 'refs/pull/42/merge', changedPaths: [] });
+  assert.deepEqual(selection, { suite: [], reason: 'no changed paths' });
+});
+
+test('a push to staging selects the full suite for any diff, including docs-only', () => {
+  const selection = selectSpecs({
+    ref: 'refs/heads/staging',
+    changedPaths: ['README.md'],
+  });
+  assert.equal(selection.suite, FULL_SUITE);
+});
+
+test('a push to production selects the full suite for any diff', () => {
+  const selection = selectSpecs({
+    ref: 'refs/heads/production',
+    changedPaths: [],
+  });
+  assert.equal(selection.suite, FULL_SUITE);
+});
+
+test('a push to main scopes by diff like a pull request', () => {
+  const selection = selectSpecs({
+    ref: 'refs/heads/main',
+    changedPaths: ['apps/web/src/app/messages/page.tsx'],
+  });
+  assert.deepEqual(
+    sorted(selection.suite),
+    sorted(['messaging.spec.ts', 'focus-indicator.spec.ts', 'route-landing.spec.ts']),
+  );
+});
+
+test('every committed spec is reachable from the table or the route sweep', () => {
+  const e2eDir = join(dirname(fileURLToPath(import.meta.url)), '../apps/web/e2e');
+  const committedSpecs = readdirSync(e2eDir).filter((name) => name.endsWith('.spec.ts'));
+  const reachable = new Set([
+    'route-landing.spec.ts', // added by the route sweep, not listed in any entry's `specs`
+    ...SPEC_SELECTORS.flatMap((selector) => selector.specs),
+  ]);
+
+  const orphaned = committedSpecs.filter((spec) => !reachable.has(spec));
+  assert.deepEqual(orphaned, [], 'a spec file changed selects itself, but nothing else selects it');
+});
+
+test('renderSelection names an empty selection as green with the summary line', () => {
+  const text = renderSelection({ suite: [], reason: 'no changed paths' });
+  assert.match(text, /no journeys affected by this diff/);
+});
+
+test('renderSelection names the full suite and why', () => {
+  const text = renderSelection({
+    suite: FULL_SUITE,
+    reason: 'push to refs/heads/staging: the full suite is the release gate',
+  });
+  assert.match(text, /Full suite — push to refs\/heads\/staging/);
+});
+
+test('renderSelection lists a scoped selection by spec name', () => {
+  const text = renderSelection({ suite: ['messaging.spec.ts'], reason: null });
+  assert.match(text, /Scoped to: messaging\.spec\.ts/);
 });
