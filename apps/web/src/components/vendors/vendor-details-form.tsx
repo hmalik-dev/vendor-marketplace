@@ -119,7 +119,7 @@ export function VendorDetailsForm({
         </span>
         <div
           aria-labelledby={`${fieldId}-email-label`}
-          className="flex items-center justify-between gap-2.5 rounded-lg border border-stone-300 bg-stone-150 px-3.25 py-2.5"
+          className="flex items-center justify-between gap-2.5 rounded-lg border border-input bg-stone-150 px-3.25 py-2.5"
         >
           <span className="text-[13.5px] text-stone-700">{application.email}</span>
           <StatusPill tone="confirmed" className="shrink-0">
