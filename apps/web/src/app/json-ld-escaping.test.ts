@@ -32,10 +32,35 @@ function sourceFiles(directory: string): string[] {
   });
 }
 
+const JSON_LD_BLOCK = /type="application\/ld\+json"/g;
+
 describe('structured data written straight into the DOM', () => {
   const files = sourceFiles(SOURCE_ROOT).map(
     (file) => [file.replace(`${SOURCE_ROOT}/`, ''), readFileSync(file, 'utf8')] as const,
   );
+
+  /**
+   * Counted per file, not `.includes`/whole-file `.test`: a file that guards
+   * its first JSON-LD block would otherwise hide a second, unguarded one
+   * added beside it. This compares two whole-file totals rather than pairing
+   * a guard to its block, so `guarded < blocks` (not `!==`) — a legitimately
+   * guarded block may spend the guard token more than once (e.g. composing a
+   * script's payload from two `serialiseJsonLd(...)` calls), and that must
+   * not read as an offence.
+   */
+  function filesMissingGuard(
+    entries: readonly (readonly [string, string])[],
+    guardPattern: RegExp,
+  ): string[] {
+    return entries
+      .filter(([, code]) => {
+        const blocks = code.match(JSON_LD_BLOCK)?.length ?? 0;
+        const guarded = code.match(guardPattern)?.length ?? 0;
+
+        return blocks > 0 && guarded < blocks;
+      })
+      .map(([file]) => file);
+  }
 
   it('finds the sites it is meant to be guarding', () => {
     const withRawHtml = files.filter(([, code]) => code.includes('dangerouslySetInnerHTML'));
@@ -62,21 +87,51 @@ describe('structured data written straight into the DOM', () => {
    * data. A JSX attribute check: the rendered result is a browser check.
    */
   it('stamps every JSON-LD block with the request nonce', () => {
-    const offenders = files
-      .filter(([, code]) => code.includes('application/ld+json'))
-      .filter(([, code]) => !/type="application\/ld\+json"\s+nonce=\{nonce\}/.test(code))
-      .map(([file]) => file);
+    const NONCE_PATTERN = /type="application\/ld\+json"\s+nonce=\{nonce\}/g;
+    const offenders = filesMissingGuard(files, NONCE_PATTERN);
 
     expect(offenders).toEqual([]);
+
+    // A second, unguarded block beside a conforming one is not hidden by it.
+    const secondBlockUnnonced: readonly [string, string] = [
+      'synthetic.tsx',
+      `
+      <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: serialiseJsonLd(a) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serialiseJsonLd(b) }} />
+      `,
+    ];
+
+    expect(filesMissingGuard([secondBlockUnnonced], NONCE_PATTERN)).toEqual(['synthetic.tsx']);
   });
 
   it('serialises every JSON-LD block through the escaping helper', () => {
-    const offenders = files
-      .filter(([, code]) => code.includes('application/ld+json'))
-      .filter(([, code]) => !code.includes('serialiseJsonLd'))
-      .map(([file]) => file);
+    const HELPER_PATTERN = /serialiseJsonLd\(/g;
+    const offenders = filesMissingGuard(files, HELPER_PATTERN);
 
     expect(offenders).toEqual([]);
+
+    // A second block that falls back to JSON.stringify is not hidden by a
+    // conforming first block.
+    const secondBlockUnserialised: readonly [string, string] = [
+      'synthetic.tsx',
+      `
+      <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: serialiseJsonLd(a) }} />
+      <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: JSON.stringify(b) }} />
+      `,
+    ];
+
+    expect(filesMissingGuard([secondBlockUnserialised], HELPER_PATTERN)).toEqual(['synthetic.tsx']);
+
+    // A block whose payload composes two calls to the helper is guarded, not
+    // an offender — `guarded < blocks`, never `!==`.
+    const oneBlockTwoHelperCalls: readonly [string, string] = [
+      'synthetic-composed.tsx',
+      `
+      <script type="application/ld+json" nonce={nonce} dangerouslySetInnerHTML={{ __html: serialiseJsonLd(a) + serialiseJsonLd(b) }} />
+      `,
+    ];
+
+    expect(filesMissingGuard([oneBlockTwoHelperCalls], HELPER_PATTERN)).toEqual([]);
   });
 
   /*
@@ -90,14 +145,7 @@ describe('structured data written straight into the DOM', () => {
    * beside it.
    */
   it("suppresses the hydration warning every JSON-LD block's nonce provokes", () => {
-    const offenders = files
-      .filter(([, code]) => {
-        const blocks = code.match(/type="application\/ld\+json"/g)?.length ?? 0;
-        const suppressed = code.match(/suppressHydrationWarning/g)?.length ?? 0;
-
-        return blocks > 0 && blocks !== suppressed;
-      })
-      .map(([file]) => file);
+    const offenders = filesMissingGuard(files, /suppressHydrationWarning/g);
 
     expect(offenders).toEqual([]);
   });
