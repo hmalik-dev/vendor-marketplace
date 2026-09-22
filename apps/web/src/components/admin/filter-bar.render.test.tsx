@@ -7,6 +7,25 @@ const push = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 
 /*
+ * `pendingOverride` lets one test force `useTransition`'s reported `pending`
+ * to stay `true` after the real transition has already settled — the shape of
+ * VEN-591's bug, where Next's own settle signal is not trustworthy proof that
+ * *this* push landed. `startTransition` itself is untouched; only the
+ * `pending` value the component reads is substituted.
+ */
+let pendingOverride: boolean | null = null;
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react')>();
+  return {
+    ...actual,
+    useTransition: () => {
+      const [realPending, start] = actual.useTransition();
+      return [pendingOverride ?? realPending, start] as const;
+    },
+  };
+});
+
+/*
  * The Refine bar's submit and the query it sends (VEN-383).
  *
  * The defect this file was written against: on `/admin/reviews` the `Apply
@@ -385,5 +404,121 @@ describe('a Refine bar dropdown falling back off a dropped push', () => {
     choose('City', 'Austin');
 
     expect(assign).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * VEN-591. `/admin/activity`'s Action filter still raced after VEN-576: a bar
+ * that also mounts a plain `Link` beside its dropdowns (`/admin/activity`'s
+ * "Clear subject filter") can have that `Link`'s prefetch settle Next's own
+ * transition tracking without this push's URL ever landing, so `pending` goes
+ * `false` and the VEN-576 effect declares victory over a navigation that never
+ * happened. `pendingOverride` reproduces exactly that: `pending` reads `true`
+ * throughout, so the effect never runs, and only the bounded timer — which
+ * does not depend on Next reporting anything — can heal it.
+ */
+describe('a Refine bar dropdown healing off the timer, not the transition settle', () => {
+  const assign = vi.fn();
+  const originalLocation = window.location;
+
+  function choose(label: string, option: string): void {
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    fireEvent.click(screen.getByRole('option', { name: option }));
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    assign.mockClear();
+    pendingOverride = true;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/admin/activity', search: '?actor=a1&subject=s1&page=2', assign },
+    });
+  });
+
+  afterEach(() => {
+    pendingOverride = null;
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+    vi.useRealTimers();
+  });
+
+  it('hard-navigates once the heal timer elapses, even though pending never settles', () => {
+    render(
+      <FilterBar action="/admin/activity" params={{ actor: 'a1', subject: 's1', page: '2' }}>
+        <FilterSelect
+          action="/admin/activity"
+          name="action"
+          label="Action"
+          value=""
+          options={[{ value: 'vendor.banned', label: 'Vendor suspended' }]}
+        />
+      </FilterBar>,
+    );
+
+    choose('Action', 'Vendor suspended');
+
+    // Nothing yet: the effect cannot fire while `pending` is stuck `true`.
+    expect(assign).not.toHaveBeenCalled();
+
+    // Pinned budget (would stay green through a regression to an eager timer
+    // if this were missing): one tick short of the deadline is still nothing.
+    vi.advanceTimersByTime(2999);
+    expect(assign).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(assign).toHaveBeenCalledWith('/admin/activity?actor=a1&subject=s1&action=vendor.banned');
+  });
+
+  /*
+   * Two writes, back to back, on two different dropdowns in the same bar
+   * (AC2), and *both* dropped — the shape a diff-reviewer pass on this ticket
+   * found the first version of this fix got wrong: a per-`FilterSelect` timer
+   * checked only its own `from`/`to`, so `Actor`'s timer had no way to know
+   * `Action` had since become the operator's real, later intent, and would
+   * hard-navigate back to `Actor`'s stale target once its own deadline
+   * elapsed — reintroducing the exact clobber VEN-576's `from` comparison
+   * exists to prevent, just with a multi-second window instead of a
+   * same-commit one.
+   *
+   * The fix is one shared `latest`/`timer` per bar (`FilterNav`): starting
+   * `Action`'s push immediately supersedes `Actor`'s attempt and cancels its
+   * timer outright, so `Actor`'s deadline (t=3000) never fires at all — only
+   * `Action`'s own deadline (started at t=1000, so t=4000) can, and only for
+   * `Action`'s own URL.
+   */
+  it('lets a later write supersede an earlier one, even when both pushes are dropped', () => {
+    render(
+      <FilterBar action="/admin/activity" params={{ actor: 'a1', subject: 's1', page: '2' }}>
+        <FilterSelect
+          action="/admin/activity"
+          name="actor"
+          label="Actor"
+          value="a1"
+          options={[{ value: 'a2', label: 'Operator two' }]}
+        />
+        <FilterSelect
+          action="/admin/activity"
+          name="action"
+          label="Action"
+          value=""
+          options={[{ value: 'vendor.banned', label: 'Vendor suspended' }]}
+        />
+      </FilterBar>,
+    );
+
+    choose('Actor', 'Operator two');
+    vi.advanceTimersByTime(1000);
+    choose('Action', 'Vendor suspended');
+
+    // Past `Actor`'s own would-be deadline (t=3000): its timer was cancelled
+    // the moment `Action` pushed, so nothing has fired yet — and specifically
+    // not a hard-navigation to `Actor`'s stale `?actor=a2` target.
+    vi.advanceTimersByTime(2000);
+    expect(assign).not.toHaveBeenCalled();
+
+    // `Action`'s own deadline (started at t=1000, so t=4000 absolute).
+    vi.advanceTimersByTime(1000);
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(assign).toHaveBeenCalledWith('/admin/activity?actor=a1&subject=s1&action=vendor.banned');
   });
 });
