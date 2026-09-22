@@ -88,6 +88,8 @@ export const REQUIRED_INPUTS = [
   { name: 'VERCEL_PROJECT_ID', kind: 'variable' },
   { name: 'SENTRY_AUTH_TOKEN', kind: 'secret' },
   { name: 'SENTRY_WEB_PROJECT', kind: 'variable' },
+  { name: 'WEB_TIER_KEY', kind: 'secret' },
+  { name: 'NEON_AUTH_COOKIE_SECRET', kind: 'secret' },
   { name: 'API_URL', kind: 'variable' },
   { name: 'WEB_URL', kind: 'variable' },
 ];
@@ -481,11 +483,18 @@ export const PHASES = {
    * environments), then aliased to the host of `WEB_URL` so the readiness poll
    * and people have one stable address; `vercel deploy` prints the deployment's
    * URL on its own line, which is what the alias names.
+   *
+   * VEN-575: `WEB_TIER_KEY` and `NEON_AUTH_COOKIE_SECRET` are Secret-type Vercel
+   * variables, which `vercel pull` writes as empty strings, so the build would
+   * validate blanks. They come from the GitHub environment's secrets instead and
+   * reach the `vercel build` process's environment only: never argv, never a
+   * file, never `pull` or `deploy`.
    */
   async web(env, io) {
     const vercel = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
     const upload = ['SENTRY_AUTH_TOKEN', 'SENTRY_WEB_PROJECT', 'SENTRY_RELEASE'];
-    need(env, [...vercel, ...upload, 'DEPLOY_TARGET']);
+    const buildSecrets = ['WEB_TIER_KEY', 'NEON_AUTH_COOKIE_SECRET'];
+    need(env, [...vercel, ...upload, ...buildSecrets, 'DEPLOY_TARGET']);
 
     const production = env.DEPLOY_TARGET === 'production';
     if (!production && env.DEPLOY_TARGET !== 'staging') {
@@ -508,9 +517,13 @@ export const PHASES = {
       }
     }
 
-    const redact = redactor([env.VERCEL_TOKEN, env.SENTRY_AUTH_TOKEN]);
+    const redact = redactor([
+      env.VERCEL_TOKEN,
+      env.SENTRY_AUTH_TOKEN,
+      ...buildSecrets.map((name) => env[name]),
+    ]);
     const child = pick(env, [...TOOL_ENV, ...vercel]);
-    const build = pick(env, [...TOOL_ENV, ...vercel, ...upload]);
+    const build = pick(env, [...TOOL_ENV, ...vercel, ...upload, ...buildSecrets]);
     const cli = ['--yes', VERCEL_CLI];
     const target = production ? ['--prod'] : [];
 

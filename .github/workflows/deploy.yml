@@ -103,6 +103,8 @@ jobs:
           HAS_VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID != '' }}
           HAS_SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN != '' }}
           HAS_SENTRY_WEB_PROJECT: ${{ vars.SENTRY_WEB_PROJECT != '' }}
+          HAS_WEB_TIER_KEY: ${{ secrets.WEB_TIER_KEY != '' }}
+          HAS_NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET != '' }}
           HAS_API_URL: ${{ vars.API_URL != '' }}
           HAS_WEB_URL: ${{ vars.WEB_URL != '' }}
           API_HOST: ${{ vars.API_HOST }}
@@ -152,6 +154,10 @@ jobs:
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_WEB_PROJECT: ${{ vars.SENTRY_WEB_PROJECT }}
+          # Secret-type Vercel variables that `vercel pull` cannot read (VEN-575);
+          # the phase hands them to `vercel build` alone.
+          WEB_TIER_KEY: ${{ secrets.WEB_TIER_KEY }}
+          NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
           # Staging aliases its preview deployment to this host.
           WEB_URL: ${{ vars.WEB_URL }}
         run: node scripts/deploy.mjs web
