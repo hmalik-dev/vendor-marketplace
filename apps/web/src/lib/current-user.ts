@@ -106,6 +106,17 @@ async function getCurrentUserOrSuspend(): Promise<WireUser | null> {
      * status alone cannot tell them apart — only the code can.
      */
     await redirectIfTermsRequired(error);
+    /*
+     * `redirectIfTermsRequired` only throws when the current route is not
+     * gate-exempt; on `isGateExemptPath` routes (VEN-586) it returns and this
+     * error is still the gate, whose status code is also 403 — falling
+     * through to the suspend branch below would send this exempt route's
+     * reader to `/suspended` for holding the very session the exemption
+     * exists to let through.
+     */
+    if (isTermsRequired(error)) {
+      return null;
+    }
     if (error instanceof ApiClientError && error.statusCode === 403) {
       redirect('/suspended');
     }

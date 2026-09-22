@@ -36,7 +36,10 @@ describe('useApi and the acceptance gate', () => {
   beforeEach(() => {
     push.mockReset();
     apiRequest.mockReset();
-    window.history.replaceState({}, '', '/vendors/june-harlow?package=1');
+    // An account-only route, not a storefront: VEN-586 made `/vendors/<slug>`
+    // itself gate-exempt, so this fixture has to stay off that pattern for the
+    // "carries where they were" assertion below to mean anything.
+    window.history.replaceState({}, '', '/bookings/abc?package=1');
   });
 
   afterEach(() => {
@@ -53,7 +56,7 @@ describe('useApi and the acceptance gate', () => {
     await expect(result.current('/conversations', { schema: z.unknown() })).rejects.toThrow();
 
     expect(push).toHaveBeenCalledWith(
-      `${TERMS_ACCEPTANCE_PATH}?returnTo=%2Fvendors%2Fjune-harlow%3Fpackage%3D1`,
+      `${TERMS_ACCEPTANCE_PATH}?returnTo=%2Fbookings%2Fabc%3Fpackage%3D1`,
     );
   });
 
@@ -214,6 +217,48 @@ describe('useApi and a session refused mid-session', () => {
 
       expect(assign).not.toHaveBeenCalled();
       expect(replace).not.toHaveBeenCalled();
+    },
+  );
+
+  /**
+   * VEN-586: `/`, `/search` and a storefront joined the **Terms funnel's**
+   * exemption (`isGateExemptPath`) so a waitlisted-but-uninvited vendor stays
+   * on them. `useRefusalRedirect` reads a separate, narrower list
+   * (`isRefusalExemptPath`) precisely so this case does not regress — these
+   * three pages carry real authenticated actions (a storefront's booking
+   * rail, the header's notification bell), so a session actually revoked or
+   * banned there still has to be signed out or sent to `/suspended`.
+   */
+  it.each(['/', '/search', '/vendors/june-harlow'])(
+    'still signs out a revoked session (401) on the newly public %s',
+    async (pathname) => {
+      stubLocation(pathname);
+      apiRequest.mockRejectedValue(new ApiClientError(401, ERROR_CODES.UNAUTHORIZED, 'no'));
+
+      const { result } = renderHook(() => useApi());
+
+      await expect(result.current('/x', { schema: z.unknown() })).rejects.toThrow();
+
+      expect(clearSessionToken).toHaveBeenCalledOnce();
+      expect(assign).toHaveBeenCalledExactlyOnceWith(
+        `/sign-in?returnTo=${encodeURIComponent(pathname)}`,
+      );
+    },
+  );
+
+  it.each(['/', '/search', '/vendors/june-harlow'])(
+    'still sends a suspended account (403) to /suspended from the newly public %s',
+    async (pathname) => {
+      stubLocation(pathname);
+      apiRequest.mockRejectedValue(
+        new ApiClientError(403, ERROR_CODES.ACCOUNT_SUSPENDED, 'Account suspended'),
+      );
+
+      const { result } = renderHook(() => useApi());
+
+      await expect(result.current('/x', { schema: z.unknown() })).rejects.toThrow();
+
+      expect(replace).toHaveBeenCalledExactlyOnceWith('/suspended');
     },
   );
 });

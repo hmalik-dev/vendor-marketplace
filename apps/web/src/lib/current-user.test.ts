@@ -121,6 +121,10 @@ describe('requireCurrentUser', () => {
     redirect.mockClear();
   });
 
+  afterEach(() => {
+    requestPath = null;
+  });
+
   it('sends a signed-out visitor to sign-in', async () => {
     getToken.mockResolvedValue(null);
 
@@ -153,6 +157,23 @@ describe('requireCurrentUser', () => {
 
     await expect(requireCurrentUser()).rejects.toBeInstanceOf(ApiClientError);
     expect(redirect).not.toHaveBeenCalled();
+  });
+
+  /*
+   * VEN-586 regression: an account-only route is not gate-exempt, so a gated
+   * session must still be sent to the interstitial rather than rendered —
+   * only the public browse surfaces changed.
+   */
+  it('still sends a gated session to the Terms gate on an account-only route', async () => {
+    requestPath = '/dashboard';
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, 'TERMS_REQUIRED', 'Accept the Terms of Service to continue.'),
+    );
+
+    await expect(requireCurrentUser()).rejects.toThrow(
+      'NEXT_REDIRECT:/accept-terms?returnTo=%2Fdashboard',
+    );
   });
 });
 
@@ -259,6 +280,7 @@ describe('redirectVendorToDashboard', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    requestPath = null;
   });
 
   it('leaves a signed-out visitor on the landing page', async () => {
@@ -307,6 +329,25 @@ describe('redirectVendorToDashboard', () => {
   ])('renders the public page through %s, skipping the redirect', async (_label, failure) => {
     getToken.mockResolvedValue('token');
     apiRequest.mockRejectedValue(failure);
+
+    await expect(redirectVendorToDashboard()).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  /*
+   * VEN-586: a waitlisted-but-uninvited vendor's session answers `/users/me`
+   * with `TERMS_REQUIRED` on every route, because it can never clear the
+   * gate. `/` is now gate-exempt, so it must render rather than bounce to
+   * `/accept-terms` — and, before this fix, `getCurrentUserOrSuspend` fell
+   * through to its own suspend branch afterwards (both are 403) and sent it
+   * to `/suspended` instead.
+   */
+  it('renders the home page for a gated session instead of redirecting it away', async () => {
+    requestPath = '/';
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, 'TERMS_REQUIRED', 'Accept the Terms of Service to continue.'),
+    );
 
     await expect(redirectVendorToDashboard()).resolves.toBeUndefined();
     expect(redirect).not.toHaveBeenCalled();
