@@ -18,8 +18,9 @@ export const metadata: Metadata = { title: pageTitle(document.title) };
  * the notice. The only cookie is the identity provider's session cookie, which is strictly necessary
  * and needs no consent. A banner over nothing is theatre, and
  * `no-cookie-consent.test.ts` asserts the absence rather than leaving it to be
- * noticed. If anything measuring behaviour is ever added, this page changes
- * first and the banner arrives with it.
+ * noticed. If anything that stores data on the device or follows a visitor
+ * between sites is ever added, this page changes first and the banner arrives
+ * with it.
  *
  * No jump rail: the page has fewer sections than `LEGAL_JUMP_RAIL_MIN_SECTIONS`,
  * so the measure re-centres rather than leaving an empty 212px column.

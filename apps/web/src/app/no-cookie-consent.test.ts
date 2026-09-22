@@ -7,10 +7,12 @@ import { sourceFiles, TS_AND_TSX, WEB_SOURCE } from '@/testing/source-scan';
  *
  * The cookie notice states, as a fact about this codebase, that there is no
  * banner because there is nothing to consent to: the tree sets no cookies of
- * its own and loads no analytics, advertising or session-recording script, so
- * the only cookie is the identity provider's strictly-necessary session cookie. That claim stops
- * being true the moment somebody adds a tracker, and the page would go on
- * saying it. This is the guard that fails first.
+ * its own and loads no advertising, session-recording or unapproved analytics
+ * script — Vercel Web Analytics, named in the notice since VEN-496, is the one
+ * exception — so the only cookie is the identity provider's strictly-necessary
+ * session cookie. That claim stops being true the moment somebody adds another
+ * tracker, and the page would go on saying it. This is the guard that fails
+ * first.
  *
  * It is deliberately a source scan rather than a rendered assertion. A consent
  * banner that never mounts is still a consent banner, and a `gtag` snippet in a
@@ -42,6 +44,7 @@ const TRACKERS = [
   /\bmixpanel\b/i,
   /\bfullstory\b/i,
   /clarity\.ms/i,
+  /speed-insights/i,
 ];
 
 /**
@@ -61,7 +64,7 @@ describe('there is no cookie consent mechanism, because there is nothing to cons
     expect(source.length).toBeGreaterThan(100);
   });
 
-  it('loads no analytics, advertising or session-recording script', () => {
+  it('loads no advertising, session-recording or unapproved analytics script', () => {
     const offenders = source.flatMap((file) =>
       TRACKERS.filter((tracker) => tracker.test(file.code)).map(
         (tracker) => `${file.name}: ${tracker.source}`,

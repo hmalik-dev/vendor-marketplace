@@ -33,8 +33,8 @@ describe('legal content', () => {
   it('loads all three documents with their own frontmatter date', () => {
     const dates: Record<(typeof LEGAL_DOCUMENT_SLUGS)[number], string> = {
       terms: '2026-06-04',
-      privacy: '2026-09-20',
-      cookies: '2026-09-20',
+      privacy: '2026-09-22',
+      cookies: '2026-09-22',
     };
 
     for (const slug of LEGAL_DOCUMENT_SLUGS) {
@@ -139,11 +139,18 @@ describe('legal content', () => {
   });
 
   /**
-   * VEN-496. Web Analytics is loaded in production, so both documents say so in
-   * the account holder's approved words — pinned whole, since a substring of
-   * the surrounding prose would survive a reworded sentence.
+   * VEN-496/VEN-596. Web Analytics is loaded in production, so both documents
+   * say so in the account holder's approved words — the note is pinned whole,
+   * since a substring of the surrounding prose would survive a reworded
+   * sentence. `ANALYTICS_DENIALS` is the guard proper: every phrase found, at
+   * one time or another, denying that any analytics runs. The original guard
+   * forbade only the literal substring `no analytics`, which `"no advertising
+   * or analytics trackers"` does not contain, so `privacy.md` shipped that
+   * denial (and `cookies.md` shipped a banner promise a live page-view tool
+   * had already broken) with this test green throughout — this list is the
+   * fix, not another single string.
    */
-  it('names Vercel Web Analytics in the approved wording, and drops the "no analytics" clauses', () => {
+  it('names Vercel Web Analytics in the approved wording, and drops every "no analytics" denial', () => {
     const note = legalDocument('privacy')
       .sections.at(-1)
       ?.blocks.find((block) => block.kind === 'note');
@@ -158,8 +165,47 @@ describe('legal content', () => {
       'We set no cookies of our own and load no advertising or session-recording scripts. We load Vercel Web Analytics, which sets no cookies.',
     );
 
+    const ANALYTICS_DENIALS = [
+      'no analytics',
+      'no advertising or analytics',
+      'analytics or advertising',
+      'nothing else — there is no tracking pixel',
+      'anything measuring behaviour',
+    ];
+
     for (const slug of ['privacy', 'cookies'] as const) {
-      expect([slug, legalMarkdownSource(slug).includes('no analytics')]).toEqual([slug, false]);
+      const text = legalMarkdownSource(slug).toLowerCase();
+
+      for (const phrase of ANALYTICS_DENIALS) {
+        expect([slug, phrase, text.includes(phrase)]).toEqual([slug, phrase, false]);
+      }
+    }
+  });
+
+  /**
+   * VEN-596. The rewording that removed the denials above still has to say
+   * something true and complete, not just avoid the forbidden phrases —
+   * `privacy.md` also called the analytics-holding processor list closed
+   * ("Stripe and Neon") and the account holder's own wording still needs a
+   * plain, unburied marker while it stands in for real legal review.
+   */
+  it('names Vercel among the processors and marks the analytics rewording interim', () => {
+    const privacySource = legalMarkdownSource('privacy');
+
+    expect(privacySource).toContain('aggregate page views our analytics tool records');
+    expect(privacySource).toContain('Vercel receives anonymous page-view counts only');
+
+    const cookiesSource = legalMarkdownSource('cookies');
+
+    expect(cookiesSource).toContain(
+      'If we ever add anything that stores data on your device or follows you between sites, this page changes first and the banner arrives with it.',
+    );
+
+    for (const slug of ['privacy', 'cookies'] as const) {
+      expect([slug, legalDocument(slug).note]).toEqual([
+        slug,
+        expect.stringContaining('AI-drafted'),
+      ]);
     }
   });
 
