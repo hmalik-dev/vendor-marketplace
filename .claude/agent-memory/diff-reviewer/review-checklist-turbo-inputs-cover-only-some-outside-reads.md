@@ -25,5 +25,17 @@ with a prefix `restore-keys`, so this is not local-only.
 **content** (git hash-object), so `touch` alone leaves the hash identical and the
 status HIT. Demand an edit, and compare `--dry=json` hashes before/after.
 
+For a **whole-tree** reader like `repo-guard.test.ts`, no enumeration is ever
+complete — compute the complement, don't read the list:
+`git ls-files --full-name -- . ':!<glob>' ':!<glob>' …` (`--full-tree` is
+`ls-tree` only, and the Bash cwd persists). Here 55 of ~1890 tracked files sat
+outside an 11-glob list — `scripts/**`, `.github/**`, `docker-compose.yml`,
+`README.md`, `.claude/agents|hooks|settings.json`, `parity-review/` — i.e. the
+exact files VEN-457 deleted the retired provider's name from (`git log -S` the
+needle to prove it). The list already carried `apps/**`, so the "narrow keeps
+the cache" rationale bought ~3% of the tree and left only guard-relevant files
+uncovered. `packages/preflight/turbo.json` is the precedent and names
+`package.json`, `.nvmrc`, `docker-compose.yml`, `.github/workflows/ci.yml`.
+
 Related: [[review-checklist-build-time-output-keyed-on-passthrough-env]],
 [[review-checklist-repo-wide-source-guards-fire-on-new-files]].
