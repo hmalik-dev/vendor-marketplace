@@ -26,13 +26,15 @@ and any `Set-Cookie` from `apps/api` are outside it.
 Vercel _preview_ alias, so the gate does isolate production) and skipped on
 `isAdminRoute`. Same-origin `/_vercel/insights/*`, so CSP needs no new host;
 outside production the package would load `va.vercel-scripts.com`, which the
-policy correctly refuses. `no-cookie-consent.test.ts` still passes and its
-header comment still claims the tree loads no analytics script.
+policy correctly refuses.
 
-**A denial survives in prose the guard cannot see.** `legal-content.test.ts`
-asserts `'no analytics'` is absent, and `privacy.md:6` says _"we run no
-advertising or analytics trackers"_ — a different substring, so the policy
-denied analytics while running it.
+**VEN-596 (audited PASS) removed the surviving denials** and replaced the single
+`'no analytics'` substring with an `ANALYTICS_DENIALS` phrase list; it is still a
+phrase list, so a new wording of a denial passes. The new copy claims page views
+are "not tied to your account" — that rests on `analytics-scrub.ts`'s
+`beforeSend` (admin + id routes dropped/normalised, query stripped); widening
+analytics to custom events or user ids falsifies it. The frontmatter `note` is
+rendered as a JSX text node from a committed file: no injection path.
 
 **How to apply:** treat every factual claim in `content/legal/` as an assertion
 the code owes a guard, and audit the guard rather than the sentence — including

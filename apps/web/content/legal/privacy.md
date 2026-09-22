@@ -1,13 +1,14 @@
 ---
 title: Privacy Policy
-lastUpdated: 2026-09-20
+lastUpdated: 2026-09-22
+note: Every mention of Vercel Web Analytics below, other than the closing note, is interim, AI-drafted wording pending the account holder's own version; the closing note was already approved.
 ---
 
-Short version: we hold the booking. Your card is held by Stripe, your sign-in is held by Neon Auth, and your uploaded files are held by Neon. We do not sell anything to anyone, and we run no advertising or analytics trackers.
+Short version: we hold the booking. Your card is held by Stripe, your sign-in is held by Neon Auth, and your uploaded files are held by Neon. We do not sell anything to anyone, and we run no advertising trackers — the one analytics tool we do run is described below.
 
 ## Where your data actually lives
 
-Three companies hold something between them, and it is worth knowing which holds what. Nothing in this table is a plan — it is the stack this product actually runs on today.
+Three companies hold something tied to your account, and it is worth knowing which holds what. Nothing in this table is a plan — it is the stack this product actually runs on today. Separately, Vercel receives anonymous page-view counts through Vercel Web Analytics, which are not tied to your account — see the analytics note further down.
 
 | What                 | Held by             | Why                                                        |
 | -------------------- | ------------------- | ---------------------------------------------------------- |
@@ -19,7 +20,7 @@ Three companies hold something between them, and it is worth knowing which holds
 
 ## What we collect from you
 
-The account details you type in, the profile a vendor publishes, the requests and bookings you make, and the messages you send through the thread. Nothing else — there is no tracking pixel building a second profile of you in the background.
+The account details you type in, the profile a vendor publishes, the requests and bookings you make, and the messages you send through the thread. Nothing else beyond the aggregate page views our analytics tool records — there is no tracking pixel building a profile of you, and it does not follow you between sites.
 
 One exception, and it is worth naming: when you accept a legal document — these Terms when you first sign in, and the vendor agreement if you are a vendor — we record the moment, the person, the business where there is one, the version accepted, a fingerprint of the exact text you were shown, **the IP address the acceptance came from and the browser that sent it**. That is the record of an agreement rather than a profile of a person, and it is the one thing here we cannot later edit or remove — see _Your rights_.
 
@@ -29,7 +30,7 @@ Because you asked us to run a booking for you, and a booking cannot be run witho
 
 ## Who else sees it
 
-A vendor sees the requests and bookings addressed to them, and the messages you send them. A customer sees the profile a vendor published. Nobody sees anybody else's. Our processors — Stripe and Neon (which also runs sign-in and stores uploads) — see what the table above says they hold, and are contractually barred from doing anything else with it.
+A vendor sees the requests and bookings addressed to them, and the messages you send them. A customer sees the profile a vendor published. Nobody sees anybody else's. Our processors — Stripe and Neon (which also runs sign-in and stores uploads) — see what the table above says they hold, and are contractually barred from doing anything else with it. Vercel receives anonymous page-view counts only, not tied to your account — see the analytics note further down.
 
 **One exception, and it is the reason reporting works at all: when a message thread is reported, the people who operate the platform can read it.** They can read that thread, and only that thread, and only while the report is open — a closed report stops being a key to the conversation. Every such read is written to an internal log naming the operator, the thread and the report it was read under. Staff never write into a thread: an operator reads and then acts, and nothing you see in a conversation is from us. We do not otherwise read your messages, and there is no way in the product for anybody to browse conversations they have no report about.
 
