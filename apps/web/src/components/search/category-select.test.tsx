@@ -9,8 +9,7 @@ import { CategorySelect } from './category-select';
  * the suite drives the **anchored** mount. jsdom's stub in `vitest.setup.ts`
  * answers every media query "no", which would silently put every one of these
  * assertions against the bottom sheet instead — a different mount with
- * different rows, tested by accident. `dropdown.test.tsx` drives the sheet on
- * purpose.
+ * different rows, tested by accident.
  */
 beforeEach(() => {
   window.matchMedia = ((query: string) =>
@@ -43,14 +42,6 @@ const CATEGORIES: Category[] = [
   category('2', 'Videography', 2),
   category('3', 'Catering', 3),
   category('4', 'Decor', 4),
-  /*
-   * The reason matching is substring rather than prefix: "film" has to find
-   * this, and a prefix match never would. Named to avoid colliding with the
-   * `Photo & film` short description that renders as Photography's row hint —
-   * two nodes carrying the same text is a test failure about the fixture
-   * rather than about the filter.
-   */
-  category('5', 'Wedding films', 5),
 ];
 
 function renderSelect(
@@ -71,36 +62,48 @@ function renderSelect(
 }
 
 /**
- * The field itself. A `combobox` input since #375, not a `button` — so this
- * reads `.value`, and every assertion that used to read `.textContent` had to
- * move with it.
+ * The field itself. **A `button`, not a `combobox` (VEN-603)** — the trigger
+ * has no text input of its own any more, so there is nothing to read `.value`
+ * from and nothing an OS keyboard could ever be summoned by.
  */
-const trigger = (): HTMLInputElement =>
-  screen.getByRole('combobox', { name: 'Vendor type' }) as HTMLInputElement;
+const trigger = (): HTMLButtonElement =>
+  screen.getByRole('button', { name: 'Vendor type' }) as HTMLButtonElement;
 
-/** The segment box around the field — the label, the input and the padding. */
-const field = (): HTMLElement => trigger().closest('[data-slot="combobox-field"]') as HTMLElement;
+const valueText = (): string | null =>
+  trigger().querySelector('[data-slot="category-value"]')?.textContent ?? null;
 
 describe('CategorySelect', () => {
   it('shows the selected category, not a free-text value', () => {
     renderSelect('photography');
 
-    expect(trigger().value).toBe('Photography');
+    expect(valueText()).toBe('Photography');
   });
 
-  /*
-   * The placeholder, not the value. The distinction matters: an empty field
-   * that *contains* the words "Any vendor type" would filter against them the
-   * moment the customer typed a character, and the list would come back empty.
-   */
   it('reads "Any vendor type" when nothing is chosen', () => {
     renderSelect('');
 
-    expect(trigger().value).toBe('');
-    expect(trigger().placeholder).toBe('Any vendor type');
+    expect(valueText()).toBe('Any vendor type');
   });
 
-  it('resolves to a category slug when one is picked', async () => {
+  /**
+   * **The whole point of VEN-603.** No `<input>` exists anywhere in this
+   * control, at rest or open — so there is no field an OS virtual keyboard
+   * could ever be summoned by, on mobile or anywhere else. This is what
+   * makes every `inputMode`/keyboard-suppression mechanism unnecessary here.
+   */
+  it('renders no text input anywhere, open or closed', async () => {
+    const user = userEvent.setup();
+    renderSelect('');
+
+    expect(document.querySelector('input')).toBeNull();
+
+    await user.click(trigger());
+    await screen.findByRole('listbox');
+
+    expect(document.querySelector('input')).toBeNull();
+  });
+
+  it('resolves to a category slug when a row is clicked', async () => {
     const user = userEvent.setup();
     const { onChange } = renderSelect('');
 
@@ -110,222 +113,44 @@ describe('CategorySelect', () => {
     expect(onChange).toHaveBeenCalledWith('catering');
   });
 
-  /*
-   * **What replaced "offers no filter field" (#375).**
-   *
-   * That assertion was right for its time and is now inverted: the field *is*
-   * the input. What it was really protecting is not the absence of a textbox —
-   * it is that a panel must never contain a **second, autofocused** field,
-   * which is D13 ruling 1's actual objection ("its focus ring would appear
-   * every single time the panel opened — permanent decoration, not feedback").
-   * That still holds, so it is what this asserts. The old wording would have
-   * banned the control the user asked for.
-   */
-  it('puts no second field inside the panel — the trigger is the only input', async () => {
-    const user = userEvent.setup();
-    renderSelect('');
-
-    await user.click(trigger());
-    const panel = await screen.findByRole('listbox');
-
-    expect(screen.queryByPlaceholderText('Filter vendor types')).toBeNull();
-    expect(panel.querySelector('input')).toBeNull();
-    expect(screen.getAllByRole('combobox')).toHaveLength(1);
-  });
-
-  /*
-   * Filtering, not the jump-to-first-letter this list shipped with.
-   * `42-dropdowns.md:45` has specified "typing narrows the list in place (not a
-   * jump-to-first-letter)" since the 2026-08-30 import; D14 recorded that the
-   * code was still on the behaviour that import reversed.
-   *
-   * Asserted on **rendered rows**, not on internal state — a filter that
-   * narrows a variable while the panel still draws eleven rows is the failure
-   * this is written against.
-   */
-  it('narrows the list to what was typed, matching a substring anywhere', async () => {
-    const user = userEvent.setup();
-    renderSelect('');
-
-    await user.click(trigger());
-    await user.type(trigger(), 'film');
-
-    const rows = await screen.findAllByRole('option');
-    expect(rows.map((row) => row.textContent)).toEqual([expect.stringContaining('Wedding films')]);
-  });
-
-  /*
-   * Two names sharing a substring must both survive — "a category name that is
-   * a substring of another" is one of the ticket's edge cases, and a filter
-   * that collapsed them would silently hide a real choice.
-   */
-  it('keeps every category a substring matches, not just the first', async () => {
-    const user = userEvent.setup();
-    renderSelect('');
-
-    await user.click(trigger());
-    await user.type(trigger(), 'graph');
-
-    const rows = await screen.findAllByRole('option');
-    expect(rows.map((row) => row.textContent?.replace(/ vendors\.$/, ''))).toEqual([
-      expect.stringContaining('Photography'),
-      expect.stringContaining('Videography'),
-    ]);
-  });
-
-  it('names what was typed when nothing matches, rather than drawing a blank panel', async () => {
-    const user = userEvent.setup();
-    renderSelect('');
-
-    await user.click(trigger());
-    await user.type(trigger(), 'zzzz');
-
-    /*
-     * The **visible** message, not any node containing the string. The polite
-     * live region also names the query — "0 matches for zzzz" — so an unscoped
-     * `findByText` matches two nodes and throws. Both are correct; only one is
-     * what a sighted customer reads.
-     */
-    expect(await screen.findByText('No vendor type matches \u201Czzzz\u201D.')).toBeDefined();
-    expect(screen.queryAllByRole('option')).toHaveLength(0);
-  });
-
-  /*
-   * The invariant the whole ticket turns on: **typing is an input affordance,
-   * never a query term**. A customer who types a misspelling and walks away has
-   * selected nothing, and the field says so by reverting.
-   */
-  it('commits nothing on blur, and reverts to the committed label', async () => {
+  it('resolves to the empty string when "Any vendor type" is chosen', async () => {
     const user = userEvent.setup();
     const { onChange } = renderSelect('photography');
 
     await user.click(trigger());
-    await user.clear(trigger());
-    await user.type(trigger(), 'cater');
-    await user.tab();
+    await user.click(await screen.findByRole('option', { name: 'Any vendor type' }));
 
-    expect(onChange).not.toHaveBeenCalled();
-    expect(trigger().value).toBe('Photography');
+    expect(onChange).toHaveBeenCalledWith('');
   });
 
-  it('commits the slug when a row is chosen, not the typed text', async () => {
-    const user = userEvent.setup();
-    const { onChange } = renderSelect('');
-
-    await user.click(trigger());
-    await user.type(trigger(), 'cater');
-    await user.click(await screen.findByRole('option', { name: /^Catering/ }));
-
-    expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange).toHaveBeenCalledWith('catering');
-  });
-
-  it('opens on the full list, because the taxonomy is worth seeing', async () => {
+  it('opens on the full list, "Any vendor type" leading', async () => {
     const user = userEvent.setup();
     renderSelect('');
 
     await user.click(trigger());
 
-    // Every fixture plus the `Any vendor type` row that empties the field.
-    expect(await screen.findAllByRole('option')).toHaveLength(CATEGORIES.length + 1);
+    const rows = await screen.findAllByRole('option');
+    expect(rows).toHaveLength(CATEGORIES.length + 1);
+    expect(rows[0]?.textContent).toContain('Any vendor type');
   });
 
   /*
-   * `ArrowDown` must not move the caret. In a text input the browser's own
-   * default sends it to the end of the value, which would put the caret past
-   * the word the customer is still editing.
+   * `categories.length`, never `options.length` — the caption is the real
+   * taxonomy count, and the extra "Any vendor type" row is not a category. A
+   * caption reading `options.length` would say "5 categories" for 4 real
+   * ones, which is exactly the kind of invented-looking number
+   * `web-design-parity.md`'s "no invented numbers" law exists to catch.
    */
-  it('moves the active option with the arrows without moving the caret', async () => {
-    const user = userEvent.setup();
-    const { onChange } = renderSelect('');
-
-    const field = trigger();
-    await user.click(field);
-    await user.type(field, 'ph');
-    field.setSelectionRange(1, 1);
-
-    await user.keyboard('{ArrowDown}');
-
-    /*
-     * Read before the commit. `Enter` reverts the field to the committed
-     * label, which moves the caret for a legitimate reason — asserting after
-     * it would be measuring the revert rather than the arrow.
-     */
-    expect(field.selectionStart).toBe(1);
-
-    /*
-     * `videography`, not `photography` — and that is the point rather than an
-     * accident. "ph" is a substring of *both* names ("photography" and
-     * "video**graph**y"), so both survive the filter and `ArrowDown` moves from
-     * the first to the second. A prefix filter would have left one row here and
-     * the arrow would have had nowhere to go.
-     */
-    await user.keyboard('{Enter}');
-    expect(onChange).toHaveBeenCalledWith('videography');
-  });
-
-  it('carries aria-activedescendant to a row that exists', async () => {
+  it('captions the real category count, not the option count', async () => {
     const user = userEvent.setup();
     renderSelect('');
 
-    const field = trigger();
-    expect(field.getAttribute('aria-expanded')).toBe('false');
-    expect(field.getAttribute('aria-activedescendant')).toBeNull();
-
-    await user.click(field);
-    await screen.findByRole('listbox');
-
-    expect(field.getAttribute('aria-expanded')).toBe('true');
-    expect(field.getAttribute('aria-autocomplete')).toBe('list');
-
-    const activeId = field.getAttribute('aria-activedescendant');
-    expect(activeId).not.toBeNull();
-    expect(document.getElementById(activeId as string)).not.toBeNull();
-  });
-
-  it('moves with the arrows and commits with Enter', async () => {
-    const user = userEvent.setup();
-    const { onChange } = renderSelect('');
-
     await user.click(trigger());
-    await screen.findByRole('listbox');
-    // From "Any vendor type" at the top, two rows down is Videography.
-    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
 
-    expect(onChange).toHaveBeenCalledWith('videography');
+    expect(await screen.findByText(`Vendor type · ${CATEGORIES.length} categories`)).toBeDefined();
   });
 
-  /*
-   * **The sharpest defect the review found.** `DropdownList` seeded its active
-   * index from the current selection; the combobox took ownership of that index
-   * and started it at 0. Row 0 is `Any vendor type`, whose value is `''` — so
-   * opening a field that already held a category and pressing `Enter` *cleared*
-   * it, on the way to submitting the form. Two keystrokes that had been a
-   * no-op became a silent data loss.
-   */
-  it('opens with the committed row active, so the first Enter changes nothing', async () => {
-    const user = userEvent.setup();
-    const { onChange } = renderSelect('decor');
-
-    await user.click(trigger());
-    await screen.findByRole('listbox');
-
-    const activeId = trigger().getAttribute('aria-activedescendant');
-    expect(document.getElementById(activeId as string)?.textContent).toContain('Decor');
-
-    await user.keyboard('{Enter}');
-    expect(onChange).toHaveBeenCalledWith('decor');
-    expect(trigger().value).toBe('Decor');
-  });
-
-  /*
-   * #417 BUG1. Committing with a **real pointer** left the panel open: the row
-   * is a `<button>`, so mousedown moved focus into the panel, and `commit`'s
-   * focus-restore then fired a genuine `focus` event on a field that opens on
-   * focus. A programmatic `.click()` never moved focus, so it never reopened —
-   * which is why the suite was green while the control was visibly broken.
-   */
-  it('closes the panel when a row is committed with a real pointer', async () => {
+  it('closes the panel once a row is committed', async () => {
     const user = userEvent.setup();
     renderSelect('');
 
@@ -336,139 +161,72 @@ describe('CategorySelect', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
 
-  /*
-   * #417 item 1c. The `<input>` is a genuine typeable combobox and carries
-   * `cursor: text`; the box around it carried `cursor: auto`, so the micro-label
-   * and the segment's padding showed the default arrow while the value showed a
-   * caret. One control, two cursors.
-   */
-  it('carries one cursor across the whole segment', () => {
-    renderSelect('');
-
-    expect(field().className).toContain('cursor-text');
-    /*
-     * The label declares it too, rather than inheriting: Preflight gives
-     * `<label>` its own `cursor: default`, and a real declaration beats an
-     * inherited value. Measured in Chromium at 1440 — with the segment and the
-     * input both reading `text`, the micro-label between them still drew an
-     * arrow, which the class list alone said nothing about.
-     */
-    expect(screen.getByText('Vendor type').className).toContain('cursor-text');
-  });
-
-  /*
-   * …and `cursor: text` has to be true rather than decorative: clicking the
-   * segment's own padding puts a caret in the field, so the promise the cursor
-   * makes is the one the control keeps. The label already does this through
-   * `htmlFor`; the padding is what did nothing.
-   */
-  it('puts a caret in the field when the segment’s padding is clicked', async () => {
-    const user = userEvent.setup();
-    renderSelect('');
-
-    await user.click(field());
-
-    expect(document.activeElement).toBe(trigger());
-  });
-
-  /*
-   * `42-dropdowns.md`: "Focus returns to the field on close." A row is a
-   * `<button>`, so committing with the **mouse** moves focus into a panel that
-   * then unmounts — and anchor mode suppresses Radix's focus restoration, so it
-   * landed on `<body>` and the next `Tab` restarted at the top of the document.
-   */
-  it('keeps focus in the field after committing with the mouse', async () => {
+  it('returns focus to the trigger once the panel closes', async () => {
     const user = userEvent.setup();
     renderSelect('');
 
     await user.click(trigger());
     await user.click(await screen.findByRole('option', { name: /^Catering/ }));
 
-    expect(document.activeElement).toBe(trigger());
+    await waitFor(() => expect(document.activeElement).toBe(trigger()));
   });
 
-  /*
-   * After a keyboard commit the focus is already in the field, so no `focus`
-   * event fires and `onFocus` alone could never reopen it — clicking the field
-   * did nothing, twice. Anchor mode gave up Radix's merged toggle deliberately
-   * (it closed the panel on the click that placed the caret), so the opener has
-   * to be a click handler that opens rather than toggles.
-   */
-  it('reopens on a click after a keyboard commit', async () => {
+  it('reopens on a click after a previous commit', async () => {
     const user = userEvent.setup();
     renderSelect('');
 
     await user.click(trigger());
-    await user.keyboard('{ArrowDown}{Enter}');
+    await user.click(await screen.findByRole('option', { name: /^Catering/ }));
     expect(trigger().getAttribute('aria-expanded')).toBe('false');
 
     await user.click(trigger());
     expect(trigger().getAttribute('aria-expanded')).toBe('true');
   });
 
-  /* ARIA's combobox pattern: ArrowUp opens a closed field, like ArrowDown. */
-  it('opens on ArrowUp as well as ArrowDown', async () => {
-    const user = userEvent.setup();
-    renderSelect('');
-
-    trigger().focus();
-    await user.keyboard('{Escape}');
-    await user.keyboard('{ArrowUp}');
-
-    expect(trigger().getAttribute('aria-expanded')).toBe('true');
-  });
-
   /*
-   * `aria-controls` names the panel while it is open, and the no-match panel is
-   * the *common* case for a field you type into. An empty branch that dropped
-   * the id left the reference dangling exactly when a screen reader most needs
-   * somewhere to look.
+   * `DropdownList`'s own keyboard model — arrows move, `Enter` commits — with
+   * no typing filter in front of it. `Vendor type` no longer needs one
+   * (VEN-603): eleven categories fit one screen, unlike `City`'s open-ended
+   * set of US places, which keeps its typing combobox untouched.
    */
-  it('points aria-controls at a real element even with no rows', async () => {
+  it('moves the active option with the arrows and commits with Enter', async () => {
     const user = userEvent.setup();
-    renderSelect('');
+    const { onChange } = renderSelect('');
 
     await user.click(trigger());
-    await user.type(trigger(), 'zzzz');
+    await screen.findByRole('listbox');
+    // From "Any vendor type" at the top: down once to Photography, once more
+    // to Videography.
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
 
-    const controls = trigger().getAttribute('aria-controls');
-    expect(controls).not.toBeNull();
-    expect(document.getElementById(controls as string)).not.toBeNull();
+    expect(onChange).toHaveBeenCalledWith('videography');
   });
 
-  /* The count a sighted customer reads off the shrinking list. */
-  it('announces the filtered count politely', async () => {
+  it('opens with the committed row already active', async () => {
     const user = userEvent.setup();
-    const { container } = render(
-      <CategorySelect categories={CATEGORIES} value="" onChange={vi.fn()} id="type" size="hero" />,
-    );
+    renderSelect('decor');
 
-    await user.type(screen.getByRole('combobox', { name: 'Vendor type' }), 'graph');
+    await user.click(trigger());
+    const list = await screen.findByRole('listbox');
 
-    const live = container.querySelector('[aria-live="polite"]');
-    // In the field, not the portalled panel — see `FilteredCount`.
-    expect(live?.textContent).toBe('2 matches for graph');
+    const activeId = list.getAttribute('aria-activedescendant');
+    expect(activeId).not.toBeNull();
+    expect(document.getElementById(activeId as string)?.textContent).toContain('Decor');
   });
 
-  it('reverts the typed text and closes on Escape', async () => {
+  it('closes without committing on Escape', async () => {
     const user = userEvent.setup();
     const { onChange } = renderSelect('photography');
 
     await user.click(trigger());
-    await user.clear(trigger());
-    await user.type(trigger(), 'cater');
     await screen.findByRole('listbox');
     await user.keyboard('{Escape}');
 
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
-    // Both halves: the panel closes *and* the field goes back to what was
-    // committed. A revert that left the typed text would show a value the
-    // query does not carry.
-    expect(trigger().value).toBe('Photography');
     expect(onChange).not.toHaveBeenCalled();
+    expect(valueText()).toBe('Photography');
   });
 
-  /* The frame prints each category's own one-line description under its name. */
   it('carries each category’s short description', async () => {
     const user = userEvent.setup();
     renderSelect('');
@@ -477,90 +235,37 @@ describe('CategorySelect', () => {
 
     expect(await screen.findByText('Photo & film')).toBeDefined();
   });
+
   /*
-   * #89. The vendor-type trigger is the third segment of the search bar, and
-   * like the other two it now tints while it holds focus. Without it the
-   * bar's halo was the only focus signal and said nothing about which
-   * segment was active.
+   * #89, restated for a self-focused trigger. `SEGMENT_FOCUS`'s
+   * `has-[:focus-visible]` variant targets a focusable *child* — the shape
+   * `City` and `DateDropdown` both have — but this button is its own
+   * focusable element, so the fill has to be declared directly too, the same
+   * way `search-bar.tsx`'s `segment` does it for `DateDropdown`'s
+   * identically-shaped trigger.
    */
   it('fills the field while it holds focus, so the segment is identifiable', () => {
-    render(
-      <CategorySelect categories={CATEGORIES} value="" onChange={vi.fn()} id="type" size="hero" />,
-    );
+    renderSelect('');
 
-    /*
-     * `has-[:focus-visible]`, not `focus-visible`. Since #375 the focus lands
-     * on the input **inside** the segment rather than on the segment itself, so
-     * the treatment reads one level out — the same way `search-bar.tsx`'s
-     * `segment` does it for City and Event date.
-     *
-     * A `stone-200` fill and a clay label, and **nothing else**: that is the
-     * whole segment treatment in `03-components.md` § Inputs. It was a
-     * `clay-400/10` tint plus an inset ring, under a bar-level halo, under the
-     * base rule's outward ring on the input — four indicators for one focus
-     * (#383).
-     */
-    /*
-     * The segment box by its `data-slot`, not by `parentElement`. #426 put the
-     * value and its caret in a row of their own, so the field is two levels out
-     * — and a positional locator silently read the row's classes instead, which
-     * is a test passing on the wrong element rather than failing.
-     */
-    const box = field();
-    expect(box.className).toContain('has-[:focus-visible]:bg-stone-200');
-    expect(box.className).not.toContain('inset-ring');
-    // VEN-541: an inset ring (never an outward one) meets 3:1 where a fill alone is 1.19:1.
-    expect(box.className).toContain('has-[:focus-visible]:ring-inset');
-    expect(box.className).toContain('has-[:focus-visible]:ring-clay-400');
-    expect(box.className).toContain('group/segment');
-
-    const label = screen.getByText('Vendor type');
-    expect(label.className).toContain('group-has-[:focus-visible]/segment:text-clay-600');
+    expect(trigger().className).toContain('focus-visible:bg-stone-200');
+    expect(trigger().className).toContain('group/segment');
+    expect(trigger().getAttribute('data-focus-own')).not.toBeNull();
+    expect(trigger().getAttribute('data-focus-fill')).not.toBeNull();
   });
 
   /*
-   * The open state the caret used to carry (D25) — and the reason this asserts
-   * an **absence** as well as a presence.
-   *
-   * The first fix added `font-semibold` beside a size ladder that already read
-   * `lg:font-normal`. Both are equal-specificity utilities, so at 1440 the `lg:`
-   * variant won on source order: the browser measured weight 400 open and
-   * closed while the class list read `font-semibold`. `cn` does not save this —
-   * tailwind-merge only collapses conflicts it is doing the joining for, and a
-   * responsive variant is not a conflict it resolves. So the resting weight is
-   * composed into the closed branch instead of layered under the open one, and
-   * the check is that the losing class is not emitted at all.
+   * VEN-541: a fill alone is 1.19:1, short of the 3:1 floor — the ring is
+   * what actually meets it. The old input-child shape carried this via
+   * `SEGMENT_FOCUS`'s `has-[:focus-visible]` variant; the button is its own
+   * focused element now, so it needs the direct variant declared too, or the
+   * indicator regresses silently.
    */
-  it('turns the hero value clay and semibold while its panel is open', async () => {
-    const user = userEvent.setup();
-    render(
-      <CategorySelect categories={CATEGORIES} value="" onChange={vi.fn()} id="type" size="hero" />,
-    );
+  it('carries the VEN-541 ring alongside the fill, not the fill alone', () => {
+    renderSelect('');
 
-    /*
-     * The value is the input itself since #375 — no span to walk. What this
-     * guards is unchanged and is the reason it survived the rewrite rather
-     * than being deleted with the span: **the two branches must never both be
-     * emitted.** `font-semibold` beside the ladder's `lg:font-normal` is two
-     * equal-specificity utilities, and at 1440 the responsive one wins on
-     * source order, so the browser paints 400 while the class list reads
-     * semibold. Asserting the *absence* of the loser is the only form of this
-     * check that fails when the bug is present.
-     */
-    const field = screen.getByRole('combobox', { name: 'Vendor type' });
-
-    expect(field.className).toContain('font-medium');
-    expect(field.className).toContain('lg:font-normal');
-    expect(field.className).not.toContain('font-semibold');
-
-    await user.click(field);
-
-    await waitFor(() => expect(field.getAttribute('aria-expanded')).toBe('true'));
-
-    expect(field.className).toContain('font-semibold');
-    expect(field.className).toContain('text-clay-600');
-    // The layering that silently won at 1440 — never emitted alongside the win.
-    expect(field.className).not.toContain('lg:font-normal');
+    expect(trigger().className).toContain('focus-visible:ring-2');
+    expect(trigger().className).toContain('focus-visible:ring-inset');
+    expect(trigger().className).toContain('focus-visible:ring-clay-400');
   });
 });
 
@@ -570,15 +275,19 @@ describe('CategorySelect', () => {
  * segment and `28 Dropdown open — hero` draws `▴` on the open one.
  *
  * `app/dropdown-caret.test.ts` is the other half of this: it holds the override
- * everywhere else and proves this file is the only exemption. What is asserted
- * here is what the customer actually gets — a rendered glyph that flips, and a
- * screen reader that never hears it.
+ * everywhere else and proves this file is the only exemption.
  */
 describe('CategorySelect — the disclosure caret (#426)', () => {
-  /** The caret, found by what it draws rather than by a class or a position. */
   const caret = (): HTMLElement => {
-    const found = [...field().querySelectorAll('span')].filter((span) =>
-      /[▾▴]/.test(span.textContent ?? ''),
+    /*
+     * A leaf span, not merely one whose concatenated `textContent` contains
+     * the glyph — the value is a real `<span>` now (VEN-603, no longer an
+     * `<input>` whose value doesn't contribute to a parent's `textContent`),
+     * so the row wrapping both the value and the caret matches the regex too
+     * unless this is scoped to elements with no element children of their own.
+     */
+    const found = [...trigger().querySelectorAll('span')].filter(
+      (span) => span.children.length === 0 && /^[▾▴]$/.test(span.textContent ?? ''),
     );
 
     expect(found).toHaveLength(1);
@@ -612,41 +321,40 @@ describe('CategorySelect — the disclosure caret (#426)', () => {
   /*
    * D25 found two chips announcing "All categories black down-pointing small
    * triangle, button" because the glyph sat in a template literal inside the
-   * control. The caret is a sibling of the field and `aria-hidden`, so the
-   * accessible name is the label and nothing else, in both states.
+   * control. The caret is `aria-hidden`, so the accessible name is the label
+   * and nothing else, in both states.
    */
   it('is hidden from assistive technology and never part of the accessible name', async () => {
     const user = userEvent.setup();
     renderSelect('photography');
 
     expect(caret().getAttribute('aria-hidden')).toBe('true');
-    expect(screen.getByRole('combobox', { name: 'Vendor type' })).toBe(trigger());
+    expect(screen.getByRole('button', { name: 'Vendor type' })).toBe(trigger());
 
     await user.click(trigger());
     await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
 
     // Still exactly `Vendor type` — a name carrying `▾` would not match this.
-    expect(screen.getByRole('combobox', { name: 'Vendor type' })).toBe(trigger());
+    expect(screen.getByRole('button', { name: 'Vendor type' })).toBe(trigger());
     expect(caret().getAttribute('aria-hidden')).toBe('true');
   });
 
   /*
-   * **Both signals, which is #426's recorded ruling.** `42-dropdowns.md` states
-   * the open state as "the value turning clay and the caret flipping", and
-   * frame `28` draws both. They say different things — the caret is the
-   * affordance, the clay value is the state — and dropping the clay would also
-   * have left this segment signalling open differently from City, which draws
-   * no caret in any frame and is out of scope.
-   *
-   * jsdom has no layout, so this is a class-level assertion: the rendered
-   * colour is verified by the browser parity pass, not here.
+   * **Both signals, which is #426's recorded ruling.** `42-dropdowns.md`
+   * states the open state as "the value turning clay and the caret
+   * flipping", and frame `28` draws both.
    */
   it('turns clay with the value when open, and is stone-600 at rest', async () => {
     const user = userEvent.setup();
-    renderSelect('photography');
+    // Hero: `font-medium`/`lg:font-normal` are the hero-only resting weight.
+    renderSelect('photography', 'hero');
 
     expect(caret().className).toContain('text-stone-600');
     expect(caret().className).not.toContain('text-clay-600');
+
+    const value = () => trigger().querySelector('[data-slot="category-value"]') as HTMLElement;
+    expect(value().className).toContain('font-medium');
+    expect(value().className).not.toContain('font-semibold');
 
     await user.click(trigger());
     await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
@@ -654,107 +362,25 @@ describe('CategorySelect — the disclosure caret (#426)', () => {
     expect(caret().className).toContain('text-clay-600');
     expect(caret().className).not.toContain('text-stone-600');
     // The other half of the pair — kept, not traded away.
-    expect(trigger().className).toContain('font-semibold');
-    expect(trigger().className).toContain('text-clay-600');
+    expect(value().className).toContain('font-semibold');
+    expect(value().className).toContain('text-clay-600');
   });
-
-  /*
-   * The frames' size ladder, per density. Read at every width each bar is drawn
-   * at: hero 11px at 390, 9px at 768, 10px at 1024, 11px at 1440; compact 9px.
-   */
-  /*
-   * The caret is the element that *looks* like the thing you click to open the
-   * list, so it has to be. It is `aria-hidden` and not a control of its own —
-   * the click focuses the field, and `openOnFocus` does the rest, which is the
-   * same path the segment's padding has always taken.
-   *
-   * It was broken by this ticket's own first draft: the field's mousedown guard
-   * read `event.target !== event.currentTarget`, and the new row made every
-   * click below the box somebody else's.
-   */
-  it('opens the panel when the caret itself is clicked', async () => {
-    const user = userEvent.setup();
-    renderSelect('photography');
-
-    expect(trigger().getAttribute('aria-expanded')).toBe('false');
-
-    await user.click(caret());
-
-    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
-    expect(caret().textContent).toBe('▴');
-  });
-
-  /*
-   * **And when the field already holds focus**, which is the state a customer
-   * is in every time they change their mind about a category.
-   *
-   * The segment's mousedown opened the panel by calling `focus()`, and
-   * `focus()` on an already-focused element fires no `focus` event — so the
-   * opener no-opped and the caret was inert. It is the identical defect the
-   * input's own `onClick` exists to fix, and its comment says so: "after a
-   * keyboard commit focus is already in the field — so no focus event fires and
-   * clicking it did nothing at all, twice in a row." The caret is not inside
-   * the input, so that handler never ran for it.
-   *
-   * Two routes reach the state, and both are ordinary use.
-   */
-  it('reopens when the caret is clicked after Escape left focus in the field', async () => {
-    const user = userEvent.setup();
-    renderSelect('photography');
-
-    await user.click(trigger());
-    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
-
-    await user.keyboard('{Escape}');
-    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('false'));
-    expect(document.activeElement).toBe(trigger());
-
-    await user.click(caret());
-
-    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
-    expect(caret().textContent).toBe('▴');
-  });
-
-  it('reopens when the caret is clicked after a keyboard commit', async () => {
-    const user = userEvent.setup();
-    renderSelect('');
-
-    await user.click(trigger());
-    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
-
-    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
-    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('false'));
-
-    await user.click(caret());
-
-    await waitFor(() => expect(trigger().getAttribute('aria-expanded')).toBe('true'));
-  });
-
-  /*
-   * The frames' size ladder, per density: hero 11px at 390, 9px at 768, 10px at
-   * 1024, 11px at 1440; compact 9px.
-   *
-   * **Asserted against the split class list, never with `toContain`.** A bare
-   * `toContain('text-[11px]')` is satisfied by the `min-[90rem]:text-[11px]` in
-   * the same string, so the 390 step — the one no larger breakpoint covers for
-   * — was pinned by nothing: deleting it left the suite green. `refine-bar.test.ts`
-   * hit the same collision and anchored its own check for the same reason.
-   */
-  const classes = (element: HTMLElement): string[] => element.className.split(/\s+/);
 
   it('carries the compact bar’s 9px, per frame `02`', () => {
     renderSelect('photography');
 
-    expect(classes(caret())).toContain('text-[9px]');
-    expect(classes(caret())).not.toContain('lg:text-[10px]');
+    const classes = caret().className.split(/\s+/);
+    expect(classes).toContain('text-[9px]');
+    expect(classes).not.toContain('lg:text-[10px]');
   });
 
   it('carries the hero ladder — 11 / 9 / 10 / 11 across the four widths', () => {
     renderSelect('photography', 'hero');
 
-    expect(classes(caret())).toContain('text-[11px]');
-    expect(classes(caret())).toContain('sm:text-[9px]');
-    expect(classes(caret())).toContain('lg:text-[10px]');
-    expect(classes(caret())).toContain('min-[90rem]:text-[11px]');
+    const classes = caret().className.split(/\s+/);
+    expect(classes).toContain('text-[11px]');
+    expect(classes).toContain('sm:text-[9px]');
+    expect(classes).toContain('lg:text-[10px]');
+    expect(classes).toContain('min-[90rem]:text-[11px]');
   });
 });

@@ -140,13 +140,10 @@ function renderBar(size: 'compact' | 'hero'): { form: string; segment: string } 
   render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={() => {}} size={size} />);
 
   const form = screen.getByRole('search');
-  const segment = screen
-    .getByRole('combobox', { name: 'Vendor type' })
-    .closest('[data-slot="combobox-field"]');
+  // The button *is* the segment box now (VEN-603) — no wrapper to `closest` to.
+  const segment = screen.getByRole('button', { name: 'Vendor type' });
 
-  expect(segment).not.toBeNull();
-
-  return { form: form.className, segment: (segment as HTMLElement).className };
+  return { form: form.className, segment: segment.className };
 }
 
 /** Every (variant, breakpoint) pair the two tables above cover. */
