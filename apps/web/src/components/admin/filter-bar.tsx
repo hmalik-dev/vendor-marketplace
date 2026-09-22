@@ -2,7 +2,16 @@
 
 import { MAX_NAME_LENGTH } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
-import { createContext, useContext, useId, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from 'react';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { adminQueryString } from '@/lib/admin-params';
 import { FIELD_FOCUS } from '@/lib/focus';
@@ -73,12 +82,39 @@ export function FilterSelect({
 }: FilterSelectProps): React.ReactElement {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  /** The navigation a push was started for, cleared once its transition settles. */
+  const navigation = useRef<{ from: string; to: string } | null>(null);
   const params = useContext(FilterParams);
   const chosen = options.find((option) => option.value === value);
 
   if (params === null) {
     throw new Error(`FilterSelect "${name}" must be rendered inside a FilterBar`);
   }
+
+  /*
+   * A soft navigation that never commits (VEN-576): CI saw the URL sit on the
+   * pre-choice value for a whole 30s timeout while nothing about the choice
+   * itself failed. `startTransition` is how Next's own docs recommend tracking
+   * a `router.push`'s completion; once it settles, a URL that still sits where
+   * it did when the push was made did not land, and a full navigation is the
+   * one thing that cannot be dropped the same way.
+   *
+   * The comparison is against `from`, not merely "does it match `to`" — two
+   * `FilterSelect`s in the same bar chosen back to back can settle their
+   * transitions in the same commit, and the second choice's URL is a perfectly
+   * good landing for the first's push. Falling back there would hard-navigate
+   * the operator's later choice away in favour of the earlier one.
+   */
+  useEffect(() => {
+    if (pending || navigation.current === null) return;
+    const { from, to } = navigation.current;
+    navigation.current = null;
+    const here = window.location.pathname + window.location.search;
+    if (here === from && here !== to) {
+      window.location.assign(to);
+    }
+  }, [pending]);
 
   return (
     <SingleSelectDropdown
@@ -91,9 +127,11 @@ export function FilterSelect({
       value={value || null}
       onChange={(next) => {
         setOpen(false);
-        router.push(
-          `${action}${adminQueryString({ ...params, [name]: next, [PAGE_PARAM]: undefined })}`,
-        );
+        const url = `${action}${adminQueryString({ ...params, [name]: next, [PAGE_PARAM]: undefined })}`;
+        navigation.current = { from: window.location.pathname + window.location.search, to: url };
+        startTransition(() => {
+          router.push(url);
+        });
       }}
       trigger={
         <button

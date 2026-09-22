@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import {
   adminVendorPayoutHoldResultSchema,
   formatPrice,
@@ -39,6 +39,7 @@ const VENDOR_SEARCH_PAGE_SIZE = 5;
 const SAVE_FAILED = 'That change did not save. Check your connection and try again.';
 
 type PauseField = Exclude<keyof PlatformSwitches, 'maxBookingCents' | 'vendorInviteOnly'>;
+type HeldVendorEntry = WireAdminPlatformSettings['heldVendors'][number];
 
 const SWITCHES: readonly { field: PauseField; label: string; description: string }[] = [
   {
@@ -73,9 +74,24 @@ export function PlatformSettingsPanel({
   const fieldId = useId();
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  /*
+   * The confirmed server state, applied from each write's own response rather
+   * than from `settings` re-rendering after `router.refresh()`. CI saw that
+   * refresh land the audited PUT server-side and never commit the transition
+   * client-side (VEN-576): `settings` stayed stale for the whole test timeout
+   * even though the switch had genuinely flipped. `router.refresh()` still
+   * runs, best-effort, to pick up anything server-rendered elsewhere on the
+   * page (the surface's paused/held counts) — but nothing the operator looks
+   * at on this panel waits on it landing.
+   */
+  const [confirmed, setConfirmed] = useState(settings);
   const [capDollars, setCapDollars] = useState(
     settings.maxBookingCents === null ? '' : String(settings.maxBookingCents / CENTS_PER_DOLLAR),
   );
+
+  useEffect(() => {
+    setConfirmed(settings);
+  }, [settings]);
 
   async function run(action: () => Promise<unknown>): Promise<void> {
     setSaving(true);
@@ -92,13 +108,24 @@ export function PlatformSettingsPanel({
   }
 
   function save(patch: Partial<PlatformSwitches>): Promise<void> {
-    return run(() =>
-      call('/admin/settings', {
-        method: 'PUT',
-        body: patch,
-        schema: wireAdminPlatformSettingsSchema,
-      }),
-    );
+    return run(async () => {
+      setConfirmed(
+        await call('/admin/settings', {
+          method: 'PUT',
+          body: patch,
+          schema: wireAdminPlatformSettingsSchema,
+        }),
+      );
+    });
+  }
+
+  function applyHold(vendor: HeldVendorEntry, payoutHold: boolean): void {
+    setConfirmed((current) => ({
+      ...current,
+      heldVendors: payoutHold
+        ? [...current.heldVendors.filter((held) => held.id !== vendor.id), vendor]
+        : current.heldVendors.filter((held) => held.id !== vendor.id),
+    }));
   }
 
   const capCents = Math.round(Number(capDollars) * CENTS_PER_DOLLAR);
@@ -112,8 +139,8 @@ export function PlatformSettingsPanel({
     <div className="h-full overflow-y-auto">
       <div className="flex max-w-[720px] flex-col gap-5">
         <p className="text-sm text-stone-600">
-          {settings.updatedAt && settings.updatedByName
-            ? `Last changed by ${settings.updatedByName}, ${WHEN.format(settings.updatedAt)}.`
+          {confirmed.updatedAt && confirmed.updatedByName
+            ? `Last changed by ${confirmed.updatedByName}, ${WHEN.format(confirmed.updatedAt)}.`
             : 'Never changed. Every switch is off and there is no cap.'}{' '}
           Every change is recorded in Activity and emailed to the operator.
         </p>
@@ -145,11 +172,11 @@ export function PlatformSettingsPanel({
                 </div>
                 <div className="flex shrink-0 items-center gap-2.5 pt-0.5">
                   <span className="text-sm text-stone-700" aria-hidden="true">
-                    {settings[item.field] ? 'Paused' : 'Running'}
+                    {confirmed[item.field] ? 'Paused' : 'Running'}
                   </span>
                   <Switch
                     id={`${fieldId}-${item.field}`}
-                    checked={settings[item.field]}
+                    checked={confirmed[item.field]}
                     disabled={saving}
                     onCheckedChange={(checked) => void save({ [item.field]: checked })}
                   />
@@ -173,7 +200,7 @@ export function PlatformSettingsPanel({
                 Vendors join by invitation only
               </label>
               <p className="mt-1 text-sm text-stone-600">
-                {settings.vendorInviteOnly
+                {confirmed.vendorInviteOnly
                   ? 'A vendor account is created only for an invited email. Anyone else choosing vendor is sent to the application form; customers sign up as usual.'
                   : 'Anyone can sign up as a vendor. Customers are never gated.'}{' '}
                 <Link
@@ -186,11 +213,11 @@ export function PlatformSettingsPanel({
             </div>
             <div className="flex shrink-0 items-center gap-2.5 pt-0.5">
               <span className="text-sm text-stone-700" aria-hidden="true">
-                {settings.vendorInviteOnly ? 'Invite only' : 'Open'}
+                {confirmed.vendorInviteOnly ? 'Invite only' : 'Open'}
               </span>
               <Switch
                 id={`${fieldId}-vendorInviteOnly`}
-                checked={settings.vendorInviteOnly}
+                checked={confirmed.vendorInviteOnly}
                 disabled={saving}
                 onCheckedChange={(checked) => void save({ vendorInviteOnly: checked })}
               />
@@ -206,9 +233,9 @@ export function PlatformSettingsPanel({
             Beta cap on booking value
           </h2>
           <p className="mt-1 text-sm text-stone-600">
-            {settings.maxBookingCents === null
+            {confirmed.maxBookingCents === null
               ? 'No cap. Any price a vendor sets can be requested and paid.'
-              : `New requests and payments over ${formatPrice(settings.maxBookingCents)} are refused, including on requests made before the cap was set. A checkout already open can still complete.`}
+              : `New requests and payments over ${formatPrice(confirmed.maxBookingCents)} are refused, including on requests made before the cap was set. A checkout already open can still complete.`}
           </p>
           <form
             noValidate
@@ -235,7 +262,7 @@ export function PlatformSettingsPanel({
             <Button type="submit" size="sm" variant="secondary" disabled={saving || !capValid}>
               Save cap
             </Button>
-            {settings.maxBookingCents !== null ? (
+            {confirmed.maxBookingCents !== null ? (
               <Button
                 type="button"
                 size="sm"
@@ -252,7 +279,7 @@ export function PlatformSettingsPanel({
           </form>
         </section>
 
-        <HeldVendors settings={settings} saving={saving} run={run} />
+        <HeldVendors settings={confirmed} saving={saving} run={run} onHoldChange={applyHold} />
       </div>
     </div>
   );
@@ -262,24 +289,32 @@ interface HeldVendorsProps {
   settings: WireAdminPlatformSettings;
   saving: boolean;
   run: (action: () => Promise<unknown>) => Promise<void>;
+  /** Applies a hold PUT's confirmed result to the parent's local state. */
+  onHoldChange: (vendor: HeldVendorEntry, payoutHold: boolean) => void;
 }
 
 /** Vendors whose automatic payouts are held, and the search that adds one. */
-function HeldVendors({ settings, saving, run }: HeldVendorsProps): React.ReactElement {
+function HeldVendors({
+  settings,
+  saving,
+  run,
+  onHoldChange,
+}: HeldVendorsProps): React.ReactElement {
   const call = useApi();
   const fieldId = useId();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<readonly WireAdminVendorRow[] | null>(null);
   const heldIds = new Set(settings.heldVendors.map((vendor) => vendor.id));
 
-  function setHold(vendorId: string, payoutHold: boolean): Promise<void> {
-    return run(() =>
-      call(`/admin/vendors/${vendorId}/payout-hold`, {
+  function setHold(vendor: HeldVendorEntry, payoutHold: boolean): Promise<void> {
+    return run(async () => {
+      await call(`/admin/vendors/${vendor.id}/payout-hold`, {
         method: 'PUT',
         body: { payoutHold },
         schema: adminVendorPayoutHoldResultSchema,
-      }),
-    );
+      });
+      onHoldChange(vendor, payoutHold);
+    });
   }
 
   function search(): Promise<void> {
@@ -321,7 +356,7 @@ function HeldVendors({ settings, saving, run }: HeldVendorsProps): React.ReactEl
                 size="sm"
                 variant="secondary"
                 disabled={saving}
-                onClick={() => void setHold(vendor.id, false)}
+                onClick={() => void setHold(vendor, false)}
               >
                 Release hold
               </Button>
@@ -384,7 +419,7 @@ function HeldVendors({ settings, saving, run }: HeldVendorsProps): React.ReactEl
                       size="sm"
                       variant="secondary"
                       disabled={saving}
-                      onClick={() => void setHold(vendor.id, true)}
+                      onClick={() => void setHold(vendor, true)}
                     >
                       Hold payouts
                     </Button>
