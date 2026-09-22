@@ -1,4 +1,9 @@
-import { emailDeliveries, notifications, vendorInvites } from '@vendor-marketplace/db/schema';
+import {
+  emailDeliveries,
+  notifications,
+  vendorApplications,
+  vendorInvites,
+} from '@vendor-marketplace/db/schema';
 import { EMAIL_RETRY_MAX_ATTEMPTS, EMAIL_RETRY_WINDOW_MS } from '@vendor-marketplace/shared';
 import { asc, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -52,6 +57,7 @@ describe('the email retry sweep', () => {
     await harness.database.db.delete(emailDeliveries);
     await harness.database.db.delete(notifications);
     await harness.database.db.delete(vendorInvites);
+    await harness.database.db.delete(vendorApplications);
     harness.email.sent.length = 0;
     harness.email.messageIdsByKey.clear();
   });
@@ -60,7 +66,11 @@ describe('the email retry sweep', () => {
     await harness.close();
   });
 
-  function sweep(): Promise<{ notifications: number; invites: number }> {
+  function sweep(): Promise<{
+    notifications: number;
+    invites: number;
+    applicationConfirmations: number;
+  }> {
     const shared = {
       db: harness.database.db,
       email: harness.email,
@@ -120,7 +130,7 @@ describe('the email retry sweep', () => {
     it('re-sends a failed delivery younger than 24 hours, keyed on the notification uuid', async () => {
       const id = await failedNotification(HOUR_MS);
 
-      expect(await sweep()).toEqual({ notifications: 1, invites: 0 });
+      expect(await sweep()).toEqual({ notifications: 1, invites: 0, applicationConfirmations: 0 });
 
       expect(harness.email.sent).toHaveLength(1);
       expect(harness.email.sent[0]).toMatchObject({
@@ -134,7 +144,7 @@ describe('the email retry sweep', () => {
     it('does not re-send a delivery older than 24 hours', async () => {
       const id = await failedNotification(EMAIL_RETRY_WINDOW_MS + HOUR_MS);
 
-      expect(await sweep()).toEqual({ notifications: 0, invites: 0 });
+      expect(await sweep()).toEqual({ notifications: 0, invites: 0, applicationConfirmations: 0 });
 
       expect(harness.email.sent).toHaveLength(0);
       expect(await outcomes(id)).toEqual(['failed']);
@@ -173,7 +183,7 @@ describe('the email retry sweep', () => {
         .set({ outcome: 'delivered' })
         .where(eq(emailDeliveries.notificationId, delivered));
 
-      expect(await sweep()).toEqual({ notifications: 0, invites: 0 });
+      expect(await sweep()).toEqual({ notifications: 0, invites: 0, applicationConfirmations: 0 });
 
       expect(harness.email.sent).toHaveLength(0);
       expect(await outcomes(sent)).toEqual(['sent']);
@@ -222,7 +232,7 @@ describe('the email retry sweep', () => {
     it('re-sends a failed invite under its original idempotency key and records it', async () => {
       const id = await invite(failedAgo(HOUR_MS));
 
-      expect(await sweep()).toEqual({ notifications: 0, invites: 1 });
+      expect(await sweep()).toEqual({ notifications: 0, invites: 1, applicationConfirmations: 0 });
 
       expect(harness.email.sent).toHaveLength(1);
       expect(harness.email.sent[0]?.idempotencyKey).toBe(`vendor-invite-${id}`);
@@ -241,7 +251,7 @@ describe('the email retry sweep', () => {
       await invite({ ...failedAgo(HOUR_MS), emailAttempts: EMAIL_RETRY_MAX_ATTEMPTS });
       await invite({});
 
-      expect(await sweep()).toEqual({ notifications: 0, invites: 0 });
+      expect(await sweep()).toEqual({ notifications: 0, invites: 0, applicationConfirmations: 0 });
       expect(harness.email.sent).toHaveLength(0);
     });
 
@@ -336,6 +346,65 @@ describe('the email retry sweep', () => {
         emailSentAt: null,
         emailFailureReason: 'Resend refused the send (500)',
       });
+    });
+  });
+
+  describe('vendor waitlist confirmation (VEN-516)', () => {
+    let applicationCount = 0;
+
+    async function application(
+      overrides: Partial<typeof vendorApplications.$inferInsert>,
+    ): Promise<string> {
+      const [row] = await harness.database.db
+        .insert(vendorApplications)
+        .values({
+          email: `applicant-${(applicationCount += 1)}@example.com`,
+          businessName: 'Hopper Florals',
+          category: 'florist',
+          city: 'Austin',
+          status: 'new',
+          ...overrides,
+        })
+        .returning({ id: vendorApplications.id });
+
+      return row!.id;
+    }
+
+    const failedAgo = (ms: number): Partial<typeof vendorApplications.$inferInsert> => ({
+      confirmationEmailAttempts: 1,
+      confirmationEmailLastAttemptAt: new Date(Date.now() - ms),
+      confirmationEmailFailureReason: 'Resend refused the send (500)',
+    });
+
+    it('re-sends a failed confirmation under its original idempotency key and records it', async () => {
+      const id = await application(failedAgo(HOUR_MS));
+
+      expect(await sweep()).toEqual({ notifications: 0, invites: 0, applicationConfirmations: 1 });
+
+      expect(harness.email.sent).toHaveLength(1);
+      expect(harness.email.sent[0]?.idempotencyKey).toBe(`vendor-application-confirmation-${id}`);
+      const [row] = await harness.database.db
+        .select()
+        .from(vendorApplications)
+        .where(eq(vendorApplications.id, id));
+      expect(row).toMatchObject({
+        confirmationEmailAttempts: 2,
+        confirmationEmailFailureReason: null,
+      });
+      expect(row?.confirmationEmailSentAt).toBeInstanceOf(Date);
+    });
+
+    it('skips a confirmation older than 24 hours, one that was sent, and one at the cap', async () => {
+      await application(failedAgo(EMAIL_RETRY_WINDOW_MS + HOUR_MS));
+      await application({ ...failedAgo(HOUR_MS), confirmationEmailSentAt: new Date() });
+      await application({
+        ...failedAgo(HOUR_MS),
+        confirmationEmailAttempts: EMAIL_RETRY_MAX_ATTEMPTS,
+      });
+      await application({});
+
+      expect(await sweep()).toEqual({ notifications: 0, invites: 0, applicationConfirmations: 0 });
+      expect(harness.email.sent).toHaveLength(0);
     });
   });
 });

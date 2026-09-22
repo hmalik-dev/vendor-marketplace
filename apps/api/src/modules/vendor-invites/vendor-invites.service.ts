@@ -3,6 +3,8 @@ import {
   EMAIL_RETRY_MAX_ATTEMPTS,
   EMAIL_RETRY_WINDOW_MS,
   ERROR_CODES,
+  US_STATE_NAMES,
+  VENDOR_SIGN_IN_PATH,
   VENDOR_SIGN_UP_PATH,
   isVendorApplicationComplete,
   type AdminVendorApplicationList,
@@ -13,6 +15,7 @@ import {
   type BulkInviteApplicationsResult,
   type BulkInviteResultItem,
   type MyVendorApplication,
+  type UsStateCode,
   type UserRole,
   type VendorApplicationDecision,
   type VendorApplicationInput,
@@ -34,6 +37,7 @@ import {
 import type { Clock } from '../../plugins/clock.js';
 import {
   deleteUnusedInvite,
+  claimApplicationConfirmationAttempt,
   countAdminApplications,
   countAdminInvites,
   findAdminApplications,
@@ -49,7 +53,10 @@ import {
   lockApplication,
   lockInviteByEmail,
   lockInviteById,
+  lockRetryableApplication,
   lockRetryableInvite,
+  recordApplicationEmailAttempt,
+  recordClaimedApplicationEmailOutcome,
   recordInviteEmailAttempt,
   markApplicationInvited,
   markInviteAccepted,
@@ -238,27 +245,63 @@ export async function readVendorSignUpGate(db: AppDatabase): Promise<VendorSignU
  * addresses that were never verified.
  */
 export async function submitVendorApplication(
-  db: AppDatabase,
+  deps: VendorInviteMailDeps,
   body: VendorApplicationInput,
   sessionEmail: string,
 ): Promise<VendorApplicationReceipt> {
   const input = { ...body, email: sessionEmail };
 
   // An address with an account can never become a vendor (`users.role` is fixed at creation).
-  if (await hasLiveAccount(db, input.email)) {
+  if (await hasLiveAccount(deps.db, input.email)) {
     throw conflict(ACCOUNT_EXISTS_MESSAGE);
   }
 
-  if ((await findActiveCategoryIds(db, [input.category])).length === 0) {
+  if ((await findActiveCategoryIds(deps.db, [input.category])).length === 0) {
     throw validationFailed(
       'That category is not available. Reload and choose from the current list.',
       { field: 'category' },
     );
   }
 
-  // Already invited by address: the application arrives decided, so it cannot be declined past the invite.
-  const invited = (await findInviteByEmail(db, input.email)) !== null;
-  await upsertApplication(db, input, invited ? 'invited' : 'new', true);
+  /*
+   * The write and the confirmation's one-time claim, in the same transaction.
+   * `upsertApplication` returns no id when its `setWhere` refuses the write
+   * (the row exists but is no longer `new` — already invited or declined): no
+   * claim is attempted then, because sending "we've saved your details" for a
+   * submit that saved nothing would be a false receipt. When it does write,
+   * `claimApplicationConfirmationAttempt` is the atomic compare-and-swap that
+   * makes "first submit" race-free — two submits for the same address landing
+   * at once can each write the row, but only one flips
+   * `confirmation_email_attempts` from 0 to 1, the same shape
+   * `insertInviteIfAbsent`'s unique index gives the invite email's own claim.
+   */
+  const { applicationId, claimed } = await deps.db.transaction(async (tx) => {
+    // Already invited by address: the application arrives decided, so it cannot be declined past the invite.
+    const invited = (await findInviteByEmail(tx, input.email)) !== null;
+    const writtenId = await upsertApplication(tx, input, invited ? 'invited' : 'new', true);
+
+    if (writtenId === undefined) {
+      return { applicationId: undefined, claimed: false };
+    }
+
+    return {
+      applicationId: writtenId,
+      claimed: await claimApplicationConfirmationAttempt(tx, writtenId, deps.now()),
+    };
+  });
+
+  if (applicationId !== undefined && claimed) {
+    const categoryName = (await resolveCategoryName(deps.db, input.category)) ?? input.category;
+
+    queueApplicationConfirmationEmail(deps, {
+      id: applicationId,
+      email: input.email,
+      businessName: input.businessName,
+      categoryName,
+      city: input.city,
+      state: input.state ?? null,
+    });
+  }
 
   return { received: true };
 }
@@ -333,21 +376,99 @@ export async function listVendorInvites(
   return { items, total, page: query.page, pageSize: query.pageSize };
 }
 
-export function renderVendorInviteEmail(webOrigin: string): {
+/**
+ * The invite email, in one of two variants (VEN-516, frame 38): `hasApplication`
+ * is true for an address that already has a waitlist application, which is
+ * true for every address that has ever signed up — a login already exists, so
+ * the invite tells them to sign in. False is a direct invite the operator sent
+ * with no application behind it: nobody, so the invite tells them to sign up.
+ * Wording is frame 38's, not restated here so it cannot drift.
+ */
+export function renderVendorInviteEmail(
+  webOrigin: string,
+  email: string,
+  hasApplication: boolean,
+): {
   subject: string;
   text: string;
   html: string;
 } {
-  const link = `${webOrigin}${VENDOR_SIGN_UP_PATH}`;
+  const link = `${webOrigin}${hasApplication ? VENDOR_SIGN_IN_PATH : VENDOR_SIGN_UP_PATH}`;
   const href = escapeHtml(link);
-  const intro = `You're invited to open a vendor account on ${BRAND_NAME}.`;
-  const how =
-    'Sign up with this email address and choose vendor to list your services. If you already signed up with it, sign in instead: your vendor account opens then.';
+  const intro = `You're invited to join ${BRAND_NAME} as a vendor.`;
+  // The sign-up sentence quotes the address; its html variant just bolds the
+  // same quoted text, so both are built from the one template below.
+  function signUpHow(emailMarkup: string): string {
+    return `Sign up with this email address — ${emailMarkup} — and you'll land in your new vendor account.`;
+  }
+  const how = hasApplication
+    ? "Sign in with the email address and password you already made, and you'll land in your new vendor account."
+    : signUpHow(email);
+  const howHtml = hasApplication
+    ? escapeHtml(how)
+    : signUpHow(`<strong>${escapeHtml(email)}</strong>`);
+  const next =
+    'The first thing to do there is set your prices, put up your work and open the dates you want to be booked on.';
+  const buttonLabel = hasApplication ? `Sign in to ${BRAND_NAME}` : 'Sign up as a vendor';
+  const footer = hasApplication
+    ? `You're getting this because you asked to join ${BRAND_NAME} as a vendor. If that wasn't you, ignore this email and nothing happens.`
+    : `You're getting this because your business was put forward to join ${BRAND_NAME}. If you'd rather not, ignore this email and nothing happens.`;
 
   return {
     subject: `You're invited to join ${BRAND_NAME} as a vendor`,
-    text: [intro, '', how, '', link].join('\n'),
-    html: `<p>${escapeHtml(intro)}</p><p>${escapeHtml(how)}</p><p><a href="${href}">${href}</a></p>`,
+    text: [intro, '', how, next, '', link, '', footer].join('\n'),
+    html: [
+      `<p>${escapeHtml(intro)}</p>`,
+      `<p>${howHtml}</p>`,
+      `<p>${escapeHtml(next)}</p>`,
+      `<p><a href="${href}">${escapeHtml(buttonLabel)}</a></p>`,
+      `<p>${escapeHtml(footer)}</p>`,
+    ].join(''),
+  };
+}
+
+/**
+ * The waitlist confirmation email (VEN-516, frame 38): sent once, on the
+ * first successful details submit. The only receipt a waitlisted vendor gets,
+ * so it carries the four facts held and offers reply as the correction
+ * channel — the invites need no receipt, they need one button.
+ */
+export function renderVendorApplicationConfirmationEmail(details: {
+  businessName: string;
+  categoryName: string;
+  city: string;
+  state: UsStateCode | null;
+  email: string;
+}): { subject: string; text: string; html: string } {
+  const intro =
+    "We've saved your details. We'll email you when you're invited, and you'll sign in with this same address. There's nothing else you need to do.";
+  const where = details.state ? `${details.city}, ${US_STATE_NAMES[details.state]}` : details.city;
+  const facts: Array<[string, string]> = [
+    ['Business', details.businessName],
+    ['Category', details.categoryName],
+    ['Where', where],
+    ['Email', details.email],
+  ];
+  const correction = "If any of that is wrong, reply to this email and we'll fix it.";
+  const footer = `You're getting this because you signed up to join ${BRAND_NAME} as a vendor.`;
+
+  return {
+    subject: `You're on the ${BRAND_NAME} waitlist`,
+    text: [
+      intro,
+      '',
+      ...facts.map(([label, value]) => `${label}: ${value}`),
+      '',
+      correction,
+      '',
+      footer,
+    ].join('\n'),
+    html: [
+      `<p>${escapeHtml(intro)}</p>`,
+      `<p>${facts.map(([label, value]) => `${escapeHtml(label)}: ${escapeHtml(value)}`).join('<br>')}</p>`,
+      `<p>${escapeHtml(correction)}</p>`,
+      `<p>${escapeHtml(footer)}</p>`,
+    ].join(''),
   };
 }
 
@@ -366,12 +487,18 @@ async function sendInviteEmail(
   handle: AppDatabase,
   invite: { id: string; email: string },
 ): Promise<boolean> {
+  // Re-read at send time, not stamped onto the invite: a resend or a sweep
+  // retry reflects whatever is true when it actually goes out. Outside the
+  // `try` below: a failed read here is not a failed *send*, and on a `tx`
+  // handle it must abort the caller's transaction rather than be swallowed
+  // and recorded as if the gateway had refused the message.
+  const hasApplication = (await findApplicationByEmail(handle, invite.email)) !== null;
   let failureReason: string | null = null;
 
   try {
     await deps.email.send({
       to: invite.email,
-      ...renderVendorInviteEmail(deps.webOrigin),
+      ...renderVendorInviteEmail(deps.webOrigin, invite.email, hasApplication),
       idempotencyKey: `vendor-invite-${invite.id}`,
     });
   } catch (error) {
@@ -394,6 +521,138 @@ function queueInviteEmail(deps: VendorInviteMailDeps, inviteId: string, to: stri
       deps.log.error({ inviteId, err: error }, 'Could not record a vendor invite email attempt');
     }
   });
+}
+
+interface ApplicationConfirmationDetails {
+  id: string;
+  email: string;
+  businessName: string;
+  categoryName: string;
+  city: string;
+  state: UsStateCode | null;
+}
+
+/** The actual send, shared by the claimed first attempt and every retry. */
+async function sendApplicationConfirmationMessage(
+  deps: VendorInviteMailDeps,
+  application: ApplicationConfirmationDetails,
+): Promise<string | null> {
+  try {
+    await deps.email.send({
+      to: application.email,
+      ...renderVendorApplicationConfirmationEmail(application),
+      idempotencyKey: `vendor-application-confirmation-${application.id}`,
+    });
+
+    return null;
+  } catch (error) {
+    deps.log.error(
+      { applicationId: application.id, err: error },
+      'Could not send a vendor waitlist confirmation email',
+    );
+
+    return error instanceof Error ? error.message : 'The email transport failed';
+  }
+}
+
+/**
+ * Sends the *already-claimed* first attempt: `submitVendorApplication` bumped
+ * `confirmation_email_attempts` from 0 to 1 in its own transaction (the atomic
+ * claim that makes "first submit" race-free), so this only ever records the
+ * **outcome** on top of it — never a second increment, which would burn a
+ * retry-budget slot on a send that has not failed yet.
+ */
+async function sendClaimedApplicationConfirmationEmail(
+  deps: VendorInviteMailDeps,
+  handle: AppDatabase,
+  application: ApplicationConfirmationDetails,
+): Promise<void> {
+  const failureReason = await sendApplicationConfirmationMessage(deps, application);
+
+  await recordClaimedApplicationEmailOutcome(handle, application.id, {
+    at: deps.now(),
+    failureReason,
+  });
+}
+
+/**
+ * Sends a retry attempt and records it, incrementing `confirmation_email_attempts`
+ * — `sendInviteEmail`'s own shape, for the sweep's own repeated tries.
+ */
+async function sendApplicationConfirmationEmail(
+  deps: VendorInviteMailDeps,
+  handle: AppDatabase,
+  application: ApplicationConfirmationDetails,
+): Promise<void> {
+  const failureReason = await sendApplicationConfirmationMessage(deps, application);
+
+  await recordApplicationEmailAttempt(handle, application.id, { at: deps.now(), failureReason });
+}
+
+/** Sends the confirmation off the request path; a failed send is recorded, never the submit's error. */
+function queueApplicationConfirmationEmail(
+  deps: VendorInviteMailDeps,
+  application: ApplicationConfirmationDetails,
+): void {
+  deps.background.run(async () => {
+    try {
+      await sendClaimedApplicationConfirmationEmail(deps, deps.db, application);
+    } catch (error) {
+      deps.log.error(
+        { applicationId: application.id, err: error },
+        'Could not record a vendor waitlist confirmation email attempt',
+      );
+    }
+  });
+}
+
+/** How many applications one sweep tick may try, so a Resend outage cannot make a tick unbounded. */
+const APPLICATION_CONFIRMATION_RETRY_BATCH = 25;
+
+/**
+ * The sweep's third half: re-sends waitlist confirmations whose email failed,
+ * `retryFailedInviteEmails`'s own shape. Returns how many it tried.
+ */
+export async function retryFailedApplicationConfirmationEmails(
+  deps: VendorInviteMailDeps,
+): Promise<number> {
+  const tried: string[] = [];
+
+  while (tried.length < APPLICATION_CONFIRMATION_RETRY_BATCH) {
+    const id = await deps.db.transaction(async (tx) => {
+      const application = await lockRetryableApplication(tx, {
+        now: deps.now(),
+        maxAttempts: EMAIL_RETRY_MAX_ATTEMPTS,
+        windowMs: EMAIL_RETRY_WINDOW_MS,
+        exclude: tried,
+      });
+
+      // Only a completed submit ever starts an attempt (`submitVendorApplication`),
+      // so every retryable row already carries all four facts.
+      if (!application || application.businessName === null || application.category === null) {
+        return null;
+      }
+
+      await sendApplicationConfirmationEmail(deps, tx, {
+        id: application.id,
+        email: application.email,
+        businessName: application.businessName,
+        categoryName: (await resolveCategoryName(tx, application.category)) ?? application.category,
+        city: application.city ?? '',
+        state: application.state,
+      });
+
+      return application.id;
+    });
+
+    if (id === null) {
+      break;
+    }
+
+    tried.push(id);
+  }
+
+  return tried.length;
 }
 
 /**
