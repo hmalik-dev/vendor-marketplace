@@ -495,16 +495,19 @@ export async function createDraftVendorProfile(
   }
 
   try {
-    await tx.transaction(async (savepoint) => {
-      const categoryIds = await findActiveCategoryIds(savepoint, [application.category]);
+    // Shadows the outer `tx`: `replace-in-transaction-guard.test.ts` requires
+    // every wholesale-replace writer's caller to be named `tx`, and this one
+    // genuinely is one — the savepoint, not the outer transaction.
+    await tx.transaction(async (tx) => {
+      const categoryIds = await findActiveCategoryIds(tx, [application.category]);
 
       if (categoryIds.length === 0) {
         // The category the applicant chose was later deactivated or removed.
         return;
       }
 
-      const slug = await resolveSlug(savepoint, application.businessName);
-      const inserted = await insertVendorProfile(savepoint, {
+      const slug = await resolveSlug(tx, application.businessName);
+      const inserted = await insertVendorProfile(tx, {
         userId,
         businessName: application.businessName,
         slug,
@@ -522,7 +525,7 @@ export async function createDraftVendorProfile(
         coverImageUrl: null,
       });
 
-      await replaceVendorCategories(savepoint, inserted.id, categoryIds);
+      await replaceVendorCategories(tx, inserted.id, categoryIds);
     });
   } catch (error) {
     log?.warn(
