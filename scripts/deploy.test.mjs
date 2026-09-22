@@ -344,6 +344,7 @@ test('web: builds under the release and upload credential, and deploys without t
       SENTRY_RELEASE: SHA,
       DATABASE_URL_UNPOOLED: UNPOOLED,
       WEB_URL: 'https://orla.test',
+      API_URL: 'https://api.orla.test',
       ...credentials,
     },
     io,
@@ -949,6 +950,7 @@ test('web: staging deploys a preview and aliases it to the staging host', async 
       SENTRY_RELEASE: SHA,
       // An allow-list: the first entry is the alias host.
       WEB_URL: 'https://orla-staging.vercel.app,https://staging.orla.test',
+      API_URL: 'https://api.orla.test',
     },
     io,
   );
@@ -975,6 +977,7 @@ test('web: staging refuses to alias a host that is not its own, before building 
           ...BUILD_SECRETS,
           SENTRY_WEB_PROJECT: 'orla-web',
           SENTRY_RELEASE: SHA,
+          API_URL: 'https://api.orla.test',
           WEB_URL,
         },
         io,
@@ -999,6 +1002,7 @@ test('web: staging refuses to alias a host that is not its own, before building 
           ...BUILD_SECRETS,
           SENTRY_WEB_PROJECT: 'orla-web',
           SENTRY_RELEASE: SHA,
+          API_URL: 'https://api.orla.test',
           WEB_URL,
         },
         io,
@@ -1023,6 +1027,7 @@ test('web: production stays a production deployment and is not aliased', async (
       SENTRY_WEB_PROJECT: 'orla-web',
       SENTRY_RELEASE: SHA,
       WEB_URL: 'https://orla.test',
+      API_URL: 'https://api.orla.test',
     },
     io,
   );
@@ -1058,6 +1063,7 @@ for (const target of ['staging', 'production']) {
         SENTRY_WEB_PROJECT: 'orla-web',
         SENTRY_RELEASE: SHA,
         WEB_URL: 'https://orla-staging.vercel.app/,https://staging.orla.test',
+        API_URL: 'https://api.orla.test',
         ...BUILD_SECRETS,
       },
       io,
@@ -1071,6 +1077,70 @@ for (const target of ['staging', 'production']) {
         `${call.args[2]} DEPLOYMENT_ORIGIN`,
       );
     }
+  });
+
+  test(`web: ${target} sets API_URL and NEXT_PUBLIC_API_URL to the environment's API_URL on vercel build`, async () => {
+    const { io: recording, calls } = recordingIo();
+    const io = {
+      ...recording,
+      run: async (command, args, options) => {
+        await recording.run(command, args, options);
+        if (args[2] === 'deploy') options.write('https://orla-abc123-team.vercel.app\n');
+      },
+    };
+    await PHASES.web(
+      {
+        PATH: '/bin',
+        DEPLOY_TARGET: target,
+        VERCEL_TOKEN: fake('vercel'),
+        VERCEL_ORG_ID: 'org',
+        VERCEL_PROJECT_ID: 'prj',
+        SENTRY_AUTH_TOKEN: fake('sentry'),
+        SENTRY_WEB_PROJECT: 'orla-web',
+        SENTRY_RELEASE: SHA,
+        WEB_URL: 'https://orla-staging.vercel.app',
+        API_URL: 'https://api.orla.test',
+        ...BUILD_SECRETS,
+      },
+      io,
+    );
+
+    for (const call of calls) {
+      const isBuild = call.args[2] === 'build';
+      assert.equal(
+        call.env.API_URL,
+        isBuild ? 'https://api.orla.test' : undefined,
+        `${call.args[2]} API_URL`,
+      );
+      assert.equal(
+        call.env.NEXT_PUBLIC_API_URL,
+        isBuild ? 'https://api.orla.test' : undefined,
+        `${call.args[2]} NEXT_PUBLIC_API_URL`,
+      );
+    }
+  });
+
+  test(`web: ${target} refuses before running anything when API_URL is missing`, async () => {
+    const { io, calls } = recordingIo();
+    await assert.rejects(
+      PHASES.web(
+        {
+          DEPLOY_TARGET: target,
+          VERCEL_TOKEN: fake('vercel'),
+          VERCEL_ORG_ID: 'org',
+          VERCEL_PROJECT_ID: 'prj',
+          SENTRY_AUTH_TOKEN: fake('sentry'),
+          SENTRY_WEB_PROJECT: 'orla-web',
+          SENTRY_RELEASE: SHA,
+          WEB_URL: 'https://orla-staging.vercel.app',
+          API_URL: '',
+          ...BUILD_SECRETS,
+        },
+        io,
+      ),
+      /API_URL/,
+    );
+    assert.equal(calls.length, 0);
   });
 
   test(`web: ${target} hands the two build secrets to vercel build only, never argv`, async () => {
@@ -1093,6 +1163,7 @@ for (const target of ['staging', 'production']) {
         SENTRY_WEB_PROJECT: 'orla-web',
         SENTRY_RELEASE: SHA,
         WEB_URL: 'https://orla-staging.vercel.app',
+        API_URL: 'https://api.orla.test',
         ...BUILD_SECRETS,
       },
       io,
@@ -1121,6 +1192,7 @@ for (const target of ['staging', 'production']) {
             SENTRY_WEB_PROJECT: 'orla-web',
             SENTRY_RELEASE: SHA,
             WEB_URL: 'https://orla-staging.vercel.app',
+            API_URL: 'https://api.orla.test',
             ...BUILD_SECRETS,
             [missing]: '',
           },
