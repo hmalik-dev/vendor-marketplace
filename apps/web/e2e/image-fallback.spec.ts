@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 
 import { expect, test } from './fixtures.js';
-import { waitForHydration } from './hydration.js';
+import { waitForHydration, waitForStreamed } from './hydration.js';
 
 import type { Page } from '@playwright/test';
 
@@ -78,6 +78,12 @@ test.describe('image fallback', () => {
      */
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    /*
+     * The footer streams in behind its own boundary, 289px of it. Read before it
+     * lands, this height is the page without a footer, and the reading after the
+     * reload below — which lets it land — comes out 289px taller.
+     */
+    await waitForStreamed(page);
     const healthyHeight = await page.evaluate(() => document.body.scrollHeight);
     const healthyImages = await page.evaluate(() => document.images.length);
 
@@ -86,6 +92,7 @@ test.describe('image fallback', () => {
     await breakEveryImage(page);
     await page.reload();
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await waitForStreamed(page);
 
     /* Acceptance 1: no browser glyph anywhere on the front door. */
     await expect
@@ -148,9 +155,14 @@ test.describe('image fallback', () => {
      */
     await waitForHydration(vendorPage, 'input[aria-label="Add portfolio photos"]');
 
-    const tile = vendorPage
-      .locator('img[src*="/uploads/"], img[src*="vendor-marketplace"]')
-      .first();
+    /*
+     * By where a tile sits, not by what its `src` says. An upload on an https
+     * storage host is served through `/_next/image?url=<encoded>` (VEN-456), so
+     * the bucket name is percent-encoded there and a `src*=` match on it holds
+     * only on the http emulator, where the URL is used as given — which is why
+     * this passed on a lane and never on CI's Neon storage branch.
+     */
+    const tile = vendorPage.locator('main li img').first();
 
     if ((await tile.count()) === 0) {
       await vendorPage.getByLabel('Add portfolio photos').setInputFiles(SAMPLE_PHOTOGRAPH);

@@ -116,6 +116,72 @@ export async function freshEventDate(
   return options.pick(free);
 }
 
+/**
+ * Moves an earlier run's completed booking off the day this one is about to take.
+ *
+ * `booking_requests_accepted_date_key` (VEN-482) holds one *accepted* request per
+ * vendor per day for good — a completed booking frees its own confirmed-date
+ * index, but its request stays accepted. Every run shifts onto the same
+ * yesterday, so on a database an earlier run already used the second shift died
+ * on that index, contradicting `e2e/README.md`'s "a second run is the ordinary
+ * case". The earlier run's request and booking go back to the nearest day with
+ * no accepted request, which is only ever older than yesterday.
+ */
+async function displaceEarlierRuns(
+  tx: AnyPgDatabase,
+  target: { vendorId: string; eventDate: string; requestId: string },
+): Promise<void> {
+  const occupied = await tx
+    .select({ id: bookingRequests.id })
+    .from(bookingRequests)
+    .where(
+      and(
+        eq(bookingRequests.vendorId, target.vendorId),
+        eq(bookingRequests.eventDate, target.eventDate),
+        eq(bookingRequests.status, 'accepted'),
+        ne(bookingRequests.id, target.requestId),
+      ),
+    );
+
+  if (occupied.length === 0) {
+    return;
+  }
+
+  const acceptedDates = new Set(
+    (
+      await tx
+        .select({ eventDate: bookingRequests.eventDate })
+        .from(bookingRequests)
+        .where(
+          and(
+            eq(bookingRequests.vendorId, target.vendorId),
+            eq(bookingRequests.status, 'accepted'),
+          ),
+        )
+    ).map((row) => row.eventDate),
+  );
+  let cursor = target.eventDate;
+  // Two days back is the oldest day still inside the payout-release window (see
+  // `PAST_EVENT_OFFSET_DAYS`); anything older would be handed to a real transfer.
+  const floor = toDateString(addDays(new Date(`${target.eventDate}T00:00:00.000Z`), -1));
+
+  for (const { id } of occupied) {
+    do {
+      cursor = toDateString(addDays(new Date(`${cursor}T00:00:00.000Z`), -1));
+    } while (acceptedDates.has(cursor) && cursor > floor);
+
+    if (acceptedDates.has(cursor)) {
+      throw new Error(
+        `no free day for an earlier run's booking on ${target.vendorId} — recreate the lane database (lane:down, lane:up)`,
+      );
+    }
+
+    acceptedDates.add(cursor);
+    await tx.update(bookingRequests).set({ eventDate: cursor }).where(eq(bookingRequests.id, id));
+    await tx.update(bookings).set({ eventDate: cursor }).where(eq(bookings.requestId, id));
+  }
+}
+
 export interface ShiftBookingOptions {
   bookingId: string;
   now: Date;
@@ -150,6 +216,11 @@ export async function shiftBookingIntoPast(
       throw new Error(`No booking ${options.bookingId}`);
     }
 
+    await displaceEarlierRuns(tx, {
+      vendorId: booking.vendorId,
+      eventDate,
+      requestId: booking.requestId,
+    });
     await tx.update(bookings).set({ eventDate }).where(eq(bookings.id, options.bookingId));
     await tx
       .update(bookingRequests)

@@ -119,7 +119,15 @@ async function readStop(page: Page): Promise<Stop | null> {
       const offset = style.getPropertyValue('--tw-ring-offset-shadow').trim();
       const insetRing = style.getPropertyValue('--tw-inset-ring-shadow').trim();
 
-      if (ring !== '' && !EMPTY.test(ring)) {
+      /*
+       * A segment's fill is backed by `ring-2 ring-inset` (VEN-541, 3:1 where the
+       * fill alone is 1.19:1). Tailwind v4 writes that into `--tw-ring-shadow` with
+       * an `inset` prefix, not into `--tw-inset-ring-shadow`, so it is the second
+       * half of the fill counted below rather than a ring of its own.
+       */
+      const segmentRing = node.hasAttribute('data-focus-fill') && ring.startsWith('inset ');
+
+      if (ring !== '' && !EMPTY.test(ring) && !segmentRing) {
         indicators.push(`ring on ${describe(node)}: ${ring}`);
       } else if (offset !== '' && !EMPTY.test(offset)) {
         indicators.push(`a bare ring-offset with no ring on ${describe(node)}: ${offset}`);
@@ -248,7 +256,7 @@ async function walk(page: Page, settled?: string): Promise<Stop[]> {
    * every control it never reached.
    */
   if (settled !== undefined) {
-    await page.locator(settled).first().waitFor({ state: 'visible' });
+    await waitForHydration(page, settled);
   }
 
   await page.locator('body').click({ position: { x: 2, y: 2 } });
@@ -397,7 +405,7 @@ const SIGNED_OUT: [string, string | undefined][] = [
   ['/', undefined],
   ['/search', undefined],
   [`/vendors/${E2E_VENDOR_SLUG}`, undefined],
-  ['/sign-in', '.cl-formFieldInput'],
+  ['/sign-in', 'input[data-slot="input"]'],
 ];
 
 test.describe('one focus indicator per keyboard stop', () => {
@@ -479,15 +487,16 @@ test.describe('one focus indicator per keyboard stop', () => {
   });
 
   /*
-   * The auth provider's own controls, which the base rule reaches and `data-focus-own`
-   * cannot: `globals.css` restates each treatment unlayered for them, and the
-   * text field is the one that has to zero the offset by hand.
+   * The sign-in form's text field: the same bordered `Input` every other form
+   * uses, asserted on the auth route because that screen is full-bleed and had
+   * its own provider-drawn field before Neon Auth (VEN-447).
    */
   test('gives the auth form the bordered treatment, offset band and all', async ({ page }) => {
     await page.goto('/sign-in');
 
-    const field = page.locator('.cl-formFieldInput').first();
-    await field.waitFor({ state: 'visible' });
+    await waitForHydration(page, 'input[data-slot="input"]');
+
+    const field = page.locator('input[data-slot="input"]').first();
     await focusUntilVisible(field);
 
     const style = await settledStyle(page, () =>
@@ -506,7 +515,7 @@ test.describe('one focus indicator per keyboard stop', () => {
 
     expect(style.focused, 'the field lost focus before its indicator was read').toBe(true);
     expect(style.ring).toContain('3px');
-    // `ring-offset-0` on the auth provider's field leaves a real declaration at zero width.
+    // The bordered treatment has no offset band; `ring-offset-0` leaves a declaration at zero width.
     expect(style.offset).toMatch(PAINTS_NOTHING);
     expect(style.border).toBe('rgb(180, 85, 47)');
     expect(style.outline).toBe('none');

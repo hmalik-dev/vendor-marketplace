@@ -173,6 +173,62 @@ describe('e2e booking dates', () => {
       expect(future).toEqual([]);
     });
 
+    /*
+     * `booking_requests_accepted_date_key` keeps an accepted request on its day
+     * for good, so a second run's shift onto the same yesterday used to die on it.
+     */
+    it('moves an earlier run’s accepted request off yesterday instead of colliding with it', async () => {
+      const firstId = await insertBooking('2027-01-20');
+      await shiftBookingIntoPast(database.db, { bookingId: firstId, now: NOW });
+
+      const [firstRequest] = await database.db
+        .select()
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, seeded.bookingRequestId!));
+      const [firstBooking] = await database.db
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, firstId));
+
+      const { id: _requestId, ...requestFields } = firstRequest!;
+      const [second] = await database.db
+        .insert(bookingRequests)
+        .values({ ...requestFields, eventDate: '2027-02-03' })
+        .returning({ id: bookingRequests.id });
+      const { id: _bookingId, ...bookingFields } = firstBooking!;
+      const [secondBooking] = await database.db
+        .insert(bookings)
+        .values({
+          ...bookingFields,
+          requestId: second!.id,
+          eventDate: '2027-02-03',
+          stripePaymentIntentId: 'pi_fixture_second_run',
+        })
+        .returning({ id: bookings.id });
+
+      const result = await shiftBookingIntoPast(database.db, {
+        bookingId: secondBooking!.id,
+        now: NOW,
+      });
+
+      expect(result).toEqual({ eventDate: '2026-09-13' });
+
+      const accepted = await database.db
+        .select({ id: bookingRequests.id, eventDate: bookingRequests.eventDate })
+        .from(bookingRequests)
+        .where(eq(bookingRequests.status, 'accepted'));
+      expect(accepted.find((row) => row.id === second!.id)?.eventDate).toBe('2026-09-13');
+      expect(accepted.find((row) => row.id === seeded.bookingRequestId)?.eventDate).toBe(
+        '2026-09-12',
+      );
+
+      const [displaced] = await database.db
+        .select({ eventDate: bookings.eventDate })
+        .from(bookings)
+        .where(eq(bookings.id, firstId));
+      expect(displaced?.eventDate).toBe('2026-09-12');
+    });
+
     it('refuses a booking id that does not exist', async () => {
       await expect(
         shiftBookingIntoPast(database.db, {

@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { expect, type Page } from '@playwright/test';
 
 import { AUTH_DIR } from './fixtures.js';
+import { waitForHydration } from './hydration.js';
 
 /**
  * An identity with **no `users` row** — the state a person is in between
@@ -75,6 +76,12 @@ export async function deleteNoRowAccount(account: NoRowAccount): Promise<void> {
  */
 export async function signInThroughTheForm(page: Page, account: NoRowAccount): Promise<URL> {
   await page.goto('/sign-in');
+  /*
+   * A value filled before React owns the field lands in the DOM but not in the
+   * form's state, so the submit stays disabled and the click never navigates
+   * anywhere (VEN-570 found it in `e2e-auth.mjs`; this is the same form).
+   */
+  await waitForHydration(page, 'input[type="password"]');
   // One step on Neon Auth: the submit stays disabled until both fields are filled.
   await page.getByLabel(/email/i).first().fill(account.email);
   await page

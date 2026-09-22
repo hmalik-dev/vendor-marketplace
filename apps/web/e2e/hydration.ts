@@ -56,3 +56,19 @@ export async function waitForHydration(page: Page, selector: string): Promise<vo
     );
   }
 }
+
+/**
+ * Wait until no Suspense boundary is still streaming in.
+ *
+ * The header and footer sit behind boundaries of their own (VEN-492). React
+ * sends each one's real markup in a hidden `S:` container beside a `B:`
+ * placeholder and swaps it in when it settles, so until then the page is
+ * shorter than it will be (no footer) and can hold two copies of a node (the
+ * hidden one and the swapped one). A measurement or a strict-mode locator taken
+ * in that window reads a page that is not the one a visitor ends up on.
+ */
+export async function waitForStreamed(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => document.querySelector('template[id^="B:"], [id^="S:"]') === null,
+  );
+}

@@ -12,7 +12,7 @@ import {
 } from '../src/lib/role-routes';
 import { resolveE2EApiUrl, resolveE2EBaseUrl } from './base-url.js';
 import { AUTH_DIR, expect, storageStatePath, test } from './fixtures.js';
-import { waitForHydration } from './hydration.js';
+import { waitForHydration, waitForStreamed } from './hydration.js';
 import {
   assertLoopbackOrigin,
   deleteNoRowAccount,
@@ -189,7 +189,21 @@ function expectationFor(
 
   if (persona.name === 'no-row') {
     if (GATE_EXEMPT.has(path)) return { renders: true, refusal: null };
-    if (path === '/after-sign-in' || path === '/sign-in' || path === '/sign-up') {
+    /*
+     * Every auth screen forwards a live session through `redirectIfSignedIn`, so
+     * it is read out of the source rather than listed: `/forgot-password` and
+     * `/reset-password` (VEN-470) do the same as `/sign-in` and were missing here.
+     */
+    const file = segmentFile(target);
+    const forwardsSession =
+      file !== null &&
+      renderChain(target).some((source) => /\bredirectIfSignedIn\(/.test(codeOf(source)));
+    if (
+      path === '/after-sign-in' ||
+      path === '/sign-in' ||
+      path === '/sign-up' ||
+      forwardsSession
+    ) {
       return { renders: false, refusal: { to: '/accept-terms', returnTo: null } };
     }
     const toGate = { to: '/accept-terms', returnTo: path };
@@ -389,6 +403,19 @@ async function landCell(
    * draw their own, and the auth screens cover it. The auth provider's signed-in and
    * signed-out branches render on the client, so these wait rather than read.
    */
+  /*
+   * The header streams behind its own boundary (VEN-492). React sends the real
+   * one in a hidden `S:` container beside the `B:` placeholder and swaps it in
+   * afterwards, so mid-swap there are two `site-header` nodes and `isVisible()`
+   * fails strict mode. Nothing here is decidable until no boundary is pending.
+   */
+  try {
+    await waitForStreamed(page);
+  } catch {
+    fail('a Suspense boundary was still streaming when the page was read');
+    return failures;
+  }
+
   const siteHeader = page.locator('[data-slot="site-header"]');
   if (!(await siteHeader.isVisible())) {
     return failures;
