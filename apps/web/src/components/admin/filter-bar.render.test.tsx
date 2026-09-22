@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminQueryString } from '@/lib/admin-params';
 import { FilterBar, FilterSelect } from './filter-bar';
 
@@ -284,5 +284,106 @@ describe('a filter trigger', () => {
     expect(classes).toContain('py-2');
     expect(classes.filter((name) => /^p[lr]-/.test(name))).toEqual([]);
     expect(trigger.textContent).toBe('City');
+  });
+});
+
+/*
+ * VEN-576. CI saw a chosen dropdown option leave the browser's URL on its
+ * pre-choice value for a whole 30s timeout — the `push` server-recorded the
+ * navigation but the browser never committed it. `assign` stands in for a
+ * real navigation, which jsdom refuses (`connect-payouts-form.test.tsx`'s
+ * pattern).
+ */
+describe('a Refine bar dropdown falling back off a dropped push', () => {
+  const assign = vi.fn();
+  const originalLocation = window.location;
+
+  function choose(label: string, option: string): void {
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    fireEvent.click(screen.getByRole('option', { name: option }));
+  }
+
+  beforeEach(() => {
+    assign.mockClear();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { pathname: '/admin/vendors', search: '?page=2', assign },
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+  });
+
+  it('hard-navigates once the transition settles and the URL never moved', () => {
+    render(
+      <FilterBar action="/admin/vendors" params={{ page: '2' }}>
+        <FilterSelect
+          action="/admin/vendors"
+          name="city"
+          label="City"
+          value=""
+          options={[{ value: 'Austin', label: 'Austin' }]}
+        />
+      </FilterBar>,
+    );
+
+    choose('City', 'Austin');
+
+    expect(assign).toHaveBeenCalledWith('/admin/vendors?city=Austin');
+  });
+
+  it('does not hard-navigate when the push actually lands', () => {
+    push.mockImplementationOnce((url: string) => {
+      const [pathname, search] = url.split('?');
+      window.location.pathname = pathname;
+      window.location.search = search ? `?${search}` : '';
+    });
+
+    render(
+      <FilterBar action="/admin/vendors" params={{ page: '2' }}>
+        <FilterSelect
+          action="/admin/vendors"
+          name="city"
+          label="City"
+          value=""
+          options={[{ value: 'Austin', label: 'Austin' }]}
+        />
+      </FilterBar>,
+    );
+
+    choose('City', 'Austin');
+
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  /*
+   * The fix this pins: comparing only against the pushed-to URL would
+   * hard-navigate back over a sibling dropdown's later choice whenever two
+   * transitions settle in the same commit. Comparing against the URL the push
+   * started from — and only falling back when nothing moved it at all —
+   * leaves a URL that changed for any other reason alone.
+   */
+  it('does not hard-navigate over a URL that already moved for another reason', () => {
+    push.mockImplementationOnce(() => {
+      window.location.pathname = '/admin/vendors';
+      window.location.search = '?status=review';
+    });
+
+    render(
+      <FilterBar action="/admin/vendors" params={{ page: '2' }}>
+        <FilterSelect
+          action="/admin/vendors"
+          name="city"
+          label="City"
+          value=""
+          options={[{ value: 'Austin', label: 'Austin' }]}
+        />
+      </FilterBar>,
+    );
+
+    choose('City', 'Austin');
+
+    expect(assign).not.toHaveBeenCalled();
   });
 });
