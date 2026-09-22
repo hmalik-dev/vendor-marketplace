@@ -929,7 +929,7 @@ test('web: staging deploys a preview and aliases it to the staging host', async 
   );
 
   assert.deepEqual(calls, [
-    'pull --yes --environment=preview',
+    'pull --yes --environment=preview --git-branch=staging',
     'build',
     `deploy --prebuilt --env SENTRY_RELEASE=${SHA}`,
     `alias set ${url} orla-staging.vercel.app`,

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orla — checkout test mode</title>
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#E9E6DF"/><rect x="30" y="56" width="140" height="26" rx="6" fill="#23201C"/><circle cx="46" cy="69" r="4" fill="#E0A83C"/><rect x="58" y="65" width="98" height="8" rx="4" fill="#F8F5EF"/><rect x="30" y="96" width="140" height="10" rx="5" fill="#C9C2B4"/><rect x="30" y="114" width="96" height="10" rx="5" fill="#C9C2B4"/><rect x="30" y="140" width="80" height="22" rx="8" fill="#B4552F"/></svg>
+</template>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#E9E6DF;font-family:'Instrument Sans',system-ui,sans-serif}
+a{color:#A34A28}a:hover{color:#8E3F20}
+.sc{padding:0 48px 58px}
+.sc-h{display:flex;align-items:baseline;gap:12px;margin:0 0 14px;flex-wrap:wrap}
+.sc-n{font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.1em;padding:4px 8px;background:#23201C;color:#F8F5EF;border-radius:4px}
+.sc-t{font:600 14px/1.2 'Instrument Sans',sans-serif;color:#23201C}
+.sc-d{font:400 12.5px/1.4 'Instrument Sans',sans-serif;color:#6B6459;max-width:820px}
+.sc-mvp{font:700 9.5px 'Instrument Sans',sans-serif;letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:4px;background:#EDF0E9;color:#4B5940}
+.sc-rev{font:700 9.5px 'Instrument Sans',sans-serif;letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:4px;background:#F7E7E0;color:#8E3F20}
+.sc-post{font:700 9.5px 'Instrument Sans',sans-serif;letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:4px;background:#F5EEDC;color:#7A5A12}
+.fr{width:1440px;height:900px;background:#F8F5EF;border:1px solid rgba(35,32,28,.12);border-radius:12px;overflow:hidden;box-shadow:0 6px 28px rgba(35,32,28,.13);display:flex;flex-direction:column}
+.hd{height:64px;flex:none;background:#FFFDF9;border-bottom:1px solid #E4DDD1;display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+.ph{background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);display:flex;align-items:flex-end;padding:10px}
+.phl{font:400 9px 'JetBrains Mono',monospace;color:#6B6459}
+.lbl{font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459}
+.inp{background:#F1ECE4;border:1px solid #E4DDD1;border-radius:10px;padding:10px 13px;font-size:13.5px;color:#23201C}
+.side{width:240px;flex:none;background:#FFFDF9;border-right:1px solid #E4DDD1;display:flex;flex-direction:column;padding:16px 12px}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:13.5px;font-weight:500;color:#4A443C}
+.navA{background:#F7E7E0;color:#8E3F20;font-weight:600;box-shadow:inset 3px 0 0 #B4552F}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.btnP{font-size:13.5px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:11px 20px;border-radius:10px;display:inline-block}
+.btnS{font-size:13.5px;font-weight:600;color:#23201C;background:#FFFDF9;border:1px solid #E4DDD1;padding:10px 20px;border-radius:10px;display:inline-block}
+.pill{font:700 10px 'Instrument Sans',sans-serif;letter-spacing:.07em;text-transform:uppercase;padding:5px 10px;border-radius:999px}
+.card{background:#FFFDF9;border-radius:16px;box-shadow:0 2px 10px rgba(35,32,28,.06);overflow:hidden}
+.h2{font-family:'Instrument Serif',serif;font-size:26px;color:#23201C;letter-spacing:-.01em}
+.sh{font-family:'Instrument Serif',serif;font-size:21px;color:#23201C}
+.sk{background:linear-gradient(90deg,#EFE9E0 0%,#F4F0E8 50%,#EFE9E0 100%);background-size:200% 100%;animation:shim 1.5s linear infinite;border-radius:4px}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.spin{border:2px solid rgba(180,85,47,.28);border-top-color:#B4552F;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pls{animation:pls 2s ease-in-out infinite}
+.ldg{position:relative;width:52px;height:30px}
+.ldg i{position:absolute;top:0;width:30px;height:30px;border-radius:50%;box-sizing:border-box}
+.ldg i:first-child{left:0;background:#B4552F;animation:ldgL 1.9s cubic-bezier(.45,0,.55,1) infinite}
+.ldg i:last-child{left:22px;border:2px solid #23201C;animation:ldgR 1.9s cubic-bezier(.45,0,.55,1) infinite}
+@keyframes ldgL{0%,100%{transform:translateX(-9px)}46%,54%{transform:translateX(7px)}}
+@keyframes ldgR{0%,100%{transform:translateX(9px)}46%,54%{transform:translateX(-7px)}}
+@keyframes pls{0%,100%{opacity:.4}50%{opacity:1}}
+.tile{background:#FFFDF9;border-radius:14px;border:1px solid #E4DDD1;padding:16px}
+.tl{font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459;margin-bottom:12px}
+.tn{font:400 11.5px/1.5 'Instrument Sans',sans-serif;color:#6B6459;margin-top:10px}
+.bp{font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#4A443C;background:#DFDACF;border-radius:4px;padding:4px 8px;display:inline-block;margin-bottom:8px}
+
+/* frame 34 — self-scoped so it can't collide with deck .card/.h2 */
+.f34-eyebrow{font:600 11px 'Instrument Sans',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#8E3F20}
+.f34-lede{font:400 14.5px/1.75 'Instrument Sans',sans-serif;color:#4A443C;max-width:620px;text-wrap:pretty}
+.f34-mono{font-family:'JetBrains Mono',monospace}
+.f34-cfg{font:500 10px 'JetBrains Mono',monospace;letter-spacing:.05em;color:#7A5A12;background:#F5EEDC;border-radius:4px;padding:2px 6px;white-space:nowrap}
+.f34-card{background:#FFFDF9;border:1px solid #E4DDD1;border-radius:14px}
+.f34-h2{font-family:'Instrument Serif',serif;font-size:34px;line-height:1.14;color:#23201C;letter-spacing:-.01em}
+.f34-sec{padding:64px 40px}
+body{padding:0 0 40px}
+</style>
+</head>
+<body>
+
+<div style="padding:40px 48px 30px">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:13px">
+<div style="position:relative;width:29px;height:20px"><div style="position:absolute;left:0;top:0;width:20px;height:20px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:9px;top:0;width:20px;height:20px;border-radius:50%;border:1.5px solid #23201C"></div></div>
+<span style="font-family:'Instrument Serif',serif;font-size:32px;color:#23201C">Orla</span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-left:8px">Checkout test mode</span>
+</div>
+<div style="max-width:900px;font:400 13.5px/1.7 'Instrument Sans',sans-serif;color:#4A443C">The test-mode strip, rendered when the Stripe publishable key starts <span style="font-family:'JetBrains Mono',monospace;font-size:12px">pk_test_</span>. <strong style="font-weight:600">39</strong> is checkout; <strong style="font-weight:600">39b</strong> is the same strip on the other two states of the same route &mdash; the declined state and the refund block &mdash; drawn so the inheritance is visible rather than assumed. Checkout only: no other route gets it. Notes, and the screens I'd add it to next, in <span style="font-family:'JetBrains Mono',monospace;font-size:12px">TEST-MODE-PROMPT.md</span>.</div>
+</div>
+
+<div class="sc" id="39a">
+<div class="sc-h"><span class="sc-n">39</span><span class="sc-t">Checkout &mdash; test mode strip</span><span class="sc-d">Frame <strong style="font-weight:600;color:#4A443C">05</strong> with one addition and <em>nothing else changed</em>: a slim strip above the header, rendered only when the Stripe key in use is a test key. <strong style="font-weight:600;color:#4A443C">Checkout only</strong> &mdash; not the dashboard, not browse, not the emails, not any other screen. Payment is the one place where a person could believe real money moved, so it is the one place that has to say otherwise. Ink ground and mono type deliberately match none of the four state colours: steel, gold, red and sage all mean something about <em>your booking</em>, and this means something about the <em>build</em>. It should read as scaffolding that was never meant to ship.</div></div>
+<div style="display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap">
+<div style="flex:none">
+<div class="bp">1440 &middot; desktop <span style="opacity:.6">&mdash; test key detected</span></div>
+<div class="fr" data-screen-label="39 Checkout test mode">
+<div style="height:34px;flex:none;background:#23201C;display:flex;align-items:center;justify-content:center;gap:9px;padding:0 20px">
+<span style="width:6px;height:6px;border-radius:50%;background:#E0A83C;flex:none"></span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.01em;color:#F8F5EF;white-space:nowrap">Test mode: no real money moves. Use Stripe's test card 4242 4242 4242 4242.</span>
+</div>
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:6px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:23px;color:#23201C">Orla</span></div>
+<div style="display:flex;align-items:center;gap:9px;font-size:12.5px;color:#4A443C"><div class="dot" style="background:#5E6B4F"></div>Secure checkout &middot; encrypted by Stripe</div>
+</div>
+<div style="flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 420px;gap:38px;padding:28px 40px 0">
+<div>
+<div class="h2" style="margin-bottom:4px">Confirm and pay</div>
+<div style="font-size:14px;color:#4A443C;margin-bottom:22px">Maya accepted your request on May 2. Paying now locks June 14 in her calendar.</div>
+<div style="max-width:620px;display:flex;flex-direction:column;gap:16px">
+<div><div class="lbl" style="margin-bottom:6px">Card number</div><div class="inp" style="background:#FFFDF9;display:flex;justify-content:space-between"><span>4242 4242 4242 4242</span><span style="color:#6B6459;font-family:'JetBrains Mono',monospace;font-size:11px">VISA</span></div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<div><div class="lbl" style="margin-bottom:6px">Expiry</div><div class="inp" style="background:#FFFDF9">04 / 28</div></div>
+<div><div class="lbl" style="margin-bottom:6px">CVC</div><div class="inp" style="background:#FFFDF9">&bull;&bull;&bull;</div></div>
+</div>
+<div><div class="lbl" style="margin-bottom:6px">Name on card</div><div class="inp" style="background:#FFFDF9">Priya Nandakumar</div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<div><div class="lbl" style="margin-bottom:6px">Country</div><div class="inp" style="background:#FFFDF9;display:flex;justify-content:space-between"><span>United States</span><span style="color:#6B6459">&#9662;</span></div></div>
+<div><div class="lbl" style="margin-bottom:6px">ZIP</div><div class="inp" style="background:#FFFDF9">78702</div></div>
+</div>
+<div style="background:#FFFDF9;border:1px solid #E4DDD1;border-radius:12px;padding:14px 16px;margin-top:2px">
+<div style="font-size:13px;font-weight:600;color:#23201C;margin-bottom:7px">If plans change</div>
+<div style="font-size:12.5px;line-height:1.6;color:#4A443C">Cancel more than 48 hours before June 14 and you're refunded in full. Inside 48 hours, half is refunded and Maya keeps the rest for the held date.</div>
+</div>
+</div>
+</div>
+<div style="padding:0 0 20px">
+<div class="card" style="border-radius:18px">
+<div style="display:flex;gap:12px;padding:16px 18px;border-bottom:1px solid #EFE9E0;align-items:center">
+<div class="ph" style="width:54px;height:54px;border-radius:12px;flex:none;padding:0"></div>
+<div><div class="sh" style="font-size:18px">Kessler &amp; Co.</div><div style="font-size:12px;color:#6B6459;margin-top:2px">Full day coverage &middot; 6 hours</div></div>
+</div>
+<div style="padding:14px 18px;border-bottom:1px solid #EFE9E0;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;justify-content:space-between;font-size:13px;color:#4A443C"><span>Date</span><span style="font-weight:600">Sunday, June 14, 2026</span></div>
+<div style="display:flex;justify-content:space-between;font-size:13px;color:#4A443C"><span>Venue</span><span style="font-weight:600">Barr Mansion</span></div>
+<div style="display:flex;justify-content:space-between;font-size:13px;color:#4A443C"><span>Guests</span><span style="font-weight:600">120</span></div>
+</div>
+<div style="padding:14px 18px;border-bottom:1px solid #EFE9E0;display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;justify-content:space-between;font-size:13.5px;color:#4A443C"><span>Package</span><span>$1,450.00</span></div>
+<div style="display:flex;justify-content:space-between;font-size:13.5px;color:#4B5940"><span>Service fee</span><span style="font-weight:600">None</span></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:9px;border-top:1px solid #EFE9E0"><span style="font-size:14px;font-weight:600;color:#23201C">Total today</span><span style="font-family:'Instrument Serif',serif;font-size:30px;color:#23201C">$1,450</span></div>
+</div>
+<div style="padding:14px 18px;display:flex;flex-direction:column;gap:10px">
+<div class="btnP" style="text-align:center;padding:14px 0;font-size:14.5px">Pay $1,450 &mdash; confirm June 14</div>
+<div style="display:flex;align-items:center;justify-content:center;gap:7px;font-size:11.5px;color:#6B6459"><div class="dot" style="background:#5E6B4F"></div>Held by Stripe until the event is complete</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div style="flex:1;min-width:320px;display:flex;flex-direction:column;gap:14px">
+<div class="tile"><div class="tl">The strip is additive and nothing else moves</div><div class="tn" style="margin-top:0">Same fields, same summary, same button, same total. If test mode changed any other pixel, the thing being tested would stop being the thing that ships. It pushes the page down 34px rather than overlaying, so nothing is covered.</div></div>
+<div class="tile"><div class="tl">Checkout only &mdash; and why not global</div><div class="tn" style="margin-top:0">A strip on every screen becomes furniture within an hour and stops being read. Payment is the only surface where the consequence of confusion is someone thinking they were charged, so it appears there and nowhere else &mdash; including the declined state on <strong style="font-weight:600;color:#4A443C">21</strong> and the refund block on <strong style="font-weight:600;color:#4A443C">33</strong>, which inherit it because they are the same page.</div></div>
+<div class="tile"><div class="tl">Not steel, not gold</div><div class="tn" style="margin-top:0">Steel would file it with <em>we're loading something</em>, gold with <em>waiting on you</em>, and both are claims about the booking. Ink with a single amber dot belongs to no state family, and mono type says <em>developer surface</em> before the sentence is even read.</div></div>
+<div class="tile"><div class="tl">Gated on the key, not a flag</div><div class="tn" style="margin-top:0">Render when the publishable key starts <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">pk_test_</span> &mdash; not on a build flag or an env name, which can disagree with the key actually in use. A production key means no strip, with no way to force one on.</div></div>
+</div>
+</div>
+</div>
+
+<div class="sc" id="39b">
+<div class="sc-h"><span class="sc-n">39b</span><span class="sc-t">Declined &amp; refund block &mdash; the strip inherited</span><span class="sc-d">The other two surfaces of the same page, drawn so the hand-off doesn't have to take &ldquo;it inherits it&rdquo; on trust. Frames <strong style="font-weight:600;color:#4A443C">21</strong> and <strong style="font-weight:600;color:#4A443C">33</strong> are the declined state and the refund block, both at <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px">/bookings/[requestId]/checkout</span> &mdash; so the strip is the same element in the same place, not a second implementation. Worth seeing because <strong style="font-weight:600;color:#4A443C">21 is the one place ink meets red</strong>: the strip says no money moved <em>in this environment</em> and the banner says no money moved <em>on this attempt</em>. They are different claims and they must not be mistaken for each other, which is exactly why the strip is ink and mono rather than a second red band.</div></div>
+<div style="display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap">
+
+<div style="flex:none">
+<div class="bp">21 &middot; declined, in test mode</div>
+<div class="fr" data-screen-label="39b Checkout declined test mode">
+<div style="height:34px;flex:none;background:#23201C;display:flex;align-items:center;justify-content:center;gap:9px;padding:0 20px">
+<span style="width:6px;height:6px;border-radius:50%;background:#E0A83C;flex:none"></span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.01em;color:#F8F5EF;white-space:nowrap">Test mode: no real money moves. Use Stripe's test card 4242 4242 4242 4242.</span>
+</div>
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span></div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#6B6459"><span style="width:16px;height:16px;border-radius:4px;background:#EDF0E9;display:inline-block"></span>Secure checkout</div>
+</div>
+<div style="flex:1;display:flex;overflow:hidden">
+<div style="flex:1;padding:26px 34px;overflow:hidden">
+<div class="h2" style="margin-bottom:16px">Confirm and pay</div>
+<div style="display:flex;align-items:flex-start;gap:12px;background:#FBEEEC;border:1px solid #EFCEC9;border-radius:12px;padding:14px 16px;margin-bottom:20px;max-width:620px">
+<div style="width:18px;height:18px;border-radius:50%;background:#B23A30;flex:none;margin-top:1px"></div>
+<div>
+<div style="font:600 13.5px 'Instrument Sans',sans-serif;color:#23201C;margin-bottom:4px">Your card was declined &mdash; you haven't been charged</div>
+<div style="font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#4A443C">Your bank refused the payment without giving a reason, which usually means a fraud hold or insufficient funds. Try the same card again, use another card, or call your bank. <strong style="font-weight:600">Jun 14 stays held for you for 24 hours.</strong></div>
+</div>
+</div>
+<div style="max-width:620px">
+<div class="lbl" style="margin-bottom:6px">Card number</div>
+<div style="background:#FFFDF9;border:1.5px solid #B23A30;box-shadow:0 0 0 3px rgba(178,58,48,.18);border-radius:10px;padding:11px 13px;font-size:13.5px;color:#23201C;display:flex;justify-content:space-between"><span>4000 0000 0000 0002</span><span style="color:#B23A30;font-weight:600;font-size:12px">Declined</span></div>
+<div style="font:400 11.5px 'Instrument Sans',sans-serif;color:#B23A30;margin-top:6px">Declined by your bank &middot; code <span style="font-family:'JetBrains Mono',monospace">card_declined</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:16px">
+<div><div class="lbl" style="margin-bottom:6px">Expiry</div><div class="inp" style="background:#FFFDF9">04 / 28</div></div>
+<div><div class="lbl" style="margin-bottom:6px">CVC</div><div class="inp" style="background:#FFFDF9;color:#6B6459">&bull;&bull;&bull;</div></div>
+<div><div class="lbl" style="margin-bottom:6px">ZIP</div><div class="inp" style="background:#FFFDF9">78704</div></div>
+</div>
+<div style="display:flex;gap:12px;margin-top:22px;align-items:center"><span class="btnP">Try this payment again</span><span class="btnS">Use a different card</span></div>
+<div style="margin-top:24px;padding-top:18px;border-top:1px solid #E4DDD1;font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#6B6459;max-width:520px">If it declines twice, don't try a third time &mdash; repeated attempts can extend the hold. Message June Harlow and she can extend the date instead.</div>
+</div>
+</div>
+<div style="width:420px;flex:none;background:#FFFDF9;border-left:1px solid #E4DDD1;padding:24px;overflow:hidden">
+<div class="lbl" style="margin-bottom:14px">Your booking</div>
+<div style="display:flex;gap:12px;margin-bottom:18px"><div class="ph" style="width:64px;height:64px;border-radius:10px;flex:none"><span class="phl">64&sup2;</span></div><div><div class="sh" style="font-size:18px">June Harlow</div><div style="font-size:12.5px;color:#6B6459;margin-top:3px">Photography &middot; Austin, TX</div><div style="margin-top:7px"><span class="pill" style="background:#F5EEDC;color:#7A5A12">Date held &middot; 24h</span></div></div></div>
+<div style="height:1px;background:#EFE9E0;margin-bottom:16px"></div>
+<div style="display:flex;flex-direction:column;gap:11px;font-size:13px;color:#4A443C">
+<div style="display:flex;justify-content:space-between"><span>Full-day coverage</span><span style="font-weight:600;color:#23201C">$1,450</span></div>
+<div style="display:flex;justify-content:space-between"><span>Second shooter</span><span style="font-weight:600;color:#23201C">$300</span></div>
+<div style="display:flex;justify-content:space-between"><span>Service fee</span><span style="font-weight:600;color:#4B5940">None</span></div>
+</div>
+<div style="height:1px;background:#EFE9E0;margin:16px 0"></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:14px;font-weight:600;color:#23201C">Total today</span><span style="font-family:'Instrument Serif',serif;font-size:28px;color:#23201C">$1,750</span></div>
+<div style="font:400 11.5px/1.55 'Instrument Sans',sans-serif;color:#6B6459;margin-top:9px">Held by Stripe until the event is complete.</div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="flex:none">
+<div class="bp">33 &middot; refund block, in test mode</div>
+<div class="fr" style="height:820px" data-screen-label="39b Checkout refund block test mode">
+<div style="height:34px;flex:none;background:#23201C;display:flex;align-items:center;justify-content:center;gap:9px;padding:0 20px">
+<span style="width:6px;height:6px;border-radius:50%;background:#E0A83C;flex:none"></span>
+<span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;letter-spacing:.01em;color:#F8F5EF;white-space:nowrap">Test mode: no real money moves. Use Stripe's test card 4242 4242 4242 4242.</span>
+</div>
+<div class="hd">
+<div style="display:flex;align-items:center;gap:9px"><div style="position:relative;width:22px;height:15px"><div style="position:absolute;left:0;top:0;width:15px;height:15px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:7px;top:0;width:15px;height:15px;border-radius:50%;border:1.2px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:19px;color:#23201C">Orla</span></div>
+<div style="display:flex;align-items:center;gap:14px"><div style="display:flex;align-items:center;gap:7px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4B5940" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l7 2.6v5.6c0 4.4-2.9 7.6-7 9.2-4.1-1.6-7-4.8-7-9.2V5.6z"></path></svg><span style="font:400 12px 'Instrument Sans',sans-serif;color:#4A443C">Secure checkout &middot; Stripe</span></div><div style="width:30px;height:30px;border-radius:50%;background:#F7E7E0;display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:13px;color:#8E3F20">AN</div></div>
+</div>
+<div style="flex:1;overflow:hidden;display:flex;justify-content:center;gap:36px;padding:36px 40px 0">
+<div style="width:560px;flex:none">
+<div class="lbl" style="margin-bottom:9px">Checkout</div>
+<div class="h2" style="font-size:29px;margin-bottom:22px">Confirm and pay</div>
+<div class="card" style="border:1px solid #E4DDD1;padding:17px 18px;margin-bottom:16px">
+<div style="display:flex;gap:14px">
+<div class="ph" style="width:88px;height:66px;border-radius:10px;flex:none"><span class="phl">3:2</span></div>
+<div style="flex:1">
+<div style="font-family:'Instrument Serif',serif;font-size:20px;color:#23201C;margin-bottom:3px">June Harlow Photography</div>
+<div style="font:400 12.5px/1.6 'Instrument Sans',sans-serif;color:#4A443C">Saturday 14 June 2026 &middot; 2:00&ndash;9:00 PM<br>Laguna Gloria, Austin &middot; Full-day coverage</div>
+</div>
+</div>
+</div>
+<div style="margin-bottom:16px"><div class="lbl" style="margin-bottom:6px">Card</div><div class="inp" style="display:flex;align-items:center;justify-content:space-between;padding:12px 13px"><span style="font-family:'JetBrains Mono',monospace;font-size:13px">4242 4242 4242 4242</span><span style="font:400 12px 'Instrument Sans',sans-serif;color:#6B6459">06 / 29 &nbsp; 123</span></div></div>
+<div style="display:flex;align-items:center;gap:9px;font:400 12.5px 'Instrument Sans',sans-serif;color:#4A443C"><div style="width:17px;height:17px;border-radius:5px;background:#F1ECE4;border:1px solid #DFD8CB"></div>Save this card for future bookings</div>
+</div>
+<div style="width:420px;flex:none">
+<div class="card" style="border:1px solid #E4DDD1;padding:19px 20px;margin-bottom:14px">
+<div class="lbl" style="margin-bottom:14px">Summary</div>
+<div style="display:flex;justify-content:space-between;font:400 13.5px 'Instrument Sans',sans-serif;color:#3A352E;margin-bottom:9px"><span>Full-day coverage</span><span>$1,700</span></div>
+<div style="display:flex;justify-content:space-between;font:400 13.5px 'Instrument Sans',sans-serif;color:#3A352E;margin-bottom:9px"><span>Second photographer</span><span>$350</span></div>
+<div style="display:flex;justify-content:space-between;font:400 13.5px 'Instrument Sans',sans-serif;color:#6B6459;margin-bottom:13px"><span>Service fee</span><span style="color:#4B5940;font-weight:600">None</span></div>
+<div style="height:1px;background:#E4DDD1;margin-bottom:13px"></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:600 14px 'Instrument Sans',sans-serif;color:#23201C">Total today</span><span style="font-family:'Instrument Serif',serif;font-size:29px;color:#23201C">$2,050</span></div>
+<div style="font:400 12px/1.6 'Instrument Sans',sans-serif;color:#6B6459;margin-top:7px">Held by Stripe until 14 June, then released to June.</div>
+</div>
+<div style="border:1px solid #E4DDD1;border-radius:14px;background:#F1ECE4;padding:16px 17px;margin-bottom:16px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B6459" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5l3 2"></path></svg><span class="lbl" style="letter-spacing:.06em">If plans change</span></div>
+<div style="display:flex;flex-direction:column;gap:0">
+<div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #E4DDD1"><span style="font:600 12.5px 'Instrument Sans',sans-serif;color:#23201C;width:112px;flex:none">Before 15 May</span><span style="font:400 12.5px/1.55 'Instrument Sans',sans-serif;color:#3A352E;flex:1">Cancel for a <strong style="font-weight:600">full refund</strong> &mdash; 30+ days out</span></div>
+<div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #E4DDD1"><span style="font:600 12.5px 'Instrument Sans',sans-serif;color:#23201C;width:112px;flex:none">15 May &ndash; 31 May</span><span style="font:400 12.5px/1.55 'Instrument Sans',sans-serif;color:#3A352E;flex:1">50% refunded &mdash; $1,025 back</span></div>
+<div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #E4DDD1"><span style="font:600 12.5px 'Instrument Sans',sans-serif;color:#23201C;width:112px;flex:none">From 1 June</span><span style="font:400 12.5px/1.55 'Instrument Sans',sans-serif;color:#3A352E;flex:1">Non-refundable &mdash; June has held the date</span></div>
+<div style="display:flex;align-items:baseline;gap:12px;padding:9px 0"><span style="font:600 12.5px 'Instrument Sans',sans-serif;color:#4B5940;width:112px;flex:none">If June cancels</span><span style="font:400 12.5px/1.55 'Instrument Sans',sans-serif;color:#3A352E;flex:1"><strong style="font-weight:600">Full refund</strong>, whenever it happens</span></div>
+</div>
+<div style="font:400 11.5px/1.55 'Instrument Sans',sans-serif;color:#6B6459;margin-top:11px">Dates calculated from 14 June 2026. <span style="font-weight:600;color:#A34A28">Full policy</span></div>
+</div>
+<span class="btnP" style="display:block;text-align:center;padding:13px 0;font-size:14px">Pay $2,050</span>
+<div style="font:400 11.5px/1.55 'Instrument Sans',sans-serif;color:#6B6459;text-align:center;margin-top:9px">By paying you accept the <span style="font-weight:600;color:#A34A28">Terms</span> and the refund schedule above.</div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="flex:1;min-width:320px;display:flex;flex-direction:column;gap:14px">
+<div class="tile"><div class="tl">One element, three renders &mdash; not three components</div><div class="tn" style="margin-top:0">All three are the same route, so the strip belongs to the checkout layout, above the header, and every state of that page gets it for free. If it were added per-state, one of them would eventually ship without it, and that one would be the declined state, where it matters most.</div></div>
+<div class="tile"><div class="tl">Ink above red, and the order matters</div><div class="tn" style="margin-top:0">Environment first, then account state. Reading top to bottom you get <em>none of this is real</em> before <em>this attempt failed</em>, which is the order that prevents a tester filing a false bug &mdash; and the two never touch, because the header sits between them.</div></div>
+<div class="tile"><div class="tl">The declined card number changes too</div><div class="tn" style="margin-top:0">In test mode the declined state shows <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">4000 0000 0000 0002</span>, Stripe's decline card, not <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">4242</span>. A tester reproducing a decline needs the card that causes one, and the strip names only the success card.</div></div>
+<div class="tile"><div class="tl">Mobile keeps it, at the same height</div><div class="tn" style="margin-top:0">At 390 the sentence is the constraint. It stays one line at 11.5px mono down to 390 with 20px padding; below that the strip wraps to two lines and grows to 48px rather than truncating &mdash; a half-shown test warning is worse than none.</div></div>
+</div>
+</div>
+</div>
+
+</body>
+</html>
