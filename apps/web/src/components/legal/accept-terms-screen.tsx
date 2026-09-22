@@ -315,7 +315,7 @@ export function AcceptTermsScreen({
                   key={option.role}
                   className={cn(
                     'cursor-pointer rounded-xl px-3.5 py-4 transition-colors duration-(--duration-fast)',
-                    'has-focus-visible:ring-2 has-focus-visible:ring-clay-400/40 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-stone-50',
+                    'has-focus-visible:ring-2 has-focus-visible:ring-clay-400 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-stone-50',
                     selected
                       ? option.selectedCard
                       : 'border border-stone-300 bg-stone-0 hover:border-stone-400',
@@ -397,7 +397,7 @@ export function AcceptTermsScreen({
               type="checkbox"
               checked={agreed}
               onChange={(event) => setAgreed(event.currentTarget.checked)}
-              className="mt-1 size-4 flex-none appearance-none rounded-[4px] border-[1.3px] border-stone-400 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[10px] checked:after:leading-[14px] checked:after:text-stone-0 checked:after:content-['✓']"
+              className="mt-1 size-4 flex-none appearance-none rounded-[4px] border-[1.3px] border-stone-560 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[10px] checked:after:leading-[14px] checked:after:text-stone-0 checked:after:content-['✓']"
             />
             <span className="text-base leading-prose text-stone-800">
               I have read and I accept the{' '}
