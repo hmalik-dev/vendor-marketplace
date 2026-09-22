@@ -2210,3 +2210,39 @@ not inside VEN-381).
 **Revisit if:** a real friends-beta or production case makes the manual
 Stripe Dashboard workflow untenable often enough to justify reopening the
 policy question.
+
+---
+
+### D43: Vendor Type Becomes a Plain Select, No Typing — Superseding D28 for This Control Only
+
+**Decision:** The Vendor type control (`CategorySelect`, landing hero and
+`/search`) drops the typing-filter text input entirely and becomes a plain
+click/tap select over the eleven categories, full taxonomy visible on open.
+`design/design-plan/11-search.md:19` and `design/design-plan/42-dropdowns.md`
+(bodies 1 and 2) are corrected to match.
+
+**Rationale (account holder, 2026-09-22, VEN-603).** The typing-filter
+combobox (D28, 2026-08-31) was summoning the mobile OS keyboard the instant a
+customer tapped the field to open it, covering most of the eleven-item list
+on a small screen — friction, not help, on the exact list it exists to make
+scannable. Rather than suppress the keyboard on an input that still accepts
+typed characters (fragile across mobile browsers), the simpler fix removes
+the text input altogether: eleven items is short enough that type-to-filter
+was never load-bearing.
+
+**What changes.** `CategorySelect` stops rendering `ComboboxDropdown`'s typing
+`<input>`; it becomes a non-editable trigger + listbox panel (native `<select>`
+or an equivalent non-typing pattern — implementation detail left to VEN-603).
+`design/design-plan/42-dropdowns.md`'s body 1 (Single-select) now lists vendor
+type as an example; body 2 (Typeahead) drops vendor type and covers city only.
+
+**What does not change.** `CitySelect` and the shared `ComboboxDropdown`
+component are untouched — city keeps its typing-filter behavior under D28
+exactly as before; many more cities than categories makes type-to-filter
+genuinely useful there. The `▾`/`▴` caret override (#426) on `CategorySelect`
+is unaffected — a plain select still needs an open/closed indicator.
+
+**Rejected:** keeping the typing input and suppressing the OS keyboard via
+`inputMode="none"` or similar (the original VEN-603 scope) — rejected as
+more fragile and more code than simply not having a text input at all, once
+it was clear typing-filter wasn't necessary for an eleven-item list.
