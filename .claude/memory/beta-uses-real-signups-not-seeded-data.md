@@ -18,4 +18,4 @@ admin account is needed on the deployment. Derive required env from the registry
 was removed with VEN-461; Railway is the one API host. The auth provider
 was retired with VEN-447/448/449.
 
-Related: [[production-api-intentionally-down]], [[vendor-marketplace-neon-dev-branch]].
+Related: [[vendor-marketplace-neon-dev-branch]].
