@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { AUTH_COPY } from '@/app/auth-copy';
+import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -33,7 +33,7 @@ export function ForgotPasswordForm(): React.ReactElement {
     const outcome = await requestPasswordReset(address);
     if (outcome !== 'ok') {
       setBusy(false);
-      setFailure(outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.resetThrottled);
+      setFailure(failureCopy(outcome, AUTH_COPY.unreachable));
       return;
     }
 

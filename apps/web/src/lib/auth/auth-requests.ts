@@ -1,3 +1,4 @@
+import { reportSwallowedError } from '@/lib/report-error';
 import { clearSessionToken } from './client';
 
 /**
@@ -6,7 +7,7 @@ import { clearSessionToken } from './client';
  * upstream body: an upstream `message` is never rendered (see
  * `no-raw-upstream-message.test.ts`), so nothing here returns one.
  */
-export type AuthOutcome = 'ok' | 'unverified' | 'rejected' | 'unreachable';
+export type AuthOutcome = 'ok' | 'unverified' | 'rejected' | 'throttled' | 'unreachable';
 
 async function post(path: string, body: Record<string, string> | null): Promise<Response | null> {
   try {
@@ -21,7 +22,16 @@ async function post(path: string, body: Record<string, string> | null): Promise<
   }
 }
 
-function outcomeOf(response: Response | null): AuthOutcome {
+/**
+ * A 403 is usually Neon's `EMAIL_NOT_VERIFIED`, but Better Auth's own per-code
+ * attempt limiter answers 403 too, body `{ code: 'TOO_MANY_ATTEMPTS' }` — a
+ * second, address-independent throttle on top of the proxy's own 429 (seen
+ * live: 5 wrong codes in a row can draw one before the proxy's budget is
+ * spent). Peeking at the body is what tells the two apart; the clone leaves
+ * the body unread for whoever reads `response` next (`signInWithEmail`'s own
+ * `emailVerified` check).
+ */
+async function outcomeOf(response: Response | null): Promise<AuthOutcome> {
   if (!response || response.status >= 500) {
     return 'unreachable';
   }
@@ -30,7 +40,26 @@ function outcomeOf(response: Response | null): AuthOutcome {
     return 'ok';
   }
 
-  return response.status === 403 ? 'unverified' : 'rejected';
+  if (response.status === 429) {
+    return 'throttled';
+  }
+
+  if (response.status === 403) {
+    // A malformed body here is the proxy or Better Auth itself misbehaving —
+    // exactly what #368 exists to catch, since the fallback below reads as
+    // an ordinary "email not verified" rather than an infra problem.
+    const body = (await response
+      .clone()
+      .json()
+      .catch((error: unknown) => {
+        reportSwallowedError('auth-requests: could not read a 403 body', error);
+        return null;
+      })) as { code?: unknown } | null;
+
+    return body?.code === 'TOO_MANY_ATTEMPTS' ? 'throttled' : 'unverified';
+  }
+
+  return 'rejected';
 }
 
 /**
@@ -44,7 +73,7 @@ export async function signUpWithEmail(input: {
   password: string;
   name: string;
 }): Promise<AuthOutcome> {
-  const outcome = outcomeOf(await post('/sign-up/email', input));
+  const outcome = await outcomeOf(await post('/sign-up/email', input));
   if (outcome === 'ok') {
     await resendVerificationCode(input.email);
   }
@@ -64,7 +93,7 @@ export async function signInWithEmail(input: {
   password: string;
 }): Promise<AuthOutcome> {
   const response = await post('/sign-in/email', input);
-  const outcome = outcomeOf(response);
+  const outcome = await outcomeOf(response);
   clearSessionToken();
 
   if (outcome !== 'ok' || !response) {
@@ -88,7 +117,7 @@ export async function resendVerificationCode(email: string): Promise<AuthOutcome
 /**
  * Asks Neon to email a reset code. The proxy answers every address the same, so
  * `ok` says nothing about whether an account exists; only `unreachable` and a
- * caller-level refusal (`rejected`, the per-caller 429) are ever different.
+ * caller-level refusal (`throttled`, the per-caller 429) are ever different.
  */
 export async function requestPasswordReset(email: string): Promise<AuthOutcome> {
   return outcomeOf(await post('/email-otp/request-password-reset', { email }));

@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { AUTH_COPY } from '@/app/auth-copy';
+import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -56,7 +56,7 @@ export function VerifyEmailStep({
       setBusy(false);
       setMessage({
         status: 'failed',
-        text: verified === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.codeWrong,
+        text: failureCopy(verified, AUTH_COPY.codeWrong),
       });
       return;
     }
@@ -64,7 +64,7 @@ export function VerifyEmailStep({
     const signedIn = await signInWithEmail({ email, password });
     if (signedIn !== 'ok') {
       setBusy(false);
-      setMessage({ status: 'failed', text: AUTH_COPY.unreachable });
+      setMessage({ status: 'failed', text: failureCopy(signedIn, AUTH_COPY.unreachable) });
       return;
     }
 
@@ -77,7 +77,7 @@ export function VerifyEmailStep({
     setMessage(
       outcome === 'ok'
         ? { status: 'informational', text: AUTH_COPY.codeResent }
-        : { status: 'failed', text: AUTH_COPY.unreachable },
+        : { status: 'failed', text: failureCopy(outcome, AUTH_COPY.unreachable) },
     );
   }
 

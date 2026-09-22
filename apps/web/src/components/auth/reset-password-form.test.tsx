@@ -48,9 +48,9 @@ describe('ForgotPasswordForm', () => {
   });
 });
 
-it('ForgotPasswordForm stays put when the caller is refused', async () => {
+it('ForgotPasswordForm stays put when the caller is throttled', async () => {
   push.mockReset();
-  requestPasswordReset.mockReset().mockResolvedValue('rejected');
+  requestPasswordReset.mockReset().mockResolvedValue('throttled');
   const user = userEvent.setup();
   render(<ForgotPasswordForm />);
 
@@ -58,7 +58,7 @@ it('ForgotPasswordForm stays put when the caller is refused', async () => {
   await user.click(screen.getByRole('button', { name: 'Email me a code' }));
 
   expect(push).not.toHaveBeenCalled();
-  expect(screen.getByText('Too many attempts. Wait a minute and try again.')).toBeDefined();
+  expect(screen.getByText('Too many attempts. Wait a few minutes and try again.')).toBeDefined();
   cleanup();
 });
 
@@ -134,14 +134,48 @@ describe('ResetPasswordForm', () => {
     expect(screen.queryByText('Your password is changed. Sign in with the new one.')).toBeNull();
   });
 
-  it('does not claim a code is on its way when a resend is refused', async () => {
+  it('says to wait, not that the code is wrong, once the address is throttled', async () => {
+    resetPasswordWithCode.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<ResetPasswordForm initialEmail="sam@example.com" />);
+
+    await fill(user);
+    await user.click(screen.getByRole('button', { name: 'Set new password' }));
+
+    expect(screen.getByText('Too many attempts. Wait a few minutes and try again.')).toBeDefined();
+    expect(
+      screen.queryByText(
+        'That code did not work, or it has expired. Check it, or ask for a new one.',
+      ),
+    ).toBeNull();
+  });
+
+  it('says to wait when a resend is throttled', async () => {
+    requestPasswordReset.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<ResetPasswordForm initialEmail="sam@example.com" />);
+
+    await user.click(screen.getByRole('button', { name: 'Send a new code' }));
+
+    expect(screen.getByText('Too many attempts. Wait a few minutes and try again.')).toBeDefined();
+  });
+
+  /*
+   * `requestPasswordReset` only ever answers 'rejected' for something other
+   * than the per-caller 429 (`auth-requests.ts`'s docstring), so this leftover
+   * outcome must not be relabelled as a throttle it never was.
+   */
+  it('does not call an actual refusal a throttle', async () => {
     requestPasswordReset.mockResolvedValue('rejected');
     const user = userEvent.setup();
     render(<ResetPasswordForm initialEmail="sam@example.com" />);
 
     await user.click(screen.getByRole('button', { name: 'Send a new code' }));
 
-    expect(screen.getByText('Too many attempts. Wait a minute and try again.')).toBeDefined();
+    expect(
+      screen.getByText('We could not reach the sign-in service. Try again in a moment.'),
+    ).toBeDefined();
+    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
   });
 
   it('asks for a fresh code for the address shown', async () => {

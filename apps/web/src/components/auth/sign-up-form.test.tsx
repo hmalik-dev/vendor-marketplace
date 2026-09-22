@@ -226,6 +226,27 @@ describe('SignUpForm', () => {
     expect(screen.queryByLabelText('Verification code')).toBeNull();
   });
 
+  /*
+   * `sign-up/email` is address-budgeted at 5 per 10 minutes (VEN-462). Before
+   * the `throttled` outcome existed, a 429 there fell into the same bucket as
+   * a genuine refusal and told the visitor their details were bad.
+   */
+  it('says to wait, not that the account could not be created, once throttled', async () => {
+    signUpWithEmail.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+
+    expect(
+      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+    ).toBeDefined();
+    expect(screen.queryByText(/could not create that account/)).toBeNull();
+    expect(readSignUpRole()).toBeNull();
+    expect(screen.queryByLabelText('Verification code')).toBeNull();
+  });
+
   it('signs in and lands on /after-sign-in after a good code', async () => {
     const user = userEvent.setup();
     render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
@@ -241,6 +262,22 @@ describe('SignUpForm', () => {
       email: 'sam@example.com',
       password: 'correct-horse-battery',
     });
+  });
+
+  it('says to wait, not that the service is unreachable, when the post-verify sign-in is throttled', async () => {
+    signInWithEmail.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.type(await screen.findByLabelText('Verification code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Verify email' }));
+
+    expect(
+      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+    ).toBeDefined();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it('shows the error and stays on the code step after a wrong code', async () => {
@@ -271,6 +308,60 @@ describe('SignUpForm', () => {
 
     expect(resendVerificationCode).toHaveBeenCalledWith('sam@example.com');
     expect(await screen.findByText('A new code is on its way.')).toBeDefined();
+  });
+
+  /*
+   * Neon's per-address budget on `email-otp/verify-email` is 5 calls per 10
+   * minutes, right or wrong (VEN-462): a person who mistypes a couple of times
+   * hits it. Before the `throttled` outcome existed, `outcomeOf` folded a 429
+   * into the same `rejected` bucket as a wrong code, so this screen told them
+   * their code was wrong even on a correct one they were no longer allowed to
+   * spend.
+   */
+  it('says to wait, not that the code is wrong, once the address is throttled', async () => {
+    verifyEmailCode.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.type(await screen.findByLabelText('Verification code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Verify email' }));
+
+    expect(
+      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+    ).toBeDefined();
+    expect(screen.queryByText('That code did not work. Check it and try again.')).toBeNull();
+    expect(signInWithEmail).not.toHaveBeenCalled();
+  });
+
+  it('says to wait, not that the service is unreachable, when a resend is throttled', async () => {
+    resendVerificationCode.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.click(await screen.findByRole('button', { name: 'Send a new code' }));
+
+    expect(
+      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+    ).toBeDefined();
+  });
+
+  it('does not call an actual refusal a throttle when a resend is refused', async () => {
+    resendVerificationCode.mockResolvedValue('rejected');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.click(await screen.findByRole('button', { name: 'Send a new code' }));
+
+    expect(
+      await screen.findByText('We could not reach the sign-in service. Try again in a moment.'),
+    ).toBeDefined();
+    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
   });
 
   it('groups the two roles under one labelled choice', () => {
