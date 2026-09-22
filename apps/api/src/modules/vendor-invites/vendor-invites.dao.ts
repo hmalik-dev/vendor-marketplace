@@ -238,11 +238,10 @@ export async function recordInviteEmailAttempt(
  * caller's own session email: then it replaces details still waiting on a
  * decision, so a stranger who filed first under that address cannot speak for
  * its owner.
- */
-/**
- * Writes the details, returning the row's id — or `undefined` when nothing
- * was written (the unverified path's conflict, or a verified resubmit whose
- * `setWhere` no longer matches).
+ *
+ * Returns the row's id, or `undefined` when nothing was written (the
+ * unverified path's conflict, or a verified resubmit whose `setWhere` no
+ * longer matches).
  */
 export async function upsertApplication(
   db: AppDatabase,

@@ -388,12 +388,17 @@ export function renderVendorInviteEmail(
   const link = `${webOrigin}${hasApplication ? VENDOR_SIGN_IN_PATH : VENDOR_SIGN_UP_PATH}`;
   const href = escapeHtml(link);
   const intro = `You're invited to join ${BRAND_NAME} as a vendor.`;
+  // The sign-up sentence quotes the address; its html variant just bolds the
+  // same quoted text, so both are built from the one template below.
+  function signUpHow(emailMarkup: string): string {
+    return `Sign up with this email address — ${emailMarkup} — and you'll land in your new vendor account.`;
+  }
   const how = hasApplication
     ? "Sign in with the email address and password you already made, and you'll land in your new vendor account."
-    : `Sign up with this email address — ${email} — and you'll land in your new vendor account.`;
+    : signUpHow(email);
   const howHtml = hasApplication
     ? escapeHtml(how)
-    : `Sign up with this email address — <strong>${escapeHtml(email)}</strong> — and you'll land in your new vendor account.`;
+    : signUpHow(`<strong>${escapeHtml(email)}</strong>`);
   const next =
     'The first thing to do there is set your prices, put up your work and open the dates you want to be booked on.';
   const buttonLabel = hasApplication ? `Sign in to ${BRAND_NAME}` : 'Sign up as a vendor';
