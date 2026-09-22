@@ -1,3 +1,4 @@
+import { reportSwallowedError } from '@/lib/report-error';
 import { clearSessionToken } from './client';
 
 /**
@@ -44,10 +45,16 @@ async function outcomeOf(response: Response | null): Promise<AuthOutcome> {
   }
 
   if (response.status === 403) {
+    // A malformed body here is the proxy or Better Auth itself misbehaving —
+    // exactly what #368 exists to catch, since the fallback below reads as
+    // an ordinary "email not verified" rather than an infra problem.
     const body = (await response
       .clone()
       .json()
-      .catch(() => null)) as { code?: unknown } | null;
+      .catch((error: unknown) => {
+        reportSwallowedError('auth-requests: could not read a 403 body', error);
+        return null;
+      })) as { code?: unknown } | null;
 
     return body?.code === 'TOO_MANY_ATTEMPTS' ? 'throttled' : 'unverified';
   }

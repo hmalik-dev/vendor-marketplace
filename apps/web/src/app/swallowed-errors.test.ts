@@ -83,6 +83,11 @@ describe('swallowed errors', () => {
       'src/components/messaging/notification-bell.tsx',
       'src/components/search/nearby-dates-band.tsx',
       'src/components/search/search-shell.tsx',
+      // A malformed 403 body on the auth proxy is the proxy or Better Auth
+      // itself misbehaving, not an ordinary refusal — the fallback below
+      // reads as "email not verified", exactly the shape #368 exists to
+      // catch, so a parse failure here still leaves a trace.
+      'src/lib/auth/auth-requests.ts',
       // #402: a failed conversation-list read is hidden from the two
       // supplementary bands that draw it beside a booking, and *shown* on
       // `/messages`, where the list is the whole screen — which is exactly the
