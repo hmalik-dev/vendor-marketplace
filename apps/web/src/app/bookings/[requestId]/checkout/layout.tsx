@@ -1,6 +1,7 @@
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { SAGE_DOT } from '@/components/checkout/checkout-screen';
+import { TestModeStrip } from '@/components/checkout/test-mode-strip';
 
 /**
  * Frame `05`'s shell: the wordmark, one reassurance line, and no nav at all.
@@ -24,6 +25,8 @@ export default function CheckoutLayout({
 }): React.ReactElement {
   return (
     <div className="flex min-h-dvh flex-col bg-stone-50">
+      {/* Frame `39`: in the layout, above the header, so frames `21` and `33` and the 404 inherit it. */}
+      <TestModeStrip />
       <header className="flex h-(--header-height) flex-none items-center justify-between border-b border-stone-300 bg-stone-0 px-8">
         {/*
           The wordmark is not a link — nothing leads away from here.
