@@ -43,6 +43,12 @@ const SHA = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
 const fake = (label) => ['dry', 'run', label, 'credential'].join('-');
 const UNPOOLED = ['postgresql://deploy:', fake('password'), '@127.0.0.1:1/orla'].join('');
 
+/** The two Secret-type Vercel variables the release build validates (VEN-575). */
+const BUILD_SECRETS = {
+  WEB_TIER_KEY: fake('web-tier-key'),
+  NEON_AUTH_COOKIE_SECRET: fake('cookie-secret'),
+};
+
 function recordingIo() {
   const calls = [];
   const lines = [];
@@ -323,7 +329,11 @@ test('api: an unknown host fails without running anything', async () => {
 
 test('web: builds under the release and upload credential, and deploys without the upload credential', async () => {
   const { io, calls } = recordingIo();
-  const credentials = { VERCEL_TOKEN: fake('vercel'), SENTRY_AUTH_TOKEN: fake('sentry') };
+  const credentials = {
+    VERCEL_TOKEN: fake('vercel'),
+    SENTRY_AUTH_TOKEN: fake('sentry'),
+    ...BUILD_SECRETS,
+  };
   await PHASES.web(
     {
       PATH: '/bin',
@@ -535,6 +545,15 @@ test('workflow: preflight is told exactly which inputs are set, and never a secr
   assert.ok(!Object.values(preflight.env).some((value) => /secrets\.[A-Z_]+ \}\}/.test(value)));
 });
 
+test('workflow: only the web step is handed the two build secrets', () => {
+  for (const step of JOB.steps) {
+    const holders = Object.entries(step.env ?? {}).filter(([, value]) =>
+      /secrets\.(WEB_TIER_KEY|NEON_AUTH_COOKIE_SECRET) \}\}/.test(value),
+    );
+    assert.equal(holders.length, step.run === 'node scripts/deploy.mjs web' ? 2 : 0, step.name);
+  }
+});
+
 test('workflow: the release the SDKs report is the commit CI tested', () => {
   assert.equal(JOB.env.SENTRY_RELEASE, '${{ github.event.workflow_run.head_sha }}');
   assert.equal(JOB.steps[0].with.ref, '${{ github.event.workflow_run.head_sha }}');
@@ -671,10 +690,14 @@ function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '', we
 }
 
 const SECRETS = Object.fromEntries(
-  ['DATABASE_URL_UNPOOLED', 'API_HOST_TOKEN', 'VERCEL_TOKEN', 'SENTRY_AUTH_TOKEN'].map((name) => [
-    name,
-    name === 'DATABASE_URL_UNPOOLED' ? UNPOOLED : fake(name.toLowerCase()),
-  ]),
+  [
+    'DATABASE_URL_UNPOOLED',
+    'API_HOST_TOKEN',
+    'VERCEL_TOKEN',
+    'SENTRY_AUTH_TOKEN',
+    'WEB_TIER_KEY',
+    'NEON_AUTH_COOKIE_SECRET',
+  ].map((name) => [name, name === 'DATABASE_URL_UNPOOLED' ? UNPOOLED : fake(name.toLowerCase())]),
 );
 const VARS = {
   NEON_BRANCH: 'production',
@@ -920,6 +943,7 @@ test('web: staging deploys a preview and aliases it to the staging host', async 
       VERCEL_ORG_ID: 'org',
       VERCEL_PROJECT_ID: 'prj',
       SENTRY_AUTH_TOKEN: fake('sentry'),
+      ...BUILD_SECRETS,
       SENTRY_WEB_PROJECT: 'orla-web',
       SENTRY_RELEASE: SHA,
       // An allow-list: the first entry is the alias host.
@@ -947,6 +971,7 @@ test('web: staging refuses to alias a host that is not its own, before building 
           VERCEL_ORG_ID: 'org',
           VERCEL_PROJECT_ID: 'prj',
           SENTRY_AUTH_TOKEN: fake('sentry'),
+          ...BUILD_SECRETS,
           SENTRY_WEB_PROJECT: 'orla-web',
           SENTRY_RELEASE: SHA,
           WEB_URL,
@@ -970,6 +995,7 @@ test('web: staging refuses to alias a host that is not its own, before building 
           VERCEL_ORG_ID: 'org',
           VERCEL_PROJECT_ID: 'prj',
           SENTRY_AUTH_TOKEN: fake('sentry'),
+          ...BUILD_SECRETS,
           SENTRY_WEB_PROJECT: 'orla-web',
           SENTRY_RELEASE: SHA,
           WEB_URL,
@@ -992,6 +1018,7 @@ test('web: production stays a production deployment and is not aliased', async (
       VERCEL_ORG_ID: 'org',
       VERCEL_PROJECT_ID: 'prj',
       SENTRY_AUTH_TOKEN: fake('sentry'),
+      ...BUILD_SECRETS,
       SENTRY_WEB_PROJECT: 'orla-web',
       SENTRY_RELEASE: SHA,
     },
@@ -1006,4 +1033,82 @@ test('web: production stays a production deployment and is not aliased', async (
       `deploy --prebuilt --prod --env SENTRY_RELEASE=${SHA}`,
     ],
   );
+});
+
+for (const target of ['staging', 'production']) {
+  test(`web: ${target} hands the two build secrets to vercel build only, never argv`, async () => {
+    const { io: recording, calls } = recordingIo();
+    const io = {
+      ...recording,
+      run: async (command, args, options) => {
+        await recording.run(command, args, options);
+        if (args[2] === 'deploy') options.write('https://orla-abc123-team.vercel.app\n');
+      },
+    };
+    await PHASES.web(
+      {
+        PATH: '/bin',
+        DEPLOY_TARGET: target,
+        VERCEL_TOKEN: fake('vercel'),
+        VERCEL_ORG_ID: 'org',
+        VERCEL_PROJECT_ID: 'prj',
+        SENTRY_AUTH_TOKEN: fake('sentry'),
+        SENTRY_WEB_PROJECT: 'orla-web',
+        SENTRY_RELEASE: SHA,
+        WEB_URL: 'https://orla-staging.vercel.app',
+        ...BUILD_SECRETS,
+      },
+      io,
+    );
+
+    for (const call of calls) {
+      const isBuild = call.args[2] === 'build';
+      for (const [name, value] of Object.entries(BUILD_SECRETS)) {
+        assert.equal(call.env[name], isBuild ? value : undefined, `${call.args[2]} ${name}`);
+        assert.ok(!call.args.some((arg) => arg.includes(value)), 'secret on a command line');
+      }
+    }
+  });
+
+  test(`web: ${target} refuses before running anything when a build secret is missing`, async () => {
+    for (const missing of Object.keys(BUILD_SECRETS)) {
+      const { io, calls } = recordingIo();
+      await assert.rejects(
+        PHASES.web(
+          {
+            DEPLOY_TARGET: target,
+            VERCEL_TOKEN: fake('vercel'),
+            VERCEL_ORG_ID: 'org',
+            VERCEL_PROJECT_ID: 'prj',
+            SENTRY_AUTH_TOKEN: fake('sentry'),
+            SENTRY_WEB_PROJECT: 'orla-web',
+            SENTRY_RELEASE: SHA,
+            WEB_URL: 'https://orla-staging.vercel.app',
+            ...BUILD_SECRETS,
+            [missing]: '',
+          },
+          io,
+        ),
+        new RegExp(missing),
+      );
+      assert.equal(calls.length, 0);
+    }
+  });
+}
+
+test('preflight: a missing build secret fails naming it, before migrate', async () => {
+  for (const name of Object.keys(BUILD_SECRETS)) {
+    await assert.rejects(
+      PHASES.preflight({ ...allPresent(), [presenceFlag(name)]: 'false' }, recordingIo().io),
+      new RegExp(`missing: ${name} \\(secret\\)`),
+    );
+  }
+});
+
+test('dry run: the build secrets reach vercel build and never the log or the other vercel steps', () => {
+  const result = dryRun({ secrets: SECRETS, vars: VARS });
+  assert.equal(result.failedAt, null, result.printed);
+  for (const value of Object.values(BUILD_SECRETS)) {
+    assert.ok(!result.printed.includes(value), 'printed a build secret');
+  }
 });
