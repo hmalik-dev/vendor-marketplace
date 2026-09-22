@@ -24,3 +24,12 @@ impossible headlessly; persistent ones are the only option. The `newcomer` has *
 - Throwaway sign-ups on dev must be deleted via `neon api /projects/<p>/branches/<b>/auth/users/<id> -X DELETE`.
 
 Related: [[e2e-admin-account-exists]], [[vendor-marketplace-e2e-credentials]].
+
+**Confirmed on production, 2026-09-22 (VEN-574):** these identities do not exist there — a scripted
+sign-in attempt against `WEB_URL` with `E2E_VENDOR_EMAIL`/`PASSWORD` returned "That email and password
+did not match." `packages/preflight/src/checks/browser.ts`'s `evaluateE2eReach` already assumes this
+(`context.target === 'production'` short-circuits it). A production browser-verification ticket that
+needs an already-onboarded vendor has no fixture shortcut: either a human completes Stripe Connect
+test-mode onboarding once by hand for a real production vendor (hits Stripe's own hCaptcha, which
+correctly can't be automated), or that step stays `[BLOCKED]` on a console action. Don't re-propose the
+seeded E2E vendor as a production workaround.
