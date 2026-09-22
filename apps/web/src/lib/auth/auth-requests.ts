@@ -33,13 +33,22 @@ function outcomeOf(response: Response | null): AuthOutcome {
   return response.status === 403 ? 'unverified' : 'rejected';
 }
 
-/** Creates the account and has Neon email a six-digit code. */
+/**
+ * Creates the account, then asks Neon for the six-digit code: on dev Neon Auth
+ * a sign-up alone emails nothing, only `send-verification-otp` does. A failed
+ * send does not fail the sign-up, because the code step offers "Send a new
+ * code" and the account already exists.
+ */
 export async function signUpWithEmail(input: {
   email: string;
   password: string;
   name: string;
 }): Promise<AuthOutcome> {
-  return outcomeOf(await post('/sign-up/email', input));
+  const outcome = outcomeOf(await post('/sign-up/email', input));
+  if (outcome === 'ok') {
+    await resendVerificationCode(input.email);
+  }
+  return outcome;
 }
 
 /** `unverified` is Neon's 403 EMAIL_NOT_VERIFIED: the caller routes to the code step. */

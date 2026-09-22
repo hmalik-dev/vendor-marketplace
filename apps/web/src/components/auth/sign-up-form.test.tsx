@@ -80,12 +80,17 @@ describe('SignUpForm', () => {
   });
 
   /* VEN-451: frame `12` draws the card description at 12px and the fields on stone-0. */
-  it('shows the notice with working links under the submit, and has no checkbox', () => {
-    render(<SignUpForm initialRole={null} />);
+  it('shows one agreement line, frame 12s, with working links under the submit and no checkbox', () => {
+    render(<SignUpForm initialRole={null} vendorInviteOnly={false} />);
 
-    const notice = document.querySelector('[data-continue-notice]') as HTMLElement;
-    expect(notice.textContent).toBe('By continuing you agree to the Terms and Privacy Policy.');
-    expect(within(notice).getByRole('link', { name: 'Terms' }).getAttribute('href')).toBe('/terms');
+    const notice = screen.getByText(/^By signing up/);
+    expect(notice.textContent).toBe(
+      'By signing up, you agree to the Terms of Service and Privacy Policy.',
+    );
+    expect(document.querySelector('[data-continue-notice]')).toBeNull();
+    expect(
+      within(notice).getByRole('link', { name: 'Terms of Service' }).getAttribute('href'),
+    ).toBe('/terms');
     expect(within(notice).getByRole('link', { name: 'Privacy Policy' }).getAttribute('href')).toBe(
       '/privacy',
     );
