@@ -125,6 +125,60 @@ export function payoutResidualHeld(): SQL<boolean> {
 }
 
 /**
+ * A vendor's owner can no longer be paid at all (VEN-569): banned or closed,
+ * **and** no working connected Stripe account left to send a transfer to.
+ *
+ * Both facts, not `is_banned`/`deleted_at` alone — a ban or closure by itself
+ * no longer stops a payout, so naming only that half here would be exactly the
+ * hand-synced money predicate `payoutOwedClauses`'s own comment warns about.
+ * `payoutFailingClauses` below and the admin DAOs' `vendorUnpayable` column
+ * both compose this one expression, parameterised on the owner and profile
+ * columns because the callers join them under different aliases (`users` here,
+ * `vendorOwner` there).
+ */
+export function vendorUnpayableExpr(
+  owner: { isBanned: SQLWrapper; deletedAt: SQLWrapper },
+  profile: { stripeOnboarded: SQLWrapper; stripeAccountId: SQLWrapper },
+): SQL<boolean> {
+  return sql<boolean>`(
+    (${owner.isBanned} or ${owner.deletedAt} is not null)
+    and (not ${profile.stripeOnboarded} or ${profile.stripeAccountId} is null)
+  )`;
+}
+
+/**
+ * A booking the account-unwind owned and may not have finished (VEN-569).
+ *
+ * Banning or closing a vendor unwinds every **still-future** confirmed booking
+ * by refunding it (`findConfirmedBookingsToUnwind`, `unwindAccountBookings`) —
+ * and that refund can fail at Stripe. `account-unwind.ts`'s failure branch
+ * alerts the operator and leaves the row exactly as it stood: `confirmed`,
+ * fully owed, with nothing durable on it besides the transient alert. D41's
+ * "a ban must not change money already earned for an event that happened"
+ * holds for every row the unwind actually finished, or never owned in the
+ * first place because its event was already past when the ban landed — it
+ * does not hold for the one row the unwind **tried and failed** on, where the
+ * event was still ahead of the ban and nothing says the customer ever
+ * received the service.
+ *
+ * Comparing the event date against the moment of the ban or closure —
+ * `users.banned_at`/`users.deleted_at`, both set atomically with the flag
+ * (`setBanned`, `closeAccount`) — is what tells the two cases apart without a
+ * new column: a booking already due when banned was never the unwind's
+ * concern and is `false` here; one still ahead of the ban was, and stays
+ * excluded until an operator resolves it by hand.
+ */
+export function unfinishedUnwindExpr(
+  owner: { isBanned: SQLWrapper; bannedAt: SQLWrapper; deletedAt: SQLWrapper },
+  eventDate: SQLWrapper,
+): SQL<boolean> {
+  return sql<boolean>`(
+    (${owner.isBanned} and ${eventDate} > (${owner.bannedAt} at time zone 'UTC')::date)
+    or (${owner.deletedAt} is not null and ${eventDate} > (${owner.deletedAt} at time zone 'UTC')::date)
+  )`;
+}
+
+/**
  * A transfer this sweep still owes and has already tried — the operator's
  * question, as clauses (#432).
  *
@@ -151,15 +205,26 @@ export function payoutFailingClauses(): SQL[] {
     notInArray(bookings.status, [...HELD_PAYOUT_STATUSES]),
     not(payoutResidualHeld()),
     /*
-     * A banned or closed owner is **stranded**, not failing (VEN-445): the sweep
-     * no longer selects the row, so "the scheduled release keeps trying" would
-     * be false. A subquery, so the count queries need no new join.
+     * A truly unpayable owner is stranded, not failing (VEN-445, narrowed by
+     * VEN-569): the sweep still selects and keeps retrying a merely banned or
+     * closed vendor's due row, because a ban must not change money already
+     * earned for an event that happened. Only `vendorUnpayableExpr` — closed
+     * *and* no connected account — can never self-heal, so that is the one the
+     * operator's failing list excludes; "the scheduled release keeps trying"
+     * is still true of every other banned or closed row. A subquery, so the
+     * count queries need no new join.
      */
     sql`not exists (
       select 1 from ${vendorProfiles}
       inner join ${users} on ${users.id} = ${vendorProfiles.userId}
       where ${vendorProfiles.id} = ${bookings.vendorId}
-        and (${users.isBanned} or ${users.deletedAt} is not null)
+        and ${vendorUnpayableExpr(
+          { isBanned: users.isBanned, deletedAt: users.deletedAt },
+          {
+            stripeOnboarded: vendorProfiles.stripeOnboarded,
+            stripeAccountId: vendorProfiles.stripeAccountId,
+          },
+        )}
     )`,
   ];
 }
@@ -218,6 +283,14 @@ export async function findDuePayoutBookingIds(
      * A held vendor's payouts are left out of the batch rather than claimed and
      * skipped (VEN-404), so a long hold cannot fill every batch and starve the
      * vendors behind it. They stay due and come back once the hold is lifted.
+     *
+     * A banned or closed vendor's owner is **not excluded outright** here
+     * (VEN-569): a ban must not change money already earned for an event that
+     * happened. The one row still excluded is `unfinishedUnwindExpr` — a
+     * booking the account-unwind owned (its event was still ahead of the ban)
+     * and may not have finished refunding, which must not be quietly paid to
+     * the account it was trying to refund. Whether the account can actually
+     * receive the transfer is decided inside the claim, not the scan.
      */
     .innerJoin(vendorProfiles, eq(bookings.vendorId, vendorProfiles.id))
     .innerJoin(users, eq(vendorProfiles.userId, users.id))
@@ -228,13 +301,12 @@ export async function findDuePayoutBookingIds(
         not(payoutResidualHeld()),
         lte(bookings.eventDate, dueThroughDate),
         eq(vendorProfiles.payoutHold, false),
-        /*
-         * Banned and retired vendors are left out the same way. Their
-         * unwind refunds every booking still ahead, so what remains is not
-         * owed to an account that can no longer be answered for.
-         */
-        eq(users.isBanned, false),
-        isNull(users.deletedAt),
+        not(
+          unfinishedUnwindExpr(
+            { isBanned: users.isBanned, bannedAt: users.bannedAt, deletedAt: users.deletedAt },
+            bookings.eventDate,
+          ),
+        ),
       ),
     )
     /*
@@ -322,12 +394,15 @@ export async function claimReleasableBooking(
         not(payoutResidualHeld()),
         lte(bookings.eventDate, dueThroughDate),
         /*
-         * The ban and retirement gate is re-read under the lock as well as in
-         * `findDuePayoutBookingIds`: a ban committed after the id scan, or an
-         * operator's retry (which skips the hold), must not pay the account.
+         * Re-read under the lock too, same as `findDuePayoutBookingIds`: a ban
+         * or closure that committed after the id scan must still win.
          */
-        eq(users.isBanned, false),
-        isNull(users.deletedAt),
+        not(
+          unfinishedUnwindExpr(
+            { isBanned: users.isBanned, bannedAt: users.bannedAt, deletedAt: users.deletedAt },
+            bookings.eventDate,
+          ),
+        ),
       ),
     )
     .for('update', { of: bookings, skipLocked: true })

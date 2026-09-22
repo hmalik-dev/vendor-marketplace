@@ -42,6 +42,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { readsAs } from '../booking-requests/booking-requests.dao.js';
+import { unfinishedUnwindExpr, vendorUnpayableExpr } from '../payments/payouts.dao.js';
 import { adminVendorSelection, vendorOwner, type AdminVendorProjection } from './admin.dao.js';
 import { countWidenings } from './widenings.js';
 
@@ -382,7 +383,27 @@ export async function findAdminBookingDetail(
       vendorName: vendorProfiles.businessName,
       vendorPayoutHold: vendorProfiles.payoutHold,
       vendorUserId: vendorProfiles.userId,
-      vendorUnpayable: sql<boolean>`(${vendorOwner.isBanned} or ${vendorOwner.deletedAt} is not null)`,
+      /*
+       * Either a permanently unpayable account, or one the ban's own unwind
+       * may still owe a refund to (VEN-569) — see `admin.dao.ts`'s twin.
+       */
+      vendorUnpayable: sql<boolean>`(
+        ${vendorUnpayableExpr(
+          { isBanned: vendorOwner.isBanned, deletedAt: vendorOwner.deletedAt },
+          {
+            stripeOnboarded: vendorProfiles.stripeOnboarded,
+            stripeAccountId: vendorProfiles.stripeAccountId,
+          },
+        )}
+        or ${unfinishedUnwindExpr(
+          {
+            isBanned: vendorOwner.isBanned,
+            bannedAt: vendorOwner.bannedAt,
+            deletedAt: vendorOwner.deletedAt,
+          },
+          bookings.eventDate,
+        )}
+      )`,
       customerId: users.id,
       customerFirstName: users.firstName,
       customerLastName: users.lastName,

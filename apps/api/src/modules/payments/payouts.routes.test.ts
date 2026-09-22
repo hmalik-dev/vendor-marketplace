@@ -946,6 +946,164 @@ describe('payouts', () => {
     });
   });
 
+  /**
+   * VEN-569. A ban or closure must not change what is owed for an event that
+   * already happened — only a still-future booking is refunded (VEN-424,
+   * VEN-477), and that is a date bound the sweep already enforces on every row
+   * it considers, banned owner or not.
+   */
+  describe('a vendor banned or closed after their event (VEN-569)', () => {
+    /**
+     * Bans or closes the vendor who owns `vendorId`, with the matching
+     * timestamp column set exactly as `setBanned`/the closure route would —
+     * `unfinishedUnwindExpr` reads `banned_at`/`deleted_at` against the
+     * booking's event date, so a fixture that skips it is not the state
+     * production ever reaches.
+     */
+    async function changeVendorOwner(
+      vendorId: string,
+      change: { isBanned: true; at: Date } | { deletedAt: Date },
+    ): Promise<void> {
+      const [profile] = await harness.database.db
+        .select({ userId: vendorProfiles.userId })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendorId));
+      const write =
+        'isBanned' in change
+          ? { isBanned: true, bannedAt: change.at }
+          : { deletedAt: change.deletedAt };
+      await harness.database.db.update(users).set(write).where(eq(users.id, profile!.userId));
+    }
+
+    it.each([
+      ['banned', { isBanned: true, at: JUST_AFTER_EVENT } as const],
+      ['closed', { deletedAt: JUST_AFTER_EVENT } as const],
+    ])(
+      'releases the payout once for a %s vendor whose event had already passed when they were %s',
+      async (_name, change) => {
+        const paid = await paidBooking();
+        /* The event happens first, and only then is the vendor banned or closed. */
+        clockNow = JUST_AFTER_EVENT;
+        await changeVendorOwner(paid.vendorId, change);
+        clockNow = AFTER_RELEASE;
+
+        expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+        expect(harness.stripe.transfers).toHaveLength(1);
+
+        const released = await currentBooking();
+        expect(released.payoutReleasedAt).not.toBeNull();
+        expect(released.stripeTransferId).toBe(harness.stripe.transfers[0]!.transferId);
+
+        /* A second sweep sends nothing more (#423 acceptance 5, on this row). */
+        expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+        expect(harness.stripe.transfers).toHaveLength(1);
+      },
+    );
+
+    it('never pays a banned vendor for a booking whose event is still ahead', async () => {
+      const paid = await paidBooking();
+      await changeVendorOwner(paid.vendorId, { isBanned: true, at: clockNow });
+      /* clockNow is still START: EVENT_DATE is 30 days out and not due. */
+
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toEqual([]);
+      expect((await currentBooking()).payoutReleasedAt).toBeNull();
+    });
+
+    it('no longer answers "busy" when the operator retries a banned vendor’s due payout', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+      await changeVendorOwner(paid.vendorId, { isBanned: true, at: clockNow });
+      clockNow = AFTER_RELEASE;
+
+      const result = await retryPayoutRelease(
+        { db: harness.database.db, stripe: harness.stripe, log: harness.app.log },
+        paid.id,
+        clockNow,
+      );
+
+      expect(result.outcome).toBe('released');
+      expect(result.payoutStatus).toBe('released');
+    });
+
+    /**
+     * The one case a ban still leaves stuck: nowhere left to send the money.
+     * The sweep keeps trying and recording why, and alerts the operator
+     * through the same threshold every other stuck payout does (VEN-405) —
+     * no new alert type, because this is not a new kind of failure.
+     */
+    it('holds the payout and alerts the operator for a closed vendor with no connected account', async () => {
+      const paid = await paidBooking();
+      clockNow = JUST_AFTER_EVENT;
+      await changeVendorOwner(paid.vendorId, { deletedAt: clockNow });
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ stripeOnboarded: false, stripeAccountId: null })
+        .where(eq(vendorProfiles.id, paid.vendorId));
+      clockNow = AFTER_RELEASE;
+
+      const dispatched: unknown[] = [];
+      const context = {
+        db: harness.database.db,
+        stripe: harness.stripe,
+        log: harness.app.log,
+        alerts: {
+          dispatch: (alert: unknown) => {
+            dispatched.push(alert);
+          },
+        },
+      };
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        expect(await releaseDuePayouts(context, clockNow)).toEqual({
+          released: 0,
+          skipped: 0,
+          failed: 1,
+        });
+      }
+
+      expect(harness.stripe.transfers).toEqual([]);
+      const held = await currentBooking();
+      expect(held.payoutReleasedAt).toBeNull();
+      expect(held.payoutAttempts).toBe(3);
+      expect(dispatched).toEqual([
+        expect.objectContaining({ kind: 'payout_failed', subjectId: paid.id }),
+      ]);
+    });
+
+    /**
+     * The blocker both reviewers found: a ban's own unwind only targets a
+     * still-future booking, and its Stripe refund can fail — `account-unwind.ts`
+     * then leaves the row `confirmed` and fully owed, with nothing durable on
+     * it besides a transient alert. That row must stay unpaid even once its
+     * event date passes and it would otherwise look due, because nothing on it
+     * says the customer was ever refunded or received the service.
+     */
+    it('never pays a booking the ban left the unwind unable to refund', async () => {
+      const paid = await paidBooking();
+      /* The vendor is banned while the event is still ahead — the unwind's own
+       * target — and its refund fails, exactly as `account-unwind.ts` leaves it:
+       * the booking is untouched, still `confirmed` and fully owed. */
+      await changeVendorOwner(paid.vendorId, { isBanned: true, at: clockNow });
+      clockNow = AFTER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toEqual([]);
+      const untouched = await currentBooking();
+      expect(untouched.payoutReleasedAt).toBeNull();
+      expect(untouched.payoutAttempts).toBe(0);
+
+      /* The operator retry refuses it too, rather than paying it by hand. */
+      const result = await retryPayoutRelease(
+        { db: harness.database.db, stripe: harness.stripe, log: harness.app.log },
+        paid.id,
+        clockNow,
+      );
+      expect(result.outcome).toBe('busy');
+      expect(harness.stripe.transfers).toEqual([]);
+    });
+  });
+
   describe('the dispute hold', () => {
     /* #423 acceptance 8. */
     it('lets the customer report a problem on an unreleased past booking', async () => {

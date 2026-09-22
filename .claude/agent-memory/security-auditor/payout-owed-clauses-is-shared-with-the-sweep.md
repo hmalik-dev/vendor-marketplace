@@ -36,17 +36,22 @@ release sweep would transfer for the same rows") calls
 `findDuePayoutBookingIds` directly and is the thing that fails if they drift —
 keep it. Related: [[payout-sweep-is-a-second-money-mover]].
 
-**VEN-423 put a fourth guard in the pre-scan only.** `findDuePayoutBookingIds`
-now joins `users` through `vendorProfiles.userId` and adds
-`is_banned = false` + `deleted_at is null`. `claimReleasableBooking` — the
-`FOR UPDATE SKIP LOCKED` row that actually transfers — was **not** given them,
-and `refusePayoutRetry` has no ban/retired arm either, so the operator retry
-(`honourVendorHold: false`) pays a banned or retired vendor outright. Every
-other payout guard (status, amount, release, `payout_hold`) is re-read under
-the lock; this one is not. The mirror cost: a retired vendor's owed payout for a
-past event is now claimed by nothing, `payout_attempts` never increments so
-`payoutFailingClauses` cannot see it, and the console still prints
-"Awaiting release".
+**VEN-569 deleted the ban/closure gate from both payout queries (D41).** A
+banned or closed vendor is paid for an event already behind us, because the
+service was delivered; `vendorUnpayableExpr` (banned/closed **and** no
+onboarded account) is all that is left, and it only drives the console's
+`payoutStranded` and `payoutFailingClauses`. The date windows do keep the
+sweep and `findConfirmedBookingsToUnwind` disjoint — unwind takes
+`event_date > unwindFloorDate` (today/yesterday), the sweep
+`event_date <= now - 72h` — so nothing races. **The gap the removal opened is
+the unwind that did not finish**: `account-unwind.ts:420` counts a failed
+Stripe refund and `continue`s, leaving a _future_ booking `confirmed`,
+unrefunded, `vendor_payout_cents` intact. The ban commits first
+(`admin.service.ts:569`) and never rolls back, so that row now becomes due 72h
+after its event and the sweep transfers to the banned account while the
+customer holds neither the service nor their money. `users.banned_at` /
+`deleted_at` versus `bookings.event_date` is the discriminator D41's argument
+actually needs.
 
 **VEN-543 added `payoutResidualHeld()` — a fifth predicate, and the first with a
 TS twin nobody feeds.** It is `status = 'cancelled' and (external_refund_cents >
