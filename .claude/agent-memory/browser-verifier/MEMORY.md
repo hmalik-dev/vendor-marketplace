@@ -18,3 +18,4 @@
 - [Admin review delete does not block a repost](admin-review-delete-does-not-block-repost.md) — deleting a review just removes the row; the same reviewer can repost the same content and it restores the rating + re-notifies the vendor
 - [Payout release needs a real Stripe PaymentIntent](payout-release-needs-a-real-payment-intent.md) — a fake `pi_...` 500s on findRefund before the account check; also needs a real bearer token against the API port and a `vendor_agreement` acceptance row
 - [Admin manual retry never dispatches operator alerts](admin-manual-retry-never-dispatches-operator-alerts.md) — by design, only the scheduled sweep pages; an empty `operator_alerts` table after 3 manual retries is expected, not a finding
+- [Invites table has a duplicate column key](invites-table-duplicate-column-key.md) — two `DataTable` columns both `key:'email'` in vendor-applications-panel.tsx; pre-existing, confirmed out of scope for VEN-513 via `git diff HEAD`

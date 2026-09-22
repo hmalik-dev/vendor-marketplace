@@ -37,6 +37,20 @@ Result: the address can never accept the Terms, so never gets a `users` row, in
 any role. Reported as VEN-512's blocker; fix is to distinguish a refusal-seeded
 row from an arrival-seeded/legacy one and divert only on the first.
 
+**VEN-513's bulk invite (`POST /admin/vendor-applications/invite`) audited
+clean.** It is the shape to copy for any later multi-id admin action: one
+transaction per id, `lockApplication(tx, id)` then every decision read off the
+locked row, `inviteAddress(tx, actorId, row.email)` so no address ever comes
+from the body, and a per-id result enum instead of a throw. What makes the lock
+real is `vendor_applications_email_key` + the `email = lower(email)` CHECK —
+`markApplicationInvited` keys on email, so without that uniqueness it would
+write outside the row it locked. The 1–50 body cap sits above the fixed
+`ADMIN_PAGE_SIZE` 15 (the console never reads `pageSize` from the URL), so
+"select all on this page" cannot 400. Deliberate and not defects: no route
+limiter (its admin neighbours have none either; the cap is the guard), and the
+sends run on the request path rather than `queueInviteEmail` so `emailFailed`
+can be reported synchronously.
+
 Reviewed clean and not to be re-reported: `neon-auth.ts:114` refuses
 `emailVerified !== true` in `verifiedClaims`, used by both the verifier and the
 loader; the waitlist email is always `snapshot.email`, `existing.email` or

@@ -96,6 +96,8 @@ import {
   SUPPORT_TOPICS,
 } from '../constants/support.js';
 import {
+  BULK_INVITE_RESULT_STATUSES,
+  MAX_BULK_INVITE_APPLICATIONS,
   MAX_VENDOR_APPLICATION_MESSAGE_LENGTH,
   VENDOR_APPLICATION_DECISIONS,
   VENDOR_APPLICATION_STATUSES,
@@ -3311,6 +3313,30 @@ export const decideVendorApplicationSchema = z.object({
   decision: z.enum(VENDOR_APPLICATION_DECISIONS),
 });
 export type DecideVendorApplication = z.infer<typeof decideVendorApplicationSchema>;
+
+/** `POST /admin/vendor-applications/invite`: the operator's multi-select invite (VEN-513). */
+export const bulkInviteApplicationsSchema = z.object({
+  applicationIds: z.array(uuidSchema).min(1).max(MAX_BULK_INVITE_APPLICATIONS),
+});
+export type BulkInviteApplications = z.infer<typeof bulkInviteApplicationsSchema>;
+
+/**
+ * One selected id's outcome. Never a thrown error — a declined or
+ * already-invited id in the batch is reported here, not refused as a whole
+ * request, so one bad id never blocks the rest of the selection.
+ */
+export const bulkInviteResultItemSchema = z.object({
+  id: uuidSchema,
+  status: z.enum(BULK_INVITE_RESULT_STATUSES),
+  /** The invite still exists and is retried by the sweep; this only says the send itself failed. */
+  emailFailed: z.boolean(),
+});
+export type BulkInviteResultItem = z.infer<typeof bulkInviteResultItemSchema>;
+
+export const bulkInviteApplicationsResultSchema = z.object({
+  results: z.array(bulkInviteResultItemSchema),
+});
+export type BulkInviteApplicationsResult = z.infer<typeof bulkInviteApplicationsResultSchema>;
 
 export const adminVendorInviteRowSchema = z.object({
   id: uuidSchema,
