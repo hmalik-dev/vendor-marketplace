@@ -26,7 +26,7 @@ wordmark size     whole pixels where measured — D=15 → 23px (1.60 D elsewher
 | -------------------------- | --------- | ---------- | ---- | -------- |
 | Desktop header             | 15px      | 22px       | 9px  | 23px     |
 | Mobile header              | 14px      | 20px       | 9px  | 21px     |
-| Auth panel                 | 19px      | 28px       | 10px | 29px     |
+| Auth panel                 | 19px      | 26px       | 10px | 29px     |
 | Marketing footer           | 20px      | 29px       | 12px | 32px     |
 | App icon (52px tile, r=12) | 24px      | 35px       | —    | —        |
 | Favicon 32 / 16            | 16 / 14px | 23 / 20px  | —    | —        |
@@ -44,6 +44,14 @@ rule at D=15 (VEN-388, 2026-09-15):** nine of the ten 1440 headers pair a 15px
 mark with a 23px wordmark and only `01 Landing` draws the 24px 1.60 D gives, so
 D30 builds 23. Other diameters stay on 1.60 D until one is corroborated the same
 way — the footer's 25px against 27.2 is still #118's.
+
+**The auth panel's offset, stroke and mark width are measured, not the ratio
+(VEN-588, 2026-09-22).** `1.45 D` gives 8.55/1.52/27.55 at D=19; `12 Sign up`
+and both `delta-waitlist` lockups (frames 36, 37) draw `left:8px`,
+`border:1.4px`, in a `26x19` box instead — three corroborating frames at one
+diameter. `logo.tsx` reads these three from a per-diameter table the same
+shape as the gap table above; every other diameter stays on the ratios in the
+box on line 16.
 
 The favicon and the app icon ask for the mark alone (`variant="mark"`), where
 the wordmark would be illegible. That is the caller's choice, not an automatic
