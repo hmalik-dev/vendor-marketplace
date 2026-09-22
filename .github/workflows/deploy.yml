@@ -160,6 +160,9 @@ jobs:
           NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
           # Staging aliases its preview deployment to this host.
           WEB_URL: ${{ vars.WEB_URL }}
+          # VEN-599: injected into `vercel build`'s own environment, never left to
+          # Vercel's per-environment dashboard configuration via `vercel pull`.
+          API_URL: ${{ vars.API_URL }}
         run: node scripts/deploy.mjs web
 
       # Bounded: ten minutes covers a cold build on either platform without

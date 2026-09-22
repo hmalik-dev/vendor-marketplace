@@ -502,7 +502,7 @@ export const PHASES = {
     const vercel = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
     const upload = ['SENTRY_AUTH_TOKEN', 'SENTRY_WEB_PROJECT', 'SENTRY_RELEASE'];
     const buildSecrets = ['WEB_TIER_KEY', 'NEON_AUTH_COOKIE_SECRET'];
-    need(env, [...vercel, ...upload, ...buildSecrets, 'DEPLOY_TARGET']);
+    need(env, [...vercel, ...upload, ...buildSecrets, 'API_URL', 'DEPLOY_TARGET']);
 
     const production = env.DEPLOY_TARGET === 'production';
     if (!production && env.DEPLOY_TARGET !== 'staging') {
@@ -533,9 +533,13 @@ export const PHASES = {
     const child = pick(env, [...TOOL_ENV, ...vercel]);
     // servesOverTls (apps/web/src/config/env.ts) needs the platform's own announcement;
     // WEB_URL's first entry is that origin, already https:// for both environments.
+    // API_URL/NEXT_PUBLIC_API_URL (VEN-599): the GitHub environment's own value,
+    // never Vercel's per-environment dashboard configuration via `vercel pull`.
     const build = {
       ...pick(env, [...TOOL_ENV, ...vercel, ...upload, ...buildSecrets]),
       DEPLOYMENT_ORIGIN: webOrigin(env),
+      API_URL: env.API_URL,
+      NEXT_PUBLIC_API_URL: env.API_URL,
     };
     const cli = ['--yes', VERCEL_CLI];
     const target = production ? ['--prod'] : [];
