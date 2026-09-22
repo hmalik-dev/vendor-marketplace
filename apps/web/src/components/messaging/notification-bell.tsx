@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { TERMS_ACCEPTANCE_PATH, VENDOR_APPLY_PATH } from '@vendor-marketplace/shared';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { EmptyStateGlyph } from '@/components/ui/empty-state';
+import { isGateExemptPath } from '@/lib/terms-gate-paths';
 import { useApi } from '@/lib/use-api';
 import { useEventStream } from '@/lib/use-event-stream';
 import { wireNotificationPageSchema, type WireNotification } from '@/lib/wire-schemas';
@@ -32,6 +33,15 @@ const WHEN = new Intl.DateTimeFormat('en-US', {
 export interface NotificationBellProps {
   /** Seed rows. Empty in the app, where the bell fetches its own on mount. */
   initial?: readonly WireNotification[];
+  /**
+   * Whether **this session** cannot clear the Terms gate — read on the server
+   * (`isTermsGatedForChrome`) and passed down, never inferred from the
+   * pathname alone. `/`, `/search` and a storefront (VEN-586) are gate-exempt
+   * so a gated session stays on them, but they are also the app's
+   * highest-traffic pages for every *ungated* signed-in account, so the bell
+   * must keep asking there for everyone else.
+   */
+  gated?: boolean;
 }
 
 /**
@@ -41,18 +51,31 @@ export interface NotificationBellProps {
  * cannot drift from what the panel shows. New notifications arrive over the
  * shared stream, so the badge moves without a reload.
  */
-export function NotificationBell(props: NotificationBellProps): React.ReactElement | null {
+export function NotificationBell({
+  gated = false,
+  ...props
+}: NotificationBellProps): React.ReactElement | null {
   const pathname = usePathname();
 
   /*
-   * An account that has not accepted the Terms sits on these two screens, and
-   * the API answers both of the bell's calls (`/notifications` and the stream
-   * ticket) with the gate's 403 — a console error on a screen that is
-   * otherwise correct (VEN-451). The bell has nothing to show there, so it
-   * does not ask; the stream is only opened from here and `/messages`, which
-   * is gated itself.
+   * An account that has not accepted the Terms sits on `/accept-terms` and
+   * `/vendors/apply` however it got there, and the API answers both of the
+   * bell's calls (`/notifications` and the stream ticket) with the gate's 403
+   * — a console error on a screen that is otherwise correct (VEN-451). The
+   * bell has nothing to show there, so it does not ask; the stream is only
+   * opened from here and `/messages`, which is gated itself.
+   *
+   * `/`, `/search` and a storefront (VEN-586) get the same treatment, but
+   * **only for a session `isTermsGatedForChrome` actually found gated** — an
+   * ordinary signed-in customer or vendor browsing them is the overwhelming
+   * case on these three, and hiding the bell for everyone would cost the one
+   * thing it is for.
    */
-  if (pathname === TERMS_ACCEPTANCE_PATH || pathname === VENDOR_APPLY_PATH) {
+  if (
+    pathname === TERMS_ACCEPTANCE_PATH ||
+    pathname === VENDOR_APPLY_PATH ||
+    (gated && isGateExemptPath(pathname))
+  ) {
     return null;
   }
 

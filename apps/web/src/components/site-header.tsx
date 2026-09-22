@@ -12,7 +12,7 @@ import { HeaderQuery } from '@/components/search/header-query';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getCategories } from '@/lib/vendor-data';
-import { readUserForChrome } from '@/lib/current-user';
+import { isTermsGatedForChrome, readUserForChrome } from '@/lib/current-user';
 import type { WireUser } from '@/lib/wire-schemas';
 import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
 
@@ -75,7 +75,11 @@ export async function SiteHeader(): Promise<React.ReactElement> {
    * a throw escapes every `error.tsx` and takes the whole document to the
    * global error screen — see the note on that function.
    */
-  const [categories, user] = await Promise.all([getCategories(), readUserForChrome()]);
+  const [categories, user, gated] = await Promise.all([
+    getCategories(),
+    readUserForChrome(),
+    isTermsGatedForChrome(),
+  ]);
   const role = user?.role ?? null;
 
   /*
@@ -220,7 +224,7 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             <Link href="/dashboard" className={`${MARKETING_LINK_CLASS} max-sm:hidden`}>
               {dashboardLabel}
             </Link>
-            <NotificationBell />
+            <NotificationBell gated={gated} />
             {/*
               The account control is the app's own, never a
               provider-hosted one (VEN-403). A hosted menu offers email changes

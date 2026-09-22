@@ -14,6 +14,7 @@ import { ApiClientError, apiRequest, type ApiRequestOptions } from './api-client
 import { signInPathReturningTo } from './return-path';
 import {
   isGateExemptPath,
+  isRefusalExemptPath,
   isTermsRequired,
   termsAcceptancePath,
   terminalRefusal,
@@ -41,7 +42,9 @@ export type RefusalRedirect = (error: unknown) => boolean;
  *
  * Returns whether the error was such a refusal, so a caller with its own
  * fallback (the stream's "Reconnecting" banner) can tell. It does not navigate
- * from the pages the gate exempts or from the refusal's own destinations.
+ * from `isRefusalExemptPath` or from the refusal's own destinations — a
+ * narrower list than the Terms funnel's, because a real 401 or suspension on
+ * a page a gated account only *browses* still has to redirect (`terms-gate-paths.ts`).
  * The identity is stable, so an effect may depend on it.
  */
 export function useRefusalRedirect(): RefusalRedirect {
@@ -69,7 +72,7 @@ export function useRefusalRedirect(): RefusalRedirect {
       const { pathname, search } = window.location;
 
       if (
-        isGateExemptPath(pathname) ||
+        isRefusalExemptPath(pathname) ||
         REFUSAL_HOME_PREFIXES.some((prefix) => pathname.startsWith(prefix))
       ) {
         return true;

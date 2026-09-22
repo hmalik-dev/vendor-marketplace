@@ -51,10 +51,15 @@ vi.mock('@/components/search/header-query', () => ({
 
 /*
  * The bell owns its own fetching and its own stream; the header's job is only
- * to place it, so it is stubbed to whether it rendered.
+ * to place it and forward the gate read (VEN-586), so it is stubbed to
+ * whether it rendered and what `gated` it was handed.
  */
+const notificationBellGated = vi.fn();
 vi.mock('@/components/messaging/notification-bell', () => ({
-  NotificationBell: () => <button type="button">Notifications</button>,
+  NotificationBell: ({ gated }: { gated?: boolean }) => {
+    notificationBellGated(gated);
+    return <button type="button">Notifications</button>;
+  },
 }));
 
 /*
@@ -64,6 +69,7 @@ vi.mock('@/components/messaging/notification-bell', () => ({
  * must follow the record.
  */
 let currentRole: 'customer' | 'vendor' | 'admin' | null = null;
+let currentlyGated = false;
 let currentUser: {
   firstName: string;
   lastName: string;
@@ -74,6 +80,10 @@ let currentUser: {
 vi.mock('@/lib/current-user', () => ({
   readUserForChrome: async () =>
     currentRole === null ? null : { ...currentUser, role: currentRole },
+  // Gating logic is `notification-bell.test.tsx` and `current-user.test.ts`'s
+  // own concern (VEN-586); this file only asserts the header forwards
+  // whatever it reads (below).
+  isTermsGatedForChrome: async () => currentlyGated,
 }));
 
 const { SiteHeader } = await import('./site-header');
@@ -83,7 +93,9 @@ describe('SiteHeader', () => {
     authState = 'signed-out';
     pathname = '/';
     currentRole = null;
+    currentlyGated = false;
     signOut.mockClear();
+    notificationBellGated.mockClear();
     currentUser = {
       firstName: 'Ada',
       lastName: 'Lovelace',
@@ -453,5 +465,19 @@ describe('SiteHeader', () => {
 
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeDefined();
     expect(screen.queryByText('Vendor')).toBeNull();
+  });
+
+  /*
+   * VEN-586: the header only forwards `isTermsGatedForChrome`'s read — the
+   * bell itself decides what to do with it.
+   */
+  it.each([true, false])('forwards the gate read (%s) to the notification bell', async (gated) => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+    currentlyGated = gated;
+
+    render(await SiteHeader());
+
+    expect(notificationBellGated).toHaveBeenCalledWith(gated);
   });
 });

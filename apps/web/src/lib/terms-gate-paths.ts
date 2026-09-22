@@ -59,7 +59,11 @@ export function terminalRefusal(error: unknown): 'suspended' | 'signed-out' | nu
 }
 
 /**
- * The pages a gated account may sit on — and the gate must not take away.
+ * The pages a gated account may sit on — and the Terms funnel must not take
+ * away. **`useRefusalRedirect`'s exemption below is a separate, narrower
+ * list** — this one governs only where `TERMS_REQUIRED` sends a reader, never
+ * a genuine 401 or suspension, so it is safe to widen with pages that carry
+ * real authenticated actions (a storefront's booking rail, its reviews).
  *
  * Everything else is refused anyway, so bouncing a gated reader off it is the
  * correct answer. These are the exceptions, and each one is load-bearing:
@@ -75,6 +79,14 @@ export function terminalRefusal(error: unknown): 'suspended' | 'signed-out' | nu
  *   account was created for it), so bouncing it back there would be a loop.
  *   `VENDOR_APPLY_PATH` stays exempt too: it is still a reachable redirect for
  *   old links.
+ * - the home page, `/search` and a vendor storefront (`/vendors/<slug>`,
+ *   VEN-586): VEN-512 AC18 already requires these public browse surfaces to
+ *   stay viewable for a gated account exactly as they do for a signed-out
+ *   visitor — not only for the waitlisted vendor whose gate is unrecoverable,
+ *   but for any account that has simply not accepted the current Terms yet.
+ *   That account keeps its own route back to the gate through `Sign in` →
+ *   `redirectIfSignedIn` → `signedInFailurePath`, so exempting these three is
+ *   a widened funnel, not a lost one.
  *
  * This exists because the client funnel is genuinely ambient: `NotificationBell`
  * is mounted by the root layout on every non-admin route and fetches on mount,
@@ -88,8 +100,42 @@ const GATE_EXEMPT_PATHS: readonly string[] = [
   VENDOR_APPLY_PATH,
   VENDOR_DETAILS_PATH,
   WAITLIST_PATH,
+  '/',
+  '/search',
 ];
 
+/** A vendor storefront's single dynamic segment — `/vendors/<slug>`, never a nested path like `/vendors/<slug>/request`. */
+const VENDOR_STOREFRONT_PATTERN = /^\/vendors\/[^/]+$/;
+
 export function isGateExemptPath(pathname: string): boolean {
-  return GATE_EXEMPT_PATHS.includes(pathname);
+  return GATE_EXEMPT_PATHS.includes(pathname) || VENDOR_STOREFRONT_PATTERN.test(pathname);
+}
+
+/**
+ * The pages `useRefusalRedirect` must not navigate away from — a **different,
+ * narrower** list than `isGateExemptPath` above, and not a subset by accident.
+ *
+ * That hook fires on a genuine mid-session refusal (a real 401, or a 403
+ * `ACCOUNT_SUSPENDED`) — `terminalRefusal` has already filtered out
+ * `TERMS_REQUIRED`, so this never governs the Terms funnel. It exists so a
+ * refusal on the page that is already answering it — `/suspended` itself, or
+ * a Terms/support page a gated reader is mid-way through — does not navigate
+ * a second time. `/`, `/search` and a storefront carry real authenticated
+ * actions (a storefront's booking rail, its review form, the header's
+ * notification bell), so a session revoked or banned there still has to be
+ * signed out or bounced to `/suspended` — VEN-586 widened `GATE_EXEMPT_PATHS`
+ * with exactly those three pages, and reusing that list here would have
+ * silently disabled both redirects on the app's highest-traffic surfaces.
+ */
+const REFUSAL_EXEMPT_PATHS: readonly string[] = [
+  ...Object.values(LEGAL_PATHS),
+  SUPPORT_PATH,
+  TERMS_ACCEPTANCE_PATH,
+  VENDOR_APPLY_PATH,
+  VENDOR_DETAILS_PATH,
+  WAITLIST_PATH,
+];
+
+export function isRefusalExemptPath(pathname: string): boolean {
+  return REFUSAL_EXEMPT_PATHS.includes(pathname);
 }

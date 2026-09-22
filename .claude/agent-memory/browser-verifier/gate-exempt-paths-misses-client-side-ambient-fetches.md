@@ -1,9 +1,18 @@
 ---
 name: gate-exempt-paths-misses-client-side-ambient-fetches
-description: VEN-512's terms-required gate bounces a waitlisted session off home/search/storefront within a few seconds via NotificationBell's ambient fetch, not just protected routes
+description: SUPERSEDED by VEN-586 — the redirect this describes is fixed; see [[ven586-terms-gate-fetch-still-403s]] for the console-noise half that survives
 metadata:
   type: project
 ---
+
+**SUPERSEDED 2026-09-22 (VEN-586).** `isGateExemptPath` now includes `/`,
+`/search` and `/vendors/<slug>`, and `use-api.ts`'s catch handler is gated by
+it before calling `router.push` — verified live with a fresh waitlisted
+Mailosaur identity: all three pages held past 5s with no redirect. The
+ambient fetch itself still 403s and logs console noise on those pages; that
+narrower, still-open half is [[ven586-terms-gate-fetch-still-403s]]. The
+redirect mechanism this entry originally described no longer exists as
+written below.
 
 `apps/web/src/lib/use-api.ts:128-129` (`useApi`'s catch handler) redirects to
 `/accept-terms` on **any** client-side `TERMS_REQUIRED` response, gated only
