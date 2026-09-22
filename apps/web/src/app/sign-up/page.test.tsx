@@ -16,6 +16,10 @@ vi.mock('@/lib/vendor-data', () => ({
   getVendorSignUpGate: async () => ({ vendorInviteOnly: gate.vendorInviteOnly }),
 }));
 
+const redirectIfSignedIn = vi.fn<() => Promise<void>>();
+
+vi.mock('@/lib/current-user', () => ({ redirectIfSignedIn: () => redirectIfSignedIn() }));
+
 const { default: SignUpPage } = await import('./page');
 
 async function renderWith(params: Record<string, string | string[] | undefined>): Promise<unknown> {
@@ -27,6 +31,34 @@ describe('SignUpPage', () => {
     cleanup();
     formProps.mockClear();
     gate.vendorInviteOnly = false;
+    redirectIfSignedIn.mockReset();
+  });
+
+  /*
+   * Regression (VEN-582): this guard used to live in a shared `layout.tsx`
+   * wrapping every `/sign-up/*` route, including `/sign-up/vendor-details` —
+   * which meant a verified vendor session the invite gate refused (answering
+   * TERMS_REQUIRED, which `redirectIfSignedIn` treats as held) was bounced off
+   * its own waitlist details screen back to `/after-sign-in`, in a loop, and
+   * never saw the form VEN-512 built for it. The guard now belongs to this
+   * page alone.
+   */
+  it('never renders when the signed-in guard redirects', async () => {
+    redirectIfSignedIn.mockRejectedValue(new Error('NEXT_REDIRECT:/after-sign-in'));
+
+    await expect(SignUpPage({ searchParams: Promise.resolve({ role: 'vendor' }) })).rejects.toThrow(
+      'NEXT_REDIRECT:/after-sign-in',
+    );
+
+    expect(formProps).not.toHaveBeenCalled();
+  });
+
+  it('renders the form for a signed-out visitor', async () => {
+    redirectIfSignedIn.mockResolvedValue(undefined);
+
+    await renderWith({ role: 'vendor' });
+
+    expect(formProps).toHaveBeenCalledWith({ initialRole: 'vendor', vendorInviteOnly: false });
   });
 
   /* Read on the server so the notice is in the first paint (VEN-515). */

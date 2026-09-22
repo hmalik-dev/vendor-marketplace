@@ -47,4 +47,44 @@ describe('AuthScreen', () => {
     expect(panel?.className).toContain('hidden');
     expect(panel?.className).toContain('xl:block');
   });
+
+  /*
+   * The terminal screen (frame 37, VEN-512/VEN-582): "the panel column
+   * becomes the whole frame, centred, and the photograph goes — the sell is
+   * over." `photo={false}` is the only way anything reaches that state, so a
+   * regression here silently ships every other screen's photo panel on it.
+   */
+  it('drops the marketing panel and widens the column when photo is false', () => {
+    const { container } = render(
+      <AuthScreen headline="You're on the waitlist" subhead="Saved." photo={false}>
+        <p>link home</p>
+      </AuthScreen>,
+    );
+    const screen = container.querySelector('[data-auth-screen]') as HTMLElement;
+
+    expect(screen.querySelector('[class*="w-150"]')).toBeNull();
+    expect(screen.querySelector('[class*="max-w-140"]')).not.toBeNull();
+    expect(screen.querySelector('[class*="max-w-115"]')).toBeNull();
+  });
+
+  it('renders beforeHeadline between the wordmark and the headline', () => {
+    const { container } = render(
+      <AuthScreen
+        headline="You're on the waitlist"
+        subhead="Saved."
+        photo={false}
+        beforeHeadline={<div data-testid="settled-mark" />}
+      >
+        <p>link home</p>
+      </AuthScreen>,
+    );
+
+    const mark = container.querySelector('[data-testid="settled-mark"]');
+    const heading = container.querySelector('h1');
+
+    expect(mark).not.toBeNull();
+    expect(
+      mark?.compareDocumentPosition(heading as Node) === Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(true);
+  });
 });
