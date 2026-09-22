@@ -110,6 +110,111 @@ describe('ComboboxDropdown — the sheet mount', () => {
     expect(screen.getByRole('button', { name: 'Vendor type' })).toBeDefined();
     expect(screen.queryByRole('combobox')).toBeNull();
   });
+
+  /*
+   * VEN-603. `dropdown.tsx`'s own effect focuses the sheet's input the instant
+   * it opens — before the customer has asked to type anything — so the field
+   * must already carry the suppression when that happens; asserting it only
+   * after would miss the render `useEffect` actually observes.
+   */
+  it('suppresses the OS keyboard on the tap that opens it', async () => {
+    const user = userEvent.setup();
+    renderCombobox();
+
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+
+    expect(
+      (await screen.findByRole('combobox', { name: 'Vendor type' })).getAttribute('inputmode'),
+    ).toBe('none');
+  });
+
+  it('arms typing on the tap into the already-open field', async () => {
+    const user = userEvent.setup();
+    renderCombobox();
+
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+    const field = await screen.findByRole('combobox', { name: 'Vendor type' });
+    await user.click(field);
+
+    expect(field.getAttribute('inputmode')).toBeNull();
+  });
+
+  /*
+   * A real keystroke arms it too, not only a click — an external keyboard
+   * never needed the OS one suppressed, so typing must not be gated behind an
+   * extra tap of its own.
+   */
+  it('keeps typing itself unaffected once armed', async () => {
+    const user = userEvent.setup();
+    renderCombobox();
+
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+    const field = await screen.findByRole('combobox', { name: 'Vendor type' });
+    await user.type(field, 'pho');
+
+    expect(field).toHaveProperty('value', 'pho');
+    expect(field.getAttribute('inputmode')).toBeNull();
+    expect(await screen.findByText('Photography')).toBeDefined();
+  });
+
+  /*
+   * A regression test for the bug that made the one above fail before this
+   * fix: every keystroke re-renders `ComboboxDropdown`, and `<Dropdown>`'s
+   * `onOpenChange` prop used to be a fresh arrow function each time — which
+   * `useModalSheet` (`dropdown.tsx`) depends on to know whether to rerun its
+   * focus trap. A prop that changes every render reruns that effect every
+   * render, and its cleanup calls `opener.focus()`, stealing focus off the
+   * field and onto the sheet's Close button after the very first character —
+   * the sheet was still open, but nothing further you typed ever landed.
+   * `onOpenChange` is memoized now; this pins both the value and the focus.
+   */
+  it('does not lose focus to the Close button on a second keystroke', async () => {
+    const user = userEvent.setup();
+    renderCombobox();
+
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+    const field = await screen.findByRole('combobox', { name: 'Vendor type' });
+    await user.type(field, 'ph');
+
+    expect(document.activeElement).toBe(field);
+    expect(field).toHaveProperty('value', 'ph');
+  });
+
+  it('re-suppresses the next time the field is reopened', async () => {
+    const user = userEvent.setup();
+    renderCombobox();
+
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+    const firstOpen = await screen.findByRole('combobox', { name: 'Vendor type' });
+    await user.click(firstOpen);
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+    expect(
+      (await screen.findByRole('combobox', { name: 'Vendor type' })).getAttribute('inputmode'),
+    ).toBe('none');
+  });
+
+  /*
+   * `City`'s shape, not `Vendor type`'s: `openOnFocus: false`, `commitOnEmpty`.
+   * Clearing the field there closes the sheet through a bare `setOpen(false)`
+   * in `onChange` — the one open-and-close cycle that never reaches `revert`
+   * — so re-suppression has to live on the *open* path, not only there.
+   */
+  it('re-suppresses after the panel closes without reverting (commitOnEmpty)', async () => {
+    const user = userEvent.setup();
+    renderCombobox({ openOnFocus: false, commitOnEmpty: true, filter: undefined });
+
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+    const field = await screen.findByRole('combobox', { name: 'Vendor type' });
+    await user.type(field, 'a');
+    await user.keyboard('{Backspace}');
+
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+    expect(
+      (await screen.findByRole('combobox', { name: 'Vendor type' })).getAttribute('inputmode'),
+    ).toBe('none');
+  });
 });
 
 describe('ComboboxDropdown — the anchored mount', () => {
@@ -122,6 +227,18 @@ describe('ComboboxDropdown — the anchored mount', () => {
 
     expect(screen.getByRole('combobox', { name: 'Vendor type' })).toBeDefined();
     expect(document.querySelectorAll('#vendor-type')).toHaveLength(1);
+  });
+
+  // VEN-603 non-goal: desktop never had a keyboard-summoning bug to fix, and
+  // the sheet's own suppression must not leak into the popover mount.
+  it('never suppresses the keyboard on the anchored mount', async () => {
+    const user = userEvent.setup();
+    renderCombobox();
+
+    const field = screen.getByRole('combobox', { name: 'Vendor type' });
+    await user.click(field);
+
+    expect(field.getAttribute('inputmode')).toBeNull();
   });
 });
 

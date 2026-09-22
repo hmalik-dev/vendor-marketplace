@@ -248,6 +248,18 @@ export function ComboboxDropdown({
   const inputRef = useRef<HTMLInputElement>(null);
   const emptyActionRef = useRef<HTMLButtonElement>(null);
   /*
+   * VEN-603. The sheet mount's own effect (`dropdown.tsx`) programmatically
+   * focuses this input the instant the panel opens, so a tap on the trigger
+   * button pops the OS keyboard before the customer has asked to type anything
+   * — it covers most of the eleven-row list on a 390px screen. `false` here
+   * means "suppress it": `inputMode="none"` on the input below, present
+   * *before* that focus() call runs (the parent effect fires after this
+   * child's own render), so the keyboard never opens automatically. A real tap
+   * into the already-focused field — genuinely the customer choosing to type,
+   * never something this component does to itself — arms it.
+   */
+  const [keyboardArmed, setKeyboardArmed] = useState(false);
+  /*
    * IME composition. A multi-byte input fires `change` for each intermediate
    * state, and filtering on those empties the list on the first keystroke of a
    * Japanese or Korean word. The value is still shown; only the filtering waits.
@@ -327,6 +339,19 @@ export function ComboboxDropdown({
     onQueryChange?.('');
   }, [onQueryChange]);
 
+  /*
+   * The tap or keystroke that means "I want to type" — genuine typing intent
+   * whether the sheet's own programmatic open already gave the field focus or
+   * not. No deliberate blur/refocus here to force the keyboard back open: the
+   * field is already inside `useModalSheet`'s focus trap (`dropdown.tsx`), and
+   * a programmatic blur is indistinguishable from the customer actually
+   * leaving it — exactly the "relocating the problem" the ticket warns
+   * against, and worse than the keyboard needing a real tap to reappear.
+   */
+  const arm = useCallback(() => {
+    setKeyboardArmed(true);
+  }, []);
+
   const commit = useCallback(
     (next: string) => {
       onCommit(next);
@@ -372,6 +397,35 @@ export function ComboboxDropdown({
       setTimeout(restoreFocus, 0);
     }
   }, [restoreFocus, revert]);
+
+  /*
+   * VEN-603. `<Dropdown>`'s `onOpenChange` prop feeds `useModalSheet`'s
+   * `onClose` (`dropdown.tsx`), whose effect deps include it — an inline arrow
+   * here would recreate that prop on every render, so the effect (and its
+   * cleanup's `opener.focus()`) reruns on every keystroke while the sheet is
+   * open, not only on open/close. That stole focus back to the sheet's Close
+   * button after the very first character: this component's own `close` is
+   * already stable, memoizing the wrapper around it is what makes the prop
+   * stable too.
+   */
+  const onOpenChange = useCallback(
+    (next: boolean) => {
+      if (next) {
+        setOpen(true);
+        /*
+         * The one path that opens the sheet without going through `revert`
+         * first: `commitOnEmpty` (`City`) closes the panel from `onChange` with
+         * a bare `setOpen(false)` when the field empties, which leaves
+         * `keyboardArmed` stuck `true` — so re-suppress here too, on every
+         * open, rather than trying to cover every way the panel can close.
+         */
+        setKeyboardArmed(false);
+      } else {
+        close();
+      }
+    },
+    [close],
+  );
 
   /*
    * Derived rather than clamped in an effect. An effect would leave one render
@@ -490,6 +544,14 @@ export function ComboboxDropdown({
       */
       aria-label={label}
       autoComplete="off"
+      /*
+       * Sheet mount only (VEN-603) — the anchored mount's field is focused
+       * exclusively by the customer's own tap or Tab, which is always genuine
+       * typing intent. `'none'` asks the browser not to summon its virtual
+       * keyboard; it does not stop a physical one, or `onChange` below, so
+       * nothing about typing itself changes once the field is reachable.
+       */
+      inputMode={!anchored && !keyboardArmed ? 'none' : undefined}
       maxLength={maxLength}
       aria-expanded={open}
       aria-controls={listId}
@@ -511,6 +573,15 @@ export function ComboboxDropdown({
         const next = event.target.value;
         setQuery(next);
         setMoved(null);
+        /*
+         * A real character reaching the field is the clearest signal of typing
+         * intent there is — including from a physical/Bluetooth keyboard,
+         * which never needed the OS one suppressed in the first place. Here
+         * rather than `onKeyDown`: arming mid-keystroke, before the browser
+         * has committed the character, raced React's re-render against the
+         * native input event and dropped the keystroke it was meant to allow.
+         */
+        arm();
 
         if (composing.current) {
           return;
@@ -555,6 +626,8 @@ export function ComboboxDropdown({
         if (openOnFocus) {
           setOpen(true);
         }
+
+        arm();
       }}
       onBlur={(event) => {
         /*
@@ -625,7 +698,7 @@ export function ComboboxDropdown({
   return (
     <Dropdown
       open={open}
-      onOpenChange={(next) => (next ? setOpen(true) : close())}
+      onOpenChange={onOpenChange}
       triggerMode="anchor"
       trigger={
         /*
