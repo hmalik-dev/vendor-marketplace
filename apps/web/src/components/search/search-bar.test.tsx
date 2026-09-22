@@ -104,8 +104,9 @@ describe('SearchBar', () => {
   it('labels its three segments exactly as the frames do', () => {
     renderBar();
 
-    // Two comboboxes and a button since #375 — the labels are unchanged.
-    expect(screen.getByRole('combobox', { name: 'Vendor type' })).toBeDefined();
+    // One combobox (City) and two buttons (Vendor type, VEN-603; Event date)
+    // — the labels are unchanged.
+    expect(screen.getByRole('button', { name: 'Vendor type' })).toBeDefined();
     expect(screen.getByText('City')).toBeDefined();
     expect(screen.getByText('Event date')).toBeDefined();
   });
@@ -125,31 +126,33 @@ describe('SearchBar', () => {
   });
 
   /*
-   * **The rule that survived #375, restated as what it always protected.**
+   * **The rule that survived #375 and VEN-603, restated as what it always
+   * protected.**
    *
-   * This asserted "no text box at all" (#167), and #375 inverted the surface of
-   * that: two of the three segments are now text inputs, on the user's explicit
-   * instruction. What it was really guarding is untouched and is what it asserts
-   * now — **there is no free-text *query*.** Typing is an input affordance; the
-   * committed value is still a category slug or empty and a real `(city, state)`
-   * pair or empty, so the query can only ever ask a question the platform can
-   * answer. That is D6, and it is not overridden.
-   *
-   * A generic `textbox` count would be the wrong check either way: a `combobox`
-   * input is not matched by `getByRole('textbox')`, so it would have passed
-   * unchanged while saying nothing.
+   * This asserted "no text box at all" (#167). #375 put a typing combobox in
+   * for Vendor type and City; VEN-603 took the typing back out of Vendor
+   * type specifically (only 11 categories — see `category-select.tsx`), so
+   * it is a plain button again and cannot hold free text at all. What this
+   * has always guarded is untouched and is what it asserts now — **there is
+   * no free-text *query*.** The committed value is still a category slug or
+   * empty and a real `(city, state)` pair or empty, so the query can only
+   * ever ask a question the platform can answer. That is D6.
    */
-  it('offers no free-text query field — typing filters, only a choice commits', async () => {
+  it('offers no free-text query field — only a choice commits', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     render(<SearchBar categories={CATEGORIES} value={EMPTY} onSubmit={onSubmit} size="hero" />);
 
-    const type = screen.getByRole('combobox', { name: 'Vendor type' });
-    await user.type(type, 'phot');
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
+    await user.click(await screen.findByRole('option', { name: /^Photography/ }));
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ category: '', city: '', state: '' });
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      category: 'photography',
+      city: '',
+      state: '',
+    });
   });
 });
 
@@ -280,22 +283,21 @@ describe('SearchBar accessible names', () => {
 
     expect(screen.getByRole('combobox', { name: 'City' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Search' })).toBeDefined();
-    expect(screen.getByRole('combobox', { name: /vendor type/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /vendor type/i })).toBeDefined();
 
     // The date is a button, not an input (#167, #328), and it is named.
     expect(screen.getByRole('button', { name: /date/i })).toBeDefined();
 
     /*
      * Nothing focusable is left anonymous. The count used to be zero — "there
-     * is no form control left on the bar at all" — and #375 put two back, so
-     * the check is now the one that actually matters: every control the bar
-     * *does* have carries a name. Each of the two is named by a real
-     * `<label htmlFor>`, which `04-laws.md:141` requires of an input and which
-     * an `aria-label` on a button did not have to satisfy.
+     * is no form control left on the bar at all" — #375 put two back, and
+     * VEN-603 took one back out (`Vendor type` is a plain button again), so
+     * one real input remains: `City`, named by a real `<label htmlFor>`,
+     * which `04-laws.md:141` requires of an input.
      */
     const controls = container.querySelectorAll('input, select, textarea');
 
-    expect(controls).toHaveLength(2);
+    expect(controls).toHaveLength(1);
 
     for (const control of controls) {
       const labels = Array.from((control as HTMLInputElement).labels ?? []);
@@ -442,19 +444,21 @@ describe('SearchBar — pill and circle discipline', () => {
     expect(date.className).toContain('focus-visible:bg-stone-200');
     expect(date.getAttribute('data-focus-own')).not.toBeNull();
 
+    // `Vendor type` is its own trigger too (VEN-603), the same shape as Date.
+    const type = screen.getByRole('button', { name: 'Vendor type' });
+    expect(type.className).toContain('focus-visible:bg-stone-200');
+    expect(type.getAttribute('data-focus-own')).not.toBeNull();
+
     /*
-     * `closest`, not `parentElement`. Since #426 the vendor-type field wraps
-     * its value and its caret in a row, so the segment box is two levels out
-     * there and one level out on City — and a positional locator answered with
-     * whichever element happened to sit in between.
+     * `closest`, not `parentElement`. City wraps its value and its caret in a
+     * row, so the segment box is one level out — and a positional locator
+     * answered with whichever element happened to sit in between.
      */
-    for (const name of ['City', 'Vendor type']) {
-      const segment = screen
-        .getByRole('combobox', { name })
-        .closest('[data-slot="combobox-field"]');
-      expect(segment?.className).toContain('has-[:focus-visible]:bg-stone-200');
-      expect(segment?.className).not.toContain('inset-ring');
-    }
+    const city = screen
+      .getByRole('combobox', { name: 'City' })
+      .closest('[data-slot="combobox-field"]');
+    expect(city?.className).toContain('has-[:focus-visible]:bg-stone-200');
+    expect(city?.className).not.toContain('inset-ring');
   });
 
   /*
@@ -779,22 +783,23 @@ describe('a draft made while the search is in flight', () => {
     />
   );
 
-  const typeField = (): HTMLInputElement =>
-    screen.getByRole('combobox', { name: 'Vendor type' }) as HTMLInputElement;
+  const typeField = (): HTMLElement => screen.getByRole('button', { name: 'Vendor type' });
+  const typeValue = (): string | null =>
+    typeField().querySelector('[data-slot="category-value"]')?.textContent ?? null;
 
   it('survives a parent render that rebuilds the value object', async () => {
     const user = userEvent.setup();
     const { rerender } = render(bar({ category: '', city: '', state: '', date: '' }));
 
-    await user.type(typeField(), 'phot');
-    await user.click(await screen.findByRole('option', { name: /Photography/ }));
-    expect(typeField().value).toBe('Photography');
+    await user.click(typeField());
+    await user.click(await screen.findByRole('option', { name: /^Photography/ }));
+    expect(typeValue()).toBe('Photography');
 
     // The same four values in a different object — exactly what a re-render of
     // `SearchScreen` hands it when the results land.
     rerender(bar({ category: '', city: '', state: '', date: '' }));
 
-    expect(typeField().value).toBe('Photography');
+    expect(typeValue()).toBe('Photography');
   });
 
   /*
@@ -806,10 +811,10 @@ describe('a draft made while the search is in flight', () => {
   it('still follows the URL when the values themselves change', () => {
     const { rerender } = render(bar({ category: 'photography', city: '', state: '', date: '' }));
 
-    expect(typeField().value).toBe('Photography');
+    expect(typeValue()).toBe('Photography');
 
     rerender(bar({ category: '', city: '', state: '', date: '' }));
 
-    expect(typeField().value).toBe('');
+    expect(typeValue()).toBe('Any vendor type');
   });
 });
