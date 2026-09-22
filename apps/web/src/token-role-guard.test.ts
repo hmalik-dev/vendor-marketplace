@@ -257,9 +257,10 @@ describe('the stone ramp', () => {
      * second is one typo away, because the ground pattern is the guard's only
      * entry point. So pin the corpus separately.
      *
-     * Seven files carry a bare ink fill. Five are JSX elements and are walked —
+     * Eight files carry a bare ink fill. Six are JSX elements and are walked —
      * the closing band, `/for-vendors`' closing band, the admin header, the
-     * footer and a `search-shell`
+     * footer, the checkout test-mode strip (`text-stone-50` on its ink ground is
+     * the ramp's ink text) and a `search-shell`
      * button whose own `text-stone-50` is legal. Two hold the fill in a plain
      * string rather than on an element, so they contribute no subtree:
      * `button.tsx`'s `ink` variant and `logo.tsx`'s mono fill. Both halves are
@@ -276,6 +277,7 @@ describe('the stone ramp', () => {
       'app/page.tsx',
       'components/admin/admin-header.tsx',
       'components/brand/logo.tsx',
+      'components/checkout/test-mode-strip.tsx',
       'components/search/search-shell.tsx',
       'components/site-footer.tsx',
       'components/ui/button.tsx',
