@@ -1055,7 +1055,6 @@ describe('payouts', () => {
       };
 
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        // eslint-disable-next-line no-await-in-loop
         expect(await releaseDuePayouts(context, clockNow)).toEqual({
           released: 0,
           skipped: 0,
