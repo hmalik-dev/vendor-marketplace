@@ -15,7 +15,7 @@
 - [Ad-hoc work commits as one](adhoc-work-single-commit.md) — don't isolate unrelated changes; the commit hook blocks on a dirty tree
 - [Vercel deployment URL](vendor-marketplace-vercel-deployment.md) — web-gules-eta-41.vercel.app follows `production`, not `main`; parity is checked against localhost
 - [Record findings in the backlog](record-findings-in-backlog.md) — chat reports scroll away; Linear is the durable queue
-- [Credentials live in env files only](credentials-env-files-only.md) — never inline in a command, never in Claude config; the Neon URL that leaked still needs rotating
+- [Credentials live in env files only](credentials-env-files-only.md) — never inline in a command, never in Claude config; no leaked Neon credential remains (user confirmed 2026-09-21)
 - [Global config repo: claude-workflow](claude-workflow-config-repo.md) — ~/.claude is git-tracked in a private repo; its .gitignore is deny-by-default
 - [Main pushes dequeue queued lane PRs](main-pushes-dequeue-parallel-lane-prs.md) — branch protection is strict; ask the other lanes to hold before `gh pr merge --auto`, and release them when it lands
 - [The shared checkout's working tree is a tripwire](shared-checkout-working-tree-is-a-tripwire.md) — uncommitted work there is ownerless and blocks everyone's rebase; commit immediately, hold only the push
