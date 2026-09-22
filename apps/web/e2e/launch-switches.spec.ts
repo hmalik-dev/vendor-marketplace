@@ -58,20 +58,11 @@ async function setCheckoutPaused(adminPage: Page, paused: boolean): Promise<void
   const toggle = adminPage.getByRole('switch', { name: 'Pause checkout' });
   const wanted = String(paused);
 
-  /*
-   * Setting a switch to a value is idempotent, so it is re-applied until it
-   * reads back. One CI run saw the `PUT` land (the API logged the flip) while the
-   * switch kept showing the old value for the whole 30s — the click is
-   * disabled-then-enabled around a save whose refresh had not arrived — and the
-   * next attempt, a second later, passed. `click` waits for the switch to be
-   * enabled, and each attempt clicks only while the saved state is still wrong.
-   */
-  await expect(async () => {
-    if ((await toggle.getAttribute('aria-checked')) !== wanted) {
-      await toggle.click({ timeout: 5_000 });
-    }
-    await expect(toggle).toHaveAttribute('aria-checked', wanted, { timeout: 5_000 });
-  }).toPass({ timeout: 30_000 });
+  if ((await toggle.getAttribute('aria-checked')) !== wanted) {
+    await toggle.click();
+  }
+
+  await expect(toggle).toHaveAttribute('aria-checked', wanted);
 }
 
 test.describe.configure({ timeout: JOURNEY_TIMEOUT_MS });

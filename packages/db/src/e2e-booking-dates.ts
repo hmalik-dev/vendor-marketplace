@@ -161,11 +161,20 @@ async function displaceEarlierRuns(
     ).map((row) => row.eventDate),
   );
   let cursor = target.eventDate;
+  // Two days back is the oldest day still inside the payout-release window (see
+  // `PAST_EVENT_OFFSET_DAYS`); anything older would be handed to a real transfer.
+  const floor = toDateString(addDays(new Date(`${target.eventDate}T00:00:00.000Z`), -1));
 
   for (const { id } of occupied) {
     do {
       cursor = toDateString(addDays(new Date(`${cursor}T00:00:00.000Z`), -1));
-    } while (acceptedDates.has(cursor));
+    } while (acceptedDates.has(cursor) && cursor > floor);
+
+    if (acceptedDates.has(cursor)) {
+      throw new Error(
+        `no free day for an earlier run's booking on ${target.vendorId} — recreate the lane database (lane:down, lane:up)`,
+      );
+    }
 
     acceptedDates.add(cursor);
     await tx.update(bookingRequests).set({ eventDate: cursor }).where(eq(bookingRequests.id, id));

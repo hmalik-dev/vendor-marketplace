@@ -195,7 +195,9 @@ function expectationFor(
      * `/reset-password` (VEN-470) do the same as `/sign-in` and were missing here.
      */
     const file = segmentFile(target);
-    const forwardsSession = file !== null && /\bredirectIfSignedIn\(/.test(codeOf(file));
+    const forwardsSession =
+      file !== null &&
+      renderChain(target).some((source) => /\bredirectIfSignedIn\(/.test(codeOf(source)));
     if (
       path === '/after-sign-in' ||
       path === '/sign-in' ||
@@ -407,7 +409,12 @@ async function landCell(
    * afterwards, so mid-swap there are two `site-header` nodes and `isVisible()`
    * fails strict mode. Nothing here is decidable until no boundary is pending.
    */
-  await waitForStreamed(page);
+  try {
+    await waitForStreamed(page);
+  } catch {
+    fail('a Suspense boundary was still streaming when the page was read');
+    return failures;
+  }
 
   const siteHeader = page.locator('[data-slot="site-header"]');
   if (!(await siteHeader.isVisible())) {
