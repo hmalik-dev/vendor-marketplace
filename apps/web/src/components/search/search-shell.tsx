@@ -568,9 +568,9 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
         is not. `aria-atomic` keeps the count and its city as one utterance.
       */}
       <p
-        // Named, because the query bar's two comboboxes each render a live
-        // region of exactly this shape — an unscoped selector finds one of
-        // theirs, empty, and reports this one as silent.
+        // Named, because `City`'s combobox renders a live region of exactly
+        // this shape — an unscoped selector can find that one, empty, and
+        // report this one as silent.
         data-slot="search-announcer"
         aria-live="polite"
         aria-atomic="true"
