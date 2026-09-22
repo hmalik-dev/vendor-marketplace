@@ -1,6 +1,7 @@
 import { test as base, type Browser, type Page } from '@playwright/test';
 
 import { expect, expectSignedIn, storageStatePath } from './fixtures.js';
+import { waitForHydration, waitForStreamed } from './hydration.js';
 
 /**
  * The console's `Apply filters` submit (VEN-383).
@@ -279,6 +280,9 @@ test.describe('the console Refine bar', () => {
     await adminPage.setViewportSize({ width: 1440, height: 900 });
     await adminPage.goto(FILTERED);
     await expect(adminPage).toHaveURL(FILTERED);
+    // Tab order is read below, so the page has to be the one a keyboard user gets: hydrated, and no boundary still streaming.
+    await waitForHydration(adminPage, 'form button[aria-haspopup="listbox"]');
+    await waitForStreamed(adminPage);
 
     /*
      * `'nothing in the bar'`, not `'itself'`: `sr-only`'s `clip` removes the
