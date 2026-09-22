@@ -283,6 +283,9 @@ export default async function VendorProfilePage({
           either one closed this element and opened another (#398).
         */
         dangerouslySetInnerHTML={{ __html: serialiseJsonLd(structuredData) }}
+        // VEN-578: see the matching comment on `/`'s JSON-LD block — the
+        // browser hides this attribute post-insertion, not a real divergence.
+        suppressHydrationWarning
       />
 
       <ProfileHeader

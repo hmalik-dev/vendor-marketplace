@@ -78,4 +78,27 @@ describe('structured data written straight into the DOM', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  /*
+   * VEN-578: the browser hides a `<script>` node's `nonce` content attribute
+   * (`getAttribute` reads back "") once it is in the document, so hydration
+   * always sees a mismatch against the real value React rendered server-side.
+   * `suppressHydrationWarning` is what tells React that divergence is expected.
+   *
+   * Counted per file, not `.includes`: a file that already carries one
+   * suppressed block would otherwise hide a second, unsuppressed one added
+   * beside it.
+   */
+  it("suppresses the hydration warning every JSON-LD block's nonce provokes", () => {
+    const offenders = files
+      .filter(([, code]) => {
+        const blocks = code.match(/type="application\/ld\+json"/g)?.length ?? 0;
+        const suppressed = code.match(/suppressHydrationWarning/g)?.length ?? 0;
+
+        return blocks > 0 && blocks !== suppressed;
+      })
+      .map(([file]) => file);
+
+    expect(offenders).toEqual([]);
+  });
 });
