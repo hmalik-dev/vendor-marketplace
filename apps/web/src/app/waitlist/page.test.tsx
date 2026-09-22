@@ -21,9 +21,9 @@ describe('WaitlistPage', () => {
 
   /*
    * Frame `37`: the divider's own `margin-top:30px` is the gap between the
-   * address paragraph and the "Back to Orla" link, and the link computes
-   * `13.5px` (`text-base`), not the 12.5px `text-sm` the wrapper used to set.
-   * VEN-587 — was `mt-0`/`text-sm` (22px gap, 12.5px link).
+   * address paragraph and the "Back to {BRAND_NAME}" link, and the link
+   * computes `13.5px` (`text-base`), not the 12.5px `text-sm` the wrapper
+   * used to set. VEN-587 — was `mt-0`/`text-sm` (22px gap, 12.5px link).
    */
   it('sets the divider gap to 30px and the home link to text-base', async () => {
     getServerSession.mockResolvedValue({ userId: 'u1' });
