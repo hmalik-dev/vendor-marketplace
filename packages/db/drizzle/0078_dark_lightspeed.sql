@@ -1,0 +1,1 @@
+ALTER TYPE "public"."legal_acceptance_method" ADD VALUE 'continue_notice' BEFORE 'seed_fixture';
