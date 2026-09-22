@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  DEFAULT_WAIT_MS,
   MAX_WAIT_MS,
   MailCodeError,
+  POLL_INTERVAL_MS,
   parseArgs,
   readMailCode,
 } from './e2e-mail-code.js';
@@ -52,11 +52,7 @@ describe('readMailCode', () => {
     const parsed = new URL(url);
     expect(init.method).toBe('POST');
     expect(parsed.origin + parsed.pathname).toBe('https://mailosaur.com/api/messages/search');
-    expect([...parsed.searchParams.entries()]).toEqual([
-      ['server', SERVER],
-      ['timeout', String(DEFAULT_WAIT_MS)],
-      ['errorOnTimeout', 'false'],
-    ]);
+    expect([...parsed.searchParams.entries()]).toEqual([['server', SERVER]]);
     expect(init.body).toBe(JSON.stringify({ sentTo: ADDRESS }));
     expect(init.headers).toEqual(headers);
     const [fetchUrl, fetchInit] = fetchMock.mock.calls[1] as [string, RequestInit];
@@ -68,10 +64,47 @@ describe('readMailCode', () => {
   it('reports no mail when the wait ends with nothing found', async () => {
     const empty = vi.fn(async () => new Response(JSON.stringify({ items: [] }), { status: 200 }));
 
-    const error = await failure(readMailCode({ address: ADDRESS }, env, asFetch(empty)));
+    vi.useFakeTimers();
+    try {
+      const pending = failure(
+        readMailCode({ address: ADDRESS, waitMs: 5_000 }, env, asFetch(empty)),
+      );
+      await vi.advanceTimersByTimeAsync(5_000);
+      const error = await pending;
 
-    expect(error.message).toBe('No mail arrived for that address.');
-    expect(empty).toHaveBeenCalledTimes(1);
+      expect(error.message).toBe('No mail arrived for that address.');
+      // Polls at t=0,1500,3000,4500, plus one final check at the deadline (t=5000).
+      expect(empty).toHaveBeenCalledTimes(5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('finds the code that arrives partway through the wait, polling client-side', async () => {
+    let searches = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (!url.includes('/api/messages/search')) {
+        return new Response(JSON.stringify({ text: { body: 'Your code is 482913' } }), {
+          status: 200,
+        });
+      }
+
+      searches += 1;
+
+      return searches < 3
+        ? new Response(JSON.stringify({ items: [] }), { status: 200 })
+        : new Response(JSON.stringify({ items: [{ id: MESSAGE_ID }] }), { status: 200 });
+    });
+
+    vi.useFakeTimers();
+    try {
+      const pending = readMailCode({ address: ADDRESS, waitMs: 10_000 }, env, asFetch(fetchMock));
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2);
+      await expect(pending).resolves.toBe('482913');
+      expect(searches).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('passes --after as receivedAfter and falls back to the subject', async () => {
@@ -200,10 +233,22 @@ describe('readMailCode', () => {
     }
   });
 
-  it('turns a 404 (no mail in time) into a plain refusal', async () => {
-    const error = await failure(readMailCode({ address: ADDRESS }, env, asFetch(answer(404, {}))));
+  it('treats a 404 from search as nothing matched yet, and keeps polling to the deadline', async () => {
+    const notFound = vi.fn(async () => new Response(JSON.stringify({}), { status: 404 }));
 
-    expect(error.message).toBe('No mail arrived for that address (mail API 404).');
+    vi.useFakeTimers();
+    try {
+      const pending = failure(
+        readMailCode({ address: ADDRESS, waitMs: 5_000 }, env, asFetch(notFound)),
+      );
+      await vi.advanceTimersByTimeAsync(5_000);
+      const error = await pending;
+
+      expect(error.message).toBe('No mail arrived for that address.');
+      expect(notFound).toHaveBeenCalledTimes(5);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('tells a 400 from a 401 by status and Mailosaur message, and nothing else', async () => {
@@ -244,13 +289,33 @@ describe('readMailCode', () => {
     expect(error.message).toBe('The mail API refused the request (401).');
   });
 
-  it('caps the requested wait', async () => {
-    const capped = answer(200, { subject: '654321' });
+  it('caps the requested wait, giving up at MAX_WAIT_MS rather than the requested wait', async () => {
+    const empty = vi.fn(async () => new Response(JSON.stringify({ items: [] }), { status: 200 }));
 
-    await readMailCode({ address: ADDRESS, waitMs: 10 * MAX_WAIT_MS }, env, asFetch(capped));
+    vi.useFakeTimers();
+    try {
+      const pending = failure(
+        readMailCode({ address: ADDRESS, waitMs: 10 * MAX_WAIT_MS }, env, asFetch(empty)),
+      );
+      let settled = false;
+      void pending.then(() => {
+        settled = true;
+      });
 
-    const url = new URL((capped.mock.calls[0] as [string])[0]);
-    expect(url.searchParams.get('timeout')).toBe(String(MAX_WAIT_MS));
+      // Just short of the cap: still polling, proving it did not give up at some smaller wait.
+      await vi.advanceTimersByTimeAsync(MAX_WAIT_MS - POLL_INTERVAL_MS);
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(2 * POLL_INTERVAL_MS);
+      const error = await pending;
+
+      expect(error.message).toBe('No mail arrived for that address.');
+      // MAX_WAIT_MS / POLL_INTERVAL_MS polls plus the initial one, capped well short of the
+      // requested 10x wait.
+      expect(empty).toHaveBeenCalledTimes(MAX_WAIT_MS / POLL_INTERVAL_MS + 1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('abandons an API that never answers', async () => {

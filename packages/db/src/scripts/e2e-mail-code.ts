@@ -13,7 +13,9 @@ export const MAIL_API_ORIGIN = 'https://mailosaur.com';
 export const DEFAULT_WAIT_MS = 60_000;
 /** Never wait longer than this, whatever the caller asks. */
 export const MAX_WAIT_MS = 120_000;
-/** Head-room over the server-side wait before the request is abandoned. */
+/** Mailosaur's search has no server-side wait; poll at this cadence instead. */
+export const POLL_INTERVAL_MS = 1_500;
+/** Head-room over a single request before it is abandoned as unanswered. */
 const ABORT_GRACE_MS = 5_000;
 
 /** Longest Mailosaur error message printed. */
@@ -84,7 +86,7 @@ function pickCode(message: MailMessage): string | null {
   return codeIn(message.text) ?? codeIn(message.html) ?? CODE.exec(subject)?.[0] ?? null;
 }
 
-/** Mailosaur answers 404 when nothing matching arrived within the wait. */
+/** A 404 from search means nothing matched at this poll; treated as no match, not a refusal. */
 const NO_MAIL_STATUS = 404;
 
 /**
@@ -103,6 +105,10 @@ async function apiMessage(response: Response, secrets: readonly string[]): Promi
   } catch {
     return null;
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -149,36 +155,33 @@ export async function readMailCode(
   }
 
   const waitMs = Math.min(request.waitMs ?? DEFAULT_WAIT_MS, MAX_WAIT_MS);
-  const query = new URLSearchParams({
-    server,
-    timeout: String(waitMs),
-    errorOnTimeout: 'false',
-  });
+  const deadline = Date.now() + waitMs;
+  const remaining = (): number => Math.max(deadline - Date.now(), 0);
+  const query = new URLSearchParams({ server });
 
   if (request.after) {
     query.set('receivedAfter', request.after);
   }
 
-  const call = async (path: string, init: RequestInit): Promise<unknown> => {
-    let response: Response;
-
+  const send = async (path: string, init: RequestInit): Promise<Response> => {
     try {
-      response = await fetchImpl(`${MAIL_API_ORIGIN}${path}`, {
+      return await fetchImpl(`${MAIL_API_ORIGIN}${path}`, {
         ...init,
         headers: {
           authorization: `Basic ${Buffer.from(`${key}:`).toString('base64')}`,
           'content-type': 'application/json',
         },
-        signal: AbortSignal.timeout(waitMs + ABORT_GRACE_MS),
+        signal: AbortSignal.timeout(remaining() + ABORT_GRACE_MS),
       });
     } catch {
       throw new MailCodeError('The mail API did not answer in time.');
     }
+  };
 
-    if (response.status === NO_MAIL_STATUS) {
-      throw new MailCodeError(`No mail arrived for that address (mail API ${response.status}).`);
-    }
-
+  // Parses a non-404 answer; a refusal here is a genuine API problem (bad
+  // key, malformed request), never "no mail yet", so it fails immediately
+  // rather than being retried away like a 404 from search is below.
+  const parse = async (response: Response): Promise<unknown> => {
     if (!response.ok) {
       const reason = await apiMessage(response, [key, server]);
 
@@ -194,18 +197,41 @@ export async function readMailCode(
     }
   };
 
-  // Search waits for a match and lists summaries; the code is only in the full message.
-  const found = (await call(`/api/messages/search?${query.toString()}`, {
-    method: 'POST',
-    body: JSON.stringify({ sentTo: address }),
-  })) as { items?: { id?: unknown }[] } | null;
-  const id = found?.items?.[0]?.id;
+  // Mailosaur's search answers immediately with whatever already matches; it
+  // does not wait server-side, so a match that has not landed yet means
+  // polling client-side until it does or the deadline passes. A 404 here
+  // means nothing matched yet, same as an empty result — it is retried, not
+  // treated as a refusal.
+  const search = async (): Promise<string | null> => {
+    const response = await send(`/api/messages/search?${query.toString()}`, {
+      method: 'POST',
+      body: JSON.stringify({ sentTo: address }),
+    });
 
-  if (typeof id !== 'string' || !MESSAGE_ID.test(id)) {
+    if (response.status === NO_MAIL_STATUS) {
+      return null;
+    }
+
+    const found = (await parse(response)) as { items?: { id?: unknown }[] } | null;
+    const id = found?.items?.[0]?.id;
+
+    return typeof id === 'string' && MESSAGE_ID.test(id) ? id : null;
+  };
+
+  let id = await search();
+
+  while (!id && Date.now() < deadline) {
+    await sleep(Math.min(POLL_INTERVAL_MS, remaining()));
+    id = await search();
+  }
+
+  if (!id) {
     throw new MailCodeError('No mail arrived for that address.');
   }
 
-  const message = (await call(`/api/messages/${id}`, { method: 'GET' })) as MailMessage;
+  const message = (await parse(
+    await send(`/api/messages/${id}`, { method: 'GET' }),
+  )) as MailMessage;
 
   const code = pickCode(message);
 
