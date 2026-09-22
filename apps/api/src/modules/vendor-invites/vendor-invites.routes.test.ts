@@ -1177,6 +1177,11 @@ describe('the vendor gate', () => {
       await harness.flushEmail();
 
       expect(harness.email.sent).toHaveLength(1);
+      // The fake gateway would dedupe a second send under the same idempotency
+      // key even if the resubmit tried one, so `sent` alone cannot catch the
+      // gate regressing — the attempt count is the tell.
+      const [after] = await harness.database.db.select().from(vendorApplications);
+      expect(after).toMatchObject({ confirmationEmailAttempts: 1 });
     });
 
     it('records a failed send and still returns 200; the retry sweep sends it once, same idempotency key', async () => {

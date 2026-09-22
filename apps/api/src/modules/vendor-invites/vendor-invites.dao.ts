@@ -293,25 +293,55 @@ export async function upsertApplication(
 }
 
 /**
- * The application for an address, locked for the caller's transaction — the
- * waitlist confirmation email's own gate (VEN-516), the same shape
- * `lockInviteByEmail` gives the invite send.
+ * Claims the one confirmation-email attempt a first submit is owed: an atomic
+ * compare-and-swap that bumps `confirmation_email_attempts` from 0 to 1 and
+ * stamps `confirmation_email_last_attempt_at`, but only for a caller that gets
+ * there first. Race-free without a separate row lock — Postgres serialises
+ * two concurrent `UPDATE ... WHERE confirmation_email_attempts = 0` on the
+ * same row, so at most one returns a row — the same shape
+ * `insertInviteIfAbsent`'s unique index gives the invite email's own claim.
+ * Returns whether this call won it.
  */
-export async function lockApplicationByEmail(
+export async function claimApplicationConfirmationAttempt(
   tx: AppDatabase,
-  email: string,
-): Promise<VendorApplicationRow | null> {
+  applicationId: string,
+  at: Date,
+): Promise<boolean> {
   const rows = await tx
-    .select()
-    .from(vendorApplications)
-    .where(eq(vendorApplications.email, inviteKey(email)))
-    .for('update')
-    .limit(1);
+    .update(vendorApplications)
+    .set({ confirmationEmailAttempts: 1, confirmationEmailLastAttemptAt: at })
+    .where(
+      and(
+        eq(vendorApplications.id, applicationId),
+        eq(vendorApplications.confirmationEmailAttempts, 0),
+      ),
+    )
+    .returning({ id: vendorApplications.id });
 
-  return rows[0] ?? null;
+  return rows.length > 0;
 }
 
-/** Records one confirmation-email send attempt on the application the caller holds locked. */
+/**
+ * Records the outcome of the attempt {@link claimApplicationConfirmationAttempt}
+ * already claimed — sent-or-failed only, no further increment, since the claim
+ * itself is the one attempt a first submit counts.
+ */
+export async function recordClaimedApplicationEmailOutcome(
+  tx: AppDatabase,
+  applicationId: string,
+  outcome: { at: Date; failureReason: string | null },
+): Promise<void> {
+  await tx
+    .update(vendorApplications)
+    .set({
+      confirmationEmailLastAttemptAt: outcome.at,
+      confirmationEmailSentAt: outcome.failureReason === null ? outcome.at : null,
+      confirmationEmailFailureReason: truncateFailureReason(outcome.failureReason),
+    })
+    .where(eq(vendorApplications.id, applicationId));
+}
+
+/** Records one retried confirmation-email attempt on the application the caller holds locked. */
 export async function recordApplicationEmailAttempt(
   tx: AppDatabase,
   applicationId: string,

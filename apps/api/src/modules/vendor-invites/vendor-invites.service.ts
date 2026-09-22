@@ -37,6 +37,7 @@ import {
 import type { Clock } from '../../plugins/clock.js';
 import {
   deleteUnusedInvite,
+  claimApplicationConfirmationAttempt,
   countAdminApplications,
   countAdminInvites,
   findAdminApplications,
@@ -50,12 +51,12 @@ import {
   inviteEmailState,
   inviteKey,
   lockApplication,
-  lockApplicationByEmail,
   lockInviteByEmail,
   lockInviteById,
   lockRetryableApplication,
   lockRetryableInvite,
   recordApplicationEmailAttempt,
+  recordClaimedApplicationEmailOutcome,
   recordInviteEmailAttempt,
   markApplicationInvited,
   markInviteAccepted,
@@ -263,26 +264,33 @@ export async function submitVendorApplication(
   }
 
   /*
-   * Locked and read before the write, inside the same transaction: whether
-   * this call is the first ever confirmation-worthy submit for the address is
-   * decided from the row's own attempt count, not from whether the write
-   * changed anything — a resubmit while still `new` re-runs the same update
-   * (VEN-516's "a resubmit sends nothing" is about the *email*, not the row).
+   * The write and the confirmation's one-time claim, in the same transaction.
+   * `upsertApplication` returns no id when its `setWhere` refuses the write
+   * (the row exists but is no longer `new` — already invited or declined): no
+   * claim is attempted then, because sending "we've saved your details" for a
+   * submit that saved nothing would be a false receipt. When it does write,
+   * `claimApplicationConfirmationAttempt` is the atomic compare-and-swap that
+   * makes "first submit" race-free — two submits for the same address landing
+   * at once can each write the row, but only one flips
+   * `confirmation_email_attempts` from 0 to 1, the same shape
+   * `insertInviteIfAbsent`'s unique index gives the invite email's own claim.
    */
-  const { applicationId, isFirstSubmit } = await deps.db.transaction(async (tx) => {
-    const existing = await lockApplicationByEmail(tx, input.email);
+  const { applicationId, claimed } = await deps.db.transaction(async (tx) => {
     // Already invited by address: the application arrives decided, so it cannot be declined past the invite.
     const invited = (await findInviteByEmail(tx, input.email)) !== null;
-    const id =
-      (await upsertApplication(tx, input, invited ? 'invited' : 'new', true)) ?? existing?.id;
+    const writtenId = await upsertApplication(tx, input, invited ? 'invited' : 'new', true);
+
+    if (writtenId === undefined) {
+      return { applicationId: undefined, claimed: false };
+    }
 
     return {
-      applicationId: id,
-      isFirstSubmit: existing === null || existing.confirmationEmailAttempts === 0,
+      applicationId: writtenId,
+      claimed: await claimApplicationConfirmationAttempt(tx, writtenId, deps.now()),
     };
   });
 
-  if (applicationId !== undefined && isFirstSubmit) {
+  if (applicationId !== undefined && claimed) {
     const categoryName = (await resolveCategoryName(deps.db, input.category)) ?? input.category;
 
     queueApplicationConfirmationEmail(deps, {
@@ -479,13 +487,15 @@ async function sendInviteEmail(
   handle: AppDatabase,
   invite: { id: string; email: string },
 ): Promise<boolean> {
+  // Re-read at send time, not stamped onto the invite: a resend or a sweep
+  // retry reflects whatever is true when it actually goes out. Outside the
+  // `try` below: a failed read here is not a failed *send*, and on a `tx`
+  // handle it must abort the caller's transaction rather than be swallowed
+  // and recorded as if the gateway had refused the message.
+  const hasApplication = (await findApplicationByEmail(handle, invite.email)) !== null;
   let failureReason: string | null = null;
 
   try {
-    // Re-read at send time, not stamped onto the invite: a resend or a sweep
-    // retry reflects whatever is true when it actually goes out.
-    const hasApplication = (await findApplicationByEmail(handle, invite.email)) !== null;
-
     await deps.email.send({
       to: invite.email,
       ...renderVendorInviteEmail(deps.webOrigin, invite.email, hasApplication),
@@ -522,35 +532,61 @@ interface ApplicationConfirmationDetails {
   state: UsStateCode | null;
 }
 
-/**
- * Sends the waitlist confirmation and records the attempt, `sendInviteEmail`'s
- * own shape: never throws for a failed send, and the idempotency key is fixed
- * to the application id so a retry cannot deliver twice.
- */
-async function sendApplicationConfirmationEmail(
+/** The actual send, shared by the claimed first attempt and every retry. */
+async function sendApplicationConfirmationMessage(
   deps: VendorInviteMailDeps,
-  handle: AppDatabase,
   application: ApplicationConfirmationDetails,
-): Promise<boolean> {
-  let failureReason: string | null = null;
-
+): Promise<string | null> {
   try {
     await deps.email.send({
       to: application.email,
       ...renderVendorApplicationConfirmationEmail(application),
       idempotencyKey: `vendor-application-confirmation-${application.id}`,
     });
+
+    return null;
   } catch (error) {
-    failureReason = error instanceof Error ? error.message : 'The email transport failed';
     deps.log.error(
       { applicationId: application.id, err: error },
       'Could not send a vendor waitlist confirmation email',
     );
+
+    return error instanceof Error ? error.message : 'The email transport failed';
   }
+}
+
+/**
+ * Sends the *already-claimed* first attempt: `submitVendorApplication` bumped
+ * `confirmation_email_attempts` from 0 to 1 in its own transaction (the atomic
+ * claim that makes "first submit" race-free), so this only ever records the
+ * **outcome** on top of it — never a second increment, which would burn a
+ * retry-budget slot on a send that has not failed yet.
+ */
+async function sendClaimedApplicationConfirmationEmail(
+  deps: VendorInviteMailDeps,
+  handle: AppDatabase,
+  application: ApplicationConfirmationDetails,
+): Promise<void> {
+  const failureReason = await sendApplicationConfirmationMessage(deps, application);
+
+  await recordClaimedApplicationEmailOutcome(handle, application.id, {
+    at: deps.now(),
+    failureReason,
+  });
+}
+
+/**
+ * Sends a retry attempt and records it, incrementing `confirmation_email_attempts`
+ * — `sendInviteEmail`'s own shape, for the sweep's own repeated tries.
+ */
+async function sendApplicationConfirmationEmail(
+  deps: VendorInviteMailDeps,
+  handle: AppDatabase,
+  application: ApplicationConfirmationDetails,
+): Promise<void> {
+  const failureReason = await sendApplicationConfirmationMessage(deps, application);
 
   await recordApplicationEmailAttempt(handle, application.id, { at: deps.now(), failureReason });
-
-  return failureReason !== null;
 }
 
 /** Sends the confirmation off the request path; a failed send is recorded, never the submit's error. */
@@ -560,7 +596,7 @@ function queueApplicationConfirmationEmail(
 ): void {
   deps.background.run(async () => {
     try {
-      await sendApplicationConfirmationEmail(deps, deps.db, application);
+      await sendClaimedApplicationConfirmationEmail(deps, deps.db, application);
     } catch (error) {
       deps.log.error(
         { applicationId: application.id, err: error },
