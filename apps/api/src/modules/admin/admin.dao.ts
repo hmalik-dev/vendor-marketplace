@@ -62,7 +62,12 @@ import { containsInsensitive } from '../../lib/like-pattern.js';
  * the same rows the transfer names, or the number an operator acts on describes
  * a set the sweep does not work.
  */
-import { payoutFailingClauses, payoutResidualHeld } from '../payments/payouts.dao.js';
+import {
+  payoutFailingClauses,
+  payoutResidualHeld,
+  unfinishedUnwindExpr,
+  vendorUnpayableExpr,
+} from '../payments/payouts.dao.js';
 
 /**
  * Every read and write the admin portal makes. Policy lives in the service; this
@@ -1027,7 +1032,28 @@ function bookingSelection() {
     payoutAttempts: bookings.payoutAttempts,
     payoutFailureReason: bookings.payoutFailureReason,
     residualHeld: payoutResidualHeld(),
-    vendorUnpayable: sql<boolean>`(${vendorOwner.isBanned} or ${vendorOwner.deletedAt} is not null)`,
+    /*
+     * Either a permanently unpayable account, or one the ban's own unwind may
+     * still owe a refund to (VEN-569): both read as stranded to the operator,
+     * because neither self-heals without a person acting on it.
+     */
+    vendorUnpayable: sql<boolean>`(
+      ${vendorUnpayableExpr(
+        { isBanned: vendorOwner.isBanned, deletedAt: vendorOwner.deletedAt },
+        {
+          stripeOnboarded: vendorProfiles.stripeOnboarded,
+          stripeAccountId: vendorProfiles.stripeAccountId,
+        },
+      )}
+      or ${unfinishedUnwindExpr(
+        {
+          isBanned: vendorOwner.isBanned,
+          bannedAt: vendorOwner.bannedAt,
+          deletedAt: vendorOwner.deletedAt,
+        },
+        bookings.eventDate,
+      )}
+    )`,
     paidAt: bookings.paidAt,
     customerFirstName: users.firstName,
     customerLastName: users.lastName,

@@ -2140,3 +2140,43 @@ Until now the question lived only in the VEN-377 console checklist.
 Rejected: a password re-entry through the auth proxy (operators sign in by
 emailed code, so it would add a credential nobody holds); a step-up claim minted
 by the provider (no such capability); a second approver (one operator).
+
+### D41: A Ban or Closure No Longer Cancels a Payout Already Earned — *2026-09-21*
+
+**Ruling (VEN-569).** The account holder ruled that banning or closing a
+vendor must not change what is owed for an event that already happened: the
+customer received the service, so the vendor is paid exactly as if nothing had
+happened. This narrows VEN-445 rather than reversing it — a banned or closed
+vendor's payout is "stranded" now only when there is no connected Stripe
+account left to send it to, not merely because the owner is banned or closed.
+
+**What changes.** `findDuePayoutBookingIds` and `claimReleasableBooking`
+(`payouts.dao.ts`) no longer exclude a banned or closed vendor's row — every
+row either query selects already has `event_date <= dueThroughDate`, i.e. the
+event is behind us, so the exclusion was stopping the sweep from paying for a
+service the platform had already received in full. The operator's manual
+retry shares the same claim, so it stops answering `busy` for the same reason.
+`payoutFailingClauses` and the `vendorUnpayable` read in `admin.dao.ts` /
+`admin-detail.dao.ts` now require **both** "banned or closed" **and** "no
+onboarded connected account" before excluding a row from the failing list or
+labelling it stranded — a banned or closed vendor who still has a working
+account is paid and never shown as stranded.
+
+**What does not change.** A booking whose event is still ahead is unaffected:
+`findConfirmedBookingsToUnwind` (VEN-424/477) still refunds it in full on ban
+or closure, and nothing in the payout sweep can pay a booking that query has
+already zeroed. A closed vendor with no connected account still cannot be
+paid — that booking stays held, reads as stranded on `/admin/payments` and the
+booking detail, and the operator is alerted through the existing
+`payoutFailedAlert` path (VEN-405) once its failed attempts cross the same
+threshold every other stuck payout does; no new alert type was added; the
+sweep's own retries can never clear it, unlike an unonboarded-but-open vendor.
+
+**Rejected:** an operator review or approval step before paying a banned
+vendor's past event (the account holder ruled no review step); holding the
+money and refunding the customer instead (the customer already received the
+service); leaving it stranded as it stood before this ticket (that is the bug
+being fixed). **Checked and not changed:** the admin ban and suspend
+confirmation copy in `vendor-detail-actions.tsx` and `vendor-table.tsx`
+already scopes its "no payout" language to "every **future** confirmed
+booking", so no wording needed correcting for VEN-378.

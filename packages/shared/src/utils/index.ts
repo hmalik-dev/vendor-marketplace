@@ -715,19 +715,25 @@ export function isPayoutFailing(booking: PayoutFailureSubject): boolean {
 export type PayoutStrandedSubject = PayoutStatusSubject & {
   payoutModel: PayoutModel;
   vendorPayoutCents: number;
-  /** The vendor's owner is banned, or their account is closed (`deleted_at` set). */
+  /**
+   * The vendor's owner is banned or closed **and** has no connected Stripe
+   * account left to send the transfer to (VEN-569). A ban or closure alone no
+   * longer sets this: the sweep keeps trying — and succeeds — for a banned or
+   * closed vendor who still has a working account, because a ban must not
+   * change money already earned for an event that happened.
+   */
   vendorUnpayable: boolean;
 };
 
 /**
- * A payout that is still owed and that the sweep will never send, because the
- * vendor's owner is banned or closed (VEN-445).
+ * A payout that is still owed and that the sweep will never send, because
+ * there is no account left to send it to (VEN-445, narrowed by VEN-569).
  *
- * The sweep leaves such rows out without touching `payout_attempts`, so neither
- * `isPayoutFailing` nor `payoutStatusOf` can see them and the console printed
- * `Awaiting release` for money nothing was going to release. It is a flag beside
- * the shared status for the same reason `isPayoutFailing` is: an operator's fact,
- * not a fourth state a vendor or customer surface should have to draw.
+ * The sweep still attempts and records failures for a merely-banned-or-closed
+ * vendor's row, so this is not "the sweep leaves it out" any more — it is the
+ * one case even the sweep's own retries cannot self-heal. It is a flag beside
+ * the shared status for the same reason `isPayoutFailing` is: an operator's
+ * fact, not a fourth state a vendor or customer surface should have to draw.
  */
 export function isPayoutStranded(booking: PayoutStrandedSubject): boolean {
   return (

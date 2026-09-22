@@ -264,9 +264,13 @@ describe('admin payout health', () => {
     await harness.close();
   });
 
-  /* VEN-423: the sweep's claim query leaves out banned and retired vendors. */
+  /*
+   * VEN-569 (narrows VEN-423/VEN-445): a ban or closure must not change what
+   * is owed for an event that already happened, so the sweep's claim query no
+   * longer excludes a banned or retired vendor's due row.
+   */
   describe('the sweep claim', () => {
-    it('does not claim a booking whose vendor is banned or retired', async () => {
+    it('claims a due booking whose vendor is banned or retired, because its event has passed', async () => {
       const due = await paidBooking({ status: 'completed' });
       const dueThrough = '2026-06-30';
 
@@ -281,54 +285,93 @@ describe('admin payout health', () => {
 
       await harness.database.db
         .update(users)
-        .set({ isBanned: true })
+        .set({ isBanned: true, bannedAt: NOW })
         .where(eq(users.id, profile!.userId));
-      expect(await findDuePayoutBookingIds(harness.database.db, dueThrough, 10)).toEqual([]);
+      expect(await findDuePayoutBookingIds(harness.database.db, dueThrough, 10)).toEqual([due]);
 
       await harness.database.db
         .update(users)
-        .set({ isBanned: false, deletedAt: new Date('2026-06-20T00:00:00Z') })
+        .set({ isBanned: false, bannedAt: null, deletedAt: NOW })
         .where(eq(users.id, profile!.userId));
-      expect(await findDuePayoutBookingIds(harness.database.db, dueThrough, 10)).toEqual([]);
+      expect(await findDuePayoutBookingIds(harness.database.db, dueThrough, 10)).toEqual([due]);
     });
   });
 
-  /* VEN-445: an owed payout the sweep will never send is surfaced, not "Awaiting release". */
-  describe('a payout stranded by a banned or closed vendor (VEN-445)', () => {
-    it.each([
-      ['banned', { isBanned: true }],
-      ['closed', { deletedAt: new Date('2026-06-20T00:00:00Z') }],
-    ])('flags a completed past booking owed to a %s vendor as stranded', async (_name, change) => {
-      const bookingId = await paidBooking({ status: 'completed' });
-
-      /* The control: the same row on a live vendor is owed and not stranded. */
-      expect((await payments()).json().items[0]).toMatchObject({
-        payoutStatus: 'pending',
-        payoutStranded: false,
-      });
-
+  /* VEN-569: a ban or closure pays a past event exactly as it would have, unless the account is gone too. */
+  describe('a payout owed to a banned or closed vendor (VEN-569, narrows VEN-445)', () => {
+    /**
+     * Bans or closes the fixture vendor, with the matching timestamp column set
+     * exactly as `setBanned`/the closure route would — every fixture booking's
+     * event date is already behind `NOW`, so banning "now" always lands after
+     * the event, matching VEN-569's actual scenario.
+     */
+    async function banOrClose(change: { isBanned: true } | { deletedAt: Date }): Promise<void> {
       const [profile] = await harness.database.db
         .select({ userId: vendorProfiles.userId })
         .from(vendorProfiles)
         .where(eq(vendorProfiles.id, vendorProfileId));
-      await harness.database.db.update(users).set(change).where(eq(users.id, profile!.userId));
+      const write = 'isBanned' in change ? { isBanned: true, bannedAt: NOW } : change;
+      await harness.database.db.update(users).set(write).where(eq(users.id, profile!.userId));
+    }
 
-      /* The sweep skips it, and the console says so on both surfaces. */
-      expect(await findDuePayoutBookingIds(harness.database.db, '2026-06-30', 10)).toEqual([]);
-      expect((await payments()).json().items[0]).toMatchObject({
-        bookingId,
-        payoutStranded: true,
-        payoutFailing: false,
-      });
-      const detail = await harness.app.inject({
-        method: 'GET',
-        url: `/admin/bookings/${bookingId}`,
-        headers: bearer(ADMIN),
-      });
-      expect(detail.json()).toMatchObject({ payoutStranded: true });
-    });
+    async function sweepOnce(): Promise<ReturnType<typeof releaseDuePayouts>> {
+      return releaseDuePayouts(
+        { db: harness.database.db, stripe: harness.stripe, log: harness.app.log },
+        NOW,
+      );
+    }
 
-    it('is stranded rather than failing once a vendor with a failed attempt is banned', async () => {
+    it.each([
+      ['banned', { isBanned: true } as const],
+      ['closed', { deletedAt: new Date('2026-06-20T00:00:00Z') } as const],
+    ])(
+      'releases a past-due payout to a %s vendor who still has a connected account',
+      async (_name, change) => {
+        const bookingId = await paidBooking({ status: 'completed' });
+        await banOrClose(change);
+
+        expect(await sweepOnce()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+        expect((await payments()).json().items[0]).toMatchObject({
+          bookingId,
+          payoutStatus: 'released',
+          payoutStranded: false,
+          payoutFailing: false,
+        });
+      },
+    );
+
+    it.each([
+      ['banned', { isBanned: true } as const],
+      ['closed', { deletedAt: new Date('2026-06-20T00:00:00Z') } as const],
+    ])(
+      'flags a %s vendor with no connected account as stranded, and never pays it',
+      async (_name, change) => {
+        const bookingId = await paidBooking({ status: 'completed' });
+        await banOrClose(change);
+        await harness.database.db
+          .update(vendorProfiles)
+          .set({ stripeOnboarded: false, stripeAccountId: null })
+          .where(eq(vendorProfiles.id, vendorProfileId));
+
+        expect(await sweepOnce()).toEqual({ released: 0, skipped: 0, failed: 1 });
+        expect(harness.stripe.transfers).toEqual([]);
+
+        expect((await payments()).json().items[0]).toMatchObject({
+          bookingId,
+          payoutStranded: true,
+          payoutFailing: false,
+        });
+        const detail = await harness.app.inject({
+          method: 'GET',
+          url: `/admin/bookings/${bookingId}`,
+          headers: bearer(ADMIN),
+        });
+        expect(detail.json()).toMatchObject({ payoutStranded: true });
+      },
+    );
+
+    it('keeps a failed attempt reading as failing, not stranded, once the vendor is banned but still has an account', async () => {
       await paidBooking({
         status: 'completed',
         payoutAttempts: 2,
@@ -339,14 +382,29 @@ describe('admin payout health', () => {
       /* The control: before the ban it is failing and listed under the filter. */
       expect((await filtered()).total).toBe(1);
 
-      const [profile] = await harness.database.db
-        .select({ userId: vendorProfiles.userId })
-        .from(vendorProfiles)
-        .where(eq(vendorProfiles.id, vendorProfileId));
+      await banOrClose({ isBanned: true });
+
+      expect((await payments()).json().items[0]).toMatchObject({
+        payoutStranded: false,
+        payoutFailing: true,
+        payoutAttempts: 2,
+      });
+      expect((await filtered()).total).toBe(1);
+    });
+
+    it('reads as stranded rather than failing once that banned vendor has no account left either', async () => {
+      await paidBooking({
+        status: 'completed',
+        payoutAttempts: 2,
+        payoutFailureReason: 'Stripe said no',
+      });
+      const filtered = async () => (await payments('?flag=payout-failing')).json();
+
+      await banOrClose({ isBanned: true });
       await harness.database.db
-        .update(users)
-        .set({ isBanned: true })
-        .where(eq(users.id, profile!.userId));
+        .update(vendorProfiles)
+        .set({ stripeOnboarded: false, stripeAccountId: null })
+        .where(eq(vendorProfiles.id, vendorProfileId));
 
       expect((await payments()).json().items[0]).toMatchObject({
         payoutStranded: true,
@@ -362,14 +420,7 @@ describe('admin payout health', () => {
         payoutReleasedAt: new Date('2026-06-05T00:00:00Z'),
         stripeTransferId: 'tr_1',
       });
-      const [profile] = await harness.database.db
-        .select({ userId: vendorProfiles.userId })
-        .from(vendorProfiles)
-        .where(eq(vendorProfiles.id, vendorProfileId));
-      await harness.database.db
-        .update(users)
-        .set({ isBanned: true })
-        .where(eq(users.id, profile!.userId));
+      await banOrClose({ isBanned: true });
 
       expect((await payments()).json().items[0]).toMatchObject({ payoutStranded: false });
     });

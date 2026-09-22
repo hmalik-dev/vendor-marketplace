@@ -2728,7 +2728,11 @@ export const adminPaymentRowSchema = z.object({
    * was precisely a state you had to already know about in order to find.
    */
   payoutFailing: z.boolean(),
-  /** Owed and never to be sent: the vendor is banned or closed — `isPayoutStranded` (VEN-445). */
+  /**
+   * Owed and never to be sent: the vendor is banned or closed with no
+   * connected account left to pay — `isPayoutStranded` (VEN-445, narrowed by
+   * VEN-569).
+   */
   payoutStranded: z.boolean(),
 });
 export type AdminPaymentRow = z.infer<typeof adminPaymentRowSchema>;
@@ -3418,7 +3422,7 @@ export const adminBookingDetailSchema = z.object({
   payoutModel: z.enum(PAYOUT_MODELS),
   payoutStatus: payoutStatusSchema,
   payoutFailing: z.boolean(),
-  /** `isPayoutStranded`: owed to a banned or closed vendor, so the sweep will never send it. */
+  /** `isPayoutStranded`: owed to a banned or closed vendor with no account left to pay, so the sweep will never send it (VEN-569). */
   payoutStranded: z.boolean(),
   payoutAttempts: z.int(),
   payoutFailureReason: z.string().nullable(),
