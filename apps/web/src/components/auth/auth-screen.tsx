@@ -163,13 +163,21 @@ export interface AuthScreenProps {
   /** Serif headline: "Let's get you set up", "Welcome back". */
   headline: string;
   /** The one line under it. */
-  subhead: string;
+  subhead: ReactNode;
   /**
    * Which marketing panel to show beside the form. Defaults to `both`: nothing
    * has been chosen yet, and a panel that picks a side before the visitor does
-   * is answering its own question.
+   * is answering its own question. Ignored when `photo` is `false`.
    */
   panel?: AuthPanelRole;
+  /**
+   * Drops the marketing photograph and widens the form column to fill the
+   * frame, centred — the waitlist terminal screen's shape (frame `37`): "the
+   * sell is over, this person already signed up." Defaults to `true`.
+   */
+  photo?: boolean;
+  /** Rendered between the wordmark and the headline — the waitlist's sage mark. */
+  beforeHeadline?: ReactNode;
   children: ReactNode;
 }
 
@@ -184,10 +192,12 @@ export function AuthScreen({
   headline,
   subhead,
   panel = 'both',
+  photo = true,
+  beforeHeadline,
   children,
 }: AuthScreenProps): React.ReactElement {
   const chosen = AUTH_PANELS[panel];
-  const { photo, wash, headline: proof, accentClass, body, guarantees } = chosen;
+  const { photo: photoSrc, wash, headline: proof, accentClass, body, guarantees } = chosen;
 
   return (
     // The attribute is what globals.css keys the chrome-suppression rule off.
@@ -206,6 +216,14 @@ export function AuthScreen({
         className="pointer-events-none absolute -bottom-30 -left-27.5 size-85 rounded-full bg-stone-900/[.035]"
       />
 
+      {/* The terminal screen's second, sage-tinted disc — frame `37` alone. */}
+      {photo ? null : (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-40 -right-32.5 size-100 rounded-full bg-sage-400/[.055]"
+        />
+      )}
+
       {/*
         `my-auto` on the panel rather than `justify-center` on the column: a
         centred flex child taller than its container is clipped at the top
@@ -214,7 +232,7 @@ export function AuthScreen({
         it just no longer scrolls for a decoration.
       */}
       <div className="relative flex flex-1 flex-col items-center overflow-y-auto bg-stone-50 px-6 py-10 sm:px-10 xl:px-15">
-        <div className="relative my-auto w-full max-w-115">
+        <div className={`relative my-auto w-full ${photo ? 'max-w-115' : 'max-w-140'}`}>
           <div className="mb-6.5 flex justify-center">
             {/*
               The mark is the way out. Sign-in and sign-up have no header and no
@@ -228,6 +246,8 @@ export function AuthScreen({
               <Logo size={LOGO_SIZES.authPanel} />
             </Link>
           </div>
+
+          {beforeHeadline}
 
           <h1 className="text-center font-display text-[32px] leading-[1.15] text-stone-900">
             {headline}
@@ -245,52 +265,58 @@ export function AuthScreen({
         letterboxing into a strip. Keying the wrapper on the panel remounts the
         photograph on a role change, so the new one loads rather than being
         cross-faded out of a stale layer.
+
+        Omitted entirely for the terminal screen (`photo={false}`): "the panel
+        column becomes the whole frame, centred, and the photograph goes — the
+        sell is over" (frame `37`).
       */}
-      <div key={panel} className="relative hidden w-150 shrink-0 overflow-hidden xl:block">
-        <StockPhoto src={photo} sizes="600px" priority className="absolute inset-0" />
-        <div aria-hidden="true" className="absolute inset-0" style={{ backgroundImage: wash }} />
+      {photo ? (
+        <div key={panel} className="relative hidden w-150 shrink-0 overflow-hidden xl:block">
+          <StockPhoto src={photoSrc} sizes="600px" priority className="absolute inset-0" />
+          <div aria-hidden="true" className="absolute inset-0" style={{ backgroundImage: wash }} />
 
-        {/* Frame `12` draws `46px 48px`, not a uniform 48. */}
-        <div className="absolute inset-x-0 bottom-0 px-12 py-11.5">
-          <p className="font-display text-[38px] leading-[1.15] text-stone-0">
-            {proof[0]}
-            <br />
-            {proof[1]}
-            <br />
-            <span className={`${accentClass} italic`}>{proof[2]}</span>
-          </p>
-          {/* 415px is the frame's measure; the scale's nearest step, 400, wraps
+          {/* Frame `12` draws `46px 48px`, not a uniform 48. */}
+          <div className="absolute inset-x-0 bottom-0 px-12 py-11.5">
+            <p className="font-display text-[38px] leading-[1.15] text-stone-0">
+              {proof[0]}
+              <br />
+              {proof[1]}
+              <br />
+              <span className={`${accentClass} italic`}>{proof[2]}</span>
+            </p>
+            {/* 415px is the frame's measure; the scale's nearest step, 400, wraps
               the body a word early against the 38px headline above it. */}
-          <p className="mt-3 max-w-[415px] text-md leading-relaxed text-stone-0/82">{body}</p>
+            <p className="mt-3 max-w-[415px] text-md leading-relaxed text-stone-0/82">{body}</p>
 
-          <ul
-            className={`mt-6.5 flex flex-col border-t border-stone-0/22 pt-5 ${
-              chosen.sideLabels ? 'max-w-105 gap-3' : 'max-w-100 gap-2.75'
-            }`}
-          >
-            {guarantees.map((guarantee, index) => (
-              <li
-                key={guarantee}
-                className={`flex items-start ${chosen.sideLabels ? 'gap-2.75' : 'gap-2.5'}`}
-              >
-                {chosen.sideLabels ? (
-                  <span
-                    className={`w-16 flex-none pt-0.75 text-[9.5px] font-bold tracking-[.09em] uppercase ${chosen.sideLabelClasses[index]}`}
-                  >
-                    {chosen.sideLabels[index]}
-                  </span>
-                ) : (
-                  <span
-                    aria-hidden="true"
-                    className={`mt-1.5 size-1.75 shrink-0 rounded-full ${chosen.dotClass}`}
-                  />
-                )}
-                <span className="text-[13.5px] leading-normal text-stone-0/90">{guarantee}</span>
-              </li>
-            ))}
-          </ul>
+            <ul
+              className={`mt-6.5 flex flex-col border-t border-stone-0/22 pt-5 ${
+                chosen.sideLabels ? 'max-w-105 gap-3' : 'max-w-100 gap-2.75'
+              }`}
+            >
+              {guarantees.map((guarantee, index) => (
+                <li
+                  key={guarantee}
+                  className={`flex items-start ${chosen.sideLabels ? 'gap-2.75' : 'gap-2.5'}`}
+                >
+                  {chosen.sideLabels ? (
+                    <span
+                      className={`w-16 flex-none pt-0.75 text-[9.5px] font-bold tracking-[.09em] uppercase ${chosen.sideLabelClasses[index]}`}
+                    >
+                      {chosen.sideLabels[index]}
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className={`mt-1.5 size-1.75 shrink-0 rounded-full ${chosen.dotClass}`}
+                    />
+                  )}
+                  <span className="text-[13.5px] leading-normal text-stone-0/90">{guarantee}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

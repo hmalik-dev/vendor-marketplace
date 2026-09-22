@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { pageTitle } from '@vendor-marketplace/shared';
 import { getVendorSignUpGate } from '@/lib/vendor-data';
 import { SignUpForm, type SignUpRole } from '@/components/auth/sign-up-form';
+import { redirectIfSignedIn } from '@/lib/current-user';
 
 export const metadata: Metadata = { title: pageTitle('Sign up') };
 
@@ -28,6 +29,15 @@ export default async function SignUpPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<React.ReactElement> {
+  /*
+   * Guards this page only, not the whole `/sign-up/*` subtree: a verified
+   * vendor session the invite gate refuses is deliberately routed to
+   * `/sign-up/vendor-details` (VEN-512) and must render there rather than
+   * being bounced back to `/after-sign-in` by a guard a shared layout applied
+   * to every child route.
+   */
+  await redirectIfSignedIn();
+
   const { role } = await searchParams;
   const { vendorInviteOnly } = await getVendorSignUpGate();
 
