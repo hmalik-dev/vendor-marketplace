@@ -246,6 +246,31 @@ export async function readUserForChrome(): Promise<WireUser | null> {
 }
 
 /**
+ * Whether **this session** cannot clear the Terms gate — for chrome that must
+ * not fire an authenticated request on a page the gate exempts (VEN-586).
+ *
+ * `readUserForChrome` already swallows a `TERMS_REQUIRED` failure into `null`,
+ * the same value it returns for a suspended, unreadable or signed-out account
+ * — which is right for the vendor chip and the avatar, but wrong for
+ * `NotificationBell`: it needs to tell "cannot clear the gate" apart from
+ * every other reason the record failed to read, because only the former means
+ * its own calls will 403. `getCurrentUser` is `cache()`-wrapped, so this costs
+ * no second request alongside `readUserForChrome` in the same render.
+ */
+export async function isTermsGatedForChrome(): Promise<boolean> {
+  try {
+    await getCurrentUser();
+    return false;
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+
+    return isTermsRequired(error);
+  }
+}
+
+/**
  * Identity on a route that is **declared public** — never inferred from where a
  * `try/catch` happens to sit.
  *

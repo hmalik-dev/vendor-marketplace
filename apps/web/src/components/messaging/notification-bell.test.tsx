@@ -25,7 +25,7 @@ afterEach(() => {
  * bell's calls, and the browser logs each as a console error.
  */
 describe.each(['/accept-terms', '/vendors/apply'])('the bell on %s', (path) => {
-  it('renders nothing and makes no request', () => {
+  it('renders nothing and makes no request, gated or not', () => {
     pathname = path;
     const { container } = render(<NotificationBell />);
 
@@ -40,6 +40,40 @@ describe('the bell elsewhere', () => {
 
     await waitFor(() => expect(call).toHaveBeenCalledWith('/notifications', expect.anything()));
   });
+});
+
+/*
+ * VEN-586. `/`, `/search` and a storefront are gate-exempt so a
+ * waitlisted-but-uninvited vendor stays on them, but they are also the app's
+ * highest-traffic pages for every *ungated* signed-in account — so the bell
+ * must only skip its (otherwise-403) fetch there when the caller says this
+ * particular session cannot clear the gate.
+ */
+describe.each(['/', '/search', '/vendors/june-harlow'])(
+  'the bell on the newly public %s',
+  (path) => {
+    it('renders nothing and makes no request for a gated session', () => {
+      pathname = path;
+      const { container } = render(<NotificationBell gated />);
+
+      expect(container.innerHTML).toBe('');
+      expect(call).not.toHaveBeenCalled();
+    });
+
+    it('still asks for the notifications for an ungated session', async () => {
+      pathname = path;
+      render(<NotificationBell gated={false} />);
+
+      await waitFor(() => expect(call).toHaveBeenCalledWith('/notifications', expect.anything()));
+    });
+  },
+);
+
+it('does not exempt an account-only route even for a gated session', async () => {
+  pathname = '/dashboard';
+  render(<NotificationBell gated />);
+
+  await waitFor(() => expect(call).toHaveBeenCalledWith('/notifications', expect.anything()));
 });
 
 /*

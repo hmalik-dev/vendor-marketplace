@@ -51,6 +51,7 @@ vi.mock('./api-client', async () => {
 
 const {
   getCurrentUser,
+  isTermsGatedForChrome,
   readIdentityForSupport,
   readRoleForChrome,
   readUserForChrome,
@@ -484,6 +485,52 @@ describe('readUserForChrome', () => {
     apiRequest.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
 
     await expect(readUserForChrome()).resolves.toBeNull();
+  });
+});
+
+/*
+ * VEN-586: `NotificationBell` must tell "this session cannot clear the Terms
+ * gate" apart from every other reason `readUserForChrome` degrades to `null`
+ * — a suspension, an unreadable record, an outage — because only the gate
+ * means the bell's own calls will 403 on the pages it now stays mounted on.
+ */
+describe('isTermsGatedForChrome', () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    apiRequest.mockReset();
+  });
+
+  it('is false when the record reads', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockResolvedValue(CUSTOMER);
+
+    await expect(isTermsGatedForChrome()).resolves.toBe(false);
+  });
+
+  it('is false when nobody is signed in', async () => {
+    getToken.mockResolvedValue(null);
+
+    await expect(isTermsGatedForChrome()).resolves.toBe(false);
+  });
+
+  it('is true for the Terms gate specifically', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, 'TERMS_REQUIRED', 'Accept the Terms of Service to continue.'),
+    );
+
+    await expect(isTermsGatedForChrome()).resolves.toBe(true);
+  });
+
+  it('is false for a suspension, an outage or any other 403/500 — not the gate', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, 'FORBIDDEN', 'This account has been suspended'),
+    );
+    await expect(isTermsGatedForChrome()).resolves.toBe(false);
+
+    apiRequest.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
+    await expect(isTermsGatedForChrome()).resolves.toBe(false);
   });
 });
 
