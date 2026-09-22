@@ -69,7 +69,7 @@ describe('Logo', () => {
   });
 
   /*
-   * VEN-588. `12 Sign up` (design/Orla - Screens.dc.html:1424) and both
+   * VEN-588. The screens document's `12 Sign up` frame and both
    * `delta-waitlist` lockups (frames 36 and 37) draw the auth panel's stroke
    * circle at `left:8px`, `border:1.4px`, in a `26x19` box — not the ratios'
    * 8.55, 1.52 and 27.55. The fill circle is untouched by any of this.

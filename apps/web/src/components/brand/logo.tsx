@@ -25,10 +25,10 @@ const STROKE_RATIO = 0.08;
  * the container is its own drawn number rather than offset + size (frame 12
  * / 37 both draw a 26px box holding an 8px-offset, 19px circle — 27, not 26).
  *
- * VEN-588: at D=19 (`authPanel`), `design/Orla - Screens.dc.html:1424` and
- * `design/delta-waitlist/Orla-Vendor-Waitlist.html:224,338` all draw
- * `left:8px`, `border:1.4px` and a `26x19` box, against the ratios' 8.55,
- * 1.52 and 27.55 — three corroborating frames at one diameter (D=19).
+ * VEN-588: at D=19 (`authPanel`), the screens document's `12 Sign up` frame
+ * and both `delta-waitlist` lockups (frames 36, 37) all draw `left:8px`,
+ * `border:1.4px` and a `26x19` box, against the ratios' 8.55, 1.52 and
+ * 27.55 — three corroborating frames at one diameter (D=19).
  */
 export const MARK_OFFSETS: Partial<Record<number, number>> = {
   19: 8,
