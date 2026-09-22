@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:staging": "playwright test --config=playwright.staging.config.ts"
   },
   "dependencies": {
     "@neondatabase/auth": "0.5.0-beta",

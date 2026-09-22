@@ -319,7 +319,12 @@ test('a push to main scopes by diff like a pull request', () => {
 
 test('every committed spec is reachable from the table or the route sweep', () => {
   const e2eDir = join(dirname(fileURLToPath(import.meta.url)), '../apps/web/e2e');
-  const committedSpecs = readdirSync(e2eDir).filter((name) => name.endsWith('.spec.ts'));
+  // `.staging.spec.ts` files never run under this config — `playwright.config.ts`
+  // ignores them and they have their own entry point (VEN-562) — so they are
+  // deliberately unreachable from the diff-selection table.
+  const committedSpecs = readdirSync(e2eDir).filter(
+    (name) => name.endsWith('.spec.ts') && !name.endsWith('.staging.spec.ts'),
+  );
   const reachable = new Set([
     'route-landing.spec.ts', // added by the route sweep, not listed in any entry's `specs`
     ...SPEC_SELECTORS.flatMap((selector) => selector.specs),
