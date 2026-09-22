@@ -2,11 +2,17 @@ import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AuthScreen } from './auth-screen';
 
-function renderScreen(): HTMLElement {
+function renderScreen(photo = true): HTMLElement {
   const { container } = render(
-    <AuthScreen headline="Let's get you set up" subhead="First — which one are you?">
-      <p>form</p>
-    </AuthScreen>,
+    photo ? (
+      <AuthScreen headline="Let's get you set up" subhead="First — which one are you?">
+        <p>form</p>
+      </AuthScreen>
+    ) : (
+      <AuthScreen headline="You're on the waitlist" subhead="Saved." photo={false}>
+        <p>link home</p>
+      </AuthScreen>
+    ),
   );
 
   return container.querySelector('[data-auth-screen]') as HTMLElement;
@@ -55,16 +61,90 @@ describe('AuthScreen', () => {
    * regression here silently ships every other screen's photo panel on it.
    */
   it('drops the marketing panel and widens the column when photo is false', () => {
-    const { container } = render(
-      <AuthScreen headline="You're on the waitlist" subhead="Saved." photo={false}>
-        <p>link home</p>
-      </AuthScreen>,
-    );
-    const screen = container.querySelector('[data-auth-screen]') as HTMLElement;
+    const screen = renderScreen(false);
 
     expect(screen.querySelector('[class*="w-150"]')).toBeNull();
     expect(screen.querySelector('[class*="max-w-140"]')).not.toBeNull();
     expect(screen.querySelector('[class*="max-w-115"]')).toBeNull();
+  });
+
+  /*
+   * Frame `37`: the terminal screen's clay disc is 460x460 at
+   * left:-150px;bottom:-170px, alpha .03 — not the 340x340/.035 disc the other
+   * auth screens draw. VEN-587 — was 340x340 at -110/-120, alpha .035.
+   */
+  it('draws the terminal screen clay disc at frame 37 size, position and alpha', () => {
+    const screen = renderScreen(false);
+    const disc = screen.querySelector('[class*="bg-stone-900/[.03]"]');
+
+    expect(disc).not.toBeNull();
+    expect(disc?.className).toContain('size-115');
+    expect(disc?.className).toContain('-left-37.5');
+    expect(disc?.className).toContain('-bottom-42.5');
+    expect(disc?.className).not.toContain('bg-stone-900/[.035]');
+  });
+
+  /*
+   * Frame `37`'s H1 is 42px/1.12/-0.01em, and its body paragraph is
+   * 15.5px/1.75 with a 16px top margin and no bottom margin — the gap to the
+   * divider below is the divider's own margin, not this paragraph's.
+   * VEN-587 — was 32px/1.15/normal and 14px (`text-cta`) with a 22px bottom
+   * margin. The tracking rides on `.display-heading` (`globals.css`) rather
+   * than a restated `tracking-[-0.01em]`, which `display-type.test.ts` bans
+   * next to a serif hook.
+   */
+  it('sets frame 37 typography on the headline and body paragraph', () => {
+    const screen = renderScreen(false);
+    const heading = screen.querySelector('h1');
+    const body = screen.querySelector('p');
+
+    expect(heading?.className).toContain('display-heading');
+    expect(heading?.className).toContain('text-[42px]');
+    expect(heading?.className).toContain('leading-[1.12]');
+    expect(heading?.className).not.toContain('tracking-[-0.01em]');
+
+    expect(body?.className).toContain('text-[15.5px]');
+    expect(body?.className).toContain('leading-[1.75]');
+    expect(body?.className).toContain('mt-4');
+    expect(body?.className).not.toContain('mb-5.5');
+    expect(body?.className).not.toContain('text-cta');
+  });
+
+  /*
+   * The other four auth screens (sign-in, sign-up, reset-password,
+   * forgot-password) all default to `photo={true}` and must stay
+   * pixel-identical: nothing here should ship frame 37's 42px/15.5px
+   * typography onto them.
+   */
+  it('keeps the default screens on their original headline and body typography', () => {
+    const screen = renderScreen();
+    const heading = screen.querySelector('h1');
+    const body = screen.querySelector('p');
+
+    expect(heading?.className).toContain('text-[32px]');
+    expect(heading?.className).toContain('leading-[1.15]');
+    expect(heading?.className).not.toContain('display-heading');
+    expect(heading?.className).not.toContain('text-[42px]');
+
+    expect(body?.className).toContain('text-cta');
+    expect(body?.className).toContain('mb-5.5');
+    expect(body?.className).not.toContain('text-[15.5px]');
+  });
+
+  /*
+   * Frame `37`: 34px below the wordmark, not the 26px every other auth screen
+   * draws (frame `12`) — the terminal screen's next element is the 46px
+   * checkmark circle, not a form. VEN-587 — was 26px (`mb-6.5`) on every
+   * screen, confirmed 8px short by a live parity-checker pass against frame 37.
+   */
+  it('gives the terminal screen more clearance below the wordmark than the other auth screens', () => {
+    const defaultWordmark = renderScreen().querySelector('a[aria-label$="home"]')?.parentElement;
+    const terminalWordmark =
+      renderScreen(false).querySelector('a[aria-label$="home"]')?.parentElement;
+
+    expect(defaultWordmark?.className).toContain('mb-6.5');
+    expect(terminalWordmark?.className).toContain('mb-8.5');
+    expect(terminalWordmark?.className).not.toContain('mb-6.5');
   });
 
   it('renders beforeHeadline between the wordmark and the headline', () => {

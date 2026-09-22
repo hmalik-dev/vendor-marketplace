@@ -213,7 +213,11 @@ export function AuthScreen({
       */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-30 -left-27.5 size-85 rounded-full bg-stone-900/[.035]"
+        className={
+          photo
+            ? 'pointer-events-none absolute -bottom-30 -left-27.5 size-85 rounded-full bg-stone-900/[.035]'
+            : 'pointer-events-none absolute -bottom-42.5 -left-37.5 size-115 rounded-full bg-stone-900/[.03]'
+        }
       />
 
       {/* The terminal screen's second, sage-tinted disc — frame `37` alone. */}
@@ -233,7 +237,7 @@ export function AuthScreen({
       */}
       <div className="relative flex flex-1 flex-col items-center overflow-y-auto bg-stone-50 px-6 py-10 sm:px-10 xl:px-15">
         <div className={`relative my-auto w-full ${photo ? 'max-w-115' : 'max-w-140'}`}>
-          <div className="mb-6.5 flex justify-center">
+          <div className={`flex justify-center ${photo ? 'mb-6.5' : 'mb-8.5'}`}>
             {/*
               The mark is the way out. Sign-in and sign-up have no header and no
               back link, so someone who arrived here by accident — or changed
@@ -241,6 +245,11 @@ export function AuthScreen({
               wordmark that goes home is the convention every other page on the
               site already follows; here it was the only thing on screen that
               looked like a link and was not one.
+
+              Frame `37` draws 34px below the wordmark, not the 26px every other
+              auth screen draws (frame `12`) — the terminal screen's next element
+              is the 46px checkmark circle rather than a form, and wants more
+              clearance.
             */}
             <Link href="/" aria-label={`${BRAND_NAME} home`} className="rounded-md">
               <Logo size={LOGO_SIZES.authPanel} />
@@ -249,11 +258,30 @@ export function AuthScreen({
 
           {beforeHeadline}
 
-          <h1 className="text-center font-display text-[32px] leading-[1.15] text-stone-900">
+          <h1
+            className={
+              photo
+                ? 'text-center font-display text-[32px] leading-[1.15] text-stone-900'
+                : 'text-center display-heading text-[42px] leading-[1.12] text-stone-900'
+            }
+          >
             {headline}
           </h1>
-          {/* Frame `12` draws this line at 14px — `text-cta`, not `text-md`. */}
-          <p className="mt-1.5 mb-5.5 text-center text-cta text-stone-700">{subhead}</p>
+          {/*
+            Frame `12` draws this line at 14px — `text-cta`, not `text-md`. Frame
+            `37`, the waitlist terminal state, draws it at 15.5px/1.75 with no
+            bottom margin — the gap to what follows is that element's own
+            margin-top instead.
+          */}
+          <p
+            className={
+              photo
+                ? 'mt-1.5 mb-5.5 text-center text-cta text-stone-700'
+                : 'mt-4 text-center text-[15.5px] leading-[1.75] text-stone-700'
+            }
+          >
+            {subhead}
+          </p>
 
           {children}
         </div>
