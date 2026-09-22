@@ -204,9 +204,35 @@ describe('runSmokeCheck', () => {
     expect(result.checks[1]?.detail).toContain('Renamed Co');
   });
 
-  it('fails when the API is ready but serves no vendors at all', async () => {
+  /*
+   * VEN-598. `staging`/`production` seed no vendor of their own — real
+   * sign-ups only — so the very first release onto a freshly-migrated
+   * environment has none yet. That is not a broken release: `/ready` already
+   * proved the release itself is live, so this stage is advisory rather than
+   * a rollback trigger.
+   */
+  it('passes on a freshly-migrated environment with no published vendor yet', async () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request) =>
       String(input).endsWith('/ready') ? response(READY) : response('{"items":[]}'),
+    ) as unknown as typeof fetch;
+
+    const result = await runSmokeCheck({ apiUrl: API, webUrl: WEB, fetchImpl });
+
+    expect(result.ok).toBe(true);
+    expect(result.checks).toEqual([
+      { name: 'API /ready', ok: true, detail: 'database and storage up' },
+      {
+        name: 'API has real data',
+        ok: true,
+        detail: 'no published vendor yet — advisory on a fresh environment with no real sign-ups',
+      },
+    ]);
+  });
+
+  /* A hard failure reading `/vendors` is still a hard failure — only a healthy, empty answer is advisory. */
+  it('fails when the API is ready but /vendors itself errors', async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) =>
+      String(input).endsWith('/ready') ? response(READY) : response('down', 500),
     ) as unknown as typeof fetch;
 
     const result = await runSmokeCheck({
@@ -219,7 +245,53 @@ describe('runSmokeCheck', () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.checks[1]?.detail).toContain('no published vendor');
+    expect(result.checks[1]).toMatchObject({ name: 'API has real data', ok: false });
+    expect(result.checks[1]?.detail).toContain('500');
+  });
+
+  /*
+   * The advisory branch must trigger only on a genuinely empty list, not on
+   * any response the name/slug regexes fail to parse — otherwise a renamed
+   * field or a malformed body would masquerade as "fresh environment" and
+   * silently stop this stage from ever failing again.
+   */
+  it('fails on a non-empty /vendors response with no readable name or slug', async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) =>
+      String(input).endsWith('/ready')
+        ? response(READY)
+        : response('{"items":[{"id":"1","displayName":"Sunlit Studio"}]}'),
+    ) as unknown as typeof fetch;
+
+    const result = await runSmokeCheck({
+      apiUrl: API,
+      webUrl: WEB,
+      fetchImpl,
+      ...controls(),
+      deadlineMs: 20,
+      retryDelayMs: 5,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.checks[1]).toMatchObject({ name: 'API has real data', ok: false });
+    expect(result.checks[1]?.detail).toContain('non-empty');
+  });
+
+  it('fails on an unparseable /vendors response', async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) =>
+      String(input).endsWith('/ready') ? response(READY) : response('not json'),
+    ) as unknown as typeof fetch;
+
+    const result = await runSmokeCheck({
+      apiUrl: API,
+      webUrl: WEB,
+      fetchImpl,
+      ...controls(),
+      deadlineMs: 20,
+      retryDelayMs: 5,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.checks[1]).toMatchObject({ name: 'API has real data', ok: false });
   });
 
   it('does not check the web front door once the API has already failed', async () => {
