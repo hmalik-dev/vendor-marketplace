@@ -48,6 +48,10 @@ persistent admin account (the only way `/admin` is reachable; never delete it).
 It needs `.env.e2e.local` and a `NEON_AUTH_BASE_URL` for the same auth branch,
 refuses production and protected Neon branches, and `lane:up` runs it per lane.
 Pin the connected account across lanes with `E2E_VENDOR_STRIPE_ACCOUNT_ID`.
+`E2E_VENDOR_INVITE_ONLY=true` (a plain env var, not an `.env.e2e.local` key)
+opts a lane into the vendor invite gate (VEN-406) so VEN-512's waitlist journey
+can be driven live: `pnpm lane:exec <id> -- env E2E_VENDOR_INVITE_ONLY=true
+pnpm db:seed:e2e`.
 
 Deployed web: `web-gules-eta-41.vercel.app` — the parity target after every push.
 

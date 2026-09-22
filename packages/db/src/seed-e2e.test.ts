@@ -19,6 +19,7 @@ import {
   bookingRequests,
   bookings,
   legalAcceptances,
+  platformSettings,
   reviews,
   servicePackages,
   supportCases,
@@ -1123,6 +1124,84 @@ describe('seedE2eFixtures', () => {
     expect(second.bookingRequestId).not.toBe(first.bookingRequestId);
     expect(second.eventDate).not.toBe(first.eventDate);
     expect(second.eventDate > first.eventDate).toBe(true);
+  });
+
+  /*
+   * VEN-584. `pnpm lane:up` never produced a lane where the vendor invite
+   * gate could be on, so the waitlist journey (VEN-512) had no way to be
+   * driven live. `vendorInviteOnly` is the opt-in that lets a lane ask for it.
+   */
+  describe('vendorInviteOnly', () => {
+    async function readGate(): Promise<boolean | undefined> {
+      const [row] = await database.db
+        .select({ vendorInviteOnly: platformSettings.vendorInviteOnly })
+        .from(platformSettings);
+
+      return row?.vendorInviteOnly;
+    }
+
+    it('leaves the switch untouched, and no row written, when not requested', async () => {
+      await seedE2eFixtures(database.db, INPUT);
+
+      expect(await database.db.select().from(platformSettings)).toHaveLength(0);
+    });
+
+    it('turns the gate on, creating the singleton row if it is missing', async () => {
+      await seedE2eFixtures(database.db, { ...INPUT, vendorInviteOnly: true });
+
+      expect(await readGate()).toBe(true);
+    });
+
+    it('turns the gate back off on a later run', async () => {
+      await seedE2eFixtures(database.db, { ...INPUT, vendorInviteOnly: true });
+      await seedE2eFixtures(database.db, { ...INPUT, vendorInviteOnly: false });
+
+      expect(await readGate()).toBe(false);
+    });
+
+    it('narrows only its own column, leaving every other switch on the row alone', async () => {
+      await database.db.insert(platformSettings).values({
+        bookingRequestsPaused: true,
+        maxBookingCents: 500_000,
+      });
+
+      await seedE2eFixtures(database.db, { ...INPUT, vendorInviteOnly: true });
+
+      const [row] = await database.db.select().from(platformSettings);
+      expect(row?.vendorInviteOnly).toBe(true);
+      expect(row?.bookingRequestsPaused).toBe(true);
+      expect(row?.maxBookingCents).toBe(500_000);
+    });
+
+    it('attributes the change to no operator, not to whoever last flipped it by hand', async () => {
+      const [admin] = await database.db
+        .insert(users)
+        .values({
+          authUserId: 'user_e2e_settings_admin',
+          email: 'settings-admin@example.com',
+          role: 'admin',
+          firstName: 'Sam',
+          lastName: 'Settings',
+        })
+        .returning({ id: users.id });
+      await database.db.insert(platformSettings).values({ updatedBy: admin!.id });
+
+      await seedE2eFixtures(database.db, { ...INPUT, vendorInviteOnly: true });
+
+      const [row] = await database.db.select().from(platformSettings);
+      expect(row?.updatedBy).toBeNull();
+    });
+
+    it('still pre-invites the fixture vendor, so its own sign-in clears the gate', async () => {
+      await seedE2eFixtures(database.db, { ...INPUT, vendorInviteOnly: true });
+
+      const [invite] = await database.db
+        .select()
+        .from(vendorInvites)
+        .where(eq(vendorInvites.email, INPUT.vendor.email));
+
+      expect(invite?.acceptedAt).toBeInstanceOf(Date);
+    });
   });
 
   /*
