@@ -2180,3 +2180,33 @@ being fixed). **Checked and not changed:** the admin ban and suspend
 confirmation copy in `vendor-detail-actions.tsx` and `vendor-table.tsx`
 already scopes its "no payout" language to "every **future** confirmed
 booking", so no wording needed correcting for VEN-378.
+
+---
+
+### D42: No Operator-Initiated Refunds or Credits Outside the Three Rails
+
+**Decision:** An operator may not move money outside the three existing
+automatic rails (ban → full refund of future bookings, customer cancellation →
+D3's fixed tiers, dispute resolved for the customer → refund + cancel). No
+partial refund, no goodwill credit, no fee waiver lever is built into the
+admin console.
+
+**Rationale (account holder, 2026-09-22):** answers VEN-381's gating
+question 1 ("may an operator move money outside the three rails at all?")
+with no — which per that ticket's own Non-goals moots questions 2-5 (which
+kind, who pays, one admin or two, what copy) entirely.
+
+**What this means.** VEN-381 is closed (Canceled) with no tooling built. Every
+off-script case — a vendor who delivered half of what was booked, a duplicate
+charge, a customer owed something for a platform error — stays a manual Stripe
+Dashboard action outside the app. The admin case/booking detail should link
+out to the Stripe Dashboard for these, with copy that plainly states the
+console does not reconcile what happens there (tracked as a small follow-up,
+not inside VEN-381).
+
+**Rejected:** building any of partial refund / goodwill credit / fee waiver
+(the account holder ruled against all three, not a preference among them).
+
+**Revisit if:** a real friends-beta or production case makes the manual
+Stripe Dashboard workflow untenable often enough to justify reopening the
+policy question.
