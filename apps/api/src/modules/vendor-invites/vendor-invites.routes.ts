@@ -6,6 +6,8 @@ import {
   adminVendorInviteListSchema,
   adminVendorInviteQuerySchema,
   adminVendorInviteRowSchema,
+  bulkInviteApplicationsResultSchema,
+  bulkInviteApplicationsSchema,
   createVendorInviteSchema,
   decideVendorApplicationSchema,
   myVendorApplicationSchema,
@@ -22,6 +24,7 @@ import {
   requireRoleBeforeValidation,
 } from '../../lib/guards.js';
 import {
+  bulkInviteApplications,
   createVendorInvite,
   decideVendorApplication,
   listVendorApplications,
@@ -157,6 +160,24 @@ export const adminVendorInviteRoutes: FastifyPluginAsyncZod<VendorInviteRoutesOp
         assertRole(request.auth, ['admin']).id,
         request.params.applicationId,
         request.body.decision,
+      ),
+  );
+
+  /* 200: an action, not a creation — a per-id result, never a single Location. */
+  app.post(
+    '/admin/vendor-applications/invite',
+    {
+      onRequest: adminOnly,
+      schema: {
+        body: bulkInviteApplicationsSchema,
+        response: { 200: bulkInviteApplicationsResultSchema },
+      },
+    },
+    async (request) =>
+      bulkInviteApplications(
+        mailDeps(app, options.webOrigin),
+        assertRole(request.auth, ['admin']).id,
+        request.body.applicationIds,
       ),
   );
 

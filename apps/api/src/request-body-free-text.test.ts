@@ -237,10 +237,11 @@ describe('free text on a request body', () => {
     // 36 since VEN-462 added `throttleChargeSchema`, an opaque printable-ASCII key and two numbers.
     // 37 since VEN-475 added `adminExportAuditSchema`.
     // 38 since VEN-506 added `grantOperatorSchema`, an email.
+    // 39 since VEN-513 added `bulkInviteApplicationsSchema`, a capped uuid list with no free text.
     //
     // A merge is where this number goes wrong: two lanes each add to 23 and a
     // both-sides union keeps one of the answers rather than the sum.
-    expect(names).toHaveLength(38);
+    expect(names).toHaveLength(39);
     expect(names).toContain('reorderCategoriesSchema');
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');

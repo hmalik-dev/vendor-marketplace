@@ -3,10 +3,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WireAdminVendorApplicationRow, WireAdminVendorInviteRow } from '@/lib/wire-schemas';
 
 const calls: { path: string; method?: string; body?: unknown }[] = [];
+/** Makes the bulk invite call reject, for the "dialog stays open on failure" case. */
+let bulkInviteFails = false;
 
 vi.mock('@/lib/use-api', () => ({
   useApi: () => async (path: string, options: { method?: string; body?: unknown }) => {
     calls.push({ path, method: options.method, body: options.body });
+    if (path === '/admin/vendor-applications/invite') {
+      if (bulkInviteFails) {
+        throw new Error('That did not reach us.');
+      }
+      // The bulk invite handler destructures `results`; every other call ignores what `call` resolves to.
+      return { results: [] };
+    }
     return null;
   },
 }));
@@ -90,6 +99,7 @@ const INVITES: WireAdminVendorInviteRow[] = [
 afterEach(() => {
   cleanup();
   calls.length = 0;
+  bulkInviteFails = false;
 });
 
 describe('VendorApplicationsPanel', () => {
@@ -221,5 +231,107 @@ describe('VendorApplicationsPanel', () => {
       },
     ]);
     expect(screen.getByText(/Nobody has applied yet\./)).toBeDefined();
+  });
+
+  describe('bulk invite (VEN-513)', () => {
+    const THIRD: WireAdminVendorApplicationRow = {
+      id: '66666666-6666-4666-8666-666666666666',
+      email: 'third@example.com',
+      businessName: 'Third & Co',
+      category: '99999999-9999-4999-8999-999999999999',
+      categoryName: 'Florist',
+      city: 'Austin',
+      state: 'TX',
+      message: '',
+      status: 'new',
+      complete: true,
+      createdAt: new Date('2026-09-16T09:00:00.000Z'),
+    };
+
+    it('offers no checkbox on an invited or an incomplete row (AC6)', () => {
+      render(
+        <VendorApplicationsPanel
+          applications={[...APPLICATIONS, THIRD]}
+          invites={INVITES}
+          invitesPager={INVITES_PAGER}
+        />,
+      );
+
+      expect(screen.queryByLabelText('Select Old Mill Catering')).toBeNull();
+      expect(screen.queryByLabelText('Select unfinished@example.com')).toBeNull();
+      expect(screen.getByLabelText('Select Fern & Gather')).toBeDefined();
+      expect(screen.getByLabelText('Select Third & Co')).toBeDefined();
+    });
+
+    it('selecting two of three new rows shows "Invite 2 selected", and confirming posts exactly those ids (AC6)', async () => {
+      render(
+        <VendorApplicationsPanel
+          applications={[...APPLICATIONS, THIRD]}
+          invites={INVITES}
+          invitesPager={INVITES_PAGER}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Select Fern & Gather'));
+      fireEvent.click(screen.getByLabelText('Select Third & Co'));
+
+      const trigger = screen.getByRole('button', { name: 'Invite 2 selected' });
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Invite selected' }));
+      });
+
+      expect(calls).toEqual([
+        {
+          path: '/admin/vendor-applications/invite',
+          method: 'POST',
+          body: {
+            applicationIds: [
+              '11111111-1111-4111-8111-111111111111',
+              '66666666-6666-4666-8666-666666666666',
+            ],
+          },
+        },
+      ]);
+    });
+
+    it('keeps the confirm dialog open with the error shown when the bulk invite fails', async () => {
+      bulkInviteFails = true;
+      render(
+        <VendorApplicationsPanel
+          applications={APPLICATIONS}
+          invites={INVITES}
+          invitesPager={INVITES_PAGER}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Select Fern & Gather'));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Invite 1 selected' }));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Invite selected' }));
+      });
+
+      // Still open: the confirm dialog's own controls are still on screen.
+      expect(screen.getByRole('button', { name: 'Invite selected' })).toBeDefined();
+      expect(screen.getByRole('alert')).toBeDefined();
+    });
+
+    it('the header checkbox selects only the new rows on the page', () => {
+      render(
+        <VendorApplicationsPanel
+          applications={[...APPLICATIONS, THIRD]}
+          invites={INVITES}
+          invitesPager={INVITES_PAGER}
+        />,
+      );
+
+      fireEvent.click(screen.getByLabelText('Select all on this page'));
+
+      expect(screen.getByRole('button', { name: 'Invite 2 selected' })).toBeDefined();
+    });
   });
 });

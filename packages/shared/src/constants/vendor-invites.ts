@@ -40,3 +40,18 @@ export type VendorApplicationDecision = (typeof VENDOR_APPLICATION_DECISIONS)[nu
 
 /** Upper bound on the free-text note an applicant leaves. */
 export const MAX_VENDOR_APPLICATION_MESSAGE_LENGTH = 2_000;
+
+/**
+ * Cap on one bulk invite call (VEN-513): a page at most, so one mistaken click
+ * cannot mail hundreds of addresses.
+ */
+export const MAX_BULK_INVITE_APPLICATIONS = 50;
+
+/** Per-id outcome of a bulk invite call — never a thrown error, so one id never blocks the rest. */
+export const BULK_INVITE_RESULT_STATUSES = [
+  'invited',
+  'already_invited',
+  'not_found_or_decided',
+  'incomplete',
+] as const;
+export type BulkInviteResultStatus = (typeof BULK_INVITE_RESULT_STATUSES)[number];

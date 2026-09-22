@@ -18,8 +18,8 @@ import { US_STATE_OPTIONS, usStateName } from '@/lib/us-states';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
+import { StatusPill } from '@/components/ui/status-pill';
 import { useApi } from '@/lib/use-api';
 import { userFacingError } from '@/lib/user-facing-error';
 
@@ -108,10 +108,24 @@ export function VendorDetailsForm({
       ) : null}
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={`${fieldId}-email`} className={LABEL}>
-          Email
-        </label>
-        <Input id={`${fieldId}-email`} type="email" value={application.email} readOnly disabled />
+        {/*
+          Not `<label htmlFor>`: this row is a locked, read-only fact rather
+          than a form control — "reassurance, not a field" (frame `36`) — so
+          there is no input for a `for` to target, the same reasoning that
+          gives Category and State a plain labelling `<span>` below.
+        */}
+        <span id={`${fieldId}-email-label`} className={LABEL}>
+          Your email
+        </span>
+        <div
+          aria-labelledby={`${fieldId}-email-label`}
+          className="flex items-center justify-between gap-2.5 rounded-lg border border-input bg-stone-150 px-3.25 py-2.5"
+        >
+          <span className="text-[13.5px] text-stone-700">{application.email}</span>
+          <StatusPill tone="confirmed" className="shrink-0">
+            Verified
+          </StatusPill>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -129,7 +143,7 @@ export function VendorDetailsForm({
 
       <div className="flex flex-col gap-1.5">
         <span id={`${fieldId}-category-label`} className={LABEL}>
-          What you offer
+          Category
         </span>
         <SingleSelectDropdown
           open={openSelect === 'category'}
@@ -158,58 +172,61 @@ export function VendorDetailsForm({
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor={`${fieldId}-city`} className={LABEL}>
-          City
-        </label>
-        <Input
-          id={`${fieldId}-city`}
-          autoComplete="address-level2"
-          maxLength={MAX_NAME_LENGTH}
-          value={city}
-          onChange={(event) => setCity(event.target.value)}
-        />
-      </div>
+      {/* One answer, two fields — frame `36`'s 1.35fr/1fr row. */}
+      <div className="grid grid-cols-[1.35fr_1fr] gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={`${fieldId}-city`} className={LABEL}>
+            City
+          </label>
+          <Input
+            id={`${fieldId}-city`}
+            autoComplete="address-level2"
+            maxLength={MAX_NAME_LENGTH}
+            value={city}
+            onChange={(event) => setCity(event.target.value)}
+          />
+        </div>
 
-      <div className="flex flex-col gap-1.5">
-        <span id={`${fieldId}-state-label`} className={LABEL}>
-          State
-        </span>
-        <SingleSelectDropdown
-          open={openSelect === 'state'}
-          onOpenChange={(next) => setOpenSelect(next ? 'state' : null)}
-          label="State"
-          countNoun="states"
-          options={US_STATE_OPTIONS}
-          value={state}
-          onChange={setState}
-          trigger={
-            <button
-              type="button"
-              id={`${fieldId}-state`}
-              aria-haspopup="listbox"
-              aria-expanded={openSelect === 'state'}
-              aria-labelledby={`${fieldId}-state-label`}
-              data-focus-own
-              className={cn(SELECT_TRIGGER, state === null && 'text-stone-600')}
-            >
-              {state === null ? 'Choose a state' : usStateName(state)}
-            </button>
-          }
-        />
+        <div className="flex flex-col gap-1.5">
+          <span id={`${fieldId}-state-label`} className={LABEL}>
+            State
+          </span>
+          <SingleSelectDropdown
+            open={openSelect === 'state'}
+            onOpenChange={(next) => setOpenSelect(next ? 'state' : null)}
+            label="State"
+            countNoun="states"
+            options={US_STATE_OPTIONS}
+            value={state}
+            onChange={setState}
+            trigger={
+              <button
+                type="button"
+                id={`${fieldId}-state`}
+                aria-haspopup="listbox"
+                aria-expanded={openSelect === 'state'}
+                aria-labelledby={`${fieldId}-state-label`}
+                data-focus-own
+                className={cn(SELECT_TRIGGER, state === null && 'text-stone-600')}
+              >
+                {state === null ? 'Choose a state' : usStateName(state)}
+              </button>
+            }
+          />
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`${fieldId}-message`} className={LABEL}>
-          Link to your work <span className="font-normal text-stone-600">(optional)</span>
+          Link to your work <span className="font-normal text-stone-600">— optional</span>
         </label>
-        <Textarea
+        <Input
           id={`${fieldId}-message`}
-          placeholder="Instagram, a website…"
           maxLength={MAX_VENDOR_APPLICATION_MESSAGE_LENGTH}
           value={message}
           onChange={(event) => setMessage(event.target.value)}
         />
+        <span className="text-[11.5px] text-stone-600">Instagram, a website</span>
       </div>
 
       <Button type="submit" variant="primary" size="lg" disabled={saving} loading={saving}>
