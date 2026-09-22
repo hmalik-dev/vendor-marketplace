@@ -24,7 +24,7 @@
 - [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` is null for a gated account; `requireAuthSubject` (pre-Neon name, retired by VEN-447) is the deliberate exception
 - [The server session cache's key is the whole gate](server-session-cache-key-is-the-cookie.md) — a hit skips the SDK's signature and revocation check; a second `*session_token` cookie keys the victim's JWT
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` renders a booking amount with no `force-dynamic`
-- [Email is a label, the auth id is the key (was `clerk_user_id`, retired)](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial; nothing resolves a person by email
+- [Email is a label, the auth id is the key (the pre-rename column is gone)](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial; nothing resolves a person by email
 - [Closing an account releases its address](closed-account-address-is-released.md) — `users_email_key` is partial since #451; the old permanent-500 memory was stale
 - [The sign-up role is confirmed, not narrowed](signup-role-is-confirmed-not-narrowed.md) — VEN-507: `normalizeRole` throws; `explicitTickRequired` is server-derived, and only the notice branch runs `admitVendor`
 - [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself
