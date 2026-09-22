@@ -2,7 +2,7 @@ import { acceptTermsSchema, termsAcceptanceStatusSchema } from '@vendor-marketpl
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { authSubject, requireAuthSubject } from '../../lib/guards.js';
 import { acceptanceContext } from './acceptance-context.js';
-import { acceptTerms, readTermsStatus, unacceptedTermsStatus } from './terms.service.js';
+import { acceptTerms, readTermsStatus } from './terms.service.js';
 
 /**
  * The acceptance gate's two routes, and the **only** two an account that has
@@ -17,12 +17,11 @@ export const termsRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/legal/terms',
     { onRequest: requireAuthSubject, schema: { response: { 200: termsAcceptanceStatusSchema } } },
-    async (request) =>
-      /*
-       * No account row yet is the ordinary case here — it is every first
-       * sign-in — and it needs no query to answer: nothing has been accepted.
-       */
-      request.auth ? readTermsStatus(app.db, request.auth.id) : unacceptedTermsStatus(),
+    async (request) => {
+      const identity = authSubject(request.authIdentity);
+
+      return readTermsStatus(app.db, identity.authUserId, identity.loadSnapshot);
+    },
   );
 
   /**

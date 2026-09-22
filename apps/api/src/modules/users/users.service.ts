@@ -1,10 +1,10 @@
 import {
-  USER_ROLES,
+  SIGN_UP_ROLES,
   stripBidiControls,
   stripRefusedText,
   type UpdateUserInput,
   type User,
-  type UserRole,
+  type SignUpRole,
 } from '@vendor-marketplace/shared';
 import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
@@ -19,10 +19,9 @@ export interface AuthUserSnapshot {
   firstName: string;
   lastName: string;
   /**
-   * The role the person chose at sign-up, as the acceptance request carried it.
-   * Left unnarrowed on purpose: the caller writes this field, so it is
-   * normalized at the single point where it is persisted rather than trusted by
-   * each caller.
+   * The role the person confirmed on the acceptance screen. Left unnarrowed on
+   * purpose: the caller writes this field, so `normalizeRole` validates it at
+   * the single point where it is persisted rather than trusting each caller.
    */
   roleHint: unknown;
   avatarUrl: string | null;
@@ -39,15 +38,23 @@ export function toUser(row: UserRow): User {
 }
 
 /**
- * Role is chosen at sign-up and travels on the acceptance request, which the
- * user can technically write. It is trusted only for the initial row creation
- * and is immutable afterwards; every later authorization decision reads the
- * local column. Anything unrecognised falls back to the least-privileged role.
+ * The role a new row is written with: exactly `customer` or `vendor`, as the
+ * person confirmed it on the acceptance screen. It is trusted only for the
+ * initial row creation and is immutable afterwards; every later authorization
+ * decision reads the local column.
+ *
+ * **Anything else is refused, never narrowed.** `admin` is granted by an
+ * operator and nothing else, and a missing or unrecognised value used to become
+ * `customer` here, which fixed a vendor on the wrong side for good (VEN-507).
  */
-export function normalizeRole(value: unknown): UserRole {
-  return USER_ROLES.includes(value as UserRole) && value !== 'admin'
-    ? (value as UserRole)
-    : 'customer';
+export function normalizeRole(value: unknown): SignUpRole {
+  const role = SIGN_UP_ROLES.find((candidate) => candidate === value);
+
+  if (!role) {
+    throw validationFailed('Choose whether you are joining as a customer or a vendor.');
+  }
+
+  return role;
 }
 
 /**

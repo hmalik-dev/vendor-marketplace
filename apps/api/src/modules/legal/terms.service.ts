@@ -1,13 +1,14 @@
 import {
   CURRENT_TERMS_VERSION,
   legalDocumentSha256,
+  type SignUpRole,
   type TermsAcceptanceStatus,
 } from '@vendor-marketplace/shared';
 import type { UserRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, unauthorized, validationFailed } from '../../lib/errors.js';
-import { findUserByAuthIdIncludingRetired } from '../users/users.dao.js';
-import { displayName, syncUserFromAuth } from '../users/users.service.js';
+import { findUserByAuthId, findUserByAuthIdIncludingRetired } from '../users/users.dao.js';
+import { displayName, normalizeRole, syncUserFromAuth } from '../users/users.service.js';
 import { admitVendor, invitedRoleHint } from '../vendor-invites/vendor-invites.service.js';
 import type { AuthUserSnapshot } from '../users/users.service.js';
 import {
@@ -36,40 +37,93 @@ export interface AcceptanceContext {
   userAgent: string | null;
 }
 
+/**
+ * What the interstitial reads.
+ *
+ * An account row answers from the database — the acceptance it holds and the
+ * **stored** role, which is what the screen shows read-only. A session with no
+ * row yet (every first sign-in) holds nothing, and the one thing worth asking
+ * is whether its address carries an unused invite, which preselects `vendor`
+ * and nothing more: the person still confirms it.
+ */
 export async function readTermsStatus(
   db: AppDatabase,
-  userId: string,
+  authUserId: string,
+  loadSnapshot: () => Promise<AuthUserSnapshot>,
 ): Promise<TermsAcceptanceStatus> {
-  const held = await findAcceptanceOfVersion(db, userId, 'terms_of_service', CURRENT_TERMS_VERSION);
+  const user = await findUserByAuthId(db, authUserId);
+
+  if (user) {
+    return termsStatusOf(db, user);
+  }
+
+  /*
+   * Best effort: the suggestion only preselects a choice the person confirms,
+   * so an identity provider that is briefly down must not take this screen —
+   * the only one that can create the account — down with it.
+   */
+  const email = await loadSnapshot().then(
+    (snapshot) => snapshot.email,
+    () => null,
+  );
+
+  return {
+    ...unacceptedTermsStatus(),
+    suggestedRole: email === null ? null : ((await invitedRoleHint(db, email)) ?? null),
+  };
+}
+
+/** The status of an account that exists: its acceptance and the role the server stored. */
+async function termsStatusOf(db: AppDatabase, user: UserRow): Promise<TermsAcceptanceStatus> {
+  const held = await findAcceptanceOfVersion(
+    db,
+    user.id,
+    'terms_of_service',
+    CURRENT_TERMS_VERSION,
+  );
+  /*
+   * An earlier version on file is what separates a re-acceptance (explicit
+   * tick) from a first one (a notice, made with the account). A retired row is
+   * never asked; the gate answers it 401 first.
+   */
+  const acceptedEarlier =
+    held === null &&
+    (await findAcceptancesByUser(db, user.id)).some((row) => row.document === 'terms_of_service');
 
   return {
     ...unacceptedTermsStatus(),
     accepted: held !== null,
     acceptedAt: held?.acceptedAt ?? null,
+    explicitTickRequired: acceptedEarlier,
+    account: { exists: true, role: user.role },
   };
 }
 
-/**
- * What the interstitial reads for a session with no account row yet — which is
- * every first sign-in, and needs no query to answer.
- */
-export function unacceptedTermsStatus(): TermsAcceptanceStatus {
+/** A session with no account row: nothing accepted, no role stored, nothing suggested. */
+function unacceptedTermsStatus(): TermsAcceptanceStatus {
   return {
     current: CURRENT_TERMS_VERSION,
     documentSha256: legalDocumentSha256('terms_of_service'),
     accepted: false,
     acceptedAt: null,
+    explicitTickRequired: false,
+    account: { exists: false, role: null },
+    suggestedRole: null,
   };
 }
 
 /** The row this module writes, assembled once for both of its callers. */
-function termsAcceptanceRow(user: UserRow, context: AcceptanceContext): NewAcceptance {
+function termsAcceptanceRow(
+  user: UserRow,
+  context: AcceptanceContext,
+  method: 'clickwrap_checkbox' | 'continue_notice',
+): NewAcceptance {
   return {
     vendorId: null,
     document: 'terms_of_service',
     version: CURRENT_TERMS_VERSION,
     documentSha256: legalDocumentSha256('terms_of_service'),
-    acceptanceMethod: 'clickwrap_checkbox',
+    acceptanceMethod: method,
     acceptedByUserId: user.id,
     /*
      * Copied and frozen, and taken from the account rather than the request: a
@@ -100,19 +154,21 @@ function termsAcceptanceRow(user: UserRow, context: AcceptanceContext): NewAccep
  * of a document the person never read, which is the one thing this record must
  * never contain.
  *
- * **`accepted` must be `true` on the wire.** The checkbox starts unticked and
- * the submit is disabled until it is ticked, but a disabled button is a
- * courtesy to the reader and not a rule: the rule is here, where a submission
- * that does not carry the affirmative act is refused and writes nothing.
+ * **A first acceptance is made by continuing, under a notice** (VEN-507): the
+ * screen names the Terms and the Privacy Policy beside the submit, and the row
+ * says so (`continue_notice`) — it never claims a box was ticked. **A new
+ * version is different**: an account that accepted an earlier one must send
+ * `accepted: true`, from a box the person ticked, or nothing is written. An
+ * explicit `false` is refused in both cases.
  */
 export async function acceptTerms(
   db: AppDatabase,
   authUserId: string,
   loadSnapshot: () => Promise<AuthUserSnapshot>,
-  input: { version: string; accepted: boolean; role?: 'customer' | 'vendor' | undefined },
+  input: { version: string; accepted?: boolean | undefined; role?: SignUpRole | undefined },
   context: AcceptanceContext,
 ): Promise<TermsAcceptanceStatus> {
-  if (!input.accepted) {
+  if (input.accepted === false) {
     throw validationFailed('Tick the box to accept the Terms of Service.');
   }
 
@@ -137,7 +193,7 @@ export async function acceptTerms(
   }
 
   if (existing) {
-    const status = await readTermsStatus(db, existing.id);
+    const status = await termsStatusOf(db, existing);
 
     /*
      * Already held: answer, do not write.
@@ -155,58 +211,74 @@ export async function acceptTerms(
     }
 
     /*
-     * The vendor gate (VEN-406) for a row the `user.created` webhook wrote: it
-     * is not an account until this acceptance, so it is held to the same rule
-     * as the path below. An account that has accepted *any* version already
-     * exists and is not re-gated by a new version of the Terms.
+     * A new version needs the tick. The status says whether this is one: an
+     * earlier acceptance is on file and the current one is not.
      */
-    const firstAcceptance = !(await findAcceptancesByUser(db, existing.id)).some(
-      (row) => row.document === 'terms_of_service',
-    );
+    if (status.explicitTickRequired && input.accepted !== true) {
+      throw validationFailed('Tick the box to accept the Terms of Service.');
+    }
 
+    /*
+     * The vendor gate (VEN-406) for a row that has no acceptance yet: it is not
+     * an account until this one, so it is held to the same rule as the path
+     * below. An account that has accepted *any* version already exists and is
+     * not re-gated by a new version of the Terms.
+     */
     await db.transaction(async (tx) => {
-      if (firstAcceptance) {
+      if (!status.explicitTickRequired) {
         await admitVendor(tx, existing.role, existing.email);
       }
 
-      await insertAcceptance(tx, termsAcceptanceRow(existing, context));
+      await insertAcceptance(
+        tx,
+        termsAcceptanceRow(
+          existing,
+          context,
+          status.explicitTickRequired ? 'clickwrap_checkbox' : 'continue_notice',
+        ),
+      );
     });
 
-    return readTermsStatus(db, existing.id);
+    return termsStatusOf(db, existing);
   }
+
+  /*
+   * **A role is required, and nothing supplies one.** The account is created
+   * with what the person confirmed on this screen, never with a browser hint
+   * that may be gone, an invite that may not be theirs, or a default: a vendor
+   * who verified on another device would otherwise become a customer for good
+   * (VEN-507). Refused before the identity read, so nothing is fetched or
+   * written for a request that cannot succeed.
+   */
+  const role = normalizeRole(input.role);
 
   /*
    * The identity read stays outside the transaction: it is a network call, and
    * holding a database transaction open across one is how a slow upstream
    * becomes a held connection.
    */
-  const loaded = await loadSnapshot();
-  const chosenRole = input.role ?? loaded.roleHint;
-  const snapshot = {
-    ...loaded,
-    roleHint: chosenRole ?? (await invitedRoleHint(db, loaded.email)),
-  };
+  const snapshot = { ...(await loadSnapshot()), roleHint: role };
 
-  const userId = await db.transaction(async (tx) => {
-    const user = await syncUserFromAuth(tx, snapshot);
+  const user = await db.transaction(async (tx) => {
+    const row = await syncUserFromAuth(tx, snapshot);
 
-    if (!user) {
+    if (!row) {
       throw new Error('legal acceptance: the account row could not be resolved');
     }
 
     /*
-     * The vendor gate (VEN-406), on the row as saved rather than the snapshot:
-     * a `user.created` webhook landing mid-request can make that row the one
-     * `syncUserFromAuth` returns, with the role the sign-up first chose. A
-     * refusal rolls the whole transaction back, so no account this path wrote
-     * and no acceptance survives it.
+     * The vendor gate (VEN-406), on the row as saved rather than the choice:
+     * a concurrent accept for this identity can win the insert, and then the
+     * row returned carries **its** role — first commit wins, and this request
+     * reports it. A refusal rolls the whole transaction back, so no account this
+     * path wrote and no acceptance survives it.
      */
-    await admitVendor(tx, user.role, user.email);
+    await admitVendor(tx, row.role, row.email);
 
-    await insertAcceptance(tx, termsAcceptanceRow(user, context));
+    await insertAcceptance(tx, termsAcceptanceRow(row, context, 'continue_notice'));
 
-    return user.id;
+    return row;
   });
 
-  return readTermsStatus(db, userId);
+  return termsStatusOf(db, user);
 }

@@ -100,8 +100,8 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
 
-    /* A sign-up with no role would be narrowed to `customer` by the API, which
-       would put a vendor on the wrong side with no way back. */
+    /* Asked here so the accept-terms screen can preselect it; that screen
+       confirms it, and the server stores what that screen submits. */
     if (role === null) {
       setRoleMissing(true);
       return;
@@ -297,7 +297,7 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
             </p>
           ) : null}
 
-          {/* A notice only: the versioned acceptance stays on the Terms screen. */}
+          {/* A notice only, frame 12's wording: nothing is recorded here. The acceptance is written on the confirm screen. */}
           <p
             className={cn(
               'text-center text-helper leading-[1.55] text-stone-600',

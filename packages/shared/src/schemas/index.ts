@@ -73,6 +73,7 @@ import {
   REVIEW_TYPES,
   TAG_CATEGORIES,
   TAG_SUGGESTION_STATUSES,
+  SIGN_UP_ROLES,
   USER_ROLES,
   US_STATE_CODES,
   VENDOR_SETTABLE_AVAILABILITY_STATUSES,
@@ -323,6 +324,7 @@ export const longitudeSchema = z.number().min(-180).max(180);
 // --- Enums -----------------------------------------------------------------
 
 export const userRoleSchema = z.enum(USER_ROLES);
+export const signUpRoleSchema = z.enum(SIGN_UP_ROLES);
 export const priceTypeSchema = z.enum(PRICE_TYPES);
 export const availabilityStatusSchema = z.enum(AVAILABILITY_STATUSES);
 export const vendorSettableAvailabilityStatusSchema = z.enum(VENDOR_SETTABLE_AVAILABILITY_STATUSES);
@@ -1369,27 +1371,49 @@ export const termsAcceptanceStatusSchema = z.object({
   accepted: z.boolean(),
   /** When they accepted `current`, or `null` while they have not. */
   acceptedAt: z.coerce.date().nullable(),
+  /**
+   * True when this account accepted an earlier version and has not accepted
+   * `current`: the one case that shows an explicit tick. A first acceptance is
+   * made by continuing under a notice, together with the account (VEN-507).
+   */
+  explicitTickRequired: z.boolean(),
+  /**
+   * The account behind this session, as the server holds it: the **stored** role
+   * once a row exists, `null` before. The screen reads it to show the role
+   * read-only and to report what a request actually produced (VEN-507).
+   */
+  account: z.object({ exists: z.boolean(), role: userRoleSchema.nullable() }),
+  /** `vendor` for an address holding an unused invite, else `null`; only ever a preselection. */
+  suggestedRole: signUpRoleSchema.nullable(),
 });
 export type TermsAcceptanceStatus = z.infer<typeof termsAcceptanceStatusSchema>;
 
 /**
  * What the interstitial sends.
  *
- * **`accepted` is the affirmative act, on the wire.** The box starts unticked
- * and the submit is disabled until it is ticked, but a disabled button is a
- * courtesy to the reader rather than a rule — so the value travels and the
- * service refuses anything but `true`. A record that says somebody accepted
- * because a request arrived is browsewrap wearing a checkbox.
+ * **A new version's `accepted` is the affirmative act, on the wire.** That box
+ * starts unticked and its submit is disabled until it is ticked, but a disabled
+ * button is a courtesy to the reader rather than a rule — so the value travels
+ * and the service refuses anything but `true` for an account that accepted an
+ * earlier version. A first acceptance sends none: it is made by continuing under
+ * the notice, and the row says so.
  */
 export const acceptTermsSchema = z.object({
   version: legalVersionSchema,
-  accepted: z.boolean(),
   /**
-   * The role the person chose at sign-up: a **hint**. Neon Auth has no field to
-   * carry it, so it rides here, and the service narrows it (`admin` is never
-   * reachable) and gates `vendor` on an invite before any row is written.
+   * The tick. **Required as `true` for an account that accepted an earlier
+   * version** (the service refuses it otherwise); a first acceptance is made by
+   * continuing under the notice and sends none. An explicit `false` is always
+   * refused.
    */
-  role: z.enum(['customer', 'vendor']).optional(),
+  accepted: z.boolean().optional(),
+  /**
+   * The role the person confirmed on this screen. **Required when the request
+   * creates the account** (the service answers 400 without it), ignored for an
+   * account that already exists, and never anything but `customer` or `vendor`:
+   * `admin`, another casing, `null` and an object are all refused here (VEN-507).
+   */
+  role: signUpRoleSchema.optional(),
 });
 export type AcceptTerms = z.infer<typeof acceptTermsSchema>;
 

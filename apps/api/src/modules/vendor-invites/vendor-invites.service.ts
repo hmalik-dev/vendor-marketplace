@@ -108,13 +108,13 @@ export async function admitVendor(tx: AppDatabase, role: UserRole, email: string
 }
 
 /**
- * The role for a first acceptance that carries no chosen one: `vendor` for an
- * address with an unused invite, otherwise nothing (so `normalizeRole` narrows
- * to customer).
+ * The role to **preselect** on the acceptance screen: `vendor` for an address
+ * with an unused invite, otherwise nothing.
  *
- * The chosen role travels in the browser for 24 hours only, and the invite email
- * tells a refused vendor to sign in rather than sign up again. Without this, an
- * invitee who signs in after that window is made a customer for good.
+ * It is a suggestion and never a default: the browser hint lives 24 hours and
+ * the invite email tells a refused vendor to sign in rather than sign up again,
+ * so an invitee arriving later has no hint. The person still confirms the role,
+ * and the account is written with what they confirmed (VEN-507).
  */
 export async function invitedRoleHint(
   db: AppDatabase,

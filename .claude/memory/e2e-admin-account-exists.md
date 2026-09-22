@@ -30,4 +30,4 @@ wording is correct, not stale.
 
 Related: [[vendor-marketplace-e2e-credentials]], [[credentials-env-files-only]].
 
-**Update 2026-09-20:** the Clerk-era admin credentials were dropped and a new admin was provisioned on the **dev** Neon Auth branch (`orla-e2e-admin@example.invalid`, sign-up by API, `emailVerified` set by SQL, password generated and written only to `.env.e2e.local`). `db:seed:e2e` gave it its `users` row at `role = 'admin'`. Test accounts belong on dev only: staging and production admins are real operators, and the seed refuses those targets.
+**Update 2026-09-20:** the retired identity provider's admin credentials were dropped and a new admin was provisioned on the **dev** Neon Auth branch (`orla-e2e-admin@example.invalid`, sign-up by API, `emailVerified` set by SQL, password generated and written only to `.env.e2e.local`). `db:seed:e2e` gave it its `users` row at `role = 'admin'`. Test accounts belong on dev only: staging and production admins are real operators, and the seed refuses those targets.

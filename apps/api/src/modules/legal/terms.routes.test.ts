@@ -34,7 +34,11 @@ describe('the Terms of Service acceptance gate', () => {
 
   function accept(
     user: string | undefined,
-    payload: Record<string, unknown> = { version: CURRENT_TERMS_VERSION, accepted: true },
+    payload: Record<string, unknown> = {
+      version: CURRENT_TERMS_VERSION,
+      accepted: true,
+      role: user === VENDOR ? 'vendor' : 'customer',
+    },
     headers: Record<string, string> = {},
   ) {
     return harness.app.inject({
@@ -100,6 +104,9 @@ describe('the Terms of Service acceptance gate', () => {
         documentSha256: legalDocumentSha256('terms_of_service'),
         accepted: false,
         acceptedAt: null,
+        explicitTickRequired: false,
+        account: { exists: false, role: null },
+        suggestedRole: null,
       });
     });
 
@@ -290,7 +297,7 @@ describe('the Terms of Service acceptance gate', () => {
         document: 'terms_of_service',
         version: CURRENT_TERMS_VERSION,
         sha: legalDocumentSha256('terms_of_service'),
-        method: 'clickwrap_checkbox',
+        method: 'continue_notice',
         vendorId: null,
         businessName: null,
         acceptedByName: 'Ada Reyes',
@@ -324,6 +331,7 @@ describe('the Terms of Service acceptance gate', () => {
       const response = await accept(CUSTOMER, {
         version: CURRENT_TERMS_VERSION,
         accepted: false,
+        role: 'customer',
       });
 
       expect(response.statusCode).toBe(400);
@@ -375,7 +383,7 @@ describe('the Terms of Service acceptance gate', () => {
 
       await accept(
         CUSTOMER,
-        { version: CURRENT_TERMS_VERSION, accepted: true },
+        { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
         {
           'user-agent': 'SubmittingBrowser/2.0',
         },
@@ -414,6 +422,198 @@ describe('the Terms of Service acceptance gate', () => {
       expect(rows.find((row) => row.version === CURRENT_TERMS_VERSION)?.documentSha256).toBe(
         legalDocumentSha256('terms_of_service'),
       );
+    });
+
+    describe('the notice and the tick (VEN-507)', () => {
+      const olderRow = (userId: string) => ({
+        vendorId: null,
+        document: 'terms_of_service' as const,
+        version: 'v0.9',
+        documentSha256: 'b'.repeat(64),
+        acceptanceMethod: 'clickwrap_checkbox' as const,
+        acceptedByUserId: userId,
+        acceptedByName: 'Ada Reyes',
+        businessName: null,
+        ip: null,
+        userAgent: null,
+      });
+
+      async function accountWithEarlierVersion(): Promise<void> {
+        const [row] = await harness.database.db
+          .insert(users)
+          .values({
+            authUserId: CUSTOMER,
+            email: `${CUSTOMER}@example.com`,
+            role: 'customer',
+            firstName: 'Ada',
+            lastName: 'Reyes',
+          })
+          .returning({ id: users.id });
+
+        await harness.database.db.insert(legalAcceptances).values(olderRow(row!.id));
+      }
+
+      it('writes one acceptance for a first submit that carries no tick at all', async () => {
+        const response = await accept(CUSTOMER, {
+          version: CURRENT_TERMS_VERSION,
+          role: 'vendor',
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ accepted: true, account: { role: 'vendor' } });
+        const rows = await termsRows();
+        expect(rows).toHaveLength(1);
+        expect({ version: rows[0]?.version, method: rows[0]?.acceptanceMethod }).toEqual({
+          version: CURRENT_TERMS_VERSION,
+          method: 'continue_notice',
+        });
+        expect(rows[0]?.acceptedAt).toBeInstanceOf(Date);
+      });
+
+      it('answers a repeat of an accepted version without writing again', async () => {
+        await accept(CUSTOMER, { version: CURRENT_TERMS_VERSION, role: 'customer' });
+        const again = await accept(CUSTOMER, { version: CURRENT_TERMS_VERSION });
+
+        expect(again.statusCode).toBe(200);
+        expect(await termsRows()).toHaveLength(1);
+      });
+
+      it('asks for the explicit tick once a new version is in force, and says so on the read', async () => {
+        await accountWithEarlierVersion();
+
+        const read = await status(CUSTOMER);
+        expect(read.json()).toMatchObject({
+          accepted: false,
+          explicitTickRequired: true,
+          account: { exists: true, role: 'customer' },
+        });
+
+        const untickedBody = { version: CURRENT_TERMS_VERSION };
+        expect((await accept(CUSTOMER, untickedBody)).statusCode).toBe(400);
+        expect((await accept(CUSTOMER, { ...untickedBody, accepted: false })).statusCode).toBe(400);
+        expect(await termsRows()).toHaveLength(1);
+      });
+
+      it('records a ticked re-acceptance as clickwrap, beside the earlier row', async () => {
+        await accountWithEarlierVersion();
+
+        const response = await accept(CUSTOMER, {
+          version: CURRENT_TERMS_VERSION,
+          accepted: true,
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ accepted: true, explicitTickRequired: false });
+        const rows = await termsRows();
+        expect(rows.map((row) => `${row.version}:${row.acceptanceMethod}`).sort()).toEqual([
+          'v0.9:clickwrap_checkbox',
+          `${CURRENT_TERMS_VERSION}:clickwrap_checkbox`,
+        ]);
+      });
+
+      it('holds a first acceptance for an existing row with no acceptance to the notice, not the tick', async () => {
+        await harness.database.db.insert(users).values({
+          authUserId: CUSTOMER,
+          email: `${CUSTOMER}@example.com`,
+          role: 'customer',
+          firstName: 'Ada',
+          lastName: 'Reyes',
+        });
+
+        expect((await status(CUSTOMER)).json()).toMatchObject({ explicitTickRequired: false });
+        expect((await accept(CUSTOMER, { version: CURRENT_TERMS_VERSION })).statusCode).toBe(200);
+        expect((await termsRows())[0]?.acceptanceMethod).toBe('continue_notice');
+      });
+    });
+
+    describe('the role (VEN-507)', () => {
+      const body = (role: unknown) => ({
+        version: CURRENT_TERMS_VERSION,
+        accepted: true,
+        ...(role === undefined ? {} : { role }),
+      });
+
+      async function counts() {
+        return {
+          users: (await harness.database.db.select().from(users)).length,
+          acceptances: (await termsRows()).length,
+        };
+      }
+
+      it('refuses a first acceptance that carries no role, and writes nothing', async () => {
+        const response = await accept(CUSTOMER, body(undefined));
+
+        expect(response.statusCode).toBe(400);
+        expect(await counts()).toEqual({ users: 0, acceptances: 0 });
+      });
+
+      it.each([['admin'], ['Vendor'], [''], [null], [{ role: 'vendor' }], [['vendor']]])(
+        'refuses the role %j with a 400 and creates nothing',
+        async (role) => {
+          const response = await accept(CUSTOMER, body(role));
+
+          expect(response.statusCode).toBe(400);
+          expect(await counts()).toEqual({ users: 0, acceptances: 0 });
+        },
+      );
+
+      it('refuses a junk role even against an account that already exists', async () => {
+        await accept(CUSTOMER);
+
+        expect((await accept(CUSTOMER, body('admin'))).statusCode).toBe(400);
+      });
+
+      it.each(['customer', 'vendor'] as const)('stores %s and reports it back', async (role) => {
+        const response = await accept(CUSTOMER, body(role));
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ accepted: true, account: { exists: true, role } });
+        const [row] = await harness.database.db.select().from(users);
+        expect(row?.role).toBe(role);
+      });
+
+      it('ignores the role in the body for an account that exists, and reports the stored one', async () => {
+        await accept(CUSTOMER, body('customer'));
+
+        const again = await accept(CUSTOMER, body('vendor'));
+
+        expect(again.statusCode).toBe(200);
+        expect(again.json()).toMatchObject({ account: { exists: true, role: 'customer' } });
+        const [row] = await harness.database.db.select().from(users);
+        expect(row?.role).toBe('customer');
+      });
+
+      it('ignores it for an existing row with no acceptance too, and accepts against the stored role', async () => {
+        await harness.database.db.insert(users).values({
+          authUserId: CUSTOMER,
+          email: `${CUSTOMER}@example.com`,
+          role: 'customer',
+          firstName: 'Ada',
+          lastName: 'Reyes',
+        });
+
+        const read = await status(CUSTOMER);
+        expect(read.json()).toMatchObject({
+          accepted: false,
+          account: { exists: true, role: 'customer' },
+          suggestedRole: null,
+        });
+
+        const response = await accept(CUSTOMER, body('vendor'));
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ accepted: true, account: { role: 'customer' } });
+        expect((await harness.database.db.select().from(users))[0]?.role).toBe('customer');
+        expect(await termsRows()).toHaveLength(1);
+      });
+
+      it('never lets the identity provider snapshot stand in for the choice', async () => {
+        // VENDOR's snapshot carries `roleHint: 'vendor'`; it must not be read.
+        const response = await accept(VENDOR, body(undefined));
+
+        expect(response.statusCode).toBe(400);
+        expect(await counts()).toEqual({ users: 0, acceptances: 0 });
+      });
     });
   });
 });

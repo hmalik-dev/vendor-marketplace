@@ -1,19 +1,19 @@
-import type { UserRole } from '@vendor-marketplace/shared';
+import { SIGN_UP_ROLES, type SignUpRole } from '@vendor-marketplace/shared';
 
-/** The two roles a person can choose at sign-up. `admin` is never one of them. */
-export type SignUpRole = Extract<UserRole, 'customer' | 'vendor'>;
-
-export const SIGN_UP_ROLES: readonly SignUpRole[] = ['customer', 'vendor'];
+export { SIGN_UP_ROLES, type SignUpRole };
 
 /**
  * Neon Auth has no sign-up field for the role, so the choice is carried from
  * the sign-up form to the accept-terms screen — through email verification and
- * a sign-in, possibly in another tab — in `localStorage` under this key. The
- * API receives it on `POST /legal/terms/accept` and narrows it again.
+ * a sign-in, possibly in another tab — in `localStorage` under this key.
+ *
+ * **It is a hint and nothing more (VEN-507).** It can be absent (another device,
+ * blocked storage), stale or wrong, so it only *preselects* the choice the
+ * person confirms on the accept-terms screen; the server stores the role that
+ * screen submits.
  *
  * Storage rather than a cookie: the product writes no cookie of its own, and
- * the cookie notice says so (`no-cookie-consent.test.ts`). The value is a
- * hint and never leaves the browser except on that one request.
+ * the cookie notice says so (`no-cookie-consent.test.ts`).
  */
 export const SIGN_UP_ROLE_KEY = 'signup_role';
 
@@ -29,7 +29,7 @@ export function rememberSignUpRole(role: SignUpRole): void {
   try {
     window.localStorage.setItem(SIGN_UP_ROLE_KEY, JSON.stringify({ role, at: Date.now() }));
   } catch {
-    // Storage blocked: the API narrows a missing role to `customer`.
+    // Storage blocked: the accept-terms screen then asks, with nothing selected.
   }
 }
 
