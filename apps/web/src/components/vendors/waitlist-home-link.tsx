@@ -18,11 +18,7 @@ export function WaitlistHomeLink({ children }: { children: React.ReactNode }): R
   }
 
   return (
-    <Link
-      href="/"
-      onClick={leave}
-      className="font-semibold text-clay-500 underline underline-offset-4"
-    >
+    <Link href="/" onClick={leave} className="font-semibold text-clay-500">
       {children}
     </Link>
   );
