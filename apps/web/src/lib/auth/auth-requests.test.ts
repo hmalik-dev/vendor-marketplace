@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { signInWithEmail, signOut, signUpWithEmail, verifyEmailCode } from './auth-requests';
+import {
+  requestPasswordReset,
+  signInWithEmail,
+  signOut,
+  signUpWithEmail,
+  verifyEmailCode,
+} from './auth-requests';
 
 const INPUT = { email: 'new@example.com', password: 'a-long-password', name: 'new' };
 
@@ -160,5 +166,21 @@ describe('signOut', () => {
     stubFetch(400);
 
     await expect(signOut()).resolves.toBeUndefined();
+  });
+});
+
+describe('an auth proxy with no auth configuration (VEN-635)', () => {
+  it('reads a sign-in answered 503 AUTH_UNAVAILABLE as unreachable', async () => {
+    stubFetchBody(503, { code: 'AUTH_UNAVAILABLE' });
+
+    await expect(
+      signInWithEmail({ email: 'new@example.com', password: 'a-long-password' }),
+    ).resolves.toBe('unreachable');
+  });
+
+  it('reads a reset request answered 503 AUTH_UNAVAILABLE as unreachable, not sent', async () => {
+    stubFetchBody(503, { code: 'AUTH_UNAVAILABLE' });
+
+    await expect(requestPasswordReset('nobody@example.invalid')).resolves.toBe('unreachable');
   });
 });

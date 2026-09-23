@@ -52,6 +52,14 @@ the localStorage `signup_role` value as trusted input.
   reconcile re-splits `name` on whitespace, so a synced `firstName` can only
   shrink, never widen the vendor's pre-accept `firstName + lastInitial` view.
 
+**VEN-635 (PASS 2026-09-23): missing auth config fails soft.** `authConfigured()`
+makes `getServerSession` answer null and the proxy/token routes answer a uniform
+503 before any throttle charge or `after()` send. Safe because every server data
+read passes a null token to the API, which is the real gate. The session cache
+hit precedes the config check, which is fine only while env is fixed per
+process. Re-open if a caller of the null session falls back to a default
+identity, or if the 503 moves below `forwardReset`'s per-address branch.
+
 **How to apply:** audit any new `/api/auth/*` allowlist entry as an account
 operation, and any new writer of `users` rows as a second provider writing into
 `users_email_key` — a squatted address is an unrecoverable 500 at

@@ -7,7 +7,9 @@ const afterTasks: Array<() => Promise<void>> = [];
 const forgetSessionsFor = vi.fn();
 const mintedUserIdForCaller = vi.fn<() => Promise<string | undefined>>();
 const getSession = vi.fn();
+const authConfigured = vi.fn<() => boolean>();
 vi.mock('@/lib/auth/server', () => ({
+  authConfigured: () => authConfigured(),
   forgetSessionsFor: (userId: string) => forgetSessionsFor(userId),
   mintedUserIdForCaller: () => mintedUserIdForCaller(),
   neonAuth: () => ({
@@ -30,6 +32,7 @@ const { POST } = await import('./route');
 const { resetThrottle } = await import('@/lib/auth/proxy-throttle');
 
 beforeEach(() => {
+  authConfigured.mockReset().mockReturnValue(true);
   mintedUserIdForCaller.mockReset().mockResolvedValue(undefined);
   getSession.mockReset().mockResolvedValue({ data: null });
 });
@@ -591,5 +594,41 @@ describe('sign-in through the auth proxy', () => {
     }
 
     expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+  });
+});
+
+describe('the auth proxy without an auth configuration (VEN-635)', () => {
+  beforeEach(() => {
+    resetThrottle();
+    afterTasks.length = 0;
+    upstreamPost.mockReset();
+    authConfigured.mockReturnValue(false);
+  });
+
+  it('answers a sign-in 503 AUTH_UNAVAILABLE, so the form can say so', async () => {
+    const response = await call('sign-in/email', { email: 'a@example.com', password: 'p' });
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ code: 'AUTH_UNAVAILABLE' });
+    expect(upstreamPost).not.toHaveBeenCalled();
+  });
+
+  it('answers a reset request 503 and schedules no send, rather than claiming one went out', async () => {
+    const response = await call(REQUEST, { email: 'nobody@example.invalid' });
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ code: 'AUTH_UNAVAILABLE' });
+    expect(afterTasks).toHaveLength(0);
+  });
+
+  it('still answers 200 for an unknown address once auth is configured again', async () => {
+    authConfigured.mockReturnValue(true);
+    upstreamPost.mockResolvedValue(Response.json({ message: 'User not found' }, { status: 404 }));
+
+    const response = await call(REQUEST, { email: 'nobody@example.invalid' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    expect(afterTasks).toHaveLength(1);
   });
 });

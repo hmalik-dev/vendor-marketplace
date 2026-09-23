@@ -1,4 +1,5 @@
 import { createNeonAuth } from '@neondatabase/auth/next/server';
+import * as Sentry from '@sentry/nextjs';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
 import { API_REQUEST_TIMEOUT_MS } from '@/lib/api-client';
@@ -15,6 +16,31 @@ import { tokenExpiryMs } from './token-expiry';
  * them, so this is the backstop and not the gate.
  */
 let instance: ReturnType<typeof createNeonAuth> | null = null;
+
+/**
+ * Whether both variables {@link neonAuth} needs are set. A deploy missing one
+ * (VEN-631) must not take down every page for anyone holding a cookie, so
+ * session reads and the `/api/auth/*` proxy ask this first and degrade —
+ * signed out, or a 503 `AUTH_UNAVAILABLE` — instead of throwing (VEN-635).
+ */
+export function authConfigured(): boolean {
+  return Boolean(process.env.NEON_AUTH_BASE_URL && process.env.NEON_AUTH_COOKIE_SECRET);
+}
+
+let reportedMissingConfig = false;
+
+/** Tells Sentry once per process; every render after the first would repeat it. */
+function reportMissingConfig(): void {
+  if (reportedMissingConfig) {
+    return;
+  }
+
+  reportedMissingConfig = true;
+  Sentry.captureMessage('Neon Auth is not configured; every caller is read as signed out', {
+    level: 'error',
+    fingerprint: ['auth-config-missing'],
+  });
+}
 
 export function neonAuth(): ReturnType<typeof createNeonAuth> {
   if (!instance) {
@@ -91,6 +117,8 @@ function withDeadline<T>(
  *
  * Never throws for "nobody is signed in": the Neon SDK answers `{ data: null }`
  * for that, and every caller here treats it as the redirect-to-sign-in case.
+ * A missing auth configuration reads the same way, so public pages still
+ * render and gated ones still redirect (VEN-635).
  * `withDeadline` answers the same shape when the call blows its deadline, so
  * that case needs no separate handling here either — matching how a 429 from
  * Neon Auth is already read as signed out below.
@@ -108,6 +136,11 @@ export const getServerSession = cache(
 
     if (remembered && remembered.expiresAtMs - Date.now() > REFRESH_WINDOW_MS) {
       return { userId: remembered.userId, token: remembered.token };
+    }
+
+    if (!authConfigured()) {
+      reportMissingConfig();
+      return null;
     }
 
     const auth = neonAuth();
@@ -236,7 +269,8 @@ export function forgetSessionsFor(userId: string): void {
   }
 }
 
-/** Test seam: forgets every remembered session. */
+/** Test seam: forgets every remembered session, and that the outage was reported. */
 export function clearServerSessions(): void {
   mintedSessions.clear();
+  reportedMissingConfig = false;
 }

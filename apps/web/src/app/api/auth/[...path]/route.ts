@@ -2,7 +2,12 @@ import * as Sentry from '@sentry/nextjs';
 import type { NextRequest } from 'next/server';
 import { after, NextResponse } from 'next/server';
 import { WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
-import { forgetSessionsFor, mintedUserIdForCaller, neonAuth } from '@/lib/auth/server';
+import {
+  authConfigured,
+  forgetSessionsFor,
+  mintedUserIdForCaller,
+  neonAuth,
+} from '@/lib/auth/server';
 import { isProxiedAuthCall } from '@/lib/auth/proxy-allowlist';
 import { apiOrigin } from '@/config/public-env';
 import {
@@ -36,6 +41,14 @@ import {
  *
  * Built per request, because `neonAuth()` reads the environment on first use
  * and a module-level `auth.handler()` would read it at build.
+ *
+ * **A missing auth configuration is a 503 `AUTH_UNAVAILABLE`**, answered before
+ * any budget is charged or any `after()` send is scheduled (VEN-635): the
+ * forms show their "could not reach" copy, and a reset request no longer
+ * claims a mail went out. A config outage says nothing about whether an
+ * address has an account, so this answer is the same for every address.
+ * An upstream outage (Neon Auth itself down or slow) still answers whatever
+ * the SDK does; extending this 503 to that is a separate change.
  */
 type RouteContext = { params: Promise<{ path: string[] }> };
 
@@ -46,6 +59,10 @@ const forward =
 
     if (!isProxiedAuthCall(method, path)) {
       return NextResponse.json({ message: 'Not found' }, { status: 404 });
+    }
+
+    if (!authConfigured()) {
+      return NextResponse.json({ code: 'AUTH_UNAVAILABLE' }, { status: 503 });
     }
 
     if (await chargeCaller(callerAddress(request.headers), path)) {

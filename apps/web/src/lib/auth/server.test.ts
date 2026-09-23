@@ -10,9 +10,14 @@ vi.mock('@neondatabase/auth/next/server', () => ({
 vi.mock('next/headers', () => ({ cookies: async () => ({ getAll }) }));
 // `cache()` memoises per request; each call here stands for a fresh request.
 vi.mock('react', () => ({ cache: <T>(fn: T): T => fn }));
+const captureMessage = vi.fn();
+vi.mock('@sentry/nextjs', () => ({
+  captureMessage: (message: string, hint: unknown) => captureMessage(message, hint),
+}));
 
 import { API_REQUEST_TIMEOUT_MS } from '@/lib/api-client';
 import {
+  authConfigured,
   clearServerSessions,
   forgetSessionsFor,
   getServerSession,
@@ -265,5 +270,51 @@ describe('mintedUserIdForCaller', () => {
     getAll.mockReturnValue([]);
 
     await expect(mintedUserIdForCaller()).resolves.toBeUndefined();
+  });
+});
+
+describe('getServerSession without an auth configuration (VEN-635)', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEON_AUTH_BASE_URL', 'https://auth.example.test');
+    vi.stubEnv('NEON_AUTH_COOKIE_SECRET', '');
+    getSession.mockReset();
+    token.mockReset();
+    getAll.mockReset();
+    captureMessage.mockReset();
+    clearServerSessions();
+  });
+
+  it('reads a caller holding a cookie as signed out, and reports the outage to Sentry once', async () => {
+    getAll.mockReturnValue([{ name: '__Secure-neon-auth.session_token', value: 'stale' }]);
+
+    const answers = [await getServerSession(), await getServerSession(), await getServerSession()];
+
+    expect(answers).toEqual([null, null, null]);
+    expect(getSession).not.toHaveBeenCalled();
+    expect(captureMessage).toHaveBeenCalledOnce();
+    expect(captureMessage).toHaveBeenCalledWith(
+      'Neon Auth is not configured; every caller is read as signed out',
+      { level: 'error', fingerprint: ['auth-config-missing'] },
+    );
+  });
+
+  it('reports nothing for a caller with no cookie, who needs no auth at all', async () => {
+    getAll.mockReturnValue([]);
+
+    expect(await getServerSession()).toBeNull();
+    expect(captureMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('authConfigured', () => {
+  it.each([
+    ['https://auth.example.test', 'x'.repeat(32), true],
+    ['https://auth.example.test', '', false],
+    ['', 'x'.repeat(32), false],
+  ])('base URL %j and secret %j → %s', (baseUrl, secret, expected) => {
+    vi.stubEnv('NEON_AUTH_BASE_URL', baseUrl);
+    vi.stubEnv('NEON_AUTH_COOKIE_SECRET', secret);
+
+    expect(authConfigured()).toBe(expected);
   });
 });

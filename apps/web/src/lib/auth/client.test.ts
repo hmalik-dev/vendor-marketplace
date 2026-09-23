@@ -104,6 +104,12 @@ describe('getSessionToken', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('is signed out while auth is not configured, so public calls still go out (VEN-635)', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('{"code":"AUTH_UNAVAILABLE"}', { status: 503 }));
+
+    await expect(getSessionToken()).resolves.toBeNull();
+  });
+
   it('rejects on a server failure so the caller can retry, rather than reading it as signed out', async () => {
     fetchMock.mockResolvedValue(new Response('boom', { status: 502 }));
 
