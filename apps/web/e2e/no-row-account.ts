@@ -3,6 +3,13 @@ import { dirname, resolve } from 'node:path';
 
 import { expect, type Page } from '@playwright/test';
 
+import {
+  API_VERSION_PREFIX,
+  type SignUpRole,
+  WEB_TIER_KEY_HEADER,
+} from '@vendor-marketplace/shared';
+
+import { resolveE2EApiUrl } from './base-url.js';
 import { AUTH_DIR } from './fixtures.js';
 import { waitForHydration } from './hydration.js';
 
@@ -97,4 +104,35 @@ export async function signInThroughTheForm(page: Page, account: NoRowAccount): P
   await expect(page.locator('#main')).toBeVisible();
 
   return new URL(page.url());
+}
+
+/**
+ * Records the role this signed-in persona "chose at sign-up", the way the auth
+ * proxy does for a real sign-up (VEN-662). The persona was created once and
+ * never passes through `/sign-up`, so without this `/accept-terms` has no role
+ * to state. Keyed by the session's own id, read from the proxy; first write
+ * wins, so a lane that already holds a record keeps it.
+ */
+export async function recordSignUpRoleFor(page: Page, role: SignUpRole): Promise<void> {
+  const key = process.env.WEB_TIER_KEY;
+
+  if (!key) {
+    throw new Error('WEB_TIER_KEY is not set — run this spec through `pnpm lane:exec`.');
+  }
+
+  const session = (await (await page.request.get('/api/auth/get-session')).json()) as {
+    user?: { id?: string };
+  } | null;
+  const authUserId = session?.user?.id;
+
+  if (!authUserId) {
+    throw new Error('The signed-in persona has no session id to record a role against.');
+  }
+
+  const recorded = await page.request.post(
+    `${resolveE2EApiUrl()}${API_VERSION_PREFIX}/internal/sign-up-role`,
+    { headers: { [WEB_TIER_KEY_HEADER]: key }, data: { authUserId, role } },
+  );
+
+  expect(recorded.status(), 'the sign-up role was not recorded').toBe(200);
 }

@@ -26,7 +26,7 @@
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` renders a booking amount with no `force-dynamic`
 - [Email is a label, the auth id is the key (the pre-rename column is gone)](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial and on `lower(email)` + lowercase CHECK since VEN-649; nothing resolves a person by email
 - [Closing an account releases its address, scrubs the row, deletes uploads](closed-account-address-is-released.md) — partial index since #451; VEN-614 scrub + owner-prefix delete audited clean
-- [The sign-up role is confirmed, not narrowed](signup-role-is-confirmed-not-narrowed.md) — VEN-507: `normalizeRole` throws; the browser hint is address-bound and UI-only (PASS 2026-09-23)
+- [The sign-up role is recorded server-side, first write wins](signup-role-is-confirmed-not-narrowed.md) — VEN-662: proxy records against the provider id; a squatter fixes the victim's role (Low)
 - [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes left low-severity on purpose
 - [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — adding `requireAuth` breaks it; removing the inline ban check is the regression

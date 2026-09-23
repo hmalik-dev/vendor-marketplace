@@ -54,8 +54,8 @@ export async function signUpAndVerify(
 /**
  * The acceptance every account clears exactly once, whatever role it is.
  *
- * A fresh sign-up hits the no-tick path — the role is already preselected
- * from the sign-up hint, so `Continue` is enabled with nothing else to do
+ * A fresh sign-up hits the no-tick path — the role was recorded on the server
+ * at sign-up (VEN-662) and is stated, so `Continue` is enabled with nothing else to do
  * (`accept-terms-screen.tsx`'s `tickMode` is only for a *returning* account
  * facing a new Terms version, which never applies to an account this spec
  * just created).
