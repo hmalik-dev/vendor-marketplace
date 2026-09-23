@@ -45,7 +45,7 @@ describe('admin customer detail', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Fernbank Studio',
@@ -96,7 +96,7 @@ describe('admin customer detail', () => {
   function get(userId: string, authUserId: string | null = ADMIN) {
     return harness.app.inject({
       method: 'GET',
-      url: `/admin/customers/${userId}`,
+      url: `/v1/admin/customers/${userId}`,
       headers: authUserId ? bearer(authUserId) : {},
     });
   }

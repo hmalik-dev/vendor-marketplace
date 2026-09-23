@@ -60,7 +60,7 @@ describe('admin routes', () => {
   ): Promise<{ profileId: string; userId: string }> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -210,88 +210,88 @@ describe('admin routes', () => {
      * below it.
      */
     const routes = [
-      { method: 'GET', url: '/admin/vendors' },
-      { method: 'POST', url: '/admin/step-up/challenge' },
-      { method: 'POST', url: '/admin/step-up/verify' },
-      { method: 'GET', url: '/admin/vendors/facets' },
-      { method: 'GET', url: '/admin/metrics' },
-      { method: 'GET', url: '/admin/customers' },
-      { method: 'GET', url: '/admin/bookings' },
-      { method: 'GET', url: '/admin/payments' },
-      { method: 'GET', url: '/admin/reviews' },
-      { method: 'DELETE', url: `/admin/reviews/${NIL}` },
-      { method: 'GET', url: '/admin/tag-suggestions' },
-      { method: 'PUT', url: `/admin/tag-suggestions/${NIL}` },
-      { method: 'GET', url: '/admin/tags' },
+      { method: 'GET', url: '/v1/admin/vendors' },
+      { method: 'POST', url: '/v1/admin/step-up/challenge' },
+      { method: 'POST', url: '/v1/admin/step-up/verify' },
+      { method: 'GET', url: '/v1/admin/vendors/facets' },
+      { method: 'GET', url: '/v1/admin/metrics' },
+      { method: 'GET', url: '/v1/admin/customers' },
+      { method: 'GET', url: '/v1/admin/bookings' },
+      { method: 'GET', url: '/v1/admin/payments' },
+      { method: 'GET', url: '/v1/admin/reviews' },
+      { method: 'DELETE', url: `/v1/admin/reviews/${NIL}` },
+      { method: 'GET', url: '/v1/admin/tag-suggestions' },
+      { method: 'PUT', url: `/v1/admin/tag-suggestions/${NIL}` },
+      { method: 'GET', url: '/v1/admin/tags' },
       /*
        * #434. The action log records what the console did to other people's
        * accounts, so reading it is itself a privileged read — an operator's
        * whole history is exactly what a stranger must not be able to walk.
        */
-      { method: 'GET', url: '/admin/activity' },
-      { method: 'GET', url: '/admin/activity/actors' },
-      { method: 'PUT', url: `/admin/tags/${NIL}` },
-      { method: 'PUT', url: `/admin/users/${NIL}/ban` },
-      { method: 'PUT', url: `/admin/users/${NIL}/unban` },
-      { method: 'GET', url: `/admin/users/${NIL}/data-rights` },
-      { method: 'POST', url: `/admin/users/${NIL}/export` },
-      { method: 'POST', url: `/admin/users/${NIL}/close` },
+      { method: 'GET', url: '/v1/admin/activity' },
+      { method: 'GET', url: '/v1/admin/activity/actors' },
+      { method: 'PUT', url: `/v1/admin/tags/${NIL}` },
+      { method: 'PUT', url: `/v1/admin/users/${NIL}/ban` },
+      { method: 'PUT', url: `/v1/admin/users/${NIL}/unban` },
+      { method: 'GET', url: `/v1/admin/users/${NIL}/data-rights` },
+      { method: 'POST', url: `/v1/admin/users/${NIL}/export` },
+      { method: 'POST', url: `/v1/admin/users/${NIL}/close` },
       /*
        * #423. A dispute resolution decides who keeps the money, so a stranger
        * or either party reaching it would let one side of the disagreement
        * settle it — which is precisely what this list is here to prove cannot
        * happen.
        */
-      { method: 'PUT', url: `/admin/bookings/${NIL}/dispute` },
+      { method: 'PUT', url: `/v1/admin/bookings/${NIL}/dispute` },
       /*
        * #431. The queue carries what customers wrote to support and the detail
        * carries the money on the booking under dispute — so both reads are
        * privileged, and the resolve is a state change on somebody else's
        * complaint.
        */
-      { method: 'GET', url: '/admin/cases' },
-      { method: 'GET', url: `/admin/cases/${NIL}` },
-      { method: 'PUT', url: `/admin/cases/${NIL}/resolve` },
+      { method: 'GET', url: '/v1/admin/cases' },
+      { method: 'GET', url: `/v1/admin/cases/${NIL}` },
+      { method: 'PUT', url: `/v1/admin/cases/${NIL}/resolve` },
       /*
        * #432. The retry moves money out of the platform's balance, so it is a
        * write, not a refresh — and the operator who pressed it is recorded.
        */
-      { method: 'PUT', url: `/admin/bookings/${NIL}/payout/retry` },
+      { method: 'PUT', url: `/v1/admin/bookings/${NIL}/payout/retry` },
       /*
        * #435. Graduated moderation acts on other people's storefronts, reviews
        * and photos without banning anyone — which makes an unguarded one a
        * stranger who can unpublish a business, not merely read about it.
        */
-      { method: 'PUT', url: `/admin/vendors/${NIL}/publish` },
-      { method: 'PUT', url: `/admin/reviews/${NIL}/visibility` },
-      { method: 'PUT', url: `/admin/packages/${NIL}/active` },
-      { method: 'DELETE', url: `/admin/portfolio-items/${NIL}` },
+      { method: 'PUT', url: `/v1/admin/vendors/${NIL}/publish` },
+      { method: 'PUT', url: `/v1/admin/reviews/${NIL}/visibility` },
+      { method: 'PUT', url: `/v1/admin/packages/${NIL}/active` },
+      { method: 'DELETE', url: `/v1/admin/portfolio-items/${NIL}` },
       /*
        * #436. The most privileged read in the console: two people's private
        * messages. It is scoped by an open case on top of this guard, but the
        * guard is what stops a stranger reaching the scope check at all.
        */
-      { method: 'GET', url: `/admin/conversations/${NIL}/messages` },
+      { method: 'GET', url: `/v1/admin/conversations/${NIL}/messages` },
       /*
        * VEN-404. The launch switches stop checkout and payouts for everyone, so
        * a stranger reaching them could halt the marketplace or unpause money.
        */
-      { method: 'GET', url: '/admin/settings' },
-      { method: 'PUT', url: '/admin/settings' },
-      { method: 'PUT', url: `/admin/vendors/${NIL}/payout-hold` },
+      { method: 'GET', url: '/v1/admin/settings' },
+      { method: 'PUT', url: '/v1/admin/settings' },
+      { method: 'PUT', url: `/v1/admin/vendors/${NIL}/payout-hold` },
       /* VEN-380. One vendor's owner email, Stripe state and who holds their dates. */
-      { method: 'GET', url: `/admin/vendors/${NIL}` },
+      { method: 'GET', url: `/v1/admin/vendors/${NIL}` },
       /* VEN-399. A booking's money and a customer's email; every request in the funnel. */
-      { method: 'GET', url: `/admin/bookings/${NIL}` },
-      { method: 'GET', url: '/admin/requests' },
+      { method: 'GET', url: `/v1/admin/bookings/${NIL}` },
+      { method: 'GET', url: '/v1/admin/requests' },
       /* VEN-400. One customer's contact details, bookings, reviews and notifications. */
-      { method: 'GET', url: `/admin/customers/${NIL}` },
+      { method: 'GET', url: `/v1/admin/customers/${NIL}` },
       /* VEN-475. The web tier reports each CSV export here. */
-      { method: 'POST', url: '/admin/exports' },
+      { method: 'POST', url: '/v1/admin/exports' },
       /* VEN-506. Whoever holds the console: granting and revoking it is privilege escalation. */
-      { method: 'GET', url: '/admin/operators' },
-      { method: 'POST', url: '/admin/operators' },
-      { method: 'DELETE', url: `/admin/operators/${NIL}` },
+      { method: 'GET', url: '/v1/admin/operators' },
+      { method: 'POST', url: '/v1/admin/operators' },
+      { method: 'DELETE', url: `/v1/admin/operators/${NIL}` },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {
@@ -393,7 +393,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${target}/ban`,
+        url: `/v1/admin/users/${target}/ban`,
         headers: { ...bearer(CUSTOMER), 'content-type': 'application/json' },
         payload: '{',
       });
@@ -409,7 +409,7 @@ describe('admin routes', () => {
 
       const live = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors',
+        url: '/v1/admin/vendors',
         headers: bearer(ADMIN),
       });
       expect(live.statusCode).toBe(200);
@@ -428,7 +428,7 @@ describe('admin routes', () => {
         .where(eq(vendorProfiles.id, vendor.profileId));
       const paused = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors',
+        url: '/v1/admin/vendors',
         headers: bearer(ADMIN),
       });
       expect(paused.json().items[0].status).toBe('paused');
@@ -439,7 +439,7 @@ describe('admin routes', () => {
         .where(eq(vendorProfiles.id, vendor.profileId));
       const review = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors',
+        url: '/v1/admin/vendors',
         headers: bearer(ADMIN),
       });
       expect(review.json().items[0].status).toBe('review');
@@ -450,7 +450,7 @@ describe('admin routes', () => {
         .where(eq(users.id, vendor.userId));
       const flagged = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors',
+        url: '/v1/admin/vendors',
         headers: bearer(ADMIN),
       });
       expect(flagged.json().items[0].status).toBe('flagged');
@@ -467,7 +467,7 @@ describe('admin routes', () => {
         .where(eq(vendorProfiles.id, vendor.profileId));
       const retired = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors',
+        url: '/v1/admin/vendors',
         headers: bearer(ADMIN),
       });
       expect(retired.json().items[0].status).toBe('retired');
@@ -488,7 +488,7 @@ describe('admin routes', () => {
 
       const unfiltered = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors',
+        url: '/v1/admin/vendors',
         headers: bearer(ADMIN),
       });
       expect(unfiltered.json().items).toHaveLength(1);
@@ -496,7 +496,7 @@ describe('admin routes', () => {
 
       const filtered = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?status=retired',
+        url: '/v1/admin/vendors?status=retired',
         headers: bearer(ADMIN),
       });
       expect(filtered.json().items).toHaveLength(1);
@@ -511,7 +511,7 @@ describe('admin routes', () => {
        */
       const review = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?status=review',
+        url: '/v1/admin/vendors?status=review',
         headers: bearer(ADMIN),
       });
       expect(review.json().items).toHaveLength(0);
@@ -524,7 +524,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?status=live',
+        url: '/v1/admin/vendors?status=live',
         headers: bearer(ADMIN),
       });
 
@@ -540,21 +540,21 @@ describe('admin routes', () => {
 
       const hit = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?q=sunlit',
+        url: '/v1/admin/vendors?q=sunlit',
         headers: bearer(ADMIN),
       });
       expect(hit.json().items).toHaveLength(1);
 
       const byEmail = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?q=user_vendor%40example.com',
+        url: '/v1/admin/vendors?q=user_vendor%40example.com',
         headers: bearer(ADMIN),
       });
       expect(byEmail.json().items).toHaveLength(1);
 
       const miss = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?q=nothing-matches-this',
+        url: '/v1/admin/vendors?q=nothing-matches-this',
         headers: bearer(ADMIN),
       });
       expect(miss.json().items).toHaveLength(0);
@@ -567,14 +567,14 @@ describe('admin routes', () => {
 
       const connected = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?payouts=connected',
+        url: '/v1/admin/vendors?payouts=connected',
         headers: bearer(ADMIN),
       });
       expect(connected.json().items).toHaveLength(0);
 
       const notConnected = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?payouts=not-connected',
+        url: '/v1/admin/vendors?payouts=not-connected',
         headers: bearer(ADMIN),
       });
       expect(notConnected.json().items).toHaveLength(1);
@@ -600,7 +600,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors',
+        url: '/v1/admin/vendors',
         headers: bearer(ADMIN),
       });
 
@@ -613,7 +613,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors',
+        url: '/v1/admin/vendors',
         headers: bearer(ADMIN),
       });
 
@@ -628,7 +628,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${adminId}/ban`,
+        url: `/v1/admin/users/${adminId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -642,7 +642,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${other}/ban`,
+        url: `/v1/admin/users/${other}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -665,7 +665,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -745,7 +745,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -912,7 +912,7 @@ describe('admin routes', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -954,7 +954,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -991,7 +991,7 @@ describe('admin routes', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -1017,7 +1017,7 @@ describe('admin routes', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -1057,7 +1057,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -1083,14 +1083,14 @@ describe('admin routes', () => {
 
       const first = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${target}/ban`,
+        url: `/v1/admin/users/${target}/ban`,
         headers: bearer(ADMIN),
       });
       expect(first.statusCode).toBe(200);
 
       const second = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${target}/ban`,
+        url: `/v1/admin/users/${target}/ban`,
         headers: bearer(ADMIN),
       });
       expect(second.statusCode).toBe(200);
@@ -1122,7 +1122,7 @@ describe('admin routes', () => {
       const ban = (userId: string, actor = ADMIN) =>
         harness.app.inject({
           method: 'PUT',
-          url: `/admin/users/${userId}/ban`,
+          url: `/v1/admin/users/${userId}/ban`,
           headers: bearer(actor),
         });
 
@@ -1209,7 +1209,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/admin/users/00000000-0000-4000-8000-000000000000/ban',
+        url: '/v1/admin/users/00000000-0000-4000-8000-000000000000/ban',
         headers: bearer(ADMIN),
       });
 
@@ -1224,13 +1224,13 @@ describe('admin routes', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/unban`,
+        url: `/v1/admin/users/${vendor.userId}/unban`,
         headers: bearer(ADMIN),
       });
 
@@ -1257,7 +1257,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${target}/unban`,
+        url: `/v1/admin/users/${target}/unban`,
         headers: bearer(ADMIN),
       });
 
@@ -1271,7 +1271,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/metrics',
+        url: '/v1/admin/metrics',
         headers: bearer(ADMIN),
       });
 
@@ -1331,7 +1331,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/metrics',
+        url: '/v1/admin/metrics',
         headers: bearer(ADMIN),
       });
 
@@ -1355,12 +1355,12 @@ describe('admin routes', () => {
       await signIn(ADMIN, true);
 
       for (const url of [
-        '/admin/vendors',
-        '/admin/customers',
-        '/admin/bookings',
-        '/admin/payments',
-        '/admin/reviews',
-        '/admin/tag-suggestions',
+        '/v1/admin/vendors',
+        '/v1/admin/customers',
+        '/v1/admin/bookings',
+        '/v1/admin/payments',
+        '/v1/admin/reviews',
+        '/v1/admin/tag-suggestions',
       ]) {
         const response = await harness.app.inject({ method: 'GET', url, headers: bearer(ADMIN) });
 
@@ -1389,7 +1389,7 @@ describe('admin routes', () => {
       await signIn(VENDOR);
       await createVendorProfile({ isPublished: true });
 
-      for (const url of ['/admin/vendors?q=%25', '/admin/customers?q=%25']) {
+      for (const url of ['/v1/admin/vendors?q=%25', '/v1/admin/customers?q=%25']) {
         const response = await harness.app.inject({
           method: 'GET',
           url,
@@ -1409,7 +1409,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?q=unlit',
+        url: '/v1/admin/vendors?q=unlit',
         headers: bearer(ADMIN),
       });
 
@@ -1428,7 +1428,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?q=100%25%20Sun',
+        url: '/v1/admin/vendors?q=100%25%20Sun',
         headers: bearer(ADMIN),
       });
 
@@ -1445,7 +1445,7 @@ describe('admin routes', () => {
 
       const all = await harness.app.inject({
         method: 'GET',
-        url: '/admin/customers',
+        url: '/v1/admin/customers',
         headers: bearer(ADMIN),
       });
       expect(all.statusCode).toBe(200);
@@ -1456,7 +1456,7 @@ describe('admin routes', () => {
 
       const filtered = await harness.app.inject({
         method: 'GET',
-        url: `/admin/customers?q=${CUSTOMER}`,
+        url: `/v1/admin/customers?q=${CUSTOMER}`,
         headers: bearer(ADMIN),
       });
       expect(filtered.json().total).toBe(1);
@@ -1494,7 +1494,7 @@ describe('admin routes', () => {
 
       const unfiltered = await harness.app.inject({
         method: 'GET',
-        url: '/admin/customers',
+        url: '/v1/admin/customers',
         headers: bearer(ADMIN),
       });
 
@@ -1508,7 +1508,7 @@ describe('admin routes', () => {
 
       const flagged = await harness.app.inject({
         method: 'GET',
-        url: '/admin/customers?flag=email-stale',
+        url: '/v1/admin/customers?flag=email-stale',
         headers: bearer(ADMIN),
       });
 
@@ -1542,7 +1542,7 @@ describe('admin routes', () => {
 
       const listed = await harness.app.inject({
         method: 'GET',
-        url: '/admin/bookings',
+        url: '/v1/admin/bookings',
         headers: bearer(ADMIN),
       });
       expect(listed.statusCode).toBe(200);
@@ -1559,7 +1559,7 @@ describe('admin routes', () => {
 
       const filtered = await harness.app.inject({
         method: 'GET',
-        url: '/admin/bookings?status=completed',
+        url: '/v1/admin/bookings?status=completed',
         headers: bearer(ADMIN),
       });
       expect(filtered.json().total).toBe(0);
@@ -1582,14 +1582,14 @@ describe('admin routes', () => {
 
       const ban = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
       expect(ban.json()).toMatchObject({ refundsFailed: 1, bookingsCancelled: 0 });
 
       const listed = await harness.app.inject({
         method: 'GET',
-        url: '/admin/bookings?flag=refund-stuck',
+        url: '/v1/admin/bookings?flag=refund-stuck',
         headers: bearer(ADMIN),
       });
 
@@ -1632,7 +1632,7 @@ describe('admin routes', () => {
 
       const listed = await harness.app.inject({
         method: 'GET',
-        url: '/admin/bookings?flag=refund-stuck',
+        url: '/v1/admin/bookings?flag=refund-stuck',
         headers: bearer(ADMIN),
       });
 
@@ -1665,7 +1665,7 @@ describe('admin routes', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -1678,7 +1678,7 @@ describe('admin routes', () => {
 
       const listed = await harness.app.inject({
         method: 'GET',
-        url: '/admin/bookings?flag=refund-stuck',
+        url: '/v1/admin/bookings?flag=refund-stuck',
         headers: bearer(ADMIN),
       });
 
@@ -1688,7 +1688,7 @@ describe('admin routes', () => {
       /* And not marked on the unfiltered table either. */
       const all = await harness.app.inject({
         method: 'GET',
-        url: '/admin/bookings',
+        url: '/v1/admin/bookings',
         headers: bearer(ADMIN),
       });
       expect(all.json().items[0]).toMatchObject({ id: past, refundStuck: false });
@@ -1720,7 +1720,7 @@ describe('admin routes', () => {
 
       const listed = await harness.app.inject({
         method: 'GET',
-        url: '/admin/bookings?flag=refund-stuck',
+        url: '/v1/admin/bookings?flag=refund-stuck',
         headers: bearer(ADMIN),
       });
 
@@ -1742,7 +1742,7 @@ describe('admin routes', () => {
 
       const listed = await harness.app.inject({
         method: 'GET',
-        url: '/admin/bookings?flag=refund-stuck',
+        url: '/v1/admin/bookings?flag=refund-stuck',
         headers: bearer(ADMIN),
       });
 
@@ -1752,7 +1752,7 @@ describe('admin routes', () => {
       // And the row is not marked on the unfiltered table either.
       const all = await harness.app.inject({
         method: 'GET',
-        url: '/admin/bookings',
+        url: '/v1/admin/bookings',
         headers: bearer(ADMIN),
       });
       expect(all.json().items[0]).toMatchObject({ refundStuck: false });
@@ -1772,7 +1772,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/payments',
+        url: '/v1/admin/payments',
         headers: bearer(ADMIN),
       });
 
@@ -1815,8 +1815,8 @@ describe('admin routes', () => {
         .where(eq(bookings.id, refunded));
 
       const [payments, metrics] = await Promise.all([
-        harness.app.inject({ method: 'GET', url: '/admin/payments', headers: bearer(ADMIN) }),
-        harness.app.inject({ method: 'GET', url: '/admin/metrics', headers: bearer(ADMIN) }),
+        harness.app.inject({ method: 'GET', url: '/v1/admin/payments', headers: bearer(ADMIN) }),
+        harness.app.inject({ method: 'GET', url: '/v1/admin/metrics', headers: bearer(ADMIN) }),
       ]);
 
       expect(payments.json().total).toBe(2);
@@ -1871,7 +1871,7 @@ describe('admin routes', () => {
 
       const listed = await harness.app.inject({
         method: 'GET',
-        url: '/admin/reviews',
+        url: '/v1/admin/reviews',
         headers: bearer(ADMIN),
       });
       expect(listed.json().total).toBe(2);
@@ -1882,7 +1882,7 @@ describe('admin routes', () => {
 
       const deleted = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${five}`,
+        url: `/v1/admin/reviews/${five}`,
         headers: bearer(ADMIN),
       });
       expect(deleted.statusCode).toBe(204);
@@ -1908,7 +1908,7 @@ describe('admin routes', () => {
 
       const deleted = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${only}`,
+        url: `/v1/admin/reviews/${only}`,
         headers: bearer(ADMIN),
       });
       expect(deleted.statusCode).toBe(204);
@@ -1926,7 +1926,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${'0'.repeat(8)}-0000-4000-8000-000000000000`,
+        url: `/v1/admin/reviews/${'0'.repeat(8)}-0000-4000-8000-000000000000`,
         headers: bearer(ADMIN),
       });
 
@@ -1953,7 +1953,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/tag-suggestions?status=pending',
+        url: '/v1/admin/tag-suggestions?status=pending',
         headers: bearer(ADMIN),
       });
 
@@ -1975,7 +1975,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${id}`,
+        url: `/v1/admin/tag-suggestions/${id}`,
         headers: bearer(ADMIN),
         payload: { action: 'approve' },
       });
@@ -2015,7 +2015,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${id}`,
+        url: `/v1/admin/tag-suggestions/${id}`,
         headers: bearer(ADMIN),
         payload: { action: 'approve' },
       });
@@ -2083,7 +2083,7 @@ describe('admin routes', () => {
 
         const response = await harness.app.inject({
           method: 'PUT',
-          url: `/admin/tag-suggestions/${id}`,
+          url: `/v1/admin/tag-suggestions/${id}`,
           headers: bearer(ADMIN),
           payload: { action: 'approve' },
         });
@@ -2115,7 +2115,7 @@ describe('admin routes', () => {
 
         const response = await harness.app.inject({
           method: 'PUT',
-          url: `/admin/tag-suggestions/${id}`,
+          url: `/v1/admin/tag-suggestions/${id}`,
           headers: bearer(ADMIN),
           payload: { action: 'merge', mergeTagId: hidden[0]!.id },
         });
@@ -2132,7 +2132,7 @@ describe('admin routes', () => {
 
         const response = await harness.app.inject({
           method: 'PUT',
-          url: `/admin/tag-suggestions/${id}`,
+          url: `/v1/admin/tag-suggestions/${id}`,
           headers: bearer(ADMIN),
           payload: { action: 'approve' },
         });
@@ -2161,7 +2161,7 @@ describe('admin routes', () => {
 
         const response = await harness.app.inject({
           method: 'PUT',
-          url: `/admin/tag-suggestions/${id}`,
+          url: `/v1/admin/tag-suggestions/${id}`,
           headers: bearer(ADMIN),
           payload: { action: 'merge', mergeTagId: existing[0]!.id },
         });
@@ -2181,7 +2181,7 @@ describe('admin routes', () => {
 
         const response = await harness.app.inject({
           method: 'PUT',
-          url: `/admin/tag-suggestions/${rows[0]!.id}`,
+          url: `/v1/admin/tag-suggestions/${rows[0]!.id}`,
           headers: bearer(ADMIN),
           payload: { action: 'approve' },
         });
@@ -2209,7 +2209,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${id}`,
+        url: `/v1/admin/tag-suggestions/${id}`,
         headers: bearer(ADMIN),
         payload: { action: 'approve', adminNote: 'Duplicate of the existing one, per Kate.' },
       });
@@ -2228,7 +2228,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${id}`,
+        url: `/v1/admin/tag-suggestions/${id}`,
         headers: bearer(ADMIN),
         payload: { action: 'approve' },
       });
@@ -2253,7 +2253,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${id}`,
+        url: `/v1/admin/tag-suggestions/${id}`,
         headers: bearer(ADMIN),
         payload: { action: 'reject', adminNote: 'Too narrow to be a filter.' },
       });
@@ -2275,7 +2275,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${id}`,
+        url: `/v1/admin/tag-suggestions/${id}`,
         headers: bearer(ADMIN),
         payload: { action: 'reject' },
       });
@@ -2294,7 +2294,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${id}`,
+        url: `/v1/admin/tag-suggestions/${id}`,
         headers: bearer(ADMIN),
         payload: { action: 'merge', mergeTagId: target[0]!.id },
       });
@@ -2329,7 +2329,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${id}`,
+        url: `/v1/admin/tag-suggestions/${id}`,
         headers: bearer(ADMIN),
         payload: { action: 'merge', mergeTagId: other[0]!.id },
       });
@@ -2345,7 +2345,7 @@ describe('admin routes', () => {
 
       const first = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${id}`,
+        url: `/v1/admin/tag-suggestions/${id}`,
         headers: bearer(ADMIN),
         payload: { action: 'approve' },
       });
@@ -2353,7 +2353,7 @@ describe('admin routes', () => {
 
       const second = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${id}`,
+        url: `/v1/admin/tag-suggestions/${id}`,
         headers: bearer(ADMIN),
         payload: { action: 'reject', adminNote: 'Changed my mind.' },
       });
@@ -2383,7 +2383,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${customerId}/ban`,
+        url: `/v1/admin/users/${customerId}/ban`,
         headers: bearer(ADMIN),
       });
       expect(response.statusCode).toBe(200);
@@ -2419,7 +2419,7 @@ describe('admin routes', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${customerId}/ban`,
+        url: `/v1/admin/users/${customerId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -2442,7 +2442,7 @@ describe('admin routes', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${customerId}/ban`,
+        url: `/v1/admin/users/${customerId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -2468,7 +2468,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/tags',
+        url: '/v1/admin/tags',
         headers: bearer(ADMIN),
       });
 
@@ -2493,7 +2493,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tags/${created[0]!.id}`,
+        url: `/v1/admin/tags/${created[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { isActive: false },
       });
@@ -2517,7 +2517,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tags/${created[0]!.id}`,
+        url: `/v1/admin/tags/${created[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { name: 'Nut free menu' },
       });
@@ -2541,7 +2541,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tags/${created[0]!.id}`,
+        url: `/v1/admin/tags/${created[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { name: 'soy free' },
       });
@@ -2563,7 +2563,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tags/${created[0]!.id}`,
+        url: `/v1/admin/tags/${created[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { name: 'Nut Free' },
       });
@@ -2587,7 +2587,7 @@ describe('admin routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tags/${created[0]!.id}`,
+        url: `/v1/admin/tags/${created[0]!.id}`,
         headers: bearer(ADMIN),
         payload: {},
       });

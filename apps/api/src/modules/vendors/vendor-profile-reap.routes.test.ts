@@ -58,7 +58,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
   async function createProfile(authUserId: string, businessName: string): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(authUserId),
       payload: {
         businessName,
@@ -74,7 +74,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
   async function save(authUserId: string, payload: Record<string, unknown>): Promise<void> {
     const response = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(authUserId),
       payload,
     });
@@ -88,7 +88,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
   ): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/portfolio',
+      url: '/v1/vendor/portfolio',
       headers: bearer(authUserId),
       payload: { imageUrl, thumbnailUrl },
     });
@@ -176,7 +176,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
 
     const profile = await harness.app.inject({
       method: 'GET',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
     });
     expect(profile.json().coverImageUrl).toBe(cover);
@@ -231,7 +231,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
 
     const response = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: { profileImageUrl: rival },
     });
@@ -260,7 +260,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
 
     const response = await harness.app.inject({
       method,
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         ...(method === 'POST'
@@ -285,7 +285,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
 
     const response = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: { profileImageUrl: `%76endor-profile/${rivalId}/rival.webp` },
     });
@@ -300,7 +300,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
 
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -329,7 +329,7 @@ describe('PUT /vendor/profile reaps only what nothing else points at', () => {
 
     const avatar = await harness.app.inject({
       method: 'PUT',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(VENDOR),
       payload: { avatarUrl: shared },
     });

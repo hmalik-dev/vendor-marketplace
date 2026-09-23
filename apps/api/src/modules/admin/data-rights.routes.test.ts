@@ -63,7 +63,7 @@ describe('data rights', () => {
   async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
@@ -88,7 +88,7 @@ describe('data rights', () => {
   }> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -291,7 +291,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/export`,
+        url: `/v1/admin/users/${customerId}/export`,
         headers: bearer(ADMIN),
       });
 
@@ -345,7 +345,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/export`,
+        url: `/v1/admin/users/${customerId}/export`,
         headers: bearer(ADMIN),
       });
 
@@ -372,7 +372,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/export`,
+        url: `/v1/admin/users/${customerId}/export`,
         headers: bearer(ADMIN),
       });
 
@@ -393,7 +393,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/export`,
+        url: `/v1/admin/users/${customerId}/export`,
         headers: bearer(ADMIN),
       });
 
@@ -417,7 +417,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/export`,
+        url: `/v1/admin/users/${customerId}/export`,
         headers: bearer(OUTSIDER),
       });
 
@@ -441,7 +441,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -487,7 +487,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -522,7 +522,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -611,7 +611,7 @@ describe('data rights', () => {
       try {
         const response = await harness.app.inject({
           method: 'POST',
-          url: `/admin/users/${customerId}/close`,
+          url: `/v1/admin/users/${customerId}/close`,
           headers: bearer(ADMIN),
         });
 
@@ -635,19 +635,19 @@ describe('data rights', () => {
       await signIn(VENDOR);
       const vendor = await createVendorProfile();
 
-      const before = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const before = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${vendor.slug}` });
       expect(before.statusCode).toBe(200);
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${vendor.userId}/close`,
+        url: `/v1/admin/users/${vendor.userId}/close`,
         headers: bearer(ADMIN),
       });
 
       expect(response.statusCode).toBe(200);
       expect(response.json().profileRetired).toBe(true);
 
-      const after = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const after = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${vendor.slug}` });
       expect(after.statusCode).toBe(404);
 
       const [profile] = await harness.database.db
@@ -685,7 +685,7 @@ describe('data rights', () => {
       /* The console offers the control, because the API would not refuse it. */
       const rights = await harness.app.inject({
         method: 'GET',
-        url: `/admin/users/${vendor.userId}/data-rights`,
+        url: `/v1/admin/users/${vendor.userId}/data-rights`,
         headers: bearer(ADMIN),
       });
       expect(rights.statusCode).toBe(200);
@@ -695,7 +695,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${vendor.userId}/close`,
+        url: `/v1/admin/users/${vendor.userId}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -746,7 +746,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${vendor.userId}/close`,
+        url: `/v1/admin/users/${vendor.userId}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -791,7 +791,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${vendor.userId}/close`,
+        url: `/v1/admin/users/${vendor.userId}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -851,14 +851,14 @@ describe('data rights', () => {
       const close = () =>
         harness.app.inject({
           method: 'POST',
-          url: `/admin/users/${vendor.userId}/close`,
+          url: `/v1/admin/users/${vendor.userId}/close`,
           headers: bearer(ADMIN),
         });
       const pending = async () =>
         (
           await harness.app.inject({
             method: 'GET',
-            url: `/admin/users/${vendor.userId}/data-rights`,
+            url: `/v1/admin/users/${vendor.userId}/data-rights`,
             headers: bearer(ADMIN),
           })
         ).json().unwindPending;
@@ -911,7 +911,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${vendor.userId}/close`,
+        url: `/v1/admin/users/${vendor.userId}/close`,
         headers: bearer(ADMIN),
       });
       expect(response.statusCode).toBe(200);
@@ -966,7 +966,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -988,7 +988,7 @@ describe('data rights', () => {
        */
       const after = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER),
       });
       expect(after.statusCode).toBe(401);
@@ -1033,7 +1033,7 @@ describe('data rights', () => {
 
       const closed = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${vendor.userId}/close`,
+        url: `/v1/admin/users/${vendor.userId}/close`,
         headers: bearer(ADMIN),
       });
       expect(closed.statusCode).toBe(200);
@@ -1069,7 +1069,7 @@ describe('data rights', () => {
 
       const closed = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${closedId}/close`,
+        url: `/v1/admin/users/${closedId}/close`,
         headers: bearer(ADMIN),
       });
       expect(closed.statusCode).toBe(200);
@@ -1140,7 +1140,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -1187,7 +1187,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${seeded[0]!.id}/close`,
+        url: `/v1/admin/users/${seeded[0]!.id}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -1227,7 +1227,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${neonUser[0]!.id}/close`,
+        url: `/v1/admin/users/${neonUser[0]!.id}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -1266,7 +1266,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${row[0]!.id}/close`,
+        url: `/v1/admin/users/${row[0]!.id}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -1294,7 +1294,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${unheld[0]!.id}/close`,
+        url: `/v1/admin/users/${unheld[0]!.id}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -1333,7 +1333,7 @@ describe('data rights', () => {
 
         const response = await harness.app.inject({
           method: 'POST',
-          url: `/admin/users/${neonUser[0]!.id}/close`,
+          url: `/v1/admin/users/${neonUser[0]!.id}/close`,
           headers: bearer(ADMIN),
         });
 
@@ -1364,14 +1364,14 @@ describe('data rights', () => {
 
       const closed = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${closedId}/close`,
+        url: `/v1/admin/users/${closedId}/close`,
         headers: bearer(ADMIN),
       });
       expect(closed.statusCode).toBe(200);
 
       const byDefault = await harness.app.inject({
         method: 'GET',
-        url: '/admin/customers',
+        url: '/v1/admin/customers',
         headers: bearer(ADMIN),
       });
       expect(byDefault.statusCode).toBe(200);
@@ -1383,14 +1383,14 @@ describe('data rights', () => {
 
       const explicitLive = await harness.app.inject({
         method: 'GET',
-        url: '/admin/customers?status=live',
+        url: '/v1/admin/customers?status=live',
         headers: bearer(ADMIN),
       });
       expect(explicitLive.json().items.map((row: { id: string }) => row.id)).toEqual([liveId]);
 
       const asked = await harness.app.inject({
         method: 'GET',
-        url: '/admin/customers?status=closed',
+        url: '/v1/admin/customers?status=closed',
         headers: bearer(ADMIN),
       });
       expect(asked.statusCode).toBe(200);
@@ -1402,7 +1402,7 @@ describe('data rights', () => {
       /* The row's link target still answers for the closed account. */
       const rights = await harness.app.inject({
         method: 'GET',
-        url: `/admin/users/${closedId}/data-rights`,
+        url: `/v1/admin/users/${closedId}/data-rights`,
         headers: bearer(ADMIN),
       });
       expect(rights.statusCode).toBe(200);
@@ -1410,7 +1410,7 @@ describe('data rights', () => {
 
       const bogus = await harness.app.inject({
         method: 'GET',
-        url: '/admin/customers?status=retired',
+        url: '/v1/admin/customers?status=retired',
         headers: bearer(ADMIN),
       });
       expect(bogus.statusCode).toBe(400);
@@ -1432,14 +1432,14 @@ describe('data rights', () => {
 
       const closed = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${closedId}/close`,
+        url: `/v1/admin/users/${closedId}/close`,
         headers: bearer(ADMIN),
       });
       expect(closed.statusCode).toBe(200);
 
       const live = await harness.app.inject({
         method: 'GET',
-        url: `/admin/customers?q=${closedId}`,
+        url: `/v1/admin/customers?q=${closedId}`,
         headers: bearer(ADMIN),
       });
       expect(live.json().total).toBe(0);
@@ -1454,7 +1454,7 @@ describe('data rights', () => {
 
       const closedView = await harness.app.inject({
         method: 'GET',
-        url: `/admin/customers?status=closed&q=${OUTSIDER}`,
+        url: `/v1/admin/customers?status=closed&q=${OUTSIDER}`,
         headers: bearer(ADMIN),
       });
       expect(closedView.json().total).toBe(0);
@@ -1470,7 +1470,7 @@ describe('data rights', () => {
       /* A term matching nobody in either set gets no status route: it would find nothing. */
       const nobody = await harness.app.inject({
         method: 'GET',
-        url: `/admin/customers?q=nobody-matches-this`,
+        url: `/v1/admin/customers?q=nobody-matches-this`,
         headers: bearer(ADMIN),
       });
       expect(nobody.json().widenings).toEqual([{ key: 'q', count: 1 }]);
@@ -1485,7 +1485,7 @@ describe('data rights', () => {
       async function close(actor: string, userId: string) {
         return harness.app.inject({
           method: 'POST',
-          url: `/admin/users/${userId}/close`,
+          url: `/v1/admin/users/${userId}/close`,
           headers: bearer(actor),
         });
       }
@@ -1595,14 +1595,14 @@ describe('data rights', () => {
 
       const first = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(ADMIN),
       });
       expect(first.statusCode).toBe(200);
 
       const second = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(ADMIN),
       });
       expect(second.statusCode).toBe(409);
@@ -1616,7 +1616,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${actorId}/close`,
+        url: `/v1/admin/users/${actorId}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -1630,7 +1630,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(OUTSIDER),
       });
 
@@ -1674,7 +1674,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(ADMIN),
       });
       expect(response.statusCode).toBe(200);
@@ -1710,7 +1710,7 @@ describe('data rights', () => {
       /* The vendor's thread names them the way the ruling says, not "Former c". */
       const threads = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(VENDOR),
       });
       expect(threads.statusCode).toBe(200);
@@ -1745,14 +1745,14 @@ describe('data rights', () => {
 
       const closed = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(ADMIN),
       });
       expect(closed.statusCode).toBe(200);
 
       const listed = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${vendor.slug}/reviews`,
+        url: `/v1/vendors/${vendor.slug}/reviews`,
       });
       expect(listed.statusCode).toBe(200);
       expect(listed.json().items).toEqual([
@@ -1801,7 +1801,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${vendor.userId}/close`,
+        url: `/v1/admin/users/${vendor.userId}/close`,
         headers: bearer(ADMIN),
       });
 
@@ -1877,7 +1877,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/admin/users/${vendor.userId}/data-rights`,
+        url: `/v1/admin/users/${vendor.userId}/data-rights`,
         headers: bearer(ADMIN),
       });
 
@@ -1907,7 +1907,7 @@ describe('data rights', () => {
       for (const method of ['PUT', 'DELETE', 'PATCH'] as const) {
         const refused = await harness.app.inject({
           method,
-          url: `/admin/users/${vendor.userId}/data-rights`,
+          url: `/v1/admin/users/${vendor.userId}/data-rights`,
           headers: bearer(ADMIN),
         });
         expect(refused.statusCode).toBe(404);
@@ -1930,14 +1930,14 @@ describe('data rights', () => {
 
       const closed = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/close`,
+        url: `/v1/admin/users/${customerId}/close`,
         headers: bearer(ADMIN),
       });
       expect(closed.statusCode).toBe(200);
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/admin/users/${customerId}/data-rights`,
+        url: `/v1/admin/users/${customerId}/data-rights`,
         headers: bearer(ADMIN),
       });
 
@@ -1974,7 +1974,7 @@ describe('data rights', () => {
 
       const rights = await harness.app.inject({
         method: 'GET',
-        url: `/admin/users/${customerId}/data-rights`,
+        url: `/v1/admin/users/${customerId}/data-rights`,
         headers: bearer(ADMIN),
       });
 
@@ -1984,7 +1984,7 @@ describe('data rights', () => {
 
       const exported = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/export`,
+        url: `/v1/admin/users/${customerId}/export`,
         headers: bearer(ADMIN),
       });
 
@@ -2004,12 +2004,12 @@ describe('data rights', () => {
 
       const rights = await harness.app.inject({
         method: 'GET',
-        url: `/admin/users/${customerId}/data-rights`,
+        url: `/v1/admin/users/${customerId}/data-rights`,
         headers: bearer(ADMIN),
       });
       const exported = await harness.app.inject({
         method: 'POST',
-        url: `/admin/users/${customerId}/export`,
+        url: `/v1/admin/users/${customerId}/export`,
         headers: bearer(ADMIN),
       });
 
@@ -2033,7 +2033,7 @@ describe('data rights', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/admin/users/${customerId}/data-rights`,
+        url: `/v1/admin/users/${customerId}/data-rights`,
         headers: bearer(OUTSIDER),
       });
 

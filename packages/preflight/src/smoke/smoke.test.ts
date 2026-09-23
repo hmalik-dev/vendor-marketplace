@@ -19,7 +19,7 @@ function healthy(): typeof fetch {
     const url = String(input);
 
     if (url.endsWith('/ready')) return response(READY);
-    if (url.startsWith(`${API}/vendors`)) return response(VENDORS);
+    if (url.startsWith(`${API}/v1/vendors`)) return response(VENDORS);
 
     return response(LANDING);
   }) as unknown as typeof fetch;
@@ -121,7 +121,7 @@ describe('runSmokeCheck', () => {
 
         return attempts < 3 ? response('no such service', 502) : response(READY);
       }
-      if (url.startsWith(`${API}/vendors`)) return response(VENDORS);
+      if (url.startsWith(`${API}/v1/vendors`)) return response(VENDORS);
 
       return response(LANDING);
     }) as unknown as typeof fetch;
@@ -166,7 +166,7 @@ describe('runSmokeCheck', () => {
       const url = String(input);
 
       if (url.endsWith('/ready')) return response(READY);
-      if (url.startsWith(`${API}/vendors`)) return response(VENDORS);
+      if (url.startsWith(`${API}/v1/vendors`)) return response(VENDORS);
 
       return response('<html><body><p>No vendors just yet.</p></body></html>');
     }) as unknown as typeof fetch;
@@ -191,7 +191,7 @@ describe('runSmokeCheck', () => {
       const url = String(input);
 
       if (url.endsWith('/ready')) return response(READY);
-      if (url.startsWith(`${API}/vendors`)) {
+      if (url.startsWith(`${API}/v1/vendors`)) {
         return response('{"items":[{"businessName":"Renamed Co","slug":"renamed-co"}]}');
       }
 
@@ -214,7 +214,7 @@ describe('runSmokeCheck', () => {
       const url = String(input);
 
       if (url.endsWith('/ready')) return response(READY);
-      if (url.startsWith(`${API}/vendors`)) return response(vendors);
+      if (url.startsWith(`${API}/v1/vendors`)) return response(vendors);
 
       return response(page);
     }) as unknown as typeof fetch;

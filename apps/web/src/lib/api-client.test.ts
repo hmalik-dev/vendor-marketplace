@@ -33,6 +33,14 @@ describe('apiRequest', () => {
     });
   });
 
+  it('calls the route under the API version prefix (VEN-650)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { id: 'u1', name: 'Ada' }));
+
+    await apiRequest('/users/me', { schema: bodySchema });
+
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).pathname).toBe('/v1/users/me');
+  });
+
   it('sends the bearer token when one is supplied', async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, { id: 'u1', name: 'Ada' }));
 

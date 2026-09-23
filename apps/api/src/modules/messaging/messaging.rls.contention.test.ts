@@ -91,9 +91,9 @@ describe('the messaging service as app_api', () => {
   });
 
   it('reads the messages of a thread the caller is in', async () => {
-    const page = await listMessages(api, vendor, conversationId, 1, 50);
+    const page = await listMessages(api, vendor, conversationId, undefined, 50);
 
-    expect(page.total).toBe(2);
+    expect(page.nextBefore).toBeNull();
     expect(page.items.map((item) => item.content)).toEqual(['Are you free on the 14th?', 'I am.']);
   });
 
@@ -106,7 +106,7 @@ describe('the messaging service as app_api', () => {
   });
 
   it('refuses a stranger at the service, as before', async () => {
-    await expect(listMessages(api, stranger, conversationId, 1, 50)).rejects.toMatchObject({
+    await expect(listMessages(api, stranger, conversationId, undefined, 50)).rejects.toMatchObject({
       statusCode: 404,
     });
   });

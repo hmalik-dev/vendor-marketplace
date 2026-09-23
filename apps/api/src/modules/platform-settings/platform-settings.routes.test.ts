@@ -71,7 +71,7 @@ describe('launch switches', () => {
   }
 
   async function signInAsAdmin(): Promise<string> {
-    expect((await inject('GET', '/users/me', ADMIN)).statusCode).toBe(200);
+    expect((await inject('GET', '/v1/users/me', ADMIN)).statusCode).toBe(200);
     await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
     const [row] = await harness.database.db
       .select({ id: users.id })
@@ -82,7 +82,7 @@ describe('launch switches', () => {
   }
 
   async function setSwitches(patch: Record<string, unknown>): Promise<Response> {
-    const response = await inject('PUT', '/admin/settings', ADMIN, patch);
+    const response = await inject('PUT', '/v1/admin/settings', ADMIN, patch);
     expect(response.statusCode).toBe(200);
 
     return response;
@@ -94,7 +94,7 @@ describe('launch switches', () => {
     account: string,
     priceCents = PRICE_CENTS,
   ): Promise<{ vendorId: string; packageId: string }> {
-    const profile = await inject('POST', '/vendor/profile', authUserId, {
+    const profile = await inject('POST', '/v1/vendor/profile', authUserId, {
       businessName: authUserId === VENDOR ? 'Sunlit Studio' : 'Harbour Blooms',
       categoryIds: [photographyId],
       city: 'Austin',
@@ -103,7 +103,7 @@ describe('launch switches', () => {
     expect(profile.statusCode).toBe(201);
     const vendorId: string = profile.json().id;
 
-    const created = await inject('POST', '/vendor/packages', authUserId, {
+    const created = await inject('POST', '/v1/vendor/packages', authUserId, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents,
@@ -118,7 +118,7 @@ describe('launch switches', () => {
       .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: account })
       .where(eq(vendorProfiles.id, vendorId));
 
-    const agreed = await inject('POST', '/vendor/agreement/accept', authUserId, {
+    const agreed = await inject('POST', '/v1/vendor/agreement/accept', authUserId, {
       version: CURRENT_VENDOR_AGREEMENT_VERSION,
     });
     expect(agreed.statusCode).toBe(200);
@@ -133,7 +133,7 @@ describe('launch switches', () => {
   }): Promise<Response> {
     dateOffset += 1;
 
-    return inject('POST', '/booking-requests', CUSTOMER, {
+    return inject('POST', '/v1/booking-requests', CUSTOMER, {
       vendorId: vendor.vendorId,
       packageId: vendor.packageId,
       eventDate: toDateString(addDays(START, dateOffset)),
@@ -145,14 +145,14 @@ describe('launch switches', () => {
     const request = await requestBooking(vendor);
     expect(request.statusCode).toBe(201);
     const requestId: string = request.json().id;
-    const accepted = await inject('POST', `/booking-requests/${requestId}/accept`, VENDOR);
+    const accepted = await inject('POST', `/v1/booking-requests/${requestId}/accept`, VENDOR);
     expect(accepted.statusCode).toBe(200);
 
     return requestId;
   }
 
   function checkout(requestId: string): Promise<Response> {
-    return inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+    return inject('POST', `/v1/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
   }
 
   /** Checkout, the webhook, and a booking whose payout is owed. */
@@ -164,7 +164,7 @@ describe('launch switches', () => {
     expect(request.statusCode).toBe(201);
     const requestId: string = request.json().id;
     expect(
-      (await inject('POST', `/booking-requests/${requestId}/accept`, authUserId)).statusCode,
+      (await inject('POST', `/v1/booking-requests/${requestId}/accept`, authUserId)).statusCode,
     ).toBe(200);
 
     const opened = await checkout(requestId);
@@ -270,12 +270,12 @@ describe('launch switches', () => {
     it('answers 401 signed out and 403 to a customer or a vendor, on every route', async () => {
       await signInAsAdmin();
       const { vendorId } = await createVendor(VENDOR, VENDOR_ACCOUNT);
-      expect((await inject('GET', '/users/me', CUSTOMER)).statusCode).toBe(200);
+      expect((await inject('GET', '/v1/users/me', CUSTOMER)).statusCode).toBe(200);
 
       const routes = [
-        ['GET', '/admin/settings', undefined],
-        ['PUT', '/admin/settings', { checkoutPaused: true }],
-        ['PUT', `/admin/vendors/${vendorId}/payout-hold`, { payoutHold: true }],
+        ['GET', '/v1/admin/settings', undefined],
+        ['PUT', '/v1/admin/settings', { checkoutPaused: true }],
+        ['PUT', `/v1/admin/vendors/${vendorId}/payout-hold`, { payoutHold: true }],
       ] as const;
 
       for (const [method, url, payload] of routes) {
@@ -295,7 +295,7 @@ describe('launch switches', () => {
   describe('the settings record', () => {
     it('reads every switch off with no cap before anyone has changed one', async () => {
       await signInAsAdmin();
-      const response = await inject('GET', '/admin/settings', ADMIN);
+      const response = await inject('GET', '/v1/admin/settings', ADMIN);
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
@@ -327,7 +327,7 @@ describe('launch switches', () => {
 
       const activity = await inject(
         'GET',
-        '/admin/activity?action=platform_setting_changed',
+        '/v1/admin/activity?action=platform_setting_changed',
         ADMIN,
       );
       expect(activity.statusCode).toBe(200);
@@ -361,7 +361,7 @@ describe('launch switches', () => {
       expect(alerts[0]!.text).toContain('checkoutPaused: off → on');
       expect(alerts[0]!.text).toContain('maxBookingCents: no cap → $500');
 
-      const repeat = await inject('PUT', '/admin/settings', ADMIN, { checkoutPaused: true });
+      const repeat = await inject('PUT', '/v1/admin/settings', ADMIN, { checkoutPaused: true });
       expect(repeat.statusCode).toBe(409);
       expect(await harness.database.db.select().from(adminActions)).toHaveLength(2);
     });
@@ -392,7 +392,7 @@ describe('launch switches', () => {
         { maxBookingCents: 12.5 },
         { paused: true },
       ]) {
-        expect((await inject('PUT', '/admin/settings', ADMIN, payload)).statusCode).toBe(400);
+        expect((await inject('PUT', '/v1/admin/settings', ADMIN, payload)).statusCode).toBe(400);
       }
     });
   });
@@ -439,9 +439,9 @@ describe('launch switches', () => {
       expect(refused.json().error).toBe('bookings_paused');
 
       const [toAccept, toDecline, toCancel] = ids as [string, string, string];
-      const accepted = await inject('POST', `/booking-requests/${toAccept}/accept`, VENDOR);
-      const declined = await inject('POST', `/booking-requests/${toDecline}/decline`, VENDOR);
-      const cancelled = await inject('POST', `/booking-requests/${toCancel}/cancel`, CUSTOMER);
+      const accepted = await inject('POST', `/v1/booking-requests/${toAccept}/accept`, VENDOR);
+      const declined = await inject('POST', `/v1/booking-requests/${toDecline}/decline`, VENDOR);
+      const cancelled = await inject('POST', `/v1/booking-requests/${toCancel}/cancel`, CUSTOMER);
 
       expect([accepted.statusCode, declined.statusCode, cancelled.statusCode]).toEqual([
         200, 200, 200,
@@ -527,7 +527,7 @@ describe('launch switches', () => {
       const otherBooking = await paidBooking(VENDOR_TWO, other);
       clockNow = afterLastRelease();
 
-      const hold = await inject('PUT', `/admin/vendors/${held.vendorId}/payout-hold`, ADMIN, {
+      const hold = await inject('PUT', `/v1/admin/vendors/${held.vendorId}/payout-hold`, ADMIN, {
         payoutHold: true,
       });
       expect(hold.statusCode).toBe(200);
@@ -537,7 +537,7 @@ describe('launch switches', () => {
         expect.stringContaining("A vendor's payouts were put on hold"),
       ]);
 
-      const settings = await inject('GET', '/admin/settings', ADMIN);
+      const settings = await inject('GET', '/v1/admin/settings', ADMIN);
       expect(settings.json().heldVendors).toEqual([
         { id: held.vendorId, businessName: 'Sunlit Studio', slug: expect.any(String) },
       ]);
@@ -561,13 +561,13 @@ describe('launch switches', () => {
 
       expect(
         (
-          await inject('PUT', `/admin/vendors/${held.vendorId}/payout-hold`, ADMIN, {
+          await inject('PUT', `/v1/admin/vendors/${held.vendorId}/payout-hold`, ADMIN, {
             payoutHold: true,
           })
         ).statusCode,
       ).toBe(409);
 
-      const lifted = await inject('PUT', `/admin/vendors/${held.vendorId}/payout-hold`, ADMIN, {
+      const lifted = await inject('PUT', `/v1/admin/vendors/${held.vendorId}/payout-hold`, ADMIN, {
         payoutHold: false,
       });
       expect(lifted.statusCode).toBe(200);
@@ -582,7 +582,7 @@ describe('launch switches', () => {
       await signInAsAdmin();
       const response = await inject(
         'PUT',
-        '/admin/vendors/00000000-0000-4000-8000-00000000abcd/payout-hold',
+        '/v1/admin/vendors/00000000-0000-4000-8000-00000000abcd/payout-hold',
         ADMIN,
         { payoutHold: true },
       );

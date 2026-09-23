@@ -78,7 +78,7 @@ describe('expiring an accepted request', () => {
   async function lapsedAcceptedRequest(): Promise<{ vendorId: string; requestId: string }> {
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -98,7 +98,7 @@ describe('expiring an accepted request', () => {
 
     const pkg = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Full day coverage',
@@ -112,7 +112,7 @@ describe('expiring an accepted request', () => {
 
     const agreed = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/agreement/accept',
+      url: '/v1/vendor/agreement/accept',
       headers: bearer(VENDOR),
       payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
     });
@@ -120,7 +120,7 @@ describe('expiring an accepted request', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(CUSTOMER),
       payload: {
         vendorId,
@@ -136,7 +136,7 @@ describe('expiring an accepted request', () => {
 
     const accepted = await harness.app.inject({
       method: 'POST',
-      url: `/booking-requests/${requestId}/accept`,
+      url: `/v1/booking-requests/${requestId}/accept`,
       headers: bearer(VENDOR),
     });
     expect(accepted.statusCode, accepted.body).toBe(200);

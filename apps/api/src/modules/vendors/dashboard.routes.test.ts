@@ -63,7 +63,7 @@ describe('/vendor/dashboard', () => {
   async function read(actor = VENDOR): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
     return harness.app.inject({
       method: 'GET',
-      url: '/vendor/dashboard',
+      url: '/v1/vendor/dashboard',
       headers: bearer(actor),
     });
   }
@@ -72,7 +72,7 @@ describe('/vendor/dashboard', () => {
   async function createProfile(): Promise<string> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -91,7 +91,7 @@ describe('/vendor/dashboard', () => {
   async function addPackage(): Promise<string> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Full day coverage',
@@ -122,7 +122,7 @@ describe('/vendor/dashboard', () => {
   async function request(vendorId: string, packageId: string, dayOffset: number): Promise<string> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(CUSTOMER),
       payload: {
         vendorId,
@@ -196,7 +196,7 @@ describe('/vendor/dashboard', () => {
   });
 
   it('rejects an unauthenticated read', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/vendor/dashboard' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/vendor/dashboard' });
 
     expect(response.statusCode).toBe(401);
   });
@@ -253,7 +253,7 @@ describe('/vendor/dashboard', () => {
 
     await harness.app.inject({
       method: 'POST',
-      url: `/booking-requests/${requestId}/decline`,
+      url: `/v1/booking-requests/${requestId}/decline`,
       headers: bearer(VENDOR),
     });
 
@@ -273,13 +273,13 @@ describe('/vendor/dashboard', () => {
 
     await harness.app.inject({
       method: 'POST',
-      url: `/booking-requests/${answered}/decline`,
+      url: `/v1/booking-requests/${answered}/decline`,
       headers: bearer(VENDOR),
     });
     // The vendor was never given the chance on this one.
     await harness.app.inject({
       method: 'POST',
-      url: `/booking-requests/${withdrawn}/cancel`,
+      url: `/v1/booking-requests/${withdrawn}/cancel`,
       headers: bearer(CUSTOMER),
     });
 

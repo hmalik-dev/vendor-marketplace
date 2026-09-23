@@ -62,7 +62,7 @@ describe('flipping the payout pause during overlapping sweeps, on real connectio
   }
 
   async function setPaused(payoutReleasePaused: boolean): Promise<number> {
-    return (await inject('PUT', '/admin/settings', ADMIN, { payoutReleasePaused })).statusCode;
+    return (await inject('PUT', '/v1/admin/settings', ADMIN, { payoutReleasePaused })).statusCode;
   }
 
   beforeAll(async () => {
@@ -89,7 +89,7 @@ describe('flipping the payout pause during overlapping sweeps, on real connectio
       payoutsActive: true,
     });
 
-    expect((await inject('GET', '/users/me', ADMIN)).statusCode).toBe(200);
+    expect((await inject('GET', '/v1/users/me', ADMIN)).statusCode).toBe(200);
     await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
 
     const [photography] = await harness.database.db
@@ -98,7 +98,7 @@ describe('flipping the payout pause during overlapping sweeps, on real connectio
       .where(eq(categories.slug, 'photography'))
       .limit(1);
 
-    const profile = await inject('POST', '/vendor/profile', VENDOR, {
+    const profile = await inject('POST', '/v1/vendor/profile', VENDOR, {
       businessName: 'Sunlit Studio',
       categoryIds: [photography!.id],
       city: 'Austin',
@@ -107,7 +107,7 @@ describe('flipping the payout pause during overlapping sweeps, on real connectio
     expect(profile.statusCode).toBe(201);
     const vendorId: string = profile.json().id;
 
-    const servicePackage = await inject('POST', '/vendor/packages', VENDOR, {
+    const servicePackage = await inject('POST', '/v1/vendor/packages', VENDOR, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: PRICE_CENTS,
@@ -123,14 +123,14 @@ describe('flipping the payout pause during overlapping sweeps, on real connectio
 
     expect(
       (
-        await inject('POST', '/vendor/agreement/accept', VENDOR, {
+        await inject('POST', '/v1/vendor/agreement/accept', VENDOR, {
           version: CURRENT_VENDOR_AGREEMENT_VERSION,
         })
       ).statusCode,
     ).toBe(200);
 
     for (let index = 0; index < BOOKING_COUNT; index += 1) {
-      const request = await inject('POST', '/booking-requests', CUSTOMER, {
+      const request = await inject('POST', '/v1/booking-requests', CUSTOMER, {
         vendorId,
         packageId: servicePackage.json().id,
         eventDate: toDateString(addDays(START, 30 + index)),
@@ -140,12 +140,12 @@ describe('flipping the payout pause during overlapping sweeps, on real connectio
       const requestId: string = request.json().id;
 
       expect(
-        (await inject('POST', `/booking-requests/${requestId}/accept`, VENDOR)).statusCode,
+        (await inject('POST', `/v1/booking-requests/${requestId}/accept`, VENDOR)).statusCode,
       ).toBe(200);
 
       const checkout = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
       expect(checkout.statusCode).toBe(200);

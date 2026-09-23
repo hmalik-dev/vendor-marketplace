@@ -45,7 +45,7 @@ describe('the vendor’s own storefront writes, against a real Postgres', () => 
   async function seedStorefront(): Promise<{ vendorId: string; packageId: string }> {
     const profile = await harness!.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: profileBody(),
     });
@@ -53,7 +53,7 @@ describe('the vendor’s own storefront writes, against a real Postgres', () => 
 
     const servicePackage = await harness!.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Full day coverage',
@@ -131,13 +131,13 @@ describe('the vendor’s own storefront writes, against a real Postgres', () => 
     const [publish, deactivate] = await Promise.all([
       harness!.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       }),
       harness!.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${packageId}`,
+        url: `/v1/vendor/packages/${packageId}`,
         headers: bearer(VENDOR),
         payload: { isActive: false },
       }),
@@ -162,7 +162,7 @@ describe('the vendor’s own storefront writes, against a real Postgres', () => 
       ['First Studio', 'Second Studio'].map((businessName) =>
         harness!.app.inject({
           method: 'POST',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR),
           payload: profileBody({ businessName }),
         }),
@@ -180,7 +180,7 @@ describe('the vendor’s own storefront writes, against a real Postgres', () => 
       [VENDOR, OTHER_VENDOR].map((user) =>
         harness!.app.inject({
           method: 'POST',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(user),
           payload: profileBody({ slug: 'shared-address' }),
         }),
@@ -207,7 +207,7 @@ describe('the vendor’s own storefront writes, against a real Postgres', () => 
     await seedStorefront();
     const opened = await harness!.app.inject({
       method: 'GET',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
     });
     const version = opened.json().updatedAt as string;
@@ -216,7 +216,7 @@ describe('the vendor’s own storefront writes, against a real Postgres', () => 
       ['First tab', 'Second tab'].map((tagline) =>
         harness!.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR),
           payload: { tagline, updatedAt: version },
         }),

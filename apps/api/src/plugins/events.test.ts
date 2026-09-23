@@ -21,7 +21,7 @@ describe('shutdown with an open event stream', () => {
 
     const issued = await harness.app.inject({
       method: 'POST',
-      url: '/events/stream-ticket',
+      url: '/v1/events/stream-ticket',
       headers: bearer(CUSTOMER),
     });
     const ticket = issued.json().ticket;
@@ -36,7 +36,7 @@ describe('shutdown with an open event stream', () => {
     });
     const ended = new Promise<void>((resolve, reject) => {
       const request = http.get(
-        { host: '127.0.0.1', port, path: `/events/stream?ticket=${ticket}` },
+        { host: '127.0.0.1', port, path: `/v1/events/stream?ticket=${ticket}` },
         (response) => {
           expect(response.statusCode).toBe(200);
           response.on('data', onConnected);

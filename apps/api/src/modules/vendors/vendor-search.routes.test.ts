@@ -46,7 +46,7 @@ describe('GET /vendors', () => {
   async function seedVendor(spec: VendorSpec): Promise<string> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(spec.user),
       payload: {
         businessName: spec.businessName,
@@ -63,7 +63,7 @@ describe('GET /vendors', () => {
     for (const priceCents of spec.prices ?? [150_000]) {
       const pkg = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(spec.user),
         payload: {
           name: `Package ${priceCents}`,
@@ -77,7 +77,7 @@ describe('GET /vendors', () => {
     if (spec.blockedDates?.length) {
       const blocked = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer(spec.user),
         payload: { entries: spec.blockedDates.map((date) => ({ date, status: 'blocked' })) },
       });
@@ -110,7 +110,7 @@ describe('GET /vendors', () => {
       await acceptVendorAgreementAs(harness, spec.user);
       const published = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(spec.user),
         payload: { isPublished: true },
       });
@@ -127,7 +127,7 @@ describe('GET /vendors', () => {
     page: number;
     pageSize: number;
   }> {
-    const response = await harness.app.inject({ method: 'GET', url: `/vendors${query}` });
+    const response = await harness.app.inject({ method: 'GET', url: `/v1/vendors${query}` });
     expect(response.statusCode).toBe(200);
     return response.json();
   }
@@ -195,7 +195,7 @@ describe('GET /vendors', () => {
   it('needs no account — discovery is the front door', async () => {
     await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.' });
 
-    const response = await harness.app.inject({ method: 'GET', url: '/vendors' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/vendors' });
 
     expect(response.statusCode).toBe(200);
     expect(names(response.json().items)).toEqual(['Kessler & Co.']);
@@ -212,7 +212,7 @@ describe('GET /vendors', () => {
     await seedVendor({ user: 'user_a', businessName: 'Kessler & Co.' });
     await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer('user_a'),
       payload: { isPublished: false },
     });
@@ -346,7 +346,10 @@ describe('GET /vendors', () => {
    * answer to "that day has gone".
    */
   it('rejects an event date that has already passed', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/vendors?date=2020-01-01' });
+    const response = await harness.app.inject({
+      method: 'GET',
+      url: '/v1/vendors?date=2020-01-01',
+    });
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ statusCode: 400 });
@@ -437,7 +440,7 @@ describe('GET /vendors', () => {
   it('rejects a price range that is inside out', async () => {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/vendors?minPriceCents=900000&maxPriceCents=1000',
+      url: '/v1/vendors?minPriceCents=900000&maxPriceCents=1000',
     });
 
     expect(response.statusCode).toBe(400);
@@ -556,7 +559,7 @@ describe('GET /vendors', () => {
   it('rejects a sort key outside the allowlist', async () => {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/vendors?sort=price_asc;DROP TABLE vendor_profiles',
+      url: '/v1/vendors?sort=price_asc;DROP TABLE vendor_profiles',
     });
 
     expect(response.statusCode).toBe(400);
@@ -595,7 +598,7 @@ describe('GET /vendors', () => {
   it('refuses a page beyond the ceiling, as a validation error', async () => {
     const response = await harness.app.inject({
       method: 'GET',
-      url: `/vendors?page=${MAX_PAGE + 1}`,
+      url: `/v1/vendors?page=${MAX_PAGE + 1}`,
     });
 
     expect(response.statusCode).toBe(400);
@@ -606,14 +609,17 @@ describe('GET /vendors', () => {
   });
 
   it('refuses the int4 boundary that used to reach the query', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/vendors?page=2147483648' });
+    const response = await harness.app.inject({
+      method: 'GET',
+      url: '/v1/vendors?page=2147483648',
+    });
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ error: ERROR_CODES.VALIDATION_ERROR });
   });
 
   it('refuses a page size beyond the cap', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/vendors?pageSize=1000' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/vendors?pageSize=1000' });
 
     expect(response.statusCode).toBe(400);
   });
@@ -674,7 +680,7 @@ describe('GET /vendors', () => {
     const cheapest = rows.find((row) => row.priceCents === 80_000)!;
     await harness.app.inject({
       method: 'PUT',
-      url: `/vendor/packages/${cheapest.id}`,
+      url: `/v1/vendor/packages/${cheapest.id}`,
       headers: bearer('user_a'),
       payload: { isActive: false },
     });
@@ -699,7 +705,7 @@ describe('GET /vendors', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendors?city=Springfield&state=IL',
+        url: '/v1/vendors?city=Springfield&state=IL',
       });
 
       expect(response.statusCode).toBe(200);

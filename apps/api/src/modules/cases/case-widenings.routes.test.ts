@@ -46,7 +46,7 @@ describe('the counted filtered-empty routes on /admin/cases', () => {
       avatarUrl: null,
     });
 
-    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(ADMIN) });
+    await harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(ADMIN) });
     await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
   });
 
@@ -70,7 +70,7 @@ describe('the counted filtered-empty routes on /admin/cases', () => {
   async function readCases(query: string) {
     const response = await harness.app.inject({
       method: 'GET',
-      url: `/admin/cases${query}`,
+      url: `/v1/admin/cases${query}`,
       headers: bearer(ADMIN),
     });
     expect(response.statusCode, JSON.stringify(response.json())).toBe(200);

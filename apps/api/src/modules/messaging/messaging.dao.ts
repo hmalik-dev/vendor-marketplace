@@ -13,8 +13,9 @@ import {
   type NotificationRow,
 } from '@vendor-marketplace/db/schema';
 import { alias } from 'drizzle-orm/pg-core';
-import type { NotificationType } from '@vendor-marketplace/shared';
+import type { CursorPage, KeysetCursor, NotificationType } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { cursorOf, olderThan, pageOf } from '../../lib/keyset.js';
 import { VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
 
 export interface ConversationListRow {
@@ -341,6 +342,34 @@ export async function findMessages(
   return rows.reverse();
 }
 
+/**
+ * One page of a thread for a participant, **by cursor** (VEN-650): the newest
+ * `limit` rows older than `before`, returned oldest-first like `findMessages`.
+ *
+ * `findMessages` pages by offset, and a message that arrives while the reader
+ * scrolls back moves every older page down by one row — the next page repeats
+ * a message and the one after skips another. A cursor is a row, not a
+ * position, so a new message changes nothing below it. The console's case read
+ * stays on offsets: its window is closed, so nothing arrives inside it.
+ */
+export async function findMessagesBefore(
+  db: AppDatabase,
+  conversationId: string,
+  limit: number,
+  before: KeysetCursor | undefined,
+): Promise<CursorPage<MessageRow>> {
+  const thread = eq(messages.conversationId, conversationId);
+  const fetched = await db
+    .select({ row: messages, cursor: cursorOf(messages.createdAt, messages.id) })
+    .from(messages)
+    .where(before ? and(thread, olderThan(messages.createdAt, messages.id, before)) : thread)
+    .orderBy(desc(messages.createdAt), desc(messages.id))
+    .limit(limit + 1);
+  const page = pageOf(fetched, limit);
+
+  return { ...page, items: page.items.reverse() };
+}
+
 export async function countMessages(
   db: AppDatabase,
   conversationId: string,
@@ -516,28 +545,22 @@ export async function insertNotification(
   return inserted?.[0] ?? null;
 }
 
+/** One page of the panel, newest first, by cursor for `findMessagesBefore`'s reason (VEN-650). */
 export async function findNotifications(
   db: AppDatabase,
   userId: string,
   limit: number,
-  offset: number,
-): Promise<NotificationRow[]> {
-  return db
-    .select()
+  before: KeysetCursor | undefined,
+): Promise<CursorPage<NotificationRow>> {
+  const own = eq(notifications.userId, userId);
+  const fetched = await db
+    .select({ row: notifications, cursor: cursorOf(notifications.createdAt, notifications.id) })
     .from(notifications)
-    .where(eq(notifications.userId, userId))
-    .orderBy(desc(notifications.createdAt))
-    .limit(limit)
-    .offset(offset);
-}
+    .where(before ? and(own, olderThan(notifications.createdAt, notifications.id, before)) : own)
+    .orderBy(desc(notifications.createdAt), desc(notifications.id))
+    .limit(limit + 1);
 
-export async function countNotifications(db: AppDatabase, userId: string): Promise<number> {
-  const rows = await db
-    .select({ total: sql<number>`count(*)::int` })
-    .from(notifications)
-    .where(eq(notifications.userId, userId));
-
-  return rows?.[0]?.total ?? 0;
+  return pageOf(fetched, limit);
 }
 
 /** Scoped to the owner, so an id from elsewhere marks nothing. */

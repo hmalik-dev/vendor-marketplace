@@ -260,7 +260,7 @@ describe('useEventStream', () => {
     await vi.waitFor(() => expect(opened).toHaveLength(1));
 
     const origin = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-    expect(opened[0]?.startsWith(`${origin}/events/stream`)).toBe(true);
+    expect(opened[0]?.startsWith(`${origin}/v1/events/stream`)).toBe(true);
   });
 
   /*

@@ -209,7 +209,10 @@ export const adminVendorInviteRoutes: FastifyPluginAsyncZod<VendorInviteRoutesOp
         request.body.email,
       );
 
-      return reply.code(201).header('location', `/admin/vendor-invites/${invite.id}`).send(invite);
+      return reply
+        .code(201)
+        .header('location', `${app.prefix}/admin/vendor-invites/${invite.id}`)
+        .send(invite);
     },
   );
 

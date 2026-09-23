@@ -47,8 +47,8 @@ export interface StreamTicketStoreOptions {
  * `delete … returning`, so two instances racing on one ticket have exactly one
  * winner. Only the SHA-256 is stored.
  *
- * `EventHub`'s subscriber map stays process-local: it governs event delivery,
- * not admission.
+ * `EventHub`'s connections stay process-local — the events reach them from
+ * every instance over the bus (VEN-650) — and govern delivery, not admission.
  */
 export class StreamTicketStore {
   readonly #db: AppDatabase;

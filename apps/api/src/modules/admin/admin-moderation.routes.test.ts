@@ -55,7 +55,7 @@ describe('admin graduated moderation', () => {
   ): Promise<{ id: string; slug: string; packageIds: string[] }> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Fernbank Studio',
@@ -73,7 +73,7 @@ describe('admin graduated moderation', () => {
     for (const priceCents of prices) {
       const pkg = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
         payload: {
           name: `Package ${priceCents}`,
@@ -92,7 +92,7 @@ describe('admin graduated moderation', () => {
     await acceptVendorAgreementAs(harness, VENDOR);
     const published = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: { isPublished: true },
     });
@@ -182,7 +182,7 @@ describe('admin graduated moderation', () => {
 
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/portfolio',
+      url: '/v1/vendor/portfolio',
       headers: bearer(VENDOR),
       payload: { imageUrl, thumbnailUrl, caption: 'A wedding at dusk' },
     });
@@ -331,20 +331,20 @@ describe('admin graduated moderation', () => {
     const actions = [
       {
         method: 'PUT' as const,
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         payload: { isPublished: false },
       },
       {
         method: 'PUT' as const,
-        url: `/admin/reviews/${review.reviewId}/visibility`,
+        url: `/v1/admin/reviews/${review.reviewId}/visibility`,
         payload: { isPublic: false },
       },
       {
         method: 'PUT' as const,
-        url: `/admin/packages/${vendor.packageIds[0]!}/active`,
+        url: `/v1/admin/packages/${vendor.packageIds[0]!}/active`,
         payload: { isActive: false },
       },
-      { method: 'DELETE' as const, url: `/admin/portfolio-items/${photo.itemId}` },
+      { method: 'DELETE' as const, url: `/v1/admin/portfolio-items/${photo.itemId}` },
     ];
 
     for (const action of actions) {
@@ -389,7 +389,7 @@ describe('admin graduated moderation', () => {
 
       const refused = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: true },
       });
@@ -405,7 +405,7 @@ describe('admin graduated moderation', () => {
       await acceptVendorAgreementAs(harness, VENDOR);
       const allowed = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: true },
       });
@@ -422,7 +422,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: false },
       });
@@ -440,10 +440,13 @@ describe('admin graduated moderation', () => {
         status: 'held',
       });
 
-      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const profile = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
       expect(profile.statusCode).toBe(404);
 
-      const search = await harness.app.inject({ method: 'GET', url: '/vendors' });
+      const search = await harness.app.inject({ method: 'GET', url: '/v1/vendors' });
       expect(search.statusCode).toBe(200);
       expect(search.json().items.map((row: { slug: string }) => row.slug)).not.toContain(
         vendor.slug,
@@ -484,7 +487,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: false },
       });
@@ -504,7 +507,7 @@ describe('admin graduated moderation', () => {
 
       const down = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: false },
       });
@@ -512,7 +515,7 @@ describe('admin graduated moderation', () => {
 
       const up = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: true },
       });
@@ -520,7 +523,10 @@ describe('admin graduated moderation', () => {
       expect(up.statusCode).toBe(200);
       expect(up.json()).toEqual({ vendorId: vendor.id, isPublished: true, status: 'live' });
 
-      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const profile = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
       expect(profile.statusCode).toBe(200);
 
       expect(await actionsFor(vendor.id)).toEqual([
@@ -535,7 +541,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: true },
       });
@@ -552,14 +558,14 @@ describe('admin graduated moderation', () => {
 
       const banned = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendorUserId}/ban`,
+        url: `/v1/admin/users/${vendorUserId}/ban`,
         headers: bearer(ADMIN),
       });
       expect(banned.statusCode).toBe(200);
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: true },
       });
@@ -585,7 +591,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: true },
       });
@@ -610,7 +616,7 @@ describe('admin graduated moderation', () => {
 
       const down = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: false },
       });
@@ -625,7 +631,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: true },
       });
@@ -659,7 +665,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: false },
       });
@@ -684,7 +690,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${'0'.repeat(8)}-0000-4000-8000-000000000000/publish`,
+        url: `/v1/admin/vendors/${'0'.repeat(8)}-0000-4000-8000-000000000000/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: false },
       });
@@ -710,13 +716,13 @@ describe('admin graduated moderation', () => {
        */
       const before = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${vendor.slug}/reviews`,
+        url: `/v1/vendors/${vendor.slug}/reviews`,
       });
       expect(before.json().summary).toMatchObject({ avgRating: 3, reviewCount: 2 });
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/reviews/${hidden.reviewId}/visibility`,
+        url: `/v1/admin/reviews/${hidden.reviewId}/visibility`,
         headers: bearer(ADMIN),
         payload: { isPublic: false },
       });
@@ -739,7 +745,7 @@ describe('admin graduated moderation', () => {
        */
       const list = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${vendor.slug}/reviews`,
+        url: `/v1/vendors/${vendor.slug}/reviews`,
       });
       expect(list.statusCode).toBe(200);
       const page = list.json();
@@ -748,7 +754,10 @@ describe('admin graduated moderation', () => {
       expect(page.summary.avgRating).toBe(5);
       expect(page.summary.distribution).toEqual([0, 0, 0, 0, 1]);
 
-      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const profile = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
       expect(profile.statusCode).toBe(200);
       expect(profile.json().reviewCount).toBe(1);
       expect(profile.json().avgRating).toBe(5);
@@ -774,7 +783,7 @@ describe('admin graduated moderation', () => {
 
       const hide = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/reviews/${target.reviewId}/visibility`,
+        url: `/v1/admin/reviews/${target.reviewId}/visibility`,
         headers: bearer(ADMIN),
         payload: { isPublic: false },
       });
@@ -784,7 +793,7 @@ describe('admin graduated moderation', () => {
       // Put it back, then delete it instead, and compare the two answers.
       const unhide = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/reviews/${target.reviewId}/visibility`,
+        url: `/v1/admin/reviews/${target.reviewId}/visibility`,
         headers: bearer(ADMIN),
         payload: { isPublic: true },
       });
@@ -792,7 +801,7 @@ describe('admin graduated moderation', () => {
 
       const deleted = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${target.reviewId}`,
+        url: `/v1/admin/reviews/${target.reviewId}`,
         headers: bearer(ADMIN),
       });
       expect(deleted.statusCode).toBe(204);
@@ -811,7 +820,7 @@ describe('admin graduated moderation', () => {
       for (const isPublic of [false, true]) {
         const response = await harness.app.inject({
           method: 'PUT',
-          url: `/admin/reviews/${target.reviewId}/visibility`,
+          url: `/v1/admin/reviews/${target.reviewId}/visibility`,
           headers: bearer(ADMIN),
           payload: { isPublic },
         });
@@ -822,7 +831,7 @@ describe('admin graduated moderation', () => {
 
       const list = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${vendor.slug}/reviews`,
+        url: `/v1/vendors/${vendor.slug}/reviews`,
       });
       expect(list.json().items).toHaveLength(2);
       expect(list.json().summary.avgRating).toBe(3);
@@ -841,7 +850,7 @@ describe('admin graduated moderation', () => {
 
       const hidden = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/reviews/${target.reviewId}/visibility`,
+        url: `/v1/admin/reviews/${target.reviewId}/visibility`,
         headers: bearer(ADMIN),
         payload: { isPublic: false },
       });
@@ -849,7 +858,7 @@ describe('admin graduated moderation', () => {
 
       const list = await harness.app.inject({
         method: 'GET',
-        url: '/admin/reviews',
+        url: '/v1/admin/reviews',
         headers: bearer(ADMIN),
       });
 
@@ -868,7 +877,7 @@ describe('admin graduated moderation', () => {
 
       const conflict = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/reviews/${target.reviewId}/visibility`,
+        url: `/v1/admin/reviews/${target.reviewId}/visibility`,
         headers: bearer(ADMIN),
         payload: { isPublic: true },
       });
@@ -877,7 +886,7 @@ describe('admin graduated moderation', () => {
 
       const missing = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/reviews/${'0'.repeat(8)}-0000-4000-8000-000000000000/visibility`,
+        url: `/v1/admin/reviews/${'0'.repeat(8)}-0000-4000-8000-000000000000/visibility`,
         headers: bearer(ADMIN),
         payload: { isPublic: false },
       });
@@ -906,7 +915,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/reviews/${noteId}/visibility`,
+        url: `/v1/admin/reviews/${noteId}/visibility`,
         headers: bearer(ADMIN),
         payload: { isPublic: true },
       });
@@ -938,7 +947,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/reviews/${noteId}/visibility`,
+        url: `/v1/admin/reviews/${noteId}/visibility`,
         headers: bearer(ADMIN),
         payload: { isPublic: false },
       });
@@ -963,7 +972,7 @@ describe('admin graduated moderation', () => {
       // Give the storefront rating a value to be undisturbed.
       const hidden = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/reviews/${(await seedReview(customerId, vendor.id, 2)).reviewId}/visibility`,
+        url: `/v1/admin/reviews/${(await seedReview(customerId, vendor.id, 2)).reviewId}/visibility`,
         headers: bearer(ADMIN),
         payload: { isPublic: false },
       });
@@ -972,7 +981,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${noteId}`,
+        url: `/v1/admin/reviews/${noteId}`,
         headers: bearer(ADMIN),
       });
 
@@ -991,7 +1000,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${target.reviewId}`,
+        url: `/v1/admin/reviews/${target.reviewId}`,
         headers: bearer(ADMIN),
       });
       expect(response.statusCode).toBe(204);
@@ -1010,12 +1019,12 @@ describe('admin graduated moderation', () => {
       const vendor = await seedVendor([90_000, 150_000]);
       const cheapest = vendor.packageIds[0]!;
 
-      const before = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const before = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${vendor.slug}` });
       expect(before.json().startingPriceCents).toBe(90_000);
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/packages/${cheapest}/active`,
+        url: `/v1/admin/packages/${cheapest}/active`,
         headers: bearer(ADMIN),
         payload: { isActive: false },
       });
@@ -1027,7 +1036,7 @@ describe('admin graduated moderation', () => {
         vendorUnpublished: false,
       });
 
-      const after = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const after = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${vendor.slug}` });
       expect(after.statusCode).toBe(200);
       expect(after.json().startingPriceCents).toBe(150_000);
       expect(after.json().packages.map((row: { id: string }) => row.id)).not.toContain(cheapest);
@@ -1043,14 +1052,14 @@ describe('admin graduated moderation', () => {
       for (const isActive of [false, true]) {
         const response = await harness.app.inject({
           method: 'PUT',
-          url: `/admin/packages/${cheapest}/active`,
+          url: `/v1/admin/packages/${cheapest}/active`,
           headers: bearer(ADMIN),
           payload: { isActive },
         });
         expect(response.statusCode).toBe(200);
       }
 
-      const after = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const after = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${vendor.slug}` });
       expect(after.json().startingPriceCents).toBe(90_000);
 
       expect(await actionsFor(cheapest)).toEqual([
@@ -1072,7 +1081,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/packages/${only}/active`,
+        url: `/v1/admin/packages/${only}/active`,
         headers: bearer(ADMIN),
         payload: { isActive: false },
       });
@@ -1080,7 +1089,10 @@ describe('admin graduated moderation', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().vendorUnpublished).toBe(true);
 
-      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const profile = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
       expect(profile.statusCode).toBe(404);
 
       expect(await actionsFor(vendor.id)).toEqual([{ action: 'vendor_unpublished', actorId }]);
@@ -1092,7 +1104,7 @@ describe('admin graduated moderation', () => {
 
       const conflict = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/packages/${vendor.packageIds[0]!}/active`,
+        url: `/v1/admin/packages/${vendor.packageIds[0]!}/active`,
         headers: bearer(ADMIN),
         payload: { isActive: true },
       });
@@ -1101,7 +1113,7 @@ describe('admin graduated moderation', () => {
 
       const missing = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/packages/${'0'.repeat(8)}-0000-4000-8000-000000000000/active`,
+        url: `/v1/admin/packages/${'0'.repeat(8)}-0000-4000-8000-000000000000/active`,
         headers: bearer(ADMIN),
         payload: { isActive: false },
       });
@@ -1135,14 +1147,17 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/portfolio-items/${item.itemId}`,
+        url: `/v1/admin/portfolio-items/${item.itemId}`,
         headers: bearer(ADMIN),
       });
 
       expect(response.statusCode).toBe(204);
       expect(harness.storedObjects.map((object) => object.key)).toEqual([]);
 
-      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const profile = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
       expect(profile.statusCode).toBe(200);
       expect(profile.json().portfolio).toHaveLength(0);
 
@@ -1156,7 +1171,7 @@ describe('admin graduated moderation', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/portfolio-items/${'0'.repeat(8)}-0000-4000-8000-000000000000`,
+        url: `/v1/admin/portfolio-items/${'0'.repeat(8)}-0000-4000-8000-000000000000`,
         headers: bearer(ADMIN),
       });
 
@@ -1186,7 +1201,7 @@ describe('admin graduated moderation', () => {
     async function unpublishAsAdmin(vendorId: string): Promise<void> {
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendorId}/publish`,
+        url: `/v1/admin/vendors/${vendorId}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: false },
       });
@@ -1218,7 +1233,7 @@ describe('admin graduated moderation', () => {
     async function consoleStatus(vendorId: string): Promise<string> {
       const listed = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors',
+        url: '/v1/admin/vendors',
         headers: bearer(ADMIN),
       });
       expect(listed.statusCode).toBe(200);
@@ -1239,7 +1254,7 @@ describe('admin graduated moderation', () => {
 
       const republished = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -1256,10 +1271,13 @@ describe('admin graduated moderation', () => {
        */
       expect(await publishedFlag(vendor.id)).toBe(false);
 
-      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const profile = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
       expect(profile.statusCode).toBe(404);
 
-      const search = await harness.app.inject({ method: 'GET', url: '/vendors' });
+      const search = await harness.app.inject({ method: 'GET', url: '/v1/vendors' });
       expect(search.statusCode).toBe(200);
       expect(search.json().items.map((row: { slug: string }) => row.slug)).not.toContain(
         vendor.slug,
@@ -1273,7 +1291,7 @@ describe('admin graduated moderation', () => {
 
       const republished = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -1300,7 +1318,7 @@ describe('admin graduated moderation', () => {
 
       const deactivated = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/packages/${heldPackageId}/active`,
+        url: `/v1/admin/packages/${heldPackageId}/active`,
         headers: bearer(ADMIN),
         payload: { isActive: false },
       });
@@ -1309,7 +1327,7 @@ describe('admin graduated moderation', () => {
 
       const reactivated = await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${heldPackageId}`,
+        url: `/v1/vendor/packages/${heldPackageId}`,
         headers: bearer(VENDOR),
         payload: { isActive: true },
       });
@@ -1327,7 +1345,10 @@ describe('admin graduated moderation', () => {
         .limit(1);
       expect(stored[0]!.isActive).toBe(false);
 
-      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const profile = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
       expect(profile.statusCode).toBe(200);
       expect(profile.json().packages.map((row: { id: string }) => row.id)).toEqual([
         vendor.packageIds[0],
@@ -1341,7 +1362,7 @@ describe('admin graduated moderation', () => {
 
       const deactivated = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/packages/${heldPackageId}/active`,
+        url: `/v1/admin/packages/${heldPackageId}/active`,
         headers: bearer(ADMIN),
         payload: { isActive: false },
       });
@@ -1354,7 +1375,7 @@ describe('admin graduated moderation', () => {
        */
       const edited = await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${heldPackageId}`,
+        url: `/v1/vendor/packages/${heldPackageId}`,
         headers: bearer(VENDOR),
         payload: {
           name: 'Half day coverage',
@@ -1376,7 +1397,7 @@ describe('admin graduated moderation', () => {
 
       const cleared = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: true },
       });
@@ -1387,7 +1408,7 @@ describe('admin graduated moderation', () => {
       /* The vendor's own lever works again in both directions. */
       const paused = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: false },
       });
@@ -1395,14 +1416,17 @@ describe('admin graduated moderation', () => {
 
       const republished = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
       expect(republished.statusCode).toBe(200);
       expect(await publishedFlag(vendor.id)).toBe(true);
 
-      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const profile = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
       expect(profile.statusCode).toBe(200);
     });
 
@@ -1414,7 +1438,7 @@ describe('admin graduated moderation', () => {
       for (const isActive of [false, true]) {
         const response = await harness.app.inject({
           method: 'PUT',
-          url: `/admin/packages/${heldPackageId}/active`,
+          url: `/v1/admin/packages/${heldPackageId}/active`,
           headers: bearer(ADMIN),
           payload: { isActive },
         });
@@ -1423,7 +1447,7 @@ describe('admin graduated moderation', () => {
 
       const off = await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${heldPackageId}`,
+        url: `/v1/vendor/packages/${heldPackageId}`,
         headers: bearer(VENDOR),
         payload: { isActive: false },
       });
@@ -1431,7 +1455,7 @@ describe('admin graduated moderation', () => {
 
       const on = await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${heldPackageId}`,
+        url: `/v1/vendor/packages/${heldPackageId}`,
         headers: bearer(VENDOR),
         payload: { isActive: true },
       });
@@ -1453,7 +1477,7 @@ describe('admin graduated moderation', () => {
        */
       const saved = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: {
           businessName: 'Fernbank Studio',
@@ -1478,7 +1502,7 @@ describe('admin graduated moderation', () => {
 
       const republished = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -1496,7 +1520,7 @@ describe('admin graduated moderation', () => {
 
       const cleared = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: true },
       });
@@ -1524,7 +1548,7 @@ describe('admin graduated moderation', () => {
       for (const isActive of [false, true]) {
         const response = await harness.app.inject({
           method: 'PUT',
-          url: `/admin/packages/${heldPackageId}/active`,
+          url: `/v1/admin/packages/${heldPackageId}/active`,
           headers: bearer(ADMIN),
           payload: { isActive },
         });
@@ -1548,7 +1572,7 @@ describe('admin graduated moderation', () => {
       /* The vendor's own pause. Nothing was moderated, and the row says so. */
       const paused = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: false },
       });
@@ -1557,7 +1581,7 @@ describe('admin graduated moderation', () => {
 
       const republished = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -1574,7 +1598,7 @@ describe('admin graduated moderation', () => {
 
       const held = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?status=held',
+        url: '/v1/admin/vendors?status=held',
         headers: bearer(ADMIN),
       });
       expect(held.statusCode).toBe(200);
@@ -1582,7 +1606,7 @@ describe('admin graduated moderation', () => {
 
       const review = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors?status=review',
+        url: '/v1/admin/vendors?status=review',
         headers: bearer(ADMIN),
       });
       expect(review.statusCode).toBe(200);
@@ -1608,7 +1632,7 @@ describe('admin graduated moderation', () => {
 
       const refused = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -1649,7 +1673,7 @@ describe('admin graduated moderation', () => {
 
       const paused = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: false },
       });
@@ -1658,7 +1682,7 @@ describe('admin graduated moderation', () => {
 
       const held = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: false },
       });
@@ -1674,13 +1698,16 @@ describe('admin graduated moderation', () => {
 
       const republished = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
       expect(republished.statusCode).toBe(403);
 
-      const profile = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const profile = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
       expect(profile.statusCode).toBe(404);
     });
 
@@ -1691,7 +1718,7 @@ describe('admin graduated moderation', () => {
 
       const off = await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${target}`,
+        url: `/v1/vendor/packages/${target}`,
         headers: bearer(VENDOR),
         payload: { isActive: false },
       });
@@ -1699,7 +1726,7 @@ describe('admin graduated moderation', () => {
 
       const held = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/packages/${target}/active`,
+        url: `/v1/admin/packages/${target}/active`,
         headers: bearer(ADMIN),
         payload: { isActive: false },
       });
@@ -1708,7 +1735,7 @@ describe('admin graduated moderation', () => {
 
       const on = await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${target}`,
+        url: `/v1/vendor/packages/${target}`,
         headers: bearer(VENDOR),
         payload: { isActive: true },
       });
@@ -1728,7 +1755,7 @@ describe('admin graduated moderation', () => {
 
       const again = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendor.id}/publish`,
+        url: `/v1/admin/vendors/${vendor.id}/publish`,
         headers: bearer(ADMIN),
         payload: { isPublished: false },
       });
@@ -1748,7 +1775,7 @@ describe('admin graduated moderation', () => {
       for (const attempt of [200, 409]) {
         const response = await harness.app.inject({
           method: 'PUT',
-          url: `/admin/packages/${target}/active`,
+          url: `/v1/admin/packages/${target}/active`,
           headers: bearer(ADMIN),
           payload: { isActive: false },
         });
@@ -1836,7 +1863,7 @@ describe('admin graduated moderation', () => {
 
       const deactivated = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/packages/${vendor.packageIds[0]}/active`,
+        url: `/v1/admin/packages/${vendor.packageIds[0]}/active`,
         headers: bearer(ADMIN),
         payload: { isActive: false },
       });
@@ -1855,7 +1882,7 @@ describe('admin graduated moderation', () => {
 
       const republished = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });

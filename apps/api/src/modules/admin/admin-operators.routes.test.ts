@@ -28,14 +28,14 @@ describe('operator grant and revoke', () => {
   async function stepUp(authUserId: string): Promise<void> {
     await harness.app.inject({
       method: 'POST',
-      url: '/admin/step-up/challenge',
+      url: '/v1/admin/step-up/challenge',
       headers: bearer(authUserId),
     });
     const message = [...harness.email.sent].reverse().find((m) => m.to === emailOf(authUserId));
     const code = /\b(\d{6})\b/.exec(message?.text ?? '')?.[1];
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/admin/step-up/verify',
+      url: '/v1/admin/step-up/verify',
       headers: bearer(authUserId),
       payload: { code },
     });
@@ -45,7 +45,7 @@ describe('operator grant and revoke', () => {
   const grant = (actor: string, email: string) =>
     harness.app.inject({
       method: 'POST',
-      url: '/admin/operators',
+      url: '/v1/admin/operators',
       headers: bearer(actor),
       payload: { email },
     });
@@ -53,7 +53,7 @@ describe('operator grant and revoke', () => {
   const revoke = (actor: string, userId: string) =>
     harness.app.inject({
       method: 'DELETE',
-      url: `/admin/operators/${userId}`,
+      url: `/v1/admin/operators/${userId}`,
       headers: bearer(actor),
     });
 
@@ -133,7 +133,7 @@ describe('operator grant and revoke', () => {
 
     const console = await harness.app.inject({
       method: 'GET',
-      url: '/admin/operators',
+      url: '/v1/admin/operators',
       headers: bearer(CUSTOMER),
     });
     expect(console.statusCode).toBe(200);
@@ -160,7 +160,7 @@ describe('operator grant and revoke', () => {
 
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/admin/operators',
+      url: '/v1/admin/operators',
       headers: bearer(ADMIN),
     });
     const items = response.json().items as Array<Record<string, unknown>>;
@@ -249,10 +249,10 @@ describe('operator grant and revoke', () => {
     const nonOperator = await grant(OUTSIDER, emailOf(CUSTOMER));
     const signedOut = await harness.app.inject({
       method: 'POST',
-      url: '/admin/operators',
+      url: '/v1/admin/operators',
       payload: { email: emailOf(CUSTOMER) },
     });
-    harness.app.stepUp.revoke(await idOf(ADMIN));
+    await harness.app.stepUp.revoke(await idOf(ADMIN));
     const stale = await grant(ADMIN, emailOf(CUSTOMER));
     const staleRevoke = await revoke(ADMIN, customerId);
 

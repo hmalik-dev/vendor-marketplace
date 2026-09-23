@@ -109,20 +109,20 @@ describe('the Neon Auth trust boundary', () => {
   });
 
   it('answers 401 to a request with no token', async () => {
-    expect((await get('/users/me')).statusCode).toBe(401);
+    expect((await get('/v1/users/me')).statusCode).toBe(401);
   });
 
   it('answers 401 to a token signed by a key the JWKS does not hold', async () => {
     const stranger = await generateKeyPair('EdDSA');
     const forged = await sign(claims(), { key: stranger.privateKey });
 
-    expect((await get('/users/me', forged)).statusCode).toBe(401);
+    expect((await get('/v1/users/me', forged)).statusCode).toBe(401);
   });
 
   it('answers 401 to an expired token', async () => {
     const expired = await sign(claims(), { expiresIn: Math.floor(Date.now() / 1000) - 60 });
 
-    expect((await get('/users/me', expired)).statusCode).toBe(401);
+    expect((await get('/v1/users/me', expired)).statusCode).toBe(401);
   });
 
   it('logs why an expired token was refused, and none of the claims it carried', async () => {
@@ -144,7 +144,7 @@ describe('the Neon Auth trust boundary', () => {
       });
       const response = await logged.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: { authorization: `Bearer ${expired}` },
       });
       const output = lines.join('');
@@ -167,19 +167,19 @@ describe('the Neon Auth trust boundary', () => {
       .setExpirationTime('15m')
       .sign((await generateKeyPair('EdDSA')).privateKey);
 
-    expect((await get('/users/me', other)).statusCode).toBe(401);
+    expect((await get('/v1/users/me', other)).statusCode).toBe(401);
   });
 
   it('answers 401 to a token whose address is not verified', async () => {
     const unverified = await sign(claims({ emailVerified: false }));
 
-    expect((await get('/users/me', unverified)).statusCode).toBe(401);
+    expect((await get('/v1/users/me', unverified)).statusCode).toBe(401);
   });
 
   it('accepts a valid token, and reads the subject the users row is keyed by', async () => {
     const token = await sign(claims());
 
-    const status = await get('/legal/terms', token);
+    const status = await get('/v1/legal/terms', token);
 
     expect(status.statusCode).toBe(200);
     expect(status.json()).toMatchObject({ accepted: false, current: CURRENT_TERMS_VERSION });
@@ -190,7 +190,12 @@ describe('the Neon Auth trust boundary', () => {
     // richer one changes nothing because the API never reads it.
     const token = await sign(claims({ sub: 'neon-user-norow', role: 'admin', roleHint: 'admin' }));
 
-    for (const url of ['/users/me', '/vendor/profile', '/vendor/agreement', '/admin/vendors']) {
+    for (const url of [
+      '/v1/users/me',
+      '/v1/vendor/profile',
+      '/v1/vendor/agreement',
+      '/v1/admin/vendors',
+    ]) {
       const response = await get(url, token);
       expect([401, 403], url).toContain(response.statusCode);
       expect(response.statusCode, url).not.toBe(200);
@@ -213,7 +218,7 @@ describe('the Neon Auth trust boundary', () => {
 
     const accepted = await harness.app.inject({
       method: 'POST',
-      url: '/legal/terms/accept',
+      url: '/v1/legal/terms/accept',
       headers: { authorization: `Bearer ${token}` },
       payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
     });
@@ -227,7 +232,7 @@ describe('the Neon Auth trust boundary', () => {
       lastName: 'Brewster Hopper',
       role: 'customer',
     });
-    expect((await get('/users/me', token)).statusCode).toBe(200);
+    expect((await get('/v1/users/me', token)).statusCode).toBe(200);
   });
 
   it.each([
@@ -242,7 +247,7 @@ describe('the Neon Auth trust boundary', () => {
 
     const accepted = await harness.app.inject({
       method: 'POST',
-      url: '/legal/terms/accept',
+      url: '/v1/legal/terms/accept',
       headers: { authorization: `Bearer ${token}` },
       payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
     });
@@ -250,7 +255,7 @@ describe('the Neon Auth trust boundary', () => {
     expect(accepted.statusCode).toBe(200);
     const rows = await harness.database.db.select().from(users);
     expect(rows.find((row) => row.authUserId === authUserId)?.avatarUrl).toBe(stored);
-    expect((await get('/users/me', token)).statusCode).toBe(200);
+    expect((await get('/v1/users/me', token)).statusCode).toBe(200);
   });
 
   it('answers 401 to a token minted before the account’s sessions were invalidated (VEN-628)', async () => {
@@ -259,19 +264,19 @@ describe('the Neon Auth trust boundary', () => {
 
     const accepted = await harness.app.inject({
       method: 'POST',
-      url: '/legal/terms/accept',
+      url: '/v1/legal/terms/accept',
       headers: { authorization: `Bearer ${before}` },
       payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
     });
     expect(accepted.statusCode).toBe(200);
-    expect((await get('/users/me', before)).statusCode).toBe(200);
+    expect((await get('/v1/users/me', before)).statusCode).toBe(200);
 
     await harness.database.db
       .update(users)
       .set({ sessionsInvalidatedAt: new Date(Date.now() + 60_000) })
       .where(eq(users.authUserId, authUserId));
 
-    expect((await get('/users/me', before)).statusCode).toBe(401);
+    expect((await get('/v1/users/me', before)).statusCode).toBe(401);
   });
 
   it('accepts a token minted after the invalidation it should outrun', async () => {
@@ -279,7 +284,7 @@ describe('the Neon Auth trust boundary', () => {
     const stale = await sign(claims({ sub: authUserId, email: 'post-invalidate@example.com' }));
     await harness.app.inject({
       method: 'POST',
-      url: '/legal/terms/accept',
+      url: '/v1/legal/terms/accept',
       headers: { authorization: `Bearer ${stale}` },
       payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
     });
@@ -290,7 +295,7 @@ describe('the Neon Auth trust boundary', () => {
       .where(eq(users.authUserId, authUserId));
 
     const fresh = await sign(claims({ sub: authUserId, email: 'post-invalidate@example.com' }));
-    expect((await get('/users/me', fresh)).statusCode).toBe(200);
+    expect((await get('/v1/users/me', fresh)).statusCode).toBe(200);
   });
 
   it('accepts a token minted in the same whole second as the invalidation write (VEN-628)', async () => {
@@ -298,7 +303,7 @@ describe('the Neon Auth trust boundary', () => {
     const setup = await sign(claims({ sub: authUserId, email: 'same-second@example.com' }));
     await harness.app.inject({
       method: 'POST',
-      url: '/legal/terms/accept',
+      url: '/v1/legal/terms/accept',
       headers: { authorization: `Bearer ${setup}` },
       payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
     });
@@ -317,7 +322,7 @@ describe('the Neon Auth trust boundary', () => {
       issuedAt: wholeSecond,
     });
 
-    expect((await get('/users/me', sameSecond)).statusCode).toBe(200);
+    expect((await get('/v1/users/me', sameSecond)).statusCode).toBe(200);
   });
 
   it('refuses a vendor sign-up with no invite and creates no account', async () => {
@@ -330,7 +335,7 @@ describe('the Neon Auth trust boundary', () => {
 
     const accepted = await harness.app.inject({
       method: 'POST',
-      url: '/legal/terms/accept',
+      url: '/v1/legal/terms/accept',
       headers: { authorization: `Bearer ${token}` },
       payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'vendor' },
     });

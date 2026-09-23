@@ -20,6 +20,7 @@ const close = vi.fn(async () => undefined);
 const listen = vi.fn(async () => '');
 const end = vi.fn(async () => undefined);
 const directoryClose = vi.fn(async () => undefined);
+const listenerClose = vi.fn(async () => undefined);
 
 vi.mock('../../server.js', () => ({
   buildServer: (options: unknown) => {
@@ -36,6 +37,7 @@ vi.mock('../../server.js', () => ({
 
 vi.mock('@vendor-marketplace/db', () => ({
   createDatabase: () => ({ db: {}, client: { end } }),
+  createListener: () => ({ listen: async () => async () => undefined, close: listenerClose }),
   createNeonAuthDirectory: () => ({ lookup: async () => [], close: directoryClose }),
   loadEnv: () => undefined,
 }));
@@ -43,6 +45,7 @@ vi.mock('@vendor-marketplace/db', () => ({
 vi.mock('../../config/env.js', () => ({
   parseEnv: () => ({
     NEON_AUTH_DATABASE_URL: 'postgres://neon-auth.test/db',
+    DATABASE_URL: 'postgres://app.test/db',
     WEB_URL: 'https://orla.test',
   }),
   canonicalWebOrigin: () => 'https://orla.test',
@@ -90,6 +93,7 @@ describe('the Neon Auth reconciliation CLI', () => {
     expect(close).toHaveBeenCalledTimes(1);
     expect(end).toHaveBeenCalledTimes(1);
     expect(directoryClose).toHaveBeenCalledTimes(1);
+    expect(listenerClose).toHaveBeenCalledTimes(1);
 
     // It did the work it exists to do, rather than exiting before reaching it.
     expect(reconcileAuthUsers).toHaveBeenCalledTimes(1);

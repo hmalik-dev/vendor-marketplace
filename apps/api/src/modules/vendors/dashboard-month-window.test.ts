@@ -88,7 +88,7 @@ describe('the vendor dashboard month window, at a boundary west of UTC', () => {
 
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Boundary Studio',
@@ -177,7 +177,7 @@ describe('the vendor dashboard month window, at a boundary west of UTC', () => {
   }> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/vendor/dashboard',
+      url: '/v1/vendor/dashboard',
       headers: bearer(VENDOR),
     });
 

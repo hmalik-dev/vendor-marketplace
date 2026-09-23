@@ -1,4 +1,6 @@
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
+import { stepUpChallenges, stepUpGrants } from '@vendor-marketplace/db/schema';
+import { and, eq, gt, lt, sql } from 'drizzle-orm';
 import type { onRequestAsyncHookHandler } from 'fastify';
 import {
   ERROR_CODES,
@@ -7,14 +9,9 @@ import {
   STEP_UP_GRANT_TTL_MS,
   STEP_UP_MAX_ATTEMPTS,
 } from '@vendor-marketplace/shared';
+import type { AppDatabase } from './database.js';
 import { AppError } from './errors.js';
 import { authenticated } from './guards.js';
-
-interface PendingChallenge {
-  readonly digest: Buffer;
-  readonly expiresAtMs: number;
-  attempts: number;
-}
 
 export interface IssuedChallenge {
   /** Emailed to the operator and never stored, logged or returned. */
@@ -31,89 +28,115 @@ export interface IssuedChallenge {
  * Neon Auth has no second factor. Reused by every irreversible route, and by
  * VEN-506's operator grant and revoke, through {@link requireStepUp}.
  *
- * **In memory, so a single-instance assumption** — the same one
- * `StreamTicketStore` and the rate limiter record in
- * `vendor-marketplace-decisions.md`. On a second replica the operator simply
- * asks for another code; the failure is a re-prompt, never an open door.
+ * **In Postgres, so every instance agrees** (VEN-650): a code issued through
+ * one replica is spent through another, and a grant minted on one is honoured
+ * by all of them. Only the SHA-256 of a code is stored.
  */
 export class StepUpStore {
-  readonly #challenges = new Map<string, PendingChallenge>();
-  readonly #grants = new Map<string, number>();
+  readonly #db: AppDatabase;
+
+  constructor(db: AppDatabase) {
+    this.#db = db;
+  }
 
   /** Replaces any earlier challenge for this operator, so only the newest code works. */
-  issue(adminId: string, now: Date): IssuedChallenge {
-    this.#sweep(now.getTime());
-
+  async issue(adminId: string, now: Date): Promise<IssuedChallenge> {
     const code = String(randomInt(10 ** STEP_UP_CODE_LENGTH)).padStart(STEP_UP_CODE_LENGTH, '0');
-    const expiresAtMs = now.getTime() + STEP_UP_CODE_TTL_MS;
+    const expiresAt = new Date(now.getTime() + STEP_UP_CODE_TTL_MS);
+    const challenge = { digest: digestOf(code), attempts: 0, expiresAt };
 
-    this.#challenges.set(adminId, { digest: digestOf(code), expiresAtMs, attempts: 0 });
+    await this.#db
+      .insert(stepUpChallenges)
+      .values({ adminId, ...challenge })
+      .onConflictDoUpdate({ target: stepUpChallenges.adminId, set: challenge });
 
-    return { code, expiresAt: new Date(expiresAtMs) };
+    return { code, expiresAt };
   }
 
   /**
    * Spends the challenge on a correct code and returns when the grant lapses,
    * or `null`. A wrong code counts an attempt; the last allowed one voids the
    * challenge, so the six-digit space cannot be walked.
+   *
+   * The attempt is counted by the statement that reads the challenge, so two
+   * replicas guessing at once each spend one; and the challenge is spent with
+   * a `delete … returning`, so of two correct entries only one mints a grant.
    */
-  verify(adminId: string, code: string, now: Date): Date | null {
-    const nowMs = now.getTime();
-    const challenge = this.#challenges.get(adminId);
+  async verify(adminId: string, code: string, now: Date): Promise<Date | null> {
+    const [challenge] = await this.#db
+      .update(stepUpChallenges)
+      .set({ attempts: sql`${stepUpChallenges.attempts} + 1` })
+      .where(
+        and(
+          eq(stepUpChallenges.adminId, adminId),
+          gt(stepUpChallenges.expiresAt, now),
+          // Concurrent guesses each count, and none past the cap is compared.
+          lt(stepUpChallenges.attempts, STEP_UP_MAX_ATTEMPTS),
+        ),
+      )
+      .returning({ digest: stepUpChallenges.digest, attempts: stepUpChallenges.attempts });
 
-    if (!challenge || challenge.expiresAtMs <= nowMs) {
-      this.#challenges.delete(adminId);
+    if (!challenge) {
+      await this.cancelChallenge(adminId);
       return null;
     }
 
-    challenge.attempts += 1;
+    const presented = digestOf(code);
 
-    if (!timingSafeEqual(challenge.digest, digestOf(code))) {
+    if (!timingSafeEqual(Buffer.from(challenge.digest, 'hex'), Buffer.from(presented, 'hex'))) {
       if (challenge.attempts >= STEP_UP_MAX_ATTEMPTS) {
-        this.#challenges.delete(adminId);
+        await this.cancelChallenge(adminId);
       }
       return null;
     }
 
-    this.#challenges.delete(adminId);
-    const expiresAtMs = nowMs + STEP_UP_GRANT_TTL_MS;
-    this.#grants.set(adminId, expiresAtMs);
+    const expiresAt = new Date(now.getTime() + STEP_UP_GRANT_TTL_MS);
 
-    return new Date(expiresAtMs);
+    return this.#db.transaction(async (tx) => {
+      const spent = await tx
+        .delete(stepUpChallenges)
+        .where(and(eq(stepUpChallenges.adminId, adminId), eq(stepUpChallenges.digest, presented)))
+        .returning({ adminId: stepUpChallenges.adminId });
+
+      if (spent.length === 0) {
+        return null;
+      }
+
+      await tx
+        .insert(stepUpGrants)
+        .values({ adminId, expiresAt })
+        .onConflictDoUpdate({ target: stepUpGrants.adminId, set: { expiresAt } });
+
+      return expiresAt;
+    });
   }
 
-  isFresh(adminId: string, now: Date): boolean {
-    return (this.#grants.get(adminId) ?? 0) > now.getTime();
+  async isFresh(adminId: string, now: Date): Promise<boolean> {
+    const [grant] = await this.#db
+      .select({ adminId: stepUpGrants.adminId })
+      .from(stepUpGrants)
+      .where(and(eq(stepUpGrants.adminId, adminId), gt(stepUpGrants.expiresAt, now)));
+
+    return grant !== undefined;
   }
 
   /** Ends a grant early — after the destructive action it was minted for, if a caller wants one-shot. */
-  revoke(adminId: string): void {
-    this.#grants.delete(adminId);
-    this.#challenges.delete(adminId);
+  async revoke(adminId: string): Promise<void> {
+    await this.#db.transaction(async (tx) => {
+      await tx.delete(stepUpGrants).where(eq(stepUpGrants.adminId, adminId));
+      await tx.delete(stepUpChallenges).where(eq(stepUpChallenges.adminId, adminId));
+    });
   }
 
   /** Voids a pending code — the send failed — and leaves any live grant alone. */
-  cancelChallenge(adminId: string): void {
-    this.#challenges.delete(adminId);
-  }
-
-  #sweep(nowMs: number): void {
-    for (const [id, challenge] of this.#challenges) {
-      if (challenge.expiresAtMs <= nowMs) {
-        this.#challenges.delete(id);
-      }
-    }
-    for (const [id, expiresAtMs] of this.#grants) {
-      if (expiresAtMs <= nowMs) {
-        this.#grants.delete(id);
-      }
-    }
+  async cancelChallenge(adminId: string): Promise<void> {
+    await this.#db.delete(stepUpChallenges).where(eq(stepUpChallenges.adminId, adminId));
   }
 }
 
-/** Stored instead of the code, so a heap dump holds no usable credential. */
-function digestOf(code: string): Buffer {
-  return createHash('sha256').update(code).digest();
+/** Stored instead of the code, so a database dump holds no usable credential. */
+function digestOf(code: string): string {
+  return createHash('sha256').update(code).digest('hex');
 }
 
 export function stepUpRequired(): AppError {
@@ -134,7 +157,7 @@ export function stepUpRequired(): AppError {
 export const requireStepUp: onRequestAsyncHookHandler = async (request) => {
   const user = authenticated(request.auth);
 
-  if (!request.server.stepUp.isFresh(user.id, request.server.clock())) {
+  if (!(await request.server.stepUp.isFresh(user.id, request.server.clock()))) {
     throw stepUpRequired();
   }
 };

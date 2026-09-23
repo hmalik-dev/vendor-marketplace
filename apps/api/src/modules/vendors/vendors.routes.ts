@@ -158,7 +158,7 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
         { authUserId: user.authUserId, directory: app.authDirectory, log: request.log },
       );
 
-      return reply.status(201).header('location', OWN_PROFILE_PATH).send(profile);
+      return reply.status(201).header('location', `${app.prefix}${OWN_PROFILE_PATH}`).send(profile);
     },
   );
 

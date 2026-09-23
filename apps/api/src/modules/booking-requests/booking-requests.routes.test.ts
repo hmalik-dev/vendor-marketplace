@@ -62,7 +62,7 @@ interface RequestBody {
   package: { id: string; name: string; priceCents: number } | null;
 }
 
-describe('/booking-requests', () => {
+describe('/v1/booking-requests', () => {
   let harness: TestHarness;
   let photographyId: string;
 
@@ -74,7 +74,7 @@ describe('/booking-requests', () => {
   ): Promise<{ vendorId: string; packageId: string }> {
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(authUserId),
       payload: {
         businessName,
@@ -89,7 +89,7 @@ describe('/booking-requests', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(authUserId),
       payload: {
         name: 'Full day coverage',
@@ -121,7 +121,7 @@ describe('/booking-requests', () => {
     if (options.agreement ?? true) {
       const agreed = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/agreement/accept',
+        url: '/v1/vendor/agreement/accept',
         headers: bearer(authUserId),
         payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
       });
@@ -149,7 +149,7 @@ describe('/booking-requests', () => {
     overrides: Record<string, unknown> = {},
     actor = CUSTOMER,
   ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
-    return post(actor, '/booking-requests', {
+    return post(actor, '/v1/booking-requests', {
       vendorId,
       eventDate: EVENT_DATE,
       eventType: 'wedding',
@@ -228,7 +228,7 @@ describe('/booking-requests', () => {
     it('rejects an unauthenticated create', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/booking-requests',
+        url: '/v1/booking-requests',
         payload: {
           vendorId: '11111111-1111-4111-8111-111111111111',
           eventDate: EVENT_DATE,
@@ -275,7 +275,7 @@ describe('/booking-requests', () => {
     it('answers a vendor 403 even when the body would not validate', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/booking-requests',
+        url: '/v1/booking-requests',
         headers: bearer(VENDOR),
         payload: { vendorId: 'not-a-uuid' },
       });
@@ -290,7 +290,7 @@ describe('/booking-requests', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/booking-requests/${created.json().id}`,
+        url: `/v1/booking-requests/${created.json().id}`,
         headers: bearer(OTHER_CUSTOMER),
       });
 
@@ -547,7 +547,7 @@ describe('/booking-requests', () => {
       // The constraint violation surfaces as the record that already exists.
       expect(second.statusCode).toBe(200);
       expect(second.json<RequestBody>().id).toBe(first.json<RequestBody>().id);
-      expect(second.headers.location).toBe(`/booking-requests/${first.json<RequestBody>().id}`);
+      expect(second.headers.location).toBe(`/v1/booking-requests/${first.json<RequestBody>().id}`);
     });
 
     /*
@@ -645,7 +645,7 @@ describe('/booking-requests', () => {
        * that transition anyway.
        */
       if (action === 'accept') {
-        const quoted = await post(VENDOR, `/booking-requests/${requestId}/quote`, {
+        const quoted = await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, {
           quotedPriceCents: 250_000,
         });
         expect(quoted.statusCode).toBe(200);
@@ -659,10 +659,10 @@ describe('/booking-requests', () => {
       const actor = action === 'quote' || action === 'decline' ? VENDOR : CUSTOMER;
       const response =
         action === 'quote'
-          ? await post(actor, `/booking-requests/${requestId}/quote`, {
+          ? await post(actor, `/v1/booking-requests/${requestId}/quote`, {
               quotedPriceCents: 250_000,
             })
-          : await post(actor, `/booking-requests/${requestId}/${action}`);
+          : await post(actor, `/v1/booking-requests/${requestId}/${action}`);
 
       expect(response.statusCode).toBe(200);
 
@@ -710,7 +710,7 @@ describe('/booking-requests', () => {
       const first = await createRequest(vendorId, { packageId });
       const withdrawn = await post(
         CUSTOMER,
-        `/booking-requests/${first.json<RequestBody>().id}/cancel`,
+        `/v1/booking-requests/${first.json<RequestBody>().id}/cancel`,
       );
       expect(withdrawn.statusCode).toBe(200);
 
@@ -782,10 +782,14 @@ describe('/booking-requests', () => {
         customDetails: 'A two-hour engagement shoot in the botanical garden.',
       });
 
-      const quoted = await post(VENDOR, `/booking-requests/${first.json<RequestBody>().id}/quote`, {
-        quotedPriceCents: 90_000,
-        quoteNote: 'Two hours, one photographer, gallery in three weeks.',
-      });
+      const quoted = await post(
+        VENDOR,
+        `/v1/booking-requests/${first.json<RequestBody>().id}/quote`,
+        {
+          quotedPriceCents: 90_000,
+          quoteNote: 'Two hours, one photographer, gallery in three weeks.',
+        },
+      );
       expect(quoted.statusCode).toBe(200);
 
       // A quote takes the request out of `pending` without settling it, and it
@@ -962,7 +966,7 @@ describe('/booking-requests', () => {
       for (const actor of [CUSTOMER, VENDOR]) {
         const response = await harness.app.inject({
           method: 'GET',
-          url: '/booking-requests',
+          url: '/v1/booking-requests',
           headers: bearer(actor),
         });
 
@@ -977,7 +981,7 @@ describe('/booking-requests', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/booking-requests',
+        url: '/v1/booking-requests',
         headers: bearer(OTHER_CUSTOMER),
       });
 
@@ -990,7 +994,7 @@ describe('/booking-requests', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/booking-requests?status=declined',
+        url: '/v1/booking-requests?status=declined',
         headers: bearer(CUSTOMER),
       });
 
@@ -1009,7 +1013,7 @@ describe('/booking-requests', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/booking-requests/${created.json().id}`,
+        url: `/v1/booking-requests/${created.json().id}`,
         headers: bearer(CUSTOMER),
       });
 
@@ -1044,7 +1048,7 @@ describe('/booking-requests', () => {
       for (const actor of [CUSTOMER, VENDOR]) {
         const response = await harness.app.inject({
           method: 'GET',
-          url: `/booking-requests/${requestId}`,
+          url: `/v1/booking-requests/${requestId}`,
           headers: bearer(actor),
         });
 
@@ -1079,7 +1083,7 @@ describe('/booking-requests', () => {
       /* And on the list read, which is what the vendor's page renders. */
       const listed = await harness.app.inject({
         method: 'GET',
-        url: '/booking-requests',
+        url: '/v1/booking-requests',
         headers: bearer(VENDOR),
       });
       expect(listed.json()[0].settlement).toMatchObject({ refundAmountCents: 145_000 });
@@ -1099,7 +1103,7 @@ describe('/booking-requests', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/booking-requests/${requestId}`,
+        url: `/v1/booking-requests/${requestId}`,
         headers: bearer(CUSTOMER),
       });
 
@@ -1164,7 +1168,7 @@ describe('/booking-requests', () => {
         const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
         const created = await createRequest(vendorId, { packageId });
         const requestId: string = created.json().id;
-        const accepted = await post(VENDOR, `/booking-requests/${requestId}/accept`);
+        const accepted = await post(VENDOR, `/v1/booking-requests/${requestId}/accept`);
         expect(accepted.statusCode).toBe(200);
 
         return { vendorId, packageId, requestId };
@@ -1230,7 +1234,7 @@ describe('/booking-requests', () => {
           .where(eq(vendorProfiles.id, vendorId));
         const calendar = await harness.app.inject({
           method: 'GET',
-          url: `/vendors/${vendor!.slug}/availability`,
+          url: `/v1/vendors/${vendor!.slug}/availability`,
         });
         expect(calendar.statusCode).toBe(200);
         expect(
@@ -1242,7 +1246,7 @@ describe('/booking-requests', () => {
         const retried = await createRequest(vendorId, { packageId }, OTHER_CUSTOMER);
         expect(retried.statusCode).toBe(201);
         expect(
-          (await post(VENDOR, `/booking-requests/${retried.json().id}/accept`)).statusCode,
+          (await post(VENDOR, `/v1/booking-requests/${retried.json().id}/accept`)).statusCode,
         ).toBe(200);
       });
 
@@ -1337,7 +1341,7 @@ describe('/booking-requests', () => {
         .set({ expiresAt: addDays(new Date(), -1) })
         .where(eq(bookingRequests.id, requestId));
 
-      const response = await post(VENDOR, `/booking-requests/${requestId}/accept`);
+      const response = await post(VENDOR, `/v1/booking-requests/${requestId}/accept`);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().error).toBe('INVALID_STATE_TRANSITION');
@@ -1349,7 +1353,7 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/accept`);
 
       expect(response.statusCode).toBe(200);
       const body = response.json() as RequestBody;
@@ -1380,8 +1384,8 @@ describe('/booking-requests', () => {
       const theirs = await createRequest(vendorId, { packageId }, OTHER_CUSTOMER);
 
       const responses = await Promise.all([
-        post(VENDOR, `/booking-requests/${mine.json().id}/accept`),
-        post(VENDOR, `/booking-requests/${theirs.json().id}/accept`),
+        post(VENDOR, `/v1/booking-requests/${mine.json().id}/accept`),
+        post(VENDOR, `/v1/booking-requests/${theirs.json().id}/accept`),
       ]);
 
       expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
@@ -1407,7 +1411,7 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/accept`);
 
       expect(response.statusCode).toBe(400);
       expect(response.json().message).toContain('Send a quote before accepting');
@@ -1430,7 +1434,7 @@ describe('/booking-requests', () => {
         .set({ eventDate: toDateString(addDays(new Date(), -2)) })
         .where(eq(bookingRequests.id, requestId));
 
-      const response = await post(VENDOR, `/booking-requests/${requestId}/accept`);
+      const response = await post(VENDOR, `/v1/booking-requests/${requestId}/accept`);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toContain('has passed');
@@ -1447,10 +1451,10 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
       const requestId: string = created.json().id;
-      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
       await harness.database.db.update(vendorProfiles).set(change);
 
-      const response = await post(CUSTOMER, `/booking-requests/${requestId}/accept`);
+      const response = await post(CUSTOMER, `/v1/booking-requests/${requestId}/accept`);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().error).toBe(ERROR_CODES.VENDOR_PAUSED);
@@ -1476,7 +1480,7 @@ describe('/booking-requests', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/booking-requests/${requestId}`,
+        url: `/v1/booking-requests/${requestId}`,
         headers: bearer(CUSTOMER),
       });
 
@@ -1489,10 +1493,10 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
       const requestId: string = created.json().id;
-      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
       await harness.database.db.update(vendorProfiles).set({ isDeleted: true });
 
-      const response = await post(CUSTOMER, `/booking-requests/${requestId}/accept`);
+      const response = await post(CUSTOMER, `/v1/booking-requests/${requestId}/accept`);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().error).toBe(ERROR_CODES.VENDOR_UNAVAILABLE);
@@ -1504,7 +1508,7 @@ describe('/booking-requests', () => {
       const requestId: string = created.json().id;
       await harness.database.db.update(vendorProfiles).set({ isPublished: false });
 
-      const response = await post(VENDOR, `/booking-requests/${requestId}/accept`);
+      const response = await post(VENDOR, `/v1/booking-requests/${requestId}/accept`);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().error).toBe(ERROR_CODES.VENDOR_PAUSED);
@@ -1524,7 +1528,7 @@ describe('/booking-requests', () => {
       });
       const requestId: string = created.json().id;
 
-      const quoted = await post(VENDOR, `/booking-requests/${requestId}/quote`, {
+      const quoted = await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, {
         quotedPriceCents: 90_000,
         quoteNote: 'Includes travel to Zilker.',
       });
@@ -1532,7 +1536,7 @@ describe('/booking-requests', () => {
       expect((quoted.json() as RequestBody).status).toBe('quoted');
       expect((quoted.json() as RequestBody).finalPriceCents).toBeNull();
 
-      const accepted = await post(CUSTOMER, `/booking-requests/${requestId}/accept`);
+      const accepted = await post(CUSTOMER, `/v1/booking-requests/${requestId}/accept`);
       expect(accepted.statusCode).toBe(200);
       const body = accepted.json() as RequestBody;
       expect(body.status).toBe('accepted');
@@ -1554,7 +1558,7 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/quote`, {
         quotedPriceCents: MIN_BOOKING_AMOUNT_CENTS - 1,
       });
 
@@ -1568,7 +1572,7 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/quote`, {
         quotedPriceCents: MAX_PACKAGE_PRICE_CENTS + 1,
       });
 
@@ -1582,7 +1586,7 @@ describe('/booking-requests', () => {
         customDetails: 'A single hour of portraits, nothing more than that.',
       });
 
-      const response = await post(VENDOR, `/booking-requests/${atMinimum.json().id}/quote`, {
+      const response = await post(VENDOR, `/v1/booking-requests/${atMinimum.json().id}/quote`, {
         quotedPriceCents: MIN_BOOKING_AMOUNT_CENTS,
       });
 
@@ -1600,7 +1604,7 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/quote`, {
         quotedPriceCents: 90_000,
       });
 
@@ -1621,11 +1625,11 @@ describe('/booking-requests', () => {
       });
       const requestId: string = created.json().id;
 
-      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
 
       const inbox = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(CUSTOMER),
       });
       expect(inbox.statusCode).toBe(200);
@@ -1669,7 +1673,7 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/decline`);
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/decline`);
 
       expect(response.statusCode).toBe(200);
       expect((response.json() as RequestBody).status).toBe('declined');
@@ -1681,9 +1685,9 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
       const requestId: string = created.json().id;
-      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
 
-      const response = await post(VENDOR, `/booking-requests/${requestId}/decline`);
+      const response = await post(VENDOR, `/v1/booking-requests/${requestId}/decline`);
 
       expect(response.statusCode).toBe(200);
       expect((response.json() as RequestBody).status).toBe('declined');
@@ -1706,9 +1710,9 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
       const requestId: string = created.json().id;
-      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
 
-      const response = await post(CUSTOMER, `/booking-requests/${requestId}/decline`);
+      const response = await post(CUSTOMER, `/v1/booking-requests/${requestId}/decline`);
 
       expect(response.statusCode).toBe(200);
       expect((response.json() as RequestBody).status).toBe('declined');
@@ -1725,7 +1729,7 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
 
-      const response = await post(CUSTOMER, `/booking-requests/${created.json().id}/decline`);
+      const response = await post(CUSTOMER, `/v1/booking-requests/${created.json().id}/decline`);
 
       expect(response.statusCode).toBe(403);
       expect((response.json() as { message: string }).message).toContain('quote');
@@ -1735,7 +1739,7 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
 
-      const response = await post(CUSTOMER, `/booking-requests/${created.json().id}/cancel`);
+      const response = await post(CUSTOMER, `/v1/booking-requests/${created.json().id}/cancel`);
 
       expect(response.statusCode).toBe(200);
       expect((response.json() as RequestBody).status).toBe('cancelled');
@@ -1747,9 +1751,9 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
       const requestId: string = created.json().id;
-      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
 
-      const response = await post(CUSTOMER, `/booking-requests/${requestId}/cancel`);
+      const response = await post(CUSTOMER, `/v1/booking-requests/${requestId}/cancel`);
 
       expect(response.statusCode).toBe(200);
       expect((response.json() as RequestBody).status).toBe('cancelled');
@@ -1758,7 +1762,7 @@ describe('/booking-requests', () => {
     it('notifies the other party on every transition', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
-      await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+      await post(VENDOR, `/v1/booking-requests/${created.json().id}/accept`);
 
       const rows = await harness.database.db
         .select({ type: notifications.type, userId: notifications.userId })
@@ -1788,8 +1792,8 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
       const requestId: string = created.json().id;
-      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
-      await post(CUSTOMER, `/booking-requests/${requestId}/decline`);
+      await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await post(CUSTOMER, `/v1/booking-requests/${requestId}/decline`);
 
       const rows = await harness.database.db
         .select({ type: notifications.type, userId: notifications.userId })
@@ -1809,7 +1813,7 @@ describe('/booking-requests', () => {
     it('tells the customer when the vendor declines', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
-      await post(VENDOR, `/booking-requests/${created.json().id}/decline`);
+      await post(VENDOR, `/v1/booking-requests/${created.json().id}/decline`);
 
       const rows = await harness.database.db
         .select({ type: notifications.type, userId: notifications.userId })
@@ -1831,13 +1835,13 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
       const requestId: string = created.json().id;
-      await post(VENDOR, `/booking-requests/${requestId}/decline`);
+      await post(VENDOR, `/v1/booking-requests/${requestId}/decline`);
 
       for (const action of ['accept', 'decline', 'quote', 'cancel']) {
         const actor = action === 'cancel' ? CUSTOMER : VENDOR;
         const response = await post(
           actor,
-          `/booking-requests/${requestId}/${action}`,
+          `/v1/booking-requests/${requestId}/${action}`,
           action === 'quote' ? { quotedPriceCents: 90_000 } : undefined,
         );
 
@@ -1852,10 +1856,10 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
       const requestId: string = created.json().id;
-      await post(VENDOR, `/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
-      await post(CUSTOMER, `/booking-requests/${requestId}/accept`);
+      await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+      await post(CUSTOMER, `/v1/booking-requests/${requestId}/accept`);
 
-      const response = await post(VENDOR, `/booking-requests/${requestId}/quote`, {
+      const response = await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, {
         quotedPriceCents: 95_000,
       });
 
@@ -1867,7 +1871,7 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/quote`, {
         quotedPriceCents: 200_000,
       });
 
@@ -1880,7 +1884,7 @@ describe('/booking-requests', () => {
         customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
       });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/quote`, {
         quotedPriceCents: 2_400,
       });
 
@@ -1891,7 +1895,7 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
 
-      const response = await post(CUSTOMER, `/booking-requests/${created.json().id}/accept`);
+      const response = await post(CUSTOMER, `/v1/booking-requests/${created.json().id}/accept`);
 
       expect(response.statusCode).toBe(403);
     });
@@ -1900,7 +1904,7 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/cancel`);
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/cancel`);
 
       expect(response.statusCode).toBe(403);
     });
@@ -1911,7 +1915,7 @@ describe('/booking-requests', () => {
       });
       const created = await createRequest(vendorId, { packageId });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/accept`);
 
       expect(response.statusCode).toBe(402);
       expect(response.json().error).toBe('PAYMENT_REQUIRED');
@@ -1923,7 +1927,7 @@ describe('/booking-requests', () => {
       });
       const created = await createRequest(vendorId, { packageId });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/accept`);
 
       expect(response.statusCode).toBe(402);
       expect(response.json().error).toBe('PAYMENT_REQUIRED');
@@ -1941,7 +1945,7 @@ describe('/booking-requests', () => {
       await harness.database.db.insert(platformSettings).values({ maxBookingCents: 100_000 });
       forgetPlatformSwitches(harness.database.db);
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/accept`);
 
       expect(response.statusCode).toBe(422);
       expect(response.json().error).toBe(ERROR_CODES.OVER_BETA_CAP);
@@ -1962,7 +1966,7 @@ describe('/booking-requests', () => {
       await harness.database.db.insert(platformSettings).values({ maxBookingCents: 100_000 });
       forgetPlatformSwitches(harness.database.db);
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/quote`, {
         quotedPriceCents: 100_001,
         quoteNote: 'Two hours, one photographer.',
       });
@@ -1975,7 +1979,7 @@ describe('/booking-requests', () => {
         .from(bookingRequests);
       expect(row).toEqual({ status: 'pending', quoted: null });
 
-      const atCap = await post(VENDOR, `/booking-requests/${created.json().id}/quote`, {
+      const atCap = await post(VENDOR, `/v1/booking-requests/${created.json().id}/quote`, {
         quotedPriceCents: 100_000,
         quoteNote: 'Two hours, one photographer.',
       });
@@ -1989,7 +1993,7 @@ describe('/booking-requests', () => {
         .insert(availability)
         .values({ vendorId, date: EVENT_DATE, status: 'booked' });
 
-      const response = await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+      const response = await post(VENDOR, `/v1/booking-requests/${created.json().id}/accept`);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().error).toBe('CONFLICT');
@@ -2020,7 +2024,7 @@ describe('/booking-requests', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/bookings',
+        url: '/v1/bookings',
         headers: bearer(CUSTOMER),
       });
 
@@ -2064,7 +2068,7 @@ describe('/booking-requests', () => {
       for (const actor of [CUSTOMER, VENDOR]) {
         const response = await harness.app.inject({
           method: 'GET',
-          url: '/bookings',
+          url: '/v1/bookings',
           headers: bearer(actor),
         });
 
@@ -2110,7 +2114,7 @@ describe('/booking-requests', () => {
     it('is empty for someone with no bookings', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/bookings',
+        url: '/v1/bookings',
         headers: bearer(OTHER_CUSTOMER),
       });
 
@@ -2128,7 +2132,7 @@ describe('/booking-requests', () => {
     async function customerOn(requestId: string, actor: string): Promise<Record<string, unknown>> {
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/booking-requests/${requestId}`,
+        url: `/v1/booking-requests/${requestId}`,
         headers: bearer(actor),
       });
 
@@ -2154,7 +2158,7 @@ describe('/booking-requests', () => {
       const created = await createRequest(vendorId, { packageId });
       const requestId: string = created.json().id;
 
-      await post(VENDOR, `/booking-requests/${requestId}/accept`);
+      await post(VENDOR, `/v1/booking-requests/${requestId}/accept`);
 
       expect(await customerOn(requestId, VENDOR)).toEqual({
         firstName: 'Test',
@@ -2173,7 +2177,7 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
       const requestId: string = created.json().id;
-      await post(VENDOR, `/booking-requests/${requestId}/accept`);
+      await post(VENDOR, `/v1/booking-requests/${requestId}/accept`);
       await harness.database.db
         .update(users)
         .set({ email: 'first&last@example.com' })
@@ -2184,7 +2188,7 @@ describe('/booking-requests', () => {
       });
       const queue = await harness.app.inject({
         method: 'GET',
-        url: '/booking-requests',
+        url: '/v1/booking-requests',
         headers: bearer(VENDOR),
       });
       expect(queue.statusCode).toBe(200);
@@ -2195,7 +2199,7 @@ describe('/booking-requests', () => {
       const created = await createRequest(vendorId, { packageId });
       const requestId: string = created.json().id;
 
-      await post(VENDOR, `/booking-requests/${requestId}/decline`);
+      await post(VENDOR, `/v1/booking-requests/${requestId}/decline`);
 
       expect(await customerOn(requestId, VENDOR)).toMatchObject({
         lastName: null,
@@ -2236,7 +2240,7 @@ describe('/booking-requests', () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
       const created = await createRequest(vendorId, { packageId });
 
-      await post(VENDOR, `/booking-requests/${created.json().id}/decline`);
+      await post(VENDOR, `/v1/booking-requests/${created.json().id}/decline`);
 
       expect(await statusOn(vendorId, EVENT_DATE)).toBeNull();
     });
@@ -2250,7 +2254,7 @@ describe('/booking-requests', () => {
       const created = await createRequest(vendorId, { packageId, eventDate: OTHER_DATE });
       expect(await statusOn(vendorId, OTHER_DATE)).toBe('blocked');
 
-      await post(VENDOR, `/booking-requests/${created.json().id}/decline`);
+      await post(VENDOR, `/v1/booking-requests/${created.json().id}/decline`);
 
       expect(await statusOn(vendorId, OTHER_DATE)).toBe('blocked');
     });
@@ -2262,7 +2266,7 @@ describe('/booking-requests', () => {
         .values({ vendorId, date: OTHER_DATE, status: 'blocked' });
 
       const created = await createRequest(vendorId, { packageId, eventDate: OTHER_DATE });
-      await post(VENDOR, `/booking-requests/${created.json().id}/accept`);
+      await post(VENDOR, `/v1/booking-requests/${created.json().id}/accept`);
 
       expect(await statusOn(vendorId, OTHER_DATE)).toBe('booked');
     });

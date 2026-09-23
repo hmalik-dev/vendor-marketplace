@@ -1,5 +1,6 @@
 import { test as base, type Browser, type Page } from '@playwright/test';
 
+import { API_VERSION_PREFIX } from '@vendor-marketplace/shared';
 import { resolveE2EApiUrl } from './base-url.js';
 import { expect, expectSignedIn, pageToken, storageStatePath } from './fixtures.js';
 import { waitForHydration } from './hydration.js';
@@ -14,7 +15,8 @@ import { waitForHydration } from './hydration.js';
  * asserts extent, because a radius on a zero-height box has passed on nothing.
  */
 
-const API_URL = resolveE2EApiUrl();
+// The API's routes, under their version prefix (VEN-650).
+const API_URL = `${resolveE2EApiUrl()}${API_VERSION_PREFIX}`;
 
 const test = base.extend<{ adminPage: Page }>({
   adminPage: async ({ browser }, provide) => {

@@ -48,7 +48,7 @@ describe('/customers', () => {
   async function idOf(authUserId: string): Promise<string> {
     const me = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(me.statusCode).toBe(200);
@@ -67,7 +67,7 @@ describe('/customers', () => {
   ): Promise<{ vendorId: string; packageId: string }> {
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(authUserId),
       payload: {
         businessName,
@@ -82,7 +82,7 @@ describe('/customers', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(authUserId),
       payload: {
         name: 'Full day coverage',
@@ -102,7 +102,7 @@ describe('/customers', () => {
     // Accepting a request needs the agreement in force (VEN-428), as checkout does.
     const agreed = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/agreement/accept',
+      url: '/v1/vendor/agreement/accept',
       headers: bearer(authUserId),
       payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
     });
@@ -114,7 +114,7 @@ describe('/customers', () => {
   async function request(vendorId: string, packageId: string): Promise<string> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(CUSTOMER),
       payload: { vendorId, packageId, eventDate: EVENT_DATE, eventType: 'wedding' },
     });
@@ -129,7 +129,7 @@ describe('/customers', () => {
   ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
     return harness.app.inject({
       method: 'GET',
-      url: `/customers/${customerId}/profile`,
+      url: `/v1/customers/${customerId}/profile`,
       headers: bearer(actor),
     });
   }
@@ -180,7 +180,7 @@ describe('/customers', () => {
     it('rejects an unauthenticated read', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/customers/11111111-1111-4111-8111-111111111111/profile',
+        url: '/v1/customers/11111111-1111-4111-8111-111111111111/profile',
       });
 
       expect(response.statusCode).toBe(401);
@@ -217,7 +217,7 @@ describe('/customers', () => {
 
       const accepted = await harness.app.inject({
         method: 'POST',
-        url: `/booking-requests/${requestId}/accept`,
+        url: `/v1/booking-requests/${requestId}/accept`,
         headers: bearer(VENDOR),
       });
       expect(accepted.statusCode).toBe(200);
@@ -318,7 +318,7 @@ describe('/customers', () => {
     async function ownPackageId(vendorId: string): Promise<string | null> {
       const rows = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
       });
       const list = rows.json() as { id: string; vendorId: string }[];
@@ -354,7 +354,7 @@ describe('/customers', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/customers/me/reviews',
+        url: '/v1/customers/me/reviews',
         headers: bearer(CUSTOMER),
       });
 
@@ -365,7 +365,7 @@ describe('/customers', () => {
     it('is empty for a customer nobody has reviewed', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/customers/me/reviews',
+        url: '/v1/customers/me/reviews',
         headers: bearer(OTHER_CUSTOMER),
       });
 
@@ -380,7 +380,7 @@ describe('/customers', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/customers/${await idOf(CUSTOMER)}/reviews`,
+        url: `/v1/customers/${await idOf(CUSTOMER)}/reviews`,
         headers: bearer(OTHER_VENDOR),
       });
 

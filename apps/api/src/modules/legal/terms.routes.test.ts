@@ -38,7 +38,7 @@ describe('the Terms of Service acceptance gate', () => {
   function status(user?: string) {
     return harness.app.inject({
       method: 'GET',
-      url: '/legal/terms',
+      url: '/v1/legal/terms',
       ...(user ? { headers: bearer(user) } : {}),
     });
   }
@@ -54,7 +54,7 @@ describe('the Terms of Service acceptance gate', () => {
   ) {
     return harness.app.inject({
       method: 'POST',
-      url: '/legal/terms/accept',
+      url: '/v1/legal/terms/accept',
       headers: { ...(user ? bearer(user) : {}), ...headers },
       payload,
     });
@@ -206,10 +206,10 @@ describe('the Terms of Service acceptance gate', () => {
      */
     it('refuses every other route with TERMS_REQUIRED until it is accepted', async () => {
       for (const [method, url, user] of [
-        ['GET', '/users/me', CUSTOMER],
-        ['GET', '/vendor/agreement', VENDOR],
-        ['GET', '/vendor/dashboard', VENDOR],
-        ['GET', '/booking-requests', CUSTOMER],
+        ['GET', '/v1/users/me', CUSTOMER],
+        ['GET', '/v1/vendor/agreement', VENDOR],
+        ['GET', '/v1/vendor/dashboard', VENDOR],
+        ['GET', '/v1/booking-requests', CUSTOMER],
       ] as const) {
         const response = await harness.app.inject({ method, url, headers: bearer(user) });
 
@@ -240,7 +240,7 @@ describe('the Terms of Service acceptance gate', () => {
   it('tells a gated caller reporting a booking which refusal it is', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       headers: bearer(CUSTOMER),
       payload: {
         topic: 'booking-or-payment',
@@ -302,7 +302,7 @@ describe('the Terms of Service acceptance gate', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER),
       });
 
@@ -333,7 +333,7 @@ describe('the Terms of Service acceptance gate', () => {
 
       const refused = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER),
       });
 
@@ -398,7 +398,7 @@ describe('the Terms of Service acceptance gate', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER),
       });
 
@@ -424,7 +424,7 @@ describe('the Terms of Service acceptance gate', () => {
 
       const after = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER),
       });
       expect(after.statusCode).toBe(403);
@@ -461,7 +461,7 @@ describe('the Terms of Service acceptance gate', () => {
       await status(CUSTOMER);
       await harness.app.inject({
         method: 'GET',
-        url: '/legal/terms',
+        url: '/v1/legal/terms',
         headers: { ...bearer(CUSTOMER), 'user-agent': 'EarlierBrowser/1.0' },
       });
 
@@ -876,7 +876,7 @@ describe('the Terms of Service acceptance gate', () => {
 
         const created = await harness.app.inject({
           method: 'POST',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR),
           payload: {
             businessName: 'Ada Photography',

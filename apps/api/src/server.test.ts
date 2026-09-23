@@ -24,12 +24,12 @@ describe('rate limiting', () => {
     const headers = { 'x-forwarded-for': '203.0.113.10' };
 
     const allowed = await Promise.all([
-      harness.app.inject({ method: 'GET', url: '/categories', headers }),
-      harness.app.inject({ method: 'GET', url: '/categories', headers }),
+      harness.app.inject({ method: 'GET', url: '/v1/categories', headers }),
+      harness.app.inject({ method: 'GET', url: '/v1/categories', headers }),
     ]);
     expect(allowed.map((response) => response.statusCode)).toEqual([200, 200]);
 
-    const blocked = await harness.app.inject({ method: 'GET', url: '/categories', headers });
+    const blocked = await harness.app.inject({ method: 'GET', url: '/v1/categories', headers });
 
     expect(blocked.statusCode).toBe(429);
     expect(blocked.json()).toMatchObject({ statusCode: 429, error: 'RATE_LIMITED' });
@@ -76,7 +76,7 @@ describe('the rate-limit key behind a proxy', () => {
     const get = (value: string): Promise<{ statusCode: number }> =>
       harness.app.inject({
         method: 'GET',
-        url: '/categories',
+        url: '/v1/categories',
         headers: { 'x-forwarded-for': value },
       });
 
@@ -154,7 +154,7 @@ describe('the rate-limit key behind Railway', () => {
   async function callAs(harness: TestHarness, headers: Record<string, string>): Promise<number> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/categories',
+      url: '/v1/categories',
       headers: { 'x-forwarded-for': '10.250.0.7', ...headers },
     });
     return response.statusCode;
@@ -239,7 +239,7 @@ describe('the rate-limit key for the web tier', () => {
     harness: TestHarness,
     headers: Record<string, string>,
   ): Promise<{ statusCode: number }> {
-    return harness.app.inject({ method: 'GET', url: '/categories', headers });
+    return harness.app.inject({ method: 'GET', url: '/v1/categories', headers });
   }
 
   const asVisitor = (visitor: string, proof: string = TIER_VALUE): Record<string, string> => ({
@@ -355,7 +355,7 @@ describe('CORS', () => {
   async function preflight(method: string) {
     return harness.app.inject({
       method: 'OPTIONS',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: {
         origin: 'http://localhost:3000',
         'access-control-request-method': method,
@@ -391,7 +391,7 @@ describe('CORS', () => {
   it('does not hand an allow-origin header to an unlisted origin', async () => {
     const response = await harness.app.inject({
       method: 'OPTIONS',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: {
         origin: 'https://evil.example.com',
         'access-control-request-method': 'PUT',
@@ -423,7 +423,7 @@ describe('response hardening', () => {
   });
 
   async function me() {
-    return harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(AUTH_ID) });
+    return harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(AUTH_ID) });
   }
 
   it('gives a JSON response a CSP that allows nothing, since the API serves no documents', async () => {
@@ -482,7 +482,7 @@ describe('log redaction', () => {
   it('never writes a session token to the log stream', async () => {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer('user_logged'),
     });
     expect(response.statusCode).toBe(200);
@@ -503,7 +503,7 @@ describe('log redaction', () => {
 
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: { authorization: 'Bearer super-secret-but-invalid' },
     });
     expect(response.statusCode).toBe(401);

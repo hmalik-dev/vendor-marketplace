@@ -2000,6 +2000,60 @@ export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
  */
 export const paginationQueryShape = paginationQuerySchema.shape;
 
+/**
+ * A keyset cursor: `<created_at>,<id>` of the oldest row a page returned, with
+ * `created_at` to the microsecond Postgres stores (VEN-650).
+ *
+ * For a live list that grows at its newest end — a thread, the notification
+ * panel. An offset counts from the newest row, so every row that arrives while
+ * someone is scrolling back shifts the next page by one: a message is shown
+ * twice, and at the other end one is never shown. A cursor names a row, and
+ * rows arriving above it change nothing below it.
+ *
+ * Microseconds, not the milliseconds a JS `Date` keeps: two messages sent in
+ * the same millisecond would otherwise fall on either side of a truncated
+ * bound, and one of them would be skipped.
+ */
+export const KEYSET_CURSOR_PATTERN =
+  /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z),([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+
+/** True when the instant names a real moment: `Date` rolls `02-30` into March rather than refusing it. */
+function isRealInstant(iso: string): boolean {
+  const parsed = new Date(iso);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 19) === iso.slice(0, 19);
+}
+
+export interface KeysetCursor {
+  createdAt: string;
+  id: string;
+}
+
+export const keysetCursorSchema = z
+  .string()
+  .regex(KEYSET_CURSOR_PATTERN, 'Not a page cursor')
+  // The pattern admits `2026-02-30` and hour 25; Postgres would refuse the cast with a 500.
+  .refine((value) => isRealInstant(value.slice(0, value.indexOf(','))), 'Not a page cursor')
+  .transform((value): KeysetCursor => {
+    const [createdAt = '', id = ''] = value.split(',');
+    return { createdAt, id };
+  });
+
+/** Omitted for the newest page; the previous page's `nextBefore` for the one before it. */
+export const cursorQuerySchema = z.object({ before: keysetCursorSchema.optional() });
+export type CursorQuery = z.infer<typeof cursorQuerySchema>;
+
+/** A page of a live list, newest first by page; `nextBefore` is null on the oldest page. */
+export const cursorPageSchema = <T extends z.ZodType>(item: T) =>
+  z.object({
+    items: z.array(item),
+    nextBefore: z.string().regex(KEYSET_CURSOR_PATTERN).nullable(),
+  });
+
+export interface CursorPage<T> {
+  items: T[];
+  nextBefore: string | null;
+}
+
 export const vendorSearchQuerySchema = z
   .object({
     /**

@@ -30,7 +30,7 @@ describe('admin export and read auditing', () => {
   function exportRequest(authUserId: string | null, payload: unknown) {
     return harness.app.inject({
       method: 'POST',
-      url: '/admin/exports',
+      url: '/v1/admin/exports',
       headers: authUserId ? bearer(authUserId) : {},
       payload: payload as Record<string, unknown>,
     });
@@ -110,8 +110,8 @@ describe('admin export and read auditing', () => {
 
     expect((await exportRequest(CUSTOMER, body)).statusCode).toBe(403);
     expect((await exportRequest(null, body)).statusCode).toBe(401);
-    expect((await read(`/admin/customers/${customerId}`, CUSTOMER)).statusCode).toBe(403);
-    expect((await read('/admin/payments', CUSTOMER)).statusCode).toBe(403);
+    expect((await read(`/v1/admin/customers/${customerId}`, CUSTOMER)).statusCode).toBe(403);
+    expect((await read('/v1/admin/payments', CUSTOMER)).statusCode).toBe(403);
     expect(await rows()).toHaveLength(0);
   });
 
@@ -128,9 +128,9 @@ describe('admin export and read auditing', () => {
     const adminId = await signInAs(harness, ADMIN, true);
     const customerId = await signInAs(harness, CUSTOMER);
 
-    expect((await read(`/admin/customers/${customerId}`)).statusCode).toBe(200);
+    expect((await read(`/v1/admin/customers/${customerId}`)).statusCode).toBe(200);
     now = new Date(START.getTime() + 59 * MINUTE);
-    expect((await read(`/admin/customers/${customerId}`)).statusCode).toBe(200);
+    expect((await read(`/v1/admin/customers/${customerId}`)).statusCode).toBe(200);
 
     const inHour = await rows();
     expect(inHour).toHaveLength(1);
@@ -143,7 +143,7 @@ describe('admin export and read auditing', () => {
     });
 
     now = new Date(START.getTime() + 61 * MINUTE);
-    expect((await read(`/admin/customers/${customerId}`)).statusCode).toBe(200);
+    expect((await read(`/v1/admin/customers/${customerId}`)).statusCode).toBe(200);
     expect(await rows()).toHaveLength(2);
   });
 
@@ -152,9 +152,9 @@ describe('admin export and read auditing', () => {
     await signInAs(harness, OTHER_ADMIN, true);
     const customerId = await signInAs(harness, CUSTOMER);
 
-    await read(`/admin/customers/${customerId}`, ADMIN);
-    await read(`/admin/customers/${customerId}`, OTHER_ADMIN);
-    await read(`/admin/customers/${MISSING_ID}`, ADMIN);
+    await read(`/v1/admin/customers/${customerId}`, ADMIN);
+    await read(`/v1/admin/customers/${customerId}`, OTHER_ADMIN);
+    await read(`/v1/admin/customers/${MISSING_ID}`, ADMIN);
 
     // The missing customer 404s and leaves no row; the two operators each have one.
     expect(await rows()).toHaveLength(2);
@@ -163,8 +163,8 @@ describe('admin export and read auditing', () => {
   it('writes one payments row per operator per hour', async () => {
     const adminId = await signInAs(harness, ADMIN, true);
 
-    expect((await read('/admin/payments')).statusCode).toBe(200);
-    expect((await read('/admin/payments?page=2')).statusCode).toBe(200);
+    expect((await read('/v1/admin/payments')).statusCode).toBe(200);
+    expect((await read('/v1/admin/payments?page=2')).statusCode).toBe(200);
 
     const recorded = await rows();
     expect(recorded).toHaveLength(1);

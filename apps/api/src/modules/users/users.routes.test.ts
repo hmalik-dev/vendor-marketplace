@@ -41,7 +41,7 @@ describe('/users/me', () => {
 
   describe('GET', () => {
     it('rejects a request with no token', async () => {
-      const response = await harness.app.inject({ method: 'GET', url: '/users/me' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/users/me' });
 
       expect(response.statusCode).toBe(401);
       expect(response.json()).toMatchObject({ statusCode: 401, error: 'UNAUTHORIZED' });
@@ -50,7 +50,7 @@ describe('/users/me', () => {
     it('rejects a token it cannot verify', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: { authorization: 'Bearer expired-nonsense' },
       });
 
@@ -70,12 +70,12 @@ describe('/users/me', () => {
 
       const read = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(AMPERSAND_AUTH_ID),
       });
       const written = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(AMPERSAND_AUTH_ID),
         payload: { firstName: 'Augusta' },
       });
@@ -92,7 +92,7 @@ describe('/users/me', () => {
     it('lazily creates the local user when the webhook has not landed yet', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
       });
 
@@ -117,12 +117,12 @@ describe('/users/me', () => {
     it('reuses the existing row on a second call rather than inserting again', async () => {
       await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
       });
       const second = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
       });
 
@@ -148,7 +148,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer('user_escalate'),
       });
 
@@ -174,7 +174,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer('user_nameless'),
       });
 
@@ -198,13 +198,13 @@ describe('/users/me', () => {
       });
       await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer('user_nameless2'),
       });
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer('user_nameless2'),
         payload: { firstName: 'Katherine', lastName: 'Johnson' },
       });
@@ -228,7 +228,7 @@ describe('/users/me', () => {
     it('refuses a suspended account', async () => {
       await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(VENDOR_AUTH_ID),
       });
       await harness.database.db
@@ -238,7 +238,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(VENDOR_AUTH_ID),
       });
 
@@ -251,7 +251,7 @@ describe('/users/me', () => {
     async function signIn(authUserId: string): Promise<void> {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(authUserId),
       });
       expect(response.statusCode).toBe(200);
@@ -271,7 +271,7 @@ describe('/users/me', () => {
       await signIn(CUSTOMER_AUTH_ID);
       const stored = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { typicalGuestCountMin: 10, typicalGuestCountMax: 100 },
       });
@@ -279,7 +279,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { typicalGuestCountMin: 500 },
       });
@@ -291,7 +291,7 @@ describe('/users/me', () => {
 
       const reloaded = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
       });
       expect(reloaded.json()).toMatchObject({
@@ -304,14 +304,14 @@ describe('/users/me', () => {
       await signIn(CUSTOMER_AUTH_ID);
       await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { typicalGuestCountMin: 50, typicalGuestCountMax: 100 },
       });
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { typicalGuestCountMax: 20 },
       });
@@ -328,7 +328,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
       });
 
@@ -341,7 +341,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'a\u0000b' },
       });
@@ -354,7 +354,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'Ada', lastName: 'Byron', phone: '+15551234567' },
       });
@@ -380,7 +380,7 @@ describe('/users/me', () => {
 
       const saved = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'Ada', lastName: 'Byron', avatarUrl },
       });
@@ -391,7 +391,7 @@ describe('/users/me', () => {
       // Survives the reload: the read model has to accept it too.
       const reloaded = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
       });
 
@@ -410,7 +410,7 @@ describe('/users/me', () => {
 
       const saved = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         // `STORAGE_PUBLIC_URL` is `http://cdn.test` in the harness.
         payload: { avatarUrl: `http://cdn.test/${key}` },
@@ -434,7 +434,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'Ada', avatarUrl: `customer-profile/${theirs}/stolen.webp` },
       });
@@ -455,7 +455,7 @@ describe('/users/me', () => {
       for (const avatarUrl of ['/images/placeholder-avatar.webp', 'https://img.auth.com/a.png']) {
         const response = await harness.app.inject({
           method: 'PUT',
-          url: '/users/me',
+          url: '/v1/users/me',
           headers: bearer(CUSTOMER_AUTH_ID),
           payload: { firstName: 'Ada', avatarUrl },
         });
@@ -470,7 +470,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'Ada', lastName: 'Byron', avatarUrl: 'javascript:alert(1)' },
       });
@@ -483,7 +483,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: {},
       });
@@ -497,7 +497,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { typicalGuestCountMin: 200, typicalGuestCountMax: 50 },
       });
@@ -511,7 +511,7 @@ describe('/users/me', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: bearer(CUSTOMER_AUTH_ID),
         payload: { firstName: 'Ada', role: 'admin', isBanned: true, completedBookingsCount: 99 },
       });
@@ -527,7 +527,7 @@ describe('/users/me', () => {
     it('rejects an unauthenticated update', async () => {
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/users/me',
+        url: '/v1/users/me',
         payload: { firstName: 'Nobody' },
       });
 

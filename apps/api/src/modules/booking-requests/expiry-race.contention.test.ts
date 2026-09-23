@@ -63,7 +63,7 @@ describe('many concurrent reads of one expired pending request', () => {
 
   /** A `pending` request already past its reply window, holding no date yet. */
   async function lapsedPendingRequest(eventDate: string): Promise<string> {
-    const created = await post(CUSTOMER, '/booking-requests', {
+    const created = await post(CUSTOMER, '/v1/booking-requests', {
       vendorId,
       packageId,
       eventDate,
@@ -115,7 +115,7 @@ describe('many concurrent reads of one expired pending request', () => {
       .where(eq(categories.slug, 'photography'))
       .limit(1);
 
-    const profile = await post(VENDOR, '/vendor/profile', {
+    const profile = await post(VENDOR, '/v1/vendor/profile', {
       businessName: 'Sunlit Studio',
       categoryIds: [photography!.id],
       city: 'Austin',
@@ -130,12 +130,12 @@ describe('many concurrent reads of one expired pending request', () => {
       .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: 'acct_test_vendor' })
       .where(eq(vendorProfiles.id, vendorId));
 
-    const agreed = await post(VENDOR, '/vendor/agreement/accept', {
+    const agreed = await post(VENDOR, '/v1/vendor/agreement/accept', {
       version: CURRENT_VENDOR_AGREEMENT_VERSION,
     });
     expect(agreed.statusCode, agreed.body).toBe(200);
 
-    const servicePackage = await post(VENDOR, '/vendor/packages', {
+    const servicePackage = await post(VENDOR, '/v1/vendor/packages', {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: 145_000,
@@ -160,7 +160,9 @@ describe('many concurrent reads of one expired pending request', () => {
       const requestId = await lapsedPendingRequest(eventDate);
 
       const responses = await Promise.all(
-        Array.from({ length: CONCURRENCY }, () => get(CUSTOMER, `/booking-requests/${requestId}`)),
+        Array.from({ length: CONCURRENCY }, () =>
+          get(CUSTOMER, `/v1/booking-requests/${requestId}`),
+        ),
       );
 
       for (const response of responses) {

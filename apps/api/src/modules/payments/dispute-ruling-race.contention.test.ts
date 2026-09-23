@@ -137,7 +137,7 @@ describe('a customer ruling racing a vendor ruling on one disputed booking', () 
       .where(eq(categories.slug, 'photography'))
       .limit(1);
 
-    const profile = await inject('POST', '/vendor/profile', VENDOR, {
+    const profile = await inject('POST', '/v1/vendor/profile', VENDOR, {
       businessName: 'Sunlit Studio',
       categoryIds: [photography!.id],
       city: 'Austin',
@@ -146,7 +146,7 @@ describe('a customer ruling racing a vendor ruling on one disputed booking', () 
     });
     expect(profile.statusCode).toBe(201);
 
-    const servicePackage = await inject('POST', '/vendor/packages', VENDOR, {
+    const servicePackage = await inject('POST', '/v1/vendor/packages', VENDOR, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: PRICE_CENTS,
@@ -162,13 +162,13 @@ describe('a customer ruling racing a vendor ruling on one disputed booking', () 
 
     expect(
       (
-        await inject('POST', '/vendor/agreement/accept', VENDOR, {
+        await inject('POST', '/v1/vendor/agreement/accept', VENDOR, {
           version: CURRENT_VENDOR_AGREEMENT_VERSION,
         })
       ).statusCode,
     ).toBe(200);
 
-    const request = await inject('POST', '/booking-requests', CUSTOMER, {
+    const request = await inject('POST', '/v1/booking-requests', CUSTOMER, {
       vendorId: profile.json().id,
       packageId: servicePackage.json().id,
       eventDate: EVENT_DATE,
@@ -179,13 +179,13 @@ describe('a customer ruling racing a vendor ruling on one disputed booking', () 
     expect(request.statusCode).toBe(201);
     const requestId: string = request.json().id;
 
-    expect((await inject('POST', `/booking-requests/${requestId}/accept`, VENDOR)).statusCode).toBe(
-      200,
-    );
+    expect(
+      (await inject('POST', `/v1/booking-requests/${requestId}/accept`, VENDOR)).statusCode,
+    ).toBe(200);
 
     const checkout = await inject(
       'POST',
-      `/customer/booking-requests/${requestId}/checkout`,
+      `/v1/customer/booking-requests/${requestId}/checkout`,
       CUSTOMER,
     );
     expect(checkout.statusCode).toBe(200);

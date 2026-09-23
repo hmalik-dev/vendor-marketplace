@@ -53,7 +53,7 @@ describe('GET /vendors/availability/nearby', () => {
   async function seedVendor(spec: VendorSpec): Promise<void> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(spec.user),
       payload: {
         businessName: spec.businessName,
@@ -68,7 +68,7 @@ describe('GET /vendors/availability/nearby', () => {
 
     const pkg = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(spec.user),
       payload: {
         name: 'Coverage',
@@ -81,7 +81,7 @@ describe('GET /vendors/availability/nearby', () => {
     if (spec.blockedDates?.length) {
       const blocked = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer(spec.user),
         payload: { entries: spec.blockedDates.map((date) => ({ date, status: 'blocked' })) },
       });
@@ -91,7 +91,7 @@ describe('GET /vendors/availability/nearby', () => {
     await acceptVendorAgreementAs(harness, spec.user);
     const published = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(spec.user),
       payload: { isPublished: true },
     });
@@ -105,7 +105,7 @@ describe('GET /vendors/availability/nearby', () => {
   }> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: `/vendors/availability/nearby${query}`,
+      url: `/v1/vendors/availability/nearby${query}`,
     });
     expect(response.statusCode).toBe(200);
 
@@ -255,7 +255,7 @@ describe('GET /vendors/availability/nearby', () => {
   it('refuses a date that has already gone, rather than answering emptily', async () => {
     const response = await harness.app.inject({
       method: 'GET',
-      url: `/vendors/availability/nearby?date=${dayFromToday(-10)}`,
+      url: `/v1/vendors/availability/nearby?date=${dayFromToday(-10)}`,
     });
 
     expect(response.statusCode).toBe(400);
@@ -383,7 +383,7 @@ describe('GET /vendors/availability/nearby', () => {
 
     const response = await harness.app.inject({
       method: 'GET',
-      url: `/vendors/availability/nearby?date=${wanted}`,
+      url: `/v1/vendors/availability/nearby?date=${wanted}`,
     });
 
     expect(response.statusCode).toBe(200);
@@ -400,7 +400,7 @@ describe('GET /vendors/availability/nearby', () => {
   it('refuses a request with no date to anchor on', async () => {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/vendors/availability/nearby',
+      url: '/v1/vendors/availability/nearby',
     });
 
     expect(response.statusCode).toBe(400);

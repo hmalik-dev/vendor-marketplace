@@ -30,7 +30,7 @@ describe('GET /health', () => {
   });
 
   it('answers an unknown route with the structured error shape', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/nope' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/nope' });
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toMatchObject({ statusCode: 404, error: 'NOT_FOUND' });

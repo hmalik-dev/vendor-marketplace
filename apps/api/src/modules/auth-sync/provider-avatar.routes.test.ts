@@ -75,22 +75,22 @@ describe('a stored provider avatar the write schema would refuse', () => {
     harness.app.inject({ method: 'GET', url, headers: bearer(authUserId) });
 
   it('still answers GET /users/me for its owner', async () => {
-    const response = await read('/users/me', 'avatar-customer');
+    const response = await read('/v1/users/me', 'avatar-customer');
 
     expect(response.statusCode).toBe(200);
     expect(response.json().avatarUrl).toBe(BAD_AVATAR);
   });
 
   it('still answers GET /conversations for the other party', async () => {
-    const response = await read('/conversations', 'avatar-vendor');
+    const response = await read('/v1/conversations', 'avatar-vendor');
 
     expect(response.statusCode).toBe(200);
     expect(response.json()[0].otherPartyAvatarUrl).toBe(BAD_AVATAR);
   });
 
   it('still answers GET /booking-requests/:id for both parties', async () => {
-    const asVendor = await read(`/booking-requests/${requestId}`, 'avatar-vendor');
-    const asCustomer = await read(`/booking-requests/${requestId}`, 'avatar-customer');
+    const asVendor = await read(`/v1/booking-requests/${requestId}`, 'avatar-vendor');
+    const asCustomer = await read(`/v1/booking-requests/${requestId}`, 'avatar-customer');
 
     expect(asVendor.statusCode).toBe(200);
     expect(asCustomer.statusCode).toBe(200);

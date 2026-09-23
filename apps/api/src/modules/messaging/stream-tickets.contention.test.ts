@@ -1,3 +1,4 @@
+import type { ServerResponse } from 'node:http';
 import { and, eq } from 'drizzle-orm';
 import {
   bookingRequests,
@@ -46,7 +47,7 @@ describe('two API instances sharing one database', () => {
       avatarUrl: null,
     });
     // Provisions the account row through a guarded route, as a sign-in does.
-    await a.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
+    await a.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(CUSTOMER) });
     const [row] = await database.db
       .select({ id: users.id })
       .from(users)
@@ -76,20 +77,42 @@ describe('two API instances sharing one database', () => {
   it('spends on B what A issued, opens B’s stream, and refuses a second spend on A', async () => {
     const issued = await a!.app.inject({
       method: 'POST',
-      url: '/events/stream-ticket',
+      url: '/v1/events/stream-ticket',
       headers: bearer(CUSTOMER),
     });
     const { ticket } = issued.json();
 
-    const stream = b!.app.inject({ method: 'GET', url: `/events/stream?ticket=${ticket}` });
+    const stream = b!.app.inject({ method: 'GET', url: `/v1/events/stream?ticket=${ticket}` });
     await vi.waitFor(() => expect(b!.app.events.countFor(customerId)).toBe(1));
 
-    const replay = await a!.app.inject({ method: 'GET', url: `/events/stream?ticket=${ticket}` });
+    const replay = await a!.app.inject({
+      method: 'GET',
+      url: `/v1/events/stream?ticket=${ticket}`,
+    });
     expect(replay.statusCode).toBe(401);
 
     b!.app.events.closeFor(customerId);
     await stream;
     expect(await database!.db.select().from(streamTickets)).toEqual([]);
+  });
+
+  /*
+   * VEN-650: each instance LISTENs on a connection of its own, so this is the
+   * bus itself — a NOTIFY sent over A's pool, heard on B's listener.
+   */
+  it('delivers a live event published through A to a stream B holds', async () => {
+    const frames: string[] = [];
+    const tab = {
+      write: (frame: string) => frames.push(frame) > 0,
+      end: () => undefined,
+    } as unknown as ServerResponse;
+    const stop = b!.app.events.subscribe(customerId, tab);
+    const event = { type: 'new_notification', notification: { id: 'n-two-instances' } } as const;
+
+    a!.app.events.publish(customerId, event);
+
+    await vi.waitFor(() => expect(frames).toEqual([`data: ${JSON.stringify(event)}\n\n`]));
+    stop?.();
   });
 
   /*

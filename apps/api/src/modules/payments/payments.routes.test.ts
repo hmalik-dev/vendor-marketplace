@@ -79,7 +79,7 @@ describe('payments', () => {
   async function createVendor(
     acceptsAgreement = true,
   ): Promise<{ vendorId: string; packageId: string }> {
-    const profile = await inject('POST', '/vendor/profile', VENDOR, {
+    const profile = await inject('POST', '/v1/vendor/profile', VENDOR, {
       businessName: 'Sunlit Studio',
       categoryIds: [photographyId],
       city: 'Austin',
@@ -89,7 +89,7 @@ describe('payments', () => {
     expect(profile.statusCode).toBe(201);
     const vendorId: string = profile.json().id;
 
-    const created = await inject('POST', '/vendor/packages', VENDOR, {
+    const created = await inject('POST', '/v1/vendor/packages', VENDOR, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: PRICE_CENTS,
@@ -113,7 +113,7 @@ describe('payments', () => {
      * a row the database will not let anybody edit.
      */
     if (acceptsAgreement) {
-      const accepted = await inject('POST', '/vendor/agreement/accept', VENDOR, {
+      const accepted = await inject('POST', '/v1/vendor/agreement/accept', VENDOR, {
         version: CURRENT_VENDOR_AGREEMENT_VERSION,
       });
       expect(accepted.statusCode).toBe(200);
@@ -141,7 +141,7 @@ describe('payments', () => {
   async function acceptedRequest(eventDate = EVENT_DATE, acceptsAgreement = true): Promise<string> {
     const { vendorId, packageId } = await createVendor(acceptsAgreement);
 
-    const request = await inject('POST', '/booking-requests', CUSTOMER, {
+    const request = await inject('POST', '/v1/booking-requests', CUSTOMER, {
       vendorId,
       packageId,
       eventDate,
@@ -154,7 +154,7 @@ describe('payments', () => {
     if (acceptsAgreement) {
       const accepted = await inject(
         'POST',
-        `/booking-requests/${request.json().id}/accept`,
+        `/v1/booking-requests/${request.json().id}/accept`,
         VENDOR,
       );
       expect(accepted.statusCode).toBe(200);
@@ -197,7 +197,7 @@ describe('payments', () => {
   async function payFor(requestId: string): Promise<string> {
     const checkout = await inject(
       'POST',
-      `/customer/booking-requests/${requestId}/checkout`,
+      `/v1/customer/booking-requests/${requestId}/checkout`,
       CUSTOMER,
     );
     expect(checkout.statusCode).toBe(200);
@@ -301,7 +301,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -326,7 +326,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -341,7 +341,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -355,7 +355,7 @@ describe('payments', () => {
     const LAPSED = addDays(START, 8);
 
     const checkout = (requestId: string): ReturnType<typeof inject> =>
-      inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+      inject('POST', `/v1/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
 
     /** What the sweep runs, built the way the plugin builds it. */
     const sweep = (at: Date = LAPSED): Promise<number> => {
@@ -423,7 +423,7 @@ describe('payments', () => {
       harness.stripe.succeed(opened.json().paymentIntentId);
       clockNow = LAPSED;
 
-      const response = await inject('GET', `/booking-requests/${requestId}`, CUSTOMER);
+      const response = await inject('GET', `/v1/booking-requests/${requestId}`, CUSTOMER);
 
       expect(response.statusCode).toBe(200);
       expect(response.json().status).toBe('accepted');
@@ -561,7 +561,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -588,7 +588,7 @@ describe('payments', () => {
     it('answers a null package for a custom request', async () => {
       const { vendorId } = await createVendor();
 
-      const request = await inject('POST', '/booking-requests', CUSTOMER, {
+      const request = await inject('POST', '/v1/booking-requests', CUSTOMER, {
         vendorId,
         eventDate: EVENT_DATE,
         eventType: 'wedding',
@@ -604,17 +604,17 @@ describe('payments', () => {
        * accepting a custom request straight from `pending`, because the row
        * that produced was terminal and could never be paid.
        */
-      const quoted = await inject('POST', `/booking-requests/${requestId}/quote`, VENDOR, {
+      const quoted = await inject('POST', `/v1/booking-requests/${requestId}/quote`, VENDOR, {
         quotedPriceCents: PRICE_CENTS,
       });
       expect(quoted.statusCode).toBe(200);
       expect(
-        (await inject('POST', `/booking-requests/${requestId}/accept`, CUSTOMER)).statusCode,
+        (await inject('POST', `/v1/booking-requests/${requestId}/accept`, CUSTOMER)).statusCode,
       ).toBe(200);
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -633,12 +633,12 @@ describe('payments', () => {
 
       const first = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
       const second = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -648,7 +648,7 @@ describe('payments', () => {
 
     it('carries the platform fee and the payout account onto the intent', async () => {
       const requestId = await acceptedRequest();
-      await inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+      await inject('POST', `/v1/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
 
       // The fee is the platform's cut *out of* the price, not an addition.
       expect(Math.round(PRICE_CENTS * DEFAULT_PLATFORM_FEE_RATE)).toBe(EXPECTED_FEE_CENTS);
@@ -663,7 +663,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -686,7 +686,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -707,7 +707,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -728,7 +728,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -745,7 +745,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -762,7 +762,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -777,7 +777,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -787,7 +787,7 @@ describe('payments', () => {
 
     it('refuses a request nobody has accepted', async () => {
       const { vendorId, packageId } = await createVendor();
-      const request = await inject('POST', '/booking-requests', CUSTOMER, {
+      const request = await inject('POST', '/v1/booking-requests', CUSTOMER, {
         vendorId,
         packageId,
         eventDate: EVENT_DATE,
@@ -795,7 +795,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${request.json().id}/checkout`,
+        `/v1/customer/booking-requests/${request.json().id}/checkout`,
         CUSTOMER,
       );
 
@@ -811,14 +811,14 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       const first = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
       harness.stripe.intentsByKey.clear();
 
       const second = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -834,7 +834,7 @@ describe('payments', () => {
     it('replaces a cancelled intent under a new key, and again after the next cancellation', async () => {
       const requestId = await acceptedRequest();
       const checkout = () =>
-        inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+        inject('POST', `/v1/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
       const first = await checkout();
       harness.stripe.cancel(first.json().paymentIntentId);
 
@@ -868,7 +868,7 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       const first = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
       const firstId: string = first.json().paymentIntentId;
@@ -933,7 +933,7 @@ describe('payments', () => {
 
       const response = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         OUTSIDER,
       );
 
@@ -944,7 +944,8 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
 
       expect(
-        (await inject('POST', `/customer/booking-requests/${requestId}/checkout`, null)).statusCode,
+        (await inject('POST', `/v1/customer/booking-requests/${requestId}/checkout`, null))
+          .statusCode,
       ).toBe(401);
     });
   });
@@ -1006,7 +1007,7 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       const checkout = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
       const intentId: string = checkout.json().paymentIntentId;
@@ -1054,7 +1055,7 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       const checkout = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
       const intentId: string = checkout.json().paymentIntentId;
@@ -1093,7 +1094,7 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       const checkout = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
       const intentId: string = checkout.json().paymentIntentId;
@@ -1125,7 +1126,7 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       const checkout = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
       const intentId: string = checkout.json().paymentIntentId;
@@ -1163,7 +1164,8 @@ describe('payments', () => {
       const intentId = await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
       expect(
-        (await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {})).statusCode,
+        (await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {}))
+          .statusCode,
       ).toBe(200);
 
       const again = await redeliver(intentId);
@@ -1229,7 +1231,7 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       const checkout = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
 
@@ -1260,7 +1262,7 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       const checkout = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
       harness.stripe.succeed(checkout.json().paymentIntentId);
@@ -1269,7 +1271,7 @@ describe('payments', () => {
 
       const response = await inject(
         'GET',
-        `/customer/booking-requests/${requestId}/booking`,
+        `/v1/customer/booking-requests/${requestId}/booking`,
         CUSTOMER,
       );
 
@@ -1281,10 +1283,10 @@ describe('payments', () => {
 
     it('says not-found while the charge is still unconfirmed', async () => {
       const requestId = await acceptedRequest();
-      await inject('POST', `/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
+      await inject('POST', `/v1/customer/booking-requests/${requestId}/checkout`, CUSTOMER);
 
       expect(
-        (await inject('GET', `/customer/booking-requests/${requestId}/booking`, CUSTOMER))
+        (await inject('GET', `/v1/customer/booking-requests/${requestId}/booking`, CUSTOMER))
           .statusCode,
       ).toBe(404);
     });
@@ -1303,7 +1305,7 @@ describe('payments', () => {
 
       const response = await inject(
         'GET',
-        `/customer/booking-requests/${requestId}/booking`,
+        `/v1/customer/booking-requests/${requestId}/booking`,
         CUSTOMER,
       );
 
@@ -1329,7 +1331,7 @@ describe('payments', () => {
 
       const response = await inject(
         'GET',
-        `/customer/booking-requests/${requestId}/booking`,
+        `/v1/customer/booking-requests/${requestId}/booking`,
         CUSTOMER,
       );
 
@@ -1358,7 +1360,7 @@ describe('payments', () => {
 
       const response = await inject(
         'GET',
-        `/customer/booking-requests/${requestId}/booking`,
+        `/v1/customer/booking-requests/${requestId}/booking`,
         OUTSIDER,
       );
 
@@ -1409,7 +1411,7 @@ describe('payments', () => {
       const booking = await pastBooking();
 
       expect(
-        (await inject('PUT', `/vendor/bookings/${booking.id}/complete`, VENDOR)).statusCode,
+        (await inject('PUT', `/v1/vendor/bookings/${booking.id}/complete`, VENDOR)).statusCode,
       ).toBe(200);
 
       expect(await countsFor(booking.customerId)).toEqual({
@@ -1425,7 +1427,8 @@ describe('payments', () => {
       const [booking] = await harness.database.db.select().from(bookings);
 
       expect(
-        (await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {})).statusCode,
+        (await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {}))
+          .statusCode,
       ).toBe(200);
 
       expect(await countsFor(booking!.customerId)).toEqual({
@@ -1440,7 +1443,7 @@ describe('payments', () => {
     it('lets the vendor mark a past event complete', async () => {
       const booking = await pastBooking();
 
-      const response = await inject('PUT', `/vendor/bookings/${booking.id}/complete`, VENDOR);
+      const response = await inject('PUT', `/v1/vendor/bookings/${booking.id}/complete`, VENDOR);
 
       expect(response.statusCode).toBe(200);
       expect(response.json().status).toBe('completed');
@@ -1452,7 +1455,7 @@ describe('payments', () => {
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
 
-      const response = await inject('PUT', `/vendor/bookings/${booking!.id}/complete`, VENDOR);
+      const response = await inject('PUT', `/v1/vendor/bookings/${booking!.id}/complete`, VENDOR);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toBe('That event has not happened yet');
@@ -1476,7 +1479,7 @@ describe('payments', () => {
       // 16:00Z on the day before is already the event day in Tokyo.
       clockNow = new Date(`${toDateString(addDays(START, 29))}T16:00:00Z`);
 
-      const response = await inject('PUT', `/vendor/bookings/${booking!.id}/complete`, VENDOR);
+      const response = await inject('PUT', `/v1/vendor/bookings/${booking!.id}/complete`, VENDOR);
 
       expect(response.statusCode).toBe(200);
       expect(response.json().status).toBe('completed');
@@ -1489,7 +1492,7 @@ describe('payments', () => {
       const [booking] = await harness.database.db.select().from(bookings);
       clockNow = new Date(`${toDateString(addDays(START, 28))}T12:00:00Z`);
 
-      const response = await inject('PUT', `/vendor/bookings/${booking!.id}/complete`, VENDOR);
+      const response = await inject('PUT', `/v1/vendor/bookings/${booking!.id}/complete`, VENDOR);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toBe('That event has not happened yet');
@@ -1499,13 +1502,13 @@ describe('payments', () => {
       const booking = await pastBooking();
 
       expect(
-        (await inject('PUT', `/vendor/bookings/${booking.id}/complete`, CUSTOMER)).statusCode,
+        (await inject('PUT', `/v1/vendor/bookings/${booking.id}/complete`, CUSTOMER)).statusCode,
       ).toBe(403);
     });
 
     it('invites the customer to review once it is complete', async () => {
       const booking = await pastBooking();
-      await inject('PUT', `/vendor/bookings/${booking.id}/complete`, VENDOR);
+      await inject('PUT', `/v1/vendor/bookings/${booking.id}/complete`, VENDOR);
 
       const rows = await harness.database.db
         .select()
@@ -1528,9 +1531,14 @@ describe('payments', () => {
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
 
-      const response = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {
-        reason: 'The venue fell through.',
-      });
+      const response = await inject(
+        'PUT',
+        `/v1/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {
+          reason: 'The venue fell through.',
+        },
+      );
 
       expect(response.statusCode).toBe(200);
       expect(response.json().refundCents).toBe(PRICE_CENTS);
@@ -1568,7 +1576,7 @@ describe('payments', () => {
       const [booking] = await harness.database.db.select().from(bookings);
       clockNow = addDays(START, 28);
 
-      const stale = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {
+      const stale = await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {
         expectedRefundCents: PRICE_CENTS,
       });
 
@@ -1576,9 +1584,14 @@ describe('payments', () => {
       expect(stale.json().message).toContain(formatPrice(PRICE_CENTS / 2));
       expect(harness.stripe.refunds).toEqual([]);
 
-      const confirmed = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {
-        expectedRefundCents: PRICE_CENTS / 2,
-      });
+      const confirmed = await inject(
+        'PUT',
+        `/v1/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {
+          expectedRefundCents: PRICE_CENTS / 2,
+        },
+      );
 
       expect(confirmed.statusCode).toBe(200);
       expect(confirmed.json().refundCents).toBe(PRICE_CENTS / 2);
@@ -1603,7 +1616,7 @@ describe('payments', () => {
 
       const response = await inject(
         'PUT',
-        `/customer/bookings/${booking!.id}/cancel`,
+        `/v1/customer/bookings/${booking!.id}/cancel`,
         CUSTOMER,
         {},
       );
@@ -1630,7 +1643,7 @@ describe('payments', () => {
       await payFor(requestId);
       const [before] = await harness.database.db.select().from(bookings);
 
-      await inject('PUT', `/customer/bookings/${before!.id}/cancel`, CUSTOMER, {
+      await inject('PUT', `/v1/customer/bookings/${before!.id}/cancel`, CUSTOMER, {
         reason: 'The venue fell through.',
       });
 
@@ -1655,8 +1668,8 @@ describe('payments', () => {
       const [booking] = await harness.database.db.select().from(bookings);
 
       const responses = await Promise.all([
-        inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {}),
-        inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {}),
+        inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {}),
+        inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {}),
       ]);
 
       // VEN-472: the loser's cancellation worked, so it is told so.
@@ -1695,7 +1708,7 @@ describe('payments', () => {
 
       const response = await inject(
         'PUT',
-        `/customer/bookings/${booking!.id}/cancel`,
+        `/v1/customer/bookings/${booking!.id}/cancel`,
         CUSTOMER,
         {},
       );
@@ -1726,7 +1739,7 @@ describe('payments', () => {
 
       const response = await inject(
         'PUT',
-        `/customer/bookings/${booking!.id}/cancel`,
+        `/v1/customer/bookings/${booking!.id}/cancel`,
         CUSTOMER,
         {},
       );
@@ -1749,7 +1762,7 @@ describe('payments', () => {
 
       const response = await inject(
         'PUT',
-        `/customer/bookings/${booking!.id}/cancel`,
+        `/v1/customer/bookings/${booking!.id}/cancel`,
         CUSTOMER,
         {},
       );
@@ -1767,7 +1780,7 @@ describe('payments', () => {
 
       const response = await inject(
         'PUT',
-        `/customer/bookings/${booking!.id}/cancel`,
+        `/v1/customer/bookings/${booking!.id}/cancel`,
         CUSTOMER,
         {},
       );
@@ -1812,7 +1825,7 @@ describe('payments', () => {
 
       const response = await inject(
         'PUT',
-        `/customer/bookings/${booking!.id}/cancel`,
+        `/v1/customer/bookings/${booking!.id}/cancel`,
         CUSTOMER,
         {},
       );
@@ -1833,7 +1846,7 @@ describe('payments', () => {
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
 
-      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+      await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
 
       const [held] = await harness.database.db.select().from(availability);
       expect(held?.status).toBe('available');
@@ -1854,7 +1867,7 @@ describe('payments', () => {
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
 
-      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+      await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
 
       const [request] = await harness.database.db
         .select()
@@ -1876,11 +1889,11 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
-      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+      await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
 
       // Any later transition on the same date re-derives the calendar cell.
       const [vendorProfile] = await harness.database.db.select().from(vendorProfiles);
-      const second = await inject('POST', '/booking-requests', OUTSIDER, {
+      const second = await inject('POST', '/v1/booking-requests', OUTSIDER, {
         vendorId: vendorProfile!.id,
         eventDate: EVENT_DATE,
         customDetails: 'A second enquiry for the same day, after the first was cancelled.',
@@ -1889,7 +1902,7 @@ describe('payments', () => {
 
       const declined = await inject(
         'POST',
-        `/booking-requests/${second.json().id}/decline`,
+        `/v1/booking-requests/${second.json().id}/decline`,
         VENDOR,
       );
       expect(declined.statusCode).toBe(200);
@@ -1913,11 +1926,11 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
-      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+      await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
 
       const response = await inject(
         'GET',
-        `/customer/booking-requests/${requestId}/booking`,
+        `/v1/customer/booking-requests/${requestId}/booking`,
         CUSTOMER,
       );
 
@@ -1941,7 +1954,7 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       const intentId = await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
-      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+      await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
 
       const replay = await redeliver(intentId);
 
@@ -1958,9 +1971,14 @@ describe('payments', () => {
 
     it('cannot cancel an event that already happened', async () => {
       const booking = await pastBooking();
-      await inject('PUT', `/vendor/bookings/${booking.id}/complete`, VENDOR);
+      await inject('PUT', `/v1/vendor/bookings/${booking.id}/complete`, VENDOR);
 
-      const response = await inject('PUT', `/customer/bookings/${booking.id}/cancel`, CUSTOMER, {});
+      const response = await inject(
+        'PUT',
+        `/v1/customer/bookings/${booking.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toBe(
@@ -1978,7 +1996,12 @@ describe('payments', () => {
     it('refuses to cancel a confirmed booking whose event has passed, refunding nothing', async () => {
       const booking = await pastBooking();
 
-      const response = await inject('PUT', `/customer/bookings/${booking.id}/cancel`, CUSTOMER, {});
+      const response = await inject(
+        'PUT',
+        `/v1/customer/bookings/${booking.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toContain('too close to cancel');
@@ -2001,7 +2024,7 @@ describe('payments', () => {
 
       const response = await inject(
         'PUT',
-        `/customer/bookings/${booking!.id}/cancel`,
+        `/v1/customer/bookings/${booking!.id}/cancel`,
         CUSTOMER,
         {},
       );
@@ -2018,9 +2041,19 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
-      const first = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+      const first = await inject(
+        'PUT',
+        `/v1/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
 
-      const again = await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+      const again = await inject(
+        'PUT',
+        `/v1/customer/bookings/${booking!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
 
       expect(again.statusCode).toBe(200);
       expect(again.json()).toEqual(first.json());
@@ -2051,7 +2084,7 @@ describe('payments', () => {
 
       const response = await inject(
         'PUT',
-        `/customer/bookings/${booking!.id}/cancel`,
+        `/v1/customer/bookings/${booking!.id}/cancel`,
         CUSTOMER,
         {},
       );
@@ -2075,7 +2108,7 @@ describe('payments', () => {
       const [booking] = await harness.database.db.select().from(bookings);
 
       expect(
-        (await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, VENDOR, {})).statusCode,
+        (await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, VENDOR, {})).statusCode,
       ).toBe(403);
       expect(harness.stripe.refunds).toEqual([]);
     });
@@ -2084,7 +2117,7 @@ describe('payments', () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
-      await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+      await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
 
       const rows = await harness.database.db
         .select()
@@ -2133,7 +2166,7 @@ describe('payments', () => {
         .from(bookingRequests)
         .where(eq(bookingRequests.id, requestId));
 
-      const edited = await inject('PUT', `/vendor/packages/${request!.packageId}`, VENDOR, {
+      const edited = await inject('PUT', `/v1/vendor/packages/${request!.packageId}`, VENDOR, {
         name: 'Half day, renamed',
         description: 'Three hours now.',
         priceCents: 99_000,
@@ -2145,7 +2178,7 @@ describe('payments', () => {
 
       const checkout = await inject(
         'POST',
-        `/customer/booking-requests/${requestId}/checkout`,
+        `/v1/customer/booking-requests/${requestId}/checkout`,
         CUSTOMER,
       );
       expect(checkout.statusCode).toBe(200);
@@ -2155,7 +2188,7 @@ describe('payments', () => {
       });
       expect(checkout.json().amountCents).toBe(PRICE_CENTS);
 
-      const detail = await inject('GET', `/booking-requests/${requestId}`, CUSTOMER);
+      const detail = await inject('GET', `/v1/booking-requests/${requestId}`, CUSTOMER);
       expect(detail.statusCode).toBe(200);
       expect(detail.json().package).toEqual({
         id: request!.packageId,
@@ -2217,7 +2250,12 @@ describe('payments', () => {
         .where(eq(bookings.id, sold!.id));
       clockNow = new Date(new Date(`${EVENT_DATE}T00:00:00Z`).getTime() - 60 * 60 * 60 * 1000);
 
-      const response = await inject('PUT', `/customer/bookings/${sold!.id}/cancel`, CUSTOMER, {});
+      const response = await inject(
+        'PUT',
+        `/v1/customer/bookings/${sold!.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
 
       expect(response.statusCode).toBe(200);
       expect(response.json().refundCents).toBe(36_250);
@@ -2231,7 +2269,7 @@ describe('payments', () => {
         .set({ city: 'Los Angeles', state: 'CA' })
         .where(eq(vendorProfiles.id, vendorId));
 
-      const created = await inject('POST', '/booking-requests', CUSTOMER, {
+      const created = await inject('POST', '/v1/booking-requests', CUSTOMER, {
         vendorId,
         packageId,
         eventDate: EVENT_DATE,
@@ -2239,7 +2277,7 @@ describe('payments', () => {
       expect(created.statusCode).toBe(201);
       const requestId: string = created.json().id;
       expect(
-        (await inject('POST', `/booking-requests/${requestId}/accept`, VENDOR)).statusCode,
+        (await inject('POST', `/v1/booking-requests/${requestId}/accept`, VENDOR)).statusCode,
       ).toBe(200);
       await payFor(requestId);
 
@@ -2258,7 +2296,8 @@ describe('payments', () => {
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
       expect(
-        (await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {})).statusCode,
+        (await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {}))
+          .statusCode,
       ).toBe(200);
 
       const customerId = await userIdOf(CUSTOMER);
@@ -2341,7 +2380,7 @@ describe('payments', () => {
 
     it('attributes an expiry to the system', async () => {
       const { vendorId, packageId } = await createVendor();
-      const created = await inject('POST', '/booking-requests', CUSTOMER, {
+      const created = await inject('POST', '/v1/booking-requests', CUSTOMER, {
         vendorId,
         packageId,
         eventDate: EVENT_DATE,
@@ -2349,9 +2388,9 @@ describe('payments', () => {
       const requestId: string = created.json().id;
       clockNow = addDays(START, 8);
 
-      expect((await inject('GET', `/booking-requests/${requestId}`, CUSTOMER)).json().status).toBe(
-        'expired',
-      );
+      expect(
+        (await inject('GET', `/v1/booking-requests/${requestId}`, CUSTOMER)).json().status,
+      ).toBe('expired');
 
       const [expiry] = await harness.database.db
         .select({

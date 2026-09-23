@@ -50,7 +50,7 @@ describe('the case queue under contention, against a real Postgres', () => {
   async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness!.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
@@ -135,7 +135,7 @@ describe('the case queue under contention, against a real Postgres', () => {
 
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -285,7 +285,7 @@ describe('the case queue under contention, against a real Postgres', () => {
     const close = async (actor: string) =>
       harness!.app.inject({
         method: 'PUT',
-        url: `/admin/cases/${row!.id}/resolve`,
+        url: `/v1/admin/cases/${row!.id}/resolve`,
         headers: bearer(actor),
       });
 

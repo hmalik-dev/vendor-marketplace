@@ -93,10 +93,12 @@ export function MessagesScreen({
     initialConversationId ?? initialConversations[0]?.id ?? null,
   );
   const [messages, setMessages] = useState<WireMessage[]>([]);
-  /** Whether a page older than the one at the top of the thread exists. */
-  const [hasOlder, setHasOlder] = useState(false);
-  /** The oldest page fetched. Page 1 is the newest; paging walks backwards. */
-  const [page, setPage] = useState(1);
+  /**
+   * The cursor of the page before the one at the top of the thread, or `null`
+   * when the top is the start of the conversation. Paging walks backwards.
+   */
+  const [olderCursor, setOlderCursor] = useState<string | null>(null);
+  const hasOlder = olderCursor !== null;
   const [loadingThread, setLoadingThread] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   /** Distance from the bottom to put back once a prepended page has laid out. */
@@ -329,8 +331,7 @@ export function MessagesScreen({
   useEffect(() => {
     setMessages([]);
     setThreadError(null);
-    setHasOlder(false);
-    setPage(1);
+    setOlderCursor(null);
     // No page has landed for this thread yet, so nothing in it is an arrival.
     seenThrough.current = null;
     setArrival('');
@@ -372,18 +373,15 @@ export function MessagesScreen({
          */
         seenThrough.current = first.items[first.items.length - 1]?.id ?? '';
         /*
-         * Read off the page itself, not `total`.
+         * Read off the page itself, never a count.
          *
-         * `items.length < total` compares the client's accumulated set against
-         * a count taken from a *different* snapshot: one message the client
-         * never received — a dropped frame, a socket down while the reader was
-         * paging — makes the inequality permanently true, so the control never
-         * goes away and every further click fetches a deeper empty page. A
-         * full page is the honest signal that another may exist; the cost of
-         * getting it wrong is one empty fetch on a thread whose length is an
-         * exact multiple of the page size, and it self-corrects.
+         * `items.length < total` compared the client's accumulated set against
+         * a count taken from a *different* snapshot, so one message the client
+         * never received kept the control up for ever. The cursor comes from
+         * the server, which read one row past the page to know whether an
+         * older one exists (VEN-650).
          */
-        setHasOlder(first.items.length === first.pageSize);
+        setOlderCursor(first.nextBefore);
       } catch (error: unknown) {
         if (cancelled) {
           return;
@@ -455,15 +453,15 @@ export function MessagesScreen({
    * would be unreachable.
    */
   const loadOlder = useCallback(async () => {
-    if (threadId === null) {
+    if (threadId === null || olderCursor === null) {
       return;
     }
 
     setLoadingOlder(true);
-    const older = page + 1;
 
     try {
-      const previous = await call(`/conversations/${threadId}/messages?page=${older}`, {
+      const query = new URLSearchParams({ before: olderCursor }).toString();
+      const previous = await call(`/conversations/${threadId}/messages?${query}`, {
         schema: wireMessagePageSchema,
       });
 
@@ -489,8 +487,7 @@ export function MessagesScreen({
         const known = new Set(current.map((row) => row.id));
         return [...previous.items.filter((row) => !known.has(row.id)), ...current];
       });
-      setHasOlder(previous.items.length === previous.pageSize);
-      setPage(older);
+      setOlderCursor(previous.nextBefore);
       setRestoreAnchor(anchor);
     } catch (error: unknown) {
       reportSwallowedError('messages: loading earlier messages failed', error);
@@ -501,7 +498,7 @@ export function MessagesScreen({
     } finally {
       setLoadingOlder(false);
     }
-  }, [call, page, threadId]);
+  }, [call, olderCursor, threadId]);
 
   /*
    * Follows the *newest* message rather than the array, so prepending a page

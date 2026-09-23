@@ -10,8 +10,13 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { MESSAGE_MAX_LENGTH, addDays, toDateString } from '@vendor-marketplace/shared';
-import { eq } from 'drizzle-orm';
+import {
+  KEYSET_CURSOR_PATTERN,
+  MESSAGE_MAX_LENGTH,
+  addDays,
+  toDateString,
+} from '@vendor-marketplace/shared';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
@@ -32,7 +37,7 @@ describe('messaging', () => {
   async function idOf(authUserId: string): Promise<string> {
     const me = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(me.statusCode).toBe(200);
@@ -44,7 +49,7 @@ describe('messaging', () => {
   async function openConversation(): Promise<string> {
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -59,7 +64,7 @@ describe('messaging', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Full day coverage',
@@ -77,7 +82,7 @@ describe('messaging', () => {
 
     const request = await harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(CUSTOMER),
       payload: {
         vendorId,
@@ -102,7 +107,7 @@ describe('messaging', () => {
 
     const request = await harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(CUSTOMER),
       payload: {
         vendorId: vendor[0]!.id,
@@ -138,6 +143,30 @@ describe('messaging', () => {
     );
   }
 
+  async function newestPage(
+    conversationId: string,
+  ): Promise<{ items: { id: string; content: string }[]; nextBefore: string | null }> {
+    const response = await harness.app.inject({
+      method: 'GET',
+      url: `/v1/conversations/${conversationId}/messages`,
+      headers: bearer(CUSTOMER),
+    });
+    expect(response.statusCode).toBe(200);
+    return response.json();
+  }
+
+  async function olderPage(
+    conversationId: string,
+    before: string | null,
+  ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
+    expect(before).toMatch(KEYSET_CURSOR_PATTERN);
+    return harness.app.inject({
+      method: 'GET',
+      url: `/v1/conversations/${conversationId}/messages?before=${encodeURIComponent(before!)}`,
+      headers: bearer(CUSTOMER),
+    });
+  }
+
   async function send(
     actor: string,
     conversationId: string,
@@ -145,7 +174,7 @@ describe('messaging', () => {
   ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
     return harness.app.inject({
       method: 'POST',
-      url: `/conversations/${conversationId}/messages`,
+      url: `/v1/conversations/${conversationId}/messages`,
       headers: bearer(actor),
       payload: { content },
     });
@@ -196,7 +225,7 @@ describe('messaging', () => {
 
   describe('access', () => {
     it('rejects an unauthenticated conversation list', async () => {
-      const response = await harness.app.inject({ method: 'GET', url: '/conversations' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/conversations' });
 
       expect(response.statusCode).toBe(401);
     });
@@ -217,7 +246,7 @@ describe('messaging', () => {
         const call = (id: string) =>
           harness.app.inject({
             method,
-            url: `/conversations/${id}/${path}`,
+            url: `/v1/conversations/${id}/${path}`,
             headers: bearer(OUTSIDER),
             ...(method === 'POST' ? { payload: { content: 'Let me in' } } : {}),
           });
@@ -288,7 +317,7 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(OUTSIDER),
       });
 
@@ -309,7 +338,7 @@ describe('messaging', () => {
 
       const own = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(OTHER_VENDOR),
         payload: {
           businessName: 'Marlow Sound',
@@ -323,7 +352,7 @@ describe('messaging', () => {
 
       const theirs = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(OTHER_VENDOR),
       });
 
@@ -332,7 +361,7 @@ describe('messaging', () => {
       // And the vendor the thread does belong to still sees it.
       const mine = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(VENDOR),
       });
       expect(mine.json().map((row: { id: string }) => row.id)).toEqual([conversationId]);
@@ -349,7 +378,7 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
 
@@ -388,7 +417,7 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
 
@@ -405,12 +434,12 @@ describe('messaging', () => {
 
       const asCustomer = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
       const asVendor = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(VENDOR),
       });
 
@@ -425,7 +454,7 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
 
@@ -448,7 +477,7 @@ describe('messaging', () => {
       for (const actor of [CUSTOMER, VENDOR]) {
         const list = await harness.app.inject({
           method: 'GET',
-          url: '/conversations',
+          url: '/v1/conversations',
           headers: bearer(actor),
         });
 
@@ -482,12 +511,12 @@ describe('messaging', () => {
       for (const actor of [CUSTOMER, VENDOR]) {
         const inFundraiser = await harness.app.inject({
           method: 'GET',
-          url: `/conversations/${fundraiser}/messages`,
+          url: `/v1/conversations/${fundraiser}/messages`,
           headers: bearer(actor),
         });
         const inWedding = await harness.app.inject({
           method: 'GET',
-          url: `/conversations/${wedding}/messages`,
+          url: `/v1/conversations/${wedding}/messages`,
           headers: bearer(actor),
         });
 
@@ -504,12 +533,12 @@ describe('messaging', () => {
 
       const own = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
       const theirs = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(VENDOR),
       });
 
@@ -524,14 +553,14 @@ describe('messaging', () => {
 
       const read = await harness.app.inject({
         method: 'PUT',
-        url: `/conversations/${conversationId}/read`,
+        url: `/v1/conversations/${conversationId}/read`,
         headers: bearer(VENDOR),
       });
       expect(read.statusCode).toBe(204);
 
       const after = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(VENDOR),
       });
       expect(after.json()[0].unreadCount).toBe(0);
@@ -548,7 +577,7 @@ describe('messaging', () => {
     async function publishedVendor(): Promise<string> {
       const profile = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: {
           businessName: 'Sunlit Studio',
@@ -574,7 +603,7 @@ describe('messaging', () => {
     ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
       return harness.app.inject({
         method: 'POST',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(actor),
         payload: { vendorSlug },
       });
@@ -586,11 +615,11 @@ describe('messaging', () => {
       const opened = await open(CUSTOMER, slug);
 
       expect(opened.statusCode).toBe(201);
-      expect(opened.headers.location).toBe(`/conversations/${opened.json().id}`);
+      expect(opened.headers.location).toBe(`/v1/conversations/${opened.json().id}`);
 
       const thread = await harness.app.inject({
         method: 'GET',
-        url: `/conversations/${opened.json().id}/messages`,
+        url: `/v1/conversations/${opened.json().id}/messages`,
         headers: bearer(CUSTOMER),
       });
 
@@ -634,7 +663,7 @@ describe('messaging', () => {
 
       const list = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
 
@@ -674,7 +703,7 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/conversations',
+        url: '/v1/conversations',
         payload: { vendorSlug: slug },
       });
 
@@ -690,7 +719,7 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/conversations/${conversationId}/messages`,
+        url: `/v1/conversations/${conversationId}/messages`,
         headers: bearer(CUSTOMER),
       });
 
@@ -699,7 +728,7 @@ describe('messaging', () => {
         'First',
         'Second',
       ]);
-      expect(response.json().total).toBe(2);
+      expect(response.json().nextBefore).toBeNull();
     });
 
     /*
@@ -714,14 +743,14 @@ describe('messaging', () => {
 
       const first = await harness.app.inject({
         method: 'GET',
-        url: `/conversations/${conversationId}/messages`,
+        url: `/v1/conversations/${conversationId}/messages`,
         headers: bearer(CUSTOMER),
       });
 
       expect(first.statusCode).toBe(200);
       const firstPage = first.json().items.map((row: { content: string }) => row.content);
-      expect(first.json().total).toBe(60);
       expect(firstPage).toHaveLength(50);
+      expect(first.json().nextBefore).toMatch(KEYSET_CURSOR_PATTERN);
       // Oldest-first within the page, but the page is the newest 50.
       expect(firstPage[0]).toBe('Message 11');
       expect(firstPage.at(-1)).toBe('Message 60');
@@ -731,13 +760,10 @@ describe('messaging', () => {
       const conversationId = await openConversation();
       await fillThread(conversationId);
 
-      const second = await harness.app.inject({
-        method: 'GET',
-        url: `/conversations/${conversationId}/messages?page=2`,
-        headers: bearer(CUSTOMER),
-      });
+      const second = await olderPage(conversationId, (await newestPage(conversationId)).nextBefore);
 
       expect(second.statusCode).toBe(200);
+      expect(second.json().nextBefore).toBeNull();
       const secondPage = second.json().items.map((row: { content: string }) => row.content);
       expect(secondPage).toEqual([
         'Message 1',
@@ -766,7 +792,7 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
 
@@ -785,7 +811,7 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
 
@@ -815,25 +841,80 @@ describe('messaging', () => {
         })),
       );
 
-      const [first, second] = await Promise.all([
-        harness.app.inject({
-          method: 'GET',
-          url: `/conversations/${conversationId}/messages`,
-          headers: bearer(CUSTOMER),
-        }),
-        harness.app.inject({
-          method: 'GET',
-          url: `/conversations/${conversationId}/messages?page=2`,
-          headers: bearer(CUSTOMER),
-        }),
-      ]);
+      const first = await newestPage(conversationId);
+      const second = await olderPage(conversationId, first.nextBefore);
 
-      const seen = [...first.json().items, ...second.json().items].map(
-        (row: { id: string }) => row.id,
-      );
+      const seen = [...first.items, ...second.json().items].map((row: { id: string }) => row.id);
 
       expect(seen).toHaveLength(60);
       expect(new Set(seen).size).toBe(60);
+    });
+
+    /*
+     * VEN-650: the reader is scrolled back when the other party writes. By
+     * offset the second page moved down one row under them and repeated a
+     * message; by cursor the rows below the one they hold do not move.
+     */
+    it('pages back to exactly the older messages while new ones arrive', async () => {
+      const conversationId = await openConversation();
+      await fillThread(conversationId);
+
+      const first = await newestPage(conversationId);
+      for (const content of ['Arrived while scrolling', 'And another']) {
+        expect((await send(VENDOR, conversationId, content)).statusCode).toBe(201);
+      }
+      const second = await olderPage(conversationId, first.nextBefore);
+
+      expect(second.json().items.map((row: { content: string }) => row.content)).toEqual(
+        Array.from({ length: 10 }, (_, index) => `Message ${index + 1}`),
+      );
+      expect((await newestPage(conversationId)).items.at(-1)?.content).toBe('And another');
+    });
+
+    /*
+     * A JS `Date` holds milliseconds and Postgres microseconds; a cursor cut to
+     * the millisecond would sit between two messages sent in the same one, and
+     * the older of them would never be shown.
+     */
+    it('keeps two messages sent in the same millisecond on either side of a page break', async () => {
+      const conversationId = await openConversation();
+      const senderId = await idOf(CUSTOMER);
+      await fillThread(conversationId);
+      // Between Message 11 (09:10) and Message 12 (09:11), so the newest page ends on the later one.
+      await harness.database.db.execute(sql`
+        insert into messages (conversation_id, sender_id, content, created_at) values
+          (${conversationId}, ${senderId}, 'Early in the millisecond', '2026-04-01T09:10:30.123100Z'),
+          (${conversationId}, ${senderId}, 'Late in the millisecond', '2026-04-01T09:10:30.123900Z')`);
+
+      const first = await newestPage(conversationId);
+      const second = (await olderPage(conversationId, first.nextBefore)).json();
+
+      expect(first.items[0]?.content).toBe('Late in the millisecond');
+      expect(second.items.map((row: { content: string }) => row.content)).toEqual([
+        ...Array.from({ length: 11 }, (_, index) => `Message ${index + 1}`),
+        'Early in the millisecond',
+      ]);
+      expect(second.nextBefore).toBeNull();
+    });
+
+    it('refuses a cursor that is not one, before reading anything', async () => {
+      const conversationId = await openConversation();
+
+      for (const before of [
+        '2',
+        '2026-04-01T09:00:00Z,not-an-id',
+        '2026-04-01T09:00:00.123Z,x',
+        // Shaped like a cursor, but no such instant: a failed cast used to answer 500.
+        '2026-02-30T00:00:00.000000Z,00000000-0000-4000-8000-000000000000',
+        '2026-04-01T25:00:00.000000Z,00000000-0000-4000-8000-000000000000',
+      ]) {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: `/v1/conversations/${conversationId}/messages?before=${encodeURIComponent(before)}`,
+          headers: bearer(CUSTOMER),
+        });
+        expect(response.statusCode).toBe(400);
+      }
     });
 
     /* The same tie in the preview's ordering, with the same caveat. */
@@ -851,7 +932,7 @@ describe('messaging', () => {
         [1, 2, 3].map(async () => {
           const response = await harness.app.inject({
             method: 'GET',
-            url: '/conversations',
+            url: '/v1/conversations',
             headers: bearer(CUSTOMER),
           });
           return response.json()[0].lastMessagePreview;
@@ -891,7 +972,7 @@ describe('messaging', () => {
 
       const before = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
       expect(before.json()[0].lastMessageAt).toBeNull();
@@ -900,7 +981,7 @@ describe('messaging', () => {
 
       const after = await harness.app.inject({
         method: 'GET',
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
       expect(after.json()[0].lastMessageAt).not.toBeNull();
@@ -909,12 +990,53 @@ describe('messaging', () => {
   });
 
   describe('notifications', () => {
+    /* VEN-650: the panel pages by cursor, so a notification landing mid-read shifts nothing. */
+    it('pages the panel by cursor, and a new notification does not repeat a row', async () => {
+      const userId = await idOf(CUSTOMER);
+      const start = new Date('2026-04-01T09:00:00Z').getTime();
+      await harness.database.db.insert(notifications).values(
+        Array.from({ length: 25 }, (_, index) => ({
+          userId,
+          type: 'new_message' as const,
+          title: `Note ${index + 1}`,
+          body: 'Body',
+          createdAt: new Date(start + index * 60_000),
+        })),
+      );
+      const read = async (query = '') =>
+        (
+          await harness.app.inject({
+            method: 'GET',
+            url: `/v1/notifications${query}`,
+            headers: bearer(CUSTOMER),
+          })
+        ).json();
+
+      const first = await read();
+      await harness.database.db
+        .insert(notifications)
+        .values({ userId, type: 'new_message', title: 'Arrived meanwhile', body: 'Body' });
+      const second = await read(`?before=${encodeURIComponent(first.nextBefore)}`);
+
+      expect(first.items).toHaveLength(20);
+      expect(first.items[0].title).toBe('Note 25');
+      expect(second.items.map((item: { title: string }) => item.title)).toEqual([
+        'Note 5',
+        'Note 4',
+        'Note 3',
+        'Note 2',
+        'Note 1',
+      ]);
+      expect(second.nextBefore).toBeNull();
+      await harness.database.db.delete(notifications).where(eq(notifications.userId, userId));
+    });
+
     it('lists the caller own notifications, newest first', async () => {
       await openConversation();
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(VENDOR),
       });
 
@@ -942,7 +1064,7 @@ describe('messaging', () => {
       await send(CUSTOMER, conversationId, 'Are you free that weekend?');
       await harness.app.inject({
         method: 'PUT',
-        url: `/conversations/${conversationId}/read`,
+        url: `/v1/conversations/${conversationId}/read`,
         headers: bearer(VENDOR),
       });
       await send(VENDOR, conversationId, 'I am — let me put a quote together.');
@@ -969,7 +1091,7 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(VENDOR),
       });
 
@@ -1002,7 +1124,7 @@ describe('messaging', () => {
       // Once they have read the thread, the next message is news again.
       await harness.app.inject({
         method: 'PUT',
-        url: `/conversations/${conversationId}/read`,
+        url: `/v1/conversations/${conversationId}/read`,
         headers: bearer(VENDOR),
       });
       await send(CUSTOMER, conversationId, 'Thought of something else.');
@@ -1019,7 +1141,7 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(OUTSIDER),
       });
 
@@ -1030,21 +1152,21 @@ describe('messaging', () => {
       await openConversation();
       const list = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(VENDOR),
       });
       const first = list.json().items[0];
 
       const marked = await harness.app.inject({
         method: 'PUT',
-        url: `/notifications/${first.id}/read`,
+        url: `/v1/notifications/${first.id}/read`,
         headers: bearer(VENDOR),
       });
       expect(marked.statusCode).toBe(204);
 
       const after = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(VENDOR),
       });
       expect(after.json().items[0].readAt).not.toBeNull();
@@ -1055,20 +1177,20 @@ describe('messaging', () => {
       await openConversation();
       const list = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(VENDOR),
       });
       const first = list.json().items[0];
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/notifications/${first.id}/read`,
+        url: `/v1/notifications/${first.id}/read`,
         headers: bearer(OUTSIDER),
       });
 
       const after = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(VENDOR),
       });
       expect(after.json().items[0].readAt).toBeNull();
@@ -1079,14 +1201,14 @@ describe('messaging', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/notifications/read-all',
+        url: '/v1/notifications/read-all',
         headers: bearer(VENDOR),
       });
       expect(response.statusCode).toBe(204);
 
       const after = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(VENDOR),
       });
       expect(after.json().items.every((row: { readAt: string | null }) => row.readAt)).toBe(true);
