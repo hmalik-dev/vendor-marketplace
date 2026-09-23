@@ -148,3 +148,32 @@ describe('the log keeps a wrapped error’s cause', () => {
     expect(logged).toContain('vendor_profiles_user_id_key');
   });
 });
+
+/*
+ * VEN-618. The 404 body used to echo `request.url` whole, so a token carried in
+ * a query string came straight back and landed in every intermediary's logs.
+ */
+describe('error handler 404 for an unknown route', () => {
+  let app: FastifyInstance | undefined;
+
+  afterEach(async () => {
+    await app?.close();
+    app = undefined;
+  });
+
+  it('names the path but never echoes the query string', async () => {
+    app = Fastify({ logger: false });
+    await app.register(errorHandlerPlugin);
+    await app.ready();
+
+    const response = await app.inject({ method: 'GET', url: '/nope?token=abc' });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({
+      statusCode: 404,
+      error: 'NOT_FOUND',
+      message: 'Route GET /nope not found',
+    });
+    expect(response.body).not.toContain('token=abc');
+  });
+});

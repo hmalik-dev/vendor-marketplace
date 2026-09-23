@@ -1675,7 +1675,7 @@ export const MAX_PAGE = 100_000;
 
 /*
  * The upload contract, stated once. `design/design-plan/40-states.md` fixes it
- * at "JPG or PNG · 12 MB each · min 1200px wide · 20 files per upload", and
+ * at "JPG, PNG or WebP · 12 MB each · min 1200px wide · 20 files per upload", and
  * the same sentence has to appear in the drop zone, the requirements rail and
  * the server's own refusals — so every one of them reads these.
  */
@@ -1702,13 +1702,13 @@ export const BYTES_PER_MB = 1_000_000;
 export const MAX_UPLOAD_BYTES = 12 * BYTES_PER_MB;
 
 /**
- * Accepted **input** formats. WebP is deliberately not among them: it is the
- * format `sharp` writes, not one a camera or an editor exports, and offering
- * it in the picker only widened the set of files a vendor could pick and then
- * be refused for. Narrowing the client without narrowing the server would do
- * the reverse, so both ends read this list.
+ * Accepted **input** formats. WebP is among them because Android cameras and
+ * desktop browsers save photos in it (VEN-618). HEIC is not: iOS Safari
+ * transcodes it to JPEG when the picker does not list it. Narrowing the client
+ * without narrowing the server would refuse files a vendor was offered, so both
+ * ends read this list.
  */
-export const ACCEPTED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png'] as const;
+export const ACCEPTED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
 /**
  * Narrowest image worth publishing. A photograph below this renders soft on a
@@ -1725,7 +1725,7 @@ export const MIN_UPLOAD_IMAGE_WIDTH = 1200;
 export const MAX_UPLOAD_BATCH_FILES = 20;
 
 /** Human-readable file extensions for the accepted set, in picker order. */
-export const ACCEPTED_IMAGE_LABEL = 'JPG or PNG';
+export const ACCEPTED_IMAGE_LABEL = 'JPG, PNG or WebP';
 
 /**
  * The one constraint sentence. `40-states.md` requires it verbatim in both the

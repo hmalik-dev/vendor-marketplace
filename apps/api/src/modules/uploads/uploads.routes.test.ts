@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { setUserRole } from '../../testing/set-user-role.js';
 import sharp from 'sharp';
 import { users } from '@vendor-marketplace/db/schema';
@@ -24,6 +25,9 @@ function multipartBody(filename: string, contentType: string, content: Buffer): 
     Buffer.from(`\r\n--${BOUNDARY}--\r\n`),
   ]);
 }
+
+/** A 1600×1200 WebP, as a phone or browser saves one. */
+const WEBP_FIXTURE = new URL('../../testing/fixtures/portfolio.webp', import.meta.url);
 
 const MULTIPART_HEADERS = { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` };
 
@@ -181,10 +185,10 @@ describe('POST /upload/image', () => {
     expect(response.statusCode).toBe(201);
 
     const body = response.json();
-    // `<prefix>/<ownerId>/<uuid>.webp` — the owner segment is what makes
-    // deleting an object safe, since nothing else records who minted a key.
+    // `<prefix>/<owner>/<uuid>.webp` — the owner segment is what makes deleting
+    // an object safe, and it is an opaque digest, never the user id (VEN-618).
     expect(body.imageUrl).toMatch(
-      /^http:\/\/cdn\.test\/vendor-profile\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.webp$/,
+      /^http:\/\/cdn\.test\/vendor-profile\/[0-9a-f]{32}\/[0-9a-f-]{36}\.webp$/,
     );
     expect(body.thumbnailUrl).toBe(body.imageUrl.replace('.webp', '-thumb.webp'));
     expect(response.headers.location).toBe(body.imageUrl);
@@ -275,6 +279,45 @@ describe('POST /upload/image', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json().message).toMatch(/unsupported image type/i);
     expect(harness.storedObjects).toHaveLength(0);
+  });
+
+  /* VEN-618: Android and desktop browsers save photos as WebP. */
+  it('accepts a WebP and stores it re-encoded', async () => {
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/v1/upload/image?prefix=portfolio',
+      headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
+      payload: multipartBody('portfolio.webp', 'image/webp', await readFile(WEBP_FIXTURE)),
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(harness.storedObjects).toHaveLength(2);
+    const [image] = harness.storedObjects;
+    expect(image?.contentType).toBe('image/webp');
+    expect(await sharp(image?.body).metadata()).toMatchObject({ format: 'webp', width: 1600 });
+  });
+
+  /*
+   * The declared type is a claim and the bytes decide (#172): PNG bytes sent as
+   * a WebP are an accepted format, so they are processed as the PNG they are.
+   */
+  it('processes PNG bytes named and declared as WebP by what the bytes are', async () => {
+    const png = await sharp({
+      create: { width: 1600, height: 1200, channels: 3, background: { r: 5, g: 6, b: 7 } },
+    })
+      .png()
+      .toBuffer();
+
+    const response = await harness.app.inject({
+      method: 'POST',
+      url: '/v1/upload/image?prefix=portfolio',
+      headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
+      payload: multipartBody('photo.webp', 'image/webp', png),
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(harness.storedObjects).toHaveLength(2);
+    expect((await sharp(harness.storedObjects[0]?.body).metadata()).format).toBe('webp');
   });
 
   it('rejects bytes that only claim to be an image', async () => {

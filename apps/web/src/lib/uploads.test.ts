@@ -44,7 +44,7 @@ describe('screenFile', () => {
       reason: "HEIC isn't a format we can publish.",
       retryable: false,
     });
-    expect(failure?.fix).toContain('JPG or PNG');
+    expect(failure?.fix).toContain('JPG, PNG or WebP');
   });
 
   /*
