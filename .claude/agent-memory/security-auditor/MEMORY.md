@@ -11,7 +11,7 @@
 - [A new secret header has three registries](new-secret-header-has-three-registries.md) — pino `redact`, Sentry `CREDENTIAL_HEADER`, and a placeholder that must fail its own shape
 - [The Resend secret's absence is refusal](resend-webhook-absence-is-refusal.md) — optional on every target is correct; no route exists without a secret
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — never add script-src hosts; CSP_ENFORCE only turns enforcement on
-- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child env/argv redacted; branch-as-environment falls back across tiers; `productionShape` gates no deploy; Resend key is full-access
+- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child env/argv redacted; branch-as-environment falls back across tiers; `productionShape` gates no deploy; Resend key is full-access; VEN-660 Neon Auth preflight clean
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — traces carry session cookies, stripe-listen.log carries whsec; masking never reaches artifacts
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — live session JWTs; `FORBIDDEN_PATHS` covers the path, no content rule will
 - [A storage branch per lane, CI run and PR](neon-storage-branch-per-runner.md) — `NEON_API_KEY` is production-capable; keep it step-scoped and away from `npm install`

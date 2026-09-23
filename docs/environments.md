@@ -40,7 +40,14 @@ each has its own secrets and variables.
 
 1. **Gate**: the commit is still the branch's tip (a superseded run exits
    green without deploying; the run for the tip carries it).
-2. **Preflight**: every input below is set, or the run fails by name.
+2. **Preflight**: every input below is set, or the run fails by name. Then
+   (VEN-660) it asks the Neon API, with `NEON_API_KEY`, for the Neon Auth of
+   the branch named `NEON_BRANCH` in `NEON_PROJECT_ID`, and fails by name when
+   `NEON_AUTH_BASE_URL` is not that integration's base URL or `WEB_URL`'s
+   first origin is not among its trusted domains, so no tier ships pointed at
+   another tier's identities. The value it checked is the value that ships:
+   the API step sets it on the Railway service and the web deploy passes it
+   as a deployment variable, overriding the dashboard's.
 3. **Sender** (VEN-609): Resend must report `EMAIL_FROM`'s domain as
    `verified`, or nothing ships. A key that cannot list domains (a
    sending-only key) fails too, since the release cannot prove the sender.
@@ -81,11 +88,16 @@ Set on each GitHub environment (`staging`, `production`) by the account holder
 token scoped to that environment), `VERCEL_TOKEN`, `SENTRY_AUTH_TOKEN`, `WEB_TIER_KEY`, `NEON_AUTH_COOKIE_SECRET`
 (the last two: the web build's Secret variables, above), `RESEND_API_KEY` (a
 full-access Resend key, so the sender step can list domains; the API's own key
-on Railway stays sending-only);
+on Railway stays sending-only), `NEON_API_KEY` (a Neon API key that can
+read the project's branches and Neon Auth; the one input that may also be the
+repository-level key CI already uses, since a Neon key is project-wide and
+names no tier);
 variables `EMAIL_FROM` (the same sender as the API's on Railway), `NEON_BRANCH` (`staging` or `production`), `NEON_HOST` (that
 branch's direct endpoint host), `API_HOST`, `API_SERVICE`, `API_URL`, `WEB_URL`
 (staging's first entry must be a host containing `staging`, since it is the
-alias target), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SENTRY_WEB_PROJECT`. A push to
+alias target), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SENTRY_WEB_PROJECT`, `NEON_PROJECT_ID`,
+`NEON_AUTH_BASE_URL` (the tier's own, as `neon neon-auth status --branch
+<NEON_BRANCH>` prints it). A push to
 `staging` or `production` with any of them unset fails at preflight, naming it.
 
 Never set any of these at the repository level: GitHub falls back from an

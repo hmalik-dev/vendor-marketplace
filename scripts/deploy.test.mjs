@@ -60,6 +60,49 @@ const RUNTIME_ENV_ABSENT = Object.fromEntries(
 );
 const SIGN_IN_HTML = '<html><body><form><input type="email" name="email" /></form></body></html>';
 
+/*
+ * VEN-660. The Neon project as preflight sees it: each tier's branch has its own
+ * Neon Auth and trusts only its own web host. Composed per tier so a test can
+ * hand one tier the other's value and watch the guard refuse it.
+ */
+const NEON_AUTH = {
+  production: 'https://ep-prod.neonauth.test/neondb/auth',
+  staging: 'https://ep-staging.neonauth.test/neondb/auth',
+};
+const NEON_WORLD = {
+  production: { id: 'br-prod', domains: ['https://orla.test'] },
+  staging: { id: 'br-staging', domains: ['https://orla-staging.test'] },
+};
+
+/** Answers the three Neon API reads `checkNeonAuth` makes, from `world`; records each URL. */
+function neonFetch(world = NEON_WORLD, seen = []) {
+  return async (url, init) => {
+    seen.push({ url, authorization: init?.headers?.authorization });
+    const { pathname } = new URL(url);
+    const match = /^\/api\/v2\/projects\/[^/]+\/branches(?:\/([^/]+)\/auth(\/domains)?)?$/.exec(
+      pathname,
+    );
+    if (!match) {
+      return new Response('not found', { status: 404 });
+    }
+    const [, branchId, domains] = match;
+    if (!branchId) {
+      return Response.json({
+        branches: Object.entries(world).map(([name, { id }]) => ({ id, name })),
+      });
+    }
+    const [name, branch] = Object.entries(world).find(([, { id }]) => id === branchId) ?? [];
+    if (!branch) {
+      return new Response('not found', { status: 404 });
+    }
+    return domains
+      ? Response.json({
+          domains: branch.domains.map((domain) => ({ domain, auth_provider: 'better_auth' })),
+        })
+      : Response.json({ base_url: NEON_AUTH[name] });
+  };
+}
+
 /**
  * A healthy origin for both `webNamesRelease` and `webServesCoreFlows`:
  * `/api/ready` names `commit` and reports `runtimeEnv`, `/api/auth/get-session`
@@ -97,6 +140,7 @@ function recordingIo() {
       },
       write: (text) => lines.push(text),
       error: (text) => lines.push(text),
+      fetch: neonFetch(),
     },
   };
 }
@@ -176,6 +220,12 @@ function allPresent() {
   return {
     ...Object.fromEntries(REQUIRED_INPUTS.map(({ name }) => [presenceFlag(name), 'true'])),
     API_HOST: 'railway',
+    NEON_API_KEY: fake('neon'),
+    NEON_PROJECT_ID: 'dark-test-1',
+    NEON_BRANCH: 'production',
+    NEON_AUTH_BASE_URL: NEON_AUTH.production,
+    WEB_URL: 'https://orla.test',
+    DEPLOY_TARGET: 'production',
   };
 }
 
@@ -228,6 +278,112 @@ test('preflight: an API host with no adapter fails rather than deploying nowhere
     /API_HOST "fly" has no adapter/,
   );
   await PHASES.preflight(allPresent(), io);
+});
+
+// --- preflight: Neon Auth (VEN-660) --------------------------------------------
+
+/** What preflight rejected with, or `null` when it passed. */
+async function preflightError(env, fetchImpl = neonFetch()) {
+  const { io } = recordingIo();
+  return PHASES.preflight(env, { ...io, fetch: fetchImpl }).then(
+    () => null,
+    (caught) => caught,
+  );
+}
+
+test("preflight: a tier's own Neon Auth and web host pass, asked of Neon with the key", async () => {
+  const seen = [];
+  const { io, lines } = recordingIo();
+  await PHASES.preflight(allPresent(), { ...io, fetch: neonFetch(NEON_WORLD, seen) });
+
+  assert.deepEqual(
+    seen.map(({ url }) => new URL(url).pathname),
+    [
+      '/api/v2/projects/dark-test-1/branches',
+      '/api/v2/projects/dark-test-1/branches/br-prod/auth',
+      '/api/v2/projects/dark-test-1/branches/br-prod/auth/domains',
+    ],
+  );
+  for (const { authorization } of seen) {
+    assert.equal(authorization, `Bearer ${fake('neon')}`);
+  }
+  assert.ok(lines.some((line) => line.includes("the production branch's own")));
+});
+
+test("preflight: NEON_AUTH_BASE_URL naming another tier's Neon Auth fails the release, by name", async () => {
+  const error = await preflightError({ ...allPresent(), NEON_AUTH_BASE_URL: NEON_AUTH.staging });
+
+  assert.ok(error instanceof PhaseError, String(error));
+  assert.equal(
+    error.message,
+    'NEON_AUTH_BASE_URL (ep-staging.neonauth.test) is not the Neon Auth base URL of the production Neon branch (ep-prod.neonauth.test); refusing to release.',
+  );
+});
+
+test("preflight: WEB_URL that is not among the branch's Neon Auth trusted domains fails the release, by name", async () => {
+  const error = await preflightError({
+    ...allPresent(),
+    WEB_URL: 'https://orla-staging.test,https://orla.test',
+  });
+
+  assert.ok(error instanceof PhaseError, String(error));
+  assert.equal(
+    error.message,
+    "WEB_URL (https://orla-staging.test) is not a trusted domain of the production Neon branch's Neon Auth; refusing to release.",
+  );
+});
+
+test('preflight: a trailing slash on either side is the same base URL and the same host', async () => {
+  assert.equal(
+    await preflightError({
+      ...allPresent(),
+      NEON_AUTH_BASE_URL: `${NEON_AUTH.production}/`,
+      WEB_URL: 'https://orla.test/',
+    }),
+    null,
+  );
+});
+
+test('preflight: a whole variable set fallen back from the other tier fails before Neon is asked', async () => {
+  const seen = [];
+  const error = await preflightError(
+    { ...allPresent(), DEPLOY_TARGET: 'staging' },
+    neonFetch(NEON_WORLD, seen),
+  );
+
+  assert.equal(
+    error.message,
+    'NEON_BRANCH "production" is not the staging environment\'s Neon branch; refusing to release.',
+  );
+  assert.equal(seen.length, 0);
+});
+
+test('preflight: a NEON_BRANCH Neon does not have, or a branch without Neon Auth, fails', async () => {
+  const missing = await preflightError({
+    ...allPresent(),
+    NEON_BRANCH: 'prod',
+    DEPLOY_TARGET: 'prod',
+  });
+  assert.match(missing.message, /^NEON_BRANCH "prod" is not a branch of NEON_PROJECT_ID/);
+
+  const noAuth = async (url, init) =>
+    new URL(url).pathname.endsWith('/auth')
+      ? new Response('{"message":"not enabled"}', { status: 404 })
+      : neonFetch()(url, init);
+  const disabled = await preflightError(allPresent(), noAuth);
+  assert.equal(
+    disabled.message,
+    "The Neon API answered HTTP 404 for the production branch's Neon Auth; refusing to release.",
+  );
+});
+
+test('preflight: a Neon API that cannot be reached fails closed and never prints the key', async () => {
+  const error = await preflightError(allPresent(), async () => {
+    throw new Error(`connect failed with ${fake('neon')}`);
+  });
+
+  assert.equal(error.message, 'The Neon API did not answer for the branches; refusing to release.');
+  assert.ok(!error.message.includes(fake('neon')));
 });
 
 // --- migrate ----------------------------------------------------------------
@@ -337,6 +493,7 @@ test('api: deploys through the named host adapter with its credential and the re
       API_HOST: 'railway',
       API_SERVICE: 'orla-api',
       SENTRY_RELEASE: SHA,
+      NEON_AUTH_BASE_URL: NEON_AUTH.production,
       ...credentials,
     },
     io,
@@ -345,7 +502,7 @@ test('api: deploys through the named host adapter with its credential and the re
   assert.deepEqual(
     calls.map(({ args }) => args.slice(2).join(' ')),
     [
-      `variables --service orla-api --set SENTRY_RELEASE=${SHA} --skip-deploys`,
+      `variables --service orla-api --set SENTRY_RELEASE=${SHA} --set NEON_AUTH_BASE_URL=${NEON_AUTH.production} --skip-deploys`,
       'up --ci --service orla-api',
     ],
   );
@@ -361,7 +518,16 @@ test('api: an unknown host fails without running anything', async () => {
   const { io, calls } = recordingIo();
   const credentials = { API_HOST_TOKEN: fake('api') };
   await assert.rejects(
-    PHASES.api({ API_HOST: 'render', API_SERVICE: 's', SENTRY_RELEASE: SHA, ...credentials }, io),
+    PHASES.api(
+      {
+        API_HOST: 'render',
+        API_SERVICE: 's',
+        SENTRY_RELEASE: SHA,
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
+        ...credentials,
+      },
+      io,
+    ),
     /no adapter/,
   );
   assert.equal(calls.length, 0);
@@ -384,6 +550,7 @@ test('web-build: builds under the release and upload credential, deployment secr
       SENTRY_RELEASE: SHA,
       DATABASE_URL_UNPOOLED: UNPOOLED,
       WEB_URL: 'https://orla.test',
+      NEON_AUTH_BASE_URL: NEON_AUTH.production,
       API_URL: 'https://api.orla.test',
       ...credentials,
     },
@@ -417,6 +584,7 @@ test('web-deploy: deploys the prebuilt bundle without the upload or build-only c
       ...BUILD_SECRETS,
       DATABASE_URL_UNPOOLED: UNPOOLED,
       WEB_URL: 'https://orla.test',
+      NEON_AUTH_BASE_URL: NEON_AUTH.production,
     },
     io,
   );
@@ -437,7 +605,7 @@ test('web-deploy: refuses without the vercel credentials or the release commit, 
   const { io, calls } = recordingIo();
   await assert.rejects(
     PHASES['web-deploy']({ DEPLOY_TARGET: 'production' }, io),
-    /Missing VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID, SENTRY_RELEASE/,
+    /Missing VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID, SENTRY_RELEASE, NEON_AUTH_BASE_URL/,
   );
   assert.equal(calls.length, 0);
 });
@@ -458,6 +626,7 @@ test('web-deploy: staging refuses to alias a host that is not its own, even call
           VERCEL_PROJECT_ID: 'prj',
           SENTRY_RELEASE: SHA,
           WEB_URL,
+          NEON_AUTH_BASE_URL: NEON_AUTH.production,
         },
         io,
       ),
@@ -480,6 +649,7 @@ test('ready: polls through the smoke check, then proves the web serves auth, sig
       PATH: '/bin',
       API_URL: 'https://api.orla.test',
       WEB_URL: 'https://orla.test',
+      NEON_AUTH_BASE_URL: NEON_AUTH.production,
       SENTRY_RELEASE: SHA,
     },
     io,
@@ -821,8 +991,14 @@ function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '', we
     // healthy so a passing dry run also clears `webServesCoreFlows` (VEN-632).
     writeFileSync(
       path.join(dir, 'web-fetch.mjs'),
-      `globalThis.fetch = async (url) => {
-  const { pathname } = new URL(url);
+      `const NEON_AUTH = ${JSON.stringify(NEON_AUTH)};
+const NEON_WORLD = ${JSON.stringify(NEON_WORLD)};
+const neonFetch = ${neonFetch.toString()};
+globalThis.fetch = async (url, init) => {
+  const { hostname, pathname } = new URL(url);
+  if (hostname === 'console.neon.tech') {
+    return neonFetch()(url, init);
+  }
   if (pathname === '/api/ready') {
     return Response.json({
       commit: ${JSON.stringify(webCommit)},
@@ -911,6 +1087,7 @@ const SECRETS = Object.fromEntries(
     'WEB_TIER_KEY',
     'NEON_AUTH_COOKIE_SECRET',
     'RESEND_API_KEY',
+    'NEON_API_KEY',
   ].map((name) => [name, name === 'DATABASE_URL_UNPOOLED' ? UNPOOLED : fake(name.toLowerCase())]),
 );
 const VARS = {
@@ -923,7 +1100,9 @@ const VARS = {
   SENTRY_WEB_PROJECT: 'orla-web',
   API_URL: 'https://api.orla.test',
   WEB_URL: 'https://orla.test',
+  NEON_AUTH_BASE_URL: NEON_AUTH.production,
   EMAIL_FROM: 'Orla <noreply@orla.test>',
+  NEON_PROJECT_ID: 'dark-test-1',
 };
 
 /** The Resend key's name, spelled once; its value is always composed. */
@@ -1069,6 +1248,7 @@ test('ready: a web still on the previous build is polled again until it names th
       PATH: '/bin',
       API_URL: 'https://api.orla.test',
       WEB_URL: 'https://orla.test',
+      NEON_AUTH_BASE_URL: NEON_AUTH.production,
       SENTRY_RELEASE: SHA,
     },
     io,
@@ -1093,6 +1273,7 @@ test('ready: naming the right commit is not enough — a missing runtime variabl
         PATH: '/bin',
         API_URL: 'https://api.orla.test',
         WEB_URL: 'https://orla.test',
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
         SENTRY_RELEASE: SHA,
       },
       io,
@@ -1129,6 +1310,7 @@ test('ready: a web with no runtimeEnv key at all is not held to the variable che
         PATH: '/bin',
         API_URL: 'https://api.orla.test',
         WEB_URL: 'https://orla.test',
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
         SENTRY_RELEASE: SHA,
         SMOKE_DEADLINE_MS: '0',
       },
@@ -1157,6 +1339,7 @@ test('webServesCoreFlows: any 5xx from get-session fails the release by status, 
         PATH: '/bin',
         API_URL: 'https://api.orla.test',
         WEB_URL: 'https://orla.test',
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
         SENTRY_RELEASE: SHA,
         SMOKE_DEADLINE_MS: '0',
       },
@@ -1185,6 +1368,7 @@ test('webServesCoreFlows: a 200 with an HTML session body fails, because JSON wa
         PATH: '/bin',
         API_URL: 'https://api.orla.test',
         WEB_URL: 'https://orla.test',
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
         SENTRY_RELEASE: SHA,
         SMOKE_DEADLINE_MS: '0',
       },
@@ -1210,6 +1394,7 @@ test('webServesCoreFlows: /sign-in without the form marker fails, even at 200', 
         PATH: '/bin',
         API_URL: 'https://api.orla.test',
         WEB_URL: 'https://orla.test',
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
         SENTRY_RELEASE: SHA,
         SMOKE_DEADLINE_MS: '0',
       },
@@ -1234,6 +1419,7 @@ test('webServesCoreFlows: passes on a healthy session, a rendered sign-in form a
       PATH: '/bin',
       API_URL: 'https://api.orla.test',
       WEB_URL: 'https://orla.test',
+      NEON_AUTH_BASE_URL: NEON_AUTH.production,
       SENTRY_RELEASE: SHA,
     },
     io,
@@ -1257,6 +1443,7 @@ test('ready: a web that never answers fails the release by name once the deadlin
         PATH: '/bin',
         API_URL: 'https://api.orla.test',
         WEB_URL: 'https://orla.test,https://www.orla.test',
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
         SENTRY_RELEASE: SHA,
         SMOKE_DEADLINE_MS: '20000',
       },
@@ -1302,7 +1489,12 @@ test('dry run: a superseded commit deploys nothing and does not fail', () => {
 test("dry run: a staging push builds the web, migrates staging first, then deploys, and looks up staging's tip", () => {
   const result = dryRun({
     secrets: SECRETS,
-    vars: { ...VARS, NEON_BRANCH: 'staging', WEB_URL: 'https://orla-staging.test' },
+    vars: {
+      ...VARS,
+      NEON_BRANCH: 'staging',
+      WEB_URL: 'https://orla-staging.test',
+      NEON_AUTH_BASE_URL: NEON_AUTH.staging,
+    },
     branch: 'staging',
   });
 
@@ -1326,7 +1518,12 @@ test("dry run: a staging push builds the web, migrates staging first, then deplo
   assertNoSecretPrinted(result.printed);
 });
 
-test("dry run: staging run handed production's Neon branch refuses after the web is built but before anything is migrated or deployed", () => {
+/*
+ * VEN-660 moved this refusal earlier: preflight holds NEON_BRANCH to the
+ * target before it asks Neon anything, so it refuses before the web is built. `migrate`'s own NEON_BRANCH check still stands
+ * behind it, and its unit tests above drive it directly.
+ */
+test("dry run: staging run handed production's Neon branch refuses at preflight, before anything is built, migrated or deployed", () => {
   const result = dryRun({
     secrets: SECRETS,
     vars: { ...VARS, WEB_URL: 'https://orla-staging.test' },
@@ -1336,19 +1533,13 @@ test("dry run: staging run handed production's Neon branch refuses after the web
   assert.equal(result.failedAt, 'Release');
   assert.match(
     result.printed,
-    /NEON_BRANCH "production" is not the staging environment's Neon branch \(expected "staging"\); refusing to migrate\./,
+    /NEON_BRANCH "production" is not the staging environment's Neon branch; refusing to release\./,
   );
-  assert.ok(!result.invocations.includes('pnpm db:migrate'), result.invocations.join('\n'));
   assert.ok(
-    !result.invocations.some((line) => line.startsWith('npx --yes @railway')),
+    !result.invocations.some((line) => line.startsWith('npx') || line.startsWith('pnpm db:')),
     result.invocations.join('\n'),
   );
-  // The web was already built (pull + build) before the migration refused.
-  assert.equal(
-    result.invocations.filter((line) => line === 'npx --yes vercel@59.17.0').length,
-    2,
-    result.invocations.join('\n'),
-  );
+  assertNoSecretPrinted(result.printed);
 });
 
 test('dry run: a run for main is refused at the gate and touches nothing past the install', () => {
@@ -1384,6 +1575,7 @@ test('web-build then web-deploy: staging builds under a branch, deploys a previe
     SENTRY_RELEASE: SHA,
     // An allow-list: the first entry is the alias host.
     WEB_URL: 'https://orla-staging.vercel.app,https://staging.orla.test',
+    NEON_AUTH_BASE_URL: NEON_AUTH.production,
     API_URL: 'https://api.orla.test',
   };
   await PHASES['web-build'](env, io);
@@ -1393,7 +1585,7 @@ test('web-build then web-deploy: staging builds under a branch, deploys a previe
     'git checkout -B staging',
     'pull --yes --environment=preview --git-branch=staging',
     'build',
-    `deploy --prebuilt --env SENTRY_RELEASE=${SHA}`,
+    `deploy --prebuilt --env SENTRY_RELEASE=${SHA} --env NEON_AUTH_BASE_URL=${NEON_AUTH.production}`,
     `alias set ${url} orla-staging.vercel.app`,
   ]);
 });
@@ -1414,6 +1606,7 @@ test('web-build: staging refuses to alias a host that is not its own, before bui
           SENTRY_RELEASE: SHA,
           API_URL: 'https://api.orla.test',
           WEB_URL,
+          NEON_AUTH_BASE_URL: NEON_AUTH.production,
         },
         io,
       ),
@@ -1436,6 +1629,7 @@ test('web-build then web-deploy: production stays a production deployment and is
     SENTRY_WEB_PROJECT: 'orla-web',
     SENTRY_RELEASE: SHA,
     WEB_URL: 'https://orla.test',
+    NEON_AUTH_BASE_URL: NEON_AUTH.production,
     API_URL: 'https://api.orla.test',
   };
   await PHASES['web-build'](env, io);
@@ -1446,7 +1640,7 @@ test('web-build then web-deploy: production stays a production deployment and is
     [
       'pull --yes --environment=production',
       'build --prod',
-      `deploy --prebuilt --prod --env SENTRY_RELEASE=${SHA}`,
+      `deploy --prebuilt --prod --env SENTRY_RELEASE=${SHA} --env NEON_AUTH_BASE_URL=${NEON_AUTH.production}`,
     ],
   );
   assert.ok(
@@ -1469,6 +1663,7 @@ for (const target of ['staging', 'production']) {
         SENTRY_WEB_PROJECT: 'orla-web',
         SENTRY_RELEASE: SHA,
         WEB_URL: 'https://orla-staging.vercel.app/,https://staging.orla.test',
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
         API_URL: 'https://api.orla.test',
         ...BUILD_SECRETS,
       },
@@ -1498,6 +1693,7 @@ for (const target of ['staging', 'production']) {
         SENTRY_WEB_PROJECT: 'orla-web',
         SENTRY_RELEASE: SHA,
         WEB_URL: 'https://orla-staging.vercel.app',
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
         API_URL: 'https://api.orla.test',
         ...BUILD_SECRETS,
       },
@@ -1532,6 +1728,7 @@ for (const target of ['staging', 'production']) {
           SENTRY_WEB_PROJECT: 'orla-web',
           SENTRY_RELEASE: SHA,
           WEB_URL: 'https://orla-staging.vercel.app',
+          NEON_AUTH_BASE_URL: NEON_AUTH.production,
           API_URL: '',
           ...BUILD_SECRETS,
         },
@@ -1555,6 +1752,7 @@ for (const target of ['staging', 'production']) {
         SENTRY_WEB_PROJECT: 'orla-web',
         SENTRY_RELEASE: SHA,
         WEB_URL: 'https://orla-staging.vercel.app',
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
         API_URL: 'https://api.orla.test',
         ...BUILD_SECRETS,
       },
@@ -1584,6 +1782,7 @@ for (const target of ['staging', 'production']) {
             SENTRY_WEB_PROJECT: 'orla-web',
             SENTRY_RELEASE: SHA,
             WEB_URL: 'https://orla-staging.vercel.app',
+            NEON_AUTH_BASE_URL: NEON_AUTH.production,
             API_URL: 'https://api.orla.test',
             ...BUILD_SECRETS,
             [missing]: '',

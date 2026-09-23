@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminHeader } from './admin-header';
 
 afterEach(cleanup);
@@ -76,5 +76,20 @@ describe('AdminHeader', () => {
     expect(classes).toContain('box-content');
     expect(classes).toContain('h-(--header-height)');
     expect(classes).toContain('border-b');
+  });
+
+  // VEN-660: the console on staging says so, inverted for the ink header.
+  it('marks a staging console in the dark tone, and a production console not at all', () => {
+    vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', 'staging');
+    const { unmount } = render(<AdminHeader email={EMAIL} name="Admin" />);
+    const marker = screen.getByTestId('tier-marker');
+    expect(marker.textContent).toBe('Staging');
+    expect(marker.className.split(/\s+/)).toContain('bg-stone-0');
+    unmount();
+
+    vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', 'production');
+    render(<AdminHeader email={EMAIL} name="Admin" />);
+    expect(screen.queryByTestId('tier-marker')).toBeNull();
+    vi.unstubAllEnvs();
   });
 });

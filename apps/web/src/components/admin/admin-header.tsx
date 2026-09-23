@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Avatar } from '@/components/ui/avatar';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
+import { TierMarker } from '@/components/brand/tier-marker';
 
 export interface AdminHeaderProps {
   /** The signed-in operator's email — frame `13` prints it beside the avatar. */
@@ -54,6 +55,7 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
         <span className="ml-1 rounded-[5px] bg-stone-0/12 px-2 py-1 text-xs font-semibold tracking-[.06em] text-clay-150 uppercase">
           Admin
         </span>
+        <TierMarker tone="dark" />
       </div>
 
       {/*
