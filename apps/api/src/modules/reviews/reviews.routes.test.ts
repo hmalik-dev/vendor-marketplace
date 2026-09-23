@@ -52,7 +52,7 @@ describe('reviews', () => {
   async function idOf(authUserId: string): Promise<string> {
     const me = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(me.statusCode).toBe(200);
@@ -114,7 +114,7 @@ describe('reviews', () => {
   ): Promise<{ vendorId: string; slug: string; packageId: string }> {
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(authUserId),
       payload: {
         businessName,
@@ -129,7 +129,7 @@ describe('reviews', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(authUserId),
       payload: {
         name: 'Full day coverage',
@@ -182,7 +182,7 @@ describe('reviews', () => {
 
     const requested = await harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(customer),
       payload: {
         vendorId,
@@ -281,7 +281,7 @@ describe('reviews', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody({ rating: 4 }),
       });
@@ -322,13 +322,13 @@ describe('reviews', () => {
       const responses = await Promise.all([
         harness.app.inject({
           method: 'POST',
-          url: `/bookings/${bookingId}/reviews`,
+          url: `/v1/bookings/${bookingId}/reviews`,
           headers: bearer(CUSTOMER),
           payload: reviewBody({ rating: 5 }),
         }),
         harness.app.inject({
           method: 'POST',
-          url: `/bookings/${bookingId}/reviews`,
+          url: `/v1/bookings/${bookingId}/reviews`,
           headers: bearer(CUSTOMER),
           payload: reviewBody({ rating: 4 }),
         }),
@@ -348,7 +348,7 @@ describe('reviews', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(VENDOR),
         payload: reviewBody({ title: 'Easy to work with' }),
       });
@@ -392,7 +392,7 @@ describe('reviews', () => {
         ].map(([bookingId, actor]) =>
           harness.app.inject({
             method: 'POST',
-            url: `/bookings/${bookingId}/reviews`,
+            url: `/v1/bookings/${bookingId}/reviews`,
             headers: bearer(actor as string),
             payload: reviewBody(),
           }),
@@ -405,7 +405,7 @@ describe('reviews', () => {
       // The vendor reads a public review on their own profile's Reviews tab.
       const toVendor = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(VENDOR),
       });
       expect(toVendor.statusCode).toBe(200);
@@ -417,7 +417,7 @@ describe('reviews', () => {
       // The customer reads a private one on theirs — there is no public page.
       const toCustomer = await harness.app.inject({
         method: 'GET',
-        url: '/notifications',
+        url: '/v1/notifications',
         headers: bearer(CUSTOMER),
       });
       expect(toCustomer.statusCode).toBe(200);
@@ -438,7 +438,7 @@ describe('reviews', () => {
       ] as const) {
         const response = await harness.app.inject({
           method: 'POST',
-          url: `/bookings/${bookingId}/reviews`,
+          url: `/v1/bookings/${bookingId}/reviews`,
           headers: bearer(actor),
           payload: reviewBody({ rating }),
         });
@@ -465,7 +465,7 @@ describe('reviews', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody({ rating: 4 }),
       });
@@ -493,7 +493,7 @@ describe('reviews', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(VENDOR),
         payload: reviewBody({ rating: 3 }),
       });
@@ -512,7 +512,7 @@ describe('reviews', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody(),
       });
@@ -531,7 +531,7 @@ describe('reviews', () => {
       const visible = (
         await harness.app.inject({
           method: 'GET',
-          url: `/vendors/${slug}/reviews`,
+          url: `/v1/vendors/${slug}/reviews`,
           headers: bearer(CUSTOMER),
         })
       ).json() as ReviewsBody;
@@ -539,7 +539,7 @@ describe('reviews', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody({ rating: 4 }),
       });
@@ -557,7 +557,7 @@ describe('reviews', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody(),
       });
@@ -567,7 +567,7 @@ describe('reviews', () => {
       const page = (
         await harness.app.inject({
           method: 'GET',
-          url: `/vendors/${slug}/reviews`,
+          url: `/v1/vendors/${slug}/reviews`,
           headers: bearer(CUSTOMER),
         })
       ).json() as ReviewsBody;
@@ -580,7 +580,7 @@ describe('reviews', () => {
 
       const first = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody(),
       });
@@ -596,7 +596,7 @@ describe('reviews', () => {
       ]) {
         const again = await harness.app.inject({
           method: 'POST',
-          url: `/bookings/${bookingId}/reviews`,
+          url: `/v1/bookings/${bookingId}/reviews`,
           headers: bearer(CUSTOMER),
           payload,
         });
@@ -607,7 +607,7 @@ describe('reviews', () => {
       const page = (
         await harness.app.inject({
           method: 'GET',
-          url: `/vendors/${slug}/reviews`,
+          url: `/v1/vendors/${slug}/reviews`,
           headers: bearer(CUSTOMER),
         })
       ).json() as ReviewsBody;
@@ -628,7 +628,7 @@ describe('reviews', () => {
       for (const actor of [OTHER_CUSTOMER, OTHER_VENDOR]) {
         const response = await harness.app.inject({
           method: 'POST',
-          url: `/bookings/${bookingId}/reviews`,
+          url: `/v1/bookings/${bookingId}/reviews`,
           headers: bearer(actor),
           payload: reviewBody(),
         });
@@ -640,7 +640,7 @@ describe('reviews', () => {
     it('refuses an unknown booking and an unauthenticated caller', async () => {
       const unknown = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${UNKNOWN_ID}/reviews`,
+        url: `/v1/bookings/${UNKNOWN_ID}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody(),
       });
@@ -648,7 +648,7 @@ describe('reviews', () => {
 
       const anonymous = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${UNKNOWN_ID}/reviews`,
+        url: `/v1/bookings/${UNKNOWN_ID}/reviews`,
         payload: reviewBody(),
       });
       expect(anonymous.statusCode).toBe(401);
@@ -660,7 +660,7 @@ describe('reviews', () => {
 
       const first = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody(),
       });
@@ -668,7 +668,7 @@ describe('reviews', () => {
 
       const second = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody({ rating: 1 }),
       });
@@ -677,7 +677,7 @@ describe('reviews', () => {
       // The other party is unaffected — they are separate rows by design.
       const vendorReview = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(VENDOR),
         payload: reviewBody(),
       });
@@ -694,7 +694,7 @@ describe('reviews', () => {
       ]) {
         const response = await harness.app.inject({
           method: 'POST',
-          url: `/bookings/${bookingId}/reviews`,
+          url: `/v1/bookings/${bookingId}/reviews`,
           headers: bearer(CUSTOMER),
           payload,
         });
@@ -729,7 +729,7 @@ describe('reviews', () => {
 
         const response = await harness.app.inject({
           method: 'POST',
-          url: `/bookings/${bookingId}/reviews`,
+          url: `/v1/bookings/${bookingId}/reviews`,
           headers: bearer(index % 2 === 0 ? CUSTOMER : OTHER_CUSTOMER),
           payload: reviewBody({ content }),
         });
@@ -760,7 +760,7 @@ describe('reviews', () => {
 
         const posted = await harness.app.inject({
           method: 'POST',
-          url: `/bookings/${bookingId}/reviews`,
+          url: `/v1/bookings/${bookingId}/reviews`,
           headers: bearer(CUSTOMER),
           payload: reviewBody(),
         });
@@ -768,7 +768,7 @@ describe('reviews', () => {
 
         const listed = await harness.app.inject({
           method: 'GET',
-          url: `/vendors/${slug}/reviews`,
+          url: `/v1/vendors/${slug}/reviews`,
         });
 
         expect(listed.statusCode).toBe(200);
@@ -790,7 +790,7 @@ describe('reviews', () => {
       ]) {
         const response = await harness.app.inject({
           method: 'POST',
-          url: `/bookings/${bookingId}/reviews`,
+          url: `/v1/bookings/${bookingId}/reviews`,
           headers: bearer(CUSTOMER),
           payload,
         });
@@ -807,14 +807,14 @@ describe('reviews', () => {
 
       await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody({ rating: 4 }),
       });
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${slug}/reviews`,
+        url: `/v1/vendors/${slug}/reviews`,
       });
 
       expect(response.statusCode).toBe(200);
@@ -848,13 +848,13 @@ describe('reviews', () => {
 
       await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody(),
       });
 
       const body = (
-        await harness.app.inject({ method: 'GET', url: `/vendors/${slug}/reviews` })
+        await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}/reviews` })
       ).json() as ReviewsBody;
 
       expect(body.items[0]!.reviewerName).toBe('Priya M.');
@@ -867,14 +867,14 @@ describe('reviews', () => {
 
       const filed = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(VENDOR),
         payload: reviewBody({ content: 'They were decisive and paid on time, no chasing.' }),
       });
       expect(filed.statusCode).toBe(201);
 
       const body = (
-        await harness.app.inject({ method: 'GET', url: `/vendors/${slug}/reviews` })
+        await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}/reviews` })
       ).json() as ReviewsBody;
 
       expect(body.items).toHaveLength(0);
@@ -892,7 +892,7 @@ describe('reviews', () => {
       const asOtherVendor = (
         await harness.app.inject({
           method: 'GET',
-          url: `/vendors/${slug}/reviews`,
+          url: `/v1/vendors/${slug}/reviews`,
           headers: bearer(OTHER_VENDOR),
         })
       ).json() as ReviewsBody;
@@ -909,7 +909,7 @@ describe('reviews', () => {
       const eligible = (
         await harness.app.inject({
           method: 'GET',
-          url: `/vendors/${slug}/reviews`,
+          url: `/v1/vendors/${slug}/reviews`,
           headers: bearer(CUSTOMER),
         })
       ).json() as ReviewsBody;
@@ -920,7 +920,7 @@ describe('reviews', () => {
         const body = (
           await harness.app.inject({
             method: 'GET',
-            url: `/vendors/${slug}/reviews`,
+            url: `/v1/vendors/${slug}/reviews`,
             headers: bearer(actor),
           })
         ).json() as ReviewsBody;
@@ -931,7 +931,7 @@ describe('reviews', () => {
       // And it closes once the review is written.
       await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(CUSTOMER),
         payload: reviewBody(),
       });
@@ -939,7 +939,7 @@ describe('reviews', () => {
       const after = (
         await harness.app.inject({
           method: 'GET',
-          url: `/vendors/${slug}/reviews`,
+          url: `/v1/vendors/${slug}/reviews`,
           headers: bearer(CUSTOMER),
         })
       ).json() as ReviewsBody;
@@ -964,14 +964,14 @@ describe('reviews', () => {
       }
 
       const first = (
-        await harness.app.inject({ method: 'GET', url: `/vendors/${slug}/reviews` })
+        await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}/reviews` })
       ).json() as ReviewsBody;
       expect(first.items).toHaveLength(REVIEW_PAGE_SIZE);
       expect(first.hasMore).toBe(true);
       expect(first.summary.reviewCount).toBe(REVIEW_PAGE_SIZE + 1);
 
       const second = (
-        await harness.app.inject({ method: 'GET', url: `/vendors/${slug}/reviews?page=2` })
+        await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}/reviews?page=2` })
       ).json() as ReviewsBody;
       expect(second.items).toHaveLength(1);
       expect(second.hasMore).toBe(false);
@@ -991,7 +991,7 @@ describe('reviews', () => {
       for (const query of ['?page=0', '?page=-1', '?page=abc', '?page=99999999999999999999']) {
         const response = await harness.app.inject({
           method: 'GET',
-          url: `/vendors/${slug}/reviews${query}`,
+          url: `/v1/vendors/${slug}/reviews${query}`,
         });
 
         expect(response.statusCode, query).toBe(200);
@@ -1001,7 +1001,7 @@ describe('reviews', () => {
     it('404s for an unknown vendor, and for one that is not published', async () => {
       const unknown = await harness.app.inject({
         method: 'GET',
-        url: '/vendors/no-such-vendor/reviews',
+        url: '/v1/vendors/no-such-vendor/reviews',
       });
       expect(unknown.statusCode).toBe(404);
 
@@ -1013,7 +1013,7 @@ describe('reviews', () => {
 
       const unpublished = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${slug}/reviews`,
+        url: `/v1/vendors/${slug}/reviews`,
       });
       expect(unpublished.statusCode).toBe(404);
     });
@@ -1038,7 +1038,7 @@ describe('reviews', () => {
       ] as const) {
         const response = await harness.app.inject({
           method: 'POST',
-          url: `/bookings/${bookingId}/reviews`,
+          url: `/v1/bookings/${bookingId}/reviews`,
           headers: bearer(actor),
           payload: reviewBody({ rating }),
         });
@@ -1062,7 +1062,7 @@ describe('reviews', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/bookings/${bookingId}/reviews`,
+        url: `/v1/bookings/${bookingId}/reviews`,
         headers: bearer(VENDOR),
         payload: reviewBody({ rating: 2 }),
       });

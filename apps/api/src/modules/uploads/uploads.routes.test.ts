@@ -103,7 +103,11 @@ describe('POST /upload/image', () => {
    * what creates the row the update then promotes.
    */
   async function signInAs(role: UserRole): Promise<void> {
-    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CALLERS[role]) });
+    await harness.app.inject({
+      method: 'GET',
+      url: '/v1/users/me',
+      headers: bearer(CALLERS[role]),
+    });
 
     if (role === 'admin') {
       await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
@@ -120,7 +124,7 @@ describe('POST /upload/image', () => {
 
         const response = await harness.app.inject({
           method: 'POST',
-          url: `/upload/image?prefix=${prefix}`,
+          url: `/v1/upload/image?prefix=${prefix}`,
           headers: { ...MULTIPART_HEADERS, ...bearer(CALLERS[role]) },
           payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
         });
@@ -142,7 +146,7 @@ describe('POST /upload/image', () => {
     for (const prefix of STORAGE_PREFIXES) {
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/upload/image?prefix=${prefix}`,
+        url: `/v1/upload/image?prefix=${prefix}`,
         headers: MULTIPART_HEADERS,
         payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
       });
@@ -157,7 +161,7 @@ describe('POST /upload/image', () => {
     harness.app
       .inject({
         method: 'POST',
-        url: '/upload/image?prefix=vendor-profile',
+        url: '/v1/upload/image?prefix=vendor-profile',
         headers: { ...MULTIPART_HEADERS, ...bearer(CUSTOMER) },
         payload: multipartBody('a.jpg', 'image/jpeg', Buffer.from('x')),
       })
@@ -169,7 +173,7 @@ describe('POST /upload/image', () => {
   it('stores both variants and returns their public URLs', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=vendor-profile',
+      url: '/v1/upload/image?prefix=vendor-profile',
       headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
       payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
     });
@@ -190,7 +194,7 @@ describe('POST /upload/image', () => {
   it('re-encodes the upload as WebP before storing it', async () => {
     await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=vendor-cover',
+      url: '/v1/upload/image?prefix=vendor-cover',
       headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
       payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
     });
@@ -204,7 +208,7 @@ describe('POST /upload/image', () => {
   it('namespaces the object by the requested prefix', async () => {
     await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=portfolio',
+      url: '/v1/upload/image?prefix=portfolio',
       headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
       payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
     });
@@ -225,7 +229,7 @@ describe('POST /upload/image', () => {
   it('answers a signed-out caller 401 before it validates the prefix', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=not-a-real-prefix',
+      url: '/v1/upload/image?prefix=not-a-real-prefix',
       headers: MULTIPART_HEADERS,
       payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
     });
@@ -236,7 +240,7 @@ describe('POST /upload/image', () => {
   it('names no storage prefix in that refusal', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=not-a-real-prefix',
+      url: '/v1/upload/image?prefix=not-a-real-prefix',
       headers: MULTIPART_HEADERS,
       payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
     });
@@ -251,7 +255,7 @@ describe('POST /upload/image', () => {
   it('rejects a prefix outside the known set', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=../../etc',
+      url: '/v1/upload/image?prefix=../../etc',
       headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
       payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
     });
@@ -263,7 +267,7 @@ describe('POST /upload/image', () => {
   it('rejects a non-image MIME type', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=vendor-profile',
+      url: '/v1/upload/image?prefix=vendor-profile',
       headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
       payload: multipartBody('notes.pdf', 'application/pdf', Buffer.from('%PDF-1.4')),
     });
@@ -276,7 +280,7 @@ describe('POST /upload/image', () => {
   it('rejects bytes that only claim to be an image', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=vendor-profile',
+      url: '/v1/upload/image?prefix=vendor-profile',
       headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
       payload: multipartBody('a.png', 'image/png', Buffer.from('<script>alert(1)</script>')),
     });
@@ -288,7 +292,7 @@ describe('POST /upload/image', () => {
   it('rejects a request with no file part', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=vendor-profile',
+      url: '/v1/upload/image?prefix=vendor-profile',
       headers: MULTIPART_HEADERS,
       payload: Buffer.from(`--${BOUNDARY}--\r\n`),
     });
@@ -297,7 +301,7 @@ describe('POST /upload/image', () => {
     // authenticated no-file path.
     const authenticated = await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=vendor-profile',
+      url: '/v1/upload/image?prefix=vendor-profile',
       headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
       payload: Buffer.from(`--${BOUNDARY}--\r\n`),
     });
@@ -315,7 +319,7 @@ describe('POST /upload/image', () => {
 
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=portfolio',
+      url: '/v1/upload/image?prefix=portfolio',
       headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
       payload: Buffer.concat([
         Buffer.from(fields),
@@ -331,7 +335,7 @@ describe('POST /upload/image', () => {
   it('refuses a request carrying more than one file part', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/upload/image?prefix=portfolio',
+      url: '/v1/upload/image?prefix=portfolio',
       headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
       payload: Buffer.concat([
         multipartBody('a.jpg', 'image/jpeg', await jpegBytes()).subarray(
@@ -352,7 +356,7 @@ describe('POST /upload/image', () => {
     for (let i = 0; i < 2; i += 1) {
       await harness.app.inject({
         method: 'POST',
-        url: '/upload/image?prefix=portfolio',
+        url: '/v1/upload/image?prefix=portfolio',
         headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
         payload: multipartBody('a.jpg', 'image/jpeg', await jpegBytes()),
       });

@@ -1,4 +1,9 @@
-import { createDatabase, createNeonAuthDirectory, loadEnv } from '@vendor-marketplace/db';
+import {
+  createDatabase,
+  createListener,
+  createNeonAuthDirectory,
+  loadEnv,
+} from '@vendor-marketplace/db';
 import { canonicalWebOrigin, parseEnv } from '../../config/env.js';
 import { createS3Storage } from '../../lib/storage.js';
 import { bookingContextFor } from '../payments/payments.service.js';
@@ -29,6 +34,8 @@ if (env.NEON_AUTH_DATABASE_URL === undefined) {
 }
 
 const { db, client } = createDatabase();
+// A retirement ends the person's open streams on the live instances too, which the bus carries.
+const listener = createListener(env.DATABASE_URL);
 const directory = createNeonAuthDirectory(env.NEON_AUTH_DATABASE_URL);
 
 /*
@@ -46,6 +53,7 @@ const app = await buildServer({
   payoutSweepIntervalMs: 0,
   expirySweepIntervalMs: 0,
   authReconcileIntervalMs: 0,
+  realtimeListen: listener.listen,
 });
 
 try {
@@ -68,5 +76,5 @@ try {
 } finally {
   await app.close();
   await directory.close();
-  await client.end();
+  await Promise.all([client.end(), listener.close()]);
 }

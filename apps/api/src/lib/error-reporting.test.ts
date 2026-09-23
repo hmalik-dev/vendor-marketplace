@@ -84,7 +84,7 @@ describe('what the API scrubs, at beforeSend', () => {
         cookies: { __session: 'abc' },
       },
       breadcrumbs: [
-        { category: 'http', data: { url: `/stream?ticket=${TICKET}` } },
+        { category: 'http', data: { url: `/v1/stream?ticket=${TICKET}` } },
         { message: `paid out to ${ACCOUNT}` },
       ],
     };
@@ -129,7 +129,7 @@ describe('what the API reports, at the scrubbing hook', () => {
     sentryErrorReporter().capture(new Error(`Transfer failed for ${EMAIL} using ${session}`), {
       userId: 'user_2abc',
       payment: true,
-      route: '/vendor/stripe/connect',
+      route: '/v1/vendor/stripe/connect',
     });
     await Sentry.flush(2_000);
 
@@ -138,7 +138,10 @@ describe('what the API reports, at the scrubbing hook', () => {
     expect(event!.user).toEqual({ id: 'user_2abc' });
     expect(event!.release).toBe('a1b2c3d');
     expect(event!.level).toBe('fatal');
-    expect(event!.tags).toMatchObject({ ...PAYMENT_ERROR_TAGS, route: '/vendor/stripe/connect' });
+    expect(event!.tags).toMatchObject({
+      ...PAYMENT_ERROR_TAGS,
+      route: '/v1/vendor/stripe/connect',
+    });
     expect(JSON.stringify(event)).not.toContain(EMAIL);
     expect(JSON.stringify(event)).not.toContain(session);
     expect(JSON.stringify(event)).not.toContain('203.0.113.9');
@@ -199,12 +202,12 @@ describe('the error handler reports what the client is not told', () => {
     });
     await app.register(errorHandlerPlugin, {
       reporter,
-      paymentRoutes: new Set(['/customer/bookings/:bookingId/cancel']),
+      paymentRoutes: new Set(['/v1/customer/bookings/:bookingId/cancel']),
     });
-    app.post('/customer/bookings/:bookingId/cancel', async () => {
+    app.post('/v1/customer/bookings/:bookingId/cancel', async () => {
       throw new Error('stripe exploded');
     });
-    app.get('/categories', async () => {
+    app.get('/v1/categories', async () => {
       throw new Error('db exploded');
     });
     app.get('/refused', async () => {
@@ -221,13 +224,13 @@ describe('the error handler reports what the client is not told', () => {
     const reporter = recordingReporter();
     const app = await serve(reporter);
 
-    const response = await app.inject({ method: 'POST', url: '/customer/bookings/b1/cancel' });
+    const response = await app.inject({ method: 'POST', url: '/v1/customer/bookings/b1/cancel' });
 
     expect(response.statusCode).toBe(500);
     expect(reporter.captured).toHaveLength(1);
     expect(reporter.captured[0]!.context).toEqual({
       userId: 'user_2abc',
-      route: '/customer/bookings/:bookingId/cancel',
+      route: '/v1/customer/bookings/:bookingId/cancel',
       payment: true,
     });
     await app.close();
@@ -237,11 +240,11 @@ describe('the error handler reports what the client is not told', () => {
     const reporter = recordingReporter();
     const app = await serve(reporter);
 
-    await app.inject({ method: 'GET', url: '/categories' });
-    await app.inject({ method: 'GET', url: '/refused' });
+    await app.inject({ method: 'GET', url: '/v1/categories' });
+    await app.inject({ method: 'GET', url: '/v1/refused' });
 
     expect(reporter.captured.map((entry) => entry.context)).toEqual([
-      { userId: 'user_2abc', route: '/categories', payment: false },
+      { userId: 'user_2abc', route: '/v1/categories', payment: false },
     ]);
     await app.close();
   });
@@ -275,7 +278,7 @@ describe('buildServer marks the money routes', () => {
     const [photography] = await harness.database.db.select().from(categories).limit(1);
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer('vendor_err'),
       payload: {
         businessName: 'First Light',
@@ -289,7 +292,7 @@ describe('buildServer marks the money routes', () => {
     expect(profile.statusCode).toBe(201);
     const agreed = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/agreement/accept',
+      url: '/v1/vendor/agreement/accept',
       headers: bearer('vendor_err'),
       payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
     });
@@ -300,13 +303,13 @@ describe('buildServer marks the money routes', () => {
     };
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/stripe/connect',
+      url: '/v1/vendor/stripe/connect',
       headers: bearer('vendor_err'),
     });
 
     expect(response.statusCode).toBe(500);
     expect(reporter.captured.map((entry) => entry.context)).toEqual([
-      { userId: 'vendor_err', route: '/vendor/stripe/connect', payment: true },
+      { userId: 'vendor_err', route: '/v1/vendor/stripe/connect', payment: true },
     ]);
   });
 });

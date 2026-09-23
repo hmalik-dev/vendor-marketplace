@@ -85,9 +85,13 @@ type WireMessagePage = ReturnType<typeof page>;
  * when it is testing the case where more history exists above — and `size` with
  * it, because a *full* page is what tells the screen another one may exist.
  */
-function page(items: ReturnType<typeof message>[], total = items.length, index = 1, size = 50) {
-  return { items, total, page: index, pageSize: size };
+/** A cursor page; `nextBefore` names the page before this one, or is null at the start of the thread. */
+function page(items: ReturnType<typeof message>[], nextBefore: string | null = null) {
+  return { items, nextBefore };
 }
+
+const NEWEST_PAGE_CURSOR = '2026-04-01T09:10:00.000001Z,44444444-4444-4444-8444-444444444444';
+const OLDER_PAGE_CURSOR = '2026-04-01T09:00:00.000001Z,55555555-5555-4555-8555-555555555555';
 
 /** The screen loads a thread and marks it read on mount. */
 function respondWith(messages: ReturnType<typeof message>[]): void {
@@ -848,21 +852,23 @@ describe('MessagesScreen', () => {
         if (path === `/conversations/${CONVERSATION}/messages`) {
           return page(
             [message('44444444-4444-4444-8444-444444444444', THEM, 'The newest one')],
-            2,
-            1,
-            1,
+            NEWEST_PAGE_CURSOR,
           );
         }
-        if (path === `/conversations/${CONVERSATION}/messages?page=2`) {
+        if (
+          path ===
+          `/conversations/${CONVERSATION}/messages?${new URLSearchParams({ before: NEWEST_PAGE_CURSOR })}`
+        ) {
           return page(
             [message('55555555-5555-4555-8555-555555555555', THEM, 'An older one')],
-            2,
-            2,
-            1,
+            OLDER_PAGE_CURSOR,
           );
         }
-        if (path === `/conversations/${CONVERSATION}/messages?page=3`) {
-          return page([], 2, 3, 1);
+        if (
+          path ===
+          `/conversations/${CONVERSATION}/messages?${new URLSearchParams({ before: OLDER_PAGE_CURSOR })}`
+        ) {
+          return page([]);
         }
         return path === '/conversations' ? [conversation()] : null;
       });
@@ -885,32 +891,28 @@ describe('MessagesScreen', () => {
       expect(bubbles).toEqual(['An older one', 'The newest one']);
 
       /*
-       * Page 2 came back full, so another may exist and the control is still
-       * offered — that is deliberate. Whether more history exists is answered
-       * by the page in hand, never by a `total` from a different snapshot,
-       * because a count the client cannot reconcile leaves this control on
-       * screen for ever. The empty page is what ends it.
+       * The older page named a page before it, so the control is still
+       * offered; the page after that named none, which is what ends it.
        */
       await userEvent.click(screen.getByRole('button', { name: 'Load earlier messages' }));
       expect(screen.queryByRole('button', { name: 'Load earlier messages' })).toBeNull();
     });
 
     /*
-     * The stuck-control case itself: a thread whose count the client can never
-     * reach, because a message arrived that it never received.
+     * The stuck-control case: whether history remains is the server's cursor,
+     * never a count the client compares its own set against — a message it
+     * never received used to leave the control on screen for ever.
      */
-    it('stops offering earlier pages even when the count is unreachable', async () => {
+    it('stops offering earlier pages once the server names no page before', async () => {
       call.mockImplementation(async (path: string) => {
         if (path === `/conversations/${CONVERSATION}/messages`) {
           return page(
             [message('44444444-4444-4444-8444-444444444444', THEM, 'Only one')],
-            99,
-            1,
-            1,
+            NEWEST_PAGE_CURSOR,
           );
         }
-        if (path.includes('?page=')) {
-          return page([], 99, 2, 1);
+        if (path.includes('?before=')) {
+          return page([]);
         }
         return path === '/conversations' ? [conversation()] : null;
       });

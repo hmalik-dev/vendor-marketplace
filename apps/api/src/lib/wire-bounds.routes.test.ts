@@ -56,7 +56,7 @@ describe('wire bounds agree with their columns', () => {
   async function createVendorProfile(authUserId: string, businessName: string): Promise<string> {
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(authUserId),
       payload: {
         businessName,
@@ -71,7 +71,7 @@ describe('wire bounds agree with their columns', () => {
 
     const servicePackage = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(authUserId),
       payload: {
         name: 'Full day coverage',
@@ -124,7 +124,7 @@ describe('wire bounds agree with their columns', () => {
   async function signInAsAdmin(): Promise<void> {
     const me = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(ADMIN),
     });
     expect(me.statusCode).toBe(200);
@@ -161,7 +161,7 @@ describe('wire bounds agree with their columns', () => {
 
     const request = await harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(CUSTOMER),
       payload: {
         vendorId,
@@ -175,7 +175,7 @@ describe('wire bounds agree with their columns', () => {
 
     const quoted = await harness.app.inject({
       method: 'POST',
-      url: `/booking-requests/${request.json().id}/quote`,
+      url: `/v1/booking-requests/${request.json().id}/quote`,
       headers: bearer(VENDOR),
       payload: { quotedPriceCents: 145_000 },
     });
@@ -245,7 +245,7 @@ describe('wire bounds agree with their columns', () => {
 
     const approved = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/tag-suggestions/${suggestion[0]!.id}`,
+      url: `/v1/admin/tag-suggestions/${suggestion[0]!.id}`,
       headers: bearer(ADMIN),
       payload: { action: 'approve' },
     });
@@ -269,7 +269,7 @@ describe('wire bounds agree with their columns', () => {
 
     const overflow = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Full day coverage',
@@ -283,7 +283,7 @@ describe('wire bounds agree with their columns', () => {
 
     const accepted = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Half day coverage',
@@ -307,7 +307,7 @@ describe('wire bounds agree with their columns', () => {
 
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/portfolio',
+      url: '/v1/vendor/portfolio',
       headers: bearer(VENDOR),
       payload: {
         imageUrl: 'https://images.example.com/one.jpg',
@@ -330,7 +330,7 @@ describe('wire bounds agree with their columns', () => {
       for (const days of [10, 20, 30]) {
         const created = await harness.app.inject({
           method: 'POST',
-          url: '/booking-requests',
+          url: '/v1/booking-requests',
           headers: bearer(CUSTOMER),
           payload: {
             vendorId,
@@ -345,12 +345,12 @@ describe('wire bounds agree with their columns', () => {
 
       const first = await harness.app.inject({
         method: 'GET',
-        url: '/booking-requests?pageSize=2',
+        url: '/v1/booking-requests?pageSize=2',
         headers: bearer(CUSTOMER),
       });
       const second = await harness.app.inject({
         method: 'GET',
-        url: '/booking-requests?pageSize=2&page=2',
+        url: '/v1/booking-requests?pageSize=2&page=2',
         headers: bearer(CUSTOMER),
       });
 
@@ -378,7 +378,7 @@ describe('wire bounds agree with their columns', () => {
       for (const days of [10, 20, 30]) {
         const created = await harness.app.inject({
           method: 'POST',
-          url: '/booking-requests',
+          url: '/v1/booking-requests',
           headers: bearer(CUSTOMER),
           payload: {
             vendorId,
@@ -399,7 +399,7 @@ describe('wire bounds agree with their columns', () => {
       for (const id of ids.slice(1)) {
         const declined = await harness.app.inject({
           method: 'POST',
-          url: `/booking-requests/${id}/decline`,
+          url: `/v1/booking-requests/${id}/decline`,
           headers: bearer(VENDOR),
         });
         expect(declined.statusCode, declined.body).toBe(200);
@@ -407,7 +407,7 @@ describe('wire bounds agree with their columns', () => {
 
       const pending = await harness.app.inject({
         method: 'GET',
-        url: '/booking-requests?status=pending&pageSize=2',
+        url: '/v1/booking-requests?status=pending&pageSize=2',
         headers: bearer(CUSTOMER),
       });
 
@@ -419,7 +419,7 @@ describe('wire bounds agree with their columns', () => {
       // And the complement, from the same window.
       const declined = await harness.app.inject({
         method: 'GET',
-        url: '/booking-requests?status=declined&pageSize=2',
+        url: '/v1/booking-requests?status=declined&pageSize=2',
         headers: bearer(CUSTOMER),
       });
       expect(declined.json()).toHaveLength(2);
@@ -433,10 +433,10 @@ describe('wire bounds agree with their columns', () => {
        * the ceiling has to be refused before the gate, not instead of it.
        */
       for (const [url, actor] of [
-        ['/booking-requests', CUSTOMER],
-        ['/bookings', CUSTOMER],
-        ['/customers/me/reviews', CUSTOMER],
-        [`/customers/${NIL_UUID}/reviews`, VENDOR],
+        ['/v1/booking-requests', CUSTOMER],
+        ['/v1/bookings', CUSTOMER],
+        ['/v1/customers/me/reviews', CUSTOMER],
+        [`/v1/customers/${NIL_UUID}/reviews`, VENDOR],
       ] as const) {
         const response = await harness.app.inject({
           method: 'GET',

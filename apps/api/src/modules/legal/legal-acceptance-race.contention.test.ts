@@ -61,7 +61,7 @@ describe('several acceptances of one document at once, against a real Postgres',
   function acceptTermsRequest(role: 'customer' | 'vendor' = 'customer', as = CUSTOMER) {
     return harness.app.inject({
       method: 'POST',
-      url: '/legal/terms/accept',
+      url: '/v1/legal/terms/accept',
       headers: bearer(as),
       payload: { version: CURRENT_TERMS_VERSION, accepted: true, role },
     });
@@ -70,7 +70,7 @@ describe('several acceptances of one document at once, against a real Postgres',
   function acceptAgreementRequest() {
     return harness.app.inject({
       method: 'POST',
-      url: '/vendor/agreement/accept',
+      url: '/v1/vendor/agreement/accept',
       headers: bearer(VENDOR),
       payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
     });
@@ -132,7 +132,7 @@ describe('several acceptances of one document at once, against a real Postgres',
 
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'June Harlow Photography',
@@ -333,7 +333,7 @@ describe('several acceptances of one document at once, against a real Postgres',
         [VENDOR_A, VENDOR_B].map((as) =>
           harness.app.inject({
             method: 'POST',
-            url: '/legal/terms/accept',
+            url: '/v1/legal/terms/accept',
             headers: bearer(as),
             payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'vendor' },
           }),

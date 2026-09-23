@@ -132,7 +132,7 @@ describe('hiding one review from two operators at once', () => {
 
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Fernbank Studio',
@@ -161,7 +161,7 @@ describe('hiding one review from two operators at once', () => {
     const hide = (actor: string) =>
       harness!.app.inject({
         method: 'PUT',
-        url: `/admin/reviews/${reviewId}/visibility`,
+        url: `/v1/admin/reviews/${reviewId}/visibility`,
         headers: bearer(actor),
         payload: { isPublic: false },
       });

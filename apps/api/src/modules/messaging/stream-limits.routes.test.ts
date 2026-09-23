@@ -37,7 +37,7 @@ describe('an open event stream, across instances and abuse', () => {
   async function ticketFor(authUserId: string): Promise<string> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/events/stream-ticket',
+      url: '/v1/events/stream-ticket',
       headers: bearer(authUserId),
     });
 
@@ -61,7 +61,10 @@ describe('an open event stream, across instances and abuse', () => {
     const ticket = await ticketFor(authUserId);
     const id = await userId(authUserId);
     const before = harness.app.events.countFor(id);
-    const pending = harness.app.inject({ method: 'GET', url: `/events/stream?ticket=${ticket}` });
+    const pending = harness.app.inject({
+      method: 'GET',
+      url: `/v1/events/stream?ticket=${ticket}`,
+    });
 
     await vi.waitFor(() => expect(harness.app.events.countFor(id)).toBe(before + 1));
 
@@ -76,7 +79,7 @@ describe('an open event stream, across instances and abuse', () => {
 
     const refused = await harness.app.inject({
       method: 'GET',
-      url: `/events/stream?ticket=${await ticketFor(OTHER)}`,
+      url: `/v1/events/stream?ticket=${await ticketFor(OTHER)}`,
     });
 
     expect(refused.statusCode).toBe(429);

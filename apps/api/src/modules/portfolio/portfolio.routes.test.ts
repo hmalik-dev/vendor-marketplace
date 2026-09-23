@@ -14,14 +14,14 @@ const FOREIGN_OWNER = '11111111-1111-4111-8111-111111111111';
 const IMAGE_URL = 'http://cdn.test/portfolio/one.webp';
 const THUMBNAIL_URL = 'http://cdn.test/portfolio/one-thumb.webp';
 
-describe('/vendor/portfolio', () => {
+describe('/v1/vendor/portfolio', () => {
   let harness: TestHarness;
   let photographyId: string;
 
   async function createProfile(authUserId: string, businessName: string): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(authUserId),
       payload: {
         businessName,
@@ -50,7 +50,7 @@ describe('/vendor/portfolio', () => {
   ): Promise<{ id: string; displayOrder: number; caption: string | null }> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/portfolio',
+      url: '/v1/vendor/portfolio',
       headers: bearer(authUserId),
       payload: { imageUrl: IMAGE_URL, thumbnailUrl: THUMBNAIL_URL, ...overrides },
     });
@@ -96,7 +96,7 @@ describe('/vendor/portfolio', () => {
 
   describe('authorization', () => {
     it('rejects an unauthenticated request', async () => {
-      const response = await harness.app.inject({ method: 'GET', url: '/vendor/portfolio' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/vendor/portfolio' });
 
       expect(response.statusCode).toBe(401);
     });
@@ -104,7 +104,7 @@ describe('/vendor/portfolio', () => {
     it('rejects a customer', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(CUSTOMER),
       });
 
@@ -118,7 +118,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
         payload: { imageUrl: IMAGE_URL, thumbnailUrl: THUMBNAIL_URL, caption: 'Golden hour' },
       });
@@ -126,7 +126,7 @@ describe('/vendor/portfolio', () => {
       expect(response.statusCode).toBe(201);
 
       const body = response.json();
-      expect(response.headers.location).toBe(`/vendor/portfolio/${body.id}`);
+      expect(response.headers.location).toBe(`/v1/vendor/portfolio/${body.id}`);
       // Sent as `<STORAGE_PUBLIC_URL>/<key>`, stored and served as the key (VEN-648).
       expect(body.imageUrl).toBe('portfolio/one.webp');
       expect(body.thumbnailUrl).toBe('portfolio/one-thumb.webp');
@@ -148,7 +148,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
         payload: { caption: 'Golden hour' },
       });
@@ -174,7 +174,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
       });
 
@@ -190,7 +190,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'PATCH',
-        url: `/vendor/portfolio/${item.id}`,
+        url: `/v1/vendor/portfolio/${item.id}`,
         headers: bearer(VENDOR),
         payload: { caption: 'First dance' },
       });
@@ -205,7 +205,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'PATCH',
-        url: `/vendor/portfolio/${item.id}`,
+        url: `/v1/vendor/portfolio/${item.id}`,
         headers: bearer(VENDOR),
         payload: { caption: '' },
       });
@@ -221,7 +221,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'PATCH',
-        url: `/vendor/portfolio/${theirs.id}`,
+        url: `/v1/vendor/portfolio/${theirs.id}`,
         headers: bearer(VENDOR),
         payload: { caption: 'Mine now' },
       });
@@ -237,7 +237,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/vendor/portfolio/${item.id}`,
+        url: `/v1/vendor/portfolio/${item.id}`,
         headers: bearer(VENDOR),
       });
 
@@ -245,7 +245,7 @@ describe('/vendor/portfolio', () => {
 
       const remaining = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
       });
       expect(remaining.json()).toEqual([]);
@@ -274,7 +274,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/vendor/portfolio/${item.id}`,
+        url: `/v1/vendor/portfolio/${item.id}`,
         headers: bearer(VENDOR),
       });
 
@@ -301,7 +301,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/vendor/portfolio/${item.id}`,
+        url: `/v1/vendor/portfolio/${item.id}`,
         headers: bearer(VENDOR),
       });
 
@@ -312,7 +312,7 @@ describe('/vendor/portfolio', () => {
       // And the row is gone, which is what the vendor was told.
       const remaining = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
       });
       expect(remaining.json()).toEqual([]);
@@ -338,7 +338,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
         payload: { imageUrl: `portfolio/${FOREIGN_OWNER}/1111.webp` },
       });
@@ -348,7 +348,7 @@ describe('/vendor/portfolio', () => {
 
       const items = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
       });
       expect(items.json()).toEqual([]);
@@ -380,7 +380,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
         payload: { imageUrl },
       });
@@ -389,7 +389,7 @@ describe('/vendor/portfolio', () => {
 
       const items = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
       });
       expect(items.json()).toEqual([]);
@@ -403,7 +403,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
         payload: { imageUrl },
       });
@@ -425,7 +425,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
         payload: payloadFor(await ownerIdOf(VENDOR)),
       });
@@ -439,7 +439,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(VENDOR),
         payload: {
           imageUrl: `portfolio/${await ownerIdOf(VENDOR)}/3333.webp`,
@@ -468,7 +468,7 @@ describe('/vendor/portfolio', () => {
 
       await harness.app.inject({
         method: 'DELETE',
-        url: `/vendor/portfolio/${first.id}`,
+        url: `/v1/vendor/portfolio/${first.id}`,
         headers: bearer(VENDOR),
       });
 
@@ -480,7 +480,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/vendor/portfolio/${UNKNOWN_ID}`,
+        url: `/v1/vendor/portfolio/${UNKNOWN_ID}`,
         headers: bearer(VENDOR),
       });
 
@@ -494,7 +494,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/vendor/portfolio/${theirs.id}`,
+        url: `/v1/vendor/portfolio/${theirs.id}`,
         headers: bearer(VENDOR),
       });
 
@@ -502,7 +502,7 @@ describe('/vendor/portfolio', () => {
 
       const stillThere = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/portfolio',
+        url: '/v1/vendor/portfolio',
         headers: bearer(OTHER_VENDOR),
       });
       expect(stillThere.json()).toHaveLength(1);
@@ -517,7 +517,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/portfolio/reorder',
+        url: '/v1/vendor/portfolio/reorder',
         headers: bearer(VENDOR),
         payload: { itemIds: [second.id, first.id] },
       });
@@ -539,7 +539,7 @@ describe('/vendor/portfolio', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/portfolio/reorder',
+        url: '/v1/vendor/portfolio/reorder',
         headers: bearer(VENDOR),
         payload: { itemIds: [first.id] },
       });
@@ -563,7 +563,7 @@ describe('portfolio writes never touch the cover', () => {
   async function coverOf(authUserId: string): Promise<string | null> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
@@ -574,7 +574,7 @@ describe('portfolio writes never touch the cover', () => {
   async function add(authUserId: string, imageUrl: string): Promise<string> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/portfolio',
+      url: '/v1/vendor/portfolio',
       headers: bearer(authUserId),
       payload: { imageUrl, thumbnailUrl: `${imageUrl}-thumb` },
     });
@@ -611,7 +611,7 @@ describe('portfolio writes never touch the cover', () => {
   async function profileWithChosenCover(): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Cover Studio',
@@ -640,7 +640,7 @@ describe('portfolio writes never touch the cover', () => {
 
     const response = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/portfolio/reorder',
+      url: '/v1/vendor/portfolio/reorder',
       headers: bearer(VENDOR),
       payload: { itemIds: [second, first] },
     });
@@ -657,7 +657,7 @@ describe('portfolio writes never touch the cover', () => {
     for (const id of [first, second]) {
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/vendor/portfolio/${id}`,
+        url: `/v1/vendor/portfolio/${id}`,
         headers: bearer(VENDOR),
       });
       expect(response.statusCode).toBe(204);
@@ -672,7 +672,7 @@ describe('portfolio writes never touch the cover', () => {
 
     const refused = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/portfolio/reorder',
+      url: '/v1/vendor/portfolio/reorder',
       headers: bearer(VENDOR),
       payload: { itemIds: [second, UNKNOWN_ID] },
     });
@@ -680,7 +680,7 @@ describe('portfolio writes never touch the cover', () => {
 
     const listed = await harness.app.inject({
       method: 'GET',
-      url: '/vendor/portfolio',
+      url: '/v1/vendor/portfolio',
       headers: bearer(VENDOR),
     });
     expect(listed.json().map((item: { id: string }) => item.id)).toEqual([first, second]);

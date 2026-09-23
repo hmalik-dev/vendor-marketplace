@@ -78,7 +78,7 @@ describe('a refund made outside the app', () => {
     webhook('charge.refunded', `ch_${paymentIntentId}`);
 
   async function paidBooking(): Promise<typeof bookings.$inferSelect & { intentId: string }> {
-    const profile = await inject('POST', '/vendor/profile', VENDOR, {
+    const profile = await inject('POST', '/v1/vendor/profile', VENDOR, {
       businessName: 'Sunlit Studio',
       categoryIds: [photographyId],
       city: 'Austin',
@@ -86,7 +86,7 @@ describe('a refund made outside the app', () => {
       bio: 'Documentary wedding photography for people who hate posing.',
     });
     const vendorId: string = profile.json().id;
-    const servicePackage = await inject('POST', '/vendor/packages', VENDOR, {
+    const servicePackage = await inject('POST', '/v1/vendor/packages', VENDOR, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: PRICE_CENTS,
@@ -99,11 +99,11 @@ describe('a refund made outside the app', () => {
       .update(vendorProfiles)
       .set({ isPublished: true, stripeOnboarded: true, stripeAccountId: VENDOR_ACCOUNT })
       .where(eq(vendorProfiles.id, vendorId));
-    await inject('POST', '/vendor/agreement/accept', VENDOR, {
+    await inject('POST', '/v1/vendor/agreement/accept', VENDOR, {
       version: CURRENT_VENDOR_AGREEMENT_VERSION,
     });
 
-    const request = await inject('POST', '/booking-requests', CUSTOMER, {
+    const request = await inject('POST', '/v1/booking-requests', CUSTOMER, {
       vendorId,
       packageId: servicePackage.json().id,
       eventDate: EVENT_DATE,
@@ -112,10 +112,10 @@ describe('a refund made outside the app', () => {
       guestCount: 120,
     });
     const requestId: string = request.json().id;
-    await inject('POST', `/booking-requests/${requestId}/accept`, VENDOR);
+    await inject('POST', `/v1/booking-requests/${requestId}/accept`, VENDOR);
     const checkout = await inject(
       'POST',
-      `/customer/booking-requests/${requestId}/checkout`,
+      `/v1/customer/booking-requests/${requestId}/checkout`,
       CUSTOMER,
     );
     const intentId: string = checkout.json().paymentIntentId;
@@ -226,7 +226,7 @@ describe('a refund made outside the app', () => {
       const paid = await paidBooking();
 
       expect(
-        (await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {})).statusCode,
+        (await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {})).statusCode,
       ).toBe(200);
       const cancelled = await currentBooking();
       expect(cancelled.refundAmountCents).toBeGreaterThan(0);
@@ -368,7 +368,12 @@ describe('a refund made outside the app', () => {
       expect(beforeCancel.status).toBe('confirmed');
       expect(beforeCancel.externalRefundCents).toBe(GOODWILL_CENTS);
 
-      const cancelled = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      const cancelled = await inject(
+        'PUT',
+        `/v1/customer/bookings/${paid.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
 
       expect(cancelled.statusCode).toBe(200);
       const after = await currentBooking();
@@ -395,7 +400,7 @@ describe('a refund made outside the app', () => {
       clockNow = addDays(START, 28);
       harness.stripe.reversalsToRefuse.add(transfer.transferId);
 
-      const refused = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      const refused = await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
       expect(refused.statusCode).toBeGreaterThanOrEqual(500);
       expect(harness.stripe.reversals).toEqual([]);
@@ -403,7 +408,7 @@ describe('a refund made outside the app', () => {
       expect(recorded).toMatchObject({ scope: `cancel_${paid.id}_reversal`, failedAttempts: 1 });
 
       harness.stripe.reversalsToRefuse.clear();
-      const retried = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      const retried = await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
       expect(retried.statusCode).toBe(200);
       expect(harness.stripe.reversals).toHaveLength(1);
@@ -461,7 +466,7 @@ describe('a refund made outside the app', () => {
       const paid = await paidBooking();
       harness.stripe.refundsToRefuse.add(paid.intentId);
 
-      const refused = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      const refused = await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
       expect(refused.statusCode).toBeGreaterThanOrEqual(500);
       expect(harness.stripe.refunds).toEqual([]);
@@ -470,7 +475,7 @@ describe('a refund made outside the app', () => {
       expect(recorded).toMatchObject({ scope: `cancel_${paid.id}`, failedAttempts: 1 });
 
       harness.stripe.refundsToRefuse.clear();
-      const retried = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      const retried = await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
       expect(retried.statusCode).toBe(200);
       expect(harness.stripe.refunds).toHaveLength(1);
@@ -481,8 +486,8 @@ describe('a refund made outside the app', () => {
       const paid = await paidBooking();
 
       const [first, second] = await Promise.all([
-        inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {}),
-        inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {}),
+        inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {}),
+        inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {}),
       ]);
 
       expect([first.statusCode, second.statusCode].sort()).toContain(200);

@@ -53,7 +53,7 @@ describe('a notification that cannot be written', () => {
   async function createVendorProfile(): Promise<string> {
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -77,7 +77,7 @@ describe('a notification that cannot be written', () => {
   async function createRequest(vendorId: string): Promise<string> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(CUSTOMER),
       payload: {
         vendorId,
@@ -141,7 +141,7 @@ describe('a notification that cannot be written', () => {
 
     const quoted = await harness.app.inject({
       method: 'POST',
-      url: `/booking-requests/${requestId}/quote`,
+      url: `/v1/booking-requests/${requestId}/quote`,
       headers: bearer(VENDOR),
       payload: { quotedPriceCents: 145_000 },
     });
@@ -171,7 +171,7 @@ describe('a notification that cannot be written', () => {
 
     const sent = await harness.app.inject({
       method: 'POST',
-      url: `/conversations/${conversation[0]!.id}/messages`,
+      url: `/v1/conversations/${conversation[0]!.id}/messages`,
       headers: bearer(CUSTOMER),
       payload: { content: 'Are you free for a walkthrough the week before?' },
     });
@@ -208,7 +208,7 @@ describe('a notification that cannot be written', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(CUSTOMER),
       payload: {
         vendorId,

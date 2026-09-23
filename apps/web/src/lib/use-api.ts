@@ -8,7 +8,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
-import { apiOrigin } from '@/config/public-env';
+import { apiBaseUrl } from '@/lib/api-base-url';
 import { clearSessionToken, getSessionToken } from './auth/client';
 import { ApiClientError, apiRequest, type ApiRequestOptions } from './api-client';
 import { signInPathReturningTo } from './return-path';
@@ -25,7 +25,7 @@ export type BrowserRequestOptions<T> = Omit<ApiRequestOptions<T>, 'token'>;
 export type BrowserRequest = <T>(path: string, options: BrowserRequestOptions<T>) => Promise<T>;
 
 /** Browser calls need the absolute origin; server-only vars are unavailable here. */
-const BASE_URL = apiOrigin();
+const BASE_URL = apiBaseUrl();
 
 const SUSPENDED_PATH = '/suspended';
 

@@ -9,7 +9,7 @@ import {
   neonAuth,
 } from '@/lib/auth/server';
 import { isProxiedAuthCall } from '@/lib/auth/proxy-allowlist';
-import { apiOrigin } from '@/config/public-env';
+import { apiBaseUrl } from '@/lib/api-base-url';
 import {
   addressLimit,
   callerAddress,
@@ -210,7 +210,7 @@ async function invalidateSessionsAtApi(userId: string | undefined): Promise<void
   }
 
   try {
-    const response = await fetch(`${apiOrigin()}/internal/session-generation`, {
+    const response = await fetch(`${apiBaseUrl()}/internal/session-generation`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', [WEB_TIER_KEY_HEADER]: key },
       body: JSON.stringify({ authUserId: userId }),

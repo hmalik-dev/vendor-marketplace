@@ -44,7 +44,10 @@ export const packageRoutes: FastifyPluginAsyncZod = async (app) => {
         request.body,
       );
 
-      return reply.status(201).header('location', `${PACKAGES_PATH}/${created.id}`).send(created);
+      return reply
+        .status(201)
+        .header('location', `${app.prefix}${PACKAGES_PATH}/${created.id}`)
+        .send(created);
     },
   );
 

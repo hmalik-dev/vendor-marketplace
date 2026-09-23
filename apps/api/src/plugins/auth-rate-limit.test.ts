@@ -20,7 +20,7 @@ describe('rate limiting ahead of authentication', () => {
     for (let attempt = 0; attempt < LIMIT + 2; attempt += 1) {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/users/me',
+        url: '/v1/users/me',
         headers: { authorization: 'Bearer garbage' },
       });
       statuses.push(response.statusCode);
@@ -47,7 +47,7 @@ describe('rate limiting ahead of authentication, on a route with its own limit',
     for (let attempt = 0; attempt < LIMIT + 2; attempt += 1) {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: { authorization: 'Bearer garbage' },
         payload: {},
       });

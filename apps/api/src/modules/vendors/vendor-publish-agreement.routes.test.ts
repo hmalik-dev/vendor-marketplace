@@ -35,7 +35,7 @@ describe('publishing and the vendor agreement', () => {
   async function completeProfile(): Promise<string> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -50,7 +50,7 @@ describe('publishing and the vendor agreement', () => {
 
     const pkg = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Full day',
@@ -68,7 +68,7 @@ describe('publishing and the vendor agreement', () => {
   function publish() {
     return harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: { isPublished: true },
     });
@@ -170,7 +170,7 @@ describe('publishing and the vendor agreement', () => {
 
     const read = await harness.app.inject({
       method: 'GET',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
     });
 
@@ -201,7 +201,7 @@ describe('publishing and the vendor agreement', () => {
     function edit(payload: Record<string, unknown>) {
       return harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload,
       });

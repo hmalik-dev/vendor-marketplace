@@ -73,7 +73,7 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
   async function signIn(authUserId: string): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
@@ -95,7 +95,7 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
   }> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -228,26 +228,26 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
 
     // Live before, so the assertions below are about the deletion and not about
     // a storefront that was never reachable.
-    expect((await harness.app.inject({ url: `/vendors/${vendor.slug}` })).statusCode).toBe(200);
+    expect((await harness.app.inject({ url: `/v1/vendors/${vendor.slug}` })).statusCode).toBe(200);
 
     await deleteIdentityAndReconcile(VENDOR);
 
-    const profile = await harness.app.inject({ url: `/vendors/${vendor.slug}` });
+    const profile = await harness.app.inject({ url: `/v1/vendors/${vendor.slug}` });
     expect(profile.statusCode).toBe(404);
 
-    const search = await harness.app.inject({ url: '/vendors?name=Sunlit' });
+    const search = await harness.app.inject({ url: '/v1/vendors?name=Sunlit' });
     expect(search.statusCode).toBe(200);
     expect(search.json().items).toEqual([]);
 
     const nearby = await harness.app.inject({
-      url: '/vendors/availability/nearby?date=2099-06-01&city=Austin&state=TX',
+      url: '/v1/vendors/availability/nearby?date=2099-06-01&city=Austin&state=TX',
     });
     expect(nearby.statusCode).toBe(200);
     expect(nearby.json().items).toEqual([]);
 
     const conversation = await harness.app.inject({
       method: 'POST',
-      url: '/conversations',
+      url: '/v1/conversations',
       headers: bearer(CUSTOMER),
       payload: { vendorSlug: vendor.slug },
     });
@@ -432,12 +432,12 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
       .set({ isDeleted: false, isPublished: true })
       .where(eq(vendorProfiles.id, vendor.profileId));
 
-    expect((await harness.app.inject({ url: `/vendors/${vendor.slug}` })).statusCode).toBe(404);
-    expect((await harness.app.inject({ url: '/vendors?name=Sunlit' })).json().items).toEqual([]);
+    expect((await harness.app.inject({ url: `/v1/vendors/${vendor.slug}` })).statusCode).toBe(404);
+    expect((await harness.app.inject({ url: '/v1/vendors?name=Sunlit' })).json().items).toEqual([]);
     expect(
       (
         await harness.app.inject({
-          url: '/vendors/availability/nearby?date=2099-06-01&city=Austin&state=TX',
+          url: '/v1/vendors/availability/nearby?date=2099-06-01&city=Austin&state=TX',
         })
       ).json().items,
     ).toEqual([]);
@@ -445,7 +445,7 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
     await signIn(CUSTOMER);
     const requested = await harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(CUSTOMER),
       payload: {
         vendorId: vendor.profileId,

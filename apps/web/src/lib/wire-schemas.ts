@@ -10,6 +10,7 @@ import {
   customerProfileSchema,
   customerReviewSchema,
   notificationItemSchema,
+  cursorPageSchema,
   paginatedSchema,
   wideningShape,
   sendMessageResultSchema,
@@ -377,14 +378,14 @@ export const wireMessageSchema = sendMessageResultSchema.extend({
   createdAt: z.coerce.date(),
 });
 export type WireMessage = z.infer<typeof wireMessageSchema>;
-export const wireMessagePageSchema = paginatedSchema(wireMessageSchema);
+export const wireMessagePageSchema = cursorPageSchema(wireMessageSchema);
 
 export const wireNotificationSchema = notificationItemSchema.extend({
   readAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
 });
 export type WireNotification = z.infer<typeof wireNotificationSchema>;
-export const wireNotificationPageSchema = paginatedSchema(wireNotificationSchema);
+export const wireNotificationPageSchema = cursorPageSchema(wireNotificationSchema);
 
 /**
  * Search results, with each card's images resolved from their stored keys.

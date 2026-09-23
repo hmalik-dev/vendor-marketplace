@@ -22,7 +22,7 @@ describe('vendor Stripe Connect onboarding', () => {
   ): Promise<void> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(user),
       payload: {
         businessName,
@@ -44,7 +44,7 @@ describe('vendor Stripe Connect onboarding', () => {
     if (acceptsAgreement) {
       const accepted = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/agreement/accept',
+        url: '/v1/vendor/agreement/accept',
         headers: bearer(user),
         payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
       });
@@ -55,7 +55,7 @@ describe('vendor Stripe Connect onboarding', () => {
   function connect(user: string) {
     return harness.app.inject({
       method: 'POST',
-      url: '/vendor/stripe/connect',
+      url: '/v1/vendor/stripe/connect',
       headers: bearer(user),
     });
   }
@@ -63,7 +63,7 @@ describe('vendor Stripe Connect onboarding', () => {
   function status(user: string) {
     return harness.app.inject({
       method: 'GET',
-      url: '/vendor/stripe/status',
+      url: '/v1/vendor/stripe/status',
       headers: bearer(user),
     });
   }
@@ -278,7 +278,10 @@ describe('vendor Stripe Connect onboarding', () => {
     });
 
     it('refuses an unauthenticated caller', async () => {
-      const response = await harness.app.inject({ method: 'POST', url: '/vendor/stripe/connect' });
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: '/v1/vendor/stripe/connect',
+      });
 
       expect(response.statusCode).toBe(401);
     });
@@ -295,7 +298,7 @@ describe('vendor Stripe Connect onboarding', () => {
     it('still answers 403, not the parser 400, when a customer sends a malformed body', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/stripe/connect',
+        url: '/v1/vendor/stripe/connect',
         headers: { ...bearer('customer_a'), 'content-type': 'application/json' },
         payload: '',
       });

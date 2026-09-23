@@ -55,7 +55,7 @@ describe('admin step-up and destructive ceiling', () => {
   async function challenge(authUserId: string): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/admin/step-up/challenge',
+      url: '/v1/admin/step-up/challenge',
       headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
@@ -65,7 +65,7 @@ describe('admin step-up and destructive ceiling', () => {
     await challenge(authUserId);
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/admin/step-up/verify',
+      url: '/v1/admin/step-up/verify',
       headers: bearer(authUserId),
       payload: { code: emailedCode(`${authUserId}@example.com`) },
     });
@@ -77,7 +77,7 @@ describe('admin step-up and destructive ceiling', () => {
     await signIn(VENDOR);
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -122,7 +122,7 @@ describe('admin step-up and destructive ceiling', () => {
   const ban = (authUserId: string, userId: string) =>
     harness.app.inject({
       method: 'PUT',
-      url: `/admin/users/${userId}/ban`,
+      url: `/v1/admin/users/${userId}/ban`,
       headers: bearer(authUserId),
     });
 
@@ -184,8 +184,7 @@ describe('admin step-up and destructive ceiling', () => {
     await harness.database.db.delete(users);
     harness.stripe.refunds.length = 0;
     harness.email.sent.length = 0;
-    harness.app.stepUp.revoke(ADMIN);
-    harness.app.stepUp.revoke(OTHER_ADMIN);
+    // Grants and pending codes went with the operators' rows, by cascade.
   });
 
   afterAll(async () => {
@@ -206,10 +205,10 @@ describe('admin step-up and destructive ceiling', () => {
     });
 
     it.each([
-      ['POST', `/admin/users/${NIL}/close`],
-      ['PUT', `/admin/bookings/${NIL}/dispute`],
-      ['DELETE', `/admin/reviews/${NIL}`],
-      ['DELETE', `/admin/portfolio-items/${NIL}`],
+      ['POST', `/v1/admin/users/${NIL}/close`],
+      ['PUT', `/v1/admin/bookings/${NIL}/dispute`],
+      ['DELETE', `/v1/admin/reviews/${NIL}`],
+      ['DELETE', `/v1/admin/portfolio-items/${NIL}`],
     ] as const)('%s %s asks for a step-up before anything else', async (method, url) => {
       await signIn(ADMIN, true);
 
@@ -238,7 +237,7 @@ describe('admin step-up and destructive ceiling', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/admin/step-up/challenge',
+        url: '/v1/admin/step-up/challenge',
         headers: bearer(ADMIN),
       });
 
@@ -256,12 +255,12 @@ describe('admin step-up and destructive ceiling', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/admin/step-up/challenge',
+        url: '/v1/admin/step-up/challenge',
         headers: bearer(ADMIN),
       });
 
       expect(response.statusCode).toBe(503);
-      expect(harness.app.stepUp.isFresh(adminId, now)).toBe(true);
+      expect(await harness.app.stepUp.isFresh(adminId, now)).toBe(true);
     });
 
     it('lets a ban through once the emailed code is entered, and stops after the grant lapses', async () => {
@@ -278,7 +277,7 @@ describe('admin step-up and destructive ceiling', () => {
       now = new Date(START.getTime() + STEP_UP_GRANT_TTL_MS + 1);
       const later = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${target.userId}/unban`,
+        url: `/v1/admin/users/${target.userId}/unban`,
         headers: bearer(ADMIN),
       });
       expect(later.statusCode).toBe(200);
@@ -309,7 +308,7 @@ describe('admin step-up and destructive ceiling', () => {
       for (let attempt = 0; attempt < STEP_UP_MAX_ATTEMPTS; attempt += 1) {
         const response = await harness.app.inject({
           method: 'POST',
-          url: '/admin/step-up/verify',
+          url: '/v1/admin/step-up/verify',
           headers: bearer(ADMIN),
           payload: { code: wrong },
         });
@@ -318,12 +317,12 @@ describe('admin step-up and destructive ceiling', () => {
 
       const late = await harness.app.inject({
         method: 'POST',
-        url: '/admin/step-up/verify',
+        url: '/v1/admin/step-up/verify',
         headers: bearer(ADMIN),
         payload: { code: right },
       });
       expect(late.statusCode).toBe(403);
-      expect(harness.app.stepUp.isFresh(adminId, now)).toBe(false);
+      expect(await harness.app.stepUp.isFresh(adminId, now)).toBe(false);
     });
 
     it('refuses an expired code', async () => {
@@ -334,7 +333,7 @@ describe('admin step-up and destructive ceiling', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/admin/step-up/verify',
+        url: '/v1/admin/step-up/verify',
         headers: bearer(ADMIN),
         payload: { code },
       });
@@ -347,12 +346,12 @@ describe('admin step-up and destructive ceiling', () => {
 
       const anonymous = await harness.app.inject({
         method: 'POST',
-        url: '/admin/step-up/verify',
+        url: '/v1/admin/step-up/verify',
         payload: [],
       });
       const customer = await harness.app.inject({
         method: 'POST',
-        url: '/admin/step-up/verify',
+        url: '/v1/admin/step-up/verify',
         headers: bearer(CUSTOMER),
         payload: [],
       });

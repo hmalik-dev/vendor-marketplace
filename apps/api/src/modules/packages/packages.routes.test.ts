@@ -15,7 +15,7 @@ const CUSTOMER = 'user_customer';
 
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
 
-describe('/vendor/packages', () => {
+describe('/v1/vendor/packages', () => {
   let harness: TestHarness;
   let photographyId: string;
 
@@ -31,7 +31,7 @@ describe('/vendor/packages', () => {
   async function createProfile(authUserId: string, businessName: string): Promise<void> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(authUserId),
       payload: {
         businessName,
@@ -53,7 +53,7 @@ describe('/vendor/packages', () => {
   ): Promise<{ id: string; displayOrder: number }> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(authUserId),
       payload: packageBody(overrides),
     });
@@ -99,7 +99,7 @@ describe('/vendor/packages', () => {
 
   describe('authorization', () => {
     it('rejects an unauthenticated request', async () => {
-      const response = await harness.app.inject({ method: 'GET', url: '/vendor/packages' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/vendor/packages' });
 
       expect(response.statusCode).toBe(401);
       expect(response.json().error).toBe('UNAUTHORIZED');
@@ -108,7 +108,7 @@ describe('/vendor/packages', () => {
     it('rejects a customer', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(CUSTOMER),
       });
 
@@ -119,7 +119,7 @@ describe('/vendor/packages', () => {
     it('answers 404 for a vendor who has not created a profile yet', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
       });
 
@@ -134,7 +134,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
         payload: packageBody({
           durationHours: 4.5,
@@ -146,7 +146,7 @@ describe('/vendor/packages', () => {
       expect(response.statusCode).toBe(201);
 
       const body = response.json();
-      expect(response.headers.location).toBe(`/vendor/packages/${body.id}`);
+      expect(response.headers.location).toBe(`/v1/vendor/packages/${body.id}`);
       expect(body.name).toBe('Half-day coverage');
       expect(body.priceCents).toBe(120_000);
       expect(body.priceType).toBe('fixed');
@@ -162,7 +162,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
         payload: packageBody({ priceCents: 0 }),
       });
@@ -176,7 +176,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
         payload: packageBody({ priceCents: 10_000_001 }),
       });
@@ -205,7 +205,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
       });
 
@@ -219,14 +219,14 @@ describe('/vendor/packages', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${created.id}`,
+        url: `/v1/vendor/packages/${created.id}`,
         headers: bearer(VENDOR),
         payload: { isActive: false },
       });
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
       });
 
@@ -242,7 +242,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${created.id}`,
+        url: `/v1/vendor/packages/${created.id}`,
         headers: bearer(VENDOR),
         payload: { priceCents: 150_000 },
       });
@@ -259,7 +259,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${created.id}`,
+        url: `/v1/vendor/packages/${created.id}`,
         headers: bearer(VENDOR),
         payload: { durationHours: null, maxGuests: null },
       });
@@ -280,7 +280,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${theirs.id}`,
+        url: `/v1/vendor/packages/${theirs.id}`,
         headers: bearer(VENDOR),
         payload: { priceCents: 150_000 },
       });
@@ -294,7 +294,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${UNKNOWN_ID}`,
+        url: `/v1/vendor/packages/${UNKNOWN_ID}`,
         headers: bearer(VENDOR),
         payload: { priceCents: 150_000 },
       });
@@ -309,7 +309,7 @@ describe('/vendor/packages', () => {
       await acceptVendorAgreementAs(harness, VENDOR);
       const published = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -317,14 +317,14 @@ describe('/vendor/packages', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${created.id}`,
+        url: `/v1/vendor/packages/${created.id}`,
         headers: bearer(VENDOR),
         payload: { isActive: false },
       });
 
       const profile = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
       });
 
@@ -340,21 +340,21 @@ describe('/vendor/packages', () => {
       await acceptVendorAgreementAs(harness, VENDOR);
       await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/vendor/packages/${first.id}`,
+        url: `/v1/vendor/packages/${first.id}`,
         headers: bearer(VENDOR),
         payload: { isActive: false },
       });
 
       const profile = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
       });
 
@@ -370,7 +370,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/packages/reorder',
+        url: '/v1/vendor/packages/reorder',
         headers: bearer(VENDOR),
         payload: { packageIds: [second.id, first.id] },
       });
@@ -389,7 +389,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/packages/reorder',
+        url: '/v1/vendor/packages/reorder',
         headers: bearer(VENDOR),
         payload: { packageIds: [first.id] },
       });
@@ -405,7 +405,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/packages/reorder',
+        url: '/v1/vendor/packages/reorder',
         headers: bearer(VENDOR),
         payload: { packageIds: [first.id, first.id] },
       });
@@ -422,7 +422,7 @@ describe('/vendor/packages', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/packages/reorder',
+        url: '/v1/vendor/packages/reorder',
         headers: bearer(VENDOR),
         payload: { packageIds: [theirs.id] },
       });

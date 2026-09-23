@@ -65,7 +65,7 @@ describe('declining a pending request while a rival accepts the same date', () =
   async function pendingRequestFor(authUserId: string, eventDate: string): Promise<string> {
     const created = await harness!.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(authUserId),
       payload: {
         vendorId,
@@ -114,7 +114,7 @@ describe('declining a pending request while a rival accepts the same date', () =
 
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -134,7 +134,7 @@ describe('declining a pending request while a rival accepts the same date', () =
 
     const agreed = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/agreement/accept',
+      url: '/v1/vendor/agreement/accept',
       headers: bearer(VENDOR),
       payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
     });
@@ -142,7 +142,7 @@ describe('declining a pending request while a rival accepts the same date', () =
 
     const servicePackage = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Full day coverage',
@@ -179,12 +179,12 @@ describe('declining a pending request while a rival accepts the same date', () =
       const [banResponse, acceptResponse] = await Promise.all([
         harness!.app.inject({
           method: 'PUT',
-          url: `/admin/users/${bannedUserId}/ban`,
+          url: `/v1/admin/users/${bannedUserId}/ban`,
           headers: bearer(ADMIN),
         }),
         harness!.app.inject({
           method: 'POST',
-          url: `/booking-requests/${rivalRequestId}/accept`,
+          url: `/v1/booking-requests/${rivalRequestId}/accept`,
           headers: bearer(VENDOR),
         }),
       ]);

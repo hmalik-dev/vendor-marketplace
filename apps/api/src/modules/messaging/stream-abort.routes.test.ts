@@ -46,7 +46,7 @@ describe('a stream client that leaves while its account is being checked', () =>
   it('leaves no subscription and starts no heartbeat', async () => {
     const issued = await harness.app.inject({
       method: 'POST',
-      url: '/events/stream-ticket',
+      url: '/v1/events/stream-ticket',
       headers: bearer(CUSTOMER),
     });
     const ticket: string = issued.json().ticket;
@@ -66,7 +66,7 @@ describe('a stream client that leaves while its account is being checked', () =>
     const client = httpRequest({
       host: '127.0.0.1',
       port,
-      path: `/events/stream?ticket=${ticket}`,
+      path: `/v1/events/stream?ticket=${ticket}`,
     });
     client.on('error', () => {});
     client.end();

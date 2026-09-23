@@ -128,7 +128,7 @@ describe('a review racing another review of the same booking', () => {
   function submitReview(bookingId: string, content: string) {
     return harness!.app.inject({
       method: 'POST',
-      url: `/bookings/${bookingId}/reviews`,
+      url: `/v1/bookings/${bookingId}/reviews`,
       headers: bearer(CUSTOMER),
       payload: { rating: 5, content },
     });
@@ -170,7 +170,7 @@ describe('a review racing another review of the same booking', () => {
 
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Fernbank Studio',

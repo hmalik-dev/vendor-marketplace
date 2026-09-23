@@ -88,7 +88,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
 
   /** A published, payout-ready vendor holding the current agreement. */
   async function createVendor(): Promise<{ vendorId: string; packageId: string }> {
-    const profile = await inject('POST', '/vendor/profile', vendorActor, {
+    const profile = await inject('POST', '/v1/vendor/profile', vendorActor, {
       businessName: 'Sunlit Studio',
       categoryIds: [photographyId],
       city: 'Austin',
@@ -98,7 +98,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
     expect(profile.statusCode).toBe(201);
     const vendorId: string = profile.json().id;
 
-    const created = await inject('POST', '/vendor/packages', vendorActor, {
+    const created = await inject('POST', '/v1/vendor/packages', vendorActor, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: 120_000,
@@ -112,7 +112,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
       .where(eq(vendorProfiles.id, vendorId));
 
     /* A vendor cannot take payment without the current agreement (#427). */
-    const accepted = await inject('POST', '/vendor/agreement/accept', vendorActor, {
+    const accepted = await inject('POST', '/v1/vendor/agreement/accept', vendorActor, {
       version: CURRENT_VENDOR_AGREEMENT_VERSION,
     });
     expect(accepted.statusCode).toBe(200);
@@ -130,7 +130,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
     packageId: string | null,
     eventDate: string,
   ): Promise<string> {
-    const request = await inject('POST', '/booking-requests', customerActor, {
+    const request = await inject('POST', '/v1/booking-requests', customerActor, {
       vendorId,
       ...(packageId
         ? { packageId }
@@ -152,7 +152,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
   async function payFor(requestId: string): Promise<void> {
     const checkout = await inject(
       'POST',
-      `/customer/booking-requests/${requestId}/checkout`,
+      `/v1/customer/booking-requests/${requestId}/checkout`,
       customerActor,
     );
     expect(checkout.statusCode).toBe(200);
@@ -234,7 +234,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
      */
     const settledRequestId = await requestFor(vendorId, packageId, SETTLED_EVENT_DATE);
     expect(
-      (await inject('POST', `/booking-requests/${settledRequestId}/accept`, VENDOR)).statusCode,
+      (await inject('POST', `/v1/booking-requests/${settledRequestId}/accept`, VENDOR)).statusCode,
     ).toBe(200);
     await payFor(settledRequestId);
 
@@ -244,7 +244,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
       .select({ id: bookings.id })
       .from(bookings)
       .where(eq(bookings.requestId, settledRequestId));
-    const finished = await inject('PUT', `/vendor/bookings/${booking!.id}/complete`, VENDOR);
+    const finished = await inject('PUT', `/v1/vendor/bookings/${booking!.id}/complete`, VENDOR);
     expect(finished.statusCode).toBe(200);
     expect(finished.json().status).toBe('completed');
 
@@ -260,7 +260,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
       toDateString(addDays(START, 90)),
     );
     expect(
-      (await inject('POST', `/booking-requests/${unpaidAcceptedId}/accept`, VENDOR)).statusCode,
+      (await inject('POST', `/v1/booking-requests/${unpaidAcceptedId}/accept`, VENDOR)).statusCode,
     ).toBe(200);
 
     /*
@@ -278,20 +278,20 @@ describe('an account unwind and the requests behind settled bookings', () => {
      */
     const cancelledId = await requestFor(vendorId, packageId, toDateString(addDays(START, 120)));
     expect(
-      (await inject('POST', `/booking-requests/${cancelledId}/accept`, VENDOR)).statusCode,
+      (await inject('POST', `/v1/booking-requests/${cancelledId}/accept`, VENDOR)).statusCode,
     ).toBe(200);
     await payFor(cancelledId);
 
     const pendingId = await requestFor(vendorId, packageId, toDateString(addDays(START, 91)));
 
     const quotedId = await requestFor(vendorId, null, toDateString(addDays(START, 92)));
-    const quoted = await inject('POST', `/booking-requests/${quotedId}/quote`, VENDOR, {
+    const quoted = await inject('POST', `/v1/booking-requests/${quotedId}/quote`, VENDOR, {
       quotedPriceCents: 130_000,
       quoteNote: 'Happy to cover this one, here is the price for the extra hour.',
     });
     expect(quoted.json()).toMatchObject({ status: 'quoted' });
 
-    const response = await inject('PUT', `/admin/users/${vendorUserId}/ban`, ADMIN);
+    const response = await inject('PUT', `/v1/admin/users/${vendorUserId}/ban`, ADMIN);
 
     expect(response.statusCode).toBe(200);
     /*
@@ -359,14 +359,14 @@ describe('an account unwind and the requests behind settled bookings', () => {
     const eventDate = toDateString(addDays(START, 200));
     const requestId = await requestFor(vendorId, packageId, eventDate);
     expect(
-      (await inject('POST', `/booking-requests/${requestId}/accept`, localVendor)).statusCode,
+      (await inject('POST', `/v1/booking-requests/${requestId}/accept`, localVendor)).statusCode,
     ).toBe(200);
 
-    const ban = await inject('PUT', `/admin/users/${bannedCustomerUserId}/ban`, ADMIN);
+    const ban = await inject('PUT', `/v1/admin/users/${bannedCustomerUserId}/ban`, ADMIN);
     expect(ban.statusCode).toBe(200);
     expect(await requestStatus(requestId)).toBe('declined');
 
-    const putAvailability = await inject('PUT', '/vendor/availability', localVendor, {
+    const putAvailability = await inject('PUT', '/v1/vendor/availability', localVendor, {
       entries: [{ date: eventDate, status: 'available' }],
     });
     expect(putAvailability.statusCode, putAvailability.body).toBe(200);
@@ -413,7 +413,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
 
       const requestId = await requestFor(vendorId, packageId, SAME_UTC_DAY_EVENT);
       expect(
-        (await inject('POST', `/booking-requests/${requestId}/accept`, vendorActor)).statusCode,
+        (await inject('POST', `/v1/booking-requests/${requestId}/accept`, vendorActor)).statusCode,
       ).toBe(200);
       await payFor(requestId);
 
@@ -429,7 +429,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
 
       let response;
       try {
-        response = await inject('PUT', `/admin/users/${targetId}/ban`, ADMIN);
+        response = await inject('PUT', `/v1/admin/users/${targetId}/ban`, ADMIN);
       } finally {
         harness.stripe.createRefund = createRefund;
       }

@@ -30,27 +30,27 @@ interface GuardedRoute {
 /** Routes that ask only for a session; each is malformed by its param, query or body. */
 const ANY_ROLE_ROUTES: readonly GuardedRoute[] = (
   [
-    ['GET', '/customers/not-a-uuid/profile'],
-    ['GET', `/customers/${ID}/reviews?page=0&pageSize=abc`],
-    ['POST', '/customer/booking-requests/not-a-uuid/checkout'],
-    ['GET', '/customer/booking-requests/not-a-uuid/booking'],
-    ['GET', '/customer/bookings/not-a-uuid'],
-    ['PUT', '/vendor/bookings/not-a-uuid/complete'],
-    ['PUT', '/customer/bookings/not-a-uuid/cancel', []],
-    ['GET', '/booking-requests?status=zz'],
-    ['GET', '/booking-requests/not-a-uuid'],
-    ['POST', '/booking-requests/not-a-uuid/accept'],
-    ['POST', '/booking-requests/not-a-uuid/decline'],
-    ['POST', '/booking-requests/not-a-uuid/cancel'],
-    ['GET', '/bookings?page=0&pageSize=abc'],
-    ['GET', '/conversations/not-a-uuid/messages'],
-    ['POST', '/conversations/not-a-uuid/messages', []],
-    ['PUT', '/conversations/not-a-uuid/read'],
-    ['GET', '/notifications?page=0&pageSize=abc'],
-    ['PUT', '/notifications/not-a-uuid/read'],
-    ['POST', '/bookings/not-a-uuid/reviews', []],
-    ['POST', '/reports', []],
-    ['PUT', '/users/me', []],
+    ['GET', '/v1/customers/not-a-uuid/profile'],
+    ['GET', `/v1/customers/${ID}/reviews?page=0&pageSize=abc`],
+    ['POST', '/v1/customer/booking-requests/not-a-uuid/checkout'],
+    ['GET', '/v1/customer/booking-requests/not-a-uuid/booking'],
+    ['GET', '/v1/customer/bookings/not-a-uuid'],
+    ['PUT', '/v1/vendor/bookings/not-a-uuid/complete'],
+    ['PUT', '/v1/customer/bookings/not-a-uuid/cancel', []],
+    ['GET', '/v1/booking-requests?status=zz'],
+    ['GET', '/v1/booking-requests/not-a-uuid'],
+    ['POST', '/v1/booking-requests/not-a-uuid/accept'],
+    ['POST', '/v1/booking-requests/not-a-uuid/decline'],
+    ['POST', '/v1/booking-requests/not-a-uuid/cancel'],
+    ['GET', '/v1/bookings?page=0&pageSize=abc'],
+    ['GET', '/v1/conversations/not-a-uuid/messages'],
+    ['POST', '/v1/conversations/not-a-uuid/messages', []],
+    ['PUT', '/v1/conversations/not-a-uuid/read'],
+    ['GET', '/v1/notifications?before=not-a-cursor'],
+    ['PUT', '/v1/notifications/not-a-uuid/read'],
+    ['POST', '/v1/bookings/not-a-uuid/reviews', []],
+    ['POST', '/v1/reports', []],
+    ['PUT', '/v1/users/me', []],
   ] as const
 ).map(([method, url, ...body]) => ({
   method,
@@ -60,30 +60,30 @@ const ANY_ROLE_ROUTES: readonly GuardedRoute[] = (
 }));
 
 const ROUTES: readonly GuardedRoute[] = [
-  { method: 'POST', url: '/vendor/profile', role: 'vendor' },
-  { method: 'PUT', url: '/vendor/profile', role: 'vendor' },
-  { method: 'POST', url: '/vendor/packages', role: 'vendor' },
-  { method: 'PUT', url: '/vendor/packages/reorder', role: 'vendor' },
-  { method: 'PUT', url: `/vendor/packages/${ID}`, role: 'vendor' },
-  { method: 'POST', url: '/vendor/portfolio', role: 'vendor' },
-  { method: 'PUT', url: '/vendor/portfolio/reorder', role: 'vendor' },
-  { method: 'PATCH', url: `/vendor/portfolio/${ID}`, role: 'vendor' },
-  { method: 'PUT', url: '/vendor/availability', role: 'vendor' },
-  { method: 'POST', url: '/tags/suggest', role: 'vendor' },
-  { method: 'POST', url: `/booking-requests/${ID}/quote`, role: 'vendor' },
-  { method: 'POST', url: '/booking-requests', role: 'customer' },
-  { method: 'POST', url: '/conversations', role: 'customer' },
-  { method: 'DELETE', url: '/vendor/portfolio/not-a-uuid', role: 'vendor', payload: undefined },
+  { method: 'POST', url: '/v1/vendor/profile', role: 'vendor' },
+  { method: 'PUT', url: '/v1/vendor/profile', role: 'vendor' },
+  { method: 'POST', url: '/v1/vendor/packages', role: 'vendor' },
+  { method: 'PUT', url: '/v1/vendor/packages/reorder', role: 'vendor' },
+  { method: 'PUT', url: `/v1/vendor/packages/${ID}`, role: 'vendor' },
+  { method: 'POST', url: '/v1/vendor/portfolio', role: 'vendor' },
+  { method: 'PUT', url: '/v1/vendor/portfolio/reorder', role: 'vendor' },
+  { method: 'PATCH', url: `/v1/vendor/portfolio/${ID}`, role: 'vendor' },
+  { method: 'PUT', url: '/v1/vendor/availability', role: 'vendor' },
+  { method: 'POST', url: '/v1/tags/suggest', role: 'vendor' },
+  { method: 'POST', url: `/v1/booking-requests/${ID}/quote`, role: 'vendor' },
+  { method: 'POST', url: '/v1/booking-requests', role: 'customer' },
+  { method: 'POST', url: '/v1/conversations', role: 'customer' },
+  { method: 'DELETE', url: '/v1/vendor/portfolio/not-a-uuid', role: 'vendor', payload: undefined },
   {
     method: 'DELETE',
-    url: `/vendor/portfolio/${ID}`,
+    url: `/v1/vendor/portfolio/${ID}`,
     role: 'vendor',
     payload: '',
     schemaDetails: false,
   },
   {
     method: 'GET',
-    url: '/customers/me/reviews?page=0&pageSize=abc',
+    url: '/v1/customers/me/reviews?page=0&pageSize=abc',
     role: 'customer',
     payload: undefined,
   },
@@ -182,7 +182,7 @@ describe('role guards run before body validation', () => {
     for (let attempt = 0; attempt <= REPORT_RATE_LIMIT.max; attempt += 1) {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/reports',
+        url: '/v1/reports',
         headers: { 'content-type': 'application/json' },
         payload: [],
         remoteAddress: '203.0.113.9',
@@ -216,7 +216,7 @@ describe('a signed-out flood of a rate-limited role-guarded POST is counted', ()
     await harness.close();
   });
 
-  it.each(['/booking-requests', '/conversations', '/upload/image'])(
+  it.each(['/v1/booking-requests', '/v1/conversations', '/v1/upload/image'])(
     'POST %s answers 401 up to the limit, then 429',
     async (url) => {
       const statuses: number[] = [];
@@ -267,7 +267,9 @@ describe('a route with an input schema does not guard in preHandler', () => {
 
   it('walks the whole route table', () => {
     expect(routes.length).toBeGreaterThan(50);
-    expect(routes.some((route) => route.url === '/users/me' && route.method === 'PUT')).toBe(true);
+    expect(routes.some((route) => route.url === '/v1/users/me' && route.method === 'PUT')).toBe(
+      true,
+    );
   });
 
   it('finds no schema-bearing route that authenticates in preHandler', () => {
