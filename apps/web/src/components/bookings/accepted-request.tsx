@@ -68,7 +68,9 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
    * learns the refund is half only from the confirmation has been told too
    * late.
    */
-  const quote = booking ? calculateRefund(booking.totalAmountCents, booking.eventDate) : null;
+  const quote = booking
+    ? calculateRefund(booking.totalAmountCents, booking.eventDate, booking)
+    : null;
 
   /*
    * The API refuses a cancellation once the event has started anywhere or the
@@ -155,8 +157,8 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
         ) : booking ? (
           <p className="text-[12.5px] leading-[1.55] text-stone-600">
             {quote?.isFullRefund
-              ? `Cancel more than ${FULL_REFUND_CUTOFF_HOURS} hours before the event and you're refunded in full — ${formatPrice(quote.refundCents)}.`
-              : `The event is inside ${FULL_REFUND_CUTOFF_HOURS} hours, so cancelling now refunds ${formatPrice(quote?.refundCents ?? 0)} of ${formatPrice(booking.totalAmountCents)}.`}
+              ? `Cancel more than ${booking.fullRefundCutoffHours} hours before the event and you're refunded in full — ${formatPrice(quote.refundCents)}.`
+              : `The event is inside ${booking.fullRefundCutoffHours} hours, so cancelling now refunds ${formatPrice(quote?.refundCents ?? 0)} of ${formatPrice(booking.totalAmountCents)}.`}
           </p>
         ) : pulled !== null ? null : (
           <p className="text-[12.5px] leading-[1.55] text-stone-600">

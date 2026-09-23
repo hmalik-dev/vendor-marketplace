@@ -22,6 +22,7 @@ import {
   BOOKING_REQUEST_STATUSES,
   BOOKING_CANCELLED_BY,
   BOOKING_STATUSES,
+  BPS_PER_UNIT,
   BUDGET_TIERS,
   DEFAULT_PAGE_SIZE,
   ERROR_CODES,
@@ -944,6 +945,24 @@ export const bookingRequestSchema = z.object({
 export type BookingRequest = z.infer<typeof bookingRequestSchema>;
 
 /**
+ * The package as it stood when the vendor accepted (VEN-647), frozen on the
+ * request. Checkout and the booking views read this rather than the live
+ * `service_packages` row, which the vendor may edit or retire afterwards — what
+ * the customer paid for, and what chargeback evidence can show, is this.
+ * `priceCents` is the request's locked `finalPriceCents`, the price charged.
+ */
+export const packageSnapshotSchema = z.object({
+  id: uuidSchema,
+  name: z.string(),
+  description: z.string(),
+  inclusions: z.array(z.string()),
+  durationHours: z.number().nullable(),
+  priceCents: z.int(),
+  priceType: priceTypeSchema,
+});
+export type PackageSnapshot = z.infer<typeof packageSnapshotSchema>;
+
+/**
  * What a request looks like to the two people in it. The vendor and package
  * facts are denormalised onto the read model because every surface that lists
  * requests (#22a, #22b) renders "Photography · Wedding" beside a business name
@@ -1200,6 +1219,13 @@ export const bookingSchema = z.object({
    * vendor's business, and `booking-view.ts` keeps it that way.
    */
   payoutReleasedAt: z.date().nullable(),
+  /**
+   * The cancellation terms this booking was sold under (VEN-647) — what
+   * `calculateRefund` is handed for it, on the server and on the screen that
+   * quotes the refund before the customer confirms.
+   */
+  fullRefundCutoffHours: z.int().min(0),
+  lateRefundRateBps: z.int().min(0).max(BPS_PER_UNIT),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

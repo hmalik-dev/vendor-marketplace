@@ -1,6 +1,6 @@
 {
-  "id": "b8152c3b-2a14-4b2b-ae4c-c33fc11096dc",
-  "prevId": "4d4ce64d-b1c2-4724-9fed-5d396479624f",
+  "id": "fe708d34-15d6-48fd-af72-1fc678c40aae",
+  "prevId": "4a813c43-c125-4591-b9aa-fe6e7a10ccd6",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -587,6 +587,68 @@
           "value": "\"vendor_profiles\".\"stripe_onboarded\" = false OR \"vendor_profiles\".\"stripe_account_id\" IS NOT NULL"
         }
       },
+      "isRLSEnabled": true
+    },
+    "public.vendor_slug_aliases": {
+      "name": "vendor_slug_aliases",
+      "schema": "",
+      "columns": {
+        "slug": {
+          "name": "slug",
+          "type": "varchar(200)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "vendor_id": {
+          "name": "vendor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "vendor_slug_aliases_vendor_id_idx": {
+          "name": "vendor_slug_aliases_vendor_id_idx",
+          "columns": [
+            {
+              "expression": "vendor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "vendor_slug_aliases_vendor_id_vendor_profiles_id_fk": {
+          "name": "vendor_slug_aliases_vendor_id_vendor_profiles_id_fk",
+          "tableFrom": "vendor_slug_aliases",
+          "tableTo": "vendor_profiles",
+          "columnsFrom": [
+            "vendor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": true
     },
     "public.categories": {

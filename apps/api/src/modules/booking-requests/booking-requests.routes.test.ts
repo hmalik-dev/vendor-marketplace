@@ -2082,7 +2082,11 @@ describe('/booking-requests', () => {
           'eventDate',
           'eventLocation',
           'eventType',
+          // The cancellation terms it was sold under (VEN-647): the reader's own
+          // refund rules, which the cancel screen quotes by.
+          'fullRefundCutoffHours',
           'id',
+          'lateRefundRateBps',
           'paidAt',
           // *When* the payout went out, never how much of it (#425). The date
           // is what the report control reads to know whether a hold is still

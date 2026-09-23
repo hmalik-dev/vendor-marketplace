@@ -33,3 +33,15 @@ switches and activity log) and report the payable-booking-specific assertions
 `lane:exec` to write to the DB directly (read-only queries only, per the
 verifier's own rules). Flag the gap back to the caller as a possible seed
 enhancement (`db:seed:e2e` could seed a second, already-accepted request).
+
+**Amendment (VEN-647, 2026-09-23):** the block above is for a verifier
+independently choosing to click Accept to manufacture a fixture. It does not
+apply when the ticket's acceptance criteria themselves spell out the sequence
+("send a package request; as the vendor accept it; then edit the package")
+— see [[ticket-setup-steps-can-authorize-scoped-db-writes]]. In that case
+sending a fresh request and accepting it through the UI is in scope and was
+not blocked. Separately, in this lane's seed every row in `bookings` was
+`status: 'completed'` (919 rows, none `'confirmed'`) — an AC phrased "if the
+seeded confirmed/paid booking exists" should be checked with a status count
+query and reported `BLOCKED`/not-applicable when none is `confirmed`, not
+assumed present.

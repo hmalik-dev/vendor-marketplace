@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CURRENT_REFUND_TERMS,
   FULL_REFUND_CUTOFF_HOURS,
   LATE_CANCELLATION_REFUND_RATE,
   PAYOUT_RELEASE_HOURS,
@@ -23,24 +24,24 @@ function rowOf(rows: readonly RefundScheduleRow[], kind: RefundScheduleRow['kind
 
 describe('refundSchedule', () => {
   it('returns null for a date the parser rejects', () => {
-    expect(refundSchedule(TOTAL_CENTS, '14/06/2026')).toBeNull();
+    expect(refundSchedule(TOTAL_CENTS, '14/06/2026', CURRENT_REFUND_TERMS)).toBeNull();
   });
 
   it('draws three windowed rows and a vendor-cancels row, and no non-refundable tier', () => {
-    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE);
+    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS);
 
     expect(rows?.map((row) => row.kind)).toEqual(['full', 'late', 'release', 'vendor-cancels']);
   });
 
   it('opens the late window one millisecond after the full-refund cutoff', () => {
-    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE) ?? [];
+    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS) ?? [];
     const cutoff = EVENT_START.getTime() - FULL_REFUND_CUTOFF_HOURS * MS_PER_HOUR;
 
     expect(rowOf(rows, 'late').from?.getTime()).toBe(cutoff + 1);
   });
 
   it('opens the release row PAYOUT_RELEASE_HOURS after the start of the event day', () => {
-    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE) ?? [];
+    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS) ?? [];
 
     expect(rowOf(rows, 'release').from?.getTime()).toBe(
       EVENT_START.getTime() + PAYOUT_RELEASE_HOURS * MS_PER_HOUR,
@@ -48,13 +49,13 @@ describe('refundSchedule', () => {
   });
 
   it('makes no refund claim on the release row', () => {
-    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE) ?? [];
+    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS) ?? [];
 
     expect(rowOf(rows, 'release').refundCents).toBeNull();
   });
 
   it('refunds the vendor-cancels row in full, whenever it happens', () => {
-    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE) ?? [];
+    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS) ?? [];
 
     expect(rowOf(rows, 'vendor-cancels').refundCents).toBe(TOTAL_CENTS);
   });
@@ -65,7 +66,7 @@ describe('refundSchedule', () => {
    * actually pay them, at every instant inside every window it draws.
    */
   it('agrees with calculateRefund at every instant of every window it labels', () => {
-    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE) ?? [];
+    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS) ?? [];
     const full = rowOf(rows, 'full');
     const late = rowOf(rows, 'late');
     const cutoff = EVENT_START.getTime() - FULL_REFUND_CUTOFF_HOURS * MS_PER_HOUR;
@@ -88,20 +89,20 @@ describe('refundSchedule', () => {
     for (const now of insideFull) {
       expect([
         now.toISOString(),
-        calculateRefund(TOTAL_CENTS, EVENT_DATE, now).refundCents,
+        calculateRefund(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS, now).refundCents,
       ]).toEqual([now.toISOString(), full.refundCents]);
     }
 
     for (const now of insideLate) {
       expect([
         now.toISOString(),
-        calculateRefund(TOTAL_CENTS, EVENT_DATE, now).refundCents,
+        calculateRefund(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS, now).refundCents,
       ]).toEqual([now.toISOString(), late.refundCents]);
     }
   });
 
   it('follows the constants rather than restating them', () => {
-    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE) ?? [];
+    const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS) ?? [];
 
     expect(rowOf(rows, 'full').refundCents).toBe(TOTAL_CENTS);
     expect(rowOf(rows, 'late').refundCents).toBe(

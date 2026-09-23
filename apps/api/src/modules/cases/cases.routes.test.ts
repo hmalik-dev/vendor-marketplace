@@ -8,9 +8,10 @@ import {
   SUPPORT_REFERENCE_PATTERN,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   adminActions,
+  bookingEvents,
   bookingRequests,
   bookings,
   categories,
@@ -552,6 +553,20 @@ describe('the operations case queue (#431)', () => {
     // The hold went through the same primitive a customer's report uses.
     expect(detail.booking?.status).toBe('disputed');
     expect(detail.booking?.payoutStatus).toBe('held');
+
+    /*
+     * VEN-647: the network froze the payout, not the customer who stands in as
+     * the hold's `user`, so the history names no actor.
+     */
+    const [held] = await harness.database.db
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(eq(bookings.stripePaymentIntentId, fixture.paymentIntentId));
+    const transitions = await harness.database.db
+      .select({ toStatus: bookingEvents.toStatus, actorUserId: bookingEvents.actorUserId })
+      .from(bookingEvents)
+      .where(and(eq(bookingEvents.subjectId, held!.id), eq(bookingEvents.toStatus, 'disputed')));
+    expect(transitions).toEqual([{ toStatus: 'disputed', actorUserId: null }]);
   });
 
   it('does not double-open or double-hold under a replayed event', async () => {

@@ -1,6 +1,6 @@
 {
-  "id": "7bc7f0bd-4336-4cb6-bb0a-f5d4eb4fce31",
-  "prevId": "7626e43c-3d65-4390-939c-83f9667b6d3e",
+  "id": "4a813c43-c125-4591-b9aa-fe6e7a10ccd6",
+  "prevId": "b8152c3b-2a14-4b2b-ae4c-c33fc11096dc",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -587,68 +587,6 @@
           "value": "\"vendor_profiles\".\"stripe_onboarded\" = false OR \"vendor_profiles\".\"stripe_account_id\" IS NOT NULL"
         }
       },
-      "isRLSEnabled": true
-    },
-    "public.vendor_slug_aliases": {
-      "name": "vendor_slug_aliases",
-      "schema": "",
-      "columns": {
-        "slug": {
-          "name": "slug",
-          "type": "varchar(200)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "vendor_id": {
-          "name": "vendor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "vendor_slug_aliases_vendor_id_idx": {
-          "name": "vendor_slug_aliases_vendor_id_idx",
-          "columns": [
-            {
-              "expression": "vendor_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "vendor_slug_aliases_vendor_id_vendor_profiles_id_fk": {
-          "name": "vendor_slug_aliases_vendor_id_vendor_profiles_id_fk",
-          "tableFrom": "vendor_slug_aliases",
-          "columnsFrom": [
-            "vendor_id"
-          ],
-          "tableTo": "vendor_profiles",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": true
     },
     "public.categories": {
@@ -1598,6 +1536,25 @@
           "primaryKey": false,
           "notNull": false
         },
+        "package_snapshot": {
+          "name": "package_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "event_timezone": {
+          "name": "event_timezone",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "char(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
         "accepted_at": {
           "name": "accepted_at",
           "type": "timestamp with time zone",
@@ -2055,6 +2012,33 @@
           "notNull": true,
           "default": 0
         },
+        "full_refund_cutoff_hours": {
+          "name": "full_refund_cutoff_hours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 48
+        },
+        "late_refund_rate_bps": {
+          "name": "late_refund_rate_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 5000
+        },
+        "event_timezone": {
+          "name": "event_timezone",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "char(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2250,8 +2234,102 @@
         "bookings_external_refund_cents_non_negative": {
           "name": "bookings_external_refund_cents_non_negative",
           "value": "\"bookings\".\"external_refund_cents\" >= 0"
+        },
+        "bookings_full_refund_cutoff_hours_non_negative": {
+          "name": "bookings_full_refund_cutoff_hours_non_negative",
+          "value": "\"bookings\".\"full_refund_cutoff_hours\" >= 0"
+        },
+        "bookings_late_refund_rate_bps_range": {
+          "name": "bookings_late_refund_rate_bps_range",
+          "value": "\"bookings\".\"late_refund_rate_bps\" >= 0 AND \"bookings\".\"late_refund_rate_bps\" <= 10000"
         }
       },
+      "isRLSEnabled": true
+    },
+    "public.booking_events": {
+      "name": "booking_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "subject_type": {
+          "name": "subject_type",
+          "type": "booking_event_subject",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_status": {
+          "name": "from_status",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_status": {
+          "name": "to_status",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "booking_events_subject_idx": {
+          "name": "booking_events_subject_idx",
+          "columns": [
+            {
+              "expression": "subject_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": true
     },
     "public.conversations": {
@@ -4649,6 +4727,14 @@
         "customer",
         "vendor",
         "admin"
+      ]
+    },
+    "public.booking_event_subject": {
+      "name": "booking_event_subject",
+      "schema": "public",
+      "values": [
+        "booking_request",
+        "booking"
       ]
     },
     "public.legal_acceptance_method": {

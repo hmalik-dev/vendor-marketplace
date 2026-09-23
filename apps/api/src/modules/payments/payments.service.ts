@@ -1,4 +1,5 @@
 import {
+  CURRENT_REFUND_TERMS,
   ERROR_CODES,
   EXPIRY_HOLD_MAX_ATTEMPTS,
   EXPIRY_HOLD_SPACING_MS,
@@ -18,6 +19,7 @@ import {
   type DisputeOutcome,
 } from '@vendor-marketplace/shared';
 import type { BookingRequestRow, BookingRow } from '@vendor-marketplace/db/schema';
+import { asBookingActor } from '@vendor-marketplace/db';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDatabase } from '../../lib/database.js';
 import { toBookingView, toBookingWithContext } from '../../lib/booking-view.js';
@@ -430,6 +432,10 @@ function toCheckoutIntent(row: PayableRequestRow, intent: PaymentIntentSnapshot)
  * not the presence of the row.
  */
 function toRailPackage(row: PayableRequestRow): CheckoutIntent['servicePackage'] {
+  if (row.packageSnapshot) {
+    return { name: row.packageSnapshot.name, durationHours: row.packageSnapshot.durationHours };
+  }
+
   if (row.packageName === null) {
     return null;
   }
@@ -610,6 +616,11 @@ export async function recordSuccessfulPayment(
       payoutModel: 'separate',
       stripePaymentIntentId: intent.id,
       paidAt: new Date(),
+      // The terms checkout showed, fixed for this booking's life (VEN-647).
+      fullRefundCutoffHours: CURRENT_REFUND_TERMS.fullRefundCutoffHours,
+      lateRefundRateBps: CURRENT_REFUND_TERMS.lateRefundRateBps,
+      eventTimezone: row.eventTimezone,
+      currency: row.currency,
     },
   });
 
@@ -1144,10 +1155,12 @@ export async function completeBooking(
     throw conflict('That event has not happened yet');
   }
 
-  const completed = await applyBookingTransition(context.db, bookingId, 'confirmed', {
-    status: 'completed',
-    completedAt: new Date(),
-  });
+  const completed = await asBookingActor(context.db, user.id, (tx) =>
+    applyBookingTransition(tx, bookingId, 'confirmed', {
+      status: 'completed',
+      completedAt: new Date(),
+    }),
+  );
 
   if (!completed) {
     throw conflict('That booking changed while you were completing it');
@@ -1488,7 +1501,7 @@ export async function cancelBooking(
     throw conflict(EVENT_PASSED_CANCEL_MESSAGE);
   }
 
-  const quote = calculateRefund(booking.totalAmountCents, booking.eventDate, now);
+  const quote = calculateRefund(booking.totalAmountCents, booking.eventDate, booking, now);
 
   /*
    * The amount the customer was shown and confirmed (VEN-425). The page quotes
@@ -1518,12 +1531,8 @@ export async function cancelBooking(
     disputeReason: null,
   } as const;
 
-  let cancelled = await cancelBookingAndFreeDate(
-    context.db,
-    bookingId,
-    cancellation,
-    'confirmed',
-    booking.payoutReleasedAt,
+  let cancelled = await asBookingActor(context.db, user.id, (tx) =>
+    cancelBookingAndFreeDate(tx, bookingId, cancellation, 'confirmed', booking.payoutReleasedAt),
   );
   let lostTo: BookingRow | null = null;
 
@@ -1540,12 +1549,9 @@ export async function cancelBooking(
     lostTo = await findBookingById(context.db, bookingId);
 
     if (lostTo?.status === 'completed') {
-      cancelled = await cancelBookingAndFreeDate(
-        context.db,
-        bookingId,
-        cancellation,
-        'completed',
-        lostTo.payoutReleasedAt,
+      const releasedBefore = lostTo.payoutReleasedAt;
+      cancelled = await asBookingActor(context.db, user.id, (tx) =>
+        cancelBookingAndFreeDate(tx, bookingId, cancellation, 'completed', releasedBefore),
       );
     }
   }
@@ -1799,21 +1805,32 @@ export async function placeDisputeHold(
    * A `completed` booking going on hold changes that figure, and a dispute
    * writer of its own would have been the fourth booking writer to forget.
    */
-  const held = await applyBookingTransition(
-    context.db,
-    bookingId,
-    booking.status,
-    { status: 'disputed', disputeReason: reason ?? null },
-    /*
-     * The payout state the refusal above was decided on, re-asserted at write
-     * time. `participantIn` reads without a lock, and the sweep changes
-     * `payout_released_at` without changing `status` — so a hold placed while a
-     * sweep was mid-transfer would otherwise land on a booking that had just
-     * been paid out, which is precisely the state the guard exists to prevent
-     * and which `resolveDispute` would then unwind by reversing a live transfer.
-     */
-    booking.payoutReleasedAt,
-  );
+  const hold = (db: AppDatabase) =>
+    applyBookingTransition(
+      db,
+      bookingId,
+      booking.status,
+      { status: 'disputed', disputeReason: reason ?? null },
+      /*
+       * The payout state the refusal above was decided on, re-asserted at write
+       * time. `participantIn` reads without a lock, and the sweep changes
+       * `payout_released_at` without changing `status` — so a hold placed while a
+       * sweep was mid-transfer would otherwise land on a booking that had just
+       * been paid out, which is precisely the state the guard exists to prevent
+       * and which `resolveDispute` would then unwind by reversing a live transfer.
+       */
+      booking.payoutReleasedAt,
+    );
+
+  /*
+   * Attributed to the customer only when they placed it. A chargeback reaches
+   * here from the dispute webhook with the customer standing in as `user`, and
+   * the network, not the customer, froze the payout (VEN-647).
+   */
+  const held =
+    origin === 'customer'
+      ? await asBookingActor(context.db, user.id, hold)
+      : await hold(context.db);
 
   if (!held) {
     throw new StaleBookingError(

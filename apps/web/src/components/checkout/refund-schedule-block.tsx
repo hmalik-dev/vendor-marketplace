@@ -1,4 +1,5 @@
 import {
+  CURRENT_REFUND_TERMS,
   formatPrice,
   LEGAL_PATHS,
   refundSchedule,
@@ -129,7 +130,8 @@ export function RefundScheduleBlock({
   onlyCurrent = false,
   now = new Date(),
 }: RefundScheduleBlockProps): React.ReactElement | null {
-  const rows = refundSchedule(totalCents, eventDate);
+  // Before payment there is no booking yet: it will be sold under today's terms.
+  const rows = refundSchedule(totalCents, eventDate, CURRENT_REFUND_TERMS);
 
   if (rows === null) {
     /*

@@ -6,13 +6,13 @@ import { portfolioItems, users, vendorProfiles } from './schema/index.js';
 import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './testing/test-db.js';
 
 /**
- * `0083` against image columns that still hold an absolute URL (VEN-648).
+ * `0085` against image columns that still hold an absolute URL (VEN-648).
  *
  * The migration is data-only and re-runnable, so the suite migrates to head —
  * `migrateUpTo` cannot replay `0077`, which grants on the migrator's own schema
  * — writes the URL rows, and applies it again.
  */
-const THIS_MIGRATION = '0083_image_columns_hold_keys';
+const THIS_MIGRATION = '0085_image_columns_hold_keys';
 
 const OWNER = '6f1c2b0a-1111-4222-8333-944445555666';
 const CUSTOMER = '6f1c2b0a-2222-4222-8333-944445555666';
@@ -49,7 +49,7 @@ afterAll(async () => {
   await testDb.close();
 });
 
-describe('0083 against image columns written as URLs', () => {
+describe('0085 against image columns written as URLs', () => {
   it('leaves every own upload holding its key and no host, and nothing else changed', async () => {
     const [vendorUser, customer, oauthCustomer] = await testDb.db
       .insert(users)
