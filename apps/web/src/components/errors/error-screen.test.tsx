@@ -8,6 +8,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ErrorScreen } from './error-screen';
 import CheckoutError from '@/app/bookings/[requestId]/checkout/error';
 import ConfirmedError from '@/app/bookings/[requestId]/confirmed/error';
+import AdminError from '@/app/admin/error';
+
+const calls: string[] = [];
+const refresh = vi.fn(() => {
+  calls.push('refresh');
+});
+const useRouter = vi.fn(() => ({ refresh }));
+
+vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => useRouter() }));
 
 /** `apps/web/src`, from this file's own location. */
 const WEB_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -51,13 +61,55 @@ describe('ErrorScreen', () => {
     expect(screen.queryByText(/include this if you write to us/)).toBeNull();
   });
 
-  it('retries the segment rather than reloading the document', async () => {
-    const reset = vi.fn();
+  /*
+   * VEN-623. `reset()` alone re-renders the segment from the server payload
+   * that just failed, so a retry after the cause had cleared showed the same
+   * error and fired no request. The refresh refetches it, then the reset
+   * clears the boundary — in that order, Next's documented recovery.
+   */
+  it('refetches the failed payload, then resets the segment', async () => {
+    calls.length = 0;
+    refresh.mockClear();
+    const reset = vi.fn(() => {
+      calls.push('reset');
+    });
     render(<ErrorScreen digest="err_9F3K2QX7" reset={reset} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
+    expect(calls).toEqual(['refresh', 'reset']);
+  });
+
+  it.each([
+    ['checkout', CheckoutError],
+    ['confirmed', ConfirmedError],
+    ['admin', AdminError],
+  ] as const)('the %s boundary refetches before it resets', async (_segment, Boundary) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    calls.length = 0;
+    const reset = vi.fn(() => {
+      calls.push('reset');
+    });
+    render(<Boundary error={new Error('boom')} reset={reset} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(calls).toEqual(['refresh', 'reset']);
+  });
+
+  /*
+   * `global-error.tsx` renders above the App Router's context — `useRouter`
+   * throws there — so that one screen retries with `reset` alone.
+   */
+  it('outside the App Router, resets without asking for a router', async () => {
+    useRouter.mockClear();
+    const reset = vi.fn();
+    render(<ErrorScreen digest="err_9F3K2QX7" reset={reset} outsideRouter />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
     expect(reset).toHaveBeenCalledOnce();
+    expect(useRouter).not.toHaveBeenCalled();
   });
 
   it('keeps the copy free of apology', () => {

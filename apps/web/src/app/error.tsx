@@ -1,8 +1,7 @@
 'use client';
 
 import * as Sentry from '@sentry/nextjs';
-import { useRouter } from 'next/navigation';
-import { startTransition, useEffect } from 'react';
+import { useEffect } from 'react';
 import { ErrorScreen } from '@/components/errors/error-screen';
 import { boundaryCaptureContext } from '@/config/error-reporting';
 
@@ -30,8 +29,6 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }): React.ReactElement {
-  const router = useRouter();
-
   useEffect(() => {
     // The digest is on the server log already; this ties the client half of
     // the story to it for anyone reading a browser console or session replay.
@@ -42,17 +39,6 @@ export default function Error({
     );
   }, [error]);
 
-  /*
-   * `reset()` alone re-renders the segment from the server payload that just
-   * failed, so a retry after the API came back kept showing the error. The
-   * refresh refetches it first (Next's documented recovery pattern).
-   */
-  const retry = (): void => {
-    startTransition(() => {
-      router.refresh();
-      reset();
-    });
-  };
-
-  return <ErrorScreen digest={error.digest} reset={retry} />;
+  // `ErrorScreen`'s Try again refetches the failed payload before it resets.
+  return <ErrorScreen digest={error.digest} reset={reset} />;
 }
