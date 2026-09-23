@@ -56,7 +56,13 @@ export function VerifyEmailStep({
       setBusy(false);
       setMessage({
         status: 'failed',
-        text: failureCopy(verified, AUTH_COPY.codeWrong),
+        // `codeInvalid` means this code is dead after too many wrong guesses
+        // (Better Auth's own limit, 3 by default) — no wait fixes that, only
+        // a fresh code does, so it is worded and handled apart from `failureCopy`.
+        text:
+          verified === 'codeInvalid'
+            ? AUTH_COPY.codeExhausted
+            : failureCopy(verified, AUTH_COPY.codeWrong),
       });
       return;
     }

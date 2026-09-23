@@ -7,7 +7,8 @@ import { clearSessionToken } from './client';
  * upstream body: an upstream `message` is never rendered (see
  * `no-raw-upstream-message.test.ts`), so nothing here returns one.
  */
-export type AuthOutcome = 'ok' | 'unverified' | 'rejected' | 'throttled' | 'unreachable';
+export type AuthOutcome =
+  'ok' | 'unverified' | 'rejected' | 'throttled' | 'codeInvalid' | 'unreachable';
 
 async function post(path: string, body: Record<string, string> | null): Promise<Response | null> {
   try {
@@ -23,13 +24,32 @@ async function post(path: string, body: Record<string, string> | null): Promise<
 }
 
 /**
- * A 403 is usually Neon's `EMAIL_NOT_VERIFIED`, but Better Auth's own per-code
- * attempt limiter answers 403 too, body `{ code: 'TOO_MANY_ATTEMPTS' }` — a
- * second, address-independent throttle on top of the proxy's own 429 (seen
- * live: 5 wrong codes in a row can draw one before the proxy's budget is
- * spent). Peeking at the body is what tells the two apart; the clone leaves
+ * A 403 is usually Neon's `EMAIL_NOT_VERIFIED`, but Better Auth's own
+ * `emailOTP` plugin answers 403 too, body `{ code: 'TOO_MANY_ATTEMPTS' }`,
+ * once a single code has been guessed wrong `allowedAttempts` times (Better
+ * Auth's own default: 3 — Neon's managed service does not expose raising it).
+ * That is a *different* failure from either proxy throttle above: this one
+ * has already invalidated the code and needs no wait at all — Better Auth's
+ * own docs say the fix is simply to request a new one, which is why this is
+ * `'codeInvalid'` rather than `'throttled'`; the two throttles above mean
+ * "the same code may still work, try again after a wait", which is false
+ * here. Peeking at the body is what tells the three apart; the clone leaves
  * the body unread for whoever reads `response` next (`signInWithEmail`'s own
  * `emailVerified` check).
+ *
+ * Only `verifyEmailCode` can actually surface `'codeInvalid'`:
+ * `resetPasswordWithCode` goes through the proxy's `forwardReset`, which
+ * flattens every 4xx on that path to a plain 400 before this ever sees it
+ * (`route.ts`), so the same Better Auth refusal reaches `resetPasswordWithCode`
+ * as `'rejected'` instead — already covered correctly by `resetFailed`'s own
+ * "...or it has expired... ask for a new one" copy, no special case needed.
+ *
+ * Unverified: Better Auth's plugin source deletes the verification row before
+ * throwing `TOO_MANY_ATTEMPTS`, so resubmitting the same dead code afterward
+ * may draw a plain `INVALID_OTP` 400 (→ `'rejected'`, the ordinary wrong-code
+ * copy) rather than this outcome again. That is not a regression — it is what
+ * every call already showed before this fix — but it means the corrected copy
+ * is not guaranteed to survive a second wrong submission of the same code.
  */
 async function outcomeOf(response: Response | null): Promise<AuthOutcome> {
   if (!response || response.status >= 500) {
@@ -56,7 +76,7 @@ async function outcomeOf(response: Response | null): Promise<AuthOutcome> {
         return null;
       })) as { code?: unknown } | null;
 
-    return body?.code === 'TOO_MANY_ATTEMPTS' ? 'throttled' : 'unverified';
+    return body?.code === 'TOO_MANY_ATTEMPTS' ? 'codeInvalid' : 'unverified';
   }
 
   return 'rejected';

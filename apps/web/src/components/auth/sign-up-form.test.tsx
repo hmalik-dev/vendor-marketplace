@@ -335,6 +335,31 @@ describe('SignUpForm', () => {
     expect(signInWithEmail).not.toHaveBeenCalled();
   });
 
+  /*
+   * Better Auth's `emailOTP` plugin invalidates a code after `allowedAttempts`
+   * wrong guesses (default 3) — its own docs say the fix is a fresh code, not
+   * a wait, so this must read differently from both the address-throttle
+   * banner above and the ordinary wrong-code banner: waiting a few minutes
+   * would still fail on this exact code.
+   */
+  it('says the code is dead, not to wait, once attempts on it are exhausted', async () => {
+    verifyEmailCode.mockResolvedValue('codeInvalid');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.type(await screen.findByLabelText('Verification code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Verify email' }));
+
+    expect(
+      await screen.findByText('That code can no longer be used. Send a new one below.'),
+    ).toBeDefined();
+    expect(screen.queryByText('That code did not work. Check it and try again.')).toBeNull();
+    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
+    expect(signInWithEmail).not.toHaveBeenCalled();
+  });
+
   it('says to wait, not that the service is unreachable, when a resend is throttled', async () => {
     resendVerificationCode.mockResolvedValue('throttled');
     const user = userEvent.setup();
