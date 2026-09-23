@@ -93,12 +93,17 @@ Dependency direction is one-way: `apps -> packages`.
 ## Releasing
 
 `.github/workflows/deploy.yml` (VEN-397) runs after `CI` succeeds on a push to
-`staging` or `production`: gate (still that branch's tip) → preflight (every input configured, or red by name)
-→ migrate over `DATABASE_URL_UNPOOLED` + reference seed → API → web (prebuilt
-Vercel, source maps to Sentry) → `/ready` must name the commit within ten
-minutes. `SENTRY_RELEASE` is that commit end to end. Railway is the API host
-(D10); a missing input fails preflight by name and never skips. Every
-migration must stay backwards-compatible with the release still serving.
+`staging` or `production`, as one `node scripts/deploy.mjs release` step
+(VEN-633 — the YAML names no phase itself): gate (still that branch's tip) →
+preflight (every input configured, or red by name) → sender (Resend verified
+`EMAIL_FROM`) → the web build (`vercel build`, the step most likely to fail) →
+migrate over `DATABASE_URL_UNPOOLED` + reference seed → API → the web deploy
+(`vercel deploy --prebuilt` + alias) → `/ready` must name the commit within
+ten minutes. Building the web before migrate/API ever move means a failed
+build never leaves the API live on a commit the web never shipped.
+`SENTRY_RELEASE` is that commit end to end. Railway is the API host (D10); a
+missing input fails preflight by name and never skips. Every migration must
+stay backwards-compatible with the release still serving.
 
 ## Merging
 
