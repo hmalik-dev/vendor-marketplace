@@ -2272,3 +2272,86 @@ types and which doesn't. It is not in this diff: `ComboboxDropdown` is out
 of scope for VEN-603 per this same ruling, and a bug fix is still a change
 to a file this ticket was told to leave as-is. Filed as its own ticket
 (VEN-605) rather than folded in here.
+
+---
+
+### D44: Neon Auth's OTP rate limit has no self-serve control — reword the copy instead
+
+**Decision (VEN-627, 2026-09-22).** Managed Better Auth's own rate limit on
+`/email-otp/*` (the one shared across every visitor, not the app's per-caller
+`proxy-throttle.ts`) exposes no self-serve way to raise it, re-key it, split
+it by endpoint, or make it honour a trusted client-IP header — nothing in the
+Neon API, console-equivalent CLI, or published docs offers a control for it.
+Whether Neon support could special-case it beyond that surface was not asked;
+this is a self-serve-configurability finding, not a support-confirmed one.
+Given that, AC3 governs: the `throttled` copy no longer claims the visitor
+made "too many attempts".
+
+**The observed limit (VEN-620, this session, dev auth branch
+`br-silent-queen-ax78ksii`).** `email-otp/verify-email` called for 8 different
+addresses about 7 seconds apart: the first 6 calls returned 400 (wrong/no
+code, expected), the 7th and 8th returned `429
+{"message":"Too many requests. Please try again later."}` — a refusal after
+roughly 6 calls in ~42-49 seconds from one server address, not scoped to the
+individual (different) addresses being called. Neon publishes no count or
+window for this limit; this is what VEN-620 observed, not a documented
+number. A fresh `x-forwarded-for` per call made no difference (still refused
+from the 2nd call on), ruling out IP-based scoping as a workaround.
+
+**What was checked, all against project `dark-surf-79137727`:**
+- `GET /projects/{id}/branches/{branch}/auth` → `{"auth_provider":
+  "better_auth", "auth_provider_project_id": "d4da59eb-...", "branch_id":
+  "br-silent-queen-ax78ksii", "db_name": "neondb", "jwks_url": "...",
+  "base_url": "...", "name": "vendor-marketplace"}`. No rate-limit field.
+- `PATCH /projects/{id}/branches/{branch}/auth/config` — not called (would
+  mutate config); per Neon's own docs
+  (`neon.com/docs/reference/api/auth/update-neon-auth-config`), this endpoint
+  only updates the application name used in auth emails.
+- `GET /projects/{id}/branches/{branch}/auth/plugins` → `organization`,
+  `magic_link` (disabled), `phone_number` (disabled, `otp_expires_in: 300`),
+  `email_provider` (`type: "shared"`), `email_and_password`, `oauth_providers`
+  (`google`, shared), `allow_localhost: true`. No rate-limit field in any of
+  these objects.
+- `neon neon-auth config --help` lists only `email-password`,
+  `email-provider`, `organization`, `webhook` sub-commands — none expose rate
+  limiting.
+- Neon's docs (`neon.com/docs/auth/production-checklist`,
+  `neon.com/docs/auth/guides/email-otp`) document only that the shared SMTP
+  sender is rate-limited for deliverability, and that Email OTP is
+  rate-limited with no mention of a way to raise, re-key or IP-scope that
+  limit; the phone-number OTP plugin's own limit (10/60s/IP, from the plugins
+  response above) is likewise stated as fixed, not configurable, and is a
+  different endpoint family from `/email-otp/*`.
+
+**What changes.** `apps/web/src/app/auth-copy.ts`'s `AUTH_COPY.throttled`
+goes from `'Too many attempts. Wait a few minutes and try again.'` to `"This
+isn't going through right now. Wait a few minutes and try again."` — cause-
+neutral, so it holds regardless of which 429 produced the `'throttled'`
+outcome: this app's own per-caller/per-address budget (`proxy-throttle.ts`,
+a deliberate lockout the visitor did trigger) or Neon's shared upstream
+budget being spent by other visitors (VEN-620, not the visitor's fault).
+`outcomeOf()` (`auth-requests.ts`) folds both into the same `'throttled'`
+outcome, and the route (`route.ts`) passes Neon's 429 through unchanged in
+the un-throttled branch of `forwardBudgeted`, so the client cannot currently
+tell which one happened. An earlier draft of this copy claimed server
+overload ("we're getting more requests than we can handle"), which is false
+on the deliberate-lockout path (e.g. 10 wrong sign-in passwords in a row) —
+caught in review and replaced with wording that names no cause. The string
+is shared by every screen that can hit either throttle (sign-in, sign-up,
+the OTP code step, password reset), not just the code step AC3 names —
+VEN-620's own repro shows the same shared-budget 429 arriving on
+`send-verification-otp`, right after sign-up, before any code is entered.
+
+**Rejected: distinguishing the two throttle sources and giving each its own
+copy.** Neon's 429 body already says "Too many requests" in its own words,
+not our proxy's "Too many attempts" — the shapes are similar but not typed,
+and building a reliable discriminator (e.g. tagging the proxy's own 429s with
+a body field the client can check, defaulting to the generic copy for
+anything else) is real design surface beyond this ticket's AC3, which asks
+only that the shared copy stop asserting a fact that is not always true.
+Revisit if VEN-620-style reports keep recurring and a distinct "the service
+is busy, not you" vs. "you're locked out" pair of messages is worth the
+added surface.
+
+**AC2 does not apply.** It requires the limit to be raisable; D44 establishes
+that no self-serve path to raise it exists.

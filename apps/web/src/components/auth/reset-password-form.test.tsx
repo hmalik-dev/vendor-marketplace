@@ -58,7 +58,9 @@ it('ForgotPasswordForm stays put when the caller is throttled', async () => {
   await user.click(screen.getByRole('button', { name: 'Email me a code' }));
 
   expect(push).not.toHaveBeenCalled();
-  expect(screen.getByText('Too many attempts. Wait a few minutes and try again.')).toBeDefined();
+  expect(
+    screen.getByText("This isn't going through right now. Wait a few minutes and try again."),
+  ).toBeDefined();
   cleanup();
 });
 
@@ -142,7 +144,9 @@ describe('ResetPasswordForm', () => {
     await fill(user);
     await user.click(screen.getByRole('button', { name: 'Set new password' }));
 
-    expect(screen.getByText('Too many attempts. Wait a few minutes and try again.')).toBeDefined();
+    expect(
+      screen.getByText("This isn't going through right now. Wait a few minutes and try again."),
+    ).toBeDefined();
     expect(
       screen.queryByText(
         'That code did not work, or it has expired. Check it, or ask for a new one.',
@@ -157,7 +161,9 @@ describe('ResetPasswordForm', () => {
 
     await user.click(screen.getByRole('button', { name: 'Send a new code' }));
 
-    expect(screen.getByText('Too many attempts. Wait a few minutes and try again.')).toBeDefined();
+    expect(
+      screen.getByText("This isn't going through right now. Wait a few minutes and try again."),
+    ).toBeDefined();
   });
 
   /*
@@ -175,7 +181,9 @@ describe('ResetPasswordForm', () => {
     expect(
       screen.getByText('We could not reach the sign-in service. Try again in a moment.'),
     ).toBeDefined();
-    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
+    expect(
+      screen.queryByText("This isn't going through right now. Wait a few minutes and try again."),
+    ).toBeNull();
   });
 
   it('asks for a fresh code for the address shown', async () => {

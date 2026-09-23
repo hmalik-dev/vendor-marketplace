@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
+import { AUTH_COPY } from '@/app/auth-copy';
 import { readSignUpRole } from '@/lib/auth/signup-role';
 
 const replace = vi.fn();
@@ -212,7 +213,8 @@ describe('SignUpForm', () => {
 
     expect(resendVerificationCode).toHaveBeenCalledTimes(1);
     expect(resendVerificationCode).toHaveBeenCalledWith('sam@example.com');
-    expect(screen.queryByText(/Too many attempts|could not reach/)).toBeNull();
+    expect(screen.queryByText(AUTH_COPY.throttled)).toBeNull();
+    expect(screen.queryByText(AUTH_COPY.unreachable)).toBeNull();
   });
 
   /*
@@ -221,7 +223,7 @@ describe('SignUpForm', () => {
    * nothing — asking for a code that was never mailed.
    */
   it.each([
-    ['throttled', 'Too many attempts. Wait a few minutes and try again.'],
+    ['throttled', "This isn't going through right now. Wait a few minutes and try again."],
     ['unreachable', 'We could not reach the sign-in service. Try again in a moment.'],
   ] as const)('says so on the code step when the code send is %s', async (outcome, copy) => {
     resendVerificationCode.mockResolvedValue(outcome);
@@ -274,7 +276,9 @@ describe('SignUpForm', () => {
     await user.click(screen.getByRole('button', { name: CREATE }));
 
     expect(
-      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+      await screen.findByText(
+        "This isn't going through right now. Wait a few minutes and try again.",
+      ),
     ).toBeDefined();
     expect(screen.queryByText(/could not create that account/)).toBeNull();
     expect(readSignUpRole()).toBeNull();
@@ -309,7 +313,9 @@ describe('SignUpForm', () => {
     await user.click(screen.getByRole('button', { name: 'Verify email' }));
 
     expect(
-      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+      await screen.findByText(
+        "This isn't going through right now. Wait a few minutes and try again.",
+      ),
     ).toBeDefined();
     expect(replace).not.toHaveBeenCalled();
   });
@@ -363,7 +369,9 @@ describe('SignUpForm', () => {
     await user.click(screen.getByRole('button', { name: 'Verify email' }));
 
     expect(
-      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+      await screen.findByText(
+        "This isn't going through right now. Wait a few minutes and try again.",
+      ),
     ).toBeDefined();
     expect(screen.queryByText('That code did not work. Check it and try again.')).toBeNull();
     expect(signInWithEmail).not.toHaveBeenCalled();
@@ -390,7 +398,9 @@ describe('SignUpForm', () => {
       await screen.findByText('That code can no longer be used. Send a new one below.'),
     ).toBeDefined();
     expect(screen.queryByText('That code did not work. Check it and try again.')).toBeNull();
-    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
+    expect(
+      screen.queryByText("This isn't going through right now. Wait a few minutes and try again."),
+    ).toBeNull();
     expect(signInWithEmail).not.toHaveBeenCalled();
   });
 
@@ -403,11 +413,15 @@ describe('SignUpForm', () => {
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
     const resend = await screen.findByRole('button', { name: 'Send a new code' });
-    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
+    expect(
+      screen.queryByText("This isn't going through right now. Wait a few minutes and try again."),
+    ).toBeNull();
     await user.click(resend);
 
     expect(
-      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+      await screen.findByText(
+        "This isn't going through right now. Wait a few minutes and try again.",
+      ),
     ).toBeDefined();
   });
 
@@ -428,7 +442,9 @@ describe('SignUpForm', () => {
     expect(
       await screen.findByText('We could not reach the sign-in service. Try again in a moment.'),
     ).toBeDefined();
-    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
+    expect(
+      screen.queryByText("This isn't going through right now. Wait a few minutes and try again."),
+    ).toBeNull();
   });
 
   it('groups the two roles under one labelled choice', () => {
