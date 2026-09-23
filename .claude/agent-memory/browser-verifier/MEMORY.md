@@ -27,3 +27,4 @@
 - [Terms-gate exemption stops the redirect, not the fetch](ven586-terms-gate-fetch-still-403s.md) — FIXED same-day via a `gated` prop on NotificationBell; re-verified clean, ungated accounts unaffected
 - [Shared browser can navigate mid-check](shared-browser-can-navigate-mid-check.md) — URL drifted between two tool calls with no action of mine; assert `location.href` inside every evaluate, don't trust the last navigate's response
 - [Testing sign-out revokes the shared E2E account everywhere](testing-sign-out-revokes-the-shared-e2e-account-everywhere.md) — clicking Sign out kills that role's session in every lane; re-run `pnpm e2e:auth <role>` after, flag it for concurrent lanes
+- [assertWebEnv blocks a cold boot without NEON_AUTH_COOKIE_SECRET, but not a present-then-removed one](ac4-assertwebenv-blocks-unset-cookie-secret-boot.md) — a `NODE_OPTIONS` preload that deletes it 15s post-boot reaches the same process and drives the real fixture
