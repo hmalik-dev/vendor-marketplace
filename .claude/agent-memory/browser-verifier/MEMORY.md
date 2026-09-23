@@ -31,3 +31,4 @@
 - [assertWebEnv blocks a cold boot without NEON_AUTH_COOKIE_SECRET, but not a present-then-removed one](ac4-assertwebenv-blocks-unset-cookie-secret-boot.md) — a `NODE_OPTIONS` preload that deletes it 15s post-boot reaches the same process and drives the real fixture
 - [run_code_unsafe globals don't persist across calls](run-code-unsafe-globals-dont-persist.md) — `globalThis.x = page` is gone next call; re-find pages via `browser.contexts()`, indexed by creation order
 - [Credential classifier blocks cookie materialization](credential-classifier-blocks-cookie-materialization.md) — never write cookie values to a file; keep sign-in (`newContext`+goto) and later data reads in separate `run_code_unsafe` calls
+- [RSC error boundary needs a real server throw, not route interception](rsc-error-boundary-needs-a-real-server-throw-not-route-interception.md) — a 500-body `route.fulfill` on a client RSC nav falls back to a full reload instead of hitting error.tsx

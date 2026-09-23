@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { BRAND_NAME, SUPPORT_PATH } from '@vendor-marketplace/shared';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Suspense, use, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ErrorScreen } from './error-screen';
 import CheckoutError from '@/app/bookings/[requestId]/checkout/error';
@@ -101,6 +102,45 @@ describe('ErrorScreen', () => {
    * `global-error.tsx` renders above the App Router's context — `useRouter`
    * throws there — so that one screen retries with `reset` alone.
    */
+  /*
+   * A refetch that has not landed yet: the reset makes the segment suspend on
+   * a read that never settles, which holds the transition open the way a slow
+   * server payload does. The mocks above return synchronously, so without this
+   * the pending state would never be observable.
+   */
+  it('stays busy but focused while the refetch is in flight, and ignores a second press', async () => {
+    refresh.mockClear();
+    const never = new Promise<never>(() => undefined);
+    function Stalled(): React.ReactElement {
+      return use(never);
+    }
+    function Segment(): React.ReactElement {
+      const [retried, setRetried] = useState(false);
+      return retried ? (
+        <Stalled />
+      ) : (
+        <ErrorScreen digest="err_9F3K2QX7" reset={() => setRetried(true)} />
+      );
+    }
+    render(
+      <Suspense fallback={<p>fallback</p>}>
+        <Segment />
+      </Suspense>,
+    );
+    const button = screen.getByRole('button', { name: 'Try again' });
+
+    await userEvent.click(button);
+
+    await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
+    expect(screen.queryByText('fallback')).toBeNull();
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    expect(document.activeElement).toBe(button);
+
+    await userEvent.click(button);
+
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it('outside the App Router, resets without asking for a router', async () => {
     useRouter.mockClear();
     const reset = vi.fn();
