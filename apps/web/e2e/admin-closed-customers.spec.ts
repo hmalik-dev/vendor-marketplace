@@ -88,6 +88,15 @@ test('an operator closes an account, then reaches its data-rights page from the 
   await expect(page.getByRole('heading', { name: 'Customers', exact: true })).toBeVisible();
   await expect(targetLink).toHaveCount(0);
 
+  /*
+   * Closure erased the name and address (VEN-614), so the operator finds the
+   * closed account by its id, which its `closed+<id>@invalid` address carries.
+   */
+  const accountId = href.split('/').at(-1)!;
+  await page.goto(`/admin/customers?q=${encodeURIComponent(accountId)}`);
+  await expect(page.getByRole('heading', { name: 'Customers', exact: true })).toBeVisible();
+  await expect(targetLink).toHaveCount(0);
+
   // Asked for deliberately, through the Status filter.
   await page.getByRole('button', { name: 'Status' }).click();
   await page.getByRole('option', { name: 'Closed' }).click();
@@ -95,6 +104,7 @@ test('an operator closes an account, then reaches its data-rights page from the 
 
   const row = targetLink.first();
   await expect(row).toBeVisible();
+  await expect(row).toHaveText('Former customer');
   await expect(
     page.locator('[data-slot="status-pill"]', { hasText: 'Closed' }).first(),
   ).toBeVisible();
