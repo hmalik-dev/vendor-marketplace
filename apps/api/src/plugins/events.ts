@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { PostgresEventBus, type ListenFn } from '../lib/event-bus.js';
+import { PostgresEventBus, SPILL_RETENTION_MS, type ListenFn } from '../lib/event-bus.js';
 import { EventHub } from '../lib/event-stream.js';
 import { StreamTicketStore } from '../lib/stream-tickets.js';
 
@@ -25,11 +25,17 @@ export interface EventsPluginOptions {
  */
 export const eventsPlugin = fp<EventsPluginOptions>(
   async (app, options) => {
-    const hub = new EventHub({
-      bus: new PostgresEventBus(app.db, options.listen, app.log),
-      log: app.log,
-    });
+    const bus = new PostgresEventBus(app.db, options.listen, app.log);
+    const hub = new EventHub({ bus, log: app.log });
     app.decorate('events', hub);
+
+    const purge = setInterval(() => {
+      bus.purge().catch((error: unknown) => {
+        app.log.error({ err: error }, 'Spilled realtime events could not be purged');
+      });
+    }, SPILL_RETENTION_MS);
+    purge.unref();
+    app.addHook('onClose', async () => clearInterval(purge));
 
     // At boot, so an API that cannot hear the other instances fails to start rather than serving half a live surface.
     const stopListening = await hub.start();

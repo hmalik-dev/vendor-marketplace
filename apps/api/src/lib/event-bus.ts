@@ -14,10 +14,10 @@ export const NOTIFY_PAYLOAD_LIMIT_BYTES = 7_900;
 
 /**
  * How long a spilled event is kept. Every listener reads it the moment the
- * notification lands, so a minute is generous, and older rows are dropped by
- * the next spill.
+ * notification lands, so a minute is generous; older rows are dropped by
+ * `purge`.
  */
-const SPILL_RETENTION_MS = 60_000;
+export const SPILL_RETENTION_MS = 60_000;
 
 /** What one instance tells the others. `origin` lets the sender skip its own. */
 export type BusEnvelope = { origin: string; userId: string } & (
@@ -34,11 +34,16 @@ type Wire = BusEnvelope | { ref: string };
 export type ListenFn = (
   channel: string,
   onPayload: (payload: string) => void,
+  onResubscribed?: () => void,
 ) => Promise<() => Promise<void>>;
 
 export interface EventBus {
   send(envelope: BusEnvelope): Promise<void>;
-  listen(onEnvelope: (envelope: BusEnvelope) => void): Promise<() => Promise<void>>;
+  /** `onGap` runs when the listener came back after a drop: anything sent meanwhile is lost. */
+  listen(
+    onEnvelope: (envelope: BusEnvelope) => void,
+    onGap: () => void,
+  ): Promise<() => Promise<void>>;
 }
 
 export interface EventBusLog {
@@ -84,18 +89,38 @@ export class PostgresEventBus implements EventBus {
     }
 
     await this.#notify(JSON.stringify({ ref: row.id } satisfies Wire));
+    await this.purge();
+  }
+
+  /**
+   * Drops spilled events past their minute. Run as each spill is written and
+   * on a timer too, so a message body does not sit here for days on a tier
+   * quiet enough that no next spill comes along.
+   */
+  async purge(): Promise<void> {
     await this.#db
       .delete(realtimeEvents)
       .where(lt(realtimeEvents.createdAt, new Date(Date.now() - SPILL_RETENTION_MS)));
   }
 
-  listen(onEnvelope: (envelope: BusEnvelope) => void): Promise<() => Promise<void>> {
-    return this.#listen(REALTIME_CHANNEL, (payload) => {
-      void this.#receive(payload, onEnvelope).catch((error: unknown) => {
-        // Nothing waits on a notification: the loss is logged, never thrown.
-        this.#log.error({ err: error }, 'A realtime event could not be read from the bus');
-      });
-    });
+  listen(
+    onEnvelope: (envelope: BusEnvelope) => void,
+    onGap: () => void,
+  ): Promise<() => Promise<void>> {
+    return this.#listen(
+      REALTIME_CHANNEL,
+      (payload) => {
+        void this.#receive(payload, onEnvelope).catch((error: unknown) => {
+          // Nothing waits on a notification: the loss is logged, never thrown.
+          this.#log.error({ err: error }, 'A realtime event could not be read from the bus');
+        });
+      },
+      () => {
+        // Postgres queues nothing for a session that was gone.
+        this.#log.warn({}, 'The realtime listener reconnected; events sent meanwhile were missed');
+        onGap();
+      },
+    );
   }
 
   async #notify(payload: string): Promise<void> {
@@ -130,6 +155,23 @@ export class PostgresEventBus implements EventBus {
   }
 }
 
+/**
+ * The two event shapes, checked rather than cast: any role that can connect
+ * to the database can `NOTIFY` this channel, so what arrives is not trusted to
+ * be what `send` wrote.
+ */
+function isStreamEvent(value: unknown): value is StreamEvent {
+  if (typeof value !== 'object' || value === null || !('type' in value)) {
+    return false;
+  }
+  if (value.type === 'new_message') {
+    return (
+      'conversationId' in value && typeof value.conversationId === 'string' && 'message' in value
+    );
+  }
+  return value.type === 'new_notification' && 'notification' in value;
+}
+
 /** The shape check a payload from the wire gets before anything acts on it. */
 function parseWire(payload: string): Wire | null {
   let parsed: unknown;
@@ -158,13 +200,12 @@ function parseWire(payload: string): Wire | null {
     return { origin: candidate.origin, userId: candidate.userId, kind: 'close' };
   }
 
-  if (candidate.kind === 'publish' && typeof candidate.event === 'object' && candidate.event) {
+  if (candidate.kind === 'publish' && isStreamEvent(candidate.event)) {
     return {
       origin: candidate.origin,
       userId: candidate.userId,
       kind: 'publish',
-      // Written by `send` above, from a typed event; the channel is not reachable from outside.
-      event: candidate.event as StreamEvent,
+      event: candidate.event,
     };
   }
 

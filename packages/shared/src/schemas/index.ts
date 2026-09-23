@@ -2017,6 +2017,12 @@ export const paginationQueryShape = paginationQuerySchema.shape;
 export const KEYSET_CURSOR_PATTERN =
   /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z),([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
+/** True when the instant names a real moment: `Date` rolls `02-30` into March rather than refusing it. */
+function isRealInstant(iso: string): boolean {
+  const parsed = new Date(iso);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 19) === iso.slice(0, 19);
+}
+
 export interface KeysetCursor {
   createdAt: string;
   id: string;
@@ -2025,6 +2031,8 @@ export interface KeysetCursor {
 export const keysetCursorSchema = z
   .string()
   .regex(KEYSET_CURSOR_PATTERN, 'Not a page cursor')
+  // The pattern admits `2026-02-30` and hour 25; Postgres would refuse the cast with a 500.
+  .refine((value) => isRealInstant(value.slice(0, value.indexOf(','))), 'Not a page cursor')
   .transform((value): KeysetCursor => {
     const [createdAt = '', id = ''] = value.split(',');
     return { createdAt, id };

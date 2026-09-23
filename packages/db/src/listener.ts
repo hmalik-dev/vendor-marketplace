@@ -26,8 +26,16 @@ export function directConnectionString(connectionString: string): string {
 }
 
 export interface DatabaseListener {
-  /** Subscribes to a channel and returns the function that unsubscribes. */
-  listen: (channel: string, onPayload: (payload: string) => void) => Promise<() => Promise<void>>;
+  /**
+   * Subscribes to a channel and returns the function that unsubscribes.
+   * `onResubscribed` runs each time the driver re-issues the `LISTEN` after a
+   * dropped connection — Postgres keeps nothing for a session that was gone.
+   */
+  listen: (
+    channel: string,
+    onPayload: (payload: string) => void,
+    onResubscribed?: () => void,
+  ) => Promise<() => Promise<void>>;
   close: () => Promise<void>;
 }
 
@@ -39,8 +47,15 @@ export function createListener(connectionString: string): DatabaseListener {
   const client = postgres(directConnectionString(connectionString), { max: 1 });
 
   return {
-    listen: async (channel, onPayload) => {
-      const subscription = await client.listen(channel, onPayload);
+    listen: async (channel, onPayload, onResubscribed) => {
+      let subscribed = false;
+      const subscription = await client.listen(channel, onPayload, () => {
+        // The driver calls this on the first LISTEN too; only the ones after it are gaps.
+        if (subscribed) {
+          onResubscribed?.();
+        }
+        subscribed = true;
+      });
       return () => subscription.unlisten();
     },
     close: () => client.end(),

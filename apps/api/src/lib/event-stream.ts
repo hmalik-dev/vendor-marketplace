@@ -50,7 +50,15 @@ export class EventHub {
       return async () => undefined;
     }
 
-    return this.#bus.listen((envelope) => this.#receive(envelope));
+    /*
+     * After a gap the streams here may have missed events from the others, and
+     * nothing on them broke to say so: ending them makes each browser
+     * reconnect and re-read, which is its recovery path already.
+     */
+    return this.#bus.listen(
+      (envelope) => this.#receive(envelope),
+      () => this.closeAll(),
+    );
   }
 
   /**

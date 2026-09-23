@@ -1,10 +1,15 @@
 import type { ServerResponse } from 'node:http';
 import { MESSAGE_MAX_LENGTH } from '@vendor-marketplace/shared';
 import { realtimeEvents, users } from '@vendor-marketplace/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { NOTIFY_PAYLOAD_LIMIT_BYTES } from '../../lib/event-bus.js';
-import type { StreamEvent } from '../../lib/event-stream.js';
+import {
+  NOTIFY_PAYLOAD_LIMIT_BYTES,
+  PostgresEventBus,
+  REALTIME_CHANNEL,
+  SPILL_RETENTION_MS,
+} from '../../lib/event-bus.js';
+import { EventHub, type StreamEvent } from '../../lib/event-stream.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
 const CUSTOMER = 'user_replicas_customer';
@@ -95,6 +100,66 @@ describe('live events across two API instances', () => {
     expect(spilled).toHaveLength(1);
 
     onB.stop();
+  });
+
+  it('streams nothing from a notification on the channel that is not an event', async () => {
+    const onB = tab(b);
+    const forged = {
+      origin: 'elsewhere',
+      userId: customerId,
+      kind: 'publish',
+      event: { type: 'x' },
+    };
+
+    await a.database.db.execute(
+      sql`select pg_notify(${REALTIME_CHANNEL}, ${JSON.stringify(forged)})`,
+    );
+    const genuine: StreamEvent = { type: 'new_notification', notification: { id: 'n-after' } };
+    a.app.events.publish(customerId, genuine);
+
+    // The genuine one after it arrives, so the forged one was read and dropped.
+    await vi.waitFor(() => expect(onB.frames).toEqual([framesOf(genuine)]));
+    onB.stop();
+  });
+
+  it('drops spilled events past their minute on a purge, whatever else is sent', async () => {
+    await a.database.db
+      .insert(realtimeEvents)
+      .values({ payload: '{}', createdAt: new Date(Date.now() - SPILL_RETENTION_MS - 1_000) });
+
+    await new PostgresEventBus(a.database.db, async () => async () => undefined, a.app.log).purge();
+
+    const left = await a.database.db
+      .select({ payload: realtimeEvents.payload })
+      .from(realtimeEvents);
+    // The spill from the test above is inside its minute and stays; the stale one is gone.
+    expect(left.map((row) => row.payload)).not.toContain('{}');
+    expect(left).toHaveLength(1);
+  });
+
+  it('ends every stream when the listener comes back after a drop, so browsers re-read', async () => {
+    let gap: () => void = () => undefined;
+    const bus = {
+      send: async () => undefined,
+      listen: async (_onEnvelope: unknown, onGap: () => void) => {
+        gap = onGap;
+        return async () => undefined;
+      },
+    };
+    const hub = new EventHub({ bus });
+    await hub.start();
+    let ended = 0;
+    hub.subscribe('user-gap', {
+      write: () => true,
+      end: () => {
+        ended += 1;
+      },
+    } as unknown as ServerResponse);
+
+    gap();
+
+    expect(ended).toBe(1);
+    expect(hub.countFor('user-gap')).toBe(0);
   });
 
   it('ends a stream held by the other instance when one closes the account’s streams', async () => {

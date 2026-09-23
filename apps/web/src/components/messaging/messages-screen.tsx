@@ -453,14 +453,11 @@ export function MessagesScreen({
    * would be unreachable.
    */
   const loadOlder = useCallback(async () => {
-    if (threadId === null) {
+    if (threadId === null || olderCursor === null) {
       return;
     }
 
     setLoadingOlder(true);
-    if (olderCursor === null) {
-      return;
-    }
 
     try {
       const query = new URLSearchParams({ before: olderCursor }).toString();
