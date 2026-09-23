@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { formatEventDate } from '@/lib/booking-entries';
 import { useApi } from '@/lib/use-api';
+import { prePaymentRefundClause } from '@/lib/refund-deadline';
 import { formatInstant, useViewerTimeZone } from '@/lib/use-viewer-time-zone';
 import { cancelledBookingWireSchema } from '@/lib/wire-schemas';
 import type { WireBooking, WireBookingRequest } from '@/lib/wire-schemas';
@@ -123,6 +124,9 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
       )?.refundCents ?? null)
     : null;
   const at = (iso: string): string => formatInstant(new Date(iso), timeZone);
+  const prePaymentClause = prePaymentRefundClause(request.eventDate, (instant) =>
+    formatInstant(instant, timeZone),
+  );
 
   async function cancel(): Promise<void> {
     if (!booking) {
@@ -212,10 +216,9 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
               refunded in full.
             </p>
           </>
-        ) : pulled !== null || !boundaries ? null : (
+        ) : pulled !== null || prePaymentClause === null ? null : (
           <p className="text-[12.5px] leading-[1.55] text-stone-600">
-            The date is held. Paying now confirms it — you&apos;re refunded in full if you cancel by{' '}
-            {at(boundaries.fullRefundEndsAt)}.
+            The date is held. Paying now confirms it — {prePaymentClause}.
           </p>
         )}
 

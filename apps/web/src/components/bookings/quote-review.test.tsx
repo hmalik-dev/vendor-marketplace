@@ -109,19 +109,19 @@ describe('QuoteReview', () => {
   });
 
   /*
-   * The terms belong before the click. The cutoff is read from the constant
-   * rather than written out, for the same reason the request deadline is — a
-   * literal here is a promise nothing keeps in sync.
+   * The terms belong before the click, and as an instant in the viewer's zone
+   * (VEN-615): "48 hours before the event" misstated the deadline by the
+   * viewer's offset, and the accepted card beside it now names the instant.
    */
-  it('states the cancellation terms before the action, from the constant', async () => {
-    const { FULL_REFUND_CUTOFF_HOURS } = await import('@vendor-marketplace/shared');
-    render(<QuoteReview request={quotedRequest()} />);
+  it('states the full-refund deadline before the action, as an instant', () => {
+    render(<QuoteReview request={quotedRequest({ eventDate: '2099-06-14' })} />);
 
     expect(
       screen.getByText(
-        new RegExp(`full refund applies if you cancel at least ${FULL_REFUND_CUTOFF_HOURS} hours`),
+        /^Accepting holds the date\. You are not charged yet, and you're refunded in full if you cancel by Jun 12, 12:00\sAM UTC\.$/,
       ),
     ).toBeDefined();
+    expect(screen.queryByText(/48 hours/)).toBeNull();
   });
 
   /* Nothing on this surface charges anything — paying is #10's. */
