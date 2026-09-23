@@ -147,6 +147,18 @@ describe('postSignInPath', () => {
     expect(postSignInPath(role, returnTo)).toBe(POST_SIGN_IN_PATH_BY_ROLE[role]);
   });
 
+  // VEN-653: carried so sign-in resumes it, never forwarded to, or it loops.
+  it('starts every role on their own home instead of the customer name step', () => {
+    for (const role of ROLES) {
+      expect(postSignInPath(role, '/sign-up/customer-details')).toBe(
+        POST_SIGN_IN_PATH_BY_ROLE[role],
+      );
+      expect(postSignInPath(role, '/sign-up/customer-details?returnTo=%2Fbookings')).toBe(
+        POST_SIGN_IN_PATH_BY_ROLE[role],
+      );
+    }
+  });
+
   it('falls back to the role start when nothing was carried', () => {
     for (const role of ROLES) {
       expect(postSignInPath(role, null)).toBe(POST_SIGN_IN_PATH_BY_ROLE[role]);

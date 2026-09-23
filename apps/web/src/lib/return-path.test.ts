@@ -72,6 +72,16 @@ describe('safeReturnPath', () => {
     },
   );
 
+  // VEN-653: a real page under `/sign-up`, so a signed-out visit resumes it.
+  it('keeps the customer name step, the one resumable page under /sign-up', () => {
+    expect(safeReturnPath('/sign-up/customer-details')).toBe('/sign-up/customer-details');
+    expect(signInPathReturningTo('/sign-up/customer-details')).toBe(
+      '/sign-in?returnTo=%2Fsign-up%2Fcustomer-details',
+    );
+    expect(safeReturnPath('/sign-up/customer-details/x')).toBeNull();
+    expect(safeReturnPath('/sign-up/vendor-details')).toBeNull();
+  });
+
   it('rejects nothing at all', () => {
     expect(safeReturnPath(null)).toBeNull();
     expect(safeReturnPath(undefined)).toBeNull();

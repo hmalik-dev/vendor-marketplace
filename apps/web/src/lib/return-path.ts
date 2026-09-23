@@ -25,8 +25,24 @@ export const RETURN_PATH_PARAM = 'returnTo';
  */
 export const REQUEST_PATH_HEADER = 'x-orla-request-path';
 
+/**
+ * The mandatory name step a customer with no `firstName`/`lastName` yet lands
+ * on right after `/accept-terms`, before anywhere else (VEN-642). Named to
+ * match the vendor sign-up flow's `VENDOR_DETAILS_PATH` sibling. Declared here
+ * rather than in `role-routes` because the loop guard below exempts it.
+ */
+export const CUSTOMER_DETAILS_PATH = '/sign-up/customer-details';
+
 /** Paths that must never be a destination, because landing on one loops. */
 const LOOPING_PREFIXES = ['/sign-in', '/sign-up', '/after-sign-in'] as const;
+
+/**
+ * Screens under a looping prefix that are real, session-gated pages, so a
+ * signed-out visit has somewhere to resume (VEN-653). They cannot loop through
+ * `/after-sign-in`: `postSignInPath` exchanges this one for the role's start,
+ * and a customer who still owes it is sent there before any destination.
+ */
+const RESUMABLE_PATHS: readonly string[] = [CUSTOMER_DETAILS_PATH];
 
 /** Origin used only to parse a path; never emitted, never compared against. */
 const PARSE_ORIGIN = 'https://return-path.invalid';
@@ -92,6 +108,7 @@ export function safeReturnPath(value: string | null | undefined): string | null 
 
   // The loop guard runs on the resolved path, so dot segments cannot evade it.
   if (
+    !RESUMABLE_PATHS.includes(url.pathname) &&
     LOOPING_PREFIXES.some(
       (prefix) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`),
     )
