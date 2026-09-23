@@ -205,6 +205,72 @@ describe('runSmokeCheck', () => {
   });
 
   /*
+   * VEN-656. The API returns the name as JSON, the page as HTML text React has
+   * entity-escaped, so the two never compare equal on a special character.
+   * Staging failed a healthy release on "Kessler & Co.".
+   */
+  function renders(vendors: string, page: string): typeof fetch {
+    return vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+
+      if (url.endsWith('/ready')) return response(READY);
+      if (url.startsWith(`${API}/vendors`)) return response(vendors);
+
+      return response(page);
+    }) as unknown as typeof fetch;
+  }
+
+  it('recognizes a name the page rendered HTML-escaped', async () => {
+    const fetchImpl = renders(
+      '{"items":[{"businessName":"Kessler & Co.","slug":"kessler-co"}]}',
+      '<html><body><h1>Kessler &amp; Co.</h1></body></html>',
+    );
+
+    const result = await runSmokeCheck({ apiUrl: API, webUrl: WEB, fetchImpl, ...controls() });
+
+    expect(result.ok).toBe(true);
+    expect(result.checks[2]).toEqual({
+      name: 'Web renders real data',
+      ok: true,
+      detail: `${WEB}/vendors/kessler-co rendered "Kessler & Co."`,
+    });
+  });
+
+  /* Quotes are escaped twice over: `\"` in the JSON, `&quot;` in the page. */
+  it('recognizes every character React escapes, in each entity form', async () => {
+    const fetchImpl = renders(
+      String.raw`{"items":[{"businessName":"Tom \"T\" O'Neil <Events> & Hire","slug":"tom-oneil"}]}`,
+      '<h1>Tom &quot;T&quot; O&#x27;Neil &lt;Events&gt; &#38; Hire</h1>',
+    );
+
+    const result = await runSmokeCheck({ apiUrl: API, webUrl: WEB, fetchImpl, ...controls() });
+
+    expect(result.checks[1]?.detail).toBe(`read "Tom "T" O'Neil <Events> & Hire" from the API`);
+    expect(result.checks[2]).toMatchObject({ name: 'Web renders real data', ok: true });
+    expect(result.ok).toBe(true);
+  });
+
+  /* Decoding once, not repeatedly: a name that literally reads "A &amp; B" is not "A & B". */
+  it('still fails when only a different name appears after decoding', async () => {
+    const fetchImpl = renders(
+      '{"items":[{"businessName":"A &amp; B","slug":"a-b"}]}',
+      '<h1>A &amp; B</h1>',
+    );
+
+    const result = await runSmokeCheck({
+      apiUrl: API,
+      webUrl: WEB,
+      fetchImpl,
+      ...controls(),
+      deadlineMs: 20,
+      retryDelayMs: 5,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.checks[2]).toMatchObject({ name: 'Web renders real data', ok: false });
+  });
+
+  /*
    * VEN-598. `staging`/`production` seed no vendor of their own — real
    * sign-ups only — so the very first release onto a freshly-migrated
    * environment has none yet. That is not a broken release: `/ready` already

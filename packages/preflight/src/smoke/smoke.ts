@@ -186,7 +186,7 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
       return { ok: false, detail: `HTTP ${response.status}` };
     }
 
-    const name = /"businessName"\s*:\s*"([^"]+)"/.exec(response.body)?.[1];
+    const name = jsonString(/"businessName"\s*:\s*("(?:[^"\\]|\\.)+")/.exec(response.body)?.[1]);
     const slug = /"slug"\s*:\s*"([^"]+)"/.exec(response.body)?.[1];
 
     if (name && slug) {
@@ -234,7 +234,7 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
      * an API outage by design, so only a value that had to come from the API
      * shows the two halves are actually talking.
      */
-    const rendered = response.body.includes(name);
+    const rendered = decodeEntities(response.body).includes(name);
 
     return {
       ok: rendered,
@@ -246,4 +246,41 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
   checks.push({ name: 'Web renders real data', ok: front.ok, detail: front.detail });
 
   return { ok: checks.every((check) => check.ok), checks };
+}
+
+/** A captured JSON string literal, quotes included, as the value it encodes. */
+function jsonString(literal: string | undefined): string | undefined {
+  if (literal === undefined) return undefined;
+
+  try {
+    return JSON.parse(literal) as string;
+  } catch {
+    return undefined;
+  }
+}
+
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+/**
+ * HTML text as the reader sees it. React escapes `&`, `<`, `>`, `"` and `'` in
+ * rendered text (VEN-656: "Kessler & Co." arrives as `Kessler &amp; Co.`), so
+ * a name read from the API's JSON is only comparable after decoding. One pass,
+ * so `&amp;lt;` stays the literal text `&lt;`.
+ */
+function decodeEntities(html: string): string {
+  return html.replace(/&(?:#x([0-9a-f]+)|#(\d+)|([a-z]+));/gi, (entity, hex, dec, named) => {
+    if (hex !== undefined || dec !== undefined) {
+      const code = Number.parseInt(hex ?? dec, hex !== undefined ? 16 : 10);
+
+      return code <= 0x10ffff ? String.fromCodePoint(code) : entity;
+    }
+
+    return NAMED_ENTITIES[(named as string).toLowerCase()] ?? entity;
+  });
 }
