@@ -858,6 +858,29 @@ export function VendorProfileForm({
                   <FieldMessage issue={validation.issueFor('businessName')} />
                 </div>
 
+                <div>
+                  <Label htmlFor="slug">Profile link</Label>
+                  <Input
+                    id="slug"
+                    value={form.slug}
+                    onChange={(event) => update('slug', event.target.value)}
+                    placeholder={generateSlug(form.businessName || 'your-business')}
+                    className="mt-1.5 bg-stone-0"
+                    {...errorProps(validation.issueFor('slug'))}
+                  />
+                  <FieldMessage issue={validation.issueFor('slug')} />
+                  <p className="mt-1 truncate text-xs text-stone-600">
+                    {BRAND_DOMAIN}/vendors/{slugPreview}
+                  </p>
+                </div>
+
+                {/*
+                  Its own row (`sm:col-span-2`), after the Business
+                  name/Profile link pair rather than between them — frame `09`
+                  pairs those two in one row, and inserting a row ahead of
+                  `slug` pushed it out of that pairing into an empty second
+                  cell (parity pass, VEN-642).
+                */}
                 <div className="grid grid-cols-2 gap-3 sm:col-span-2">
                   <div>
                     <Label htmlFor="firstName">First name</Label>
@@ -886,22 +909,6 @@ export function VendorProfileForm({
                     />
                     <FieldMessage issue={validation.issueFor('lastName')} />
                   </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="slug">Profile link</Label>
-                  <Input
-                    id="slug"
-                    value={form.slug}
-                    onChange={(event) => update('slug', event.target.value)}
-                    placeholder={generateSlug(form.businessName || 'your-business')}
-                    className="mt-1.5 bg-stone-0"
-                    {...errorProps(validation.issueFor('slug'))}
-                  />
-                  <FieldMessage issue={validation.issueFor('slug')} />
-                  <p className="mt-1 truncate text-xs text-stone-600">
-                    {BRAND_DOMAIN}/vendors/{slugPreview}
-                  </p>
                 </div>
 
                 <div className="sm:col-span-2">
