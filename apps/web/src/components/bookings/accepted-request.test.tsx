@@ -45,6 +45,8 @@ function booking(overrides: Partial<WireBooking> = {}): WireBooking {
     eventDate: FAR_EVENT,
     totalAmountCents: 145_000,
     status: 'confirmed',
+    fullRefundCutoffHours: 48,
+    lateRefundRateBps: 5_000,
     ...overrides,
   } as unknown as WireBooking;
 }
@@ -161,6 +163,29 @@ describe('AcceptedRequest', () => {
     );
 
     expect(screen.getByText(/refunds \$725 of \$1,450\./)).toBeDefined();
+  });
+
+  /*
+   * VEN-647: the booking's own terms, not today's constants. A booking sold under
+   * a 96-hour, 25% policy is quoted by it three days out, where today's 48 hours
+   * would still refund in full.
+   */
+  it('quotes the refund by the terms the booking was sold under', () => {
+    const threeDaysOut = '2027-01-04';
+    render(
+      <AcceptedRequest
+        request={acceptedRequest({ eventDate: threeDaysOut })}
+        booking={booking({
+          eventDate: threeDaysOut,
+          fullRefundCutoffHours: 96,
+          lateRefundRateBps: 2_500,
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText(/inside 96 hours, so cancelling now refunds \$362\.50 of \$1,450\./),
+    ).toBeDefined();
   });
 
   /*

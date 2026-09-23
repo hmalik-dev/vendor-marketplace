@@ -1,11 +1,10 @@
 import {
   BOOKING_PAYMENT_WINDOW_DAYS,
   BOOKING_REQUEST_EXPIRY_DAYS,
+  BPS_PER_UNIT,
   DEFAULT_PLATFORM_FEE_RATE,
   EXPIRABLE_BOOKING_REQUEST_STATUSES,
-  FULL_REFUND_CUTOFF_HOURS,
   HELD_PAYOUT_STATUSES,
-  LATE_CANCELLATION_REFUND_RATE,
   MAX_EVENT_DATE_MONTHS_AHEAD,
   MAX_SLUG_LENGTH,
   PAYOUT_RELEASE_HOURS,
@@ -13,6 +12,7 @@ import {
   type BookingStatus,
   type PayoutModel,
   type PayoutStatus,
+  type RefundTerms,
 } from '../constants/index.js';
 
 const SLUG_FALLBACK = 'vendor';
@@ -182,9 +182,14 @@ export interface RefundQuote {
  * What a cancellation returns, decided in one place for both sides.
  *
  * D3 fixed these tiers platform-wide rather than per vendor, so this is
- * arithmetic and not policy lookup: at or beyond `FULL_REFUND_CUTOFF_HOURS`
+ * arithmetic and not policy lookup: at or beyond `terms.fullRefundCutoffHours`
  * the customer gets everything back, inside it they get
- * `LATE_CANCELLATION_REFUND_RATE` of it.
+ * `terms.lateRefundRateBps` of it.
+ *
+ * **`terms` are the booking's own**, stored when it was sold (VEN-647): a later
+ * change to `FULL_REFUND_CUTOFF_HOURS` or `LATE_CANCELLATION_REFUND_RATE` must
+ * not re-price a booking already paid for. Only a caller with no booking yet —
+ * checkout, a quote — passes `CURRENT_REFUND_TERMS`.
  *
  * **The comparison is against the start of the event day in UTC.** `eventDate`
  * is a `DATE` column and carries no time, so "48 hours before the event" has to
@@ -199,6 +204,7 @@ export interface RefundQuote {
 export function calculateRefund(
   totalCents: number,
   eventDate: string,
+  terms: RefundTerms,
   now: Date = new Date(),
 ): RefundQuote {
   if (!Number.isInteger(totalCents) || totalCents < 0) {
@@ -212,10 +218,12 @@ export function calculateRefund(
   }
 
   const hoursUntilEvent = Math.max((eventStart.getTime() - now.getTime()) / MS_PER_HOUR, 0);
-  const isFullRefund = hoursUntilEvent >= FULL_REFUND_CUTOFF_HOURS;
+  const isFullRefund = hoursUntilEvent >= terms.fullRefundCutoffHours;
 
   return {
-    refundCents: isFullRefund ? totalCents : Math.round(totalCents * LATE_CANCELLATION_REFUND_RATE),
+    refundCents: isFullRefund
+      ? totalCents
+      : Math.round((totalCents * terms.lateRefundRateBps) / BPS_PER_UNIT),
     isFullRefund,
     hoursUntilEvent,
   };
@@ -267,6 +275,7 @@ export interface RefundScheduleRow {
 export function refundSchedule(
   totalCents: number,
   eventDate: string,
+  terms: RefundTerms,
 ): readonly RefundScheduleRow[] | null {
   const eventStart = parseDateString(eventDate);
 
@@ -276,11 +285,11 @@ export function refundSchedule(
 
   /*
    * The instant the full-refund window closes. `calculateRefund` is inclusive
-   * at the cutoff — `hoursUntilEvent >= FULL_REFUND_CUTOFF_HOURS` — so the late
+   * at the cutoff — `hoursUntilEvent >= fullRefundCutoffHours` — so the late
    * window opens one millisecond later, and the rows below stay a partition of
    * the timeline rather than two intervals that overlap at a point.
    */
-  const cutoff = new Date(eventStart.getTime() - FULL_REFUND_CUTOFF_HOURS * MS_PER_HOUR);
+  const cutoff = new Date(eventStart.getTime() - terms.fullRefundCutoffHours * MS_PER_HOUR);
   const lateFrom = new Date(cutoff.getTime() + 1);
   const releaseAt = new Date(eventStart.getTime() + PAYOUT_RELEASE_HOURS * MS_PER_HOUR);
 
@@ -288,12 +297,12 @@ export function refundSchedule(
     {
       kind: 'full',
       from: null,
-      refundCents: calculateRefund(totalCents, eventDate, cutoff).refundCents,
+      refundCents: calculateRefund(totalCents, eventDate, terms, cutoff).refundCents,
     },
     {
       kind: 'late',
       from: lateFrom,
-      refundCents: calculateRefund(totalCents, eventDate, lateFrom).refundCents,
+      refundCents: calculateRefund(totalCents, eventDate, terms, lateFrom).refundCents,
     },
     /*
      * Not a refund claim, which is why `refundCents` is null rather than a

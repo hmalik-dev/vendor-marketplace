@@ -575,6 +575,20 @@
       "when": 1790138181299,
       "tag": "0081_lame_spot",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1790171137686,
+      "tag": "0082_mushy_power_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1790171148978,
+      "tag": "0083_booking_events_triggers",
+      "breakpoints": true
     }
   ]
 }

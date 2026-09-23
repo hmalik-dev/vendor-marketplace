@@ -6,6 +6,7 @@ import {
   ADMIN_ACTIONS,
   AVAILABILITY_STATUSES,
   BOOKING_CANCELLED_BY,
+  BOOKING_EVENT_SUBJECTS,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
   BUDGET_TIERS,
@@ -98,6 +99,7 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'operator_alert_kind', values: OPERATOR_ALERT_KINDS },
     { enumName: 'operator_alert_outcome', values: OPERATOR_ALERT_OUTCOMES },
     { enumName: 'vendor_application_status', values: VENDOR_APPLICATION_STATUSES },
+    { enumName: 'booking_event_subject', values: BOOKING_EVENT_SUBJECTS },
   ];
 
   it.each(cases)(
