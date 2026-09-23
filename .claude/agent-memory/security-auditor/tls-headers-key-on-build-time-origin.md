@@ -42,6 +42,15 @@ Chromium exempts the _initial_ request to a trustworthy host but upgrades a
    `WEB_URL=http://...` is accepted on a deployment. Only
    `pnpm preflight --env production` applies `productionShape` (HTTPS-only).
 
+4. **VEN-606 baked `siteOrigin()` into the bundle** as `SITE_ORIGIN` (next.config
+   `env`), so canonicals, `og:url`, sitemap, robots and security.txt now all ride
+   the unhashed-`WEB_URL` replay above. `siteOrigin` returns any non-empty
+   `SITE_ORIGIN` verbatim, and next.config's own call reads raw `process.env`, so
+   a stray unregistered `SITE_ORIGIN` in a build env skips WEB_URL's shape and the
+   no-localhost fallback (low; fix is to pass `SITE_ORIGIN: undefined` there).
+   Tier noindex (`searchIndexed`) is `=== 'production'` on the default-`local`
+   `DEPLOY_ENV`: fail-closed, do not re-probe.
+
 Nothing asserts the header after a deploy: `packages/preflight/src/smoke/`
 checks that the deployment answers, not what it answers with. A silent loss
 stays silent. See [[deployment-gate-detects-by-marker-and-fails-open]] — that

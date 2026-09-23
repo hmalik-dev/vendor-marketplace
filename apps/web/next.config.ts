@@ -4,7 +4,7 @@ import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
 import { releaseIdentifier } from '@vendor-marketplace/shared/env';
 import { errorIngestOrigin, sentryBuildOptions } from './src/config/error-reporting';
-import { assertWebEnv, searchIndexed, servesOverTls, siteOrigin } from './src/config/env';
+import { assertWebEnv, servesOverTls, siteOrigin } from './src/config/env';
 import {
   DEVICE_SIZES,
   IMAGE_MINIMUM_CACHE_TTL,
@@ -117,7 +117,9 @@ const nextConfig: NextConfig = {
     CSP_HEADER_NAME: cspHeaderName(cspEnforced),
     // VEN-606: the origin resolved once, here, so a request never re-derives
     // it from a runtime environment that lacks `WEB_URL`. See `siteOrigin`.
-    SITE_ORIGIN: siteOrigin(),
+    // Resolved from `WEB_URL` and the platform, never from a stray
+    // `SITE_ORIGIN` in the build shell, which no registry row validates.
+    SITE_ORIGIN: siteOrigin({ ...process.env, SITE_ORIGIN: undefined }),
   },
 
   /*
@@ -159,7 +161,7 @@ const nextConfig: NextConfig = {
         // header that only covers pages leaves the interesting paths bare.
         // The CSP is the exception: it is per-request, see `src/middleware.ts`.
         source: '/:path*',
-        headers: securityHeaders({ https: servesTls, indexed: searchIndexed(webEnv.DEPLOY_ENV) }),
+        headers: securityHeaders({ https: servesTls, deployEnv: webEnv.DEPLOY_ENV }),
       },
       {
         /*

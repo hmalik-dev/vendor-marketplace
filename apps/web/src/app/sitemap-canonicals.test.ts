@@ -115,13 +115,21 @@ describe('every production sitemap URL is its own canonical', () => {
       const page = await resolvedMetadata(url);
       const base = page.metadataBase ?? layout.metadataBase;
       const canonical = absolute((page.alternates ?? layout.alternates)?.canonical, base);
-      const ogUrl = absolute((page.openGraph ?? layout.openGraph)?.url, base);
+      const openGraph = page.openGraph ?? layout.openGraph;
+      const ogUrl = absolute(openGraph?.url, base);
 
       if (canonical !== url.href) {
         mismatches.push(`${url.href} canonical=${canonical ?? 'none'}`);
       }
       if (ogUrl !== url.href) {
         mismatches.push(`${url.href} og:url=${ogUrl ?? 'none'}`);
+      }
+      // A page that sets its own `openGraph` drops the file-based card unless
+      // it names an image, so each must carry one. `/` is the exception: it
+      // is the segment `opengraph-image.tsx` lives in, so Next attaches the
+      // card there whatever the page sets.
+      if (url.pathname !== '/' && !openGraph?.images) {
+        mismatches.push(`${url.href} og:image=none`);
       }
     }
 

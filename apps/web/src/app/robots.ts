@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
-import { searchIndexed, siteOrigin } from '@/config/env';
+import { siteOrigin } from '@/config/env';
+import { searchIndexed } from '@/config/indexing';
 
 /**
  * Everything a signed-in person sees is disallowed, and everything a visitor

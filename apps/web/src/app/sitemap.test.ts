@@ -1,10 +1,7 @@
 import { CATEGORY_SEEDS } from '@vendor-marketplace/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/config/env', async (actual) => ({
-  ...(await actual<typeof import('@/config/env')>()),
-  siteOrigin: () => 'https://orla.example.com',
-}));
+vi.mock('@/config/env', () => ({ siteOrigin: () => 'https://orla.example.com' }));
 
 const apiRequest = vi.fn();
 vi.mock('@/lib/api-client', () => ({ apiRequest: (p: string, o: unknown) => apiRequest(p, o) }));

@@ -6,7 +6,8 @@ import {
   vendorSearchResultSchema,
 } from '@vendor-marketplace/shared';
 import type { MetadataRoute } from 'next';
-import { searchIndexed, siteOrigin } from '@/config/env';
+import { siteOrigin } from '@/config/env';
+import { searchIndexed } from '@/config/indexing';
 import { apiRequest } from '@/lib/api-client';
 
 /**

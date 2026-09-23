@@ -9,6 +9,8 @@
  * exactly the kind of thing that is silently wrong for months.
  */
 
+import { searchIndexed } from './indexing';
+
 /**
  * Where the middleware puts the per-request nonce on the request, so a server
  * component can stamp it on a `<script>` it renders itself (JSON-LD).
@@ -212,10 +214,11 @@ export interface SecurityHeaderOptions {
    */
   https: boolean;
   /**
-   * Whether this tier may be indexed (`searchIndexed`). Required rather than
-   * defaulted, so a caller that forgets it cannot open a tier to crawlers.
+   * The validated `DEPLOY_ENV`. Required rather than defaulted, and read
+   * through `searchIndexed`, so only an exact `production` opens the tier to
+   * crawlers and a forgotten or missing value closes it.
    */
-  indexed: boolean;
+  deployEnv: string | undefined;
 }
 
 /** The headers that are the same on every response. The CSP is per-request: see `middleware.ts`. */
@@ -265,7 +268,7 @@ export function securityHeaders(options: SecurityHeaderOptions): HeaderRule[] {
    * every response, assets and API routes included, because a crawler can
    * reach any of them.
    */
-  if (!options.indexed) {
+  if (!searchIndexed(options.deployEnv)) {
     headers.push({ key: 'X-Robots-Tag', value: 'noindex, nofollow' });
   }
 
