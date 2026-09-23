@@ -31,10 +31,19 @@ vi.mock('next/server', async (importOriginal) => ({
 const { POST } = await import('./route');
 const { resetThrottle } = await import('@/lib/auth/proxy-throttle');
 
+/*
+ * No web tier key unless a suite sets one: with a key the throttle and the
+ * internal calls reach a real API, and a lane's env (VEN-662) carries one.
+ */
 beforeEach(() => {
+  vi.stubEnv('WEB_TIER_KEY', '');
   authConfigured.mockReset().mockReturnValue(true);
   mintedUserIdForCaller.mockReset().mockResolvedValue(undefined);
   getSession.mockReset().mockResolvedValue({ data: null });
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 const REQUEST = 'email-otp/request-password-reset';
