@@ -124,38 +124,43 @@ test.describe('a refused vendor sign-up', () => {
 
       await signInThroughTheForm(page, account);
 
-      // Confirm as a vendor if the picker is showing (see the "not idempotent"
+      // Confirm as a vendor when the screen is showing (see the "not idempotent"
       // note above for when it is not) — the gate refuses it and VEN-512's
       // client funnel bounces straight to the details screen.
       if (new URL(page.url()).pathname === TERMS_ACCEPTANCE_PATH) {
         await waitForHydration(page, 'form');
         const vendorOption = page.getByRole('radio', { name: /^I'm a vendor/ });
 
-        if ((await vendorOption.count()) > 0) {
-          await vendorOption.click({ force: true });
+        /*
+          The picker renders only after the mount effect has read the sign-up
+          hint, which is after hydration: wait for it rather than sample a
+          count that can land before it. A fresh context has no hint, so it
+          always appears.
+        */
+        await expect(vendorOption).toHaveCount(1);
 
-          const [acceptResponse] = await Promise.all([
-            page.waitForResponse(
-              (response) => new URL(response.url()).pathname === '/legal/terms/accept',
-            ),
-            page.getByRole('button', { name: 'Continue' }).click(),
-          ]);
+        await vendorOption.click({ force: true });
 
-          // The gate must genuinely refuse this address. A success here would
-          // create a real, permanent `users` row for the shared no-row persona
-          // every other spec depends on staying row-less — this has to fail
-          // loudly rather than let that account get silently promoted.
-          expect(
-            acceptResponse.status(),
-            'the invite gate did not refuse this vendor sign-up',
-          ).toBe(403);
-          const body = (await acceptResponse.json()) as { error?: string };
-          expect(body.error).toBe(ERROR_CODES.VENDOR_NOT_INVITED);
+        const [acceptResponse] = await Promise.all([
+          page.waitForResponse(
+            (response) => new URL(response.url()).pathname === '/legal/terms/accept',
+          ),
+          page.getByRole('button', { name: 'Continue' }).click(),
+        ]);
 
-          await page.waitForURL((url) => url.pathname !== TERMS_ACCEPTANCE_PATH, {
-            timeout: 10_000,
-          });
-        }
+        // The gate must genuinely refuse this address. A success here would
+        // create a real, permanent `users` row for the shared no-row persona
+        // every other spec depends on staying row-less — this has to fail
+        // loudly rather than let that account get silently promoted.
+        expect(acceptResponse.status(), 'the invite gate did not refuse this vendor sign-up').toBe(
+          403,
+        );
+        const body = (await acceptResponse.json()) as { error?: string };
+        expect(body.error).toBe(ERROR_CODES.VENDOR_NOT_INVITED);
+
+        await page.waitForURL((url) => url.pathname !== TERMS_ACCEPTANCE_PATH, {
+          timeout: 10_000,
+        });
       }
 
       expect(await settledPath(page)).toBe(VENDOR_DETAILS_PATH);

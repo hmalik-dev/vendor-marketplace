@@ -4,16 +4,29 @@
  * readable `exp` yields `null` and is never cached.
  */
 export function tokenExpiryMs(token: string): number | null {
+  const exp = tokenClaim(token, 'exp');
+  return typeof exp === 'number' ? exp * 1000 : null;
+}
+
+/**
+ * Reads the `email` claim from a JWT payload, unverified. Only for a token this
+ * server just minted from its own session, where it names the signed-in address.
+ */
+export function tokenEmail(token: string): string | null {
+  const email = tokenClaim(token, 'email');
+  return typeof email === 'string' && email !== '' ? email : null;
+}
+
+function tokenClaim(token: string, name: string): unknown {
   const payload = token.split('.')[1];
   if (!payload) {
-    return null;
+    return undefined;
   }
 
   try {
     const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-    const exp = (JSON.parse(json) as { exp?: unknown }).exp;
-    return typeof exp === 'number' ? exp * 1000 : null;
+    return (JSON.parse(json) as Record<string, unknown>)[name];
   } catch {
-    return null;
+    return undefined;
   }
 }

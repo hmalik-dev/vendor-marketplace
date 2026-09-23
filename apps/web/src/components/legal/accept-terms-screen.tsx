@@ -31,11 +31,13 @@ import { useApi } from '@/lib/use-api';
 /**
  * The first screen after verification — two screens under one route.
  *
- * **First acceptance (VEN-507): confirm the role, continue under a notice.**
- * The choice made at sign-up is only a hint, so this screen asks again —
- * preselecting the hint, or the invite's `vendor`, and otherwise nothing — and
- * the server stores what is submitted here, with the account and the acceptance
- * in one transaction. There is **no checkbox**: "By continuing you agree to the
+ * **First acceptance (VEN-507): the role, then continue under a notice.** The
+ * sign-up form tells the person their choice can't be changed later, so a role
+ * this browser remembers from sign-up is stated, never asked again. Only when
+ * it is absent (another device, blocked storage, over a day old) does this
+ * screen ask — preselecting the invite's `vendor`, and otherwise nothing. The
+ * server stores what is submitted here, with the account and the acceptance in
+ * one transaction. There is **no checkbox**: "By continuing you agree to the
  * Terms and Privacy Policy" sits under the submit, and the row is recorded as a
  * `continue_notice`, never as a ticked box. An account that already exists shows
  * its stored role read-only: nothing here can change it.
@@ -57,6 +59,8 @@ export interface AcceptTermsScreenProps {
   terms: LegalDocument;
   /** Where the reader was going before the gate, already validated. */
   returnTo: string | null;
+  /** The signed-in address: the sign-up role is read only when it was remembered for this one. */
+  email: string | null;
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -99,6 +103,7 @@ export function AcceptTermsScreen({
   status,
   terms,
   returnTo,
+  email,
 }: AcceptTermsScreenProps): React.ReactElement {
   const request = useApi();
   const router = useRouter();
@@ -109,6 +114,11 @@ export function AcceptTermsScreen({
   const inFlight = useRef(false);
 
   const [role, setRole] = useState<SignUpRole | null>(null);
+  /* The role this browser carried over from the sign-up form, once read after mount. */
+  const [hint, setHint] = useState<{ read: boolean; role: SignUpRole | null }>({
+    read: false,
+    role: null,
+  });
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -118,9 +128,10 @@ export function AcceptTermsScreen({
   /*
    * Preselection is read after mount, never during render: `localStorage` does
    * not exist on the server, so reading it in the initial state would render
-   * one thing there and another on hydration. Order: the browser hint (under a
-   * day old, validated by `readSignUpRole`), then the invite's `vendor`, then
-   * nothing — never a default. A choice the person already made is kept.
+   * one thing there and another on hydration. The browser hint (under a day
+   * old, written for this address, validated by `readSignUpRole`) is the
+   * choice made at sign-up and is shown as made; without one, the invite's `vendor` preselects the picker,
+   * and otherwise nothing — never a default. A choice already made is kept.
    *
    * **Deliberately never skips this screen on a hint alone** (VEN-512): an
    * earlier version read a `vendor` hint against an address the gate would
@@ -135,14 +146,18 @@ export function AcceptTermsScreen({
    */
   useEffect(() => {
     if (!tickMode && storedRole === null) {
-      setRole((chosen) => chosen ?? readSignUpRole() ?? status.suggestedRole);
+      const remembered = email === null ? null : readSignUpRole(email);
+      setHint({ read: true, role: remembered });
+      setRole((chosen) => chosen ?? remembered ?? status.suggestedRole);
     }
-  }, [tickMode, storedRole, status.suggestedRole]);
+  }, [tickMode, storedRole, status.suggestedRole, email]);
 
   function choose(next: SignUpRole): void {
     setRole(next);
-    /* Kept as the hint, so a reload lands on the same choice. It is still only a hint. */
-    rememberSignUpRole(next);
+    /* Remembered for this address, so a reload states the choice rather than asking again. */
+    if (email !== null) {
+      rememberSignUpRole(next, email);
+    }
   }
 
   function continueOn(): void {
@@ -157,6 +172,9 @@ export function AcceptTermsScreen({
       returnTo ? `/after-sign-in?returnTo=${encodeURIComponent(returnTo)}` : '/after-sign-in',
     );
   }
+
+  /* A role already decided — stored on the account, or chosen at sign-up — is stated, not asked. */
+  const knownRole = storedRole ?? hint.role;
 
   const ready = tickMode ? agreed : storedRole !== null || role !== null;
 
@@ -277,14 +295,7 @@ export function AcceptTermsScreen({
           </p>
         </>
       ) : (
-        <>
-          <p className="text-label font-semibold tracking-label text-stone-600 uppercase">
-            One last step
-          </p>
-          <h1 className="display-heading mt-2 text-display-md text-stone-900">
-            Confirm how you&apos;re joining
-          </h1>
-        </>
+        <h1 className="display-heading text-display-md text-stone-900">{`Welcome to ${BRAND_NAME}`}</h1>
       )}
 
       {failed ? (
@@ -293,12 +304,12 @@ export function AcceptTermsScreen({
         </Banner>
       ) : null}
 
-      {tickMode ? null : storedRole !== null ? (
+      {tickMode ? null : knownRole !== null ? (
         <p className="mt-6 text-base leading-prose text-stone-800" data-testid="stored-role">
-          You&apos;re joining as {ROLE_LABELS[storedRole]}. This can&apos;t be changed later. To
+          You&apos;re joining as {ROLE_LABELS[knownRole]}. This can&apos;t be changed later. To
           switch, close the account and register again.
         </p>
-      ) : (
+      ) : !hint.read ? null : (
         <fieldset className="mt-6">
           <legend className="text-label font-semibold tracking-label text-stone-600 uppercase">
             How are you joining?

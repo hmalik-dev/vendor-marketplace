@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import {
+  BRAND_NAME,
   CURRENT_TERMS_VERSION,
   legalDocumentSha256,
   type TermsAcceptanceStatus,
@@ -26,6 +28,8 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }) }));
 vi.mock('@/lib/auth/auth-requests', () => ({ signOut: () => signOut() }));
 
 const TERMS = legalDocument('terms');
+/* The signed-in address the page passes down; the sign-up hint is read only for it. */
+const EMAIL = 'ada@example.com';
 
 function status(overrides: Partial<TermsAcceptanceStatus> = {}): TermsAcceptanceStatus {
   return {
@@ -91,7 +95,7 @@ function stored(role: 'customer' | 'vendor' | 'admin'): TermsAcceptanceStatus {
 describe('the role confirmed on this screen (VEN-507)', () => {
   it('preselects nothing without a hint and keeps the submit disabled', async () => {
     const user = userEvent.setup();
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     expect(radio(CUSTOMER_RADIO).checked).toBe(false);
     expect(radio(VENDOR_RADIO).checked).toBe(false);
@@ -106,19 +110,26 @@ describe('the role confirmed on this screen (VEN-507)', () => {
       throw new Error('blocked');
     });
     const user = userEvent.setup();
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     expect(radio(CUSTOMER_RADIO).checked).toBe(false);
     expect(radio(VENDOR_RADIO).checked).toBe(false);
     expect(submit().disabled).toBe(true);
   });
 
-  it('preselects a hint under a day old, and still needs the submit', async () => {
+  it('states the role chosen at sign-up instead of asking again, and still needs the submit', async () => {
     const user = userEvent.setup();
-    rememberSignUpRole('vendor');
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    rememberSignUpRole('vendor', EMAIL);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
-    expect(radio(VENDOR_RADIO).checked).toBe(true);
+    /* The sign-up form promised this can't be changed later; a picker here would contradict it. */
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.getByTestId('stored-role').textContent).toBe(
+      "You're joining as a vendor. This can't be changed later. To switch, close the account and register again.",
+    );
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(`Welcome to ${BRAND_NAME}`);
+    expect(screen.queryByText(/One last step/i)).toBeNull();
+    expect(post).not.toHaveBeenCalled();
 
     await user.click(submit());
 
@@ -127,15 +138,15 @@ describe('the role confirmed on this screen (VEN-507)', () => {
       version: CURRENT_TERMS_VERSION,
       role: 'vendor',
     });
-    expect(readSignUpRole()).toBeNull();
+    expect(readSignUpRole(EMAIL)).toBeNull();
   });
 
   it('ignores a hint older than a day', () => {
     window.localStorage.setItem(
       SIGN_UP_ROLE_KEY,
-      JSON.stringify({ role: 'vendor', at: Date.now() - SIGN_UP_ROLE_TTL_MS - 1 }),
+      JSON.stringify({ role: 'vendor', email: EMAIL, at: Date.now() - SIGN_UP_ROLE_TTL_MS - 1 }),
     );
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     expect(radio(VENDOR_RADIO).checked).toBe(false);
     expect(radio(CUSTOMER_RADIO).checked).toBe(false);
@@ -144,37 +155,95 @@ describe('the role confirmed on this screen (VEN-507)', () => {
   it('ignores a stored value that is not one of the two roles', () => {
     window.localStorage.setItem(
       SIGN_UP_ROLE_KEY,
-      JSON.stringify({ role: 'admin', at: Date.now() }),
+      JSON.stringify({ role: 'admin', email: EMAIL, at: Date.now() }),
     );
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     expect(radio(VENDOR_RADIO).checked).toBe(false);
     expect(radio(CUSTOMER_RADIO).checked).toBe(false);
   });
 
+  it('asks rather than inherit a role remembered for another address on this browser', () => {
+    rememberSignUpRole('vendor', 'someone-else@example.com');
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
+
+    expect(screen.queryByTestId('stored-role')).toBeNull();
+    expect(radio(VENDOR_RADIO).checked).toBe(false);
+    expect(radio(CUSTOMER_RADIO).checked).toBe(false);
+    expect(submit().disabled).toBe(true);
+  });
+
+  it('matches the remembered address regardless of case and surrounding space', () => {
+    rememberSignUpRole('vendor', '  Ada@Example.com ');
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
+
+    expect(screen.getByTestId('stored-role').textContent).toContain('joining as a vendor');
+  });
+
+  it('ignores a role remembered before addresses were recorded', () => {
+    window.localStorage.setItem(
+      SIGN_UP_ROLE_KEY,
+      JSON.stringify({ role: 'vendor', at: Date.now() }),
+    );
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
+
+    expect(screen.queryByTestId('stored-role')).toBeNull();
+    expect(radio(VENDOR_RADIO).checked).toBe(false);
+  });
+
+  it('asks when the session address is unknown, even with a hint present', () => {
+    rememberSignUpRole('vendor', EMAIL);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={null} />);
+
+    expect(screen.queryByTestId('stored-role')).toBeNull();
+    expect(radio(VENDOR_RADIO).checked).toBe(false);
+  });
+
+  /*
+   * The server cannot read the hint, so its render must commit to neither the
+   * picker nor the statement: a person with a hint would otherwise see a picker
+   * flash and vanish. RTL's `render` runs effects first, so only a server
+   * render sees this state.
+   */
+  it('renders neither the picker nor a role on the server, before the hint is read', () => {
+    rememberSignUpRole('vendor', EMAIL);
+    const html = renderToString(
+      <AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />,
+    );
+
+    expect(html).not.toContain('type="radio"');
+    expect(html).not.toContain('data-testid="stored-role"');
+    expect(html).toContain(`Welcome to ${BRAND_NAME}`);
+  });
+
   it('prefers the browser hint to the invite, and the invite to nothing', () => {
-    rememberSignUpRole('customer');
+    rememberSignUpRole('customer', EMAIL);
     const invited = status({ suggestedRole: 'vendor' });
     const { unmount } = render(
-      <AcceptTermsScreen status={invited} terms={TERMS} returnTo={null} />,
+      <AcceptTermsScreen status={invited} terms={TERMS} returnTo={null} email={EMAIL} />,
     );
-    expect(radio(CUSTOMER_RADIO).checked).toBe(true);
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.getByTestId('stored-role').textContent).toContain('joining as a customer');
     unmount();
 
     window.localStorage.clear();
-    render(<AcceptTermsScreen status={invited} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={invited} terms={TERMS} returnTo={null} email={EMAIL} />);
     expect(radio(VENDOR_RADIO).checked).toBe(true);
   });
 
   it('sends the role picked on the screen and keeps it across a reload', async () => {
     const user = userEvent.setup();
-    const first = render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    const first = render(
+      <AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />,
+    );
 
     await user.click(radio(VENDOR_RADIO));
     first.unmount();
 
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
-    expect(radio(VENDOR_RADIO).checked).toBe(true);
+    /* Picked here, then reloaded: the choice is made, so it is stated rather than asked again. */
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.getByTestId('stored-role').textContent).toContain('joining as a vendor');
 
     await user.click(submit());
 
@@ -185,26 +254,28 @@ describe('the role confirmed on this screen (VEN-507)', () => {
   it('leaves the hint in place when the save fails, and a retry succeeds', async () => {
     const user = userEvent.setup();
     post.mockRejectedValueOnce(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
-    rememberSignUpRole('vendor');
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    rememberSignUpRole('vendor', EMAIL);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     await user.click(submit());
     await waitFor(() => expect(screen.getByText(/Nothing has been recorded/)).toBeDefined());
 
-    expect(readSignUpRole()).toBe('vendor');
-    expect(radio(VENDOR_RADIO).checked).toBe(true);
+    expect(readSignUpRole(EMAIL)).toBe('vendor');
+    expect(screen.getByTestId('stored-role').textContent).toContain('joining as a vendor');
 
     await user.click(submit());
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
     expect(replace).toHaveBeenCalledWith('/after-sign-in');
-    expect(readSignUpRole()).toBeNull();
+    expect(readSignUpRole(EMAIL)).toBeNull();
   });
 
   it('shows an existing account read-only, offers no choice and sends no role', async () => {
     const user = userEvent.setup();
-    rememberSignUpRole('vendor');
-    render(<AcceptTermsScreen status={stored('customer')} terms={TERMS} returnTo={null} />);
+    rememberSignUpRole('vendor', EMAIL);
+    render(
+      <AcceptTermsScreen status={stored('customer')} terms={TERMS} returnTo={null} email={EMAIL} />,
+    );
 
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
     expect(screen.getByTestId('stored-role').textContent).toContain('joining as a customer');
@@ -224,7 +295,7 @@ describe('the role confirmed on this screen (VEN-507)', () => {
         account: { exists: true, role: 'customer' },
       }),
     );
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     await user.click(radio(VENDOR_RADIO));
     await user.click(submit());
@@ -246,7 +317,7 @@ describe('the role confirmed on this screen (VEN-507)', () => {
         account: { exists: true, role: 'vendor' },
       }),
     );
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     await user.click(radio(VENDOR_RADIO));
     await user.click(submit());
@@ -259,29 +330,31 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     post.mockRejectedValueOnce(
       new ApiClientError(403, 'vendor_not_invited', 'Vendor accounts are by invitation for now.'),
     );
-    rememberSignUpRole('vendor');
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    rememberSignUpRole('vendor', EMAIL);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
-    await user.click(radio(VENDOR_RADIO));
     await user.click(submit());
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/sign-up/vendor-details'));
+    expect(bodyOfPost().role).toBe('vendor');
     expect(signOut).not.toHaveBeenCalled();
-    expect(readSignUpRole()).toBe('vendor');
+    expect(readSignUpRole(EMAIL)).toBe('vendor');
   });
 
   it('never skips this screen on a browser hint alone, even one the gate would refuse (VEN-512)', async () => {
-    rememberSignUpRole('vendor');
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    rememberSignUpRole('vendor', EMAIL);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
-    // Preselected from the hint, but shown and left for the person to submit — a client value never redirects by itself.
-    await waitFor(() => expect(radio(VENDOR_RADIO).checked).toBe(true));
+    // Stated from the hint, but shown and left for the person to submit — a client value never redirects by itself.
+    await waitFor(() =>
+      expect(screen.getByTestId('stored-role').textContent).toContain('joining as a vendor'),
+    );
     expect(replace).not.toHaveBeenCalled();
     expect(post).not.toHaveBeenCalled();
   });
 
   it('has no checkbox and shows the notice with working Terms and Privacy links under the submit', () => {
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     expect(screen.queryByRole('checkbox')).toBeNull();
     const notice = document.querySelector('[data-continue-notice]') as HTMLElement;
@@ -301,8 +374,8 @@ describe('the role confirmed on this screen (VEN-507)', () => {
     let release: (value: TermsAcceptanceStatus) => void = () => undefined;
     post.mockReset();
     post.mockReturnValue(new Promise<TermsAcceptanceStatus>((resolve) => (release = resolve)));
-    rememberSignUpRole('customer');
-    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+    rememberSignUpRole('customer', EMAIL);
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     /*
      * Two submits inside one act, so React has not re-rendered `saving` between
@@ -329,7 +402,7 @@ describe('the acceptance gate', () => {
    * property, not a detail of the render.
    */
   it('starts with the box unticked and the submit disabled', () => {
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     expect(box().checked).toBe(false);
     expect(submit().disabled).toBe(true);
@@ -337,7 +410,7 @@ describe('the acceptance gate', () => {
 
   /** The document is named and linked beside the box, not merely alluded to. */
   it('names and links the document beside the box', () => {
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     const link = screen.getByRole('link', { name: 'Terms of Service' });
 
@@ -355,7 +428,7 @@ describe('the acceptance gate', () => {
    */
   it('expands the document in place without resetting the tick', async () => {
     const user = userEvent.setup();
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     await user.click(box());
     await user.click(screen.getByRole('button', { name: /Read all \d+ sections/ }));
@@ -366,7 +439,14 @@ describe('the acceptance gate', () => {
 
   it('sends the tick and the version, and forwards through /after-sign-in', async () => {
     const user = userEvent.setup();
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo="/bookings/abc" />);
+    render(
+      <AcceptTermsScreen
+        status={tickStatus()}
+        terms={TERMS}
+        returnTo="/bookings/abc"
+        email={EMAIL}
+      />,
+    );
 
     await user.click(box());
     await user.click(submit());
@@ -393,7 +473,7 @@ describe('the acceptance gate', () => {
    */
   it('sends nothing while the box is unticked', async () => {
     const user = userEvent.setup();
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     await user.click(submit());
 
@@ -407,7 +487,7 @@ describe('the acceptance gate', () => {
     post.mockRejectedValue(new ApiClientError(409, 'CONFLICT', 'not current'));
 
     const user = userEvent.setup();
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     await user.click(box());
     await user.click(submit());
@@ -422,7 +502,7 @@ describe('the acceptance gate', () => {
   it('sends a suspended account to /suspended instead of offering a retry', async () => {
     const user = userEvent.setup();
     post.mockRejectedValue(new ApiClientError(403, 'FORBIDDEN', 'This account has been suspended'));
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     await user.click(box());
     await user.click(submit());
@@ -435,7 +515,7 @@ describe('the acceptance gate', () => {
   it('ends a session the API no longer honours and returns to sign-in', async () => {
     const user = userEvent.setup();
     post.mockRejectedValue(new ApiClientError(401, 'UNAUTHORIZED', 'Sign in again'));
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     await user.click(box());
     await user.click(submit());
@@ -448,7 +528,7 @@ describe('the acceptance gate', () => {
   it('still offers a retry for a server failure', async () => {
     const user = userEvent.setup();
     post.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     await user.click(box());
     await user.click(submit());
@@ -461,7 +541,7 @@ describe('the acceptance gate', () => {
 
   /** The card promises "you don't lose your place", so an in-text link must not navigate this tab. */
   it('opens the Privacy Policy link inside the Terms card in a new tab', () => {
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     const links = screen.getAllByRole('link', { name: 'Privacy Policy' });
 
@@ -474,7 +554,7 @@ describe('the acceptance gate', () => {
   });
 
   it('shows no role choice and no notice on the new-version screen', () => {
-    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} email={EMAIL} />);
 
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
     expect(screen.queryByTestId('stored-role')).toBeNull();
