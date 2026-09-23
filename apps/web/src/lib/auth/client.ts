@@ -61,7 +61,8 @@ async function authUnavailable(response: Response): Promise<boolean> {
     return false;
   }
 
-  const body = (await response.json().catch(() => null)) as { code?: unknown } | null;
+  // No catch: an unreadable 503 body rejects, the same retryable failure as any other 5xx.
+  const body = (await response.json()) as { code?: unknown } | null;
   return body?.code === 'AUTH_UNAVAILABLE';
 }
 

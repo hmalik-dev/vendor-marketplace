@@ -110,6 +110,14 @@ describe('getSessionToken', () => {
     await expect(getSessionToken()).resolves.toBeNull();
   });
 
+  it('rejects on a 503 whose body it cannot read, like any other server failure', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('<html>Service Unavailable</html>', { status: 503 }),
+    );
+
+    await expect(getSessionToken()).rejects.toBeInstanceOf(SyntaxError);
+  });
+
   it('rejects on a server failure so the caller can retry, rather than reading it as signed out', async () => {
     fetchMock.mockResolvedValue(new Response('boom', { status: 502 }));
 
