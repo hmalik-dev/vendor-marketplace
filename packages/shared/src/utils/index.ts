@@ -232,12 +232,13 @@ export function calculateRefund(
 /** One window of the cancellation schedule, as the checkout block draws it. */
 export interface RefundScheduleRow {
   /**
-   * `full` and `late` are the two tiers `calculateRefund` implements; `release`
-   * is not a refund tier at all but the moment the money stops being the
-   * platform's to refund, because it has been paid out (D35); `vendor-cancels`
-   * is D31's rule, which no clock reaches.
+   * `full` and `late` are the two tiers `calculateRefund` implements; `closed`
+   * is where the server stops taking a cancellation at all
+   * (`isUniversallyFutureDate`); `release` is not a refund tier but the moment
+   * the money stops being the platform's to refund, because it has been paid
+   * out (D35); `vendor-cancels` is D31's rule, which no clock reaches.
    */
-  kind: 'full' | 'late' | 'release' | 'vendor-cancels';
+  kind: 'full' | 'late' | 'closed' | 'release' | 'vendor-cancels';
   /**
    * The first instant this row governs, inclusive — `null` for a row that is
    * not a window on the clock. Rows are contiguous and half-open: `from` up to
@@ -245,11 +246,60 @@ export interface RefundScheduleRow {
    */
   from: Date | null;
   /**
+   * The instant this row's window ends, as the customer is told it — `null`
+   * for a row with no end. VEN-615: a row that states only where it starts
+   * hid that the late tier ends a day before the event.
+   */
+  until: Date | null;
+  /**
    * What a cancellation inside this window returns, or `null` where the row
    * makes no refund claim. **Never a rate and never a phrase** — the whole
    * point of the block is that the customer does not do the arithmetic.
    */
   refundCents: number | null;
+}
+
+/** The instants a booking's cancellation schedule turns on, as ISO strings. */
+export interface RefundBoundaries {
+  /** The last instant a cancellation is refunded in full (inclusive). */
+  fullRefundEndsAt: string;
+  /** The first instant the server refuses a cancellation, which ends the late tier. */
+  onlineCancellationClosesAt: string;
+  /** Midnight UTC on the event date — the zero point both are measured from. */
+  eventStartsAt: string;
+}
+
+/**
+ * The first instant at which `isUniversallyFutureDate(value)` stops holding —
+ * when the server starts refusing a customer's cancellation. Derived from that
+ * predicate's arithmetic, like `universallyPastFrom`, so the two cannot drift.
+ */
+function universallyFutureUntil(eventStart: Date): Date {
+  return addDays(eventStart, -1);
+}
+
+/**
+ * The full-refund end and the online-cancellation close for one booking
+ * (VEN-615). `null` for a date string the parser rejects.
+ *
+ * When the terms' cutoff falls after the close — a cutoff under a day — the
+ * full tier ends at the close, because nothing can be cancelled online after it.
+ */
+export function refundBoundaries(eventDate: string, terms: RefundTerms): RefundBoundaries | null {
+  const eventStart = parseDateString(eventDate);
+
+  if (eventStart === null) {
+    return null;
+  }
+
+  const closes = universallyFutureUntil(eventStart);
+  const cutoff = eventStart.getTime() - terms.fullRefundCutoffHours * MS_PER_HOUR;
+
+  return {
+    fullRefundEndsAt: new Date(Math.min(cutoff, closes.getTime())).toISOString(),
+    onlineCancellationClosesAt: closes.toISOString(),
+    eventStartsAt: eventStart.toISOString(),
+  };
 }
 
 /**
@@ -270,6 +320,11 @@ export interface RefundScheduleRow {
  * that promises something the code does not do is the one failure mode here
  * that creates a dispute the platform loses".
  *
+ * **Online cancellation closes a day before the event** (VEN-615, ruling 1),
+ * so the late tier is bounded by that instant and a `closed` row follows it:
+ * a schedule that let the late tier run to the event promised a refund the
+ * server refuses.
+ *
  * `null` for a date string the parser rejects, matching `payoutReleaseAt`.
  */
 export function refundSchedule(
@@ -277,42 +332,55 @@ export function refundSchedule(
   eventDate: string,
   terms: RefundTerms,
 ): readonly RefundScheduleRow[] | null {
-  const eventStart = parseDateString(eventDate);
+  const boundaries = refundBoundaries(eventDate, terms);
 
-  if (eventStart === null) {
+  if (boundaries === null) {
     return null;
   }
 
   /*
-   * The instant the full-refund window closes. `calculateRefund` is inclusive
-   * at the cutoff — `hoursUntilEvent >= fullRefundCutoffHours` — so the late
-   * window opens one millisecond later, and the rows below stay a partition of
-   * the timeline rather than two intervals that overlap at a point.
+   * `calculateRefund` is inclusive at the cutoff —
+   * `hoursUntilEvent >= fullRefundCutoffHours` — so the late window opens one
+   * millisecond later, and the rows below stay a partition of the timeline
+   * rather than two intervals that overlap at a point.
    */
-  const cutoff = new Date(eventStart.getTime() - terms.fullRefundCutoffHours * MS_PER_HOUR);
-  const lateFrom = new Date(cutoff.getTime() + 1);
+  const fullEnds = new Date(boundaries.fullRefundEndsAt);
+  const lateFrom = new Date(fullEnds.getTime() + 1);
+  const closes = new Date(boundaries.onlineCancellationClosesAt);
+  const eventStart = new Date(boundaries.eventStartsAt);
   const releaseAt = new Date(eventStart.getTime() + PAYOUT_RELEASE_HOURS * MS_PER_HOUR);
+  const hasLateWindow = lateFrom.getTime() < closes.getTime();
 
   return [
     {
       kind: 'full',
       from: null,
-      refundCents: calculateRefund(totalCents, eventDate, terms, cutoff).refundCents,
+      until: fullEnds,
+      refundCents: calculateRefund(totalCents, eventDate, terms, fullEnds).refundCents,
     },
-    {
-      kind: 'late',
-      from: lateFrom,
-      refundCents: calculateRefund(totalCents, eventDate, terms, lateFrom).refundCents,
-    },
+    ...(hasLateWindow
+      ? [
+          {
+            kind: 'late' as const,
+            from: lateFrom,
+            until: closes,
+            refundCents: calculateRefund(totalCents, eventDate, terms, lateFrom).refundCents,
+          },
+        ]
+      : []),
     /*
-     * Not a refund claim, which is why `refundCents` is null rather than a
-     * third number. It is where the customer's money goes: #423 holds the
-     * payment until the event and releases it `PAYOUT_RELEASE_HOURS` later, so
-     * this is the last row on which a cancellation is still a plain refund
-     * rather than an unwind an operator has to drive (D31).
+     * No refund claim: the server refuses the cancellation from here on, so
+     * there is no figure to promise.
      */
-    { kind: 'release', from: releaseAt, refundCents: null },
-    { kind: 'vendor-cancels', from: null, refundCents: totalCents },
+    { kind: 'closed', from: closes, until: null, refundCents: null },
+    /*
+     * Not a refund claim either. It is where the customer's money goes: #423
+     * holds the payment until the event and releases it `PAYOUT_RELEASE_HOURS`
+     * later, so past this row a cancellation is an unwind an operator has to
+     * drive rather than a refund (D31).
+     */
+    { kind: 'release', from: releaseAt, until: null, refundCents: null },
+    { kind: 'vendor-cancels', from: null, until: null, refundCents: totalCents },
   ];
 }
 

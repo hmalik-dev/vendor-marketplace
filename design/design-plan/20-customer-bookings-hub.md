@@ -88,6 +88,14 @@ availability is live." → **Find a vendor**.
 Master–detail at ≥1280: 380px list + detail pane, independent scroll, selection in
 the URL. Below 1280 they're separate pages. Detail carries the status stepper,
 full price breakdown, cancellation policy in plain language, and a link to the thread.
+The accepted-request card states the refund deadlines as instants in the
+viewer's zone (VEN-615): _Cancel until Oct 7, 5:00 PM PDT and you're refunded
+in full — $X. After that, until Oct 8, 5:00 PM PDT, cancelling refunds $Y._;
+inside the late tier, _Cancelling now refunds $Y of $X. Online cancellation
+closes <instant>._; then _If <vendor> cancels, they do it through support and
+you're refunded in full._ Before payment: _…refunded in full if you cancel by
+<instant>._ Never "48 hours before the event" — the zero point is midnight UTC
+on the event date, so an hour count misstates it by the viewer's offset.
 
 Contextual actions: Quoted → Review quote + Decline · Accepted → Pay now ·
 Confirmed → Message + Cancel · Completed → Leave a review.

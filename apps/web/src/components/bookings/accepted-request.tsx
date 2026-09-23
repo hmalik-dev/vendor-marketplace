@@ -1,13 +1,16 @@
 'use client';
 
 import {
+  CURRENT_REFUND_TERMS,
   EVENT_TYPE_LABELS,
-  FULL_REFUND_CUTOFF_HOURS,
   calculateRefund,
   expiryCountdown,
   formatPrice,
   isUniversallyFutureDate,
+  refundBoundaries,
+  refundSchedule,
 } from '@vendor-marketplace/shared';
+import type { RefundBoundaries } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -15,6 +18,8 @@ import { Button } from '@/components/ui/button';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { formatEventDate } from '@/lib/booking-entries';
 import { useApi } from '@/lib/use-api';
+import { prePaymentRefundClause } from '@/lib/refund-deadline';
+import { formatInstant, useViewerTimeZone } from '@/lib/use-viewer-time-zone';
 import { cancelledBookingWireSchema } from '@/lib/wire-schemas';
 import type { WireBooking, WireBookingRequest } from '@/lib/wire-schemas';
 
@@ -40,6 +45,26 @@ function pulledVendorMessage(request: WireBookingRequest): string | null {
   return `${businessName} isn't taking bookings right now. This is temporary — check back a little later.${deadlineSentence}`;
 }
 
+/** The refund line for a paid, cancellable booking, given today's quote and boundaries. */
+function cancelWindowMessage(
+  quote: ReturnType<typeof calculateRefund> | null,
+  lateRefundCents: number | null,
+  boundaries: RefundBoundaries,
+  totalAmountCents: number,
+  at: (iso: string) => string,
+): string {
+  if (!quote?.isFullRefund) {
+    return `Cancelling now refunds ${formatPrice(quote?.refundCents ?? 0)} of ${formatPrice(totalAmountCents)}. Online cancellation closes ${at(boundaries.onlineCancellationClosesAt)}.`;
+  }
+
+  const lateNote =
+    lateRefundCents === null
+      ? ''
+      : ` After that, until ${at(boundaries.onlineCancellationClosesAt)}, cancelling refunds ${formatPrice(lateRefundCents)}.`;
+
+  return `Cancel until ${at(boundaries.fullRefundEndsAt)} and you're refunded in full — ${formatPrice(quote.refundCents)}.${lateNote}`;
+}
+
 /**
  * An accepted request, and the two things a customer does with one: pay for it,
  * or cancel it.
@@ -56,6 +81,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const timeZone = useViewerTimeZone();
 
   const price = request.finalPriceCents ?? request.quotedPriceCents;
   const occasion = request.eventType
@@ -81,6 +107,26 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
    */
   const cancellable =
     booking !== null && isUniversallyFutureDate(booking.eventDate) && !booking.payoutReleasedAt;
+
+  /*
+   * VEN-615: the deadlines as instants in the viewer's zone, from the same
+   * schedule checkout draws. "More than 48 hours before the event" read as
+   * the customer's own evening and overstated the full window by the offset.
+   * Before payment there is no booking yet, so today's terms apply.
+   */
+  const boundaries = refundBoundaries(
+    booking?.eventDate ?? request.eventDate,
+    booking ?? CURRENT_REFUND_TERMS,
+  );
+  const lateRefundCents = booking
+    ? (refundSchedule(booking.totalAmountCents, booking.eventDate, booking)?.find(
+        (row) => row.kind === 'late',
+      )?.refundCents ?? null)
+    : null;
+  const at = (iso: string): string => formatInstant(new Date(iso), timeZone);
+  const prePaymentClause = prePaymentRefundClause(request.eventDate, (instant) =>
+    formatInstant(instant, timeZone),
+  );
 
   async function cancel(): Promise<void> {
     if (!booking) {
@@ -154,16 +200,25 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
             This booking can no longer be cancelled here. If something went wrong, report a problem
             below.
           </p>
-        ) : booking ? (
+        ) : booking && boundaries ? (
+          <>
+            <p className="text-[12.5px] leading-[1.55] text-stone-600">
+              {cancelWindowMessage(
+                quote,
+                lateRefundCents,
+                boundaries,
+                booking.totalAmountCents,
+                at,
+              )}
+            </p>
+            <p className="text-[12.5px] leading-[1.55] text-stone-600">
+              If {request.vendor.businessName} cancels, they do it through support and you&apos;re
+              refunded in full.
+            </p>
+          </>
+        ) : pulled !== null || prePaymentClause === null ? null : (
           <p className="text-[12.5px] leading-[1.55] text-stone-600">
-            {quote?.isFullRefund
-              ? `Cancel more than ${booking.fullRefundCutoffHours} hours before the event and you're refunded in full — ${formatPrice(quote.refundCents)}.`
-              : `The event is inside ${booking.fullRefundCutoffHours} hours, so cancelling now refunds ${formatPrice(quote?.refundCents ?? 0)} of ${formatPrice(booking.totalAmountCents)}.`}
-          </p>
-        ) : pulled !== null ? null : (
-          <p className="text-[12.5px] leading-[1.55] text-stone-600">
-            The date is held. Paying now confirms it — you&apos;re refunded in full if you cancel at
-            least {FULL_REFUND_CUTOFF_HOURS} hours before the event.
+            The date is held. Paying now confirms it — {prePaymentClause}.
           </p>
         )}
 

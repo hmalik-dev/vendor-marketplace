@@ -85,6 +85,18 @@ reading this record, not drift. The frames are corrected by a design pass.
   schedule on `stone-100` at 14px radius with a 10.5px uppercase heading.
   Frame `33` draws it there, and one block replaces the two-sentence panel so
   the policy is stated once (`/terms` section 5).
+- **Its rows are instants, not days (VEN-615).** Five rows: `Until <instant>`
+  full refund · `Until <instant>` late refund · `From <instant>` _Online
+  cancellation closes. If something goes wrong, report a problem from your
+  booking._ · `After <event day>` release · `If <vendor> cancels` _**Full
+  refund**, whenever it happens — <vendor> cancels through support_. Each
+  instant is a date and time in the viewer's own zone with the zone named
+  (`Oct 7, 5:00 PM PDT`). The zero point stays midnight UTC on the event date
+  (D3); a date-only label in UTC told a Pacific customer their full refund
+  ran into a day it did not, and the late row had no end although the server
+  refuses a cancellation from midnight UTC the day before the event. A vendor
+  cannot cancel a confirmed booking in the app (VEN-659), so the vendor row
+  names the route it takes. Drawn in `delta-testmode` frame `39b`.
 - **The summary card ends at the total and the pay button is its sibling**, with
   the schedule between them (frame `33`'s composition).
 - **The line under the button reads `Held by Orla until …`, not `Held by

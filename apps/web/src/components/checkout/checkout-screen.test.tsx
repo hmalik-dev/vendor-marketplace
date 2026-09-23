@@ -212,9 +212,10 @@ describe('CheckoutScreen', () => {
     render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
 
     expect(screen.getByRole('heading', { name: /If plans change/ })).toBeDefined();
-    expect(screen.getByText('Before June 12')).toBeDefined();
+    expect(screen.getByText(/^Until Jun 12, 12:00\sAM UTC$/)).toBeDefined();
     expect(screen.getByText(/\$1,450 back/)).toBeDefined();
-    expect(screen.getByText('From June 12')).toBeDefined();
+    expect(screen.getByText(/^Until Jun 13, 12:00\sAM UTC$/)).toBeDefined();
+    expect(screen.getByText(/Online cancellation closes/)).toBeDefined();
     expect(screen.getByText(/\$725 back/)).toBeDefined();
   });
 

@@ -2,7 +2,6 @@
 
 import {
   EVENT_TYPE_LABELS,
-  FULL_REFUND_CUTOFF_HOURS,
   LIVE_BOOKING_REQUEST_STATUSES,
   expiryCountdown,
   formatPrice,
@@ -12,6 +11,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
+import { prePaymentRefundClause } from '@/lib/refund-deadline';
+import { formatInstant, useViewerTimeZone } from '@/lib/use-viewer-time-zone';
 import { formatEventDate, REQUEST_PRESENTATION } from '@/lib/booking-entries';
 import { SettlementNote } from '@/components/bookings/settlement-note';
 import { cancellationNarrative } from '@/lib/settlement-copy';
@@ -65,6 +66,10 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const timeZone = useViewerTimeZone();
+  const refundClause = prePaymentRefundClause(request.eventDate, (instant) =>
+    formatInstant(instant, timeZone),
+  );
 
   const price = request.quotedPriceCents ?? request.finalPriceCents;
   const countdown = expiryCountdown(request.expiresAt, new Date());
@@ -211,10 +216,9 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
           `20-customer-bookings-hub.md` puts it on this surface in plain
           language rather than behind a link.
         */}
-        {awaiting || settled ? null : (
+        {awaiting || settled || refundClause === null ? null : (
           <p className="text-[12.5px] leading-[1.55] text-stone-600">
-            Accepting holds the date. You are not charged yet, and a full refund applies if you
-            cancel at least {FULL_REFUND_CUTOFF_HOURS} hours before the event.
+            Accepting holds the date. You are not charged yet, and {refundClause}.
           </p>
         )}
 

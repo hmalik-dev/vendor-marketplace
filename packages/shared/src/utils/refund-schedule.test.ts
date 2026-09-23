@@ -5,7 +5,13 @@ import {
   LATE_CANCELLATION_REFUND_RATE,
   PAYOUT_RELEASE_HOURS,
 } from '../constants/index.js';
-import { calculateRefund, refundSchedule, type RefundScheduleRow } from './index.js';
+import {
+  calculateRefund,
+  isUniversallyFutureDate,
+  refundBoundaries,
+  refundSchedule,
+  type RefundScheduleRow,
+} from './index.js';
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 const EVENT_DATE = '2026-06-14';
@@ -27,10 +33,64 @@ describe('refundSchedule', () => {
     expect(refundSchedule(TOTAL_CENTS, '14/06/2026', CURRENT_REFUND_TERMS)).toBeNull();
   });
 
-  it('draws three windowed rows and a vendor-cancels row, and no non-refundable tier', () => {
+  it('draws four windowed rows and a vendor-cancels row, and no non-refundable tier', () => {
     const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS);
 
-    expect(rows?.map((row) => row.kind)).toEqual(['full', 'late', 'release', 'vendor-cancels']);
+    expect(rows?.map((row) => row.kind)).toEqual([
+      'full',
+      'late',
+      'closed',
+      'release',
+      'vendor-cancels',
+    ]);
+  });
+
+  /*
+   * VEN-615 acceptance 1. The two instants a customer acts on, as instants:
+   * the full tier ends 48 hours before midnight UTC on the event date, and
+   * online cancellation closes at midnight UTC the day before, when the
+   * server's `isUniversallyFutureDate` stops holding.
+   */
+  it('states each boundary as an exact instant', () => {
+    const rows = refundSchedule(TOTAL_CENTS, '2026-10-10', CURRENT_REFUND_TERMS) ?? [];
+
+    expect(refundBoundaries('2026-10-10', CURRENT_REFUND_TERMS)).toEqual({
+      fullRefundEndsAt: '2026-10-08T00:00:00.000Z',
+      onlineCancellationClosesAt: '2026-10-09T00:00:00.000Z',
+      eventStartsAt: '2026-10-10T00:00:00.000Z',
+    });
+    expect(rowOf(rows, 'full').until?.toISOString()).toBe('2026-10-08T00:00:00.000Z');
+    expect(rowOf(rows, 'late').until?.toISOString()).toBe('2026-10-09T00:00:00.000Z');
+    expect(rowOf(rows, 'closed').from?.toISOString()).toBe('2026-10-09T00:00:00.000Z');
+  });
+
+  it('closes online cancellation at the instant the server starts refusing it', () => {
+    const closes = new Date(
+      refundBoundaries('2026-10-10', CURRENT_REFUND_TERMS)?.onlineCancellationClosesAt ?? '',
+    );
+
+    expect(isUniversallyFutureDate('2026-10-10', new Date(closes.getTime() - 1))).toBe(true);
+    expect(isUniversallyFutureDate('2026-10-10', closes)).toBe(false);
+  });
+
+  it('returns no boundaries for a date the parser rejects', () => {
+    expect(refundBoundaries('10/10/2026', CURRENT_REFUND_TERMS)).toBeNull();
+  });
+
+  /*
+   * Terms sold under a cutoff wider than a day would leave a late window that
+   * opens after online cancellation has closed. The full tier then runs to
+   * the close and no late row is drawn, rather than a window nobody can use.
+   */
+  it('draws no late row when the cutoff falls after online cancellation closes', () => {
+    const rows =
+      refundSchedule(TOTAL_CENTS, EVENT_DATE, {
+        fullRefundCutoffHours: 12,
+        lateRefundRateBps: 5_000,
+      }) ?? [];
+
+    expect(rows.map((row) => row.kind)).toEqual(['full', 'closed', 'release', 'vendor-cancels']);
+    expect(rowOf(rows, 'full').until?.toISOString()).toBe('2026-06-13T00:00:00.000Z');
   });
 
   it('opens the late window one millisecond after the full-refund cutoff', () => {
@@ -80,10 +140,7 @@ describe('refundSchedule', () => {
     const insideLate = [
       new Date(cutoff + 1),
       new Date(cutoff + MS_PER_HOUR),
-      new Date(EVENT_START.getTime() - 1),
-      EVENT_START,
-      new Date(EVENT_START.getTime() + PAYOUT_RELEASE_HOURS * MS_PER_HOUR),
-      new Date(EVENT_START.getTime() + 5_000 * MS_PER_HOUR),
+      new Date(EVENT_START.getTime() - 24 * MS_PER_HOUR - 1),
     ];
 
     for (const now of insideFull) {
