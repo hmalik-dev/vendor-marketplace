@@ -51,5 +51,15 @@ with 100 newer rows would read as a first acceptance and skip the tick, which
 needs ~100 published document versions to reach. `insertAcceptance`'s
 `ON CONFLICT DO NOTHING` on `(user, document, version)` makes replay a no-op.
 
+**The browser hint is address-bound and stated read-only (audited PASS
+2026-09-23).** `signup-role.ts` stores `{role, email (trim+lowercase), at}`;
+`/accept-terms` reads the address from the caller's own server-minted JWT
+(`tokenEmail`, unverified decode, UI-only) and, on a match, shows the role with
+no picker. Trust is unchanged: the server still takes `role` from the body and
+enforces the invite gate. Residual, accepted: a planted hint for the victim's
+own address (needs same-origin script or the device) now removes the picker
+rather than preselecting it. Re-open if `tokenEmail` ever feeds an API call,
+an authorization branch, or a non-`force-dynamic` page.
+
 Related: [[terms-gate-is-a-five-state-session]], [[neon-auth-cutover-boundaries]],
 [[legal-acceptance-record-is-undeletable-pii]].

@@ -246,7 +246,9 @@ describe('SignUpForm', () => {
     await user.click(screen.getByRole('button', { name: CREATE }));
     await screen.findByLabelText('Verification code');
 
-    expect(readSignUpRole()).toBe('vendor');
+    expect(readSignUpRole('sam@example.com')).toBe('vendor');
+    /* Remembered for this address only: another sign-in on this browser does not inherit it. */
+    expect(readSignUpRole('other@example.com')).toBeNull();
   });
 
   it('does not remember a role, or leave the form, when the sign-up is refused', async () => {
@@ -258,7 +260,7 @@ describe('SignUpForm', () => {
     await user.click(screen.getByRole('button', { name: CREATE }));
 
     expect(await screen.findByText(/could not create that account/)).toBeDefined();
-    expect(readSignUpRole()).toBeNull();
+    expect(readSignUpRole('sam@example.com')).toBeNull();
     expect(screen.queryByLabelText('Verification code')).toBeNull();
   });
 
@@ -281,7 +283,7 @@ describe('SignUpForm', () => {
       ),
     ).toBeDefined();
     expect(screen.queryByText(/could not create that account/)).toBeNull();
-    expect(readSignUpRole()).toBeNull();
+    expect(readSignUpRole('sam@example.com')).toBeNull();
     expect(screen.queryByLabelText('Verification code')).toBeNull();
   });
 
