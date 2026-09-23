@@ -60,8 +60,7 @@ import {
   findCustomerNames,
   findVendorsByIds,
   insertRequest,
-  setHeldDate,
-  statusesOnDate,
+  syncHeldDate,
   hasRivalAcceptanceOn,
   isAcceptedDateTaken,
   lockHeldDate,
@@ -314,6 +313,14 @@ export async function ageIfExpired(
 
     const moved = await applyExpiry(tx, row.id, row.status);
     if (!moved) {
+      /*
+       * A concurrent read won the race and already aged this row.
+       * `lockHeldDate` above still inserted a `pending` placeholder if the
+       * date held nothing, and this losing transaction is about to commit it.
+       * Recomputing now reads the request as `expired` and clears it, so a
+       * loser never strands the date the winner already released.
+       */
+      await syncHeldDate(tx, row.vendorId, row.eventDate);
       return null;
     }
 
@@ -1026,35 +1033,6 @@ export async function transitionRequest(
    * (#400).
    */
   return toDetail(updated, vendor, servicePackage, await nameOf(db, updated.customerId), null);
-}
-
-/**
- * Recomputes the vendor's calendar cell for one date from the requests that
- * actually exist on it.
- *
- * Derived rather than patched, because the cell has to survive edges a
- * per-action write cannot: two live requests on one date where the vendor
- * declines only one, an accept landing on a date a rival request already held,
- * and a request ageing out on read. Recomputing is idempotent, so calling it
- * after every write costs one indexed read and can never leave the stored
- * calendar disagreeing with the queue.
- *
- * `#212` fixed the mapping: accepted is **`booked`**, because acceptance is the
- * commitment — payment turns it into a `bookings` row in #10, but the vendor
- * has already promised to turn up. Before this, accept wrote `pending`, so the
- * cell read one state below the truth and the `Booked` counter stayed at zero.
- *
- * A *live* request deliberately writes **nothing**. Search excludes any vendor
- * whose row for the date is not `available`, so persisting `pending` here would
- * take a vendor out of the market for a week on a request they have not
- * answered and never agreed to. The vendor's own calendar still shows those
- * dates as `Pending request` — `listOwnAvailability` overlays them at read
- * time, which is the one place that view is wanted.
- */
-async function syncHeldDate(db: AppDatabase, vendorId: string, date: string): Promise<void> {
-  const statuses = await statusesOnDate(db, vendorId, date);
-
-  await setHeldDate(db, vendorId, date, statuses.includes('accepted') ? 'booked' : null);
 }
 
 const TARGET_STATUS: Record<RequestAction, BookingRequestStatus> = {

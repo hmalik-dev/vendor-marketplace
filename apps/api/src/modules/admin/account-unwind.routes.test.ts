@@ -322,6 +322,61 @@ describe('an account unwind and the requests behind settled bookings', () => {
   });
 
   /**
+   * VEN-621, acceptance 4 — a customer's ban frees the date for the vendor and
+   * for the market, not just for the request row.
+   *
+   * Fresh actors throughout: the vendor and customer from the test above are
+   * spent (the first ban's customer accepted nothing, but the it.each below
+   * bans a vendor, and a banned account cannot act again).
+   */
+  it('lets the vendor edit the freed date and a new customer book it, after the holding customer is banned', async () => {
+    const localVendor = 'user_ac4_vendor';
+    const localBannedCustomer = 'user_ac4_banned_customer';
+    const localOtherCustomer = 'user_ac4_other_customer';
+
+    for (const [authUserId, role] of [
+      [localVendor, 'vendor'],
+      [localBannedCustomer, 'customer'],
+      [localOtherCustomer, 'customer'],
+    ] as const) {
+      harness.authUsers.set(authUserId, {
+        authUserId,
+        email: `${authUserId}@example.com`,
+        firstName: 'Test',
+        lastName: 'User',
+        roleHint: role,
+        avatarUrl: null,
+      });
+    }
+
+    await signInAs(harness, ADMIN, true);
+    vendorActor = localVendor;
+    customerActor = localBannedCustomer;
+    await signInAs(harness, localVendor);
+    const bannedCustomerUserId = await signInAs(harness, localBannedCustomer);
+
+    const { vendorId, packageId } = await createVendor();
+    const eventDate = toDateString(addDays(START, 200));
+    const requestId = await requestFor(vendorId, packageId, eventDate);
+    expect(
+      (await inject('POST', `/booking-requests/${requestId}/accept`, localVendor)).statusCode,
+    ).toBe(200);
+
+    const ban = await inject('PUT', `/admin/users/${bannedCustomerUserId}/ban`, ADMIN);
+    expect(ban.statusCode).toBe(200);
+    expect(await requestStatus(requestId)).toBe('declined');
+
+    const putAvailability = await inject('PUT', '/vendor/availability', localVendor, {
+      entries: [{ date: eventDate, status: 'available' }],
+    });
+    expect(putAvailability.statusCode, putAvailability.body).toBe(200);
+
+    // `requestFor` itself asserts 201 — a second customer can book the freed date.
+    customerActor = localOtherCustomer;
+    await requestFor(vendorId, packageId, eventDate);
+  });
+
+  /**
    * VEN-423. The unwind's day bound was the operator's UTC date, so a booking on
    * the next local day fell outside it for anyone west of UTC: at 01:00 UTC on
    * Oct 8 an event dated Oct 8 was neither cancelled, refunded nor notified.
