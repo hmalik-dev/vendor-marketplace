@@ -106,6 +106,37 @@ describe('SignInForm', () => {
     );
   });
 
+  /*
+   * A password sign-in is charged for its failures only (VEN-462), but a
+   * mistyped password before the right one still spends the budget: the
+   * per-address limit is 10 in 10 minutes. Before the `throttled` outcome
+   * existed, a 429 there fell into the same bucket as a genuine mismatch and
+   * told a correct password it was wrong.
+   */
+  it('says to wait, not that credentials are wrong, once throttled', async () => {
+    signInWithEmail.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignInForm destination="/after-sign-in" />);
+
+    await submit(user);
+
+    expect(
+      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+    ).toBeDefined();
+    expect(screen.queryByText('That email and password did not match.')).toBeNull();
+  });
+
+  it('does not mark the fields invalid when throttled', async () => {
+    signInWithEmail.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignInForm destination="/after-sign-in" />);
+
+    await submit(user);
+
+    await screen.findByRole('alert');
+    expect(screen.getByLabelText('Email').getAttribute('aria-invalid')).toBeNull();
+  });
+
   it('does not mark the fields invalid when the service is unreachable', async () => {
     signInWithEmail.mockResolvedValue('unreachable');
     const user = userEvent.setup();
@@ -139,6 +170,41 @@ describe('SignInForm', () => {
     expect(await screen.findByLabelText('Verification code')).toBeDefined();
     await waitFor(() => expect(resendVerificationCode).toHaveBeenCalledWith('sam@example.com'));
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('says so on the code step when the fresh code is refused (VEN-620)', async () => {
+    signInWithEmail.mockResolvedValueOnce('unverified');
+    resendVerificationCode.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignInForm destination="/after-sign-in" />);
+
+    await submit(user);
+
+    expect(await screen.findByLabelText('Verification code')).toBeDefined();
+    expect(
+      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+    ).toBeDefined();
+  });
+
+  it("keeps a resend's answer when the slower arrival send is refused after it", async () => {
+    signInWithEmail.mockResolvedValueOnce('unverified');
+    let refuseArrival: (outcome: string) => void = () => undefined;
+    resendVerificationCode
+      .mockReturnValueOnce(new Promise((resolve) => (refuseArrival = resolve)))
+      .mockResolvedValue('ok');
+    const user = userEvent.setup();
+    render(<SignInForm destination="/after-sign-in" />);
+
+    await submit(user);
+    await user.click(await screen.findByRole('button', { name: 'Send a new code' }));
+    expect(await screen.findByText('A new code is on its way.')).toBeDefined();
+
+    refuseArrival('throttled');
+    await waitFor(() => expect(resendVerificationCode).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByText('A new code is on its way.')).toBeDefined();
+    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
   });
 
   it('finishes the sign-in after the code from the unverified route is accepted', async () => {

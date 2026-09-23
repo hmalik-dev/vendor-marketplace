@@ -11,7 +11,7 @@
 - [A new secret header has three registries](new-secret-header-has-three-registries.md) — pino `redact`, Sentry `CREDENTIAL_HEADER`, and a placeholder that must fail its own shape
 - [The Resend secret's absence is refusal](resend-webhook-absence-is-refusal.md) — optional on every target is correct; no route exists without a secret
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — never add script-src hosts; CSP_ENFORCE only turns enforcement on
-- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child output redacted, `workflow_run` gated; VEN-494's branch-as-environment makes every shared-name input fall back across tiers
+- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child env/argv redacted; branch-as-environment falls back across tiers; `productionShape` gates no deploy; Resend key is full-access
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — traces carry session cookies, stripe-listen.log carries whsec; masking never reaches artifacts
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — live session JWTs; `FORBIDDEN_PATHS` covers the path, no content rule will
 - [A storage branch per lane, CI run and PR](neon-storage-branch-per-runner.md) — `NEON_API_KEY` is production-capable; keep it step-scoped and away from `npm install`
@@ -126,4 +126,4 @@
 - [Admin category writes](admin-category-writes.md) — PASS; the toggle can double-write its audit row under a concurrent repeat
 - [RLS is enabled, never forced](rls-is-enabled-not-forced-owner-bypasses.md) — VEN-504: the owner bypasses, so a future non-owner role reads zero rows silently; the guard is `relkind='r'` in `public`
 
-- [Auth proxy parser differential](auth-proxy-parser-differential.md) — a body-derived rate-limit key must fail closed; an unparseable body must not be forwarded unbudgeted
+- [Auth proxy parser differential](auth-proxy-parser-differential.md) — a body-derived rate-limit key must fail closed; sign-in tooling must not retry a credential refusal (10 failures/10 min locks a shared E2E identity)

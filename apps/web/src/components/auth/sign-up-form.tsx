@@ -3,13 +3,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { BRAND_NAME, LEGAL_PATHS } from '@vendor-marketplace/shared';
-import { AUTH_COPY } from '@/app/auth-copy';
+import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { AuthScreen } from '@/components/auth/auth-screen';
 import { VerifyEmailStep } from '@/components/auth/verify-email-step';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
-import { signUpWithEmail } from '@/lib/auth/auth-requests';
+import {
+  type AuthOutcome,
+  resendVerificationCode,
+  signUpWithEmail,
+} from '@/lib/auth/auth-requests';
 import { rememberSignUpRole, type SignUpRole } from '@/lib/auth/signup-role';
 import { cn } from '@/lib/utils';
 
@@ -96,6 +100,7 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
   /* The code step replaces the form. The role question is not asked again: the
      subhead promises the choice cannot be changed later. */
   const [verifying, setVerifying] = useState(false);
+  const [sendOutcome, setSendOutcome] = useState<AuthOutcome>('ok');
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -121,19 +126,24 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
       name: email.trim().split('@')[0] || 'member',
     });
 
-    setBusy(false);
-
     if (outcome === 'ok') {
+      /* The account exists whatever the send answers: the code step shows a
+         refused send and offers "Send a new code" rather than failing here. */
+      setSendOutcome(await resendVerificationCode(email.trim()));
+      setBusy(false);
       rememberSignUpRole(role);
       setVerifying(true);
       return;
     }
 
-    setFailure(outcome === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.signUpFailed);
+    setBusy(false);
+
+    setFailure(failureCopy(outcome, AUTH_COPY.signUpFailed));
   }
 
-  // A network failure says nothing about what the reader typed, so only a refusal marks the fields.
-  const credentialsRefused = failure !== null && failure !== AUTH_COPY.unreachable;
+  // Neither a network failure nor a throttle says anything about what the reader typed.
+  const credentialsRefused =
+    failure !== null && failure !== AUTH_COPY.unreachable && failure !== AUTH_COPY.throttled;
 
   return (
     <AuthScreen
@@ -219,7 +229,12 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
       )}
 
       {verifying ? (
-        <VerifyEmailStep email={email.trim()} password={password} destination="/after-sign-in" />
+        <VerifyEmailStep
+          email={email.trim()}
+          password={password}
+          destination="/after-sign-in"
+          sendOutcome={sendOutcome}
+        />
       ) : (
         /*
           The fields stay live with no role chosen — typing first and choosing

@@ -1,3 +1,4 @@
+import { reportSwallowedError } from '@/lib/report-error';
 import { clearSessionToken } from './client';
 
 /**
@@ -6,7 +7,8 @@ import { clearSessionToken } from './client';
  * upstream body: an upstream `message` is never rendered (see
  * `no-raw-upstream-message.test.ts`), so nothing here returns one.
  */
-export type AuthOutcome = 'ok' | 'unverified' | 'rejected' | 'unreachable';
+export type AuthOutcome =
+  'ok' | 'unverified' | 'rejected' | 'throttled' | 'codeInvalid' | 'unreachable';
 
 async function post(path: string, body: Record<string, string> | null): Promise<Response | null> {
   try {
@@ -21,7 +23,35 @@ async function post(path: string, body: Record<string, string> | null): Promise<
   }
 }
 
-function outcomeOf(response: Response | null): AuthOutcome {
+/**
+ * A 403 is usually Neon's `EMAIL_NOT_VERIFIED`, but Better Auth's own
+ * `emailOTP` plugin answers 403 too, body `{ code: 'TOO_MANY_ATTEMPTS' }`,
+ * once a single code has been guessed wrong `allowedAttempts` times (Better
+ * Auth's own default: 3 — Neon's managed service does not expose raising it).
+ * That is a *different* failure from either proxy throttle above: this one
+ * has already invalidated the code and needs no wait at all — Better Auth's
+ * own docs say the fix is simply to request a new one, which is why this is
+ * `'codeInvalid'` rather than `'throttled'`; the two throttles above mean
+ * "the same code may still work, try again after a wait", which is false
+ * here. Peeking at the body is what tells the three apart; the clone leaves
+ * the body unread for whoever reads `response` next (`signInWithEmail`'s own
+ * `emailVerified` check).
+ *
+ * Only `verifyEmailCode` can actually surface `'codeInvalid'`:
+ * `resetPasswordWithCode` goes through the proxy's `forwardReset`, which
+ * flattens every 4xx on that path to a plain 400 before this ever sees it
+ * (`route.ts`), so the same Better Auth refusal reaches `resetPasswordWithCode`
+ * as `'rejected'` instead — already covered correctly by `resetFailed`'s own
+ * "...or it has expired... ask for a new one" copy, no special case needed.
+ *
+ * Unverified: Better Auth's plugin source deletes the verification row before
+ * throwing `TOO_MANY_ATTEMPTS`, so resubmitting the same dead code afterward
+ * may draw a plain `INVALID_OTP` 400 (→ `'rejected'`, the ordinary wrong-code
+ * copy) rather than this outcome again. That is not a regression — it is what
+ * every call already showed before this fix — but it means the corrected copy
+ * is not guaranteed to survive a second wrong submission of the same code.
+ */
+async function outcomeOf(response: Response | null): Promise<AuthOutcome> {
   if (!response || response.status >= 500) {
     return 'unreachable';
   }
@@ -30,25 +60,40 @@ function outcomeOf(response: Response | null): AuthOutcome {
     return 'ok';
   }
 
-  return response.status === 403 ? 'unverified' : 'rejected';
+  if (response.status === 429) {
+    return 'throttled';
+  }
+
+  if (response.status === 403) {
+    // A malformed body here is the proxy or Better Auth itself misbehaving —
+    // exactly what #368 exists to catch, since the fallback below reads as
+    // an ordinary "email not verified" rather than an infra problem.
+    const body = (await response
+      .clone()
+      .json()
+      .catch((error: unknown) => {
+        reportSwallowedError('auth-requests: could not read a 403 body', error);
+        return null;
+      })) as { code?: unknown } | null;
+
+    return body?.code === 'TOO_MANY_ATTEMPTS' ? 'codeInvalid' : 'unverified';
+  }
+
+  return 'rejected';
 }
 
 /**
- * Creates the account, then asks Neon for the six-digit code: on dev Neon Auth
- * a sign-up alone emails nothing, only `send-verification-otp` does. A failed
- * send does not fail the sign-up, because the code step offers "Send a new
- * code" and the account already exists.
+ * Creates the account and nothing else. The code is asked for separately
+ * (`resendVerificationCode`): on dev Neon Auth a sign-up alone emails nothing,
+ * and Neon's own limiter can refuse that send (VEN-620), so the caller has to
+ * see its outcome rather than have it folded into the sign-up's.
  */
 export async function signUpWithEmail(input: {
   email: string;
   password: string;
   name: string;
 }): Promise<AuthOutcome> {
-  const outcome = outcomeOf(await post('/sign-up/email', input));
-  if (outcome === 'ok') {
-    await resendVerificationCode(input.email);
-  }
-  return outcome;
+  return outcomeOf(await post('/sign-up/email', input));
 }
 
 /**
@@ -64,7 +109,7 @@ export async function signInWithEmail(input: {
   password: string;
 }): Promise<AuthOutcome> {
   const response = await post('/sign-in/email', input);
-  const outcome = outcomeOf(response);
+  const outcome = await outcomeOf(response);
   clearSessionToken();
 
   if (outcome !== 'ok' || !response) {
@@ -88,7 +133,7 @@ export async function resendVerificationCode(email: string): Promise<AuthOutcome
 /**
  * Asks Neon to email a reset code. The proxy answers every address the same, so
  * `ok` says nothing about whether an account exists; only `unreachable` and a
- * caller-level refusal (`rejected`, the per-caller 429) are ever different.
+ * caller-level refusal (`throttled`, the per-caller 429) are ever different.
  */
 export async function requestPasswordReset(email: string): Promise<AuthOutcome> {
   return outcomeOf(await post('/email-otp/request-password-reset', { email }));

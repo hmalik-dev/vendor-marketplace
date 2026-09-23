@@ -2,7 +2,7 @@
 /**
  * VEN-397, VEN-494. The phases `.github/workflows/deploy.yml` runs, one per step:
  *
- *   gate → preflight → migrate → api → web → ready
+ *   gate → preflight → sender → migrate → api → web → ready
  *
  * Each run targets one environment, `staging` or `production`, named by the
  * branch CI ran on (`DEPLOY_TARGET`); nothing else deploys, and `main` never does.
@@ -92,6 +92,9 @@ export const REQUIRED_INPUTS = [
   { name: 'NEON_AUTH_COOKIE_SECRET', kind: 'secret' },
   { name: 'API_URL', kind: 'variable' },
   { name: 'WEB_URL', kind: 'variable' },
+  // VEN-609: the API's sender, repeated here so the release can prove Resend verified it.
+  { name: 'EMAIL_FROM', kind: 'variable' },
+  { name: 'RESEND_API_KEY', kind: 'secret' },
 ];
 
 /** The environment variable preflight reads to learn whether `name` is set. */
@@ -409,6 +412,24 @@ export const PHASES = {
   },
 
   /*
+   * VEN-609. The sending domain must be verified in Resend before anything
+   * moves: an unverified one is refused on every send and the API only logs
+   * it, so booking email, the admin step-up code and the operator pager would
+   * all go quiet behind a green release. The check is launch:check's own
+   * probe (`packages/preflight/src/launch/sender.ts`), where a key that cannot
+   * list domains fails rather than asking a person to look.
+   */
+  async sender(env, io) {
+    need(env, ['EMAIL_FROM', 'RESEND_API_KEY']);
+
+    await io.run('pnpm', ['release:sender'], {
+      env: pick(env, [...TOOL_ENV, 'EMAIL_FROM', 'RESEND_API_KEY']),
+      redact: redactor([env.RESEND_API_KEY]),
+      write: io.write,
+    });
+  },
+
+  /*
    * Migrations run before either service, over the **unpooled** URL only: Neon's
    * pooler is PgBouncer in transaction mode, and the migrator's advisory lock and
    * its DDL need one session. `DATABASE_URL` is refused rather than ignored, so a
@@ -552,6 +573,26 @@ export const PHASES = {
     const scope = production
       ? ['--environment=production']
       : ['--environment=preview', `--git-branch=${env.DEPLOY_TARGET}`];
+
+    /*
+     * VEN-631: the checkout that put this commit here (`actions/checkout` with
+     * a `ref:` SHA) leaves the repository in detached HEAD, so `vercel deploy`
+     * reads no branch off it and tags the deployment `gitSource: null`. With
+     * no branch attached, Vercel cannot tell this deployment belongs to the
+     * `Preview (staging)` environment, so it serves the deployment with *no*
+     * environment variables at runtime, Config-type included — not only the
+     * two Secret-type ones VEN-575 handed to `vercel build` directly. A local
+     * branch named for the environment gives `vercel deploy` a git ref to
+     * read, the same unambiguous signal `--prod` is for production. Production
+     * is unaffected: it is never checked out onto a branch, exactly as before.
+     */
+    if (!production) {
+      await io.run('git', ['checkout', '-B', env.DEPLOY_TARGET], {
+        env: child,
+        redact,
+        write: io.write,
+      });
+    }
     await io.run('npx', [...cli, 'pull', '--yes', ...scope], {
       env: child,
       redact,

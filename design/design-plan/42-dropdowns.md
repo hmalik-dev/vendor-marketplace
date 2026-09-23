@@ -25,26 +25,38 @@ runs off it, which is why mobile switches rather than shrinks.
 
 ## Bodies
 
-1. **Single-select** (event type, and any short enumerable list) — commits and
-   closes on click. **No search field _inside the panel_**, and that is not
+1. **Single-select** (vendor type, event type, and any short enumerable list) —
+   commits and closes on click. **No search field _inside the panel_**, and that is not
    negotiable: a filter box on a list this short is friction rather than help,
    and because such a field is autofocused its focus ring would appear every
-   single time the panel opened — permanent decoration, not feedback. **Typing
-   narrows the list in place.**
-2. **Combobox** (vendor type) and **typeahead** (city) — **the field itself is
-   the text input**, and the panel hangs off it. Ruled by the account holder on
-   2026-08-31 and recorded as **D28**; `11-search.md` has specified both
-   controls this way since it was written.
+   single time the panel opened — permanent decoration, not feedback.
+   **`DropdownList`'s own keyboard model — arrows move, `Enter` commits, a
+   typed key jumps to the first matching row — is the whole affordance; there
+   is no in-place narrowing.** Vendor type has no text input of any kind — a
+   plain click/tap list, full taxonomy visible the moment it opens.
+
+   **Vendor type moved here from body 2 on 2026-09-22, recorded as D43,
+   superseding D28 for this control only** (city is unaffected — see body 2).
+   The typing-filter combobox was summoning the mobile OS keyboard just to open
+   eleven items, covering the very list it was meant to help scan; a plain
+   select needs no such workaround because a non-text control never requests a
+   keyboard. D13 ruling 1's original objection to a search field in a
+   single-select panel (an autofocused box is friction, not help) is restored
+   rather than re-litigated for this control. **Vendor type still opens on
+   the full taxonomy**, because eleven categories are worth seeing and
+   teaching — that part of the original D28 rationale survives the move.
+
+2. **Typeahead** (city) — **the field itself is the text input**, and the panel
+   hangs off it. Ruled by the account holder on 2026-08-31 and recorded as
+   **D28**; `11-search.md` has specified city this way since it was written,
+   and originally specified vendor type the same way until D43 moved it to
+   body 1 above.
 
    This does **not** contradict body 1, and the distinction is the whole of it:
    body 1 forbids a **second, autofocused** field inside the panel, and there is
    no second field here. The customer types into the one they already tabbed to,
-   so its focus ring means what it has always meant. The narrowing behaviour is
-   body 1's own — see Behaviour below, which has said "typing narrows the list
-   in place" since the 2026-08-30 import.
+   so its focus ring means what it has always meant.
 
-   The two differ in one behaviour and it is deliberate. **Vendor type opens on
-   the full taxonomy**, because eleven categories are worth seeing and teaching.
    **City opens nothing until something is typed** — "cities can vary
    drastically", so a scroll list is not the affordance. City caps at eight
    suggestions.
@@ -84,7 +96,7 @@ makes the results grid flicker and re-sort under the user's hand.
 ## Behaviour
 
 - **Dismiss:** click outside, `Esc`, or select. Scroll does **not** dismiss — it repositions.
-- **Keyboard:** ↑↓ moves, ↵ commits, typing **narrows the list in place** (not a jump-to-first-letter), `Tab` closes and moves on. Focus returns to the field on close. On a combobox or typeahead the field never lost focus in the first place, so ↑↓ must `preventDefault` — a text input's own arrows move the caret, and the ticket's requirement that the caret stay put is a requirement to suppress that.
+- **Keyboard:** ↑↓ moves, ↵ commits, `Tab` closes and moves on, focus returns to the field on close. **Typing differs by body, and that is D43 as much as it is D28.** Body 2's combobox and typeahead (`City`) **narrow the list in place**, not a jump-to-first-letter — that has been true since the 2026-08-30 import. Body 1's single-selects, `Vendor type` included since D43, do not narrow at all: `DropdownList`'s own uncontrolled keyboard model is a typed key jumping to the first row it prefix-matches, the ordinary listbox pattern. On a combobox or typeahead the field never lost focus in the first place, so ↑↓ must `preventDefault` there — a text input's own arrows move the caret, and the ticket's requirement that the caret stay put is a requirement to suppress that. A single-select's ↑↓ has no caret to protect.
 - **Open state on the field:** open **adds to** the focused state rather than replacing it — same `stone-200` fill and clay label, plus the value turning clay and the caret flipping. (The earlier "open replaces focus" rule made an open segment look quieter than a focused one.) In the compact header bar the open segment is the only clay element. A segment inside a joined bar takes a fill and a clay label at every rung — **never a border, edge or outline**, which would fight the bar it sits inside.
 - **Scrim:** hero and mobile only, where the dropdown is the page's subject. **Never** in the compact header — results must stay readable behind it.
 - **Empty body**: one row of `stone-600` copy saying so plus a single action, never a blank panel. The example used to be _"a city with no vendors in that category"_ and **#384 retired it** — a city with no vendors is not an empty panel any more, it is a suggestion that commits and lands on frame `18`. City's empty bodies are now a typed string no US place matches, a request still in flight, and a request that failed; all three carry `Search anywhere` as the action.

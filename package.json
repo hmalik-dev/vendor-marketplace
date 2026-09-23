@@ -17,6 +17,7 @@
     "secrets:scan": "pnpm --filter @vendor-marketplace/preflight run secrets:scan",
     "secrets:scan:all": "pnpm --filter @vendor-marketplace/preflight run secrets:scan -- --tracked",
     "smoke": "pnpm --filter @vendor-marketplace/preflight run smoke",
+    "release:sender": "pnpm --filter @vendor-marketplace/preflight run release:sender",
     "launch:check": "turbo run build --filter=@vendor-marketplace/shared --filter=@vendor-marketplace/db && pnpm --filter @vendor-marketplace/preflight run launch:check",
     "reconcile:auth": "pnpm --filter @vendor-marketplace/api run reconcile:auth",
     "env:example": "turbo run build --filter=@vendor-marketplace/shared && pnpm --filter @vendor-marketplace/preflight run env:example",

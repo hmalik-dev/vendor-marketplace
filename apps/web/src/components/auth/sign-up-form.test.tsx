@@ -202,6 +202,40 @@ describe('SignUpForm', () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
+  it('asks Neon for the code once the account exists', async () => {
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await screen.findByLabelText('Verification code');
+
+    expect(resendVerificationCode).toHaveBeenCalledTimes(1);
+    expect(resendVerificationCode).toHaveBeenCalledWith('sam@example.com');
+    expect(screen.queryByText(/Too many attempts|could not reach/)).toBeNull();
+  });
+
+  /*
+   * VEN-620, seen live: Neon's own limiter answered the post-sign-up send 429
+   * ("Too many requests"), the account existed, and the code step showed
+   * nothing — asking for a code that was never mailed.
+   */
+  it.each([
+    ['throttled', 'Too many attempts. Wait a few minutes and try again.'],
+    ['unreachable', 'We could not reach the sign-in service. Try again in a moment.'],
+  ] as const)('says so on the code step when the code send is %s', async (outcome, copy) => {
+    resendVerificationCode.mockResolvedValue(outcome);
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+
+    expect(await screen.findByLabelText('Verification code')).toBeDefined();
+    expect(screen.getByText(copy)).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Send a new code' })).toBeDefined();
+  });
+
   it('remembers the chosen role for the accept-terms screen once the account exists', async () => {
     const user = userEvent.setup();
     render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
@@ -226,6 +260,27 @@ describe('SignUpForm', () => {
     expect(screen.queryByLabelText('Verification code')).toBeNull();
   });
 
+  /*
+   * `sign-up/email` is address-budgeted at 5 per 10 minutes (VEN-462). Before
+   * the `throttled` outcome existed, a 429 there fell into the same bucket as
+   * a genuine refusal and told the visitor their details were bad.
+   */
+  it('says to wait, not that the account could not be created, once throttled', async () => {
+    signUpWithEmail.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+
+    expect(
+      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+    ).toBeDefined();
+    expect(screen.queryByText(/could not create that account/)).toBeNull();
+    expect(readSignUpRole()).toBeNull();
+    expect(screen.queryByLabelText('Verification code')).toBeNull();
+  });
+
   it('signs in and lands on /after-sign-in after a good code', async () => {
     const user = userEvent.setup();
     render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
@@ -241,6 +296,22 @@ describe('SignUpForm', () => {
       email: 'sam@example.com',
       password: 'correct-horse-battery',
     });
+  });
+
+  it('says to wait, not that the service is unreachable, when the post-verify sign-in is throttled', async () => {
+    signInWithEmail.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.type(await screen.findByLabelText('Verification code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Verify email' }));
+
+    expect(
+      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+    ).toBeDefined();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it('shows the error and stays on the code step after a wrong code', async () => {
@@ -271,6 +342,93 @@ describe('SignUpForm', () => {
 
     expect(resendVerificationCode).toHaveBeenCalledWith('sam@example.com');
     expect(await screen.findByText('A new code is on its way.')).toBeDefined();
+  });
+
+  /*
+   * Neon's per-address budget on `email-otp/verify-email` is 5 calls per 10
+   * minutes, right or wrong (VEN-462): a person who mistypes a couple of times
+   * hits it. Before the `throttled` outcome existed, `outcomeOf` folded a 429
+   * into the same `rejected` bucket as a wrong code, so this screen told them
+   * their code was wrong even on a correct one they were no longer allowed to
+   * spend.
+   */
+  it('says to wait, not that the code is wrong, once the address is throttled', async () => {
+    verifyEmailCode.mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.type(await screen.findByLabelText('Verification code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Verify email' }));
+
+    expect(
+      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+    ).toBeDefined();
+    expect(screen.queryByText('That code did not work. Check it and try again.')).toBeNull();
+    expect(signInWithEmail).not.toHaveBeenCalled();
+  });
+
+  /*
+   * Better Auth's `emailOTP` plugin invalidates a code after `allowedAttempts`
+   * wrong guesses (default 3) — its own docs say the fix is a fresh code, not
+   * a wait, so this must read differently from both the address-throttle
+   * banner above and the ordinary wrong-code banner: waiting a few minutes
+   * would still fail on this exact code.
+   */
+  it('says the code is dead, not to wait, once attempts on it are exhausted', async () => {
+    verifyEmailCode.mockResolvedValue('codeInvalid');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await user.type(await screen.findByLabelText('Verification code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Verify email' }));
+
+    expect(
+      await screen.findByText('That code can no longer be used. Send a new one below.'),
+    ).toBeDefined();
+    expect(screen.queryByText('That code did not work. Check it and try again.')).toBeNull();
+    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
+    expect(signInWithEmail).not.toHaveBeenCalled();
+  });
+
+  it('says to wait, not that the service is unreachable, when a resend is throttled', async () => {
+    // The send right after sign-up succeeds; only the resend is refused.
+    resendVerificationCode.mockResolvedValueOnce('ok').mockResolvedValue('throttled');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    const resend = await screen.findByRole('button', { name: 'Send a new code' });
+    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
+    await user.click(resend);
+
+    expect(
+      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+    ).toBeDefined();
+  });
+
+  it('does not call an actual refusal a throttle when a resend is refused', async () => {
+    // The send right after sign-up succeeds; only the resend is refused.
+    resendVerificationCode.mockResolvedValueOnce('ok').mockResolvedValue('rejected');
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    const resend = await screen.findByRole('button', { name: 'Send a new code' });
+    expect(
+      screen.queryByText('We could not reach the sign-in service. Try again in a moment.'),
+    ).toBeNull();
+    await user.click(resend);
+
+    expect(
+      await screen.findByText('We could not reach the sign-in service. Try again in a moment.'),
+    ).toBeDefined();
+    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
   });
 
   it('groups the two roles under one labelled choice', () => {

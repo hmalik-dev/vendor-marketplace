@@ -1,12 +1,17 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { AUTH_COPY } from '@/app/auth-copy';
+import { useEffect, useRef, useState } from 'react';
+import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
-import { resendVerificationCode, signInWithEmail, verifyEmailCode } from '@/lib/auth/auth-requests';
+import {
+  type AuthOutcome,
+  resendVerificationCode,
+  signInWithEmail,
+  verifyEmailCode,
+} from '@/lib/auth/auth-requests';
 
 export interface VerifyEmailStepProps {
   email: string;
@@ -15,6 +20,22 @@ export interface VerifyEmailStepProps {
   destination: string;
   /** Ask Neon for a fresh code on arrival (the sign-in route, where none was just sent). */
   sendOnMount?: boolean;
+  /** What the caller's own code request answered (sign-up sends before this mounts). */
+  sendOutcome?: AuthOutcome;
+}
+
+type StepMessage = { status: 'failed' | 'informational'; text: string } | null;
+
+/**
+ * A refused code request, said on arrival. Neon's own limiter counts every
+ * visitor as the one server calling it, so a send can be refused on a
+ * visitor's first try (VEN-620); left silent, the step asks for a code that
+ * was never mailed and the next one typed reads as wrong.
+ */
+function sendFailure(outcome: AuthOutcome): StepMessage {
+  return outcome === 'ok'
+    ? null
+    : { status: 'failed', text: failureCopy(outcome, AUTH_COPY.unreachable) };
 }
 
 /**
@@ -27,19 +48,31 @@ export function VerifyEmailStep({
   password,
   destination,
   sendOnMount = false,
+  sendOutcome = 'ok',
 }: VerifyEmailStepProps): React.ReactElement {
   const router = useRouter();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{
-    status: 'failed' | 'informational';
-    text: string;
-  } | null>(null);
+  const [message, setMessage] = useState<StepMessage>(() => sendFailure(sendOutcome));
+  /* The arrival send's answer is dropped once anything newer has spoken, so a
+     slow refusal cannot overwrite a later resend's or code check's message. */
+  const arrivalSendLive = useRef(false);
 
   useEffect(() => {
-    if (sendOnMount) {
-      void resendVerificationCode(email);
+    if (!sendOnMount) {
+      return;
     }
+
+    arrivalSendLive.current = true;
+    void resendVerificationCode(email).then((outcome) => {
+      if (arrivalSendLive.current && outcome !== 'ok') {
+        setMessage(sendFailure(outcome));
+      }
+    });
+
+    return () => {
+      arrivalSendLive.current = false;
+    };
   }, [email, sendOnMount]);
 
   async function submit(event: React.FormEvent): Promise<void> {
@@ -50,13 +83,20 @@ export function VerifyEmailStep({
 
     setBusy(true);
     setMessage(null);
+    arrivalSendLive.current = false;
 
     const verified = await verifyEmailCode({ email, otp: code.trim() });
     if (verified !== 'ok') {
       setBusy(false);
       setMessage({
         status: 'failed',
-        text: verified === 'unreachable' ? AUTH_COPY.unreachable : AUTH_COPY.codeWrong,
+        // `codeInvalid` means this code is dead after too many wrong guesses
+        // (Better Auth's own limit, 3 by default) — no wait fixes that, only
+        // a fresh code does, so it is worded and handled apart from `failureCopy`.
+        text:
+          verified === 'codeInvalid'
+            ? AUTH_COPY.codeExhausted
+            : failureCopy(verified, AUTH_COPY.codeWrong),
       });
       return;
     }
@@ -64,7 +104,7 @@ export function VerifyEmailStep({
     const signedIn = await signInWithEmail({ email, password });
     if (signedIn !== 'ok') {
       setBusy(false);
-      setMessage({ status: 'failed', text: AUTH_COPY.unreachable });
+      setMessage({ status: 'failed', text: failureCopy(signedIn, AUTH_COPY.unreachable) });
       return;
     }
 
@@ -73,11 +113,12 @@ export function VerifyEmailStep({
   }
 
   async function resend(): Promise<void> {
+    arrivalSendLive.current = false;
     const outcome = await resendVerificationCode(email);
     setMessage(
       outcome === 'ok'
         ? { status: 'informational', text: AUTH_COPY.codeResent }
-        : { status: 'failed', text: AUTH_COPY.unreachable },
+        : sendFailure(outcome),
     );
   }
 

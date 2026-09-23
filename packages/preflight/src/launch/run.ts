@@ -23,7 +23,7 @@ const GROUP_LABELS: Readonly<Record<LaunchGroup, string>> = {
 };
 const STATUS_WIDTH = 'MANUAL'.length;
 
-async function settle(probe: Probe): Promise<LaunchResult[]> {
+export async function settle(probe: Probe): Promise<LaunchResult[]> {
   try {
     return await probe.run();
   } catch (error: unknown) {

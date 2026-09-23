@@ -164,6 +164,36 @@ describe('ENV_REGISTRY integrity', () => {
     expect(shapeFor(stripe!, 'production')?.test('sk_live_51ABCdefGHIjklMNO')).toBe(true);
   });
 
+  /*
+   * VEN-609. Nothing in the app sets `ssl`, so TLS rests on the URL alone: a
+   * production connection string that does not demand it could connect in
+   * plaintext to anything that is not Neon.
+   */
+  it.each(['DATABASE_URL', 'DATABASE_URL_UNPOOLED'])(
+    'requires a production %s to demand TLS',
+    (key) => {
+      const production = shapeFor(findVariable(key)!, 'production')!;
+      const neon = 'postgresql://app:secret@ep-x-123.us-east-2.aws.neon.tech/neondb';
+
+      expect(production.test(`${neon}?sslmode=require`)).toBe(true);
+      expect(production.test(`${neon}?sslmode=require&channel_binding=require`)).toBe(true);
+      expect(production.test(`${neon}?channel_binding=require&sslmode=verify-full`)).toBe(true);
+      expect(production.test(neon)).toBe(false);
+      expect(production.test(`${neon}?sslmode=prefer`)).toBe(false);
+      expect(production.test(`${neon}?sslmode=disable`)).toBe(false);
+      expect(production.test(`${neon}?sslmode=required`)).toBe(false);
+      expect(production.test(`${neon}?xsslmode=require`)).toBe(false);
+      // The driver takes the last `sslmode`, decodes names, and ignores the fragment.
+      expect(production.test(`${neon}?sslmode=require&sslmode=disable`)).toBe(false);
+      expect(production.test(`${neon}?sslmode=require&ssl%6Dode=disable`)).toBe(false);
+      expect(production.test(`${neon}#?sslmode=require`)).toBe(false);
+      expect(production.test(`${neon}?a=b#&sslmode=require`)).toBe(false);
+      expect(production.test(`${neon}?sslmode=disable&sslmode=require`)).toBe(true);
+      // Local development keeps the Docker Postgres, which has no TLS.
+      expect(shapeFor(findVariable(key)!, 'local')!.test(neon)).toBe(true);
+    },
+  );
+
   it('declares localShape, productionShape and modes as one unit', () => {
     // A mode restriction that is declared in only one direction is the defect
     // this ticket removes; it must not be reintroducible one field at a time.
@@ -380,7 +410,7 @@ describe('registrySchemaShape', () => {
   describe("the 'deployed' target", () => {
     const shape = registrySchemaShape({
       consumer: 'api',
-      capabilities: ['core', 'storage', 'stripe'],
+      capabilities: ['core', 'storage', 'stripe', 'email'],
       target: 'deployed',
     });
 
@@ -445,6 +475,15 @@ describe('registrySchemaShape', () => {
         expect(requiresExplicitValue(variable as EnvVariable, 'local'), key).toBe(false);
         expect(requiresExplicitValue(variable as EnvVariable, 'baseline'), key).toBe(false);
       }
+    });
+
+    it('requires EMAIL_FROM on a deployment and keeps its default on a laptop', () => {
+      const from = findVariable('EMAIL_FROM')!;
+
+      expect(requiresExplicitValue(from, 'deployed')).toBe(true);
+      expect(requiresExplicitValue(from, 'production')).toBe(true);
+      expect(requiresExplicitValue(from, 'local')).toBe(false);
+      expect(() => shape.EMAIL_FROM.parse(undefined)).toThrow(/EMAIL_FROM is required/);
     });
 
     it('requires exactly the per-environment rows, and every one of them', () => {

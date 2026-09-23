@@ -22,6 +22,21 @@ upstream request without the caller's `content-length` / `content-encoding` —
 the body has been re-encoded, so those headers no longer describe it. Check the
 same shape whenever `request.text()` + `JSON.parse` appears before a guard.
 
+**The sign-in budget is the shared E2E identities' lockout lever** (VEN-602
+audit, 2026-09-22): `sign-in/email` charges only 401/403 against
+`SIGN_IN_ADDRESS_LIMIT` (10 per 10 min, durable in the API DB when
+`WEB_TIER_KEY` is set). Any tooling that retries a sign-in (`withRetry` in
+`scripts/e2e-sign-in.mjs`) must not retry the fixed `signInFailed` refusal, or
+a drifted `.env.e2e.local` spends the shared account's budget 3x per run. The
+refusal banner is fixed `AUTH_COPY` text, so echoing it leaks no address.
+
+**The OTP send is charged per request** (VEN-620 audit, 2026-09-22, PASS): the
+sign-up's send moved from `signUpWithEmail` into `sign-up-form.tsx` and still
+fires once per `'ok'` sign-up; `sendOnMount` still fires once (the `live` flag
+only guards `setState`). Refusal banners are `failureCopy` constants, and the
+code step is reachable only after a password-correct unverified sign-in, so the
+banner is no oracle curl against the proxy did not already have.
+
 Related: the request-reset path hides account existence with a fixed 200 and
 `after()`; its sibling `email-otp/reset-password` returns the upstream status
 verbatim, so existence can leak there instead. See [[fixed-response-sibling-leak]].

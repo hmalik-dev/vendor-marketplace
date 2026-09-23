@@ -2210,3 +2210,65 @@ not inside VEN-381).
 **Revisit if:** a real friends-beta or production case makes the manual
 Stripe Dashboard workflow untenable often enough to justify reopening the
 policy question.
+
+---
+
+### D43: Vendor Type Becomes a Plain Select, No Typing — Superseding D28 for This Control Only
+
+**Decision:** The Vendor type control (`CategorySelect`, landing hero and
+`/search`) drops the typing-filter text input entirely and becomes a plain
+click/tap select over the eleven categories, full taxonomy visible on open.
+`design/design-plan/11-search.md:19` and `design/design-plan/42-dropdowns.md`
+(bodies 1 and 2) are corrected to match.
+
+**Rationale (account holder, 2026-09-22, VEN-603).** The typing-filter
+combobox (D28, 2026-08-31) was summoning the mobile OS keyboard the instant a
+customer tapped the field to open it, covering most of the eleven-item list
+on a small screen — friction, not help, on the exact list it exists to make
+scannable. Rather than suppress the keyboard on an input that still accepts
+typed characters (fragile across mobile browsers), the simpler fix removes
+the text input altogether: eleven items is short enough that type-to-filter
+was never load-bearing.
+
+**What changes.** `CategorySelect` stops rendering `ComboboxDropdown`'s typing
+`<input>`; it becomes a non-editable trigger + listbox panel (native `<select>`
+or an equivalent non-typing pattern — implementation detail left to VEN-603).
+`design/design-plan/42-dropdowns.md`'s body 1 (Single-select) now lists vendor
+type as an example; body 2 (Typeahead) drops vendor type and covers city only.
+
+**What does not change.** `CitySelect` and the shared `ComboboxDropdown`
+component are untouched — city keeps its typing-filter behavior under D28
+exactly as before; many more cities than categories makes type-to-filter
+genuinely useful there. The `▾`/`▴` caret override (#426) on `CategorySelect`
+is unaffected — a plain select still needs an open/closed indicator.
+
+**Rejected:** keeping the typing input and suppressing the OS keyboard via
+`inputMode="none"` or similar (the original VEN-603 scope) — rejected as
+more fragile and more code than simply not having a text input at all, once
+it was clear typing-filter wasn't necessary for an eleven-item list.
+
+**Implementation (VEN-603, landed same day).** `category-select.tsx` builds
+directly on `Dropdown` + `DropdownList` — the primitives `SingleSelectDropdown`
+itself wraps, used directly rather than through it so the caption keeps the
+real category count (`SingleSelectDropdown`'s own `countNoun` would count the
+"Any vendor type" row as a twelfth category). The trigger is a `<button>`,
+named by `aria-label` rather than a `<label htmlFor>` — correct for a button,
+matching `DateDropdown`'s identically-shaped trigger on the same bar. Losing
+the segment's VEN-541 focus ring in the move from an input-child to a
+self-focused button was caught in review and fixed (`focus-visible:ring-2
+focus-visible:ring-inset focus-visible:ring-clay-400` declared directly,
+since `SEGMENT_FOCUS`'s `has-[:focus-visible]` variant needs a focusable
+child to fire and this button has none).
+
+**A separate, real, pre-existing bug was found and verified in
+`dropdown-combobox.tsx` while VEN-603 was in flight, then deliberately left
+out of this change rather than fixed here.** An inline `onOpenChange` arrow
+passed to `<Dropdown>` is a fresh closure every render, which destabilizes
+`useModalSheet`'s focus-trap effect deps (`dropdown.tsx`) and closes the
+mobile sheet after the second keystroke — reproduced, fixed with a
+`useCallback`, and confirmed with a regression test that failed before the
+fix and passed after. It affects `City` today, independent of which control
+types and which doesn't. It is not in this diff: `ComboboxDropdown` is out
+of scope for VEN-603 per this same ruling, and a bug fix is still a change
+to a file this ticket was told to leave as-is. Filed as its own ticket
+(VEN-605) rather than folded in here.

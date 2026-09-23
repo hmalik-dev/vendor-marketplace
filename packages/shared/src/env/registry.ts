@@ -198,6 +198,16 @@ const HTTP_URL_LIST = /^\s*https?:\/\/[^\s,]+\s*(,\s*https?:\/\/[^\s,]+\s*)*,?\s
 const HTTPS_URL_LIST = /^\s*https:\/\/[^\s,]+\s*(,\s*https:\/\/[^\s,]+\s*)*,?\s*$/;
 /** user:password@host/database — the placeholder form has no credentials and fails it. */
 const POSTGRES_URL = /^postgres(ql)?:\/\/[^:@\s/]+:[^@\s/]+@[^\s/]+\/[^\s?]+/;
+/**
+ * VEN-609. The same URL, demanding TLS in its query, for `preflight --env
+ * production`. Nothing in the app sets `ssl`, so the connection string is where
+ * TLS is required; Neon's own strings carry `sslmode=require`. The driver reads
+ * the last `sslmode` and never the fragment, so a later `sslmode`, a `#` or a
+ * percent-encoded query cannot sit beside the one that passes.
+ */
+const POSTGRES_TLS_URL = new RegExp(
+  `^(?![^#]*#)${POSTGRES_URL.source.slice(1)}\\?(?:[^\\s%&]*&)*sslmode=(?:require|verify-full)(?:&(?!sslmode=)[^\\s%&]*)*$`,
+);
 
 /**
  * The single declarative list of every variable `.env` carries. `.env.example`,
@@ -448,6 +458,7 @@ export const ENV_REGISTRY = [
     consumers: ['api', 'tooling'],
     environments: 'per-environment',
     shape: POSTGRES_URL,
+    productionShape: POSTGRES_TLS_URL,
     placeholder: 'postgresql://...',
     description:
       'Postgres for this environment — the local Docker service in development, a pooled Neon branch in staging and production.',
@@ -461,6 +472,7 @@ export const ENV_REGISTRY = [
     optionalFor: ['baseline', 'local'],
     environments: 'per-environment',
     shape: POSTGRES_URL,
+    productionShape: POSTGRES_TLS_URL,
     placeholder: 'postgresql://...',
     description:
       'Direct unpooled connection for migrations, drizzle-kit and pg_dump. Neon only; leave unset locally, where there is no PgBouncer to bypass.',
@@ -764,13 +776,20 @@ export const ENV_REGISTRY = [
     setup: RESEND_SETUP,
   },
   {
+    /*
+     * VEN-609. `per-environment`, so a deployment must state its sender or
+     * refuse to boot: the default names a domain no Resend account has
+     * verified, and every send from it is refused and merely logged. The
+     * deploy workflow then proves the stated domain is verified.
+     */
     key: 'EMAIL_FROM',
     capability: 'email',
     audience: 'server',
     consumers: ['api'],
-    environments: 'shared',
+    environments: 'per-environment',
     defaultValue: `noreply@${BRAND_DOMAIN}`,
-    description: 'From address on every transactional email. Free-form; no shape is enforced.',
+    description:
+      'From address on every transactional email. Free-form; no shape is enforced. A deployment must state one on a domain verified in Resend.',
     setup: RESEND_SETUP,
   },
   {

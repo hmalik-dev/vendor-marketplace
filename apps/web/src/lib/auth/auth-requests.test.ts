@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { signInWithEmail, signUpWithEmail } from './auth-requests';
+import { signInWithEmail, signUpWithEmail, verifyEmailCode } from './auth-requests';
 
 const INPUT = { email: 'new@example.com', password: 'a-long-password', name: 'new' };
 
@@ -23,32 +23,72 @@ afterEach(() => {
 });
 
 describe('signUpWithEmail', () => {
-  it('requests the verification code after the account is created', async () => {
-    const fetchMock = stubFetch(200, 200);
+  /*
+   * The code request is the caller's (VEN-620): folded in here, a refused send
+   * read as a successful sign-up and the code step waited on a mail never sent.
+   */
+  it('creates the account and asks for no code itself', async () => {
+    const fetchMock = stubFetch(200);
 
     await expect(signUpWithEmail(INPUT)).resolves.toBe('ok');
 
-    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      '/api/auth/sign-up/email',
-      '/api/auth/email-otp/send-verification-otp',
-    ]);
-    expect(JSON.parse(fetchMock.mock.calls[1]![1].body as string)).toEqual({
-      email: 'new@example.com',
-      type: 'email-verification',
-    });
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(['/api/auth/sign-up/email']);
   });
 
-  it('still reports ok when only the code send fails', async () => {
-    stubFetch(200, 500);
-
-    await expect(signUpWithEmail(INPUT)).resolves.toBe('ok');
-  });
-
-  it('requests no code when the sign-up is refused', async () => {
-    const fetchMock = stubFetch(422);
+  it('reports a refused sign-up', async () => {
+    stubFetch(422);
 
     await expect(signUpWithEmail(INPUT)).resolves.toBe('rejected');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('verifyEmailCode', () => {
+  /*
+   * The proxy's per-address budget on this path answers 429 (proxy-throttle.ts).
+   * `outcomeOf` used to fold that into the same 'rejected' bucket as an
+   * actually wrong code, so a throttled call must read as 'throttled' here,
+   * distinct from a genuine refusal.
+   */
+  it('reports throttled for a 429, distinct from a rejected code', async () => {
+    stubFetch(429);
+
+    await expect(verifyEmailCode({ email: 'new@example.com', otp: '000000' })).resolves.toBe(
+      'throttled',
+    );
+  });
+
+  it('still reports rejected for an actual refusal', async () => {
+    stubFetch(400);
+
+    await expect(verifyEmailCode({ email: 'new@example.com', otp: '000000' })).resolves.toBe(
+      'rejected',
+    );
+  });
+
+  /*
+   * Observed live: Better Auth's `emailOTP` plugin answers 403 with this body
+   * once a single code has been guessed wrong `allowedAttempts` times (the
+   * plugin's own default is 3 — Neon's managed service does not expose
+   * raising it). Without the body check this fell into the same 403 bucket as
+   * `EMAIL_NOT_VERIFIED` and read as 'unverified', which the code step's
+   * `codeWrong` fallback then showed as an ordinary wrong code. It is
+   * `'codeInvalid'`, not `'throttled'`: Better Auth's own docs say the code
+   * is already dead and the fix is to request a new one, not to wait.
+   */
+  it('reports codeInvalid for a 403 carrying Better Auth’s own attempt-limit code', async () => {
+    stubFetchBody(403, { code: 'TOO_MANY_ATTEMPTS' });
+
+    await expect(verifyEmailCode({ email: 'new@example.com', otp: '000000' })).resolves.toBe(
+      'codeInvalid',
+    );
+  });
+
+  it('still reports unverified for an ordinary 403', async () => {
+    stubFetchBody(403, { code: 'SOME_OTHER_REASON' });
+
+    await expect(verifyEmailCode({ email: 'new@example.com', otp: '000000' })).resolves.toBe(
+      'unverified',
+    );
   });
 });
 

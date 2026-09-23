@@ -41,15 +41,23 @@ each has its own secrets and variables.
 1. **Gate**: the commit is still the branch's tip (a superseded run exits
    green without deploying; the run for the tip carries it).
 2. **Preflight**: every input below is set, or the run fails by name.
-3. **Migrate** the environment's database over its `DATABASE_URL_UNPOOLED`, then
+3. **Sender** (VEN-609): Resend must report `EMAIL_FROM`'s domain as
+   `verified`, or nothing ships. A key that cannot list domains (a
+   sending-only key) fails too, since the release cannot prove the sender.
+   Exception (VEN-626): `EMAIL_FROM=onboarding@resend.dev`, Resend's shared
+   test sender, passes this step without a domain — it delivers only to the
+   Resend account owner, and it is the friends-beta accommodation until a real
+   domain exists (VEN-563). `launch:check`, the real-money gate, still fails
+   it; no other `resend.dev` address qualifies.
+4. **Migrate** the environment's database over its `DATABASE_URL_UNPOOLED`, then
    the idempotent reference seed. `NEON_BRANCH` must equal the environment
    name and the URL's host must equal `NEON_HOST`, so neither a mis-set branch
    variable nor a secret copied from the other tier can migrate the wrong
    database.
-4. **API**: `railway up` with the environment's token. Railway's own branch
+5. **API**: `railway up` with the environment's token. Railway's own branch
    auto-deploy must stay **off**, since it cannot be ordered after a GitHub job
    and would ship code before its migration.
-5. **Web**: a prebuilt Vercel deploy: production as a production deployment,
+6. **Web**: a prebuilt Vercel deploy: production as a production deployment,
    staging as a preview deployment aliased to `WEB_URL`'s host. Staging's Vercel
    variables are scoped to the Preview `staging` branch, and the release pulls
    them by branch (`--git-branch=staging`). `WEB_TIER_KEY` and
@@ -61,7 +69,7 @@ pull` cannot read (it writes them as empty strings, and the web build
 build` alone (VEN-575). Preflight fails by name when either is missing. When
    rotating either, rotate it in all three places: Vercel, Railway (for
    `WEB_TIER_KEY`) and the GitHub environment secret.
-6. **Ready**: `/ready` on the API must name the pushed commit within ten
+7. **Ready**: `/ready` on the API must name the pushed commit within ten
    minutes, or the run fails.
 
 Every step runs only if the one before it succeeded, so a failed migration
@@ -71,8 +79,10 @@ the previous release's code and must stay backwards-compatible with it.
 Set on each GitHub environment (`staging`, `production`) by the account holder
 (VEN-377): secrets `DATABASE_URL_UNPOOLED`, `API_HOST_TOKEN` (a Railway project
 token scoped to that environment), `VERCEL_TOKEN`, `SENTRY_AUTH_TOKEN`, `WEB_TIER_KEY`, `NEON_AUTH_COOKIE_SECRET`
-(the last two: the web build's Secret variables, above);
-variables `NEON_BRANCH` (`staging` or `production`), `NEON_HOST` (that
+(the last two: the web build's Secret variables, above), `RESEND_API_KEY` (a
+full-access Resend key, so the sender step can list domains; the API's own key
+on Railway stays sending-only);
+variables `EMAIL_FROM` (the same sender as the API's on Railway), `NEON_BRANCH` (`staging` or `production`), `NEON_HOST` (that
 branch's direct endpoint host), `API_HOST`, `API_SERVICE`, `API_URL`, `WEB_URL`
 (staging's first entry must be a host containing `staging`, since it is the
 alias target), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `SENTRY_WEB_PROJECT`. A push to

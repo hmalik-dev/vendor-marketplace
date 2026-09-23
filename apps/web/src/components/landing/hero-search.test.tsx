@@ -71,12 +71,12 @@ describe('HeroSearch', () => {
     render(<HeroSearch categories={CATEGORIES} />);
 
     /*
-     * The whole journey, through the controls #375 rebuilt: both segments are
-     * comboboxes, and `City` shows nothing until something is typed. That is
-     * the difference the ticket exists for, so the flow test drives it rather
-     * than clicking a list open.
+     * The whole journey, through both controls: `Vendor type` is a plain
+     * button (VEN-603) that opens on the full list, and `City` is still a
+     * typing combobox that shows nothing until something is typed (#384) —
+     * two different shapes for two different reasons, both driven here.
      */
-    await user.click(screen.getByRole('combobox', { name: 'Vendor type' }));
+    await user.click(screen.getByRole('button', { name: 'Vendor type' }));
     // The row carries the category's short description under its name, so the
     // accessible name is the pair rather than the name alone (#167).
     await user.click(await screen.findByRole('option', { name: /^Photography/ }));
