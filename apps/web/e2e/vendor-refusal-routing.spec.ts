@@ -126,13 +126,19 @@ test.describe('a refused vendor sign-up', () => {
 
       await signInThroughTheForm(page, account);
 
-      // Continue as a vendor when the screen is showing (see the "not
-      // idempotent" note above for when it is not) — the gate refuses it and
-      // VEN-512's client funnel bounces straight to the details screen.
+      /*
+        The role is the one recorded at sign-up (VEN-662), stated, never
+        picked; this persona never signs up, so it is recorded here as the
+        proxy would. Recorded before the screen is read, and the screen read
+        after a fresh load: in a lane this spec already ran in, that load is
+        the waitlist redirect (the "not idempotent" note above).
+      */
+      await recordSignUpRoleFor(page, 'vendor');
+      await page.goto(TERMS_ACCEPTANCE_PATH);
+
+      // Continue as a vendor when the screen is showing — the gate refuses it
+      // and VEN-512's client funnel bounces straight to the details screen.
       if (new URL(page.url()).pathname === TERMS_ACCEPTANCE_PATH) {
-        // The role is the one recorded at sign-up (VEN-662), stated, never picked.
-        await recordSignUpRoleFor(page, 'vendor');
-        await page.reload();
         await waitForHydration(page, 'form');
         await expect(page.getByTestId('stored-role')).toContainText('joining as a vendor');
         await expect(page.getByRole('radio')).toHaveCount(0);
