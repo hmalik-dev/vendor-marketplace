@@ -44,18 +44,15 @@ describe('screenFile', () => {
       reason: "HEIC isn't a format we can publish.",
       retryable: false,
     });
-    expect(failure?.fix).toContain('JPG or PNG');
+    expect(failure?.fix).toContain('JPG, PNG or WebP');
   });
 
   /*
-   * WebP was accepted until #29. The picker offering it while the server
-   * refused it was the worst of both — a file a vendor could pick and then be
-   * told off for.
+   * VEN-618: Android cameras and desktop browsers save photos as WebP, and the
+   * server accepts it again, so the picker must too — both ends read one list.
    */
-  it('no longer accepts WebP', () => {
-    expect(screenFile({ name: 'a.webp', type: 'image/webp', size: 1024 })).toMatchObject({
-      kind: 'unsupported-format',
-    });
+  it('accepts WebP', () => {
+    expect(screenFile({ name: 'a.webp', type: 'image/webp', size: 1024 })).toBeNull();
   });
 
   /*

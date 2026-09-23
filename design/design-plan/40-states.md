@@ -126,7 +126,7 @@ Rules:
 
 ### Constraints, stated before the picker opens
 
-JPG or PNG · 12 MB each · min 1200px wide · 20 files per upload. The same line
+JPG, PNG or WebP · 12 MB each · min 1200px wide · 20 files per upload. The same line
 appears in the drop zone and the requirements rail.
 
 ### The four failure modes — each needs its own sentence

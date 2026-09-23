@@ -186,10 +186,13 @@ export const errorHandlerPlugin = fp<ErrorHandlerOptions>(
     });
 
     app.setNotFoundHandler((request, reply) => {
+      // The path only: a query string can carry a token, and echoing it puts
+      // it in every log between here and the caller (VEN-618).
+      const path = request.routeOptions.url ?? request.url.split('?')[0];
       const body: ApiError = {
         statusCode: 404,
         error: ERROR_CODES.NOT_FOUND,
-        message: `Route ${request.method} ${request.url} not found`,
+        message: `Route ${request.method} ${path} not found`,
       };
       return reply.status(404).send(body);
     });

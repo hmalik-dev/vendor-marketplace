@@ -257,7 +257,9 @@ describe('the profile photo hint', () => {
 
   it('states the same constraint the refusal states', () => {
     // The two used to be retyped separately and disagreed by a batch clause.
-    expect(SINGLE_UPLOAD_CONSTRAINT_LINE).toBe('JPG or PNG · under 12 MB · at least 1200px wide');
+    expect(SINGLE_UPLOAD_CONSTRAINT_LINE).toBe(
+      'JPG, PNG or WebP · under 12 MB · at least 1200px wide',
+    );
   });
 });
 

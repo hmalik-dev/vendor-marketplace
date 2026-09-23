@@ -4,16 +4,39 @@ import {
   assertOwnedImageRefs,
   assertStorageOriginRefs,
   buildObjectKey,
+  countOwnedImages,
   ownsObjectKey,
   publicUrlFor,
+  removeOwnedObjects,
+  storageOwnerSegment,
   thumbnailKeyFor,
 } from './storage.js';
+
+const USER_ID = '0b7e9f5c-3f4a-4c55-9a51-2d8f6c1e7a90';
 
 describe('buildObjectKey', () => {
   it('namespaces the object by prefix and owner, and keeps the extension', () => {
     const key = buildObjectKey('vendor-profile', 'owner-1', 'webp');
 
-    expect(key).toMatch(/^vendor-profile\/owner-1\/[0-9a-f-]{36}\.webp$/);
+    expect(key).toMatch(
+      new RegExp(`^vendor-profile/${storageOwnerSegment('owner-1')}/[0-9a-f-]{36}\\.webp$`),
+    );
+  });
+
+  /*
+   * VEN-618. The key is part of every public storefront image URL, and the
+   * public vendor API deliberately never hands out a `users.id`.
+   */
+  it('never writes the uploader’s user id into the key', () => {
+    const key = buildObjectKey('portfolio', USER_ID, 'webp');
+
+    expect(key).not.toContain(USER_ID);
+    expect(key.split('/')[1]).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it('gives one owner the same segment every time and two owners different ones', () => {
+    expect(storageOwnerSegment(USER_ID)).toBe(storageOwnerSegment(USER_ID));
+    expect(storageOwnerSegment(USER_ID)).not.toBe(storageOwnerSegment('owner-2'));
   });
 
   it('never reuses a key', () => {
@@ -49,6 +72,19 @@ describe('ownsObjectKey', () => {
     expect(ownsObjectKey(buildObjectKey('portfolio', 'owner-2', 'webp'), 'owner-1')).toBe(false);
   });
 
+  /* Keys minted before VEN-618 carry the user id itself, and rows still name them. */
+  it('accepts both a new key and a legacy user-id key for the same owner', () => {
+    expect(ownsObjectKey(buildObjectKey('portfolio', USER_ID, 'webp'), USER_ID)).toBe(true);
+    expect(ownsObjectKey(`portfolio/${USER_ID}/abc.webp`, USER_ID)).toBe(true);
+    expect(ownsObjectKey(`portfolio/${USER_ID}/abc.webp`, 'owner-2')).toBe(false);
+  });
+
+  it('refuses a key whose owner segment is the hash of someone else', () => {
+    expect(ownsObjectKey(`portfolio/${storageOwnerSegment('owner-2')}/abc.webp`, USER_ID)).toBe(
+      false,
+    );
+  });
+
   /* Pre-owner-segment keys have two parts and are never reaped. */
   it('refuses a legacy key with no owner segment', () => {
     expect(ownsObjectKey('portfolio/abc.webp', 'owner-1')).toBe(false);
@@ -60,6 +96,53 @@ describe('ownsObjectKey', () => {
 
   it('refuses a key whose first segment is not a known prefix', () => {
     expect(ownsObjectKey('not-a-prefix/owner-1/abc.webp', 'owner-1')).toBe(false);
+  });
+});
+
+/**
+ * An account's objects sit under two owner segments once VEN-618 ships: the
+ * user id on keys minted before it, the digest on keys minted after. Closure
+ * and the storage cap have to see both, or a closed account keeps its newer
+ * photos public and the cap undercounts.
+ */
+describe('owned objects across both key shapes', () => {
+  function fakeStorage(keys: string[]) {
+    const held = new Set(keys);
+
+    return {
+      held,
+      async list(prefix: string) {
+        return {
+          objects: [...held]
+            .filter((key) => key.startsWith(`${prefix}/`))
+            .map((key) => ({ key, lastModified: new Date(0) })),
+        };
+      },
+      async remove(removed: readonly string[]) {
+        for (const key of removed) {
+          held.delete(key);
+        }
+      },
+    };
+  }
+
+  const LEGACY = `portfolio/${USER_ID}/old.webp`;
+  const LEGACY_THUMB = `portfolio/${USER_ID}/old-thumb.webp`;
+  const CURRENT = `vendor-cover/${storageOwnerSegment(USER_ID)}/new.webp`;
+  const CURRENT_THUMB = `vendor-cover/${storageOwnerSegment(USER_ID)}/new-thumb.webp`;
+  const SOMEONE_ELSE = `portfolio/${storageOwnerSegment('owner-2')}/theirs.webp`;
+
+  it('counts the images under both segments, thumbnails excluded', async () => {
+    const storage = fakeStorage([LEGACY, LEGACY_THUMB, CURRENT, CURRENT_THUMB, SOMEONE_ELSE]);
+
+    expect(await countOwnedImages(storage, USER_ID, 10)).toBe(2);
+  });
+
+  it('removes the objects under both segments and nobody else’s', async () => {
+    const storage = fakeStorage([LEGACY, LEGACY_THUMB, CURRENT, CURRENT_THUMB, SOMEONE_ELSE]);
+
+    expect(await removeOwnedObjects(storage, USER_ID)).toBe(4);
+    expect([...storage.held]).toEqual([SOMEONE_ELSE]);
   });
 });
 
@@ -87,6 +170,18 @@ describe('assertOwnedImageRefs', () => {
 
   it('refuses a key minted for another account', () => {
     expect(() => assertOwnedImageRefs([THEIRS], 'owner-1')).toThrow(
+      'That image belongs to another account',
+    );
+  });
+
+  it('accepts this account’s digest-owned key and refuses another account’s', () => {
+    const mine = buildObjectKey('portfolio', USER_ID, 'webp');
+    const theirs = buildObjectKey('portfolio', 'owner-2', 'webp');
+
+    expect(() =>
+      assertOwnedImageRefs([mine, `portfolio/${USER_ID}/old.webp`], USER_ID),
+    ).not.toThrow();
+    expect(() => assertOwnedImageRefs([theirs], USER_ID)).toThrow(
       'That image belongs to another account',
     );
   });

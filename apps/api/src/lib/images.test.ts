@@ -123,23 +123,17 @@ describe('processUploadedImage', () => {
     ).resolves.toMatchObject({});
   });
 
-  /*
-   * WebP is what this function writes, not something it takes. Offering it in
-   * the picker only widened the set of files a vendor could pick and then be
-   * refused for, so it left the accepted set at both ends together.
-   */
-  it('no longer accepts WebP as an input format', async () => {
+  /* VEN-618: Android cameras and desktop browsers save photos as WebP. */
+  it('accepts WebP as an input format', async () => {
     const webp = await sharp({
       create: { width: 1600, height: 1200, channels: 3, background: { r: 1, g: 2, b: 3 } },
     })
       .webp()
       .toBuffer();
 
-    expect(ACCEPTED_IMAGE_MIME_TYPES).toEqual(['image/jpeg', 'image/png']);
-    await expect(processUploadedImage(webp, 'image/webp')).rejects.toMatchObject({
-      statusCode: 400,
-      message: 'Unsupported image type. Upload a JPG or PNG file.',
-    });
+    expect(ACCEPTED_IMAGE_MIME_TYPES).toEqual(['image/jpeg', 'image/png', 'image/webp']);
+    const processed = await processUploadedImage(webp, 'image/webp');
+    expect((await sharp(processed.image).metadata()).width).toBe(1600);
   });
 
   it.each([
@@ -185,20 +179,20 @@ describe('processUploadedImage', () => {
   it.each([
     ['gif', async () => sharp({ create: BLANK }).gif().toBuffer()],
     ['tiff', async () => sharp({ create: BLANK }).tiff().toBuffer()],
-    ['webp', async () => sharp({ create: BLANK }).webp().toBuffer()],
   ])('refuses a decodable %s renamed to claim it is a PNG', async (_format, encode) => {
     const bytes = await encode();
 
     await expect(processUploadedImage(bytes, 'image/png')).rejects.toMatchObject({
       statusCode: 400,
       // The same sentence a wrongly-picked file gets: the fix is identical.
-      message: 'Unsupported image type. Upload a JPG or PNG file.',
+      message: 'Unsupported image type. Upload a JPG, PNG or WebP file.',
     });
   });
 
   it.each([
     ['jpeg', async () => sharp({ create: BLANK }).jpeg().toBuffer(), 'image/jpeg'],
     ['png', async () => sharp({ create: BLANK }).png().toBuffer(), 'image/png'],
+    ['webp', async () => sharp({ create: BLANK }).webp().toBuffer(), 'image/webp'],
   ])('still accepts a genuine %s', async (_format, encode, mime) => {
     const processed = await processUploadedImage(await encode(), mime);
 

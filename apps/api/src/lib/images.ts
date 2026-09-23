@@ -90,10 +90,10 @@ function isAcceptedMimeType(value: string): boolean {
  * The declared `Content-Type` is a claim; this is what the bytes are. Renaming
  * a GIF to `.png` and declaring `image/png` satisfied the allow-list, and the
  * only thing standing behind it was a decode that accepts **every** format
- * libvips supports — so the two-format allow-list was in practice "anything
+ * libvips supports — so the allow-list was in practice "anything
  * sharp can read", which includes SVG, TIFF, AVIF and GIF.
  */
-const ACCEPTED_DECODED_FORMATS: readonly string[] = ['jpeg', 'png'];
+const ACCEPTED_DECODED_FORMATS: readonly string[] = ['jpeg', 'png', 'webp'];
 
 /** EXIF orientations 5-8 swap the image's width and height; 1-4 and junk do not. */
 const EXIF_QUARTER_TURNS: readonly number[] = [5, 6, 7, 8];

@@ -153,8 +153,9 @@ export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (a
 
       const processed = await processUploadedImage(buffer, mimetype);
 
-      // The uploader is written into the key: it is the only record of who
-      // minted it, and the only thing that makes deleting one safe.
+      // The uploader is written into the key, as a digest of their id: it is the
+      // only record of who minted it, and the only thing that makes deleting
+      // one safe.
       const key = buildObjectKey(request.query.prefix, uploader.id, 'webp');
       const thumbnailKey = thumbnailKeyFor(key);
 

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   DeleteObjectsCommand,
   HeadBucketCommand,
@@ -48,7 +48,7 @@ export const STORAGE_PREFIX_ROLES: Record<StoragePrefix, readonly UserRole[]> = 
  * one would need a second bucket, signed URLs and a bypass of the image
  * optimizer cache. That is worth paying only for a photo meant to be
  * owner-only; a customer avatar is not, and its key is an unguessable
- * `prefix/ownerId/uuid.webp`. Revisit if a customer photo ever becomes private.
+ * `prefix/owner/uuid.webp`. Revisit if a customer photo ever becomes private.
  */
 const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
@@ -92,7 +92,33 @@ export interface ObjectStorage {
 }
 
 /**
- * Builds the key an upload is stored under: `<prefix>/<ownerId>/<uuid>.<ext>`.
+ * The owner segment written into a new key for the account `userId`: a digest
+ * of the user id rather than the id itself (VEN-618). The key is part of every
+ * public image URL, and the public vendor API deliberately never hands out a
+ * `users.id`.
+ *
+ * A digest rather than the vendor profile id, because `customer-profile` is
+ * written by customers, who have no vendor profile; and unkeyed, because a
+ * keyed one would orphan every key's ownership the day its secret rotated. The
+ * id is a random UUID, so the digest names nobody to a caller who does not
+ * already hold it.
+ */
+export function storageOwnerSegment(userId: string): string {
+  return createHash('sha256').update(`storage-owner:${userId}`).digest('hex').slice(0, 32);
+}
+
+/**
+ * Every owner segment `userId`'s objects may sit under: the digest new keys
+ * carry, and the raw id that keys minted before VEN-618 carry and rows still
+ * name. Keys are never rewritten, so both stay valid for good.
+ */
+function ownerSegments(userId: string): readonly string[] {
+  return [storageOwnerSegment(userId), userId];
+}
+
+/**
+ * Builds the key an upload is stored under: `<prefix>/<owner>/<uuid>.<ext>`,
+ * where `<owner>` is `storageOwnerSegment(ownerId)`.
  *
  * The name is a random UUID rather than anything derived from the client's
  * filename, so an attacker cannot choose a path, overwrite someone else's
@@ -114,7 +140,7 @@ export function buildObjectKey(prefix: string, ownerId: string, extension: strin
     throw new Error('An object key needs a single-segment owner id');
   }
 
-  return `${prefix}/${ownerId}/${randomUUID()}.${extension}`;
+  return `${prefix}/${storageOwnerSegment(ownerId)}/${randomUUID()}.${extension}`;
 }
 
 /**
@@ -158,14 +184,16 @@ function objectKeyOwner(key: string): string | null {
 }
 
 /**
- * Whether `key` was minted for `ownerId`.
+ * Whether `key` was minted for `ownerId`, under either owner segment.
  *
  * The safe side of the trade for deletion: a key this cannot vouch for — a
  * legacy two-segment key, an absolute URL — is left in the bucket as an orphan
  * rather than reaped.
  */
 export function ownsObjectKey(key: string, ownerId: string): boolean {
-  return objectKeyOwner(key) === ownerId;
+  const owner = objectKeyOwner(key);
+
+  return owner !== null && ownerSegments(ownerId).includes(owner);
 }
 
 /**
@@ -309,13 +337,14 @@ function walkedBackOwners(ref: string): string[] {
  * deleting more on the way out is unrecoverable.
  */
 function isForeignObjectKey(ref: string, ownerId: string): boolean {
+  const own = ownerSegments(ownerId);
   const owner = referencedObjectKeyOwner(ref);
 
-  if (owner !== null && owner !== ownerId) {
+  if (owner !== null && !own.includes(owner)) {
     return true;
   }
 
-  return walkedBackOwners(ref).some((walked) => walked !== ownerId);
+  return walkedBackOwners(ref).some((walked) => !own.includes(walked));
 }
 
 /**
@@ -341,6 +370,13 @@ export function assertOwnedImageRefs(
   }
 }
 
+/** Every `<prefix>/<owner>` the objects of `ownerId` may be listed under. */
+function ownedNamespaces(ownerId: string): string[] {
+  return STORAGE_PREFIXES.flatMap((prefix) =>
+    ownerSegments(ownerId).map((segment) => `${prefix}/${segment}`),
+  );
+}
+
 /**
  * Deletes every object `ownerId` uploaded, in every namespace, thumbnails and
  * never-referenced uploads included — for a closed account (VEN-614).
@@ -359,11 +395,11 @@ export async function removeOwnedObjects(
 
   let removed = 0;
 
-  for (const prefix of STORAGE_PREFIXES) {
+  for (const namespace of ownedNamespaces(ownerId)) {
     let token: string | undefined;
 
     do {
-      const page = await storage.list(`${prefix}/${ownerId}`, token ? { token } : undefined);
+      const page = await storage.list(namespace, token ? { token } : undefined);
       await storage.remove(page.objects.map((object) => object.key));
       removed += page.objects.length;
       token = page.nextToken;
@@ -385,11 +421,11 @@ export async function countOwnedImages(
 ): Promise<number> {
   let count = 0;
 
-  for (const prefix of STORAGE_PREFIXES) {
+  for (const namespace of ownedNamespaces(ownerId)) {
     let token: string | undefined;
 
     do {
-      const page = await storage.list(`${prefix}/${ownerId}`, token ? { token } : undefined);
+      const page = await storage.list(namespace, token ? { token } : undefined);
       count += page.objects.filter((object) => !object.key.endsWith('-thumb.webp')).length;
 
       if (count >= stopAt) {
