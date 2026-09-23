@@ -10,6 +10,7 @@ describe('isProxiedAuthCall', () => {
     ['POST', ['email-otp', 'send-verification-otp']],
     ['POST', ['email-otp', 'request-password-reset']],
     ['POST', ['email-otp', 'reset-password']],
+    ['POST', ['change-password']],
     ['GET', ['get-session']],
     ['GET', ['token']],
   ])('forwards %s %j', (method, path) => {
@@ -19,7 +20,8 @@ describe('isProxiedAuthCall', () => {
   it.each([
     ['POST', ['delete-user']],
     ['POST', ['change-email']],
-    ['POST', ['change-password']],
+    ['GET', ['change-password']],
+    ['POST', ['change-password', 'extra']],
     ['POST', ['reset-password']],
     ['POST', ['request-password-reset']],
     ['POST', ['email-otp', 'forget-password']],
@@ -27,6 +29,7 @@ describe('isProxiedAuthCall', () => {
     ['POST', ['email-otp', 'check-verification-otp']],
     ['POST', ['update-user']],
     ['GET', ['list-sessions']],
+    ['POST', ['list-sessions']],
     ['POST', ['revoke-sessions']],
     ['POST', ['revoke-other-sessions']],
     ['POST', ['admin', 'set-role']],

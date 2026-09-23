@@ -18,8 +18,8 @@ import { NAV_DRAWER_ROW_CLASS, NavDrawer } from '@/components/nav-drawer';
  *   quietly reintroducing the nav on every screen. Off `/`, "Sign in" and the
  *   Sign up pill both stay in the bar and there is nothing left to put away.
  * - **Signed in** it holds Dashboard, which the header hides below `sm` for
- *   width, and every row of the avatar's account menu — `Contact support` and
- *   `Sign out` too — so a narrow width loses nothing the menu offers (VEN-403).
+ *   width, and every row of the avatar's account menu — `Account settings`,
+ *   `Contact support` and `Sign out` too — so a narrow width loses nothing the menu offers (VEN-403).
  */
 export function SignedOutDrawer(): React.ReactElement | null {
   const pathname = usePathname();
@@ -50,11 +50,11 @@ export interface SignedInDrawerProps {
 }
 
 export function SignedInDrawer({ dashboardLabel }: SignedInDrawerProps): React.ReactElement {
-  const [dashboard, support] = accountLinks(dashboardLabel);
+  const [dashboard, settings, support] = accountLinks(dashboardLabel);
 
   return (
     <NavDrawer
-      links={[dashboard, { label: 'Messages', href: '/messages' }, support]}
+      links={[dashboard, { label: 'Messages', href: '/messages' }, settings, support]}
       action={
         <SignOutButton redirectUrl={SIGN_OUT_REDIRECT}>
           <button type="button" className={NAV_DRAWER_ROW_CLASS}>

@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Avatar } from '@/components/ui/avatar';
+import { AccountMenu } from '@/components/account-menu';
+import { DASHBOARD_LABEL_BY_ROLE, DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { TierMarker } from '@/components/brand/tier-marker';
 
@@ -17,11 +18,14 @@ export interface AdminHeaderProps {
  * surface acts on other people's accounts. It replaces `SiteHeader` rather than
  * sitting beneath it — see `OutsideAdmin` in `public-chrome.tsx`.
  *
- * The avatar is the shared `Avatar` at its `xs` step — the 30px frame `13`
- * draws — with the ground and the initial swapped for the inverted pair the
- * frame uses. The colours are an override rather than a new tone: the fallback
- * ramp exists to distinguish *people* from each other, and there is exactly one
- * operator in this header.
+ * The avatar opens the same account menu the site header's does (ruled by the
+ * account holder on VEN-677), so an operator reaches `Account settings`,
+ * `Contact support` and `Sign out` from the console; its first row returns to
+ * the console. `tone="dark"` draws it as frame `13` does: the shared `Avatar`
+ * at its 30px `xs` step with the ground and the initial swapped for the
+ * inverted pair. The colours are an override rather than a new tone: the
+ * fallback ramp exists to distinguish *people* from each other, and there is
+ * exactly one operator in this header.
  */
 export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactElement {
   /*
@@ -85,12 +89,13 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
         <span className="truncate text-action text-stone-480" title={email}>
           Logged in as {email}
         </span>
-        {/*
-          The one `labelled` avatar in the product: the line beside it carries
-          the operator's email address, not their name, so this monogram is the
-          only thing that says who is signed in.
-        */}
-        <Avatar name={name} labelled size="xs" className="bg-stone-700 text-clay-150" />
+        <AccountMenu
+          name={name}
+          avatarUrl={null}
+          dashboardLabel={DASHBOARD_LABEL_BY_ROLE.admin}
+          dashboardHref={DASHBOARD_PATH_BY_ROLE.admin}
+          tone="dark"
+        />
       </div>
     </header>
   );

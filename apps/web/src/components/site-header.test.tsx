@@ -327,32 +327,42 @@ describe('SiteHeader', () => {
 
   /*
    * VEN-403: users never reach a provider-hosted panel. The avatar opens the app's own menu,
-   * and it holds exactly three rows — nothing that leads to a provider's profile.
+   * and it holds exactly four rows — nothing that leads to a provider's profile.
+   * `Account settings` is the app's own page (VEN-677).
    */
   it.each([
     ['customer' as const, 'Bookings'],
     ['vendor' as const, 'Dashboard'],
     ['admin' as const, 'Admin'],
-  ])('opens a %s account menu of exactly dashboard, support and sign out', async (role, label) => {
-    authState = 'signed-in';
-    currentRole = role;
+  ])(
+    'opens a %s account menu of exactly dashboard, settings, support and sign out',
+    async (role, label) => {
+      authState = 'signed-in';
+      currentRole = role;
 
-    render(await SiteHeader());
-    // jsdom has no PointerEvent, and Radix opens a menu from the keyboard too.
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu' }), { key: 'Enter' });
+      render(await SiteHeader());
+      // jsdom has no PointerEvent, and Radix opens a menu from the keyboard too.
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu' }), { key: 'Enter' });
 
-    const menu = screen.getByRole('menu');
-    const items = within(menu).getAllByRole('menuitem');
+      const menu = screen.getByRole('menu');
+      const items = within(menu).getAllByRole('menuitem');
 
-    expect(items.map((item) => item.textContent)).toEqual([label, 'Contact support', 'Sign out']);
-    expect(items[0]).toHaveProperty('href', 'http://localhost:3000/dashboard');
-    expect(items[1]).toHaveProperty('href', 'http://localhost:3000/support');
-    expect(items[2]?.tagName).toBe('BUTTON');
+      expect(items.map((item) => item.textContent)).toEqual([
+        label,
+        'Account settings',
+        'Contact support',
+        'Sign out',
+      ]);
+      expect(items[0]).toHaveProperty('href', 'http://localhost:3000/dashboard');
+      expect(items[1]).toHaveProperty('href', 'http://localhost:3000/account/settings');
+      expect(items[2]).toHaveProperty('href', 'http://localhost:3000/support');
+      expect(items[3]?.tagName).toBe('BUTTON');
 
-    // Sign out lands signed out on `/` — criterion 2's half that jsdom can see.
-    fireEvent.click(items[2]!);
-    expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
-  });
+      // Sign out lands signed out on `/` — criterion 2's half that jsdom can see.
+      fireEvent.click(items[3]!);
+      expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
+    },
+  );
 
   /*
    * #435's ruling for an ARIA menu button: Tab closes the panel and parks focus

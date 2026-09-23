@@ -75,7 +75,7 @@ describe('SignedInDrawer', () => {
    * VEN-403: at narrow widths the avatar's account menu is out of reach behind
    * the hamburger, so the drawer carries every row that menu offers.
    */
-  it('carries the account menu’s rows: dashboard, support and sign out', async () => {
+  it('carries the account menu’s rows: dashboard, settings, support and sign out', async () => {
     const user = userEvent.setup();
 
     render(<SignedInDrawer dashboardLabel={DASHBOARD_LABEL_BY_ROLE.vendor} />);
@@ -86,6 +86,7 @@ describe('SignedInDrawer', () => {
     expect([...rows].map((row) => [row.textContent, row.getAttribute('href')])).toEqual([
       ['Dashboard', '/dashboard'],
       ['Messages', '/messages'],
+      ['Account settings', '/account/settings'],
       ['Contact support', '/support'],
       ['Sign out', null],
     ]);

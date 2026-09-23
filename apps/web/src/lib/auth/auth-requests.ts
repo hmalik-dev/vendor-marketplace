@@ -202,3 +202,37 @@ export async function signOut(): Promise<void> {
 
   clearSessionToken();
 }
+
+export type ChangePasswordOutcome = 'ok' | 'rejected' | 'signedOut' | 'throttled' | 'unreachable';
+
+/**
+ * Changes the signed-in caller's password (VEN-677). The proxy always ends
+ * the account's other sessions and keeps this one, with a fresh cookie, so the
+ * cached token is dropped for the next read to mint anew.
+ *
+ * `signedOut` is a 401: the session ended elsewhere (a sign-out in another
+ * tab), which no password typed here can fix. `rejected` is a wrong current
+ * password: every other 4xx but the proxy's 429, including a 403, which
+ * `outcomeOf` would read as `unverified` — a signed-in person has nothing left
+ * to verify.
+ */
+export async function changePassword(input: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<ChangePasswordOutcome> {
+  const response = await post('/change-password', input);
+
+  if (response?.status === 401) {
+    return 'signedOut';
+  }
+
+  const outcome = await outcomeOf(response);
+
+  if (outcome === 'ok') {
+    clearSessionToken();
+  }
+
+  return outcome === 'ok' || outcome === 'throttled' || outcome === 'unreachable'
+    ? outcome
+    : 'rejected';
+}

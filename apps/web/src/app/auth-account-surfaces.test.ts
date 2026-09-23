@@ -22,13 +22,29 @@ import { sourceFiles, TS_AND_TSX, withoutComments } from '@/testing/source-scan'
 const FORBIDDEN_SURFACES =
   /\b(?:AccountView|AccountSettings|SettingsCards|UserButton|UserProfile|OrganizationProfile|NeonAuthUIProvider|AuthView|SignedIn|SignedOut)\b/g;
 const FORBIDDEN_IMPORTS = /@neondatabase\/auth\/react|@cler[k]\//g;
+/*
+ * An endpoint ends where its path segment does, so a module named after one
+ * (`./change-password-form`) is not a call to it.
+ */
 const FORBIDDEN_ENDPOINTS =
-  /\/(?:change-email|change-password|delete-user|update-user|link-social|unlink-account|set-password)\b/g;
+  /\/(?:change-email|change-password|delete-user|update-user|link-social|unlink-account|set-password)(?![\w-])/g;
 
-function violationsIn(code: string): string[] {
-  return [FORBIDDEN_SURFACES, FORBIDDEN_IMPORTS, FORBIDDEN_ENDPOINTS].flatMap((pattern) =>
-    [...code.matchAll(pattern)].map((match) => match[0]),
-  );
+/*
+ * The one account mutation the app makes itself (VEN-677): a password change,
+ * from this file only, through the proxy's `forwardChangePassword`, which
+ * forces every other session to end and budgets it per account. Anywhere else
+ * it is still a finding.
+ */
+const SANCTIONED: Readonly<Record<string, readonly string[]>> = {
+  'lib/auth/auth-requests.ts': ['/change-password'],
+};
+
+function violationsIn(code: string, file = ''): string[] {
+  const allowed = SANCTIONED[file] ?? [];
+
+  return [FORBIDDEN_SURFACES, FORBIDDEN_IMPORTS, FORBIDDEN_ENDPOINTS]
+    .flatMap((pattern) => [...code.matchAll(pattern)].map((match) => match[0]))
+    .filter((identifier) => !allowed.includes(identifier));
 }
 
 describe('no provider-hosted account surface is reachable from the app (VEN-403, VEN-447)', () => {
@@ -61,13 +77,28 @@ describe('no provider-hosted account surface is reachable from the app (VEN-403,
     expect(violationsIn(withoutComments('// `<AccountView />` opened the profile'))).toEqual([]);
     // Word boundaries, so an app component that merely starts with a name is not a panel.
     expect(violationsIn('<AccountViewSummary />')).toEqual([]);
+    expect(violationsIn("import { X } from '@/components/account/change-password-form';")).toEqual(
+      [],
+    );
+  });
+
+  it('allows the password change from the one sanctioned file, and nowhere else (VEN-677)', () => {
+    const call = "post('/change-password', input)";
+
+    expect(violationsIn(call, 'lib/auth/auth-requests.ts')).toEqual([]);
+    expect(violationsIn(call, 'components/account/change-password-form.tsx')).toEqual([
+      '/change-password',
+    ]);
+    expect(violationsIn("post('/change-email', body)", 'lib/auth/auth-requests.ts')).toEqual([
+      '/change-email',
+    ]);
   });
 
   it('finds none of them in any source file under apps/web/src', async () => {
     const files = await sourceFiles(undefined, TS_AND_TSX);
 
     const found = files.flatMap(({ name, code }) =>
-      violationsIn(code).map((identifier) => `${name}: ${identifier}`),
+      violationsIn(code, name).map((identifier) => `${name}: ${identifier}`),
     );
 
     expect(found).toEqual([]);

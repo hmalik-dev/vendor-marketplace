@@ -5,10 +5,11 @@ import { SignOutButton } from '@/components/auth/sign-out-button';
 import { DropdownMenu } from 'radix-ui';
 import { useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
 
 /**
  * The signed-in account control: the reader's avatar, opening a menu of the
- * three things an account holder does from the header (VEN-403).
+ * things an account holder does from the header (VEN-403).
  *
  * **It replaces the identity provider's account menu, and it must never grow a
  * way back into one.** Users never reach a hosted panel; the owner does. That
@@ -20,7 +21,12 @@ import { Avatar } from '@/components/ui/avatar';
  * acts. `app/auth-account-surfaces.test.ts` fails the tree if a provider account
  * surface is imported anywhere.
  *
- * There is no settings row because there is no settings screen to link to.
+ * `Account settings` is the app's own page (VEN-677): changing a password
+ * lives there, behind the proxy's rules. Email and closure stay out of it.
+ *
+ * The same menu sits in the admin console's header (ruled by the account
+ * holder on VEN-677), in the console's ink `tone` and with its dashboard row
+ * pointing at the console itself.
  */
 
 /** Where signing out lands, stated rather than inherited from a provider's config. */
@@ -31,13 +37,19 @@ export interface AccountLink {
   href: string;
 }
 
+export const ACCOUNT_SETTINGS_PATH = '/account/settings';
+
 /**
- * The menu's two links, shared with the drawer that carries the same rows at
+ * The menu's three links, shared with the drawer that carries the same rows at
  * narrow widths — one list, so the bar and the drawer cannot disagree.
  */
-export function accountLinks(dashboardLabel: string): readonly [AccountLink, AccountLink] {
+export function accountLinks(
+  dashboardLabel: string,
+  dashboardHref = '/dashboard',
+): readonly [AccountLink, AccountLink, AccountLink] {
   return [
-    { label: dashboardLabel, href: '/dashboard' },
+    { label: dashboardLabel, href: dashboardHref },
+    { label: 'Account settings', href: ACCOUNT_SETTINGS_PATH },
     { label: 'Contact support', href: '/support' },
   ];
 }
@@ -48,6 +60,13 @@ export interface AccountMenuProps {
   avatarUrl: string | null;
   /** `DASHBOARD_LABEL_BY_ROLE` for this reader, resolved once by the header. */
   dashboardLabel: string;
+  /** Where that row goes: `/dashboard` resolves the role; the console names itself. */
+  dashboardHref?: string;
+  /**
+   * `dark` on the admin console's ink header: frame `13`'s 30px monogram in the
+   * inverted pair, rather than the site header's 32px one.
+   */
+  tone?: 'light' | 'dark';
 }
 
 /**
@@ -61,6 +80,8 @@ export function AccountMenu({
   name,
   avatarUrl,
   dashboardLabel,
+  dashboardHref,
+  tone = 'light',
 }: AccountMenuProps): React.ReactElement {
   const trigger = useRef<HTMLButtonElement>(null);
   // Controlled only so `Tab` can close it — see the handler on the content.
@@ -70,17 +91,26 @@ export function AccountMenu({
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger
         ref={trigger}
-        aria-label="Account menu"
+        // On the console the line beside it carries only an address, so the trigger names the operator.
+        aria-label={tone === 'dark' ? `Account menu, ${name}` : 'Account menu'}
         /*
           44px of target around the frame's 32px circle, per `04-laws.md`. No
           `data-focus-own`: this is an unbordered control, and the base
           `:focus-visible` rule in `globals.css` paints exactly the clay offset
           ring the law asks for.
         */
-        className="flex size-11 cursor-pointer items-center justify-center rounded-full"
+        className={cn(
+          'flex size-11 cursor-pointer items-center justify-center rounded-full',
+          // The console's 30px circle keeps frame `13`'s position: the target's extra 7px a side overlaps.
+          tone === 'dark' && '-mx-[7px]',
+        )}
       >
         {/* Decorative: the trigger's label names the control. */}
-        <Avatar name={name} src={avatarUrl} size="header" />
+        {tone === 'dark' ? (
+          <Avatar name={name} src={avatarUrl} size="xs" className="bg-stone-700 text-clay-150" />
+        ) : (
+          <Avatar name={name} src={avatarUrl} size="header" />
+        )}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
@@ -103,7 +133,7 @@ export function AccountMenu({
           }}
           className="z-50 flex min-w-[13rem] flex-col rounded-panel border border-stone-300 bg-stone-0 p-[6px] shadow-dropdown"
         >
-          {accountLinks(dashboardLabel).map((link) => (
+          {accountLinks(dashboardLabel, dashboardHref).map((link) => (
             <DropdownMenu.Item key={link.href} asChild data-focus-own>
               <Link href={link.href} className={ITEM_CLASS}>
                 {link.label}
