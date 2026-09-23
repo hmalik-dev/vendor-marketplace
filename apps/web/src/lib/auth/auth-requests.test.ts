@@ -76,18 +76,20 @@ describe('verifyEmailCode', () => {
   });
 
   /*
-   * Observed live: Better Auth's own per-code attempt limiter answers 403 with
-   * this body, a second throttle independent of the proxy's address-level 429
-   * (proxy-throttle.ts) — five wrong codes in a row can draw one before that
-   * budget is spent. Without the body check this fell into the same 403
-   * bucket as `EMAIL_NOT_VERIFIED` and read as 'unverified', which the code
-   * step's `codeWrong` fallback then showed as a wrong code.
+   * Observed live: Better Auth's `emailOTP` plugin answers 403 with this body
+   * once a single code has been guessed wrong `allowedAttempts` times (the
+   * plugin's own default is 3 — Neon's managed service does not expose
+   * raising it). Without the body check this fell into the same 403 bucket as
+   * `EMAIL_NOT_VERIFIED` and read as 'unverified', which the code step's
+   * `codeWrong` fallback then showed as an ordinary wrong code. It is
+   * `'codeInvalid'`, not `'throttled'`: Better Auth's own docs say the code
+   * is already dead and the fix is to request a new one, not to wait.
    */
-  it('reports throttled for a 403 carrying Better Auth’s own attempt-limit code', async () => {
+  it('reports codeInvalid for a 403 carrying Better Auth’s own attempt-limit code', async () => {
     stubFetchBody(403, { code: 'TOO_MANY_ATTEMPTS' });
 
     await expect(verifyEmailCode({ email: 'new@example.com', otp: '000000' })).resolves.toBe(
-      'throttled',
+      'codeInvalid',
     );
   });
 
