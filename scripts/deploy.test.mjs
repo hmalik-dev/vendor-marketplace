@@ -32,8 +32,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WORKFLOW = parse(readFileSync(path.join(ROOT, '.github/workflows/deploy.yml'), 'utf8'));
 const CI = parse(readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8'));
 const JOB = WORKFLOW.jobs.deploy;
-const GATED = "steps.gate.outputs.deploy == 'true'";
-const READY = `${GATED} && steps.preflight.outputs.ready == 'true'`;
 const SHA = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
 
 /*
@@ -369,14 +367,14 @@ test('api: an unknown host fails without running anything', async () => {
   assert.equal(calls.length, 0);
 });
 
-test('web: builds under the release and upload credential, and deploys without the upload credential', async () => {
+test('web-build: builds under the release and upload credential, deployment secrets excluded', async () => {
   const { io, calls } = recordingIo();
   const credentials = {
     VERCEL_TOKEN: fake('vercel'),
     SENTRY_AUTH_TOKEN: fake('sentry'),
     ...BUILD_SECRETS,
   };
-  await PHASES.web(
+  await PHASES['web-build'](
     {
       PATH: '/bin',
       DEPLOY_TARGET: 'production',
@@ -394,15 +392,79 @@ test('web: builds under the release and upload credential, and deploys without t
 
   assert.deepEqual(
     calls.map(({ args }) => args[2]),
-    ['pull', 'build', 'deploy'],
+    ['pull', 'build'],
   );
   assert.equal(calls[1].env.SENTRY_RELEASE, SHA);
   assert.equal(calls[1].env.SENTRY_AUTH_TOKEN, fake('sentry'));
-  assert.equal(calls[2].env.SENTRY_AUTH_TOKEN, undefined);
-  assert.ok(calls[2].args.includes(`SENTRY_RELEASE=${SHA}`));
   for (const call of calls) {
     assert.equal(call.env.DATABASE_URL_UNPOOLED, undefined);
   }
+});
+
+test('web-deploy: deploys the prebuilt bundle without the upload or build-only credentials, after the build', async () => {
+  const { io, calls } = recordingIo();
+  await PHASES['web-deploy'](
+    {
+      PATH: '/bin',
+      DEPLOY_TARGET: 'production',
+      VERCEL_TOKEN: fake('vercel'),
+      VERCEL_ORG_ID: 'org',
+      VERCEL_PROJECT_ID: 'prj',
+      SENTRY_RELEASE: SHA,
+      // Handed to this call the way `release` hands every phase the whole
+      // environment; none of these belong to `vercel deploy`'s own child.
+      SENTRY_AUTH_TOKEN: fake('sentry'),
+      ...BUILD_SECRETS,
+      DATABASE_URL_UNPOOLED: UNPOOLED,
+      WEB_URL: 'https://orla.test',
+    },
+    io,
+  );
+
+  assert.deepEqual(
+    calls.map(({ args }) => args[2]),
+    ['deploy'],
+  );
+  assert.equal(calls[0].env.SENTRY_AUTH_TOKEN, undefined);
+  assert.ok(calls[0].args.includes(`SENTRY_RELEASE=${SHA}`));
+  assert.equal(calls[0].env.DATABASE_URL_UNPOOLED, undefined);
+  for (const name of Object.keys(BUILD_SECRETS)) {
+    assert.equal(calls[0].env[name], undefined, name);
+  }
+});
+
+test('web-deploy: refuses without the vercel credentials or the release commit, before running anything', async () => {
+  const { io, calls } = recordingIo();
+  await assert.rejects(
+    PHASES['web-deploy']({ DEPLOY_TARGET: 'production' }, io),
+    /Missing VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID, SENTRY_RELEASE/,
+  );
+  assert.equal(calls.length, 0);
+});
+
+// Run standalone (a manual release, not through `release`), `web-deploy` must
+// refuse the same alias mismatch `web-build` already refuses inside `release`
+// — otherwise a lone `web-deploy` could alias production's host to a stray
+// staging build.
+test('web-deploy: staging refuses to alias a host that is not its own, even called on its own', async () => {
+  const { io, calls } = recordingIo();
+  for (const WEB_URL of ['https://orla.example', 'orla-staging.vercel.app', '']) {
+    await assert.rejects(
+      PHASES['web-deploy'](
+        {
+          DEPLOY_TARGET: 'staging',
+          VERCEL_TOKEN: fake('vercel'),
+          VERCEL_ORG_ID: 'org',
+          VERCEL_PROJECT_ID: 'prj',
+          SENTRY_RELEASE: SHA,
+          WEB_URL,
+        },
+        io,
+      ),
+      /WEB_URL/,
+    );
+  }
+  assert.equal(calls.length, 0);
 });
 
 test('ready: polls through the smoke check, then proves the web serves auth, sign-in and home', async () => {
@@ -490,6 +552,73 @@ test('migrate: a failed migration exits non-zero, runs no seed and prints no par
   assert.ok(!log.includes(new URL(UNPOOLED).password), log);
 });
 
+// --- release ------------------------------------------------------------------
+
+/**
+ * Every phase name `release` calls, in call order — deliberately not the
+ * `PHASES` insertion order, so this fails if `release` is reordered without
+ * this test being touched too.
+ */
+const RELEASE_PHASES = [
+  'gate',
+  'preflight',
+  'sender',
+  'web-build',
+  'migrate',
+  'api',
+  'web-deploy',
+  'ready',
+];
+
+/** Replaces every named phase with a recording stub, runs `fn`, then restores the originals. */
+async function withStubbedPhases(names, stub, fn) {
+  const originals = Object.fromEntries(names.map((name) => [name, PHASES[name]]));
+  for (const name of names) {
+    PHASES[name] = stub(name);
+  }
+  try {
+    await fn();
+  } finally {
+    Object.assign(PHASES, originals);
+  }
+}
+
+test('release: VEN-633 AC2 — runs gate → preflight → sender → web-build → migrate → api → web-deploy → ready, in that order', async () => {
+  const order = [];
+  await withStubbedPhases(
+    RELEASE_PHASES,
+    (name) => async () => {
+      order.push(name);
+      if (name === 'gate') {
+        return { deploy: true };
+      }
+    },
+    async () => {
+      await PHASES.release({}, recordingIo().io);
+    },
+  );
+
+  assert.deepEqual(order, RELEASE_PHASES);
+});
+
+test('release: a superseded gate verdict stops before preflight, and does not throw', async () => {
+  const order = [];
+  await withStubbedPhases(
+    RELEASE_PHASES,
+    (name) => async () => {
+      order.push(name);
+      if (name === 'gate') {
+        return { deploy: false };
+      }
+    },
+    async () => {
+      await PHASES.release({}, recordingIo().io);
+    },
+  );
+
+  assert.deepEqual(order, ['gate']);
+});
+
 // --- the workflow file ----------------------------------------------------------
 
 test('workflow: runs after CI completes on staging or production only, never on main', () => {
@@ -530,55 +659,57 @@ test('workflow: serialises deploys per environment and never cancels one in flig
 test('workflow: no step outlives a failure before it', () => {
   for (const step of JOB.steps) {
     assert.equal(step['continue-on-error'], undefined, step.name);
-    assert.ok(
-      step.if === undefined || step.if === GATED || step.if === READY,
-      `${step.name}: ${step.if}`,
-    );
+    assert.equal(step.if, undefined, step.name);
   }
 });
 
 /*
- * The step **id**, which the dry run cannot check for: it models each condition
- * by reading the file the gate wrote, where Actions evaluates
- * `steps.<id>.outputs.deploy`. So deleting `id: gate` — an edit that looks
- * redundant beside `name:` — left every test green while, on GitHub, the
- * reference would expand to empty, every guarded step would be skipped, and the
- * job would report success having deployed nothing. That is the one failure
- * this workflow exists to remove, so it is pinned here rather than simulated.
+ * VEN-633: this file used to name every phase as its own step, conditional on
+ * an earlier step's `id`. Deleting that `id` — an edit that looked redundant
+ * beside `name:` — silently turned every later condition into a skip, and the
+ * job reported success having deployed nothing. A single `release` step
+ * removes the class of bug: there is no id for a typo to break, because there
+ * is nothing left here for a step to be conditional on.
  */
-test('workflow: the gate declares the id every later step is conditional on', () => {
-  const [checkout, gate, ...rest] = JOB.steps;
+test('workflow: exactly one step runs deploy.mjs, and only its release phase', () => {
+  const invocations = JOB.steps.filter((step) => /deploy\.mjs/.test(step.run ?? ''));
 
-  assert.match(checkout.uses, /^actions\/checkout@[0-9a-f]{40}$/);
-  assert.equal(gate.id, 'gate');
-  assert.equal(gate.run, 'node scripts/deploy.mjs gate');
-  assert.equal(gate.if, undefined);
-
-  assert.ok(rest.length > 0);
-  for (const step of rest) {
-    const expected = step.id === 'preflight' ? GATED : READY;
-    assert.equal(step.if, expected, step.name ?? step.uses);
-  }
+  assert.equal(invocations.length, 1);
+  assert.equal(invocations[0].name, 'Release');
+  assert.equal(invocations[0].run, 'node scripts/deploy.mjs release');
 });
 
-test('workflow: only the migrate step is handed a database URL, and only the unpooled one', () => {
-  const migrate = JOB.steps.find((step) => step.run === 'node scripts/deploy.mjs migrate');
+test('workflow: the checkout step names the commit CI tested, before anything else runs', () => {
+  const [checkout, ...rest] = JOB.steps;
+
+  assert.match(checkout.uses, /^actions\/checkout@[0-9a-f]{40}$/);
+  assert.equal(checkout.with.ref, '${{ github.event.workflow_run.head_sha }}');
+  assert.ok(rest.length > 0);
+});
+
+test('workflow: only the release step is handed a database URL, and only the unpooled one', () => {
+  const release = JOB.steps.find((step) => step.run === 'node scripts/deploy.mjs release');
   const holders = JOB.steps.filter((step) =>
     Object.values(step.env ?? {}).some((value) => /secrets\.DATABASE_URL[A-Z_]* \}\}/.test(value)),
   );
 
-  assert.deepEqual(holders, [migrate]);
-  assert.deepEqual(migrate.env, {
-    DATABASE_URL_UNPOOLED: '${{ secrets.DATABASE_URL_UNPOOLED }}',
-    NEON_BRANCH: '${{ vars.NEON_BRANCH }}',
-    NEON_HOST: '${{ vars.NEON_HOST }}',
-  });
+  assert.deepEqual(holders, [release]);
+  assert.equal(release.env.DATABASE_URL_UNPOOLED, '${{ secrets.DATABASE_URL_UNPOOLED }}');
+  assert.equal(release.env.NEON_BRANCH, '${{ vars.NEON_BRANCH }}');
+  assert.equal(release.env.NEON_HOST, '${{ vars.NEON_HOST }}');
+  // "Only the unpooled one": no DATABASE_URL (pooled) key reaches this step or
+  // the job at large, or `migrate`'s own `DATABASE_URL` refusal (VEN-377)
+  // would never fire in a real run.
+  assert.deepEqual(
+    Object.keys(release.env).filter((key) => key.startsWith('DATABASE_URL')),
+    ['DATABASE_URL_UNPOOLED'],
+  );
   assert.ok(!Object.keys(JOB.env).some((key) => key.startsWith('DATABASE_URL')));
 });
 
 test('workflow: preflight is told exactly which inputs are set, and never a secret value', () => {
-  const preflight = JOB.steps.find((step) => step.run === 'node scripts/deploy.mjs preflight');
-  const flags = Object.entries(preflight.env).filter(([key]) => key.startsWith('HAS_'));
+  const release = JOB.steps.find((step) => step.run === 'node scripts/deploy.mjs release');
+  const flags = Object.entries(release.env).filter(([key]) => key.startsWith('HAS_'));
 
   assert.deepEqual(
     flags.map(([key]) => key).sort(),
@@ -587,25 +718,17 @@ test('workflow: preflight is told exactly which inputs are set, and never a secr
   for (const [key, value] of flags) {
     assert.match(value, /^\$\{\{ (secrets|vars)\.[A-Z_]+ != '' \}\}$/, key);
   }
-  assert.ok(!Object.values(preflight.env).some((value) => /secrets\.[A-Z_]+ \}\}/.test(value)));
 });
 
-test('workflow: only the sender step is handed the Resend key, with EMAIL_FROM, before migrate', () => {
-  const sender = JOB.steps.find((step) => step.run === 'node scripts/deploy.mjs sender');
+test('workflow: only the release step is handed the Resend key, with EMAIL_FROM', () => {
+  const release = JOB.steps.find((step) => step.run === 'node scripts/deploy.mjs release');
   const holders = JOB.steps.filter((step) =>
     Object.values(step.env ?? {}).some((value) => value.includes(`secrets.${RESEND_KEY} }}`)),
   );
 
-  assert.deepEqual(holders, [sender]);
-  assert.deepEqual(sender.env, {
-    EMAIL_FROM: '${{ vars.EMAIL_FROM }}',
-    [RESEND_KEY]: `\${{ secrets.${RESEND_KEY} }}`,
-  });
-  const order = JOB.steps.map((step) => step.run);
-  assert.ok(
-    order.indexOf('node scripts/deploy.mjs sender') <
-      order.indexOf('node scripts/deploy.mjs migrate'),
-  );
+  assert.deepEqual(holders, [release]);
+  assert.equal(release.env.EMAIL_FROM, '${{ vars.EMAIL_FROM }}');
+  assert.equal(release.env[RESEND_KEY], `\${{ secrets.${RESEND_KEY} }}`);
 });
 
 test('sender: runs the check with only its two inputs, and refuses without them', async () => {
@@ -623,12 +746,12 @@ test('sender: runs the check with only its two inputs, and refuses without them'
   }
 });
 
-test('workflow: only the web step is handed the two build secrets', () => {
+test('workflow: only the release step is handed the two build secrets', () => {
   for (const step of JOB.steps) {
     const holders = Object.entries(step.env ?? {}).filter(([, value]) =>
       /secrets\.(WEB_TIER_KEY|NEON_AUTH_COOKIE_SECRET) \}\}/.test(value),
     );
-    assert.equal(holders.length, step.run === 'node scripts/deploy.mjs web' ? 2 : 0, step.name);
+    assert.equal(holders.length, step.run === 'node scripts/deploy.mjs release' ? 2 : 0, step.name);
   }
 });
 
@@ -741,12 +864,6 @@ function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '', we
       if (step.uses) {
         continue;
       }
-      // The only condition the workflow may use, asserted above.
-      const written = step.if === undefined ? '' : readFileSync(output, 'utf8');
-      const needed = step.if === READY ? ['deploy=true', 'ready=true'] : ['deploy=true'];
-      if (step.if !== undefined && !needed.every((line) => written.includes(line))) {
-        continue;
-      }
 
       const env = Object.fromEntries(
         Object.entries({ ...JOB.env, ...step.env }).map(([key, value]) => [
@@ -827,22 +944,22 @@ function assertNoSecretPrinted(printed) {
   assert.match(printed, /^PATH=/m, printed.slice(0, 400));
 }
 
-test('dry run: a configured release runs migrate → api → web → poll, in that order', () => {
+test('dry run: a configured release runs sender → web-build → migrate → api → web-deploy → poll, in that order', () => {
   const result = dryRun({ secrets: SECRETS, vars: VARS });
 
   assert.equal(result.failedAt, null, result.printed);
   assert.deepEqual(result.invocations, [
-    'git ls-remote origin',
     'pnpm install --frozen-lockfile',
     'pnpm turbo run',
+    'git ls-remote origin',
     'pnpm release:sender',
+    'npx --yes vercel@59.17.0', // web-build: pull
+    'npx --yes vercel@59.17.0', // web-build: build
     'pnpm db:migrate',
     'pnpm db:seed',
     'npx --yes @railway/cli@5.57.2',
     'npx --yes @railway/cli@5.57.2',
-    'npx --yes vercel@59.17.0',
-    'npx --yes vercel@59.17.0',
-    'npx --yes vercel@59.17.0',
+    'npx --yes vercel@59.17.0', // web-deploy: deploy
     'pnpm smoke',
   ]);
   assertNoSecretPrinted(result.printed);
@@ -859,22 +976,42 @@ test('dry run: a configured release runs migrate → api → web → poll, in th
   );
 });
 
-test('dry run: a failed migration aborts before either service is deployed', () => {
-  const result = dryRun({ secrets: SECRETS, vars: VARS, fail: 'db:migrate' });
+// VEN-633 AC1: a build failure — the step most likely to fail — leaves the
+// migration and the API deploy never invoked, because web-build now runs
+// before either of them.
+test('dry run: a failed vercel build leaves migrate and api never invoked', () => {
+  const result = dryRun({ secrets: SECRETS, vars: VARS, fail: 'vercel@59.17.0 build' });
 
-  assert.equal(result.failedAt, 'Migrate, then seed reference data');
-  assert.equal(result.invocations.at(-1), 'pnpm db:migrate');
+  assert.equal(result.failedAt, 'Release');
+  assert.ok(!result.invocations.includes('pnpm db:migrate'), result.invocations.join('\n'));
   assert.ok(
-    !result.invocations.some((line) => line.startsWith('npx')),
+    !result.invocations.some((line) => line.startsWith('npx --yes @railway')),
     result.invocations.join('\n'),
   );
   assertNoSecretPrinted(result.printed);
 });
 
-test('dry run: an unverified sender stops the release before anything is migrated or deployed', () => {
+test('dry run: a failed migration aborts before the api or the web deploy, after the web is already built', () => {
+  const result = dryRun({ secrets: SECRETS, vars: VARS, fail: 'db:migrate' });
+
+  assert.equal(result.failedAt, 'Release');
+  assert.equal(result.invocations.at(-1), 'pnpm db:migrate');
+  assert.ok(
+    !result.invocations.some((line) => line.startsWith('npx --yes @railway')),
+    result.invocations.join('\n'),
+  );
+  assert.equal(
+    result.invocations.filter((line) => line === 'npx --yes vercel@59.17.0').length,
+    2,
+    result.invocations.join('\n'),
+  );
+  assertNoSecretPrinted(result.printed);
+});
+
+test('dry run: an unverified sender stops the release before the web is built or anything is migrated or deployed', () => {
   const result = dryRun({ secrets: SECRETS, vars: VARS, fail: 'release:sender' });
 
-  assert.equal(result.failedAt, 'Refuse to release from an unverified email sender');
+  assert.equal(result.failedAt, 'Release');
   assert.equal(result.invocations.at(-1), 'pnpm release:sender');
   assert.match(result.printed, /::error::pnpm release:sender exited with 1/);
   assertNoSecretPrinted(result.printed);
@@ -885,7 +1022,7 @@ test('dry run: an unverified sender stops the release before anything is migrate
 test('dry run: a readiness poll that fails fails the release', () => {
   const result = dryRun({ secrets: SECRETS, vars: VARS, fail: 'smoke' });
 
-  assert.equal(result.failedAt, 'Poll /ready until it names this release');
+  assert.equal(result.failedAt, 'Release');
   assertNoSecretPrinted(result.printed);
 });
 
@@ -893,7 +1030,7 @@ test('dry run: the API naming this release while the web names another fails, na
   const stale = 'b'.repeat(40);
   const result = dryRun({ secrets: SECRETS, vars: VARS, webCommit: stale });
 
-  assert.equal(result.failedAt, 'Poll /ready until it names this release');
+  assert.equal(result.failedAt, 'Release');
   assert.ok(
     result.printed.includes(
       `Web/API skew: the web serves ${stale.slice(0, 7)} but the API serves ${SHA.slice(0, 7)}.`,
@@ -1129,26 +1266,28 @@ test('ready: a web that never answers fails the release by name once the deadlin
   );
 });
 
-const GATE_STEP = "Gate on CI success and on still being the branch's tip";
-const PREFLIGHT_STEP = 'Refuse to release unless every input is configured';
+// The install-and-build step is plumbing, not a phase: it always runs, since
+// only the Release step's own gate phase — the last thing that runs — knows
+// whether this commit should deploy at all.
+const INSTALL_INVOCATIONS = ['pnpm install --frozen-lockfile', 'pnpm turbo run'];
 
 test('dry run: a staging push with nothing configured fails red naming every input', () => {
   const result = dryRun({ secrets: {}, vars: {}, branch: 'staging' });
 
-  assert.equal(result.failedAt, PREFLIGHT_STEP);
-  assert.deepEqual(result.invocations, ['git ls-remote origin']);
+  assert.equal(result.failedAt, 'Release');
+  assert.deepEqual(result.invocations, [...INSTALL_INVOCATIONS, 'git ls-remote origin']);
   assert.match(result.printed, /not fully configured/);
   for (const { name, kind } of REQUIRED_INPUTS) {
     assert.ok(result.printed.includes(`${name} (${kind})`), name);
   }
 });
 
-test('dry run: a partly configured deploy fails closed before touching anything', () => {
+test('dry run: a partly configured deploy fails closed before touching anything past the install', () => {
   const { DATABASE_URL_UNPOOLED: _dropped, ...secrets } = SECRETS;
   const result = dryRun({ secrets, vars: VARS });
 
-  assert.equal(result.failedAt, PREFLIGHT_STEP);
-  assert.deepEqual(result.invocations, ['git ls-remote origin']);
+  assert.equal(result.failedAt, 'Release');
+  assert.deepEqual(result.invocations, [...INSTALL_INVOCATIONS, 'git ls-remote origin']);
   assert.match(result.printed, /DATABASE_URL_UNPOOLED \(secret\)/);
 });
 
@@ -1156,11 +1295,11 @@ test('dry run: a superseded commit deploys nothing and does not fail', () => {
   const result = dryRun({ secrets: SECRETS, vars: VARS, tip: 'f'.repeat(40) });
 
   assert.equal(result.failedAt, null);
-  assert.deepEqual(result.ran, [GATE_STEP]);
-  assert.deepEqual(result.invocations, ['git ls-remote origin']);
+  assert.deepEqual(result.ran, ['Install and build the release tooling', 'Release']);
+  assert.deepEqual(result.invocations, [...INSTALL_INVOCATIONS, 'git ls-remote origin']);
 });
 
-test("dry run: a staging push migrates staging first, then deploys, and looks up staging's tip", () => {
+test("dry run: a staging push builds the web, migrates staging first, then deploys, and looks up staging's tip", () => {
   const result = dryRun({
     secrets: SECRETS,
     vars: { ...VARS, NEON_BRANCH: 'staging', WEB_URL: 'https://orla-staging.test' },
@@ -1169,14 +1308,16 @@ test("dry run: a staging push migrates staging first, then deploys, and looks up
 
   assert.equal(result.failedAt, null, result.printed);
   assert.match(result.printed, /Deploying a1b2c3d to staging\./);
-  assert.deepEqual(result.invocations.slice(0, 6), [
+  assert.deepEqual(result.invocations.slice(0, 4), [
+    ...INSTALL_INVOCATIONS,
     'git ls-remote origin',
-    'pnpm install --frozen-lockfile',
-    'pnpm turbo run',
     'pnpm release:sender',
-    'pnpm db:migrate',
-    'pnpm db:seed',
   ]);
+  assert.ok(
+    result.invocations.indexOf('npx --yes vercel@59.17.0') <
+      result.invocations.indexOf('pnpm db:migrate'),
+    'the web is built before the migration',
+  );
   assert.ok(
     result.invocations.indexOf('pnpm db:migrate') <
       result.invocations.indexOf('npx --yes @railway/cli@5.57.2'),
@@ -1185,27 +1326,40 @@ test("dry run: a staging push migrates staging first, then deploys, and looks up
   assertNoSecretPrinted(result.printed);
 });
 
-test("dry run: staging run handed production's Neon branch refuses before anything is migrated or deployed", () => {
-  const result = dryRun({ secrets: SECRETS, vars: VARS, branch: 'staging' });
+test("dry run: staging run handed production's Neon branch refuses after the web is built but before anything is migrated or deployed", () => {
+  const result = dryRun({
+    secrets: SECRETS,
+    vars: { ...VARS, WEB_URL: 'https://orla-staging.test' },
+    branch: 'staging',
+  });
 
-  assert.equal(result.failedAt, 'Migrate, then seed reference data');
+  assert.equal(result.failedAt, 'Release');
   assert.match(
     result.printed,
     /NEON_BRANCH "production" is not the staging environment's Neon branch \(expected "staging"\); refusing to migrate\./,
   );
   assert.ok(!result.invocations.includes('pnpm db:migrate'), result.invocations.join('\n'));
-  assert.ok(!result.invocations.some((line) => line.startsWith('npx')));
+  assert.ok(
+    !result.invocations.some((line) => line.startsWith('npx --yes @railway')),
+    result.invocations.join('\n'),
+  );
+  // The web was already built (pull + build) before the migration refused.
+  assert.equal(
+    result.invocations.filter((line) => line === 'npx --yes vercel@59.17.0').length,
+    2,
+    result.invocations.join('\n'),
+  );
 });
 
-test('dry run: a run for main is refused at the gate and touches nothing', () => {
+test('dry run: a run for main is refused at the gate and touches nothing past the install', () => {
   const result = dryRun({ secrets: SECRETS, vars: VARS, branch: 'main' });
 
-  assert.equal(result.failedAt, GATE_STEP);
-  assert.deepEqual(result.invocations, []);
+  assert.equal(result.failedAt, 'Release');
+  assert.deepEqual(result.invocations, INSTALL_INVOCATIONS);
   assert.match(result.printed, /CI ran on "main", which is not one of staging, production/);
 });
 
-test('web: staging deploys a preview and aliases it to the staging host', async () => {
+test('web-build then web-deploy: staging builds under a branch, deploys a preview, and aliases it to the staging host', async () => {
   const calls = [];
   const url = 'https://orla-abc123-team.vercel.app';
   const io = {
@@ -1218,23 +1372,22 @@ test('web: staging deploys a preview and aliases it to the staging host', async 
     },
     write: () => {},
   };
-  await PHASES.web(
-    {
-      PATH: '/bin',
-      DEPLOY_TARGET: 'staging',
-      VERCEL_TOKEN: fake('vercel'),
-      VERCEL_ORG_ID: 'org',
-      VERCEL_PROJECT_ID: 'prj',
-      SENTRY_AUTH_TOKEN: fake('sentry'),
-      ...BUILD_SECRETS,
-      SENTRY_WEB_PROJECT: 'orla-web',
-      SENTRY_RELEASE: SHA,
-      // An allow-list: the first entry is the alias host.
-      WEB_URL: 'https://orla-staging.vercel.app,https://staging.orla.test',
-      API_URL: 'https://api.orla.test',
-    },
-    io,
-  );
+  const env = {
+    PATH: '/bin',
+    DEPLOY_TARGET: 'staging',
+    VERCEL_TOKEN: fake('vercel'),
+    VERCEL_ORG_ID: 'org',
+    VERCEL_PROJECT_ID: 'prj',
+    SENTRY_AUTH_TOKEN: fake('sentry'),
+    ...BUILD_SECRETS,
+    SENTRY_WEB_PROJECT: 'orla-web',
+    SENTRY_RELEASE: SHA,
+    // An allow-list: the first entry is the alias host.
+    WEB_URL: 'https://orla-staging.vercel.app,https://staging.orla.test',
+    API_URL: 'https://api.orla.test',
+  };
+  await PHASES['web-build'](env, io);
+  await PHASES['web-deploy'](env, io);
 
   assert.deepEqual(calls, [
     'git checkout -B staging',
@@ -1245,11 +1398,11 @@ test('web: staging deploys a preview and aliases it to the staging host', async 
   ]);
 });
 
-test('web: staging refuses to alias a host that is not its own, before building anything', async () => {
+test('web-build: staging refuses to alias a host that is not its own, before building anything', async () => {
   const { io, calls } = recordingIo();
   for (const WEB_URL of ['https://orla.example', 'orla-staging.vercel.app', '']) {
     await assert.rejects(
-      PHASES.web(
+      PHASES['web-build'](
         {
           DEPLOY_TARGET: 'staging',
           VERCEL_TOKEN: fake('vercel'),
@@ -1270,49 +1423,23 @@ test('web: staging refuses to alias a host that is not its own, before building 
   assert.equal(calls.length, 0);
 });
 
-test('web: staging refuses to alias a host that is not its own, before building anything', async () => {
+test('web-build then web-deploy: production stays a production deployment and is not aliased', async () => {
   const { io, calls } = recordingIo();
-  for (const WEB_URL of ['https://orla.example', 'orla-staging.vercel.app', '']) {
-    await assert.rejects(
-      PHASES.web(
-        {
-          DEPLOY_TARGET: 'staging',
-          VERCEL_TOKEN: fake('vercel'),
-          VERCEL_ORG_ID: 'org',
-          VERCEL_PROJECT_ID: 'prj',
-          SENTRY_AUTH_TOKEN: fake('sentry'),
-          ...BUILD_SECRETS,
-          SENTRY_WEB_PROJECT: 'orla-web',
-          SENTRY_RELEASE: SHA,
-          API_URL: 'https://api.orla.test',
-          WEB_URL,
-        },
-        io,
-      ),
-      /WEB_URL/,
-    );
-  }
-  assert.equal(calls.length, 0);
-});
-
-test('web: production stays a production deployment and is not aliased', async () => {
-  const { io, calls } = recordingIo();
-  await PHASES.web(
-    {
-      PATH: '/bin',
-      DEPLOY_TARGET: 'production',
-      VERCEL_TOKEN: fake('vercel'),
-      VERCEL_ORG_ID: 'org',
-      VERCEL_PROJECT_ID: 'prj',
-      SENTRY_AUTH_TOKEN: fake('sentry'),
-      ...BUILD_SECRETS,
-      SENTRY_WEB_PROJECT: 'orla-web',
-      SENTRY_RELEASE: SHA,
-      WEB_URL: 'https://orla.test',
-      API_URL: 'https://api.orla.test',
-    },
-    io,
-  );
+  const env = {
+    PATH: '/bin',
+    DEPLOY_TARGET: 'production',
+    VERCEL_TOKEN: fake('vercel'),
+    VERCEL_ORG_ID: 'org',
+    VERCEL_PROJECT_ID: 'prj',
+    SENTRY_AUTH_TOKEN: fake('sentry'),
+    ...BUILD_SECRETS,
+    SENTRY_WEB_PROJECT: 'orla-web',
+    SENTRY_RELEASE: SHA,
+    WEB_URL: 'https://orla.test',
+    API_URL: 'https://api.orla.test',
+  };
+  await PHASES['web-build'](env, io);
+  await PHASES['web-deploy'](env, io);
 
   assert.deepEqual(
     calls.map(({ args }) => args.slice(2).join(' ')),
@@ -1329,16 +1456,9 @@ test('web: production stays a production deployment and is not aliased', async (
 });
 
 for (const target of ['staging', 'production']) {
-  test(`web: ${target} sets DEPLOYMENT_ORIGIN to WEB_URL's canonical origin on vercel build`, async () => {
-    const { io: recording, calls } = recordingIo();
-    const io = {
-      ...recording,
-      run: async (command, args, options) => {
-        await recording.run(command, args, options);
-        if (args[2] === 'deploy') options.write('https://orla-abc123-team.vercel.app\n');
-      },
-    };
-    await PHASES.web(
+  test(`web-build: ${target} sets DEPLOYMENT_ORIGIN to WEB_URL's canonical origin on vercel build`, async () => {
+    const { io, calls } = recordingIo();
+    await PHASES['web-build'](
       {
         PATH: '/bin',
         DEPLOY_TARGET: target,
@@ -1365,16 +1485,9 @@ for (const target of ['staging', 'production']) {
     }
   });
 
-  test(`web: ${target} sets API_URL and NEXT_PUBLIC_API_URL to the environment's API_URL on vercel build`, async () => {
-    const { io: recording, calls } = recordingIo();
-    const io = {
-      ...recording,
-      run: async (command, args, options) => {
-        await recording.run(command, args, options);
-        if (args[2] === 'deploy') options.write('https://orla-abc123-team.vercel.app\n');
-      },
-    };
-    await PHASES.web(
+  test(`web-build: ${target} sets API_URL and NEXT_PUBLIC_API_URL to the environment's API_URL on vercel build`, async () => {
+    const { io, calls } = recordingIo();
+    await PHASES['web-build'](
       {
         PATH: '/bin',
         DEPLOY_TARGET: target,
@@ -1406,10 +1519,10 @@ for (const target of ['staging', 'production']) {
     }
   });
 
-  test(`web: ${target} refuses before running anything when API_URL is missing`, async () => {
+  test(`web-build: ${target} refuses before running anything when API_URL is missing`, async () => {
     const { io, calls } = recordingIo();
     await assert.rejects(
-      PHASES.web(
+      PHASES['web-build'](
         {
           DEPLOY_TARGET: target,
           VERCEL_TOKEN: fake('vercel'),
@@ -1429,16 +1542,9 @@ for (const target of ['staging', 'production']) {
     assert.equal(calls.length, 0);
   });
 
-  test(`web: ${target} hands the two build secrets to vercel build only, never argv`, async () => {
-    const { io: recording, calls } = recordingIo();
-    const io = {
-      ...recording,
-      run: async (command, args, options) => {
-        await recording.run(command, args, options);
-        if (args[2] === 'deploy') options.write('https://orla-abc123-team.vercel.app\n');
-      },
-    };
-    await PHASES.web(
+  test(`web-build: ${target} hands the two build secrets to vercel build only, never argv`, async () => {
+    const { io, calls } = recordingIo();
+    await PHASES['web-build'](
       {
         PATH: '/bin',
         DEPLOY_TARGET: target,
@@ -1464,11 +1570,11 @@ for (const target of ['staging', 'production']) {
     }
   });
 
-  test(`web: ${target} refuses before running anything when a build secret is missing`, async () => {
+  test(`web-build: ${target} refuses before running anything when a build secret is missing`, async () => {
     for (const missing of Object.keys(BUILD_SECRETS)) {
       const { io, calls } = recordingIo();
       await assert.rejects(
-        PHASES.web(
+        PHASES['web-build'](
           {
             DEPLOY_TARGET: target,
             VERCEL_TOKEN: fake('vercel'),

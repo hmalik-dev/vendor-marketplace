@@ -1,17 +1,26 @@
 #!/usr/bin/env node
 /**
- * VEN-397, VEN-494. The phases `.github/workflows/deploy.yml` runs, one per step:
+ * VEN-397, VEN-494, VEN-633. `release` is the one phase
+ * `.github/workflows/deploy.yml` invokes; it runs every other phase in order:
  *
- *   gate → preflight → sender → migrate → api → web → ready
+ *   gate → preflight → sender → web-build → migrate → api → web-deploy → ready
+ *
+ * The web is *built* (pulled and compiled) before anything moves, so the step
+ * most likely to fail — `vercel build` — fails before the migration or the API
+ * ever runs, and only *deployed* once the API is already live on the new
+ * commit. Each phase stays callable on its own, for a manual run and for this
+ * file's own suite, but the workflow names no phase itself: promoting an older
+ * commit calls that commit's `deploy.mjs release`, which can never disagree
+ * with a newer `deploy.yml` about what phases exist.
  *
  * Each run targets one environment, `staging` or `production`, named by the
  * branch CI ran on (`DEPLOY_TARGET`); nothing else deploys, and `main` never does.
  *
- * The workflow owns the order and the stop-on-failure — every step runs only if
- * the one before it succeeded, and nothing is `if: always()` — while this file
- * owns what each phase refuses. Keeping the logic here rather than in YAML is
- * what lets `deploy.test.mjs` run the real phases, and dry-run the real workflow
- * file, under plain `node`.
+ * The workflow owns nothing about ordering or stop-on-failure — `release`
+ * below does, by awaiting each phase in turn and letting a thrown `PhaseError`
+ * stop the rest. Keeping the logic here rather than in YAML is what lets
+ * `deploy.test.mjs` run the real phases, and dry-run the real workflow file,
+ * under plain `node`.
  *
  * **Fail closed.** A phase with a missing input exits non-zero naming the input,
  * and that includes preflight finding *nothing* configured: a run exists only
@@ -141,6 +150,36 @@ function aliasHost(env) {
   return urlHost(webOrigin(env));
 }
 
+/** Throws unless `DEPLOY_TARGET` names an environment; returns whether it is production. */
+function webTarget(env) {
+  const production = env.DEPLOY_TARGET === 'production';
+  if (!production && env.DEPLOY_TARGET !== 'staging') {
+    throw new PhaseError(
+      `DEPLOY_TARGET "${env.DEPLOY_TARGET}" is not one of ${ENVIRONMENTS.join(', ')}.`,
+    );
+  }
+  return production;
+}
+
+/**
+ * Throws unless a non-production target's `WEB_URL` names its own host. Both
+ * `web-build` and `web-deploy` call this — `web-build` so a release that would
+ * refuse to alias never spends a build first, `web-deploy` so it refuses the
+ * same way when run on its own for a manual release, rather than aliasing
+ * production's host to a stray preview build.
+ */
+function requireAliasHost(env, production) {
+  if (production) {
+    return;
+  }
+  need(env, ['WEB_URL']);
+  if (!aliasHost(env).includes(env.DEPLOY_TARGET)) {
+    throw new PhaseError(
+      `WEB_URL is not a ${env.DEPLOY_TARGET} host; refusing to alias a preview deployment to it.`,
+    );
+  }
+}
+
 /** `names` copied out of `env`, and nothing else. */
 function pick(env, names) {
   return Object.fromEntries(
@@ -236,6 +275,23 @@ export function run(command, args, { env, redact, write }) {
           ),
     );
   });
+}
+
+/**
+ * VEN-633. Wraps one of `release`'s phases in a named
+ * [log group](https://docs.github.com/actions/using-workflows/workflow-commands-for-github-actions#grouping-log-lines),
+ * so a single `release` run's log still shows which phase produced a given
+ * line — including a thrown `PhaseError`, which `main` prints after this
+ * phase's group has already closed, but Actions still attributes to the last
+ * group that was open when the step failed.
+ */
+async function runPhase(io, name, fn) {
+  io.write(`::group::${name}\n`);
+  try {
+    return await fn();
+  } finally {
+    io.write('::endgroup::\n');
+  }
 }
 
 /**
@@ -532,6 +588,7 @@ export const PHASES = {
     if (!verdict.deploy) {
       io.error(`::warning::${verdict.message}\n`);
     }
+    return verdict;
   },
 
   async preflight(env, io) {
@@ -646,15 +703,17 @@ export const PHASES = {
   },
 
   /*
-   * A prebuilt deploy: `vercel build` runs here, under the release and the
-   * source-map credential, so the bundle names the release this workflow is
-   * shipping and its maps are uploaded under that name.
+   * `vercel build` runs here, under the release and the source-map credential,
+   * so the bundle names the release this workflow is shipping and its maps are
+   * uploaded under that name. It runs before either service moves (VEN-633):
+   * the step most likely to fail fails before anything has shipped.
    *
-   * Production is a production deployment. Staging is a preview deployment
-   * built from the Preview environment's variables (Hobby has no custom
-   * environments), then aliased to the host of `WEB_URL` so the readiness poll
-   * and people have one stable address; `vercel deploy` prints the deployment's
-   * URL on its own line, which is what the alias names.
+   * Production builds a production deployment. Staging builds a preview
+   * deployment from the Preview environment's variables (Hobby has no custom
+   * environments). `requireAliasHost` runs here too, before the build, not only
+   * in `web-deploy`: WEB_URL resolves environment → repository, so a
+   * repository-level value would be production's, and a release that would
+   * refuse to alias should never spend a build first.
    *
    * VEN-575: `WEB_TIER_KEY` and `NEON_AUTH_COOKIE_SECRET` are Secret-type Vercel
    * variables, which `vercel pull` writes as empty strings, so the build would
@@ -662,32 +721,14 @@ export const PHASES = {
    * reach the `vercel build` process's environment only: never argv, never a
    * file, never `pull` or `deploy`.
    */
-  async web(env, io) {
+  async 'web-build'(env, io) {
     const vercel = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
     const upload = ['SENTRY_AUTH_TOKEN', 'SENTRY_WEB_PROJECT', 'SENTRY_RELEASE'];
     const buildSecrets = ['WEB_TIER_KEY', 'NEON_AUTH_COOKIE_SECRET'];
     need(env, [...vercel, ...upload, ...buildSecrets, 'API_URL', 'DEPLOY_TARGET']);
 
-    const production = env.DEPLOY_TARGET === 'production';
-    if (!production && env.DEPLOY_TARGET !== 'staging') {
-      throw new PhaseError(
-        `DEPLOY_TARGET "${env.DEPLOY_TARGET}" is not one of ${ENVIRONMENTS.join(', ')}.`,
-      );
-    }
-    /*
-     * The alias repoints a hostname at this build. WEB_URL resolves environment
-     * → repository, so a repository-level value would be production's; the host
-     * must therefore name the environment, and the run refuses before anything
-     * has shipped.
-     */
-    if (!production) {
-      need(env, ['WEB_URL']);
-      if (!aliasHost(env).includes(env.DEPLOY_TARGET)) {
-        throw new PhaseError(
-          `WEB_URL is not a ${env.DEPLOY_TARGET} host; refusing to alias a preview deployment to it.`,
-        );
-      }
-    }
+    const production = webTarget(env);
+    requireAliasHost(env, production);
 
     const redact = redactor([
       env.VERCEL_TOKEN,
@@ -742,6 +783,34 @@ export const PHASES = {
       write: io.write,
     });
     await io.run('npx', [...cli, 'build', ...target], { env: build, redact, write: io.write });
+  },
+
+  /*
+   * The other half of `web-build` (VEN-633): ships the build it already
+   * produced, only once the API is live on this commit. `vercel deploy
+   * --prebuilt` reuses that build rather than compiling again, so nothing here
+   * can fail the way `vercel build` does.
+   *
+   * Production is a production deployment, so it needs no alias. Staging
+   * aliases its preview deployment to the host of `WEB_URL` so the readiness
+   * poll and people have one stable address; `vercel deploy` prints the
+   * deployment's URL on its own line, which is what the alias names.
+   */
+  async 'web-deploy'(env, io) {
+    const vercel = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
+    need(env, [...vercel, 'DEPLOY_TARGET', 'SENTRY_RELEASE']);
+
+    const production = webTarget(env);
+    // Re-checked here, not only in `web-build`: a manual `web-deploy` run
+    // must refuse to alias a stray preview to production's host exactly as
+    // it did before the split, rather than trusting that `web-build` already
+    // ran first in the same process.
+    requireAliasHost(env, production);
+
+    const redact = redactor([env.VERCEL_TOKEN]);
+    const child = pick(env, [...TOOL_ENV, ...vercel]);
+    const cli = ['--yes', VERCEL_CLI];
+    const target = production ? ['--prod'] : [];
 
     let printed = '';
     await io.run(
@@ -800,6 +869,31 @@ export const PHASES = {
 
     await webNamesRelease(env, io);
     await webServesCoreFlows(env, io);
+  },
+
+  /*
+   * VEN-633. The one phase `.github/workflows/deploy.yml` calls: every other
+   * phase, in the order this file's header names. `gate` is the only phase
+   * that can stop the rest without failing — a superseded commit returns
+   * `{ deploy: false }` and this phase simply returns, exactly as the old
+   * per-step `if: steps.gate.outputs.deploy == 'true'` skipped every step
+   * after it. Every other phase either finishes or throws a `PhaseError`,
+   * which `main` below turns into the same non-zero exit a standalone phase
+   * would have produced.
+   */
+  async release(env, io) {
+    const verdict = await runPhase(io, 'gate', () => PHASES.gate(env, io));
+    if (!verdict.deploy) {
+      return;
+    }
+
+    await runPhase(io, 'preflight', () => PHASES.preflight(env, io));
+    await runPhase(io, 'sender', () => PHASES.sender(env, io));
+    await runPhase(io, 'web-build', () => PHASES['web-build'](env, io));
+    await runPhase(io, 'migrate', () => PHASES.migrate(env, io));
+    await runPhase(io, 'api', () => PHASES.api(env, io));
+    await runPhase(io, 'web-deploy', () => PHASES['web-deploy'](env, io));
+    await runPhase(io, 'ready', () => PHASES.ready(env, io));
   },
 };
 
