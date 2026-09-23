@@ -721,6 +721,40 @@ export async function setHeldDate(
 }
 
 /**
+ * Recomputes the vendor's calendar cell for one date from the requests that
+ * actually exist on it.
+ *
+ * Derived rather than patched, because the cell has to survive edges a
+ * per-action write cannot: two live requests on one date where the vendor
+ * declines only one, an accept landing on a date a rival request already held,
+ * and a request ageing out on read. Recomputing is idempotent, so calling it
+ * after every write costs one indexed read and can never leave the stored
+ * calendar disagreeing with the queue.
+ *
+ * `#212` fixed the mapping: accepted is **`booked`**, because acceptance is the
+ * commitment — payment turns it into a `bookings` row in #10, but the vendor
+ * has already promised to turn up. Before this, accept wrote `pending`, so the
+ * cell read one state below the truth and the `Booked` counter stayed at zero.
+ *
+ * A *live* request deliberately writes **nothing**. Search excludes any vendor
+ * whose row for the date is not `available`, so persisting `pending` here would
+ * take a vendor out of the market for a week on a request they have not
+ * answered and never agreed to. The vendor's own calendar still shows those
+ * dates as `Pending request` — `listOwnAvailability` overlays them at read
+ * time, which is the one place that view is wanted.
+ *
+ * Any caller that moves a request off `accepted` — a decline, a cancel, a ban
+ * unwind, a refund, an expiry race that lost — ends here instead of writing
+ * the cell itself, so it never needs its own opinion about what the date
+ * should read now.
+ */
+export async function syncHeldDate(db: AppDatabase, vendorId: string, date: string): Promise<void> {
+  const statuses = await statusesOnDate(db, vendorId, date);
+
+  await setHeldDate(db, vendorId, date, statuses.includes('accepted') ? 'booked' : null);
+}
+
+/**
  * The conversation this request is negotiated in, created with it.
  *
  * One thread per request, because the context rail's actions — send a revised

@@ -18,6 +18,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { VENDOR_CLOSED, VENDOR_SELLABLE } from '../vendors/vendor-visibility.js';
+import { lockHeldDate, syncHeldDate } from '../booking-requests/booking-requests.dao.js';
 
 /**
  * Typed rather than written into the SQL as a bare string, so a rename of the
@@ -145,21 +146,52 @@ export async function declineRefundedRequest(
   requestId: string,
   now: Date,
 ): Promise<void> {
-  await db
-    .update(bookingRequests)
-    .set({ status: 'declined', updatedAt: now })
-    .where(
-      and(
-        eq(bookingRequests.id, requestId),
-        eq(bookingRequests.status, 'accepted'),
-        notExists(
-          db
-            .select({ present: sql`1` })
-            .from(bookings)
-            .where(eq(bookings.requestId, requestId)),
+  await db.transaction(async (tx) => {
+    /*
+     * The candidate row, read before anything is locked, so there is a date to
+     * lock at all — a request already settled to something other than
+     * `accepted` never held one.
+     */
+    const [candidate] = await tx
+      .select({ vendorId: bookingRequests.vendorId, eventDate: bookingRequests.eventDate })
+      .from(bookingRequests)
+      .where(and(eq(bookingRequests.id, requestId), eq(bookingRequests.status, 'accepted')));
+
+    if (!candidate) {
+      return;
+    }
+
+    /*
+     * The date lock first, the request second — the order every other writer
+     * of the calendar takes it (`ageIfExpired`, `transitionRequest`). Reversed,
+     * this decline and an accept or an expiry of the same date could each hold
+     * one lock and wait on the other, and `syncHeldDate` below could otherwise
+     * recompute the cell from a sibling accept that has not committed yet and
+     * then delete it once that accept lands.
+     */
+    await lockHeldDate(tx, candidate.vendorId, candidate.eventDate);
+
+    const [declined] = await tx
+      .update(bookingRequests)
+      .set({ status: 'declined', updatedAt: now })
+      .where(
+        and(
+          eq(bookingRequests.id, requestId),
+          eq(bookingRequests.status, 'accepted'),
+          notExists(
+            tx
+              .select({ present: sql`1` })
+              .from(bookings)
+              .where(eq(bookings.requestId, requestId)),
+          ),
         ),
-      ),
-    );
+      )
+      .returning({ vendorId: bookingRequests.vendorId, eventDate: bookingRequests.eventDate });
+
+    if (declined) {
+      await syncHeldDate(tx, declined.vendorId, declined.eventDate);
+    }
+  });
 }
 
 /** A booking with the occasion the confirmed screen renders beside the venue. */

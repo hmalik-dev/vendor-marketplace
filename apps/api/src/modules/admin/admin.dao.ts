@@ -53,6 +53,7 @@ import type {
 import { countWidenings } from './widenings.js';
 import type { AppDatabase } from '../../lib/database.js';
 import { containsInsensitive } from '../../lib/like-pattern.js';
+import { lockHeldDate, syncHeldDate } from '../booking-requests/booking-requests.dao.js';
 /*
  * The sweep's own definition of a failing payout, imported rather than restated.
  *
@@ -656,21 +657,66 @@ export async function declineOpenRequests(
     .from(bookings)
     .where(eq(bookings.requestId, bookingRequests.id));
 
-  const declined = await db
-    .update(bookingRequests)
-    .set({ status: 'declined', updatedAt: now })
-    .where(
-      and(
-        or(
-          inArray(bookingRequests.status, ['pending', 'quoted']),
-          and(eq(bookingRequests.status, 'accepted'), notExists(bookingBehindRequest)),
-        ),
-        sides,
-      ),
-    )
-    .returning({ id: bookingRequests.id });
+  const predicate = and(
+    or(
+      inArray(bookingRequests.status, ['pending', 'quoted']),
+      and(eq(bookingRequests.status, 'accepted'), notExists(bookingBehindRequest)),
+    ),
+    sides,
+  );
 
-  return declined.length;
+  return db.transaction(async (tx) => {
+    /*
+     * The date lock comes first, the request second — the order every other
+     * writer of the calendar takes it (`ageIfExpired`, `transitionRequest`).
+     * Reversed, this decline and an accept or an expiry landing on the same
+     * date could each hold one lock and wait on the other, and worse: without
+     * the lock, `syncHeldDate` could recompute the cell from a sibling accept
+     * that has not committed yet, then delete it once that accept lands.
+     *
+     * Every candidate is locked up front — not only the ones already
+     * `accepted` — because `syncHeldDate` below recomputes each declined row's
+     * date from whatever is live on it at that moment, including a rival's
+     * accept that this transaction did not itself hold: a pending request's
+     * own date carries no lock of its own, but declining it still reads and
+     * can rewrite that cell. Sorted, so two unwinds can never deadlock each
+     * other; one indexed read per row closes the race for the whole batch,
+     * not just the rows that turn out to have actually declined.
+     */
+    const candidates = await tx
+      .select({
+        vendorId: bookingRequests.vendorId,
+        eventDate: bookingRequests.eventDate,
+      })
+      .from(bookingRequests)
+      .where(predicate);
+    const heldDates = [
+      ...new Map(candidates.map((row) => [`${row.vendorId}/${row.eventDate}`, row])).values(),
+    ].sort(
+      (a, b) => a.vendorId.localeCompare(b.vendorId) || a.eventDate.localeCompare(b.eventDate),
+    );
+
+    for (const { vendorId, eventDate } of heldDates) {
+      await lockHeldDate(tx, vendorId, eventDate);
+    }
+
+    const declined = await tx
+      .update(bookingRequests)
+      .set({ status: 'declined', updatedAt: now })
+      .where(predicate)
+      .returning({
+        id: bookingRequests.id,
+        vendorId: bookingRequests.vendorId,
+        eventDate: bookingRequests.eventDate,
+      });
+
+    const releasedDates = new Map(declined.map((row) => [`${row.vendorId}/${row.eventDate}`, row]));
+    for (const { vendorId, eventDate } of releasedDates.values()) {
+      await syncHeldDate(tx, vendorId, eventDate);
+    }
+
+    return declined.length;
+  });
 }
 
 /**

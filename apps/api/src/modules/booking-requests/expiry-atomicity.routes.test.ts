@@ -32,10 +32,13 @@ vi.mock('./booking-requests.dao.js', async () => {
 
   return {
     ...actual,
-    setHeldDate: async (...args: Parameters<typeof actual.setHeldDate>) =>
+    // `setHeldDate` is called from inside `syncHeldDate`'s own module, so
+    // mocking it would not be seen by that internal call; the release this
+    // test fails is `syncHeldDate` itself, which is what `ageIfExpired` calls.
+    syncHeldDate: async (...args: Parameters<typeof actual.syncHeldDate>) =>
       failHeldDateWrites
         ? Promise.reject(new Error('connection terminated'))
-        : actual.setHeldDate(...args),
+        : actual.syncHeldDate(...args),
   };
 });
 

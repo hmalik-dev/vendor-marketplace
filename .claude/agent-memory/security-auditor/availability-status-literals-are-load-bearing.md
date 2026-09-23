@@ -41,6 +41,16 @@ deliberately refused to touch `booked` ("`booked` belongs to #10"). Unreachable
 today because creation 409s on a `booked` date, but live the moment the payments
 module writes its own `booked` rows.
 
+**An unlocked `syncHeldDate` can delete a cell a concurrent accept just booked.**
+Only accept and `ageIfExpired` take `lockHeldDate` first. A recompute without it
+reads statuses under READ COMMITTED, decides `null`, blocks on the accept's row
+lock, then re-checks the `DELETE` against the committed `booked` row and removes
+it (the WHERE still matches). It also locks request-then-date, the reverse of
+accept's order, so it can deadlock. Seen in `transitionRequest`'s non-accept
+branch (pre-existing) and VEN-621's `declineOpenRequests` / `declineRefundedRequest`.
+Fix: `lockHeldDate` before the request UPDATE (canonical order), or at least
+before the recompute.
+
 **How to apply:** treat any change to what a lifecycle writes into
 `availability.status` as a migration, not a code change. Grep for the literal
 before approving, and check whether a terminal request status means the stale
