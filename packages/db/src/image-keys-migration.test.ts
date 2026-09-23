@@ -106,8 +106,8 @@ describe('0083 against image columns written as URLs', () => {
           userId: customer!.id,
           businessName: 'Legacy Studio',
           slug: 'legacy-studio',
-          // The R2 host uploads were served from before Neon.
-          coverImageUrl: `https://pub-0123.r2.dev/${LEGACY_COVER_KEY}`,
+          // A host uploads were served from before the current one.
+          coverImageUrl: `https://old-cdn.example.com/${LEGACY_COVER_KEY}`,
         },
         {
           userId: oauthCustomer!.id,
