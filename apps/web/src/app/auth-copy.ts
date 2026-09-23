@@ -32,7 +32,7 @@ export const AUTH_COPY = {
   resetSubmit: 'Set new password',
   resetDone: 'Your password is changed. Sign in with the new one.',
   resetFailed: 'That code did not work, or it has expired. Check it, or ask for a new one.',
-  throttled: 'Too many attempts. Wait a few minutes and try again.',
+  throttled: "This isn't going through right now. Wait a few minutes and try again.",
   unreachable: 'We could not reach the sign-in service. Try again in a moment.',
 } as const;
 

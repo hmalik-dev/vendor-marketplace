@@ -121,7 +121,9 @@ describe('SignInForm', () => {
     await submit(user);
 
     expect(
-      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+      await screen.findByText(
+        "This isn't going through right now. Wait a few minutes and try again.",
+      ),
     ).toBeDefined();
     expect(screen.queryByText('That email and password did not match.')).toBeNull();
   });
@@ -182,7 +184,9 @@ describe('SignInForm', () => {
 
     expect(await screen.findByLabelText('Verification code')).toBeDefined();
     expect(
-      await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
+      await screen.findByText(
+        "This isn't going through right now. Wait a few minutes and try again.",
+      ),
     ).toBeDefined();
   });
 
@@ -204,7 +208,9 @@ describe('SignInForm', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(screen.getByText('A new code is on its way.')).toBeDefined();
-    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
+    expect(
+      screen.queryByText("This isn't going through right now. Wait a few minutes and try again."),
+    ).toBeNull();
   });
 
   it('finishes the sign-in after the code from the unverified route is accepted', async () => {
