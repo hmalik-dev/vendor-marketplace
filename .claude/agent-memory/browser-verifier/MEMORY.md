@@ -25,3 +25,4 @@
 - [Gate-exempt paths misses client-side ambient fetches](gate-exempt-paths-misses-client-side-ambient-fetches.md) — SUPERSEDED by VEN-586: the redirect is fixed; see the entry below for the surviving console-noise half
 - [Terms-gate exemption stops the redirect, not the fetch](ven586-terms-gate-fetch-still-403s.md) — FIXED same-day via a `gated` prop on NotificationBell; re-verified clean, ungated accounts unaffected
 - [Shared browser can navigate mid-check](shared-browser-can-navigate-mid-check.md) — URL drifted between two tool calls with no action of mine; assert `location.href` inside every evaluate, don't trust the last navigate's response
+- [Testing sign-out revokes the shared E2E account everywhere](testing-sign-out-revokes-the-shared-e2e-account-everywhere.md) — clicking Sign out kills that role's session in every lane; re-run `pnpm e2e:auth <role>` after, flag it for concurrent lanes
