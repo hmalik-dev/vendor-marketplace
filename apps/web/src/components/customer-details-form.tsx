@@ -21,8 +21,9 @@ const LABEL = 'text-sm font-semibold text-stone-700';
 /**
  * The mandatory name step (VEN-642), built directly against
  * `accept-terms-screen.tsx`'s composition — the same `max-w-[700px]` panel,
- * label-then-heading rhythm and button/helper-text treatment — since no
- * design frame exists for it (VEN-643, canceled, ruled not a blocker).
+ * heading and button/helper-text treatment — since no design frame exists for
+ * it (VEN-643, canceled, ruled not a blocker). No "One last step" eyebrow: it
+ * is not the last step for every path through sign-up, so it claims none.
  */
 export function CustomerDetailsForm({ returnTo }: CustomerDetailsFormProps): React.ReactElement {
   const call = useApi();
@@ -73,12 +74,7 @@ export function CustomerDetailsForm({ returnTo }: CustomerDetailsFormProps): Rea
 
   return (
     <div className="mx-auto max-w-[700px] px-6 py-13">
-      <p className="text-label font-semibold tracking-label text-stone-600 uppercase">
-        One last step
-      </p>
-      <h1 className="display-heading mt-2 text-display-md text-stone-900">
-        What should we call you?
-      </h1>
+      <h1 className="display-heading text-display-md text-stone-900">What should we call you?</h1>
       <p className="mt-2 text-sm leading-prose text-stone-600">
         Vendors see this name once you request a booking.
       </p>

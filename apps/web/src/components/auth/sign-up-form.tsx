@@ -131,7 +131,7 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
          refused send and offers "Send a new code" rather than failing here. */
       setSendOutcome(await resendVerificationCode(email.trim()));
       setBusy(false);
-      rememberSignUpRole(role);
+      rememberSignUpRole(role, email);
       setVerifying(true);
       return;
     }
