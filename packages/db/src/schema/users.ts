@@ -133,10 +133,17 @@ export const users = pgTable(
      * written when this index refuses an address, and the catch that writes it
      * matches on the constraint name — so the name is the constant above
      * rather than a literal, and #451's `where` clause is untouched by that.
+     *
+     * **On `lower(email)`, not `email`** (VEN-649). A mail server treats the
+     * address case-insensitively and so does a person, so `Ada@x` and `ada@x`
+     * are one person; a raw index let them become two accounts, which is an
+     * account merge the moment both hold bookings. The CHECK below makes the
+     * writers store the lowered form, so equality lookups on `email` still hit.
      */
     uniqueIndex(USERS_EMAIL_UNIQUE_INDEX)
-      .on(table.email)
+      .on(sql`lower(${table.email})`)
       .where(sql`${table.deletedAt} is null`),
+    check('users_email_lowercase', sql`${table.email} = lower(${table.email})`),
     index('users_role_idx').on(table.role),
     /**
      * The retired accounts, and only those (#433).

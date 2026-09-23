@@ -275,7 +275,9 @@ async function bootTestDatabase(): Promise<TestDatabase> {
  * and then `delete(users)` between tests would otherwise fail on its first
  * acceptance row. Each trigger below clears the referencing rows with triggers
  * and constraints switched off for that one statement, and only in the harness's
- * own throwaway database. The behaviour they stand in for is proved where it
+ * own throwaway database. The other party's history — threads, messages and
+ * reviews — became `RESTRICT` too (VEN-649); those are ordinary rows, so they
+ * are deleted first with constraints on, and their own cascades still run. The behaviour they stand in for is proved where it
  * belongs, against a database without them: `admin-action-immutability.test.ts`
  * and `legal-acceptance-immutability.test.ts` in `packages/db`.
  */
@@ -283,6 +285,10 @@ async function allowTeardownOfRecords(db: AppDatabase): Promise<void> {
   const statements = [
     `CREATE OR REPLACE FUNCTION test_teardown_user_records() RETURNS trigger AS $$
       BEGIN
+        DELETE FROM messages WHERE sender_id = OLD.id;
+        DELETE FROM conversations WHERE customer_id = OLD.id;
+        DELETE FROM review_tombstones WHERE reviewer_id = OLD.id;
+        DELETE FROM reviews WHERE reviewer_id = OLD.id;
         PERFORM set_config('session_replication_role', 'replica', true);
         DELETE FROM admin_actions WHERE actor_id = OLD.id;
         DELETE FROM legal_acceptances WHERE accepted_by_user_id = OLD.id;

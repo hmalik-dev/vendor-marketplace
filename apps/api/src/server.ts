@@ -262,6 +262,7 @@ function rateLimitKey(
     log: { warn: (message: string) => void };
   },
   secret: string | undefined,
+  onMismatch: () => void,
 ): string {
   const presented = request.headers[WEB_TIER_KEY_HEADER];
   const visitor = request.headers[VISITOR_IP_HEADER];
@@ -281,6 +282,7 @@ function rateLimitKey(
     // A rotated key on one side only puts every visitor back in one bucket, and
     // nothing else would say so.
     request.log.warn('web tier key mismatch: rate limit is keyed on the socket address');
+    onMismatch();
     return clientAddress(request);
   }
   return `visitor:${visitor}`;
@@ -289,6 +291,24 @@ function rateLimitKey(
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
   const { env, db, storage } = options;
   const errorReporter = options.errorReporter ?? createErrorReporter(env);
+  /*
+   * A warning alone was the whole signal that rate limiting had collapsed to
+   * one bucket for every visitor (VEN-649). Reported once per process: the
+   * first mismatch says a key was rotated on one side, and every request after
+   * it would say the same thing again.
+   */
+  let tierKeyMismatchReported = false;
+  function reportTierKeyMismatch(): void {
+    if (tierKeyMismatchReported) {
+      return;
+    }
+    tierKeyMismatchReported = true;
+    errorReporter.capture(
+      new Error(
+        'Web tier key mismatch: the web tier presented a WEB_TIER_KEY this API does not hold, so the rate limit keys every visitor on the web platform address',
+      ),
+    );
+  }
   /** Route patterns that move money; filled as the payment plugins register below. */
   const moneyRoutes = new Set<string>();
 
@@ -416,7 +436,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(rateLimit, {
     max: env.RATE_LIMIT_MAX,
     timeWindow: '1 minute',
-    keyGenerator: (request) => rateLimitKey(request, env.WEB_TIER_KEY),
+    keyGenerator: (request) => rateLimitKey(request, env.WEB_TIER_KEY, reportTierKeyMismatch),
   });
   /*
    * The limiter, ahead of authentication.

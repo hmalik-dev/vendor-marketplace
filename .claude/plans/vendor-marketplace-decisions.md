@@ -1849,6 +1849,8 @@ never existed.
 
 ### D38: The Acceptance Gate Is an API Refusal, and an Account Is Created by Accepting — *2026-09-07*
 
+> **Corrected 2026-09-23 (VEN-649):** Neon Auth sends no `user.created` or `user.deleted` webhook. There is no webhook writer of bare `users` rows; the text below that names one describes the retired provider. A deletion at Neon Auth is caught by the daily reconcile (`auth-sync.reconcile.ts`), not by an event.
+
 > **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 
 **#429.** `legal_acceptances` (#427) recorded only vendors, only a version
@@ -2039,6 +2041,8 @@ provisioned" is not a fact that survives the test that established it — memois
 it broke 20 suites and was reverted.
 
 ### D39: An Account With Live Bookings Cannot Be Closed — *2026-09-07*
+
+> **Corrected 2026-09-23 (VEN-649):** there is no `user.deleted` webhook under Neon Auth. The backstop named below is the daily reconcile, which finds an identity Neon Auth no longer holds and, when it still has confirmed bookings, raises `auth_identity_deleted` instead of closing it. Neon Auth's self-serve `delete-user` and `change-email` are refused at the web proxy (`proxy-allowlist.ts`); whether they are also off at the provider is a console check on `docs/pre-launch.md`.
 
 > **Superseded by VEN-447/448/449**: the auth provider is retired and identity is Neon Auth. The auth provider text in this section is the historical record, not the current design.
 

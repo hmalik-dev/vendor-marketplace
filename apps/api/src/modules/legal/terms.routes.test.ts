@@ -94,6 +94,30 @@ describe('the Terms of Service acceptance gate', () => {
     await harness.close();
   });
 
+  // VEN-649: the account row is the one writer the sign-in path has.
+  it('creates the account under the lowercased address', async () => {
+    const MIXED = 'terms_mixed_case';
+    harness.authUsers.set(MIXED, {
+      authUserId: MIXED,
+      email: 'Mixed.Case@Example.com',
+      firstName: 'Ada',
+      lastName: 'Reyes',
+      roleHint: 'customer',
+      avatarUrl: null,
+    });
+
+    expect(
+      (await accept(MIXED, { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' }))
+        .statusCode,
+    ).toBe(200);
+
+    const rows = await harness.database.db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.authUserId, MIXED));
+    expect(rows).toEqual([{ email: 'mixed.case@example.com' }]);
+  });
+
   describe('before the box is ticked', () => {
     /**
      * Acceptance 10, from the outside: the account does not exist yet. Nothing

@@ -37,6 +37,7 @@ import {
   messages,
   notifications,
   portfolioItems,
+  reviewTombstones,
   reviews,
   servicePackages,
   users,
@@ -364,6 +365,25 @@ export async function clearDemoData<
         ? or(inArray(bookings.customerId, ownedUserIds), inArray(bookings.vendorId, ownedVendorIds))
         : inArray(bookings.customerId, ownedUserIds),
     );
+
+  /*
+   * The threads and reviews, for the same reason: their user FKs are RESTRICT
+   * (VEN-649), which Postgres checks per row as the user goes — before the
+   * cascade through `conversations` would have removed the messages.
+   */
+  await db.delete(messages).where(inArray(messages.senderId, ownedUserIds));
+  await db
+    .delete(conversations)
+    .where(
+      ownedVendorIds.length > 0
+        ? or(
+            inArray(conversations.customerId, ownedUserIds),
+            inArray(conversations.vendorId, ownedVendorIds),
+          )
+        : inArray(conversations.customerId, ownedUserIds),
+    );
+  await db.delete(reviewTombstones).where(inArray(reviewTombstones.reviewerId, ownedUserIds));
+  await db.delete(reviews).where(inArray(reviews.reviewerId, ownedUserIds));
 
   await db.delete(users).where(inArray(users.id, ownedUserIds));
 }

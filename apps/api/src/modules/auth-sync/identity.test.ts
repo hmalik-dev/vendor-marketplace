@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { providerAvatarUrl } from './identity.js';
+import { mirroredIdentity, providerAvatarUrl } from './identity.js';
+
+describe('mirroredIdentity (VEN-649)', () => {
+  it('stores the address lowercased and trimmed, as the unique index compares it', () => {
+    const identity = {
+      id: 'auth-1',
+      email: '  Ada.Lovelace@Example.COM ',
+      name: 'Ada',
+      image: null,
+    };
+
+    expect(mirroredIdentity(identity).email).toBe('ada.lovelace@example.com');
+  });
+
+  it('still reads a blank address as no opinion', () => {
+    expect(
+      mirroredIdentity({ id: 'auth-1', email: '   ', name: 'Ada', image: null }).email,
+    ).toBeNull();
+  });
+});
 
 describe('providerAvatarUrl (VEN-538)', () => {
   it.each([

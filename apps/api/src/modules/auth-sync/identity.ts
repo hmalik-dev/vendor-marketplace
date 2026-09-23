@@ -1,6 +1,6 @@
 import { MAX_URL_LENGTH, type AuthProvider } from '@vendor-marketplace/shared';
 import type { NeonAuthDirectory, NeonAuthIdentity } from '@vendor-marketplace/db';
-import { mirroredAuthName, splitAuthName } from '../users/users.service.js';
+import { mirroredAuthEmail, mirroredAuthName, splitAuthName } from '../users/users.service.js';
 
 /**
  * The half of Neon Auth the API reads outside a session: who holds an address,
@@ -30,10 +30,11 @@ export interface MirroredIdentity {
 
 export function mirroredIdentity(identity: NeonAuthIdentity): MirroredIdentity {
   const { firstName, lastName } = splitAuthName(identity.name);
+  const email = mirroredAuthEmail(identity.email);
 
   return {
     authUserId: identity.id,
-    email: identity.email.trim() === '' ? null : identity.email.trim(),
+    email: email === '' ? null : email,
     // Normalised here, not only at the write, so the drift check compares what the write would store.
     firstName: mirroredAuthName(firstName) === '' ? null : mirroredAuthName(firstName),
     lastName: mirroredAuthName(lastName) === '' ? null : mirroredAuthName(lastName),

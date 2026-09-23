@@ -92,6 +92,20 @@ first. Both branches were empty of user rows and both held 0000–0009.
       see them otherwise, and preflight fails by name without them. On
       rotation, change all three places: Vercel, Railway (`WEB_TIER_KEY`) and
       GitHub.
+- [ ] **A web tier key per environment** (VEN-649). `WEB_TIER_KEY` must
+      differ between `staging` and `production`: a staging key that also works
+      on production lets whoever reads it choose the address production's rate
+      limiter counts. If both were set from one `openssl rand -hex 32`, generate
+      a new one for production and set it in all three places (Vercel, Railway,
+      the `production` GitHub environment secret) in one sitting; a mismatch
+      between the API and web now reports to Sentry.
+- [ ] **Neon Auth self-service account changes** (VEN-649). In the Neon
+      console, confirm the auth branch does not let a signed-in user call
+      `delete-user` or `change-email` directly. The web proxy refuses both
+      (`proxy-allowlist.ts`), but a call made straight to the Neon Auth URL
+      never passes the proxy; a deletion there is only caught by the daily
+      reconcile, and an email change there bypasses the lowercase rule until
+      the reconcile mirrors it.
 - [ ] **Release sender check** (VEN-609). On both `staging` and `production`,
       add the variable `EMAIL_FROM` (the same value Railway's API has) and
       the secret `RESEND_API_KEY`, a full-access Resend key so it can list
