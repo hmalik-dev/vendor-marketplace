@@ -55,7 +55,7 @@
 
 ## Money, bookings and background work
 
-- [availability.status literals are load-bearing](availability-status-literals-are-load-bearing.md) — three double-booking guards compare to `'booked'`
+- [availability.status literals are load-bearing](availability-status-literals-are-load-bearing.md) — three double-booking guards compare to `'booked'`; a `syncHeldDate` without `lockHeldDate` deletes a concurrently booked cell
 - [Availability floors are one day wider than UTC](availability-date-floors-are-universally-past.md) — the DAO's `booked` predicates protect history, not the floor
 - [Booking reads gate on two separate paths](booking-reads-gate-on-two-separate-paths.md) — `reconcileBooking`'s short-circuit leaked the fee split until #387
 - [The reply-window cap lives in five places](reply-deadline-cap-must-match-accept-guard.md) — VEN-433 gave `expires_at` a second meaning with no backfill
