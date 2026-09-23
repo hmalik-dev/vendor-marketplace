@@ -898,16 +898,21 @@ describe('the vendor gate', () => {
       expect(mail.text).not.toContain('Sign in');
     });
 
-    it('carries the prices/work/dates sentence in both variants, and no date, count, position or expiry language (AC3)', () => {
-      const banned = [
-        /\bday(?:s)?\b/i,
-        /\bwithin\b/i,
-        /\bexpir\w*/i,
-        /\bposition\b/i,
-        /\bqueue\b/i,
-        /\bone of \d/i,
-      ];
+    const NO_URGENCY_COPY = [
+      /\bday(?:s)?\b/i,
+      /\bwithin\b/i,
+      /\bexpir\w*/i,
+      /\bposition\b/i,
+      /\bqueue\b/i,
+      /\bone of \d/i,
+      /\bsoon\b/i,
+      /\bhurry\b/i,
+      /\blimited\b/i,
+      /\burgent\w*/i,
+      /test[\s-]?mode/i,
+    ];
 
+    it('carries the prices/work/dates sentence in both variants, and no date, count, position or expiry language (AC3, AC4)', () => {
       for (const hasApplication of [true, false]) {
         const mail = renderVendorInviteEmail(
           'https://orla.test',
@@ -918,10 +923,25 @@ describe('the vendor gate', () => {
         expect(mail.text).toContain(
           'set your prices, put up your work and open the dates you want to be booked on',
         );
-        for (const pattern of banned) {
+        for (const pattern of NO_URGENCY_COPY) {
           expect(mail.text).not.toMatch(pattern);
           expect(mail.html).not.toMatch(pattern);
         }
+      }
+    });
+
+    it('carries no date, count, position, expiry or urgency language in the waitlist confirmation either (AC4)', () => {
+      const mail = renderVendorApplicationConfirmationEmail({
+        businessName: 'Hopper Florals',
+        categoryName: 'Florist',
+        city: 'Austin',
+        state: 'TX',
+        email: 'mara@example.com',
+      });
+
+      for (const pattern of NO_URGENCY_COPY) {
+        expect(mail.text).not.toMatch(pattern);
+        expect(mail.html).not.toMatch(pattern);
       }
     });
 
@@ -942,6 +962,78 @@ describe('the vendor gate', () => {
       expect(mail.text).not.toContain('href');
       expect(mail.html).not.toContain('<a ');
       expect(mail.text).toContain('reply to this email');
+    });
+
+    it('matches the Frame 38 template on both invite variants: 600px card, brand mark, body copy, clay button, footer rule (VEN-600 AC1)', () => {
+      for (const hasApplication of [true, false]) {
+        const mail = renderVendorInviteEmail(
+          'https://orla.test',
+          'mara@example.com',
+          hasApplication,
+        );
+
+        expect(mail.html).toContain(
+          '<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif',
+        );
+        expect(mail.html).toContain('width="600" style="width:600px;max-width:600px;');
+        expect(mail.html).toContain('background:#F8F5EF;border-radius:10px');
+        expect(mail.html).toContain('background:#E9E6DF');
+        // The two-circle brand mark: clay fill + ink outline, 17px each.
+        expect(mail.html).toContain('width:17px;height:17px;border-radius:50%;background:#B4552F;');
+        expect(mail.html).toContain(
+          'width:17px;height:17px;border-radius:50%;border:1.3px solid #23201C;',
+        );
+        expect(mail.html).toContain(
+          "font-family:'Instrument Serif', Georgia, serif;font-size:24px;color:#23201C",
+        );
+        expect(mail.html).toContain(
+          "font-family:'Instrument Serif', Georgia, serif;font-size:31px;line-height:1.18;color:#23201C",
+        );
+        // Body paragraph typography, pinned in full — not just a loose color match.
+        expect(mail.html).toContain('font-size:14.5px;line-height:1.75;color:#4A443C');
+        expect(mail.html).toContain(
+          "font-family:'Instrument Sans', Arial, Helvetica, sans-serif;font-size:14px;font-weight:600;line-height:14px;color:#FFFDF9;background:#B4552F;padding:13px 26px;border-radius:10px",
+        );
+        // Footer typography and rule, pinned in full.
+        expect(mail.html).toContain(
+          "border-top:1px solid #E4DDD1;font-family:'Instrument Sans', Arial, Helvetica, sans-serif;font-size:12px;line-height:1.65;color:#6B6459",
+        );
+        expect(mail.html).toContain('Your invitation is here');
+      }
+    });
+
+    it("bolds the quoted address to Frame 38's ink weight, not the browser default <strong> (VEN-600 AC1)", () => {
+      const mail = renderVendorInviteEmail('https://orla.test', 'mara@example.com', false);
+
+      expect(mail.html).toContain('font-weight:600;color:#23201C;">mara@example.com</span>');
+      expect(mail.html).not.toContain('<strong>');
+    });
+
+    it('matches the Frame 38 template on the waitlist confirmation: info box, gapped label column, one bold row, no button (VEN-600 AC1)', () => {
+      const mail = renderVendorApplicationConfirmationEmail({
+        businessName: 'Hopper Florals',
+        categoryName: 'Florist',
+        city: 'Austin',
+        state: 'TX',
+        email: 'mara@example.com',
+      });
+
+      expect(mail.html).toContain('width="600" style="width:600px;max-width:600px;');
+      expect(mail.html).toContain(
+        'background:#FFFDF9;border:1px solid #E4DDD1;border-radius:12px;padding:16px 18px',
+      );
+      expect(mail.html).toContain(
+        'width:104px;padding-right:12px;font-size:13.5px;line-height:1.6;color:#6B6459',
+      );
+      // Only the Business row is bold — the other three facts stay regular weight.
+      expect(mail.html).toContain('font-weight:600;">Hopper Florals</td>');
+      expect(mail.html).toContain('font-weight:400;">Florist</td>');
+      expect(mail.html).toContain('font-weight:400;">Austin, Texas</td>');
+      expect(mail.html).toContain('font-weight:400;">mara@example.com</td>');
+      // The closing "if any of that is wrong" line sits below body size, per Frame 38.
+      expect(mail.html).toContain('font-size:13.5px;line-height:1.7;color:#4A443C');
+      expect(mail.html).not.toContain('<a href="https://orla.test');
+      expect(mail.html).toContain("You're on the waitlist");
     });
 
     it('walks past 200 applications, with server-side totals for both lists', async () => {
