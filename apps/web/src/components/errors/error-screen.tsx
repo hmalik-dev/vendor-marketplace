@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState, useTransition } from 'react';
 import { SUPPORT_PATH } from '@vendor-marketplace/shared';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { Banner } from '@/components/ui/banner';
@@ -65,6 +66,55 @@ export interface ErrorScreenProps {
    * failed read from a failed charge, so it asserts neither.
    */
   payment?: 'none' | 'unknown';
+  /**
+   * `global-error.tsx` only. It renders above the App Router's context, where
+   * `useRouter` throws, so its retry is `reset` alone; every `error.tsx` sits
+   * inside the router and refetches first.
+   */
+  outsideRouter?: boolean;
+}
+
+interface RetryButtonProps {
+  reset: () => void;
+}
+
+/**
+ * `reset()` alone re-renders the segment from the server payload that just
+ * failed, so a retry after the cause had cleared showed the same error and
+ * fired no request (VEN-623). The refresh refetches that payload and the reset
+ * clears the boundary — Next's documented recovery for a server error.
+ *
+ * Busy while the refetch is in flight, but not disabled: a disabled button
+ * drops the focus the reader just put on it. A second press is ignored instead.
+ */
+function RefetchRetryButton({ reset }: RetryButtonProps): React.ReactElement {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <Button
+      variant="primary"
+      loading={pending}
+      disabled={false}
+      onClick={() => {
+        if (pending) return;
+        startTransition(() => {
+          router.refresh();
+          reset();
+        });
+      }}
+    >
+      Try again
+    </Button>
+  );
+}
+
+function ResetRetryButton({ reset }: RetryButtonProps): React.ReactElement {
+  return (
+    <Button variant="primary" onClick={reset}>
+      Try again
+    </Button>
+  );
 }
 
 export function ErrorScreen({
@@ -72,6 +122,7 @@ export function ErrorScreen({
   reset,
   chrome = true,
   payment = 'none',
+  outsideRouter = false,
 }: ErrorScreenProps): React.ReactElement {
   /*
    * The route and the moment can only be read in the browser, and this screen
@@ -218,9 +269,11 @@ export function ErrorScreen({
 
         <div className="mt-6.5 flex flex-wrap justify-center gap-3">
           {/* Most 500s are transient, so retrying the segment is the primary action. */}
-          <Button variant="primary" onClick={reset}>
-            Try again
-          </Button>
+          {outsideRouter ? (
+            <ResetRetryButton reset={reset} />
+          ) : (
+            <RefetchRetryButton reset={reset} />
+          )}
           <Button asChild variant="secondary">
             {/*
               A hard navigation, deliberately. This screen is shared with

@@ -1,8 +1,7 @@
 'use client';
 
 import * as Sentry from '@sentry/nextjs';
-import { useRouter } from 'next/navigation';
-import { startTransition, useEffect } from 'react';
+import { useEffect } from 'react';
 import { ErrorScreen } from '@/components/errors/error-screen';
 import { boundaryCaptureContext } from '@/config/error-reporting';
 
@@ -21,20 +20,10 @@ export default function BookingError({
   error: Error & { digest?: string };
   reset: () => void;
 }): React.ReactElement {
-  const router = useRouter();
-
   useEffect(() => {
     console.error(`Unhandled booking error${error.digest ? ` [${error.digest}]` : ''}`, error);
     Sentry.captureException(error, boundaryCaptureContext({ payment: true, digest: error.digest }));
   }, [error]);
 
-  // `reset()` alone reuses the server payload that failed; refetch it first.
-  const retry = (): void => {
-    startTransition(() => {
-      router.refresh();
-      reset();
-    });
-  };
-
-  return <ErrorScreen digest={error.digest} reset={retry} payment="unknown" />;
+  return <ErrorScreen digest={error.digest} reset={reset} payment="unknown" />;
 }
