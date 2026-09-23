@@ -10,7 +10,7 @@ import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
 import type { NeonAuthDirectory } from '@vendor-marketplace/db';
 import type { AppDatabase } from '../../lib/database.js';
 import { accountSuspended, notFound, unauthorized, validationFailed } from '../../lib/errors.js';
-import { assertOwnedImageRefs } from '../../lib/storage.js';
+import { assertOwnedImageRefs, storedImageRef } from '../../lib/storage.js';
 import { findUserById, insertUserIfAbsent, updateUserById } from './users.dao.js';
 
 /** The subset of an auth identity the local `users` row mirrors. */
@@ -210,6 +210,7 @@ export async function updateUserProfile(
   db: AppDatabase,
   userId: string,
   input: UpdateUserInput,
+  publicBaseUrl: string,
   authSync?: {
     authUserId: string;
     directory: NeonAuthDirectory | null;
@@ -238,7 +239,15 @@ export async function updateUserProfile(
     }
   }
 
-  const row = await updateUserById(db, userId, input);
+  // Stored as a key, so it follows `STORAGE_PUBLIC_URL` and is never read as a
+  // provider avatar the next sign-in would overwrite (VEN-648).
+  const row = await updateUserById(
+    db,
+    userId,
+    input.avatarUrl === undefined
+      ? input
+      : { ...input, avatarUrl: storedImageRef(input.avatarUrl, publicBaseUrl) },
+  );
   if (!row) {
     throw notFound('User not found');
   }

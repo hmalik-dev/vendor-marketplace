@@ -852,7 +852,12 @@ export async function updateVendorProfile(
        * `moderation_hold = true`: on search, `Held` in the console, and the
        * operator's own republish answering 409 with no lever left but a ban.
        */
-      if (patch.slug !== undefined && patch.slug !== existing.slug) {
+      /*
+       * Only a live storefront's old address is recorded: before publication
+       * nobody has the link, and recording a draft's renames would let one
+       * account reserve every `-n` suffix of a name for nothing (VEN-648).
+       */
+      if (existing.isPublished && patch.slug !== undefined && patch.slug !== existing.slug) {
         await recordSlugChange(tx, existing.id, existing.slug, patch.slug);
       }
 

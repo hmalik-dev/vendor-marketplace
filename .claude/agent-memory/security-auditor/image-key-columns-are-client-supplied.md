@@ -158,6 +158,17 @@ the guard's own normaliser before comparing, and a `LIKE '%/<key>'` prefilter
 cannot be the widening step because it misses exactly the same rows.** The five
 columns are small enough to read whole and normalise in JS.
 
+**VEN-648 (2026-09-23): the API now strips `STORAGE_PUBLIC_URL` on write
+(`storedImageRef` → `toObjectKey`, exact prefix) after the guard, and
+`assertStorageOriginRefs` pins absolute refs to the storage origin — that
+ordering is clean (the guard scans three-from-end, so leading base segments do
+not matter). Migration `0083` is the `keys:from-urls` defect in SQL: it strips
+**any** host and never checks the owner segment against the row's owner.
+`users.avatar_url` via `providerAvatarUrl` (Neon Auth `image` claim) has **no**
+owner check, so a planted `https://x/customer-profile/<victim>/<obj>` becomes a
+foreign bare key, stops being `isProviderAvatar`, and sync never overwrites it.
+Any bulk key rewrite must require `split_part(key,'/',2) = owner id`.
+
 **How to apply:** treat any new code that _acts on_ one of these columns —
 delete, copy, sign, fetch, move, or **normalise** — as taking an attacker-chosen
 key. VEN-442 deleted `syncCoverFromPortfolio`: the cover is its own upload now

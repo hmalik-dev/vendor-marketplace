@@ -15,11 +15,18 @@ import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './test
 const THIS_MIGRATION = '0083_image_columns_hold_keys';
 
 const OWNER = '6f1c2b0a-1111-4222-8333-944445555666';
+const CUSTOMER = '6f1c2b0a-2222-4222-8333-944445555666';
+const OAUTH_CUSTOMER = '6f1c2b0a-3333-4222-8333-944445555666';
+const ATTACKER = '6f1c2b0a-4444-4222-8333-944445555666';
 const PROFILE_KEY = `vendor-profile/${OWNER}/a1.webp`;
 const COVER_KEY = `vendor-cover/${OWNER}/b2.webp`;
 const IMAGE_KEY = `portfolio/${OWNER}/c3.webp`;
 const THUMB_KEY = `portfolio/${OWNER}/c3-thumb.webp`;
-const AVATAR_KEY = `customer-profile/${OWNER}/d4.webp`;
+const LEGACY_COVER_KEY = `vendor-cover/${CUSTOMER}/b2.webp`;
+const AVATAR_KEY = `customer-profile/${CUSTOMER}/d4.webp`;
+/** Another account's object, on a host anyone can make serve that path. */
+const FOREIGN_AVATAR = `https://x.example/customer-profile/${CUSTOMER}/d4.webp`;
+const FOREIGN_PORTFOLIO = `https://x.example/portfolio/${CUSTOMER}/f6.webp`;
 
 let testDb: TestDatabase;
 
@@ -43,11 +50,12 @@ afterAll(async () => {
 });
 
 describe('0083 against image columns written as URLs', () => {
-  it('leaves every upload column holding the key and no host, and nothing else changed', async () => {
+  it('leaves every own upload holding its key and no host, and nothing else changed', async () => {
     const [vendorUser, customer, oauthCustomer] = await testDb.db
       .insert(users)
       .values([
         {
+          id: OWNER,
           authUserId: 'keys_vendor',
           email: 'keys-vendor@example.com',
           role: 'vendor',
@@ -55,6 +63,7 @@ describe('0083 against image columns written as URLs', () => {
           lastName: 'Vendor',
         },
         {
+          id: CUSTOMER,
           authUserId: 'keys_customer',
           email: 'keys-customer@example.com',
           role: 'customer',
@@ -63,12 +72,22 @@ describe('0083 against image columns written as URLs', () => {
           avatarUrl: `http://localhost:9000/vendor-marketplace-uploads/${AVATAR_KEY}`,
         },
         {
+          id: OAUTH_CUSTOMER,
           authUserId: 'keys_oauth',
           email: 'keys-oauth@example.com',
           role: 'customer',
           firstName: 'Kay',
           lastName: 'Customer',
           avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocK=s96-c',
+        },
+        {
+          id: ATTACKER,
+          authUserId: 'keys_attacker',
+          email: 'keys-attacker@example.com',
+          role: 'customer',
+          firstName: 'Kay',
+          lastName: 'Attacker',
+          avatarUrl: FOREIGN_AVATAR,
         },
       ])
       .returning({ id: users.id });
@@ -88,7 +107,7 @@ describe('0083 against image columns written as URLs', () => {
           businessName: 'Legacy Studio',
           slug: 'legacy-studio',
           // The R2 host uploads were served from before Neon.
-          coverImageUrl: `https://pub-0123.r2.dev/${COVER_KEY}`,
+          coverImageUrl: `https://pub-0123.r2.dev/${LEGACY_COVER_KEY}`,
         },
         {
           userId: oauthCustomer!.id,
@@ -101,13 +120,16 @@ describe('0083 against image columns written as URLs', () => {
       ])
       .returning({ id: vendorProfiles.id });
 
-    const [item] = await testDb.db
+    const [item, foreignItem] = await testDb.db
       .insert(portfolioItems)
-      .values({
-        vendorId: storageVendor!.id,
-        imageUrl: `http://localhost:9000/vendor-marketplace-uploads/${IMAGE_KEY}`,
-        thumbnailUrl: `http://localhost:9000/vendor-marketplace-uploads/${THUMB_KEY}`,
-      })
+      .values([
+        {
+          vendorId: storageVendor!.id,
+          imageUrl: `http://localhost:9000/vendor-marketplace-uploads/${IMAGE_KEY}`,
+          thumbnailUrl: `http://localhost:9000/vendor-marketplace-uploads/${THUMB_KEY}`,
+        },
+        { vendorId: storageVendor!.id, imageUrl: FOREIGN_PORTFOLIO },
+      ])
       .returning({ id: portfolioItems.id });
 
     await applyMigration(THIS_MIGRATION);
@@ -134,7 +156,7 @@ describe('0083 against image columns written as URLs', () => {
     });
     expect(await vendor(legacyVendor!.id)).toEqual({
       profileImageUrl: null,
-      coverImageUrl: COVER_KEY,
+      coverImageUrl: LEGACY_COVER_KEY,
     });
     expect(await vendor(seededVendor!.id)).toEqual({
       profileImageUrl: `https://cdn.example.com/myportfolio/${OWNER}/e5.webp`,
@@ -146,14 +168,21 @@ describe('0083 against image columns written as URLs', () => {
       .from(portfolioItems)
       .where(eq(portfolioItems.id, item!.id));
     expect(portfolio).toEqual({ imageUrl: IMAGE_KEY, thumbnailUrl: THUMB_KEY });
+    // Key-shaped, but naming another account: left as the URL it was.
+    const [foreign] = await testDb.db
+      .select({ imageUrl: portfolioItems.imageUrl })
+      .from(portfolioItems)
+      .where(eq(portfolioItems.id, foreignItem!.id));
+    expect(foreign).toEqual({ imageUrl: FOREIGN_PORTFOLIO });
 
     const avatars = await testDb.db
       .select({ id: users.id, avatarUrl: users.avatarUrl })
       .from(users)
-      .where(sql`${users.id} in (${customer!.id}, ${oauthCustomer!.id})`);
+      .where(sql`${users.id} in (${customer!.id}, ${oauthCustomer!.id}, ${ATTACKER})`);
     expect(Object.fromEntries(avatars.map((row) => [row.id, row.avatarUrl]))).toEqual({
       [customer!.id]: AVATAR_KEY,
       [oauthCustomer!.id]: 'https://lh3.googleusercontent.com/a/ACg8ocK=s96-c',
+      [ATTACKER]: FOREIGN_AVATAR,
     });
   });
 });

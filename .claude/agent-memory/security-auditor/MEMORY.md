@@ -40,6 +40,7 @@
 - [`VENDOR_VISIBLE` is the only public vendor gate](vendor-visible-is-the-only-public-vendor-gate.md) — VEN-431 added `OWNER_NOT_BANNED`; checkout has no vendor predicate and rests on the unwind
 - [Moderation levers are undoable by their subject](moderation-levers-are-undoable-by-their-subject.md) — `moderation_hold`; both subject-wins paths closed on its own lane
 - [Customer PII has two disclosure gates](customer-pii-has-two-disclosure-gates.md) — profile relationship is permanent and customer-wide, request-status is per-request; no shared code
+- [Slug aliases reserve slugs for ever](vendor-slug-aliases-reserve-slugs.md) — VEN-648: successor/redirect clean; uncapped aliases let one vendor 409 a name's 50 slug attempts
 - [The public vendor card is the widest anonymous projection](public-vendor-card-is-the-widest-anonymous-projection.md) — the DAO's literal decides, not the select; `isNew` is settled
 - [The public price filter is a pricing oracle](search-price-filter-is-a-pricing-oracle.md) — any-package EXISTS binary-searched a tier ladder; MIN only exposes the printed price
 - [`/places` replaced an inventory oracle](places-endpoint-replaced-an-inventory-oracle.md) — `/vendors/cities` leaked per-city counts; the missing `ESCAPE` is correct on Postgres

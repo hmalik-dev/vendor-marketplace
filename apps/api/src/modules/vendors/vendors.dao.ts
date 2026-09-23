@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import {
   categories,
   tags,
@@ -52,21 +52,27 @@ export async function slugExists(
     return false;
   }
 
-  const [current, aliases] = await Promise.all([
-    db
-      .select({ id: vendorProfiles.id })
-      .from(vendorProfiles)
-      .where(eq(vendorProfiles.slug, slug))
-      .limit(2),
-    db
-      .select({ id: vendorSlugAliases.vendorId })
-      .from(vendorSlugAliases)
-      .where(eq(vendorSlugAliases.slug, slug))
-      .limit(1),
-  ]);
+  // One statement, so both tables are read in one snapshot: a rename that
+  // commits between two separate reads could otherwise hide the slug from both.
+  const rows = await db
+    .select({ id: vendorProfiles.id })
+    .from(vendorProfiles)
+    .where(eq(vendorProfiles.slug, slug))
+    .unionAll(
+      db
+        .select({ id: vendorSlugAliases.vendorId })
+        .from(vendorSlugAliases)
+        .where(eq(vendorSlugAliases.slug, slug)),
+    );
 
-  return [...current, ...aliases].some((row) => row.id !== exceptVendorId);
+  return rows.some((row) => row.id !== exceptVendorId);
 }
+
+/**
+ * How many former slugs one vendor keeps. Enough for any real business's
+ * renames; few enough that one account cannot reserve a name's suffixes.
+ */
+const MAX_SLUG_ALIASES_PER_VENDOR = 10;
 
 /**
  * Records a slug change so the old address keeps leading to this vendor: the
@@ -83,6 +89,23 @@ export async function recordSlugChange(
     .delete(vendorSlugAliases)
     .where(and(eq(vendorSlugAliases.slug, to), eq(vendorSlugAliases.vendorId, vendorId)));
   await db.insert(vendorSlugAliases).values({ slug: from, vendorId }).onConflictDoNothing();
+  // The oldest address past the cap is released; the newest ones are the links still in use.
+  await db
+    .delete(vendorSlugAliases)
+    .where(
+      and(
+        eq(vendorSlugAliases.vendorId, vendorId),
+        notInArray(
+          vendorSlugAliases.slug,
+          db
+            .select({ slug: vendorSlugAliases.slug })
+            .from(vendorSlugAliases)
+            .where(eq(vendorSlugAliases.vendorId, vendorId))
+            .orderBy(desc(vendorSlugAliases.createdAt), desc(vendorSlugAliases.slug))
+            .limit(MAX_SLUG_ALIASES_PER_VENDOR),
+        ),
+      ),
+    );
 }
 
 export async function insertVendorProfile(

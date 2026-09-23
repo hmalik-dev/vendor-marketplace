@@ -541,6 +541,36 @@ describe('/vendor/profile', () => {
         expect(current.statusCode).toBe(200);
       });
 
+      it('is not recorded for a draft, whose old slug nobody was given', async () => {
+        await createProfile();
+        expect(await renameTo(VENDOR, 'moonlit-studio')).toBe('moonlit-studio');
+
+        const other = await harness.app.inject({
+          method: 'POST',
+          url: '/vendor/profile',
+          headers: bearer(OTHER_VENDOR),
+          payload: validBody({ businessName: 'Sunlit Studio' }),
+        });
+        expect(other.json().slug).toBe('sunlit-studio');
+      });
+
+      it('keeps only the newest ten, releasing the oldest', async () => {
+        await publishSunlit();
+
+        for (let rename = 1; rename <= 11; rename += 1) {
+          await renameTo(VENDOR, `moonlit-studio-${rename + 1}`);
+        }
+
+        // `sunlit-studio` then `-2` … `-11` were given up; the first is released.
+        expect((await successorOf('sunlit-studio')).status).toBe(404);
+        expect((await successorOf('moonlit-studio-2')).body).toEqual({
+          slug: 'moonlit-studio-12',
+        });
+        expect((await successorOf('moonlit-studio-11')).body).toEqual({
+          slug: 'moonlit-studio-12',
+        });
+      });
+
       it('names nothing while the vendor is not public', async () => {
         await publishSunlit();
         await renameTo(VENDOR, 'moonlit-studio');
