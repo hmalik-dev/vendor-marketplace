@@ -379,19 +379,23 @@ describe('SiteHeader', () => {
   });
 
   /*
-   * Our record names the avatar, never the session's claims. Frame `02` draws one
-   * initial on the clay or sage fill; a fresh account with no name falls back
-   * to its email address.
+   * Our record names the avatar, never the session's claims: the full name's
+   * initials on the clay or sage fill, or the photo once one is set.
    */
   it('draws the avatar from our record: initials without a photo, the photo with one', async () => {
     authState = 'signed-in';
     currentRole = 'customer';
-    currentUser = { firstName: '', lastName: '', email: 'pat@example.com', avatarUrl: null };
+    currentUser = {
+      firstName: 'Pat',
+      lastName: 'Okafor',
+      email: 'pat@example.com',
+      avatarUrl: null,
+    };
 
     const initials = render(await SiteHeader());
     const monogram = initials.container.querySelector('[data-slot="avatar-fallback"]');
 
-    expect(monogram?.textContent).toBe('P');
+    expect(monogram?.textContent).toBe('PO');
     expect(monogram?.className).toMatch(/\b(?:bg-clay-150|bg-sage-100)\b/);
 
     cleanup();
@@ -404,6 +408,26 @@ describe('SiteHeader', () => {
       'https://cdn.example.com/pat.jpg',
     );
     expect(trigger.querySelector('[data-slot="avatar-fallback"]')).toBeNull();
+  });
+
+  /*
+   * Until the name step, the record holds the sign-up form's email-prefix
+   * placeholder and no last name — a letter that is not the person's. The
+   * header drew it (or `?` with no record); it draws the plain circle now.
+   */
+  it.each([
+    ['a placeholder first name and no last name', 'customer' as const],
+    ['no readable record', null],
+  ])('draws no letter on the avatar for %s', async (_case, role) => {
+    authState = 'signed-in';
+    currentRole = role;
+    currentUser = { firstName: 'pat', lastName: '', email: 'pat@example.com', avatarUrl: null };
+
+    const { container } = render(await SiteHeader());
+    const monogram = container.querySelector('[data-slot="avatar-fallback"]');
+
+    expect(monogram).not.toBeNull();
+    expect(monogram?.textContent).toBe('');
   });
 
   /*

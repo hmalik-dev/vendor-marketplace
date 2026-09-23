@@ -14,6 +14,8 @@ import { AcceptTermsScreen } from './accept-terms-screen';
 
 const post = vi.fn();
 const replace = vi.fn();
+/* A full-load replace reports into `replace` too, so every navigation assertion reads one mock. */
+const hardReplace = vi.fn((url: string) => replace(url));
 const signOut = vi.fn<() => Promise<void>>();
 const assign = vi.fn();
 
@@ -57,10 +59,11 @@ beforeEach(() => {
   post.mockReset();
   post.mockResolvedValue(status({ accepted: true, acceptedAt: new Date() }));
   replace.mockReset();
+  hardReplace.mockClear();
   signOut.mockReset();
   signOut.mockResolvedValue(undefined);
   assign.mockReset();
-  vi.stubGlobal('location', { ...window.location, assign });
+  vi.stubGlobal('location', { ...window.location, assign, replace: hardReplace });
 });
 
 afterEach(() => {
@@ -116,6 +119,9 @@ describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
     await user.click(submit());
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/after-sign-in'));
+    // A full load: the header was drawn before the row existed, and a client
+    // navigation would keep it (VEN-678).
+    expect(hardReplace).toHaveBeenCalledWith('/after-sign-in');
     expect(bodyOfPost()).toEqual({ version: CURRENT_TERMS_VERSION });
   });
 

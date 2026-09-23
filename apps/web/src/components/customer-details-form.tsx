@@ -1,7 +1,6 @@
 'use client';
 
 import { MAX_NAME_LENGTH, personalNameInputSchema } from '@vendor-marketplace/shared';
-import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -27,7 +26,6 @@ const LABEL = 'text-sm font-semibold text-stone-700';
  */
 export function CustomerDetailsForm({ returnTo }: CustomerDetailsFormProps): React.ReactElement {
   const call = useApi();
-  const router = useRouter();
   const fieldId = useId();
 
   const [firstName, setFirstName] = useState('');
@@ -59,9 +57,11 @@ export function CustomerDetailsForm({ returnTo }: CustomerDetailsFormProps): Rea
        * Back through `/after-sign-in` rather than straight to `returnTo`, the
        * same reason `accept-terms-screen.tsx` does it: that handler is the one
        * place that knows where this customer starts and re-validates the
-       * destination before sending anybody to it.
+       * destination before sending anybody to it. A full load, for the reason
+       * `accept-terms-screen.tsx` gives: the header's avatar would otherwise
+       * keep the placeholder it drew before the name existed.
        */
-      router.replace(
+      window.location.replace(
         returnTo
           ? `/after-sign-in?${RETURN_PATH_PARAM}=${encodeURIComponent(returnTo)}`
           : '/after-sign-in',

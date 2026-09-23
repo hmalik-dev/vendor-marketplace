@@ -3,9 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const replace = vi.fn();
+/* A full-load replace reports into `replace` too, so every navigation assertion reads one mock. */
+const hardReplace = vi.fn((url: string) => replace(url));
 const requestMock = vi.fn();
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }) }));
 vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
 
 const { CustomerDetailsForm } = await import('./customer-details-form');
@@ -13,9 +14,14 @@ const { CustomerDetailsForm } = await import('./customer-details-form');
 describe('CustomerDetailsForm', () => {
   beforeEach(() => {
     replace.mockReset();
+    hardReplace.mockClear();
+    vi.stubGlobal('location', { ...window.location, replace: hardReplace });
     requestMock.mockReset();
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   /* Not the last step for everyone, so the screen claims no position in the flow. */
   it('asks for the name under its heading alone, with no step eyebrow', () => {
@@ -58,6 +64,8 @@ describe('CustomerDetailsForm', () => {
       }),
     );
     expect(replace).toHaveBeenCalledWith('/after-sign-in');
+    // A full load, so the header re-reads the record and draws the new initials.
+    expect(hardReplace).toHaveBeenCalledWith('/after-sign-in');
   });
 
   it('carries a validated returnTo through to /after-sign-in', async () => {

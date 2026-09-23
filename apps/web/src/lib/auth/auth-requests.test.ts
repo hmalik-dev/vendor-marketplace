@@ -39,11 +39,28 @@ describe('signUpWithEmail', () => {
    * read as a successful sign-up and the code step waited on a mail never sent.
    */
   it('creates the account and asks for no code itself', async () => {
-    const fetchMock = stubFetch(200);
+    const fetchMock = stubFetchBody(200, { token: 'session-token', user: { id: 'u1' } });
 
-    await expect(signUpWithEmail(INPUT)).resolves.toBe('ok');
+    await expect(signUpWithEmail(INPUT)).resolves.toEqual({ outcome: 'ok', codeSent: false });
 
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(['/api/auth/sign-up/email']);
+  });
+
+  /*
+   * Production requires verification, so Neon answers `token: null` and has
+   * already mailed a code; asking again rotated it and the first mail's code
+   * was refused when typed.
+   */
+  it('reports the code as sent when Neon opened no session', async () => {
+    stubFetchBody(200, { token: null, user: { id: 'u1' } });
+
+    await expect(signUpWithEmail(INPUT)).resolves.toEqual({ outcome: 'ok', codeSent: true });
+  });
+
+  it('does not assume a code was sent when the answer names no token', async () => {
+    stubFetch(200);
+
+    await expect(signUpWithEmail(INPUT)).resolves.toEqual({ outcome: 'ok', codeSent: false });
   });
 
   it('sends the chosen role with the sign-up, for the proxy to record (VEN-662)', async () => {
@@ -57,13 +74,16 @@ describe('signUpWithEmail', () => {
   it('reads a sign-up whose role could not be recorded as unreachable', async () => {
     stubFetch(503);
 
-    await expect(signUpWithEmail(INPUT)).resolves.toBe('unreachable');
+    await expect(signUpWithEmail(INPUT)).resolves.toEqual({
+      outcome: 'unreachable',
+      codeSent: false,
+    });
   });
 
   it('reports a refused sign-up', async () => {
     stubFetch(422);
 
-    await expect(signUpWithEmail(INPUT)).resolves.toBe('rejected');
+    await expect(signUpWithEmail(INPUT)).resolves.toEqual({ outcome: 'rejected', codeSent: false });
   });
 });
 

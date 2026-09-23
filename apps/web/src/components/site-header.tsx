@@ -51,18 +51,18 @@ function homeFor(role: UserRole | null): string {
 }
 
 /**
- * The name the avatar's initials are drawn from: our own record's, never
- * the session's claims. Sign-up collects no name,
- * so a fresh account falls back to its email address — one initial, which is
- * what frame `02` draws — and an unreadable record to an empty string, which
- * `Avatar` renders as `?`.
+ * The name the avatar's initials are drawn from: our own record's, never the
+ * session's claims. Only a full name counts — the app cannot be entered
+ * without one (VEN-642) as a customer, a vendor sets one before publishing, and until then the record holds the sign-up form's
+ * email-prefix placeholder with no last name, whose letter is not the
+ * person's. Before that, and for an unreadable record, the avatar draws its
+ * plain tone circle; a profile photo replaces either.
  */
 function displayNameFor(user: WireUser | null): string {
-  if (!user) {
-    return '';
-  }
+  const first = user?.firstName.trim() ?? '';
+  const last = user?.lastName.trim() ?? '';
 
-  return `${user.firstName} ${user.lastName}`.trim() || user.email;
+  return first && last ? `${first} ${last}` : '';
 }
 
 export async function SiteHeader(): Promise<React.ReactElement> {

@@ -43,7 +43,7 @@ async function fillCredentials(user: ReturnType<typeof userEvent.setup>): Promis
 
 describe('SignUpForm', () => {
   beforeEach(() => {
-    signUpWithEmail.mockReset().mockResolvedValue('ok');
+    signUpWithEmail.mockReset().mockResolvedValue({ outcome: 'ok', codeSent: false });
     signInWithEmail.mockReset().mockResolvedValue('ok');
     verifyEmailCode.mockReset().mockResolvedValue('ok');
     resendVerificationCode.mockReset().mockResolvedValue('ok');
@@ -218,6 +218,24 @@ describe('SignUpForm', () => {
   });
 
   /*
+   * Production mails the code on sign-up itself. A second request rotated it:
+   * two mails, and the first one's code refused when typed.
+   */
+  it('asks for no second code when Neon already mailed one', async () => {
+    signUpWithEmail.mockResolvedValue({ outcome: 'ok', codeSent: true });
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await screen.findByLabelText('Verification code');
+
+    expect(resendVerificationCode).not.toHaveBeenCalled();
+    expect(screen.queryByText(AUTH_COPY.throttled)).toBeNull();
+    expect(screen.queryByText(AUTH_COPY.unreachable)).toBeNull();
+  });
+
+  /*
    * VEN-620, seen live: Neon's own limiter answered the post-sign-up send 429
    * ("Too many requests"), the account existed, and the code step showed
    * nothing — asking for a code that was never mailed.
@@ -256,7 +274,7 @@ describe('SignUpForm', () => {
   });
 
   it('does not leave the form when the sign-up is refused', async () => {
-    signUpWithEmail.mockResolvedValue('rejected');
+    signUpWithEmail.mockResolvedValue({ outcome: 'rejected', codeSent: false });
     const user = userEvent.setup();
     render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
 
@@ -273,7 +291,7 @@ describe('SignUpForm', () => {
    * a genuine refusal and told the visitor their details were bad.
    */
   it('says to wait, not that the account could not be created, once throttled', async () => {
-    signUpWithEmail.mockResolvedValue('throttled');
+    signUpWithEmail.mockResolvedValue({ outcome: 'throttled', codeSent: false });
     const user = userEvent.setup();
     render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
 

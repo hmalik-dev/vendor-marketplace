@@ -138,12 +138,15 @@ export function avatarToneIndex(seed: string): number {
   return hash % FALLBACK_TONES.length;
 }
 
-/** Up to two initials, from the first and last word of a name. */
+/**
+ * Up to two initials, from the first and last word of a name. No name draws
+ * no glyph: the tone circle alone is a placeholder, where `?` read as an error.
+ */
 export function initialsFor(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
 
   if (words.length === 0) {
-    return '?';
+    return '';
   }
 
   const first = words[0]?.[0] ?? '';

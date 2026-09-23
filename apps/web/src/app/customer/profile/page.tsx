@@ -81,6 +81,7 @@ export default async function CustomerProfilePage({
   const settledRate = completionRate(user.completedBookingsCount, user.cancelledBookingsCount);
   const budget = user.budgetTier ? BUDGET_TIER_LABELS[user.budgetTier as BudgetTier] : null;
   const isNewMember = user.totalBookingsCount === 0;
+  const fullName = `${user.firstName} ${user.lastName}`.trim();
 
   return (
     /*
@@ -95,10 +96,11 @@ export default async function CustomerProfilePage({
       />
       <div className="min-w-0 flex-1 px-6 pt-6.5 pb-12 xl:px-10">
         <div className="flex items-center gap-4">
-          <Avatar name={user.firstName || 'You'} src={user.avatarUrl} size="lg" />
+          {/* Initials from a full name only, the header's rule: a placeholder first name alone is not the person's. */}
+          <Avatar name={user.lastName.trim() ? fullName : ''} src={user.avatarUrl} size="lg" />
           <div className="min-w-0">
             <h1 className="font-display text-[33px] leading-[1.1] text-stone-900">
-              {user.firstName ? `${user.firstName} ${user.lastName}`.trim() : 'Your profile'}
+              {user.firstName ? fullName : 'Your profile'}
             </h1>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-stone-700">
               {/*
