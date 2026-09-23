@@ -20,6 +20,7 @@ export const AUTH_COPY = {
   codeResend: 'Send a new code',
   codeResent: 'A new code is on its way.',
   codeWrong: 'That code did not work. Check it and try again.',
+  codeExhausted: 'That code can no longer be used. Send a new one below.',
   signUpFailed:
     'We could not create that account. Check the details, or sign in if you already have one.',
   signInFailed: 'That email and password did not match.',
