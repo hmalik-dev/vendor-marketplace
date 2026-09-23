@@ -8,15 +8,6 @@ export function tokenExpiryMs(token: string): number | null {
   return typeof exp === 'number' ? exp * 1000 : null;
 }
 
-/**
- * Reads the `email` claim from a JWT payload, unverified. Only for a token this
- * server just minted from its own session, where it names the signed-in address.
- */
-export function tokenEmail(token: string): string | null {
-  const email = tokenClaim(token, 'email');
-  return typeof email === 'string' && email !== '' ? email : null;
-}
-
 function tokenClaim(token: string, name: string): unknown {
   const payload = token.split('.')[1];
   if (!payload) {

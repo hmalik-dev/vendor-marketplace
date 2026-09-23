@@ -7,7 +7,12 @@ import {
   verifyEmailCode,
 } from './auth-requests';
 
-const INPUT = { email: 'new@example.com', password: 'a-long-password', name: 'new' };
+const INPUT = {
+  email: 'new@example.com',
+  password: 'a-long-password',
+  name: 'new',
+  role: 'vendor',
+} as const;
 
 function stubFetch(...statuses: number[]): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn();
@@ -39,6 +44,20 @@ describe('signUpWithEmail', () => {
     await expect(signUpWithEmail(INPUT)).resolves.toBe('ok');
 
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(['/api/auth/sign-up/email']);
+  });
+
+  it('sends the chosen role with the sign-up, for the proxy to record (VEN-662)', async () => {
+    const fetchMock = stubFetch(200);
+
+    await signUpWithEmail(INPUT);
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(INPUT);
+  });
+
+  it('reads a sign-up whose role could not be recorded as unreachable', async () => {
+    stubFetch(503);
+
+    await expect(signUpWithEmail(INPUT)).resolves.toBe('unreachable');
   });
 
   it('reports a refused sign-up', async () => {

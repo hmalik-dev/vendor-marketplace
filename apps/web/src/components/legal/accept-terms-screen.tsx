@@ -4,26 +4,20 @@ import {
   BRAND_NAME,
   ERROR_CODES,
   LEGAL_PATHS,
+  SUPPORT_PATH,
   VENDOR_DETAILS_PATH,
   termsAcceptanceStatusSchema,
   type TermsAcceptanceStatus,
   type UserRole,
 } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { ContinueNotice } from '@/components/legal/continue-notice';
 import { ExpandableDocumentCard } from '@/components/legal/expandable-document-card';
 import { ApiClientError } from '@/lib/api-client';
 import { signOut } from '@/lib/auth/auth-requests';
-import {
-  clearSignUpRole,
-  readSignUpRole,
-  rememberSignUpRole,
-  type SignUpRole,
-} from '@/lib/auth/signup-role';
-import { cn } from '@/lib/utils';
 import type { LegalDocument } from '@/lib/legal-markdown';
 import { terminalRefusal } from '@/lib/terms-gate-paths';
 import { useApi } from '@/lib/use-api';
@@ -32,12 +26,13 @@ import { useApi } from '@/lib/use-api';
  * The first screen after verification — two screens under one route.
  *
  * **First acceptance (VEN-507): the role, then continue under a notice.** The
- * sign-up form tells the person their choice can't be changed later, so a role
- * this browser remembers from sign-up is stated, never asked again. Only when
- * it is absent (another device, blocked storage, over a day old) does this
- * screen ask — preselecting the invite's `vendor`, and otherwise nothing. The
- * server stores what is submitted here, with the account and the acceptance in
- * one transaction. There is **no checkbox**: "By continuing you agree to the
+ * sign-up form tells the person their choice can't be changed later, so this
+ * screen never asks it again: the role the server recorded at sign-up
+ * (VEN-662) — on whatever device the person verifies — is stated read-only,
+ * from the server render, and the server creates the account with it, the
+ * account and the acceptance in one transaction. A session with no recorded
+ * role (it expired, or its record failed) is told to contact support and can
+ * send nothing: no role is ever defaulted here. There is **no checkbox**: "By continuing you agree to the
  * Terms and Privacy Policy" sits under the submit, and the row is recorded as a
  * `continue_notice`, never as a ticked box. An account that already exists shows
  * its stored role read-only: nothing here can change it.
@@ -59,8 +54,6 @@ export interface AcceptTermsScreenProps {
   terms: LegalDocument;
   /** Where the reader was going before the gate, already validated. */
   returnTo: string | null;
-  /** The signed-in address: the sign-up role is read only when it was remembered for this one. */
-  email: string | null;
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -69,96 +62,33 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'an operator',
 };
 
-/*
- * The same two cards the sign-up form draws (`ROLE_CHOICES`), so the choice
- * looks the same one step apart: clay for the customer, sage for the vendor.
- */
-const ROLE_OPTIONS: readonly {
-  role: SignUpRole;
-  title: string;
-  description: string;
-  glyph: 'square' | 'circle';
-  selectedCard: string;
-  selectedGlyph: string;
-}[] = [
-  {
-    role: 'customer',
-    title: "I'm planning an event",
-    description: 'Find and book vendors near you.',
-    glyph: 'square',
-    selectedCard: 'border-2 border-clay-400 bg-clay-100',
-    selectedGlyph: 'border-clay-500',
-  },
-  {
-    role: 'vendor',
-    title: "I'm a vendor",
-    description: 'List your services and take bookings.',
-    glyph: 'circle',
-    selectedCard: 'border-2 border-sage-400 bg-sage-50',
-    selectedGlyph: 'border-sage-600',
-  },
-];
-
 export function AcceptTermsScreen({
   status,
   terms,
   returnTo,
-  email,
 }: AcceptTermsScreenProps): React.ReactElement {
   const request = useApi();
   const router = useRouter();
 
-  /* A new version asks for the tick; a first acceptance asks for the role and continues under a notice. */
+  /* A new version asks for the tick; a first acceptance states the role and continues under a notice. */
   const tickMode = status.explicitTickRequired;
-  const storedRole = !tickMode && status.account.exists ? status.account.role : null;
+  /*
+   * A role already decided — stored on the account, or recorded at sign-up —
+   * is stated, never asked. Both come from the server render, so there is no
+   * mount effect and nothing to flash.
+   */
+  const knownRole = tickMode
+    ? null
+    : status.account.exists
+      ? status.account.role
+      : status.signUpRole;
   const inFlight = useRef(false);
 
-  const [role, setRole] = useState<SignUpRole | null>(null);
-  /* The role this browser carried over from the sign-up form, once read after mount. */
-  const [hint, setHint] = useState<{ read: boolean; role: SignUpRole | null }>({
-    read: false,
-    role: null,
-  });
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
-  /* The role the server stored when it differs from the one chosen: shown before continuing. */
+  /* The role the server stored when it differs from the one stated: shown before continuing. */
   const [landedAs, setLandedAs] = useState<UserRole | null>(null);
-
-  /*
-   * Preselection is read after mount, never during render: `localStorage` does
-   * not exist on the server, so reading it in the initial state would render
-   * one thing there and another on hydration. The browser hint (under a day
-   * old, written for this address, validated by `readSignUpRole`) is the
-   * choice made at sign-up and is shown as made; without one, the invite's `vendor` preselects the picker,
-   * and otherwise nothing — never a default. A choice already made is kept.
-   *
-   * **Deliberately never skips this screen on a hint alone** (VEN-512): an
-   * earlier version read a `vendor` hint against an address the gate would
-   * refuse and redirected straight to the details screen before the person
-   * ever confirmed anything. The hint is a client value a browser can write
-   * to itself, so trusting it to decide where an account-creating flow goes
-   * let any signed-in address — including one that never chose vendor — be
-   * routed away from `/accept-terms` and, because the details screen used to
-   * write a row on arrival, permanently. The only thing that may now divert
-   * this screen is an *actual* refusal: `accept`'s catch below, after the
-   * server has genuinely tried and failed to admit this address as a vendor.
-   */
-  useEffect(() => {
-    if (!tickMode && storedRole === null) {
-      const remembered = email === null ? null : readSignUpRole(email);
-      setHint({ read: true, role: remembered });
-      setRole((chosen) => chosen ?? remembered ?? status.suggestedRole);
-    }
-  }, [tickMode, storedRole, status.suggestedRole, email]);
-
-  function choose(next: SignUpRole): void {
-    setRole(next);
-    /* Remembered for this address, so a reload states the choice rather than asking again. */
-    if (email !== null) {
-      rememberSignUpRole(next, email);
-    }
-  }
 
   function continueOn(): void {
     /*
@@ -173,10 +103,7 @@ export function AcceptTermsScreen({
     );
   }
 
-  /* A role already decided — stored on the account, or chosen at sign-up — is stated, not asked. */
-  const knownRole = storedRole ?? hint.role;
-
-  const ready = tickMode ? agreed : storedRole !== null || role !== null;
+  const ready = tickMode ? agreed : knownRole !== null;
 
   async function accept(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -194,31 +121,23 @@ export function AcceptTermsScreen({
       const result = await request('/legal/terms/accept', {
         method: 'POST',
         /*
-         * The tick for a new version; otherwise the role confirmed on this
-         * screen, left out for an account that already exists (the server
-         * ignores it there, and the screen shows the stored one).
+         * The tick for a new version; otherwise the version alone. No role is
+         * sent: the server creates the account with the one it recorded at
+         * sign-up (VEN-662).
          */
-        body: tickMode
-          ? { version: status.current, accepted: true }
-          : {
-              version: status.current,
-              ...(storedRole === null && role !== null ? { role } : {}),
-            },
+        body: tickMode ? { version: status.current, accepted: true } : { version: status.current },
         schema: termsAcceptanceStatusSchema,
       });
 
-      /* Accepted: the hint has done its job, and only now. */
-      clearSignUpRole();
-
       /*
-       * What the server stored is what counts. When it is not what was chosen
-       * (another tab won the race), say so before moving on: the choice cannot
-       * be changed later, and continuing silently would hide which side of the
-       * product this account is on.
+       * What the server stored is what counts. When it is not what this
+       * screen stated, say so before moving on: the choice cannot be changed
+       * later, and continuing silently would hide which side of the product
+       * this account is on.
        */
       const stored = result.account.role;
 
-      if (!tickMode && storedRole === null && role !== null && stored !== null && stored !== role) {
+      if (!tickMode && stored !== null && stored !== knownRole) {
         inFlight.current = false;
         setSaving(false);
         setLandedAs(stored);
@@ -233,8 +152,8 @@ export function AcceptTermsScreen({
        * The vendor gate (VEN-406): no account was created for this address.
        * The API has already written the waitlist row for it (VEN-512), so
        * there is nothing left to ask here — on to the details screen, rather
-       * than staying to explain the refusal. The hint is kept: a return visit
-       * before it expires still reads as "this person is a vendor".
+       * than staying to explain the refusal. The server keeps the recorded
+       * role: a return visit still reads as "this person is a vendor".
        */
       if (error instanceof ApiClientError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
         router.replace(VENDOR_DETAILS_PATH);
@@ -271,8 +190,8 @@ export function AcceptTermsScreen({
           This account is {ROLE_LABELS[landedAs]}
         </h1>
         <p className="mt-2 text-sm leading-prose text-stone-600">
-          Another tab set this account up as {ROLE_LABELS[landedAs]} a moment before this one, and
-          that can&apos;t be changed later. To switch, close the account and register again.
+          This account was set up as {ROLE_LABELS[landedAs]}, and that can&apos;t be changed later.
+          To switch, close the account and register again.
         </p>
         <Button variant="primary" size="lg" className="mt-6" onClick={continueOn}>
           Continue
@@ -309,66 +228,23 @@ export function AcceptTermsScreen({
           You&apos;re joining as {ROLE_LABELS[knownRole]}. This can&apos;t be changed later. To
           switch, close the account and register again.
         </p>
-      ) : !hint.read ? null : (
-        <fieldset className="mt-6">
-          <legend className="text-label font-semibold tracking-label text-stone-600 uppercase">
-            How are you joining?
-          </legend>
-          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {ROLE_OPTIONS.map((option) => {
-              const selected = role === option.role;
-
-              return (
-                <label
-                  key={option.role}
-                  className={cn(
-                    'cursor-pointer rounded-xl px-3.5 py-4 transition-colors duration-(--duration-fast)',
-                    'has-focus-visible:ring-2 has-focus-visible:ring-clay-400 has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-stone-50',
-                    selected
-                      ? option.selectedCard
-                      : 'border border-stone-300 bg-stone-0 hover:border-stone-400',
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="role"
-                    value={option.role}
-                    checked={selected}
-                    onChange={() => choose(option.role)}
-                    data-focus-own
-                    className="sr-only"
-                  />
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'mb-2.5 flex size-8.5 items-center justify-center rounded-full',
-                      selected ? 'bg-stone-0' : 'bg-stone-150',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'block size-3.25 border-[1.6px]',
-                        option.glyph === 'circle' ? 'rounded-full' : 'rounded-[3px]',
-                        selected ? option.selectedGlyph : 'border-stone-600',
-                      )}
-                    />
-                  </span>
-                  <span className="block text-[14.5px] font-semibold text-stone-900">
-                    {option.title}
-                  </span>
-                  <span className="mt-1 block text-[12px] leading-normal text-stone-700">
-                    {option.description}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          <p className="mt-3 text-helper text-stone-600" aria-live="polite">
-            {role
-              ? `You're joining as ${ROLE_LABELS[role]}. This can't be changed later. To switch, close the account and register again.`
-              : "Choose one to continue. This can't be changed later."}
-          </p>
-        </fieldset>
+      ) : (
+        /*
+          No recorded role: it expired, or the sign-up could not store it. Signing
+          up again would meet "already exists", so the way on is support, never a
+          picker and never a default.
+        */
+        <Banner status="failed" title="We couldn't find how you're joining" className="mt-6">
+          The choice you made at sign-up wasn&apos;t saved with this account, so it can&apos;t be
+          set up from here.{' '}
+          <a
+            href={SUPPORT_PATH}
+            className="font-semibold text-clay-600 underline underline-offset-4"
+          >
+            Contact support
+          </a>{' '}
+          and we&apos;ll finish it for you.
+        </Banner>
       )}
 
       {tickMode ? (

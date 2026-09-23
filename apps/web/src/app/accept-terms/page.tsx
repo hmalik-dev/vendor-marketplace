@@ -2,8 +2,6 @@ import { pageTitle, VENDOR_DETAILS_PATH, WAITLIST_PATH } from '@vendor-marketpla
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { AcceptTermsScreen } from '@/components/legal/accept-terms-screen';
-import { getServerSession } from '@/lib/auth/server';
-import { tokenEmail } from '@/lib/auth/token-expiry';
 import { legalDocument } from '@/lib/legal-content';
 import { getTermsStatus } from '@/lib/legal-data';
 import { pathReturningTo, RETURN_PATH_PARAM, safeReturnPath } from '@/lib/return-path';
@@ -72,9 +70,5 @@ export default async function AcceptTermsPage({
     redirect(status.vendorWaitlist.complete ? WAITLIST_PATH : VENDOR_DETAILS_PATH);
   }
 
-  /* The signed-in address, so the screen reads only the sign-up role remembered for it. `cache()`d: no second round trip. */
-  const session = await getServerSession();
-  const email = session ? tokenEmail(session.token) : null;
-
-  return <AcceptTermsScreen status={status} terms={terms} returnTo={returnTo} email={email} />;
+  return <AcceptTermsScreen status={status} terms={terms} returnTo={returnTo} />;
 }

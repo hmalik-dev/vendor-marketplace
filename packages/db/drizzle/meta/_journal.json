@@ -645,6 +645,13 @@
       "when": 1790185373377,
       "tag": "0091_left_the_initiative",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1790186785482,
+      "tag": "0092_sign_up_roles",
+      "breakpoints": true
     }
   ]
 }

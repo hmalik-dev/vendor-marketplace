@@ -20,10 +20,15 @@ plugins, and use `onRequest` / `preHandler` hooks for middleware.
 
 ## Authorization reads the local column, never the token
 
-Role is chosen once, at sign-up, and travels as a `role` field on the Terms
-acceptance request (Neon Auth has no sign-up field to carry it, VEN-444). The
-caller can write that field, so it is validated by `normalizeRole` (which refuses anything but `customer` or `vendor`, never defaulting) at the single
-point where a user row is created, and `vendor` is gated on an invite before any
+Role is chosen once, at sign-up. Neon Auth has no sign-up field to carry it
+(VEN-444; it refuses `role` and drops any other custom field, VEN-662), so the
+auth proxy takes it off the sign-up body and records it at the API's
+`/internal/sign-up-role` in `sign_up_roles`, keyed by the provider's user id.
+The Terms acceptance creates the user row with that record, and falls back to a
+`role` in its body only where nothing was recorded. Both are caller-writable, so
+each is validated against `SIGN_UP_ROLES` (`normalizeRole` refuses anything but
+`customer` or `vendor`, never defaulting) at the single point where a user row
+is created, and `vendor` is gated on an invite before any
 row exists. **Every later authorization decision reads the local `users.role`
 column.** The Neon JWT's own `role` claim is always `authenticated` and is never
 read; a guard that trusts a token claim or the request body at request time is a

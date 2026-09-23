@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs';
 import type { NextRequest } from 'next/server';
 import { after, NextResponse } from 'next/server';
-import { WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
+import { SIGN_UP_ROLES, type SignUpRole, WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
 import {
   authConfigured,
   forgetSessionsFor,
@@ -49,6 +49,12 @@ import {
  * address has an account, so this answer is the same for every address.
  * An upstream outage (Neon Auth itself down or slow) still answers whatever
  * the SDK does; extending this 503 to that is a separate change.
+ *
+ * **A sign-up carries the role chosen on the form, and the proxy records it**
+ * (VEN-662): Neon Auth has no field for it, so the role is taken out of the
+ * body before it is forwarded and stored at the API against the id the
+ * provider's answer names (`recordSignUpRole`). A sign-up whose role cannot be
+ * stored is answered as failed rather than as created.
  */
 type RouteContext = { params: Promise<{ path: string[] }> };
 
@@ -229,6 +235,9 @@ async function invalidateSessionsAtApi(userId: string | undefined): Promise<void
 }
 
 const MAX_BODY_BYTES = 4096;
+const SIGN_UP = 'sign-up/email';
+const SIGN_UP_ROLE_TIMEOUT_MS = 2_000;
+const SIGN_UP_ROLE_ATTEMPTS = 2;
 const REQUEST_RESET = 'email-otp/request-password-reset';
 const RESET_PATHS: ReadonlySet<string> = new Set([REQUEST_RESET, 'email-otp/reset-password']);
 
@@ -256,11 +265,30 @@ async function forwardBudgeted(
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
   }
 
-  const body = await request.text();
+  let body = await request.text();
   const email = emailIn(body);
 
   if (email === '') {
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  let role: SignUpRole | undefined;
+
+  if (path.join('/') === SIGN_UP) {
+    const split = splitSignUpRole(body);
+
+    // No role, or one that is not a sign-up role: refused before the provider is called.
+    if (split === null) {
+      return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+    }
+
+    // Without the key the role cannot be stored, so no account is created to lack one.
+    if (!process.env.WEB_TIER_KEY) {
+      return NextResponse.json({ code: 'AUTH_UNAVAILABLE' }, { status: 503 });
+    }
+
+    role = split.role;
+    body = split.forwarded;
   }
 
   /*
@@ -290,7 +318,71 @@ async function forwardBudgeted(
     await chargeAddress(email, path);
   }
 
+  if (role !== undefined && response.ok && !(await recordSignUpRole(response, role))) {
+    return NextResponse.json({ code: 'SIGN_UP_UNRECORDED' }, { status: 503 });
+  }
+
   return response;
+}
+
+/** The sign-up body with its role taken out, or `null` when it carries no sign-up role. */
+function splitSignUpRole(body: string): { role: SignUpRole; forwarded: string } | null {
+  try {
+    const { role, ...rest } = JSON.parse(body) as Record<string, unknown>;
+    const chosen = SIGN_UP_ROLES.find((candidate) => candidate === role);
+
+    return chosen ? { role: chosen, forwarded: JSON.stringify(rest) } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stores the role against the account the provider just created, at the API's
+ * `/internal/sign-up-role`, trying twice with a short deadline each. Unlike
+ * `invalidateSessionsAtApi`, a failure is not swallowed: the caller answers the
+ * sign-up as failed, so no account is knowingly created without its role.
+ *
+ * That leaves one orphan window, named in VEN-662: the identity now exists at
+ * the provider with no role on our side, and a retry meets "already exists".
+ * It is the size of an internal API outage, and the error below carries the
+ * account's id — never its address — so support can find it.
+ */
+async function recordSignUpRole(response: Response, role: SignUpRole): Promise<boolean> {
+  const authUserId = await userIdIn(response);
+
+  if (authUserId === undefined) {
+    Sentry.captureMessage('A sign-up answer named no account id, so its role was not recorded', {
+      level: 'error',
+    });
+    return false;
+  }
+
+  for (let attempt = 0; attempt < SIGN_UP_ROLE_ATTEMPTS; attempt++) {
+    try {
+      const recorded = await fetch(`${apiBaseUrl()}/internal/sign-up-role`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          [WEB_TIER_KEY_HEADER]: process.env.WEB_TIER_KEY ?? '',
+        },
+        body: JSON.stringify({ authUserId, role }),
+        signal: AbortSignal.timeout(SIGN_UP_ROLE_TIMEOUT_MS),
+      });
+
+      if (recorded.ok) {
+        return true;
+      }
+    } catch {
+      // Timed out or unreachable: the next attempt, or the error below, covers it.
+    }
+  }
+
+  Sentry.captureMessage('Could not record the role chosen at sign-up', {
+    level: 'error',
+    extra: { authUserId },
+  });
+  return false;
 }
 
 function authCall(request: NextRequest, path: string[], headers: Headers, body: string): Request {
@@ -363,13 +455,13 @@ async function endEverySession(request: NextRequest, email: string, body: string
   }
 }
 
-/** The account's id from a sign-in answer, or `undefined` when the body says none. */
+/** The account's id from a sign-in or sign-up answer, or `undefined` when the body says none. */
 async function userIdIn(response: Response): Promise<string | undefined> {
   try {
     const id = ((await response.clone().json()) as { user?: { id?: unknown } } | null)?.user?.id;
     return typeof id === 'string' ? id : undefined;
   } catch {
-    // Only the cache eviction needs it; the revoke below does not.
+    // Each caller decides what an unknown id means for it.
     return undefined;
   }
 }

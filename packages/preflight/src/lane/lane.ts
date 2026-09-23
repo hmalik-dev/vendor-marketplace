@@ -9,9 +9,16 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { runCommand } from '../exec.js';
 import { ENV_FILES } from '../context.js';
-import { laneChildEnv, LANE_ENV_FILE, parseLaneEnv, renderLaneEnv } from './env.js';
+import {
+  laneChildEnv,
+  LANE_ENV_FILE,
+  LANE_WEB_TIER_KEY_SHAPE,
+  parseLaneEnv,
+  renderLaneEnv,
+} from './env.js';
 import {
   claimManifest,
   type LaneManifest,
@@ -202,9 +209,16 @@ async function ensureLaneEnv(
 
   if (!laneEnvAgreesWith(file, manifest)) {
     // Created owner-only: the file holds a bucket credential from its first byte.
-    writeFileSync(file, renderLaneEnv(manifest, resolveDatabaseUrl(), await resolveStorage()), {
-      mode: LANE_ENV_MODE,
-    });
+    writeFileSync(
+      file,
+      renderLaneEnv(
+        manifest,
+        resolveDatabaseUrl(),
+        await resolveStorage(),
+        randomBytes(32).toString('hex'),
+      ),
+      { mode: LANE_ENV_MODE },
+    );
   }
 
   chmodSync(file, LANE_ENV_MODE);
@@ -240,6 +254,7 @@ function laneEnvAgreesWith(file: string, manifest: LaneManifest): boolean {
     values.SENTRY_DSN === '' &&
     values.NEXT_PUBLIC_SENTRY_DSN === '' &&
     (values.DATABASE_URL ?? '').endsWith(`/${manifest.database}`) &&
+    LANE_WEB_TIER_KEY_SHAPE.test(values.WEB_TIER_KEY ?? '') &&
     laneStorageAgrees(values)
   );
 }

@@ -1447,6 +1447,12 @@ export const termsAcceptanceStatusSchema = z.object({
    * read-only and to report what a request actually produced (VEN-507).
    */
   account: z.object({ exists: z.boolean(), role: userRoleSchema.nullable() }),
+  /**
+   * The role chosen on `/sign-up`, as the server recorded it for this identity
+   * (VEN-662), while no account row exists yet; `null` once one does, and for a
+   * session with no unexpired record. The screen states it and never asks.
+   */
+  signUpRole: signUpRoleSchema.nullable(),
   /** `vendor` for an address holding an unused invite, else `null`; only ever a preselection. */
   suggestedRole: signUpRoleSchema.nullable(),
   /**
@@ -1480,10 +1486,12 @@ export const acceptTermsSchema = z.object({
    */
   accepted: z.boolean().optional(),
   /**
-   * The role the person confirmed on this screen. **Required when the request
-   * creates the account** (the service answers 400 without it), ignored for an
-   * account that already exists, and never anything but `customer` or `vendor`:
-   * `admin`, another casing, `null` and an object are all refused here (VEN-507).
+   * A role for the account this request creates. **The role recorded at
+   * sign-up wins over it** (VEN-662), and the screen no longer sends one; it is
+   * read only where nothing was recorded, and a first acceptance with neither
+   * is answered 400. Ignored for an account that already exists, and never
+   * anything but `customer` or `vendor`: `admin`, another casing, `null` and an
+   * object are all refused here (VEN-507).
    */
   role: signUpRoleSchema.optional(),
 });

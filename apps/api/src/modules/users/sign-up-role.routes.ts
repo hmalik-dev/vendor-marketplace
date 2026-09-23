@@ -1,0 +1,41 @@
+import { z } from 'zod';
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { SIGN_UP_ROLES } from '@vendor-marketplace/shared';
+import { requireWebTierKey } from '../../lib/web-tier-key.js';
+import { recordSignUpRole } from './sign-up-roles.dao.js';
+
+export interface SignUpRoleRoutesOptions {
+  /** `WEB_TIER_KEY`. Unset (local only) and the route does not exist. */
+  webTierKey: string | undefined;
+}
+
+/**
+ * Stores the role chosen on `/sign-up` against the identity the provider just
+ * created (VEN-662): the web tier's auth proxy calls this once `sign-up/email`
+ * succeeds, because Neon Auth carries no custom field on the identity itself.
+ * Same trust model as `/internal/session-generation` — only the web tier may
+ * call it, proved with the shared key. A repeat for the same identity answers
+ * 200 and changes nothing: the first choice stands.
+ */
+export const signUpRoleRoutes: FastifyPluginAsyncZod<SignUpRoleRoutesOptions> = async (
+  app,
+  options,
+) => {
+  app.post(
+    '/internal/sign-up-role',
+    {
+      config: { rateLimit: false },
+      bodyLimit: 1_024,
+      onRequest: requireWebTierKey(options.webTierKey),
+      schema: {
+        body: z.object({ authUserId: z.string().min(1), role: z.enum(SIGN_UP_ROLES) }),
+        response: { 200: z.object({ recorded: z.literal(true) }) },
+      },
+    },
+    async (request) => {
+      await recordSignUpRole(app.db, request.body.authUserId, request.body.role);
+
+      return { recorded: true as const };
+    },
+  );
+};

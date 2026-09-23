@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { BRAND_NAME, LEGAL_PATHS } from '@vendor-marketplace/shared';
+import { BRAND_NAME, LEGAL_PATHS, type SignUpRole } from '@vendor-marketplace/shared';
 import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { AuthScreen } from '@/components/auth/auth-screen';
@@ -14,7 +14,6 @@ import {
   resendVerificationCode,
   signUpWithEmail,
 } from '@/lib/auth/auth-requests';
-import { rememberSignUpRole, type SignUpRole } from '@/lib/auth/signup-role';
 import { cn } from '@/lib/utils';
 
 export type { SignUpRole };
@@ -74,10 +73,11 @@ export interface SignUpFormProps {
 }
 
 /**
- * Role is chosen before the form is submitted and is remembered in a
- * short-lived local-storage entry (`signup-role.ts`) that the accept-terms screen sends to
- * the API, which narrows it and persists it on the local user row; nothing
- * downstream trusts this value on its own.
+ * Role is chosen before the form is submitted and travels with the sign-up:
+ * the auth proxy records it on the server against the account Neon creates
+ * (VEN-662), and the accept-terms screen states it from there on any device.
+ * The API still refuses anything but `customer` or `vendor`, and still gates a
+ * vendor on an invite when the account row is made.
  *
  * The choice is irreversible, so it is made visibly: the cards stay on screen
  * after selection rather than collapsing to a line of text, and they sit side
@@ -105,8 +105,8 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
 
-    /* Asked here so the accept-terms screen can preselect it; that screen
-       confirms it, and the server stores what that screen submits. */
+    /* Asked here, and only here: the server records it with the account and
+       the accept-terms screen states it without asking again. */
     if (role === null) {
       setRoleMissing(true);
       return;
@@ -124,6 +124,7 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
       email: email.trim(),
       password,
       name: email.trim().split('@')[0] || 'member',
+      role,
     });
 
     if (outcome === 'ok') {
@@ -131,7 +132,6 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
          refused send and offers "Send a new code" rather than failing here. */
       setSendOutcome(await resendVerificationCode(email.trim()));
       setBusy(false);
-      rememberSignUpRole(role, email);
       setVerifying(true);
       return;
     }
