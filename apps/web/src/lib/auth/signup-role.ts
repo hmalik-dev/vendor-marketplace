@@ -7,10 +7,13 @@ export { SIGN_UP_ROLES, type SignUpRole };
  * the sign-up form to the accept-terms screen — through email verification and
  * a sign-in, possibly in another tab — in `localStorage` under this key.
  *
- * **It is a hint and nothing more (VEN-507).** It can be absent (another device,
- * blocked storage), stale or wrong, so it only *preselects* the choice the
- * person confirms on the accept-terms screen; the server stores the role that
- * screen submits.
+ * **It is the choice made at sign-up, for one address.** The sign-up form tells
+ * the person it can't be changed later, so the accept-terms screen states it
+ * rather than asking again. It carries the address it was written for and is
+ * read only for that address: one browser can hold a sign-up for A while B signs
+ * in, and B must never inherit A's role. It can still be absent (another device,
+ * blocked storage) or stale, and then the accept-terms screen asks; the server
+ * stores the role that screen submits and still enforces the vendor gate.
  *
  * Storage rather than a cookie: the product writes no cookie of its own, and
  * the cookie notice says so (`no-cookie-consent.test.ts`).
@@ -25,21 +28,40 @@ export function asSignUpRole(value: unknown): SignUpRole | null {
   return SIGN_UP_ROLES.find((role) => role === value) ?? null;
 }
 
-export function rememberSignUpRole(role: SignUpRole): void {
+/** Addresses compare case- and whitespace-insensitively, as the identity provider treats them. */
+function sameAddress(a: string): string {
+  return a.trim().toLowerCase();
+}
+
+export function rememberSignUpRole(role: SignUpRole, email: string): void {
   try {
-    window.localStorage.setItem(SIGN_UP_ROLE_KEY, JSON.stringify({ role, at: Date.now() }));
+    window.localStorage.setItem(
+      SIGN_UP_ROLE_KEY,
+      JSON.stringify({ role, email: sameAddress(email), at: Date.now() }),
+    );
   } catch {
     // Storage blocked: the accept-terms screen then asks, with nothing selected.
   }
 }
 
-/** Reads the remembered role, validated and expiry-checked on every read. */
-export function readSignUpRole(): SignUpRole | null {
+/**
+ * Reads the role remembered for `email`, validated and expiry-checked on every
+ * read. A role written for any other address — or before addresses were
+ * recorded — is absent.
+ */
+export function readSignUpRole(email: string): SignUpRole | null {
   try {
     const raw = window.localStorage.getItem(SIGN_UP_ROLE_KEY);
-    const stored = raw === null ? null : (JSON.parse(raw) as { role?: unknown; at?: unknown });
+    const stored =
+      raw === null ? null : (JSON.parse(raw) as { role?: unknown; email?: unknown; at?: unknown });
 
-    if (!stored || typeof stored.at !== 'number' || Date.now() - stored.at > SIGN_UP_ROLE_TTL_MS) {
+    if (
+      !stored ||
+      typeof stored.at !== 'number' ||
+      Date.now() - stored.at > SIGN_UP_ROLE_TTL_MS ||
+      typeof stored.email !== 'string' ||
+      sameAddress(stored.email) !== sameAddress(email)
+    ) {
       return null;
     }
 
