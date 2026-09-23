@@ -3,10 +3,11 @@ import {
   CURRENT_REFUND_TERMS,
   calculateRefund,
   formatPrice,
+  isUniversallyFutureDate,
   refundSchedule,
   type RefundScheduleRow,
 } from '@vendor-marketplace/shared';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { currentRow, RefundScheduleBlock } from './refund-schedule-block';
 
 /**
@@ -35,13 +36,23 @@ function block(props: Partial<Parameters<typeof RefundScheduleBlock>[0]> = {}) {
 }
 
 describe('the refund schedule block', () => {
-  it('resolves the boundaries into the booking own dates', () => {
+  it('resolves the boundaries into the booking own instants, zone named', () => {
     block();
 
-    // 48 hours before midnight UTC on 14 June is midnight UTC on 12 June.
-    expect(screen.getByText('Before June 12')).toBeDefined();
-    expect(screen.getByText('From June 12')).toBeDefined();
+    // The suite runs in UTC: 48 hours before midnight UTC on 14 June, then the
+    // midnight UTC a day before the event, when online cancellation closes.
+    expect(screen.getByText(/^Until Jun 12, 12:00\sAM UTC$/)).toBeDefined();
+    expect(screen.getByText(/^Until Jun 13, 12:00\sAM UTC$/)).toBeDefined();
+    expect(screen.getByText(/^From Jun 13, 12:00\sAM UTC$/)).toBeDefined();
     expect(screen.getByText('After June 14')).toBeDefined();
+  });
+
+  it('says online cancellation closes, with no refund figure on that row', () => {
+    block();
+
+    const closed = screen.getByText(/Online cancellation closes/);
+
+    expect(closed.textContent).not.toMatch(/\$/);
   });
 
   it('resolves the money into real amounts, never a percentage', () => {
@@ -60,12 +71,16 @@ describe('the refund schedule block', () => {
     expect(container.textContent?.toLowerCase()).not.toContain('non-refundable');
   });
 
-  it('draws three windowed rows and the vendor-cancels row', () => {
+  /*
+   * VEN-615 ruling 2: a vendor cannot cancel a confirmed booking in the app,
+   * so the row names the route it actually takes.
+   */
+  it('says a vendor cancels through support and the customer is refunded in full', () => {
     block();
 
     expect(screen.getByText('If June cancels')).toBeDefined();
-    expect(screen.getByText(/Full refund/)).toBeDefined();
-    expect(screen.getAllByRole('definition')).toHaveLength(4);
+    expect(screen.getByText(/June cancels through support/).textContent).toContain('Full refund');
+    expect(screen.getAllByRole('definition')).toHaveLength(5);
   });
 
   it('names the day the payment is released, from the constant', () => {
@@ -101,62 +116,96 @@ describe('the refund schedule block', () => {
    * current position, not a schedule.
    */
   it('shows only the applicable row and the vendor row when asked', () => {
-    block({ onlyCurrent: true, now: new Date('2027-06-13T00:00:00Z') });
+    block({ onlyCurrent: true, now: new Date('2027-06-12T12:00:00Z') });
 
-    expect(screen.getByText('From June 12')).toBeDefined();
+    expect(screen.getByText(/^Until Jun 13/)).toBeDefined();
     expect(screen.getByText('If June cancels')).toBeDefined();
-    expect(screen.queryByText('Before June 12')).toBeNull();
+    expect(screen.queryByText(/^Until Jun 12/)).toBeNull();
     expect(screen.getAllByRole('definition')).toHaveLength(2);
   });
 
-  it('keeps the full-refund label pointing at the next window in that mode', () => {
-    block({ onlyCurrent: true, now: new Date('2027-01-01T00:00:00Z') });
+  it('shows the closed row, not the late tier, on the day before the event', () => {
+    block({ onlyCurrent: true, now: new Date('2027-06-13T00:00:00Z') });
 
-    expect(screen.getByText('Before June 12')).toBeDefined();
+    expect(screen.getByText(/Online cancellation closes/)).toBeDefined();
+    expect(screen.queryByText(/\$1,025 back/)).toBeNull();
   });
 });
 
-/**
- * Acceptance 13, and the one this whole component is for: the schedule a
- * customer is shown has to be what the refund function will actually pay them.
- * Asserted against `calculateRefund`'s own output rather than against numbers
- * written here — if the two can disagree, eventually they will.
+/*
+ * VEN-615 acceptance 2. The viewer's own zone, not UTC: a Pacific customer's
+ * full-refund window for an Oct 10 event ends at 5 PM on Oct 7, which a
+ * date-only UTC label drew as "Oct 8".
  */
-describe('what the block draws is what calculateRefund returns', () => {
+describe('in the viewer own time zone', () => {
+  let previous: string | undefined;
+
+  beforeAll(() => {
+    previous = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+  });
+
+  afterAll(() => {
+    process.env.TZ = previous;
+  });
+
+  it('states each boundary as a Pacific date and time', () => {
+    block({ eventDate: '2026-10-10' });
+
+    expect(screen.getByText(/^Until Oct 7, 5:00\sPM PDT$/)).toBeDefined();
+    expect(screen.getByText(/^Until Oct 8, 5:00\sPM PDT$/)).toBeDefined();
+    expect(screen.getByText(/^From Oct 8, 5:00\sPM PDT$/)).toBeDefined();
+    expect(screen.queryByText(/Oct 8, 12:00/)).toBeNull();
+  });
+});
+
+/*
+ * VEN-615 acceptance 3. Across a grid of instants around every boundary, the
+ * row the block says governs agrees with both halves of the server: the
+ * refund `calculateRefund` pays, and whether `cancelBooking` accepts at all
+ * (`isUniversallyFutureDate`).
+ */
+describe('what the block claims is what the server does', () => {
   const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS) ?? [];
   const event = new Date(`${EVENT_DATE}T00:00:00Z`).getTime();
+  const fullEnds = event - 48 * MS_PER_HOUR;
+  const closes = event - 24 * MS_PER_HOUR;
+  const release = event + 72 * MS_PER_HOUR;
 
-  const samples: [string, Date][] = [
-    ['a year out', new Date(event - 8_760 * MS_PER_HOUR)],
-    ['a week out', new Date(event - 168 * MS_PER_HOUR)],
-    ['at the cutoff', new Date(event - 48 * MS_PER_HOUR)],
-    ['a millisecond past it', new Date(event - 48 * MS_PER_HOUR + 1)],
-    ['the day before', new Date(event - 24 * MS_PER_HOUR)],
-    ['on the day', new Date(event)],
-    ['after the event', new Date(event + 96 * MS_PER_HOUR)],
-  ];
+  const grid = [
+    event - 8_760 * MS_PER_HOUR,
+    fullEnds - 1,
+    fullEnds,
+    fullEnds + 1,
+    closes - 1,
+    closes,
+    closes + 1,
+    event,
+    release - 1,
+    release,
+    release + 1,
+  ].map((ms) => [new Date(ms).toISOString(), new Date(ms)] as const);
 
-  it.each(samples)('renders the amount the function would pay %s', (_when, now) => {
+  it.each(grid)('agrees at %s', (_iso, now) => {
     cleanup();
     block({ onlyCurrent: true, now });
 
     const governing = currentRow(rows, now) as RefundScheduleRow;
-    const quoted = calculateRefund(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS, now).refundCents;
+    const quote = calculateRefund(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS, now);
+    const eligible = isUniversallyFutureDate(EVENT_DATE, now);
 
-    if (governing.kind === 'release') {
-      /*
-       * The release row makes no refund claim, so there is no figure to
-       * compare — because past the release a cancellation is D31's unwind,
-       * driven by an operator, rather than the schedule. The claim to check is
-       * therefore the *absence* of a figure: a number here would be one the
-       * block owes and `calculateRefund` alone cannot honour.
-       */
-      expect(governing.refundCents).toBeNull();
-      expect(screen.getByText(/released to June/).textContent).not.toMatch(/\$/);
+    if (governing.kind === 'full' || governing.kind === 'late') {
+      expect(eligible).toBe(true);
+      expect(quote.isFullRefund).toBe(governing.kind === 'full');
+      expect(governing.refundCents).toBe(quote.refundCents);
+      expect(
+        screen.getByText(new RegExp(`\\${formatPrice(quote.refundCents)} back`)),
+      ).toBeDefined();
       return;
     }
 
-    expect(governing.refundCents).toBe(quoted);
-    expect(screen.getByText(new RegExp(`\\${formatPrice(quoted)} back`))).toBeDefined();
+    expect(eligible).toBe(false);
+    expect(governing.refundCents).toBeNull();
+    expect(screen.queryByText(/ back/)).toBeNull();
   });
 });

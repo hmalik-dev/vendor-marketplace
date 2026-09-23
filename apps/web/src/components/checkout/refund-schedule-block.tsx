@@ -1,3 +1,5 @@
+'use client';
+
 import {
   CURRENT_REFUND_TERMS,
   formatPrice,
@@ -7,6 +9,7 @@ import {
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { Clock } from 'lucide-react';
+import { formatInstant, useViewerTimeZone } from '@/lib/use-viewer-time-zone';
 
 /**
  * Frame `33` — the refund schedule, **shown** above the pay control rather than
@@ -28,8 +31,13 @@ import { Clock } from 'lucide-react';
  * failure that creates a dispute the platform loses (#374).
  */
 
-/** The day a boundary falls on, in the event's own zone — UTC, like the dates. */
-const BOUNDARY_DAY = new Intl.DateTimeFormat('en-US', {
+/**
+ * The event day and the release day stay calendar days in UTC, like the
+ * stored date. The refund boundaries do not: they are instants, stated in the
+ * viewer's own zone with the zone named (VEN-615), because a date-only label
+ * in UTC told a Pacific customer their full refund ran a day longer than it did.
+ */
+const EVENT_MONTH_DAY = new Intl.DateTimeFormat('en-US', {
   day: 'numeric',
   month: 'long',
   timeZone: 'UTC',
@@ -64,13 +72,13 @@ export interface RefundScheduleBlockProps {
 /** What each row's label and consequence say, given this booking's numbers. */
 function describe(
   row: RefundScheduleRow,
-  next: RefundScheduleRow | undefined,
   vendorName: string,
   eventDate: Date,
+  timeZone: string,
 ): { label: string; consequence: React.ReactNode } {
   if (row.kind === 'full') {
     return {
-      label: `Before ${BOUNDARY_DAY.format(next?.from ?? eventDate)}`,
+      label: `Until ${formatInstant(row.until ?? eventDate, timeZone)}`,
       consequence: (
         <>
           Cancel for a <strong className="font-semibold">full refund</strong> —{' '}
@@ -82,18 +90,29 @@ function describe(
 
   if (row.kind === 'late') {
     return {
-      label: `From ${BOUNDARY_DAY.format(row.from ?? eventDate)}`,
+      label: `Until ${formatInstant(row.until ?? eventDate, timeZone)}`,
       consequence: <>{formatPrice(row.refundCents ?? 0)} back — the rest holds the date</>,
+    };
+  }
+
+  if (row.kind === 'closed') {
+    return {
+      label: `From ${formatInstant(row.from ?? eventDate, timeZone)}`,
+      consequence: (
+        <>
+          Online cancellation closes. If something goes wrong, report a problem from your booking.
+        </>
+      ),
     };
   }
 
   if (row.kind === 'release') {
     return {
-      label: `After ${BOUNDARY_DAY.format(eventDate)}`,
+      label: `After ${EVENT_MONTH_DAY.format(eventDate)}`,
       consequence: (
         <>
           The event has happened. Your payment is released to {vendorName} on{' '}
-          {BOUNDARY_DAY.format(row.from ?? eventDate)}.
+          {EVENT_MONTH_DAY.format(row.from ?? eventDate)}.
         </>
       ),
     };
@@ -103,7 +122,8 @@ function describe(
     label: `If ${vendorName} cancels`,
     consequence: (
       <>
-        <strong className="font-semibold">Full refund</strong>, whenever it happens
+        <strong className="font-semibold">Full refund</strong>, whenever it happens — {vendorName}{' '}
+        cancels through support
       </>
     ),
   };
@@ -130,6 +150,7 @@ export function RefundScheduleBlock({
   onlyCurrent = false,
   now = new Date(),
 }: RefundScheduleBlockProps): React.ReactElement | null {
+  const timeZone = useViewerTimeZone();
   // Before payment there is no booking yet: it will be sold under today's terms.
   const rows = refundSchedule(totalCents, eventDate, CURRENT_REFUND_TERMS);
 
@@ -164,15 +185,7 @@ export function RefundScheduleBlock({
 
       <dl>
         {shown.map((row, index) => {
-          /*
-           * The successor is taken from the **full** schedule, not from what is
-           * being shown: the full-refund row's label is the day the next window
-           * opens, and in `onlyCurrent` mode its neighbour has been filtered out
-           * of `shown`. Reading the neighbour from `shown` there would label the
-           * window with the vendor-cancels row's date, which has none.
-           */
-          const next = rows[rows.indexOf(row) + 1];
-          const { label, consequence } = describe(row, next, vendorName, event);
+          const { label, consequence } = describe(row, vendorName, event, timeZone);
 
           return (
             <div

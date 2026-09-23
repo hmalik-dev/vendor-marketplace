@@ -150,7 +150,49 @@ describe('AcceptedRequest', () => {
   it('names the full refund while the event is far off', () => {
     render(<AcceptedRequest request={acceptedRequest()} booking={booking()} />);
 
-    expect(screen.getByText(/refunded in full — \$1,450\./)).toBeDefined();
+    expect(
+      screen.getByText(
+        /^Cancel until Jun 12, 12:00\sAM UTC and you're refunded in full — \$1,450\. After that, until Jun 13, 12:00\sAM UTC, cancelling refunds \$725\.$/,
+      ),
+    ).toBeDefined();
+  });
+
+  /*
+   * VEN-615: the instants in the viewer's own zone. A Pacific customer's full
+   * refund ends at 5 PM the evening before the UTC cutoff day — "more than 48
+   * hours before the event" overstated it by the offset.
+   */
+  it('states the refund deadlines in the viewer time zone', () => {
+    const previous = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+
+    try {
+      render(<AcceptedRequest request={acceptedRequest()} booking={booking()} />);
+
+      expect(
+        screen.getByText(/^Cancel until Jun 11, 5:00\sPM PDT and .* until Jun 12, 5:00\sPM PDT,/),
+      ).toBeDefined();
+      expect(screen.queryByText(/48 hours/)).toBeNull();
+    } finally {
+      process.env.TZ = previous;
+    }
+  });
+
+  it('names the full-refund deadline before payment, as an instant', () => {
+    render(<AcceptedRequest request={acceptedRequest()} booking={null} />);
+
+    expect(
+      screen.getByText(/refunded in full if you cancel by Jun 12, 12:00\sAM UTC\.$/),
+    ).toBeDefined();
+  });
+
+  /* VEN-615 ruling 2: a vendor cannot cancel in the app, so the page says how they do. */
+  it('says a vendor cancels through support and the customer is refunded in full', () => {
+    render(<AcceptedRequest request={acceptedRequest()} booking={booking()} />);
+
+    expect(
+      screen.getByText(/cancels, they do it through support and you're refunded in full\./),
+    ).toBeDefined();
   });
 
   it('names the halved refund once the event is inside the cutoff', () => {
@@ -162,7 +204,11 @@ describe('AcceptedRequest', () => {
       />,
     );
 
-    expect(screen.getByText(/refunds \$725 of \$1,450\./)).toBeDefined();
+    expect(
+      screen.getByText(
+        /^Cancelling now refunds \$725 of \$1,450\. Online cancellation closes Jan 2, 12:00\sAM UTC\.$/,
+      ),
+    ).toBeDefined();
   });
 
   /*
@@ -183,9 +229,7 @@ describe('AcceptedRequest', () => {
       />,
     );
 
-    expect(
-      screen.getByText(/inside 96 hours, so cancelling now refunds \$362\.50 of \$1,450\./),
-    ).toBeDefined();
+    expect(screen.getByText(/^Cancelling now refunds \$362\.50 of \$1,450\./)).toBeDefined();
   });
 
   /*
