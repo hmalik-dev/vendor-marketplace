@@ -46,6 +46,17 @@ regex is bypassable: postgres.js 3.4.9 (`index.js:437` reduce) takes the
 **last** duplicate param, decodes `ssl%6Dode`, and ignores a `#` fragment.
 Neon refuses plaintext server-side, so it is low; parse, do not regex.
 
+**VEN-660 — preflight's Neon Auth check (PASS 2026-09-23).** `checkNeonAuth`
+sends `NEON_API_KEY` only to the fixed `console.neon.tech` host, ids
+`encodeURIComponent`-ed, failures name status/hosts only, and children still get
+`pick(TOOL_ENV)`. `NEON_API_KEY` is _already_ a repository-level secret (ci.yml,
+preview-branch.yml), so deploy.yml's copy falls back to it despite the docs'
+"never repository level"; harmless, the key is project-wide either way. The
+check keys on `NEON_BRANCH` without comparing it to `DEPLOY_TARGET`, so a
+whole-set fallback passes preflight and is stopped later by `migrate`. Since
+VEN-633 every phase shares one `node` process, and on Linux a same-uid child
+can read the parent's `/proc/<ppid>/environ`; `pick()` is hygiene, not isolation.
+
 **How to apply:** a new per-environment input needs either a tier-named
 variable (a repository fallback then cannot be the other tier's value) or a
 canary compared against `DEPLOY_TARGET`. See

@@ -13,6 +13,11 @@
  * commit calls that commit's `deploy.mjs release`, which can never disagree
  * with a newer `deploy.yml` about what phases exist.
  *
+ * Preflight also proves the tier's Neon Auth is its own (VEN-660): the
+ * `NEON_AUTH_BASE_URL` it ships is the one Neon reports for `NEON_BRANCH`, and
+ * `WEB_URL` is among that branch's trusted domains. The value it checked is
+ * then the value that ships, set on the API and the web deployment alike.
+ *
  * Each run targets one environment, `staging` or `production`, named by the
  * branch CI ran on (`DEPLOY_TARGET`); nothing else deploys, and `main` never does.
  *
@@ -60,7 +65,7 @@ export const API_HOSTS = {
   railway: {
     /** The variable the host's CLI reads its credential from. */
     credentialVariable: 'RAILWAY_TOKEN',
-    commands: ({ service, release }) => [
+    commands: ({ service, release, neonAuthBaseUrl }) => [
       [
         'npx',
         '--yes',
@@ -70,6 +75,8 @@ export const API_HOSTS = {
         service,
         '--set',
         `SENTRY_RELEASE=${release}`,
+        '--set',
+        `NEON_AUTH_BASE_URL=${neonAuthBaseUrl}`,
         '--skip-deploys',
       ],
       ['npx', '--yes', RAILWAY_CLI, 'up', '--ci', '--service', service],
@@ -104,6 +111,10 @@ export const REQUIRED_INPUTS = [
   // VEN-609: the API's sender, repeated here so the release can prove Resend verified it.
   { name: 'EMAIL_FROM', kind: 'variable' },
   { name: 'RESEND_API_KEY', kind: 'secret' },
+  // VEN-660: the tier's Neon Auth, and what preflight asks Neon about it with.
+  { name: 'NEON_AUTH_BASE_URL', kind: 'variable' },
+  { name: 'NEON_PROJECT_ID', kind: 'variable' },
+  { name: 'NEON_API_KEY', kind: 'secret' },
 ];
 
 /** The environment variable preflight reads to learn whether `name` is set. */
@@ -361,9 +372,9 @@ export function missingInputs(env) {
  * throws (offline, DNS, timeout) — shared by `webNamesRelease` and
  * `webServesCoreFlows` (VEN-632) so neither repeats the try/catch.
  */
-async function tryFetch(fetchImpl, url) {
+async function tryFetch(fetchImpl, url, init = {}) {
   try {
-    return await fetchImpl(url, { signal: AbortSignal.timeout(10_000) });
+    return await fetchImpl(url, { ...init, signal: AbortSignal.timeout(10_000) });
   } catch {
     return null;
   }
@@ -547,6 +558,107 @@ async function webServesCoreFlows(env, io) {
   }
 }
 
+const NEON_API = 'https://console.neon.tech/api/v2';
+
+/** A URL's origin, the form Neon Auth's trusted domains take; `''` when it is not one. */
+function urlOrigin(value) {
+  try {
+    return new URL(value.trim()).origin;
+  } catch {
+    return '';
+  }
+}
+
+/** A base URL compared the way a client joins paths onto it: trimmed, no trailing slash. */
+function baseUrl(value) {
+  return value.trim().replace(/\/+$/, '');
+}
+
+/**
+ * GETs one Neon API path under `NEON_API_KEY`. A failure names what was being
+ * read and the status, never the key or a body.
+ */
+async function neonGet(env, io, path, what) {
+  const response = await tryFetch(io.fetch ?? fetch, `${NEON_API}${path}`, {
+    headers: { accept: 'application/json', authorization: `Bearer ${env.NEON_API_KEY}` },
+  });
+  if (!response?.ok) {
+    throw new PhaseError(
+      `The Neon API ${response ? `answered HTTP ${response.status}` : 'did not answer'} for ${what}; refusing to release.`,
+    );
+  }
+  try {
+    return await response.json();
+  } catch {
+    throw new PhaseError(`The Neon API answered ${what} with a body that could not be parsed.`);
+  }
+}
+
+/**
+ * VEN-660. A release refuses to ship a tier pointed at another tier's Neon
+ * Auth. It asks Neon — as `neon neon-auth status --branch <NEON_BRANCH>` and
+ * `neon neon-auth domain list` do — for the Neon Auth of the branch named
+ * `NEON_BRANCH`, then fails by name when `NEON_AUTH_BASE_URL` is not that
+ * integration's base URL, or when `WEB_URL`'s origin is not among its trusted
+ * domains. The first is a sign-up landing in the wrong tier's identities; the
+ * second is Neon Auth refusing, or redirecting away from, this tier's own
+ * host. Hosts are named in a failure, since both are public; the key never is.
+ */
+export async function checkNeonAuth(env, io) {
+  need(env, [
+    'NEON_API_KEY',
+    'NEON_PROJECT_ID',
+    'NEON_BRANCH',
+    'NEON_AUTH_BASE_URL',
+    'WEB_URL',
+    'DEPLOY_TARGET',
+  ]);
+  const project = encodeURIComponent(env.NEON_PROJECT_ID.trim());
+  const name = env.NEON_BRANCH.trim();
+
+  // A whole variable set fallen back from the other tier agrees with itself; only the target can tell.
+  if (name !== env.DEPLOY_TARGET) {
+    throw new PhaseError(
+      `NEON_BRANCH "${name}" is not the ${env.DEPLOY_TARGET} environment's Neon branch; refusing to release.`,
+    );
+  }
+
+  const { branches } = await neonGet(env, io, `/projects/${project}/branches`, 'the branches');
+  const branch = Array.isArray(branches) ? branches.find((b) => b?.name === name) : undefined;
+  if (!branch) {
+    throw new PhaseError(
+      `NEON_BRANCH "${name}" is not a branch of NEON_PROJECT_ID; refusing to release.`,
+    );
+  }
+
+  const auth = `/projects/${project}/branches/${encodeURIComponent(branch.id)}/auth`;
+  const { base_url: expected } = await neonGet(env, io, auth, `the ${name} branch's Neon Auth`);
+  if (typeof expected !== 'string' || expected === '') {
+    throw new PhaseError(`The ${name} Neon branch has no Neon Auth base URL; refusing to release.`);
+  }
+  if (baseUrl(env.NEON_AUTH_BASE_URL) !== baseUrl(expected)) {
+    throw new PhaseError(
+      `NEON_AUTH_BASE_URL (${urlHost(env.NEON_AUTH_BASE_URL) || 'not a URL'}) is not the Neon Auth base URL of the ${name} Neon branch (${urlHost(expected)}); refusing to release.`,
+    );
+  }
+
+  const { domains } = await neonGet(
+    env,
+    io,
+    `${auth}/domains`,
+    `the ${name} branch's Neon Auth trusted domains`,
+  );
+  const web = urlOrigin(webOrigin(env));
+  const trusted = Array.isArray(domains) ? domains.map((d) => urlOrigin(d?.domain ?? '')) : [];
+  if (web === '' || !trusted.includes(web)) {
+    throw new PhaseError(
+      `WEB_URL (${web || 'not a URL'}) is not a trusted domain of the ${name} Neon branch's Neon Auth; refusing to release.`,
+    );
+  }
+
+  io.write(`Neon Auth: NEON_AUTH_BASE_URL and WEB_URL are the ${name} branch's own.\n`);
+}
+
 export const PHASES = {
   async gate(env, io) {
     const branch = env.DEPLOY_TARGET;
@@ -606,6 +718,8 @@ export const PHASES = {
         `API_HOST "${env.API_HOST}" has no adapter in scripts/deploy.mjs (known: ${KNOWN_HOSTS}).`,
       );
     }
+
+    await checkNeonAuth(env, io);
 
     if (!blank(env.GITHUB_OUTPUT)) appendFileSync(env.GITHUB_OUTPUT, 'ready=true\n');
     io.write('Every deploy input is configured.\n');
@@ -684,7 +798,13 @@ export const PHASES = {
   },
 
   async api(env, io) {
-    need(env, ['API_HOST', 'API_SERVICE', 'API_HOST_TOKEN', 'SENTRY_RELEASE']);
+    need(env, [
+      'API_HOST',
+      'API_SERVICE',
+      'API_HOST_TOKEN',
+      'SENTRY_RELEASE',
+      'NEON_AUTH_BASE_URL',
+    ]);
 
     if (!Object.hasOwn(API_HOSTS, env.API_HOST)) {
       throw new PhaseError(`API_HOST "${env.API_HOST}" has no adapter (known: ${KNOWN_HOSTS}).`);
@@ -697,6 +817,7 @@ export const PHASES = {
     for (const [command, ...args] of host.commands({
       service: env.API_SERVICE,
       release: env.SENTRY_RELEASE,
+      neonAuthBaseUrl: baseUrl(env.NEON_AUTH_BASE_URL),
     })) {
       await io.run(command, args, { env: child, redact, write: io.write });
     }
@@ -725,7 +846,14 @@ export const PHASES = {
     const vercel = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
     const upload = ['SENTRY_AUTH_TOKEN', 'SENTRY_WEB_PROJECT', 'SENTRY_RELEASE'];
     const buildSecrets = ['WEB_TIER_KEY', 'NEON_AUTH_COOKIE_SECRET'];
-    need(env, [...vercel, ...upload, ...buildSecrets, 'API_URL', 'DEPLOY_TARGET']);
+    need(env, [
+      ...vercel,
+      ...upload,
+      ...buildSecrets,
+      'API_URL',
+      'DEPLOY_TARGET',
+      'NEON_AUTH_BASE_URL',
+    ]);
 
     const production = webTarget(env);
     requireAliasHost(env, production);
@@ -745,6 +873,8 @@ export const PHASES = {
       DEPLOYMENT_ORIGIN: webOrigin(env),
       API_URL: env.API_URL,
       NEXT_PUBLIC_API_URL: env.API_URL,
+      // VEN-660: the Neon Auth preflight proved is this tier's, not whatever `vercel pull` holds.
+      NEON_AUTH_BASE_URL: baseUrl(env.NEON_AUTH_BASE_URL),
     };
     const cli = ['--yes', VERCEL_CLI];
     const target = production ? ['--prod'] : [];
@@ -798,7 +928,7 @@ export const PHASES = {
    */
   async 'web-deploy'(env, io) {
     const vercel = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
-    need(env, [...vercel, 'DEPLOY_TARGET', 'SENTRY_RELEASE']);
+    need(env, [...vercel, 'DEPLOY_TARGET', 'SENTRY_RELEASE', 'NEON_AUTH_BASE_URL']);
 
     const production = webTarget(env);
     // Re-checked here, not only in `web-build`: a manual `web-deploy` run
@@ -815,7 +945,17 @@ export const PHASES = {
     let printed = '';
     await io.run(
       'npx',
-      [...cli, 'deploy', '--prebuilt', ...target, '--env', `SENTRY_RELEASE=${env.SENTRY_RELEASE}`],
+      [
+        ...cli,
+        'deploy',
+        '--prebuilt',
+        ...target,
+        '--env',
+        `SENTRY_RELEASE=${env.SENTRY_RELEASE}`,
+        // VEN-660: the runtime reads the value preflight checked, not the dashboard's.
+        '--env',
+        `NEON_AUTH_BASE_URL=${baseUrl(env.NEON_AUTH_BASE_URL)}`,
+      ],
       {
         env: child,
         redact,

@@ -1,5 +1,5 @@
 import { cleanup, render } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthScreen } from './auth-screen';
 
 function renderScreen(photo = true): HTMLElement {
@@ -166,5 +166,24 @@ describe('AuthScreen', () => {
     expect(
       mark?.compareDocumentPosition(heading as Node) === Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(true);
+  });
+
+  // VEN-660: the auth screens hide the site header, and sign-up is where the tiers were confused.
+  it('marks a staging sign-up screen, and a production one not at all', () => {
+    const screenFor = (tier: string) => {
+      vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', tier);
+      return render(
+        <AuthScreen headline="Create your account" subhead="Join.">
+          <p>form</p>
+        </AuthScreen>,
+      ).container;
+    };
+
+    expect(screenFor('staging').querySelector('[data-testid="tier-marker"]')?.textContent).toBe(
+      'Staging',
+    );
+    cleanup();
+    expect(screenFor('production').querySelector('[data-testid="tier-marker"]')).toBeNull();
+    vi.unstubAllEnvs();
   });
 });

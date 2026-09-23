@@ -129,6 +129,9 @@ jobs:
           HAS_WEB_URL: ${{ vars.WEB_URL != '' }}
           HAS_EMAIL_FROM: ${{ vars.EMAIL_FROM != '' }}
           HAS_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY != '' }}
+          HAS_NEON_AUTH_BASE_URL: ${{ vars.NEON_AUTH_BASE_URL != '' }}
+          HAS_NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID != '' }}
+          HAS_NEON_API_KEY: ${{ secrets.NEON_API_KEY != '' }}
           # migrate: the unpooled URL and nothing else; NEON_BRANCH names the
           # branch it belongs to and NEON_HOST its endpoint, so migrate can
           # refuse a value that silently fell back from the other tier.
@@ -156,6 +159,11 @@ jobs:
           # sender
           EMAIL_FROM: ${{ vars.EMAIL_FROM }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # preflight (VEN-660): asks Neon whether NEON_AUTH_BASE_URL and WEB_URL
+          # are NEON_BRANCH's own Neon Auth; api and web-deploy then ship that value.
+          NEON_AUTH_BASE_URL: ${{ vars.NEON_AUTH_BASE_URL }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           # ready
           SMOKE_DEADLINE_MS: '600000'
         run: node scripts/deploy.mjs release

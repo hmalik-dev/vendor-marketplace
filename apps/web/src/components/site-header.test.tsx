@@ -450,6 +450,19 @@ describe('SiteHeader', () => {
     expect(screen.queryByText('Vendor')).toBeNull();
   });
 
+  // VEN-660: a staging page must never read as production.
+  it('marks a staging build as Staging, and a production build not at all', async () => {
+    vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', 'staging');
+    const { unmount } = render(await SiteHeader());
+    expect(screen.getByTestId('tier-marker').textContent).toBe('Staging');
+    unmount();
+
+    vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', 'production');
+    render(await SiteHeader());
+    expect(screen.queryByTestId('tier-marker')).toBeNull();
+    vi.unstubAllEnvs();
+  });
+
   /*
    * The header must not be able to cost the page. It sits in the root layout,
    * where a throw escapes every `error.tsx` and takes the whole document to

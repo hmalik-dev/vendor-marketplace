@@ -2,6 +2,7 @@ import { BRAND_NAME } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
+import { TierMarker } from '@/components/brand/tier-marker';
 import { StockPhoto } from '@/components/ui/stock-photo';
 
 /**
@@ -237,7 +238,7 @@ export function AuthScreen({
       */}
       <div className="relative flex flex-1 flex-col items-center overflow-y-auto bg-stone-50 px-6 py-10 sm:px-10 xl:px-15">
         <div className={`relative my-auto w-full ${photo ? 'max-w-115' : 'max-w-140'}`}>
-          <div className={`flex justify-center ${photo ? 'mb-6.5' : 'mb-8.5'}`}>
+          <div className={`flex items-center justify-center ${photo ? 'mb-6.5' : 'mb-8.5'}`}>
             {/*
               The mark is the way out. Sign-in and sign-up have no header and no
               back link, so someone who arrived here by accident — or changed
@@ -254,6 +255,8 @@ export function AuthScreen({
             <Link href="/" aria-label={`${BRAND_NAME} home`} className="rounded-md">
               <Logo size={LOGO_SIZES.authPanel} />
             </Link>
+            {/* The auth screens hide the site header, and sign-up is where tiers get confused (VEN-660). */}
+            <TierMarker />
           </div>
 
           {beforeHeadline}

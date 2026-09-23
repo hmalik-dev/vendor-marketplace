@@ -4,6 +4,7 @@ import type { UserRole } from '@vendor-marketplace/shared';
 import { AccountMenu } from '@/components/account-menu';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { RoleChip } from '@/components/brand/role-chip';
+import { TierMarker } from '@/components/brand/tier-marker';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 import { MarketingNav } from '@/components/marketing-nav';
 import { SignedInDrawer, SignedOutDrawer } from '@/components/header-drawer';
@@ -130,6 +131,8 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             </Link>
 
             {role === 'vendor' ? <RoleChip label="Vendor" /> : null}
+            {/* Every width, unlike the role chip: VEN-660, the tier is never in doubt. */}
+            <TierMarker />
           </div>
 
           <Show when="signed-out">
