@@ -327,6 +327,16 @@ describe('launch:check against correctly configured doubles', () => {
     });
   });
 
+  it("fails the Resend shared test sender — VEN-626's exception is the release check's alone", async () => {
+    const env = { ...envFor('live'), EMAIL_FROM: 'onboarding@resend.dev' };
+    const results = await runLaunchChecks(options('live', { env }));
+
+    expect(find(results, 'resend sending domain')).toMatchObject({
+      status: 'FAIL',
+      detail: 'resend.dev is not in the Resend account (expected verified)',
+    });
+  });
+
   it('turns an unreachable provider into a failure rather than a crash', async () => {
     const get: HttpGet = async () => {
       throw new Error('getaddrinfo ENOTFOUND');
