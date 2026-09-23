@@ -16,7 +16,13 @@ import { resolve, dirname } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { hasSessionCookie, signInRefusal, waitForSession, withRetry } from './e2e-sign-in.mjs';
+import {
+  hasSessionCookie,
+  keepOffTheImageOptimizer,
+  signInRefusal,
+  waitForSession,
+  withRetry,
+} from './e2e-sign-in.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -180,4 +186,23 @@ test('e2e-auth.mjs finishes on the session, not on the post-sign-in navigation',
   for (const statement of script.split(';').filter((s) => s.includes('waitForURL('))) {
     assert.match(statement, /\.catch\(/, `an uncaught waitForURL is back: ${statement.trim()}`);
   }
+});
+
+test('the sign-in browser answers every optimizer request itself (VEN-655)', async () => {
+  const routes = [];
+  await keepOffTheImageOptimizer({
+    route: async (pattern, handler) => routes.push({ pattern, handler }),
+  });
+
+  assert.equal(routes.length, 1);
+  const [{ pattern }] = routes;
+  assert.equal(
+    pattern.test('http://localhost:3000/_next/image?url=%2Fstock%2Fflorals.jpg&w=256&q=75'),
+    true,
+  );
+  assert.equal(pattern.test('http://localhost:3000/categories/decor.jpg'), false);
+  assert.equal(pattern.test('http://localhost:3000/_next/static/chunks/main.js'), false);
+  let aborted = 0;
+  await routes[0].handler({ abort: async () => void (aborted += 1) });
+  assert.equal(aborted, 1);
 });
