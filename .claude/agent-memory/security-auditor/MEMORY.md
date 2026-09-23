@@ -24,7 +24,7 @@
 - [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` is null for a gated account; `requireAuthSubject` (pre-Neon name, retired by VEN-447) is the deliberate exception
 - [The server session cache's key is the whole gate](server-session-cache-key-is-the-cookie.md) — a hit skips the SDK's signature and revocation check; VEN-628's per-user `sessions_invalidated_at` outruns the other instances' caches
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` renders a booking amount with no `force-dynamic`
-- [Email is a label, the auth id is the key (the pre-rename column is gone)](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial; nothing resolves a person by email
+- [Email is a label, the auth id is the key (the pre-rename column is gone)](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial and on `lower(email)` + lowercase CHECK since VEN-649; nothing resolves a person by email
 - [Closing an account releases its address](closed-account-address-is-released.md) — `users_email_key` is partial since #451; the old permanent-500 memory was stale
 - [The sign-up role is confirmed, not narrowed](signup-role-is-confirmed-not-narrowed.md) — VEN-507: `normalizeRole` throws; the browser hint is address-bound and UI-only (PASS 2026-09-23)
 - [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself
@@ -108,14 +108,14 @@
 - [A browser parse failure is reader-visible copy](client-parse-failures-are-shown-verbatim.md) — a landed transfer reports as failed
 - [The 500 screen hides chrome, it does not unmount it](error-screen-chrome-is-hidden-not-unmounted.md) — the header hydrates behind `display:none`
 - [Legal claims rest on two under-matching scans](no-cookie-consent-claim-rests-on-a-source-scan.md) — `TRACKERS` is a vendor list; VEN-596 closed the prose denials; "not tied to your account" rests on `analytics-scrub.ts`
-- [Rate limiting: hop-0 proxy, pre-auth hook, per-account keys](rate-limit-key-is-the-proxy-not-the-caller.md) — one `rateLimitRan` symbol can silently disable a route's own limit; `countBearer` only counts a request that carries a header
+- [Rate limiting: hop-0 proxy, pre-auth hook, per-account keys](rate-limit-key-is-the-proxy-not-the-caller.md) — one `rateLimitRan` symbol can silently disable a route's own limit; VEN-649's once-per-process tier-key report is spendable by any probe
 - [`request.ip` is one hop, never IP-validated](request-ip-is-one-hop-trusted-not-validated.md) — unbounded text against `varchar(45)` when persisted as evidence
 - [`/ready` is unthrottled by design](ready-probe-is-unthrottled-and-now-reads-a-file.md) — VEN-495 sync read on the unlimited route; web `/api/ready` `runtimeEnv` presence booleans accepted (VEN-632)
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — a shed 429 costs a DB write; the email cap drops on a DB outage
 
 ## Data layer, seeds and tooling
 
-- [Fabricating seeds share one declared-branch guard](fabricating-seeds-share-one-declared-branch-guard.md) — `assertSafeTarget` trusts `.neon`/`NEON_BRANCH`, not the URL
+- [Fabricating seeds share one declared-branch guard](fabricating-seeds-share-one-declared-branch-guard.md) — `assertSafeTarget` trusts `.neon`/`NEON_BRANCH`, not the URL; VEN-649's `test:neon` skips it
 - [The contention harness issues server DDL](contention-harness-issues-server-ddl.md) — CREATE/DROP DATABASE accepted because the name is a fresh UUID
 - [The contention gate is a path pattern](contention-gate-is-a-path-pattern.md) — `verify.contentionPattern` misses `modules/payments/payments.*`
 - [The categories cascade is single-edged, for now](categories-cascade-is-single-edged.md) — a second cascading FK onto `categories.id` is silent data loss

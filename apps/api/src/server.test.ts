@@ -289,10 +289,10 @@ describe('the rate-limit key for the web tier', () => {
 
   /*
    * VEN-649: the warning was the only signal that every visitor now shares one
-   * bucket. A key rotated on one side must reach the error tracker, once per
-   * process rather than once per request.
+   * bucket. A key rotated on one side must reach the error tracker, at most
+   * once an hour rather than once per request.
    */
-  it('reports a wrong key to the error tracker, once per process', async () => {
+  it('reports a wrong key to the error tracker at most once an hour', async () => {
     const captured: unknown[] = [];
     const harness = await createTestHarness({
       env: tierEnv,

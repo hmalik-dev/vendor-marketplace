@@ -21,4 +21,6 @@ BEGIN
   END IF;
 END $$;--> statement-breakpoint
 -- The rows written before the writers lowercased, so the CHECK that follows holds.
-UPDATE "users" SET "email" = lower("email") WHERE "email" <> lower("email");
+UPDATE "users" SET "email" = lower("email") WHERE "email" <> lower("email");--> statement-breakpoint
+-- And the addresses still waiting to be written, which the writer compares against them.
+UPDATE "users" SET "pending_email" = lower("pending_email") WHERE "pending_email" <> lower("pending_email");

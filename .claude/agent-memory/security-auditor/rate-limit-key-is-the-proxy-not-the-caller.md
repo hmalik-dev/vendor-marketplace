@@ -47,6 +47,13 @@ source (`node_modules/.pnpm/@fastify+rate-limit@11.2.0/.../index.js`):
   keys on the platform's egress address; and a per-_account_ ceiling is only as
   strong as sign-up, which is open for customers — the API-wide IP bucket stays
   the only cap on an attacker minting accounts.
+- **The tier-key mismatch report is attacker-armable (VEN-649).** `rateLimitKey`
+  calls `onMismatch` for any anonymous caller sending a wrong `x-web-tier-key`
+  plus a valid `x-visitor-ip`; `server.ts` latches the Sentry capture once per
+  process, so the first probe after each deploy spends it and a later genuine
+  rotation mismatch never reports. Flagged low; fix is a time-windowed throttle,
+  not a process latch. The capture carries a static message; Sentry's
+  `CREDENTIAL_HEADER` already drops both headers.
 
 Related: [[public-mail-endpoint-echoes-to-any-address]],
 [[operator-alert-dedupe-is-attacker-armable]].

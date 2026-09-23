@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createNeonAuthDirectory, type NeonAuthDirectory } from './neon-auth-directory.js';
+import { assertSafeTarget } from './scripts/safe-target.js';
 
 /**
  * The directory against a real Neon Auth branch, not a table this repo drew
@@ -16,8 +17,14 @@ import { createNeonAuthDirectory, type NeonAuthDirectory } from './neon-auth-dir
  * Gated like the contention suites: excluded from `pnpm test`, run by
  * `pnpm --filter @vendor-marketplace/db test:neon` with
  * `NEON_AUTH_CONTRACT_DATABASE_URL` naming a **non-production** branch's
- * database. It writes one throwaway identity and removes it.
+ * database (and `NEON_BRANCH` naming that branch, which the guard below
+ * checks). It writes one throwaway identity and removes it.
  */
+// The fabricating writers' guard: never a production-named database or branch.
+assertSafeTarget('a Neon Auth contract identity', undefined, {
+  connectionVariable: 'NEON_AUTH_CONTRACT_DATABASE_URL',
+  action: 'write',
+});
 const url = process.env['NEON_AUTH_CONTRACT_DATABASE_URL'];
 
 if (!url) {

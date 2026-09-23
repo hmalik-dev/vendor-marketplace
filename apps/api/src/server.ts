@@ -222,6 +222,9 @@ function recordingRoutes<TOptions extends FastifyPluginOptions>(
  */
 const WEBHOOK_RATE_LIMIT_FACTOR = 10;
 
+/** How often a web tier key mismatch may reach the error tracker from one process. */
+const TIER_KEY_MISMATCH_REPORT_INTERVAL_MS = 60 * 60_000;
+
 /** Longest textual IP address, IPv6 with an embedded IPv4 tail. */
 const MAX_IP_LENGTH = 45;
 
@@ -293,16 +296,18 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   const errorReporter = options.errorReporter ?? createErrorReporter(env);
   /*
    * A warning alone was the whole signal that rate limiting had collapsed to
-   * one bucket for every visitor (VEN-649). Reported once per process: the
-   * first mismatch says a key was rotated on one side, and every request after
-   * it would say the same thing again.
+   * one bucket for every visitor (VEN-649). Reported at most once an hour: a
+   * rotated key mismatches on every request, and anyone can send a wrong key,
+   * so a once-per-process latch would let one probe after a deploy spend the
+   * report a real rotation later needs.
    */
-  let tierKeyMismatchReported = false;
+  let tierKeyMismatchReportedAt = Number.NEGATIVE_INFINITY;
   function reportTierKeyMismatch(): void {
-    if (tierKeyMismatchReported) {
+    const now = Date.now();
+    if (now - tierKeyMismatchReportedAt < TIER_KEY_MISMATCH_REPORT_INTERVAL_MS) {
       return;
     }
-    tierKeyMismatchReported = true;
+    tierKeyMismatchReportedAt = now;
     errorReporter.capture(
       new Error(
         'Web tier key mismatch: the web tier presented a WEB_TIER_KEY this API does not hold, so the rate limit keys every visitor on the web platform address',
