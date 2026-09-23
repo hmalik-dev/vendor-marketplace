@@ -39,6 +39,15 @@ through `postSignInPath` over 1,170,906 cases: zero origin escapes, zero
 `LOOPING_PREFIXES` evasions, still idempotent. The raw read at that line is not a
 finding.
 
+**VEN-653 added `RESUMABLE_PATHS` (audited CLEAN 2026-09-23).** The loop guard
+now exempts exactly `url.pathname === '/sign-up/customer-details'` (exact match on
+the parsed pathname, after the origin checks, so `/x`, `;`, `%2D`, trailing `/`
+all still fall to the guard). It is loop-free only because `postSignInPath`
+refuses that pathname as a destination and every carrier (sign-in, accept-terms,
+the details page/form, `redirectIfSignedIn`) funnels through `/after-sign-in`.
+Reopen if a second path joins the list, or any caller redirects straight to a
+`safeReturnPath` result without going through `postSignInPath`.
+
 **How to apply:** the open-redirect boundary itself is settled. Spend audit time
 on the _callers_ that assemble a candidate (`/vendors/${slug}/request...`,
 `/messages?...`, `/bookings?tab=...`) and on where the destination lands after
