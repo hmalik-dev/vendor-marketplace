@@ -9,6 +9,8 @@ import {
 /** A form state with nothing outstanding, for each test to spoil one field of. */
 const COMPLETE: FormState = {
   businessName: 'Kessler & Co.',
+  firstName: 'Jamie',
+  lastName: 'Kessler',
   slug: 'kessler-co',
   bio: 'Ten years photographing weddings across central Texas.',
   tagline: 'Editorial polish without the editorial fuss.',
@@ -31,6 +33,8 @@ describe('liveBlockers', () => {
 
   it.each([
     ['businessName', { businessName: '   ' }],
+    ['personalName', { firstName: '   ' }],
+    ['personalName', { lastName: '' }],
     ['bio', { bio: '' }],
     ['categories', { categoryIds: [] }],
     ['location', { city: '' }],

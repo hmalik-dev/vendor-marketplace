@@ -1,6 +1,13 @@
 import type { UserRole } from '@vendor-marketplace/shared';
 import { safeReturnPath } from './return-path';
 
+/**
+ * The mandatory name step a customer with no `firstName`/`lastName` yet lands
+ * on right after `/accept-terms`, before anywhere else (VEN-642). Named to
+ * match the vendor sign-up flow's `VENDOR_DETAILS_PATH` sibling.
+ */
+export const CUSTOMER_DETAILS_PATH = '/sign-up/customer-details';
+
 /** Where each role's own dashboard lives. */
 export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
   /*
@@ -100,6 +107,8 @@ export const ROLE_ROUTE_RULES: ReadonlyArray<{
   { pattern: /^\/customer(?:\/|$)/, roles: ['customer'] },
   // `app/admin/layout.tsx` — `requireRole('admin')`.
   { pattern: /^\/admin(?:\/|$)/, roles: ['admin'] },
+  // `app/sign-up/customer-details/page.tsx` — `requireRole('customer')`.
+  { pattern: /^\/sign-up\/customer-details(?:\/|$)/, roles: ['customer'] },
   // The bookings hub and every request detail, checkout and confirmed page.
   { pattern: /^\/bookings(?:\/|$)/, roles: ['customer'] },
   /*

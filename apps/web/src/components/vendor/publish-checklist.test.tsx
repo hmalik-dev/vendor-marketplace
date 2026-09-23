@@ -25,7 +25,7 @@ describe('PublishChecklist', () => {
     expect(screen.getByRole('link', { name: 'Finish →' }).getAttribute('href')).toBe(
       '/vendor/profile/edit',
     );
-    expect(screen.getByText('5 of 7')).toBeTruthy();
+    expect(screen.getByText('6 of 8')).toBeTruthy();
   });
 
   it('links the agreement row from the first-open position too', () => {
@@ -35,13 +35,13 @@ describe('PublishChecklist', () => {
     expect(screen.getByRole('link', { name: 'Accept →' }).getAttribute('href')).toBe(
       '/vendor/agreement',
     );
-    expect(screen.getByText('6 of 7')).toBeTruthy();
+    expect(screen.getByText('7 of 8')).toBeTruthy();
   });
 
   it('drops the link and completes the row once the agreement is accepted', () => {
     render(<PublishChecklist dashboard={dashboard([])} />);
 
     expect(screen.queryByRole('link')).toBeNull();
-    expect(screen.getByText('7 of 7')).toBeTruthy();
+    expect(screen.getByText('8 of 8')).toBeTruthy();
   });
 });

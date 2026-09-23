@@ -19,6 +19,7 @@ import {
 const VENDOR = 'user_vendor';
 const OTHER_VENDOR = 'user_vendor_two';
 const CUSTOMER = 'user_customer';
+const VENDOR_NO_NAME = 'user_vendor_no_name';
 
 describe('/vendor/profile', () => {
   let harness: TestHarness;
@@ -65,6 +66,21 @@ describe('/vendor/profile', () => {
         avatarUrl: null,
       });
     }
+
+    /*
+     * Blank, like a fresh sign-up whose only name is the sign-up form's
+     * synthetic email-prefix placeholder split with no space in it (VEN-642) —
+     * for the `personalName` publish blocker, which every other fixture above
+     * satisfies by construction and so could never exercise.
+     */
+    harness.authUsers.set(VENDOR_NO_NAME, {
+      authUserId: VENDOR_NO_NAME,
+      email: 'nameless@example.com',
+      firstName: '',
+      lastName: '',
+      roleHint: 'vendor',
+      avatarUrl: null,
+    });
 
     photographyId = await categoryIdBySlug('photography');
     cateringId = await categoryIdBySlug('catering');
@@ -485,6 +501,105 @@ describe('/vendor/profile', () => {
       expect(published.statusCode).toBe(200);
       expect(published.json().isPublished).toBe(true);
       expect(published.json().publishBlockers).toEqual([]);
+    });
+
+    /*
+     * `users.firstName`/`lastName`, not a `vendor_profiles` column (VEN-642) —
+     * the same personal-name gap the customer interstitial closes, applied to
+     * vendors so neither role can publish forever under a blank name.
+     */
+    describe('the personal name blocker (VEN-642)', () => {
+      async function createNamelessProfile(): Promise<void> {
+        const response = await harness.app.inject({
+          method: 'POST',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR_NO_NAME),
+          payload: validBody(),
+        });
+        expect(response.statusCode).toBe(201);
+      }
+
+      it('lists personalName among the prerequisites for a nameless vendor', async () => {
+        await createNamelessProfile();
+
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR_NO_NAME),
+        });
+
+        expect(response.json().publishBlockers).toContain('personalName');
+      });
+
+      it('refuses to publish while the vendor has no name on file', async () => {
+        await createNamelessProfile();
+        await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR_NO_NAME),
+          payload: { bio: 'Documentary wedding photography.', responseTimeHours: 24 },
+        });
+        await harness.app.inject({
+          method: 'POST',
+          url: '/vendor/packages',
+          headers: bearer(VENDOR_NO_NAME),
+          payload: {
+            name: 'Half-day coverage',
+            description: 'Four hours of documentary coverage and edited photos.',
+            priceCents: 120_000,
+          },
+        });
+        await acceptVendorAgreementAs(harness, VENDOR_NO_NAME);
+
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR_NO_NAME),
+          payload: { isPublished: true },
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().details.blockers).toEqual(['personalName']);
+      });
+
+      it('writes a name sent alongside the publish, onto `users` not this row, and clears the blocker', async () => {
+        await createNamelessProfile();
+        await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR_NO_NAME),
+          payload: { bio: 'Documentary wedding photography.', responseTimeHours: 24 },
+        });
+        await harness.app.inject({
+          method: 'POST',
+          url: '/vendor/packages',
+          headers: bearer(VENDOR_NO_NAME),
+          payload: {
+            name: 'Half-day coverage',
+            description: 'Four hours of documentary coverage and edited photos.',
+            priceCents: 120_000,
+          },
+        });
+        await acceptVendorAgreementAs(harness, VENDOR_NO_NAME);
+
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR_NO_NAME),
+          payload: { firstName: 'Priya', lastName: 'Nair', isPublished: true },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().isPublished).toBe(true);
+        expect(response.json().publishBlockers).toEqual([]);
+        expect(response.json()).not.toMatchObject({ firstName: expect.anything() });
+
+        const [row] = await harness.database.db
+          .select({ firstName: users.firstName, lastName: users.lastName })
+          .from(users)
+          .where(eq(users.email, 'nameless@example.com'));
+        expect(row).toMatchObject({ firstName: 'Priya', lastName: 'Nair' });
+      });
     });
 
     describe('editing a live storefront (VEN-557)', () => {

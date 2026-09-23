@@ -1128,7 +1128,13 @@ export async function setVendorPublished(
       const categoryIds = await findVendorCategoryIds(tx, vendor.id);
       const activePackages = await countActivePackages(tx, vendor.id);
       const holdsAgreement = await holdsCurrentAgreement(tx, vendor.userId);
-      const blockers = publishBlockers(vendor, categoryIds, activePackages, holdsAgreement);
+      const blockers = publishBlockers(
+        vendor,
+        categoryIds,
+        activePackages,
+        holdsAgreement,
+        Boolean(owner.firstName.trim()) && Boolean(owner.lastName.trim()),
+      );
 
       /*
        * A held storefront is released by republishing it, so a vendor who has

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/current-user';
-import { RETURN_PATH_PARAM } from '@/lib/return-path';
-import { postSignInPath } from '@/lib/role-routes';
+import { pathReturningTo, RETURN_PATH_PARAM } from '@/lib/return-path';
+import { CUSTOMER_DETAILS_PATH, postSignInPath } from '@/lib/role-routes';
 import { signedInFailurePath } from '@/lib/terms-gate';
 
 /**
@@ -41,7 +41,20 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   try {
     const user = await getCurrentUser();
-    target = user ? postSignInPath(user.role, returnTo) : '/sign-in';
+    /*
+     * A customer with no real name yet (VEN-642): `users.firstName`/`lastName`
+     * are `NOT NULL`, and the only value a fresh sign-up ever gives them is the
+     * sign-up form's synthetic email-prefix placeholder, split so `lastName`
+     * lands empty. Sits in front of `postSignInPath` so nothing — including a
+     * carried `returnTo` — reaches a dashboard before this step is cleared;
+     * the interstitial sends the customer right back here once it is.
+     */
+    target =
+      user && user.role === 'customer' && (!user.firstName.trim() || !user.lastName.trim())
+        ? pathReturningTo(CUSTOMER_DETAILS_PATH, returnTo)
+        : user
+          ? postSignInPath(user.role, returnTo)
+          : '/sign-in';
   } catch (error) {
     /*
      * The two refusals a signed-in caller can meet, in the order that

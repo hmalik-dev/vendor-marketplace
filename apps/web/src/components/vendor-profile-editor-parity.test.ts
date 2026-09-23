@@ -229,7 +229,9 @@ describe('the text inputs match the frame’s `.inp` box (#142)', () => {
     }
 
     // `--color-stone-0: #fffdf9`, so the editor's fields carry `bg-stone-0`.
-    expect(formSource.match(/className="mt-1\.5 bg-stone-0"/g)).toHaveLength(6);
+    // Two of these — first and last name (VEN-642) — carry no frame of their
+    // own; they match the panel's existing fields rather than a `.inp` box.
+    expect(formSource.match(/className="mt-1\.5 bg-stone-0"/g)).toHaveLength(8);
   });
 });
 

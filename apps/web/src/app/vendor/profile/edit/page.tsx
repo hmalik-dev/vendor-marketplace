@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: pageTitle('Your storefront') };
  * on this screen, per frame `09 Vendor profile editor`.
  */
 export default async function VendorProfileEditPage(): Promise<React.ReactElement> {
-  await requireRole('vendor');
+  const user = await requireRole('vendor');
 
   const [profile, categories, allTags] = await Promise.all([
     getOwnVendorProfile(),
@@ -34,7 +34,12 @@ export default async function VendorProfileEditPage(): Promise<React.ReactElemen
 
   return (
     <div data-app-shell className="w-full lg:app-shell">
-      <VendorProfileForm profile={profile} categories={categories} allTags={allTags} />
+      <VendorProfileForm
+        profile={profile}
+        categories={categories}
+        allTags={allTags}
+        personalName={{ firstName: user.firstName, lastName: user.lastName }}
+      />
     </div>
   );
 }

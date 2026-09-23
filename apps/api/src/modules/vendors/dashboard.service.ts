@@ -23,6 +23,7 @@ import {
   type NextPendingPayoutRow,
   type OwedPayoutTotalRow,
 } from './dashboard.dao.js';
+import { findUserById } from '../users/users.dao.js';
 import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import { publishBlockers, requireOwnVendorProfile } from './vendors.service.js';
 
@@ -135,6 +136,7 @@ export async function getVendorDashboard(
     categoryIds,
     activePackageCount,
     holdsAgreement,
+    owner,
   ] = await Promise.all([
     countPendingRequests(db, vendor.id),
     countBookingsBetween(db, vendor.id, start, next),
@@ -152,6 +154,7 @@ export async function getVendorDashboard(
     findCategoryIds(db, vendor.id),
     countActivePackages(db, vendor.id),
     holdsCurrentAgreement(db, vendor.userId),
+    findUserById(db, vendor.userId),
   ]);
 
   const rating = Number.parseFloat(vendor.avgRating);
@@ -168,7 +171,13 @@ export async function getVendorDashboard(
     earningsThisMonthCents,
     isPublished: vendor.isPublished,
     moderationHold: vendor.moderationHold,
-    publishBlockers: publishBlockers(vendor, categoryIds, activePackageCount, holdsAgreement),
+    publishBlockers: publishBlockers(
+      vendor,
+      categoryIds,
+      activePackageCount,
+      holdsAgreement,
+      Boolean(owner?.firstName.trim()) && Boolean(owner?.lastName.trim()),
+    ),
     stripeOnboarded: vendor.stripeOnboarded,
     /*
      * Every day in the window, in order — not only the ones with a row. The

@@ -39,6 +39,7 @@ import { insertNotification } from '../messaging/messaging.dao.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
+import { findUserById } from '../users/users.dao.js';
 import {
   applyExpiry,
   applyTransition,
@@ -608,6 +609,17 @@ export async function createBookingRequest(
   now: Date = new Date(),
   mail?: NotificationEmailDeps,
 ): Promise<BookingRequestOutcome> {
+  /*
+   * Refused independently of whatever the customer-details interstitial does
+   * (VEN-642): a direct call must not be able to route around the UI step, and
+   * the vendor reads `customer.firstName` off this same request later
+   * (`toDetail`) to project it into their view.
+   */
+  const customer = await findUserById(db, user.id);
+  if (!customer?.firstName.trim() || !customer.lastName.trim()) {
+    throw validationFailed('Add your name before requesting a booking.');
+  }
+
   /*
    * The visibility test is the query, not three checks after it (#433). It used
    * to read `isDeleted` and `isPublished` off a row fetched regardless of

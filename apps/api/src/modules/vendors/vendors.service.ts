@@ -43,6 +43,7 @@ import { replaceVendorTags } from '../tags/tags.dao.js';
 import { resolveVendorTagSelection } from '../tags/tags.service.js';
 import { lockVendorProfile } from '../admin/admin.dao.js';
 import { countActivePackages } from '../packages/packages.dao.js';
+import { findUserById, updateUserById } from '../users/users.dao.js';
 import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import {
   findActiveCategoryIds,
@@ -117,6 +118,7 @@ export function toVendorProfileDetail(
   tagRows: TagRow[],
   activePackageCount: number,
   holdsAgreement: boolean,
+  hasPersonalName: boolean,
 ): VendorProfileDetail {
   return {
     ...row,
@@ -125,7 +127,13 @@ export function toVendorProfileDetail(
     avgRating: parseRating(row.avgRating),
     categoryIds,
     tags: tagRows satisfies Tag[],
-    publishBlockers: publishBlockers(row, categoryIds, activePackageCount, holdsAgreement),
+    publishBlockers: publishBlockers(
+      row,
+      categoryIds,
+      activePackageCount,
+      holdsAgreement,
+      hasPersonalName,
+    ),
   };
 }
 
@@ -135,6 +143,7 @@ const LIVE_EDIT_FIELD_LABELS: Record<PublishBlockerKey, string> = {
   location: 'the location',
   categories: 'the categories',
   bio: 'the bio',
+  personalName: 'your name',
   responseTime: 'the reply window',
   packages: 'the packages',
   agreement: 'the agreement',
@@ -150,6 +159,7 @@ export function publishBlockers(
   categoryIds: readonly string[],
   activePackageCount: number,
   holdsAgreement: boolean,
+  hasPersonalName: boolean,
 ): PublishBlockerKey[] {
   const blockers: PublishBlockerKey[] = [];
 
@@ -164,6 +174,15 @@ export function publishBlockers(
   }
   if (!row.bio?.trim()) {
     blockers.push('bio');
+  }
+  /*
+   * `users.firstName`/`lastName`, not a `vendor_profiles` column (VEN-642):
+   * the same personal-name gap the customer interstitial closes, applied to
+   * vendors so neither role can publish or book forever under the synthetic
+   * sign-up placeholder.
+   */
+  if (!hasPersonalName) {
+    blockers.push('personalName');
   }
   /*
    * A customer deciding between two vendors reads the reply window before they
@@ -297,15 +316,28 @@ async function assertCategoriesSelectable(
   return unique;
 }
 
+/** Whether both halves of a personal name are actually there, not just present as a key. */
+function isCompleteName(firstName: string | undefined, lastName: string | undefined): boolean {
+  return Boolean(firstName?.trim()) && Boolean(lastName?.trim());
+}
+
 async function loadDetail(db: AppDatabase, row: VendorProfileRow): Promise<VendorProfileDetail> {
-  const [categoryIds, tagRows, activePackageCount, holdsAgreement] = await Promise.all([
+  const [categoryIds, tagRows, activePackageCount, holdsAgreement, owner] = await Promise.all([
     findVendorCategoryIds(db, row.id),
     findVendorTags(db, row.id),
     countActivePackages(db, row.id),
     holdsCurrentAgreement(db, row.userId),
+    findUserById(db, row.userId),
   ]);
 
-  return toVendorProfileDetail(row, categoryIds, tagRows, activePackageCount, holdsAgreement);
+  return toVendorProfileDetail(
+    row,
+    categoryIds,
+    tagRows,
+    activePackageCount,
+    holdsAgreement,
+    isCompleteName(owner?.firstName, owner?.lastName),
+  );
 }
 
 /**
@@ -432,6 +464,11 @@ export async function createVendorProfile(
       await replaceVendorCategories(tx, inserted.id, categoryIds);
       if (tags !== undefined) {
         await replaceVendorTags(tx, inserted.id, tags.tagIds);
+      }
+      // Personal name onto `users`, not `vendor_profiles` (VEN-642) — optional,
+      // like `bio`: a vendor may not have supplied it on this save.
+      if (input.firstName !== undefined && input.lastName !== undefined) {
+        await updateUserById(tx, userId, { firstName: input.firstName, lastName: input.lastName });
       }
 
       return inserted;
@@ -659,22 +696,38 @@ export async function updateVendorProfile(
    * out of fixing the rest.
    */
   const editingLive = existing.isPublished && input.isPublished !== false;
+  // As this write will leave it — this request's own firstName/lastName when
+  // it sends them, the same way `{ ...existing, ...patch }` reflects this
+  // write's vendor_profiles columns below.
+  let hasPersonalName = false;
 
   if (publishing || editingLive) {
-    const [heldCategories, activePackageCount, holdsAgreement] = await Promise.all([
+    const [heldCategories, activePackageCount, holdsAgreement, owner] = await Promise.all([
       findVendorCategoryIds(db, existing.id),
       countActivePackages(db, existing.id),
       holdsCurrentAgreement(db, existing.userId),
+      findUserById(db, existing.userId),
     ]);
+    hasPersonalName = isCompleteName(
+      input.firstName ?? owner?.firstName,
+      input.lastName ?? owner?.lastName,
+    );
     const blockers = publishBlockers(
       { ...existing, ...patch } as VendorProfileRow,
       categoryIds ?? heldCategories,
       activePackageCount,
       holdsAgreement,
+      hasPersonalName,
     );
     const alreadyBlocked = publishing
       ? []
-      : publishBlockers(existing, heldCategories, activePackageCount, holdsAgreement);
+      : publishBlockers(
+          existing,
+          heldCategories,
+          activePackageCount,
+          holdsAgreement,
+          isCompleteName(owner?.firstName, owner?.lastName),
+        );
     const introduced = blockers.filter((key) => !alreadyBlocked.includes(key));
 
     if (introduced.length > 0) {
@@ -703,6 +756,14 @@ export async function updateVendorProfile(
       }
       if (tags !== undefined) {
         await replaceVendorTags(tx, existing.id, tags.tagIds);
+      }
+      if (input.firstName !== undefined && input.lastName !== undefined) {
+        // `users`, not `vendor_profiles` (VEN-642) — inside the same write so
+        // the vendor's one Save is still one transaction (#405).
+        await updateUserById(tx, existing.userId, {
+          firstName: input.firstName,
+          lastName: input.lastName,
+        });
       }
 
       /*
@@ -741,6 +802,7 @@ export async function updateVendorProfile(
               categoryIds ?? (await findVendorCategoryIds(tx, existing.id)),
               lockedPackageCount,
               lockedHoldsAgreement,
+              hasPersonalName,
             ),
           });
         }
