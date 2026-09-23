@@ -83,21 +83,17 @@ async function outcomeOf(response: Response | null): Promise<AuthOutcome> {
 }
 
 /**
- * Creates the account, then asks Neon for the six-digit code: on dev Neon Auth
- * a sign-up alone emails nothing, only `send-verification-otp` does. A failed
- * send does not fail the sign-up, because the code step offers "Send a new
- * code" and the account already exists.
+ * Creates the account and nothing else. The code is asked for separately
+ * (`resendVerificationCode`): on dev Neon Auth a sign-up alone emails nothing,
+ * and Neon's own limiter can refuse that send (VEN-620), so the caller has to
+ * see its outcome rather than have it folded into the sign-up's.
  */
 export async function signUpWithEmail(input: {
   email: string;
   password: string;
   name: string;
 }): Promise<AuthOutcome> {
-  const outcome = await outcomeOf(await post('/sign-up/email', input));
-  if (outcome === 'ok') {
-    await resendVerificationCode(input.email);
-  }
-  return outcome;
+  return outcomeOf(await post('/sign-up/email', input));
 }
 
 /**
