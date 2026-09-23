@@ -354,6 +354,39 @@ describe('sending', () => {
     expect(screen.queryByText(/7 days/)).toBeNull();
   });
 
+  /*
+   * VEN-669: the API dedupes a second live request for the same vendor, date
+   * and package, answering 200 with the one that already exists. The new
+   * details were dropped, so "Sent" would be a false statement.
+   */
+  it('says a repeat for the same date is the request already made, not "Sent"', async () => {
+    const existingId = '33333333-3333-4333-8333-333333333333';
+    requestMock.mockImplementation(
+      (_path: string, options: { onStatus?: (status: number) => void }) => {
+        options.onStatus?.(200);
+        return Promise.resolve({ id: existingId, expiresAt: SENT_DEADLINE });
+      },
+    );
+    renderScreen();
+
+    await chooseEventType('Birthday');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'You already have a request with Kessler & Co. for September 12, 2026',
+      }),
+    ).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Open that request' }).getAttribute('href')).toBe(
+      `/bookings/${existingId}`,
+    );
+    expect(
+      screen.queryByRole('heading', { name: 'Your request is with Kessler & Co.' }),
+    ).toBeNull();
+    expect(screen.queryByText(/^Sent\./)).toBeNull();
+  });
+
   it('keeps the form and says what happened when the send fails', async () => {
     requestMock.mockRejectedValue(new Error('offline'));
     renderScreen();

@@ -97,6 +97,13 @@ export interface ApiRequestOptions<T> {
    * Ignored in the browser, where `fetch` has no `next` option.
    */
   revalidate?: number;
+  /**
+   * Told the status of a successful response before its body is returned, for
+   * the one caller whose 2xx statuses mean different things: creating a
+   * booking request answers 201 for a new one and 200 for the one that
+   * already exists (VEN-669).
+   */
+  onStatus?: (status: number) => void;
 }
 
 /** Reads the API's structured error body, tolerating a non-JSON failure page. */
@@ -178,7 +185,7 @@ async function visitorHeaders(secret: string): Promise<Record<string, string>> {
  * `undefined` deep inside a component.
  */
 export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>): Promise<T> {
-  const { schema, method = 'GET', body, token, signal, revalidate } = options;
+  const { schema, method = 'GET', body, token, signal, revalidate, onStatus } = options;
 
   const headers: Record<string, string> = { accept: 'application/json' };
   if (token) {
@@ -311,6 +318,8 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
       parsed.error.issues,
     );
   }
+
+  onStatus?.(response.status);
 
   return parsed.data;
 }
