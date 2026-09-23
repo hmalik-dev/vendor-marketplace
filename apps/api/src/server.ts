@@ -528,6 +528,9 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     from: env.EMAIL_FROM,
     deployEnv: env.DEPLOY_ENV,
     sinkAddress: env.EMAIL_SINK_ADDRESS,
+    // The registry's shape is digits only, so `Number` cannot answer NaN here.
+    dailyCap: env.EMAIL_DAILY_SEND_CAP === undefined ? undefined : Number(env.EMAIL_DAILY_SEND_CAP),
+    reporter: errorReporter,
     ...(options.email ? { gateway: options.email } : {}),
   });
   await app.register(neonAuthPlugin, {

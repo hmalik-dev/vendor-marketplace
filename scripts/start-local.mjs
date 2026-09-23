@@ -62,6 +62,8 @@ export const OPTIONAL_PLACEHOLDER_KEYS = [
   'NEON_BRANCH',
   // Its placeholder fails the shape too; a laptop has no sink and logs instead.
   'EMAIL_SINK_ADDRESS',
+  // Unset is the tier's default, 0 on a laptop: no quota spent (VEN-661).
+  'EMAIL_DAILY_SEND_CAP',
   'RESEND_WEBHOOK_SECRET',
   // The second Stripe endpoint's key: locally one listener secret covers both streams.
   'STRIPE_CONNECT_WEBHOOK_SECRET',

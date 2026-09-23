@@ -631,6 +631,13 @@
       "when": 1790180275480,
       "tag": "0089_closed_accounts_forget_the_person",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1790182960509,
+      "tag": "0090_email_send_days",
+      "breakpoints": true
     }
   ]
 }

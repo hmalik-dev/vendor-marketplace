@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AppDatabase } from '../../lib/database.js';
 import type { EmailMessage } from '../../lib/email.js';
+import { EmailSendingClosedError } from '../../lib/email-send-cap.js';
 import { alertNow, refundFailedAlert, type OperatorAlertDeps } from './operator-alerts.service.js';
 
 /** A database whose every write throws — the outage these alerts exist for. */
@@ -48,6 +49,8 @@ describe('alertNow', () => {
     expect(sent[0]!.to).toBe('ops@example.com');
     expect(sent[0]!.subject).toBe('[Orla ops] Refund failed on booking b1');
     expect(sent[0]!.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+    // Operator mail may spend the headroom past the daily cap (VEN-661).
+    expect(sent[0]!.essential).toBe(true);
     expect(log.error).toHaveBeenCalledTimes(1);
   });
 
@@ -88,5 +91,26 @@ describe('alertNow', () => {
     expect(result).toBe('failed');
     // One for the record, one for the exhausted send; no release was attempted.
     expect(log.error).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops retrying at once when the day is closed, rather than waiting to be refused again (VEN-661)', async () => {
+    let attempts = 0;
+    const { all } = deps({
+      send: async () => {
+        attempts += 1;
+        throw new EmailSendingClosedError('quota', '2026-09-19');
+      },
+    } as unknown as OperatorAlertDeps['email']);
+    const wait = vi.fn(async () => undefined);
+
+    const result = await alertNow(
+      { ...all, wait },
+      refundFailedAlert({ bookingId: 'b-closed', during: 'a test' }),
+    );
+
+    expect(result).toBe('failed');
+    expect(wait).not.toHaveBeenCalled();
+    // The first try and the final one; the two waited retries are skipped.
+    expect(attempts).toBe(2);
   });
 });

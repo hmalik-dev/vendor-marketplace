@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createEmailGateway, createResendGateway, EMAIL_SEND_TIMEOUT_MS } from './email.js';
+import {
+  createEmailGateway,
+  createResendGateway,
+  dailySendCapFor,
+  EMAIL_SEND_TIMEOUT_MS,
+  EmailQuotaExceededError,
+} from './email.js';
 
 /**
  * The gateway had no test at all, which is how it carried no deadline for as
@@ -99,6 +105,44 @@ describe('createResendGateway', () => {
 
     await expect(gateway().send(message)).rejects.toThrow('Resend refused the send (422)');
   });
+
+  it.each(['daily_quota_exceeded', 'monthly_quota_exceeded'])(
+    'names a spent quota (%s) so the day can be closed on it (VEN-661)',
+    async (name) => {
+      stubFetch(new Response(JSON.stringify({ statusCode: 429, name }), { status: 429 }));
+
+      const error = await gateway()
+        .send(message)
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(EmailQuotaExceededError);
+      expect((error as EmailQuotaExceededError).code).toBe(name);
+    },
+  );
+
+  it('keeps the per-second rate limit an ordinary failure, which clears by itself', async () => {
+    stubFetch(new Response('{"name":"rate_limit_exceeded"}', { status: 429 }));
+
+    const error = await gateway()
+      .send(message)
+      .catch((caught: unknown) => caught);
+
+    expect(error).not.toBeInstanceOf(EmailQuotaExceededError);
+    expect((error as Error).message).toBe('Resend refused the send (429)');
+  });
+});
+
+describe('dailySendCapFor (VEN-661)', () => {
+  it('caps production below the plan limit and spends nothing elsewhere when unset', () => {
+    expect(dailySendCapFor('production', undefined)).toBe(80);
+    expect(dailySendCapFor('staging', undefined)).toBe(0);
+    expect(dailySendCapFor('local', undefined)).toBe(0);
+  });
+
+  it('takes EMAIL_DAILY_SEND_CAP over the default on any tier', () => {
+    expect(dailySendCapFor('production', 40)).toBe(40);
+    expect(dailySendCapFor('staging', 5)).toBe(5);
+  });
 });
 
 describe('createEmailGateway', () => {
@@ -129,12 +173,14 @@ describe('createEmailGateway', () => {
   const gateway = (
     deployEnv: string,
     sinkAddress?: string,
+    dailyCap = 10,
   ): ReturnType<typeof createEmailGateway> =>
     createEmailGateway({
       apiKey: 'key',
       from: 'Orla <hi@example.test>',
       deployEnv,
       sinkAddress,
+      dailyCap,
       log,
     });
 
@@ -182,4 +228,21 @@ describe('createEmailGateway', () => {
       'email not delivered outside production',
     );
   });
+
+  it.each(['production', 'staging', 'local'])(
+    'a %s process whose cap is 0 spends no quota, even with a sink (VEN-661)',
+    async (deployEnv) => {
+      const bodies = sentBodies();
+
+      await expect(gateway(deployEnv, SINK, 0).send(message)).resolves.toEqual({
+        providerMessageId: null,
+      });
+
+      expect(bodies).toHaveLength(0);
+      expect(log.info).toHaveBeenCalledWith(
+        { idempotencyKey: message.idempotencyKey },
+        'email not delivered: EMAIL_DAILY_SEND_CAP is 0 on this tier',
+      );
+    },
+  );
 });

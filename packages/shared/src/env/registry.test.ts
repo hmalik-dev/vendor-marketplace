@@ -447,6 +447,9 @@ describe('registrySchemaShape', () => {
      * branch, and an assertion that mirrors the implementation cannot fail for
      * any change made consistently in both.
      *
+     * `EMAIL_DAILY_SEND_CAP` (VEN-661) has a per-tier default the API derives
+     * from `DEPLOY_ENV`, so unset is a decision on every target, never a gap.
+     *
      * The two Sentry upload rows (VEN-397) are read by the web build, but only
      * the production build uploads source maps; a preview deployment has none
      * to send, and the deploy workflow refuses to start without them.
@@ -457,7 +460,12 @@ describe('registrySchemaShape', () => {
      * and every visitor shares one rate-limit address. They are excused only on
      * a laptop, and the test after this one pins that.
      */
-    const EXCUSED_ON_DEPLOYED = ['EMAIL_SINK_ADDRESS', 'SENTRY_AUTH_TOKEN', 'SENTRY_WEB_PROJECT'];
+    const EXCUSED_ON_DEPLOYED = [
+      'EMAIL_SINK_ADDRESS',
+      'EMAIL_DAILY_SEND_CAP',
+      'SENTRY_AUTH_TOKEN',
+      'SENTRY_WEB_PROJECT',
+    ];
 
     const REQUIRED_FOR_REAL_USERS = [
       'RESEND_WEBHOOK_SECRET',

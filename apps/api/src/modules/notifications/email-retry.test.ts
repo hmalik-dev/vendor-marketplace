@@ -1,5 +1,6 @@
 import {
   emailDeliveries,
+  emailSendDays,
   notifications,
   vendorApplications,
   vendorInvites,
@@ -13,6 +14,7 @@ import {
   signInAs,
   type TestHarness,
 } from '../../testing/test-server.js';
+import { closeSendDay, sendDay } from '../../lib/email-send-cap.js';
 import { retryFailedEmails } from './email-retry.service.js';
 
 /**
@@ -55,6 +57,7 @@ describe('the email retry sweep', () => {
 
   afterEach(async () => {
     await harness.database.db.delete(emailDeliveries);
+    await harness.database.db.delete(emailSendDays);
     await harness.database.db.delete(notifications);
     await harness.database.db.delete(vendorInvites);
     await harness.database.db.delete(vendorApplications);
@@ -125,6 +128,22 @@ describe('the email retry sweep', () => {
 
     return rows.map((row) => row.outcome);
   }
+
+  describe('a closed sending day (VEN-661)', () => {
+    it('sends nothing and spends no attempt while today is closed, and resumes once it is not', async () => {
+      const id = await failedNotification(HOUR_MS);
+      await closeSendDay(harness.database.db, sendDay(new Date()), 'quota', new Date());
+
+      expect(await sweep()).toEqual({ notifications: 0, invites: 0, applicationConfirmations: 0 });
+      expect(harness.email.sent).toHaveLength(0);
+      expect(await outcomes(id)).toEqual(['failed']);
+
+      await harness.database.db.delete(emailSendDays);
+
+      expect((await sweep()).notifications).toBe(1);
+      expect(harness.email.sent).toHaveLength(1);
+    });
+  });
 
   describe('notification email', () => {
     it('re-sends a failed delivery younger than 24 hours, keyed on the notification uuid', async () => {

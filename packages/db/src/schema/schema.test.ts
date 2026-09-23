@@ -30,6 +30,7 @@ const EXPECTED_TABLES = [
   'categories',
   'conversations',
   'email_deliveries',
+  'email_send_days',
   'legal_acceptances',
   'messages',
   'notifications',

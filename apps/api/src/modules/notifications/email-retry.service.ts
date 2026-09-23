@@ -1,4 +1,5 @@
 import { EMAIL_RETRY_MAX_ATTEMPTS, EMAIL_RETRY_WINDOW_MS } from '@vendor-marketplace/shared';
+import { sendDay, sendDayClosedReason } from '../../lib/email-send-cap.js';
 import type { Clock } from '../../plugins/clock.js';
 import {
   retryFailedApplicationConfirmationEmails,
@@ -74,11 +75,22 @@ export interface EmailRetryDeps {
   invites: VendorInviteMailDeps;
 }
 
-/** One sweep tick: notification emails, then vendor invites, then waitlist confirmations. */
+/**
+ * One sweep tick: notification emails, then vendor invites, then waitlist confirmations.
+ *
+ * Skipped outright while today's sending is closed (VEN-661): every send would
+ * be refused without reaching Resend, so the sweep would only spend each
+ * message's few attempts on refusals. The rows wait for tomorrow's budget,
+ * still inside `EMAIL_RETRY_WINDOW_MS`.
+ */
 export async function retryFailedEmails(
   deps: EmailRetryDeps,
   now: Clock,
 ): Promise<{ notifications: number; invites: number; applicationConfirmations: number }> {
+  if ((await sendDayClosedReason(deps.notifications.db, sendDay(now()))) !== null) {
+    return { notifications: 0, invites: 0, applicationConfirmations: 0 };
+  }
+
   const notifications = await retryFailedNotificationEmails(deps.notifications, now);
   const invites = await retryFailedInviteEmails(deps.invites);
   const applicationConfirmations = await retryFailedApplicationConfirmationEmails(deps.invites);

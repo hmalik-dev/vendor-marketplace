@@ -14,6 +14,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { BackgroundWork } from '../../lib/background.js';
 import type { AppDatabase } from '../../lib/database.js';
 import type { EmailGateway } from '../../lib/email.js';
+import { EmailSendingClosedError } from '../../lib/email-send-cap.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import type { Clock } from '../../plugins/clock.js';
 import {
@@ -168,9 +169,14 @@ export async function alertNow(
 
   for (const [attempt, delayMs] of OPERATOR_ALERT_RETRY_DELAYS_MS.entries()) {
     try {
-      await deps.email.send({ to: deps.to, ...rendered, idempotencyKey: id });
+      await deps.email.send({ to: deps.to, ...rendered, idempotencyKey: id, essential: true });
       return 'sent';
     } catch (error) {
+      // A closed day refuses every retry too (VEN-661); waiting twelve seconds to hear it again helps nobody.
+      if (error instanceof EmailSendingClosedError) {
+        break;
+      }
+
       deps.log.warn(
         { kind: alert.kind, subjectId: alert.subjectId, attempt: attempt + 1, err: error },
         'An operator alert send failed; retrying',
@@ -180,7 +186,7 @@ export async function alertNow(
   }
 
   try {
-    await deps.email.send({ to: deps.to, ...rendered, idempotencyKey: id });
+    await deps.email.send({ to: deps.to, ...rendered, idempotencyKey: id, essential: true });
     return 'sent';
   } catch (error) {
     deps.log.error(

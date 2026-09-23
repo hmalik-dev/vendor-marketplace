@@ -779,6 +779,28 @@ export const ENV_REGISTRY = [
   },
   {
     /*
+     * VEN-661. The most transactional email one UTC day may send before the
+     * API stops and pages Sentry. Excused everywhere and given no registry
+     * default because the default differs by tier: unset is 80 in production,
+     * below Resend's 100-a-day free plan, and 0 on every other tier, which
+     * spends no quota at all (`DEFAULT_DAILY_SEND_CAP` in the API). Set it on a
+     * lane or staging only while exercising an email flow.
+     */
+    key: 'EMAIL_DAILY_SEND_CAP',
+    capability: 'email',
+    audience: 'server',
+    consumers: ['api'],
+    environments: 'per-environment',
+    optionalFor: ['baseline', 'local', 'production', 'deployed'],
+    // Six digits at most: the count is an int4, and a larger cap would fail every send.
+    shape: /^\d{1,6}$/,
+    placeholder: '<daily-send-cap>',
+    description:
+      'Emails the API may send per UTC day before it stops and pages Sentry. Unset: 80 in production, 0 (nothing sent) on every other tier.',
+    setup: RESEND_SETUP,
+  },
+  {
+    /*
      * VEN-609. `per-environment`, so a deployment must state its sender or
      * refuse to boot: the default names a domain no Resend account has
      * verified, and every send from it is refused and merely logged. The
