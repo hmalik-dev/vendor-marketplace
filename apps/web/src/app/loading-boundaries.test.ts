@@ -34,19 +34,13 @@ const LOADING_SEGMENTS = ROUTE_FILES.filter((file) => file.path.endsWith(`${sep}
   .concat(ROUTE_FILES.filter((file) => file.path === 'loading.tsx'))
   .map((file) => file.segments);
 
-/**
- * The operations console is the one exemption (VEN-460): the rule below exists
- * so a search engine never reads a soft 404, and nothing under `/admin` is
- * indexable — its layout says so, and the test after the rule holds it to that.
- * The console's own loading boundary is worth more to an operator than a 404
- * status their browser never reads.
+/*
+ * No exemptions. The operations console had one (VEN-460) until its loading
+ * boundary went (VEN-654), so its detail pages' `notFound()` is guarded too.
  */
-const NOINDEX_SEGMENT = 'admin';
-
 const NOT_FOUND_PAGES = ROUTE_FILES.filter(
   (file) =>
     file.path.endsWith('page.tsx') &&
-    file.segments[0] !== NOINDEX_SEGMENT &&
     readFileSync(join(APP_DIR, file.path), 'utf8').includes('notFound()'),
 );
 
@@ -99,12 +93,6 @@ describe('loading boundaries never wrap a notFound() route', () => {
     );
 
     expect(offenders.map((segments) => segments.join('/'))).toEqual([]);
-  });
-
-  it('exempts only a segment whose layout keeps every page out of search results', () => {
-    const layout = readFileSync(join(APP_DIR, NOINDEX_SEGMENT, 'layout.tsx'), 'utf8');
-
-    expect(layout).toMatch(/robots:\s*\{\s*index:\s*false/);
   });
 });
 

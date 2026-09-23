@@ -6,15 +6,20 @@ const ADMIN_DIR = join(process.cwd(), 'src/app/admin');
 
 /*
  * A failed console read used to fall to the root boundary, which drops the
- * console's own header and rail (VEN-460). Both boundaries sit beside the
- * layout that draws them; the browser pass asserts what they render.
+ * console's own header and rail (VEN-460). The error boundary sits beside the
+ * layout that draws it; the browser pass asserts what it renders.
  */
 describe('the console has boundaries of its own', () => {
-  it('shows the page loader while a screen streams in', () => {
-    const loading = join(ADMIN_DIR, 'loading.tsx');
-
-    expect(existsSync(loading)).toBe(true);
-    expect(readFileSync(loading, 'utf8')).toContain('PageLoader as default');
+  /*
+   * VEN-654. A `loading.tsx` is a Suspense boundary, and whenever a screen's
+   * read outlasts the shell, React streams the screen into a `hidden` node that
+   * only a script reveals. With JavaScript off it stayed hidden: the Refine
+   * bar's `Apply filters` submit, which exists for exactly that path (VEN-383),
+   * was in the DOM and unreachable by Tab. Whether it streamed was timing, so it
+   * passed on a fast lane and failed on every CI run.
+   */
+  it('does not stream a screen, so it renders whole with JavaScript off', () => {
+    expect(existsSync(join(ADMIN_DIR, 'loading.tsx'))).toBe(false);
   });
 
   it('catches a throw as a client error boundary that keeps the console shell', () => {
