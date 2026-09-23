@@ -10,9 +10,10 @@ import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
  *
  * The address becomes `closed+<id>@invalid`: unique per row, and RFC 2606's
  * `.invalid` can never deliver, so a stray notification cannot reach anyone.
- * The name becomes "Former customer" (or vendor, or operator), which is what
- * every surface that prints a counterparty's full name then shows, messages
- * included, as ruled on the ticket.
+ * The name becomes "Former customer" (or vendor, or operator), whole in the
+ * first name with an empty surname: surfaces that print a first name and an
+ * initial (messages, a vendor's request row) would otherwise read "Former c",
+ * and an empty surname is what each of them already renders as no initial.
  */
 export function closedAccountFields(
   user: Pick<UserRow, 'id' | 'role'>,
@@ -31,8 +32,8 @@ export function closedAccountFields(
 > {
   return {
     email: `closed+${user.id}@invalid`,
-    firstName: 'Former',
-    lastName: user.role === 'admin' ? 'operator' : user.role,
+    firstName: `Former ${user.role === 'admin' ? 'operator' : user.role}`,
+    lastName: '',
     phone: null,
     avatarUrl: null,
     bio: null,
@@ -44,7 +45,8 @@ export function closedAccountFields(
 }
 
 /**
- * A closed reviewer on a vendor's public reviews. Spelled out rather than
- * abbreviated from the row, which would print "Former c.".
+ * A closed reviewer on a vendor's public reviews, keyed off `deleted_at` rather
+ * than read from the row, so an account closed before the row was anonymised
+ * is not shown under its old name.
  */
 export const CLOSED_REVIEWER_NAME = 'Former customer';

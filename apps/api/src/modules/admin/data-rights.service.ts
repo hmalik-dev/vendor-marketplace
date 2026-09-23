@@ -705,7 +705,7 @@ export async function closeAccount(
     context,
     { userId },
     async () => {
-      await removeOwnedObjects(storage, userId);
+      await removeOwnedObjects(storage, user.id);
     },
     "An account closure could not delete the account's uploads; the upload sweep will retry",
   );

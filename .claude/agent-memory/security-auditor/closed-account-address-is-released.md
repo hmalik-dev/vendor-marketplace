@@ -27,6 +27,18 @@ instruction is only true because the index is partial — if anyone makes
 `users_email_key` unconditional again, the product is advising an irreversible
 closure (which refunds future bookings) into a permanent lockout.
 
+**VEN-614 (audited 2026-09-23, no blocker):** retirement now scrubs the row
+(`closedAccountFields`: `closed+<id>@invalid`, "Former <role>", contact nulled)
+and `handAddressToWaiter` gets the pre-scrub address read under `FOR UPDATE`.
+`removeOwnedObjects` cannot reach another owner: S3 `list` appends the `/`,
+and ids are fixed-length uuids. The sweep ignores rows whose owning `users` row
+is closed (`vendor_profiles.user_id` is NOT NULL, so the inner joins drop no
+live row). Residuals, low: no backfill, and the resume branch of `closeAccount`
+does not re-scrub, so pre-VEN-614 closed rows keep name/phone/email (reviews
+still print "Former customer" off `deleted_at`); the object delete lists by the
+route param, and `z.uuid()` accepts uppercase, so an uppercase id matches no key
+and leaves the sweep to clean up. Fix is `retired.user.id`.
+
 Related: [[email-uniqueness-is-partial-nothing-joins-by-email]],
 [[closure-refuses-only-the-customer-side]],
 [[legal-acceptance-record-is-undeletable-pii]].

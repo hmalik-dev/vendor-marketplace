@@ -1656,6 +1656,9 @@ describe('data rights', () => {
         '2025-05-01',
         'completed',
       );
+      await harness.database.db
+        .insert(conversations)
+        .values({ customerId, vendorId: vendor.profileId });
 
       await harness.database.db
         .update(users)
@@ -1679,8 +1682,8 @@ describe('data rights', () => {
       const [row] = await harness.database.db.select().from(users).where(eq(users.id, customerId));
       expect(row).toMatchObject({
         email: `closed+${customerId}@invalid`,
-        firstName: 'Former',
-        lastName: 'customer',
+        firstName: 'Former customer',
+        lastName: '',
         phone: null,
         bio: null,
         city: null,
@@ -1703,6 +1706,17 @@ describe('data rights', () => {
         .from(legalAcceptances)
         .where(eq(legalAcceptances.acceptedByUserId, customerId));
       expect(acceptances.map((acceptance) => acceptance.document)).toEqual(['terms_of_service']);
+
+      /* The vendor's thread names them the way the ruling says, not "Former c". */
+      const threads = await harness.app.inject({
+        method: 'GET',
+        url: '/conversations',
+        headers: bearer(VENDOR),
+      });
+      expect(threads.statusCode).toBe(200);
+      expect(
+        threads.json().map((thread: { otherPartyName: string }) => thread.otherPartyName),
+      ).toEqual(['Former customer']);
     });
 
     it('shows a closed customer’s review as a former customer’s, still counted in the rating', async () => {
