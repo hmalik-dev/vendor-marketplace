@@ -72,3 +72,10 @@
 - [Never print env lines with a capture regex](never-print-env-lines-with-a-capture-regex.md) — BSD sed has no \s; a failed capture printed a Neon password; use cut for names
 - [DB changes are last resort after launch](db-changes-are-last-resort-after-launch.md) — once live nobody edits the DB by hand; a "run this SQL" runbook line is a missing app feature, file a ticket
 - [Tear down a lane's Neon branch after its PR](tear-down-lane-neon-branch-after-pr.md) — `pnpm lane:down <id>` once the PR is created and verified, at the latest at merge; six stale branches hit the plan ceiling and blocked four tickets
+- [OTP verify has two independent throttles](otp-verify-has-two-independent-throttles.md) — our proxy's 429 AND Better Auth's own 403 `TOO_MANY_ATTEMPTS`; only live browser testing found the second (#418)
+- [Linear free-plan issue cap](linear-free-issue-limit.md) — creates fail at the cap; archive old Done/Canceled via GraphQL with LINEAR_API_KEY from .env.e2e.local (MCP cannot archive)
+- [Friends beta needs no domain](friends-beta-needs-no-domain.md) — ruled 2026-09-22; email via onboarding@resend.dev (owner-only), VEN-626 lets releases pass; domain stays VEN-595
+- [Infra bugs blocking core flows are Urgent](infra-bugs-blocking-core-flows-are-urgent.md) — probe each deployed tier live (auth 4xx never 5xx, logs, staging≈prod); a green release proved nothing for VEN-631
+- [Reuse E2E accounts unless testing auth](reuse-e2e-accounts-unless-testing-auth.md) — default to the saved customer/vendor/admin accounts; mint fresh only for sign-up/verification/invite acceptance criteria
+- [No step-position eyebrows; role asked once](no-step-position-eyebrows.md) — never "One last step"; the sign-up role is stated on /accept-terms, not re-asked
+- [verify.mjs misses source-scan guards](verify-changed-misses-source-scan-guards.md) — `vitest --changed` never selects whole-tree guards like swallowed-errors.test.ts; run the full web suite after adding a catch
