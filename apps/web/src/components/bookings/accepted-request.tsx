@@ -10,6 +10,7 @@ import {
   refundBoundaries,
   refundSchedule,
 } from '@vendor-marketplace/shared';
+import type { RefundBoundaries } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -41,6 +42,26 @@ function pulledVendorMessage(request: WireBookingRequest): string | null {
   const deadlineSentence = deadline && deadline !== 'expired' ? ` Your booking ${deadline}.` : '';
 
   return `${businessName} isn't taking bookings right now. This is temporary — check back a little later.${deadlineSentence}`;
+}
+
+/** The refund line for a paid, cancellable booking, given today's quote and boundaries. */
+function cancelWindowMessage(
+  quote: ReturnType<typeof calculateRefund> | null,
+  lateRefundCents: number | null,
+  boundaries: RefundBoundaries,
+  totalAmountCents: number,
+  at: (iso: string) => string,
+): string {
+  if (!quote?.isFullRefund) {
+    return `Cancelling now refunds ${formatPrice(quote?.refundCents ?? 0)} of ${formatPrice(totalAmountCents)}. Online cancellation closes ${at(boundaries.onlineCancellationClosesAt)}.`;
+  }
+
+  const lateNote =
+    lateRefundCents === null
+      ? ''
+      : ` After that, until ${at(boundaries.onlineCancellationClosesAt)}, cancelling refunds ${formatPrice(lateRefundCents)}.`;
+
+  return `Cancel until ${at(boundaries.fullRefundEndsAt)} and you're refunded in full — ${formatPrice(quote.refundCents)}.${lateNote}`;
 }
 
 /**
@@ -178,13 +199,13 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
         ) : booking && boundaries ? (
           <>
             <p className="text-[12.5px] leading-[1.55] text-stone-600">
-              {quote?.isFullRefund
-                ? `Cancel until ${at(boundaries.fullRefundEndsAt)} and you're refunded in full — ${formatPrice(quote.refundCents)}.${
-                    lateRefundCents === null
-                      ? ''
-                      : ` After that, until ${at(boundaries.onlineCancellationClosesAt)}, cancelling refunds ${formatPrice(lateRefundCents)}.`
-                  }`
-                : `Cancelling now refunds ${formatPrice(quote?.refundCents ?? 0)} of ${formatPrice(booking.totalAmountCents)}. Online cancellation closes ${at(boundaries.onlineCancellationClosesAt)}.`}
+              {cancelWindowMessage(
+                quote,
+                lateRefundCents,
+                boundaries,
+                booking.totalAmountCents,
+                at,
+              )}
             </p>
             <p className="text-[12.5px] leading-[1.55] text-stone-600">
               If {request.vendor.businessName} cancels, they do it through support and you&apos;re
