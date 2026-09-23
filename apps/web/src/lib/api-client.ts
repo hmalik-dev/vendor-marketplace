@@ -240,6 +240,13 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
       return await step();
     } catch (error) {
       if ((deadline?.aborted ?? false) && !(signal?.aborted ?? false)) {
+        // `deadline` is only ever non-null on the server, so this only fires
+        // there: it names the stalled request in `web.log`, which CI uploads
+        // on failure — before this, a stuck render's only trace there was
+        // Next's own generic `[ResponseAborted: ]` (VEN-619).
+        console.error(
+          `[api-timeout] ${method} ${path} did not answer within ${API_REQUEST_TIMEOUT_MS}ms`,
+        );
         throw new ApiTimeoutError(path, API_REQUEST_TIMEOUT_MS);
       }
 

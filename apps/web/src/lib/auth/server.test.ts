@@ -11,6 +11,7 @@ vi.mock('next/headers', () => ({ cookies: async () => ({ getAll }) }));
 // `cache()` memoises per request; each call here stands for a fresh request.
 vi.mock('react', () => ({ cache: <T>(fn: T): T => fn }));
 
+import { API_REQUEST_TIMEOUT_MS } from '@/lib/api-client';
 import { clearServerSessions, forgetSessionsFor, getServerSession } from './server';
 
 const NOW = Date.UTC(2026, 8, 20, 12, 0, 0);
@@ -174,5 +175,28 @@ describe('getServerSession', () => {
 
     expect(await getServerSession()).toBeNull();
     expect(token).not.toHaveBeenCalled();
+  });
+
+  // VEN-619: a `getSession`/`token` call with no deadline held `/` and
+  // `/accept-terms` open until CI's own runner timeout ended the job.
+  it('reads signed out, within the deadline, when getSession never answers', async () => {
+    getAll.mockReturnValue([{ name: '__Secure-neon-auth.session_token', value: 'cookie-a' }]);
+    getSession.mockReturnValue(new Promise(() => {})); // stalls forever
+
+    const pending = getServerSession();
+    await vi.advanceTimersByTimeAsync(API_REQUEST_TIMEOUT_MS);
+
+    expect(await pending).toBeNull();
+    expect(token).not.toHaveBeenCalled();
+  });
+
+  it('reads signed out, within the deadline, when token never answers', async () => {
+    signedInAs('user-1', 'cookie-a');
+    token.mockReturnValue(new Promise(() => {})); // stalls forever
+
+    const pending = getServerSession();
+    await vi.advanceTimersByTimeAsync(API_REQUEST_TIMEOUT_MS);
+
+    expect(await pending).toBeNull();
   });
 });
