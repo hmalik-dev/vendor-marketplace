@@ -83,6 +83,19 @@ describe('the refund schedule block', () => {
     expect(screen.getAllByRole('definition')).toHaveLength(5);
   });
 
+  /* Frame `39b`: 12.5px rows, a 13px gap under the heading, 8px beside its glyph. */
+  it('sets the rows and heading at the frame values', () => {
+    block();
+
+    const heading = screen.getByRole('heading', { name: /If plans change/ });
+    const classes = (element: Element) => element.className.split(/\s+/);
+
+    expect(classes(heading)).toEqual(expect.arrayContaining(['mb-3.25', 'gap-2']));
+    for (const cell of [...screen.getAllByRole('term'), ...screen.getAllByRole('definition')]) {
+      expect(classes(cell)).toContain('text-sm');
+    }
+  });
+
   it('names the day the payment is released, from the constant', () => {
     block();
 

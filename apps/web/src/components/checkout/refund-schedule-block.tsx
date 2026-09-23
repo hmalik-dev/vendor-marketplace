@@ -177,9 +177,9 @@ export function RefundScheduleBlock({
     >
       <h2
         id="refund-schedule"
-        className="mb-1.5 flex items-center gap-1.75 text-label font-semibold tracking-label text-stone-600 uppercase"
+        className="mb-3.25 flex items-center gap-2 text-label font-semibold tracking-label text-stone-600 uppercase"
       >
-        <Clock aria-hidden="true" className="size-3.5" />
+        <Clock aria-hidden="true" className="size-3.5" strokeWidth={1.7} />
         If plans change
       </h2>
 
@@ -195,13 +195,13 @@ export function RefundScheduleBlock({
               }`}
             >
               <dt
-                className={`w-28 flex-none text-meta font-semibold ${
+                className={`w-28 flex-none text-sm font-semibold ${
                   row.kind === 'vendor-cancels' ? 'text-sage-600' : 'text-stone-900'
                 }`}
               >
                 {label}
               </dt>
-              <dd className="text-meta leading-prose text-stone-700">{consequence}</dd>
+              <dd className="text-sm leading-prose text-stone-700">{consequence}</dd>
             </div>
           );
         })}
