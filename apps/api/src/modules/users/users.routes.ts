@@ -19,7 +19,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request) => {
       const user = authenticated(request.auth);
 
-      return updateUserProfile(app.db, user.id, request.body, {
+      return updateUserProfile(app.db, user.id, request.body, app.storagePublicUrl, {
         authUserId: user.authUserId,
         directory: app.authDirectory,
         log: request.log,

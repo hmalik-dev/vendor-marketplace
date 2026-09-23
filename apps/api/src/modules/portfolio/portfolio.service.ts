@@ -12,6 +12,7 @@ import {
   assertOwnedImageRefs,
   assertStorageOriginRefs,
   ownsObjectKey,
+  storedImageRef,
   type ObjectStorage,
 } from '../../lib/storage.js';
 import { requireOwnVendorProfile } from '../vendors/vendors.service.js';
@@ -51,8 +52,8 @@ export async function addPortfolioItem(
 
   const values: NewPortfolioItemRow = {
     vendorId: vendor.id,
-    imageUrl: input.imageUrl,
-    thumbnailUrl: input.thumbnailUrl ?? null,
+    imageUrl: storedImageRef(input.imageUrl, publicBaseUrl),
+    thumbnailUrl: storedImageRef(input.thumbnailUrl ?? null, publicBaseUrl),
     caption: input.caption ?? null,
     displayOrder: input.displayOrder ?? (await nextDisplayOrder(db, vendor.id)),
   };

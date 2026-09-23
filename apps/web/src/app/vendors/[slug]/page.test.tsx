@@ -27,6 +27,9 @@ vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('NEXT_NOT_FOUND');
   },
+  permanentRedirect: (path: string) => {
+    throw new Error(`NEXT_REDIRECT 308 ${path}`);
+  },
   useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
   usePathname: () => '/vendors/hostile-studio',
   useSearchParams: () => new URLSearchParams(),
@@ -35,6 +38,7 @@ vi.mock('next/navigation', () => ({
 const getPublicVendorProfile = vi.fn();
 const getPublicVendorAvailability = vi.fn();
 const getPublicVendorReviews = vi.fn();
+const getVendorSlugSuccessor = vi.fn();
 /* The reading vendor's own storefront id, or `null` for everybody else (#458). */
 const readOwnVendorProfileIdForChrome = vi.fn();
 
@@ -42,6 +46,7 @@ vi.mock('@/lib/vendor-data', () => ({
   getPublicVendorProfile: (slug: string) => getPublicVendorProfile(slug),
   getPublicVendorAvailability: (slug: string) => getPublicVendorAvailability(slug),
   getPublicVendorReviews: (slug: string) => getPublicVendorReviews(slug),
+  getVendorSlugSuccessor: (slug: string) => getVendorSlugSuccessor(slug),
   readOwnVendorProfileIdForChrome: () => readOwnVendorProfileIdForChrome(),
 }));
 
@@ -121,6 +126,7 @@ beforeEach(() => {
   getPublicVendorProfile.mockResolvedValue(VENDOR);
   getPublicVendorAvailability.mockResolvedValue([]);
   getPublicVendorReviews.mockResolvedValue(REVIEWS_PAYLOAD);
+  getVendorSlugSuccessor.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -507,5 +513,35 @@ describe('the one report control the storefront still offers its own vendor', ()
 
     expect(container.textContent).toContain('Austin, TX');
     expect(container.textContent).not.toContain('Report this profile');
+  });
+});
+
+/*
+ * VEN-648: a storefront URL leaves the app, so a slug the vendor has changed
+ * must keep leading to them — permanently, so a crawler moves its index too.
+ */
+describe('a slug the vendor has since changed', () => {
+  it('redirects permanently to the current slug', async () => {
+    getPublicVendorProfile.mockResolvedValue(null);
+    getVendorSlugSuccessor.mockResolvedValue('moonlit-studio');
+
+    await expect(
+      VendorProfilePage({ params: Promise.resolve({ slug: 'hostile-studio' }) }),
+    ).rejects.toThrow('NEXT_REDIRECT 308 /vendors/moonlit-studio');
+    expect(getVendorSlugSuccessor).toHaveBeenCalledWith('hostile-studio');
+  });
+
+  it('is the ordinary 404 when no vendor ever gave the slug up', async () => {
+    getPublicVendorProfile.mockResolvedValue(null);
+
+    await expect(
+      VendorProfilePage({ params: Promise.resolve({ slug: 'hostile-studio' }) }),
+    ).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  it('costs a live storefront no successor read', async () => {
+    await renderPage();
+
+    expect(getVendorSlugSuccessor).not.toHaveBeenCalled();
   });
 });

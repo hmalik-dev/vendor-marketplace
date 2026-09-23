@@ -399,6 +399,32 @@ describe('/users/me', () => {
       expect(reloaded.json().avatarUrl).toBe(avatarUrl);
     });
 
+    /*
+     * VEN-648: sent as `<STORAGE_PUBLIC_URL>/<key>`, stored as the key. A host
+     * in the row would read as a provider avatar, which the next sign-in
+     * overwrites with the provider's image.
+     */
+    it('stores an avatar sent as a storage URL as its key', async () => {
+      await signIn(CUSTOMER_AUTH_ID);
+      const key = `customer-profile/${await userIdOf(CUSTOMER_AUTH_ID)}/0f4a1c2e.webp`;
+
+      const saved = await harness.app.inject({
+        method: 'PUT',
+        url: '/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+        // `STORAGE_PUBLIC_URL` is `http://cdn.test` in the harness.
+        payload: { avatarUrl: `http://cdn.test/${key}` },
+      });
+
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json().avatarUrl).toBe(key);
+      const [row] = await harness.database.db
+        .select({ avatarUrl: users.avatarUrl })
+        .from(users)
+        .where(eq(users.authUserId, CUSTOMER_AUTH_ID));
+      expect(row).toEqual({ avatarUrl: key });
+    });
+
     /* #407 — the write guard on `avatarUrl`. See `assertOwnedImageRefs`. */
     it('refuses an avatar naming an object minted for another account', async () => {
       await signIn(CUSTOMER_AUTH_ID);

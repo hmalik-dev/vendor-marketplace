@@ -2210,6 +2210,10 @@ export type PublicVendorProfile = z.infer<typeof publicVendorProfileSchema>;
 export const vendorSlugParamsSchema = z.object({ slug: slugSchema });
 export type VendorSlugParams = z.infer<typeof vendorSlugParamsSchema>;
 
+/** The current slug of a storefront that gave up the one asked for (VEN-648). */
+export const vendorSlugSuccessorSchema = z.object({ slug: slugSchema });
+export type VendorSlugSuccessor = z.infer<typeof vendorSlugSuccessorSchema>;
+
 /**
  * How many published vendors each category would return under the rest of the
  * current filters. A query result, not marketing — see design-plan/98-post-mvp.md.

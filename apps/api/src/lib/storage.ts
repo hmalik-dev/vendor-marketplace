@@ -6,7 +6,12 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { normalizeImageRefPath, UPLOAD_PREFIXES, type UserRole } from '@vendor-marketplace/shared';
+import {
+  normalizeImageRefPath,
+  toObjectKey,
+  UPLOAD_PREFIXES,
+  type UserRole,
+} from '@vendor-marketplace/shared';
 import type { ApiEnv } from '../config/env.js';
 import { forbidden, validationFailed } from './errors.js';
 
@@ -368,6 +373,20 @@ export async function countOwnedImages(
 
 export function publicUrlFor(publicBaseUrl: string, key: string): string {
   return `${publicBaseUrl.replace(/\/+$/, '')}/${key}`;
+}
+
+/**
+ * What an image column stores for a submitted reference: the object key, even
+ * when the caller sent it as `<STORAGE_PUBLIC_URL>/<key>` (VEN-648). A row that
+ * holds the host is tied to it — a CDN, a custom image domain or a copy into
+ * another environment would need every such row rewritten — whereas a key
+ * follows `STORAGE_PUBLIC_URL` wherever it points. Anything not under the base
+ * is left exactly as it is.
+ */
+export function storedImageRef(ref: string, publicBaseUrl: string): string;
+export function storedImageRef(ref: string | null, publicBaseUrl: string): string | null;
+export function storedImageRef(ref: string | null, publicBaseUrl: string): string | null {
+  return ref === null ? null : toObjectKey(publicBaseUrl, ref);
 }
 
 /**

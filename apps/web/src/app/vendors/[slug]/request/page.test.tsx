@@ -5,6 +5,7 @@ const requireCurrentUser = vi.fn();
 const requireRole = vi.fn();
 const getPublicVendorProfile = vi.fn();
 const getPublicVendorAvailability = vi.fn();
+const getVendorSlugSuccessor = vi.fn();
 
 vi.mock('@/lib/current-user', () => ({
   requireCurrentUser: (returnTo?: string) => requireCurrentUser(returnTo),
@@ -14,6 +15,7 @@ vi.mock('@/lib/current-user', () => ({
 vi.mock('@/lib/vendor-data', () => ({
   getPublicVendorProfile: (slug: string) => getPublicVendorProfile(slug),
   getPublicVendorAvailability: (slug: string) => getPublicVendorAvailability(slug),
+  getVendorSlugSuccessor: (slug: string) => getVendorSlugSuccessor(slug),
 }));
 
 vi.mock('@/components/booking/booking-request-screen', () => ({
@@ -87,5 +89,26 @@ describe('BookingRequestPage role gate', () => {
       'customer',
       '/vendors/sunlit-studio/request?package=pkg-1&date=2026-12-25',
     );
+  });
+});
+
+describe('BookingRequestPage on a slug the vendor has since changed (VEN-648)', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('redirects permanently to the current slug, keeping the customer’s choices', async () => {
+    getPublicVendorProfile.mockResolvedValue(null);
+    getVendorSlugSuccessor.mockResolvedValue('moonlit-studio');
+
+    const refusal = await BookingRequestPage({
+      params: Promise.resolve({ slug: 'sunlit-studio' }),
+      searchParams: Promise.resolve({ package: 'pkg-1', date: '2027-05-01' }),
+    }).catch((error: unknown) => error);
+
+    expect((refusal as { digest?: string }).digest).toBe(
+      'NEXT_REDIRECT;replace;/vendors/moonlit-studio/request?package=pkg-1&date=2027-05-01;308;',
+    );
+    expect(requireRole).not.toHaveBeenCalled();
   });
 });

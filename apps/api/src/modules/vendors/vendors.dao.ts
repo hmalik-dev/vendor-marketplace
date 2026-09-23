@@ -1,9 +1,10 @@
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import {
   categories,
   tags,
   vendorCategories,
   vendorProfiles,
+  vendorSlugAliases,
   vendorTags,
   type NewVendorProfileRow,
   type TagRow,
@@ -37,6 +38,10 @@ export async function findVendorProfileByUserId(
  * Slug uniqueness check. Includes soft-deleted rows on purpose: the unique
  * index covers them too, so ignoring them would produce a constraint violation
  * instead of a validation message.
+ *
+ * A slug another vendor gave up is taken too (VEN-648): its old links still
+ * lead to that vendor, and handing it on would send them to a different
+ * business. The vendor who gave it up may take it back.
  */
 export async function slugExists(
   db: AppDatabase,
@@ -47,13 +52,60 @@ export async function slugExists(
     return false;
   }
 
+  // One statement, so both tables are read in one snapshot: a rename that
+  // commits between two separate reads could otherwise hide the slug from both.
   const rows = await db
     .select({ id: vendorProfiles.id })
     .from(vendorProfiles)
     .where(eq(vendorProfiles.slug, slug))
-    .limit(2);
+    .unionAll(
+      db
+        .select({ id: vendorSlugAliases.vendorId })
+        .from(vendorSlugAliases)
+        .where(eq(vendorSlugAliases.slug, slug)),
+    );
 
   return rows.some((row) => row.id !== exceptVendorId);
+}
+
+/**
+ * How many former slugs one vendor keeps. Enough for any real business's
+ * renames; few enough that one account cannot reserve a name's suffixes.
+ */
+const MAX_SLUG_ALIASES_PER_VENDOR = 10;
+
+/**
+ * Records a slug change so the old address keeps leading to this vendor: the
+ * slug given up becomes an alias, and one this vendor is taking back stops
+ * being one. Run inside the transaction that writes the new slug.
+ */
+export async function recordSlugChange(
+  db: AppDatabase,
+  vendorId: string,
+  from: string,
+  to: string,
+): Promise<void> {
+  await db
+    .delete(vendorSlugAliases)
+    .where(and(eq(vendorSlugAliases.slug, to), eq(vendorSlugAliases.vendorId, vendorId)));
+  await db.insert(vendorSlugAliases).values({ slug: from, vendorId }).onConflictDoNothing();
+  // The oldest address past the cap is released; the newest ones are the links still in use.
+  await db
+    .delete(vendorSlugAliases)
+    .where(
+      and(
+        eq(vendorSlugAliases.vendorId, vendorId),
+        notInArray(
+          vendorSlugAliases.slug,
+          db
+            .select({ slug: vendorSlugAliases.slug })
+            .from(vendorSlugAliases)
+            .where(eq(vendorSlugAliases.vendorId, vendorId))
+            .orderBy(desc(vendorSlugAliases.createdAt), desc(vendorSlugAliases.slug))
+            .limit(MAX_SLUG_ALIASES_PER_VENDOR),
+        ),
+      ),
+    );
 }
 
 export async function insertVendorProfile(

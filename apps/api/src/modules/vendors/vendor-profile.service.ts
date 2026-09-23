@@ -11,11 +11,31 @@ import { findPublicAvailabilityInRange } from '../availability/availability.dao.
 import { availabilityWindow } from '../availability/availability.service.js';
 import {
   findActivePackages,
+  findCurrentSlugForAlias,
   findPortfolio,
   findPublicVendorBySlug,
   findPublicVendorTags,
   findVendorCategories,
 } from './vendor-profile.dao.js';
+
+/**
+ * Where a storefront that changed its slug lives now (VEN-648): the web answers
+ * the old address with a permanent redirect to this one, so a link that left
+ * the app — a bio, a bookmark — keeps working. 404 for a slug no visible vendor
+ * ever gave up, with the profile's own message, for the profile's own reason.
+ */
+export async function getVendorSlugSuccessor(
+  db: AppDatabase,
+  slug: string,
+): Promise<{ slug: string }> {
+  const current = await findCurrentSlugForAlias(db, slug);
+
+  if (current === null) {
+    throw notFound('That vendor page is not available');
+  }
+
+  return { slug: current };
+}
 
 /**
  * The public profile behind frame `03`.
