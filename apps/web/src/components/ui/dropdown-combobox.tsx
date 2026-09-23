@@ -374,6 +374,14 @@ export function ComboboxDropdown({
   }, [restoreFocus, revert]);
 
   /*
+   * Stable, and it has to be (VEN-605). The sheet mount feeds this into
+   * `useModalSheet`'s focus-trap effect, whose cleanup focuses the trigger: an
+   * inline closure reran it on every keystroke, which blurred the field, and the
+   * input's `onBlur` closed the sheet on the second character.
+   */
+  const onOpenChange = useCallback((next: boolean) => (next ? setOpen(true) : close()), [close]);
+
+  /*
    * Derived rather than clamped in an effect. An effect would leave one render
    * where `aria-activedescendant` names a row that no longer exists — the list
    * shrinks with every character typed, so that render happens constantly, and
@@ -625,7 +633,7 @@ export function ComboboxDropdown({
   return (
     <Dropdown
       open={open}
-      onOpenChange={(next) => (next ? setOpen(true) : close())}
+      onOpenChange={onOpenChange}
       triggerMode="anchor"
       trigger={
         /*
