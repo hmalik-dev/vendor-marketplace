@@ -573,6 +573,26 @@ export const PHASES = {
     const scope = production
       ? ['--environment=production']
       : ['--environment=preview', `--git-branch=${env.DEPLOY_TARGET}`];
+
+    /*
+     * VEN-631: the checkout that put this commit here (`actions/checkout` with
+     * a `ref:` SHA) leaves the repository in detached HEAD, so `vercel deploy`
+     * reads no branch off it and tags the deployment `gitSource: null`. With
+     * no branch attached, Vercel cannot tell this deployment belongs to the
+     * `Preview (staging)` environment, so it serves the deployment with *no*
+     * environment variables at runtime, Config-type included — not only the
+     * two Secret-type ones VEN-575 handed to `vercel build` directly. A local
+     * branch named for the environment gives `vercel deploy` a git ref to
+     * read, the same unambiguous signal `--prod` is for production. Production
+     * is unaffected: it is never checked out onto a branch, exactly as before.
+     */
+    if (!production) {
+      await io.run('git', ['checkout', '-B', env.DEPLOY_TARGET], {
+        env: child,
+        redact,
+        write: io.write,
+      });
+    }
     await io.run('npx', [...cli, 'pull', '--yes', ...scope], {
       env: child,
       redact,
