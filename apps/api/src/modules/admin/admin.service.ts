@@ -75,7 +75,11 @@ import {
   updateVendorProfileById,
 } from '../vendors/vendors.dao.js';
 import { holdsCurrentAgreement } from '../vendors/legal-agreement.service.js';
-import { publishBlockers, unpublishForMissingPackages } from '../vendors/vendors.service.js';
+import {
+  isCompleteName,
+  publishBlockers,
+  unpublishForMissingPackages,
+} from '../vendors/vendors.service.js';
 import { normalizeTagName } from '../tags/tags.service.js';
 import { banOperatorById, hasAnotherLiveOperator } from '../users/users.dao.js';
 import { resolveDispute } from '../payments/payments.service.js';
@@ -1133,7 +1137,7 @@ export async function setVendorPublished(
         categoryIds,
         activePackages,
         holdsAgreement,
-        Boolean(owner.firstName.trim()) && Boolean(owner.lastName.trim()),
+        isCompleteName(owner.firstName, owner.lastName),
       );
 
       /*

@@ -317,7 +317,10 @@ async function assertCategoriesSelectable(
 }
 
 /** Whether both halves of a personal name are actually there, not just present as a key. */
-function isCompleteName(firstName: string | undefined, lastName: string | undefined): boolean {
+export function isCompleteName(
+  firstName: string | undefined,
+  lastName: string | undefined,
+): boolean {
   return Boolean(firstName?.trim()) && Boolean(lastName?.trim());
 }
 

@@ -8,6 +8,7 @@ import {
   describeBlockers,
   generateSlug,
   kmToMiles,
+  MAX_NAME_LENGTH,
   MAX_TAGLINE_LENGTH,
   MAX_VENDOR_BIO_LENGTH,
   MAX_YEARS_IN_BUSINESS,
@@ -865,7 +866,7 @@ export function VendorProfileForm({
                       autoComplete="given-name"
                       value={form.firstName}
                       onChange={(event) => update('firstName', event.target.value)}
-                      maxLength={100}
+                      maxLength={MAX_NAME_LENGTH}
                       className="mt-1.5 bg-stone-0"
                       {...errorProps(validation.issueFor('firstName'))}
                     />
@@ -879,7 +880,7 @@ export function VendorProfileForm({
                       autoComplete="family-name"
                       value={form.lastName}
                       onChange={(event) => update('lastName', event.target.value)}
-                      maxLength={100}
+                      maxLength={MAX_NAME_LENGTH}
                       className="mt-1.5 bg-stone-0"
                       {...errorProps(validation.issueFor('lastName'))}
                     />

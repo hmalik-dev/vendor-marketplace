@@ -25,7 +25,7 @@ import {
 } from './dashboard.dao.js';
 import { findUserById } from '../users/users.dao.js';
 import { holdsCurrentAgreement } from './legal-agreement.service.js';
-import { publishBlockers, requireOwnVendorProfile } from './vendors.service.js';
+import { isCompleteName, publishBlockers, requireOwnVendorProfile } from './vendors.service.js';
 
 /** The window the response rate is measured over, as the frame labels it. */
 const RESPONSE_WINDOW_DAYS = 30;
@@ -176,7 +176,7 @@ export async function getVendorDashboard(
       categoryIds,
       activePackageCount,
       holdsAgreement,
-      Boolean(owner?.firstName.trim()) && Boolean(owner?.lastName.trim()),
+      isCompleteName(owner?.firstName, owner?.lastName),
     ),
     stripeOnboarded: vendor.stripeOnboarded,
     /*
