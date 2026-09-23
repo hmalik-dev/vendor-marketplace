@@ -546,7 +546,9 @@ async function forwardReset(
 
 type PasswordChange = { currentPassword: string; newPassword: string };
 
-const isFilled = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
+function isFilled(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
 
 /** The two passwords a change carries, and nothing else the client sent; `null` when either is missing. */
 function passwordsIn(body: string): PasswordChange | null {
