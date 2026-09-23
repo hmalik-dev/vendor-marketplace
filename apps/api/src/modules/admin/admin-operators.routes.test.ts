@@ -265,21 +265,30 @@ describe('operator grant and revoke', () => {
     expect(await auditRows(customerId)).toHaveLength(0);
   });
 
-  it('refuses an address two live accounts hold in different case, granting neither', async () => {
+  /*
+   * Two live accounts in different case used to be a state the grant had to
+   * refuse. VEN-649 made it one the database refuses, so the grant finds one
+   * account whatever case the operator types.
+   */
+  it('grants the one live account an address names, whatever case it is typed in', async () => {
     await fixtures();
-    await harness.database.db
-      .update(users)
-      .set({ email: 'Twin@Example.com' })
-      .where(eq(users.id, await idOf(CUSTOMER)));
+    const customerId = await idOf(CUSTOMER);
     await harness.database.db
       .update(users)
       .set({ email: 'twin@example.com' })
-      .where(eq(users.id, await idOf(VENDOR)));
+      .where(eq(users.id, customerId));
 
-    const response = await grant(ADMIN, 'twin@example.com');
+    await expect(
+      harness.database.db
+        .update(users)
+        .set({ email: 'twin@example.com' })
+        .where(eq(users.id, await idOf(VENDOR))),
+    ).rejects.toThrow();
 
-    expect(response.statusCode).toBe(409);
-    expect(await roleOf(CUSTOMER)).toBe('customer');
+    const response = await grant(ADMIN, 'Twin@Example.com');
+
+    expect(response.statusCode).toBe(200);
+    expect(await roleOf(CUSTOMER)).toBe('admin');
     expect(await roleOf(VENDOR)).toBe('vendor');
   });
 

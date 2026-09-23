@@ -610,6 +610,20 @@
       "when": 1790176164857,
       "tag": "0086_funny_proemial_gods",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1790177177207,
+      "tag": "0087_users_email_case_collisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1790177177687,
+      "tag": "0088_one_account_per_address",
+      "breakpoints": true
     }
   ]
 }

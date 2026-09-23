@@ -222,6 +222,9 @@ function recordingRoutes<TOptions extends FastifyPluginOptions>(
  */
 const WEBHOOK_RATE_LIMIT_FACTOR = 10;
 
+/** How often a web tier key mismatch may reach the error tracker from one process. */
+const TIER_KEY_MISMATCH_REPORT_INTERVAL_MS = 60 * 60_000;
+
 /** Longest textual IP address, IPv6 with an embedded IPv4 tail. */
 const MAX_IP_LENGTH = 45;
 
@@ -262,6 +265,7 @@ function rateLimitKey(
     log: { warn: (message: string) => void };
   },
   secret: string | undefined,
+  onMismatch: () => void,
 ): string {
   const presented = request.headers[WEB_TIER_KEY_HEADER];
   const visitor = request.headers[VISITOR_IP_HEADER];
@@ -281,6 +285,7 @@ function rateLimitKey(
     // A rotated key on one side only puts every visitor back in one bucket, and
     // nothing else would say so.
     request.log.warn('web tier key mismatch: rate limit is keyed on the socket address');
+    onMismatch();
     return clientAddress(request);
   }
   return `visitor:${visitor}`;
@@ -289,6 +294,26 @@ function rateLimitKey(
 export async function buildServer(options: BuildServerOptions): Promise<FastifyInstance> {
   const { env, db, storage } = options;
   const errorReporter = options.errorReporter ?? createErrorReporter(env);
+  /*
+   * A warning alone was the whole signal that rate limiting had collapsed to
+   * one bucket for every visitor (VEN-649). Reported at most once an hour: a
+   * rotated key mismatches on every request, and anyone can send a wrong key,
+   * so a once-per-process latch would let one probe after a deploy spend the
+   * report a real rotation later needs.
+   */
+  let tierKeyMismatchReportedAt = Number.NEGATIVE_INFINITY;
+  function reportTierKeyMismatch(): void {
+    const now = Date.now();
+    if (now - tierKeyMismatchReportedAt < TIER_KEY_MISMATCH_REPORT_INTERVAL_MS) {
+      return;
+    }
+    tierKeyMismatchReportedAt = now;
+    errorReporter.capture(
+      new Error(
+        'Web tier key mismatch: the web tier presented a WEB_TIER_KEY this API does not hold, so the rate limit keys every visitor on the web platform address',
+      ),
+    );
+  }
   /** Route patterns that move money; filled as the payment plugins register below. */
   const moneyRoutes = new Set<string>();
 
@@ -416,7 +441,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(rateLimit, {
     max: env.RATE_LIMIT_MAX,
     timeWindow: '1 minute',
-    keyGenerator: (request) => rateLimitKey(request, env.WEB_TIER_KEY),
+    keyGenerator: (request) => rateLimitKey(request, env.WEB_TIER_KEY, reportTierKeyMismatch),
   });
   /*
    * The limiter, ahead of authentication.

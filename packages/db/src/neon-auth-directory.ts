@@ -47,7 +47,8 @@ export type SqlExecutor = (query: string, params: unknown[]) => Promise<Record<s
 /** Ids are compared as text: Better Auth mints them, and the column type is Neon's to change. */
 const LOOKUP = `select id::text as id, email, name, image from neon_auth."user" where id::text = any($1::text[])`;
 const SELECT_EMAIL = `select email from neon_auth."user" where id::text = $1`;
-const DELETE_USER = `delete from neon_auth."user" where id::text = $1`;
+/** `returning`, so a delete that removed nothing is told apart from one that did. */
+const DELETE_USER = `delete from neon_auth."user" where id::text = $1 returning id::text as id`;
 const UPDATE_NAME = `update neon_auth."user" set name = $2 where id::text = $1 returning id::text as id`;
 /** The whole identifier, or a `<flow>-` prefix on it: never a substring, which would reach other people's codes. */
 const DELETE_CODES = `delete from neon_auth.verification where lower(identifier) = lower($1) or lower(identifier) like '%-' || replace(replace(replace(lower($1), '\\', '\\\\'), '%', '\\%'), '_', '\\_')`;
@@ -82,7 +83,12 @@ export function createNeonAuthDirectoryOver(
         return false;
       }
 
-      await execute(DELETE_USER, [id]);
+      // Between the read and the delete another closure (or the provider) may
+      // have removed it; claiming this call did would be the lie described above.
+      const deleted = await execute(DELETE_USER, [id]);
+      if (deleted.length === 0) {
+        return false;
+      }
 
       const email = text(row['email']);
       if (email !== '') {

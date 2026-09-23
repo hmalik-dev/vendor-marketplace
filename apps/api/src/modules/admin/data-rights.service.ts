@@ -528,6 +528,22 @@ async function deleteAndConfirm(
       { userId },
       'An account closure found no Neon Auth identity to delete; the store may point at another branch',
     );
+    /*
+     * And a page, not only a log line (VEN-649): a delete that removed nothing
+     * is also what a change to Neon's private schema looks like, and then every
+     * closure leaves a person able to sign in until someone reads the logs.
+     */
+    context.alerts?.dispatch({
+      kind: 'auth_identity_kept',
+      subjectId: userId,
+      summary: 'An account closure removed no Neon Auth identity',
+      details: [
+        `User ${userId} is closed here, but deleting their Neon Auth identity affected 0 rows.`,
+        'Either the identity was already gone, or the API reads a different Neon Auth branch or schema than the one that signs this person in.',
+        'Check the identity in the Neon console; if it still exists, the person can still sign in.',
+      ],
+      adminPath: `/admin/users/${userId}`,
+    });
   }
 
   return completed && removed;

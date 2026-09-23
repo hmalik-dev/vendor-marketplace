@@ -287,6 +287,46 @@ describe('the rate-limit key for the web tier', () => {
     }
   });
 
+  /*
+   * VEN-649: the warning was the only signal that every visitor now shares one
+   * bucket. A key rotated on one side must reach the error tracker, at most
+   * once an hour rather than once per request.
+   */
+  it('reports a wrong key to the error tracker at most once an hour', async () => {
+    const captured: unknown[] = [];
+    const harness = await createTestHarness({
+      env: tierEnv,
+      errorReporter: { capture: (error) => captured.push(error) },
+    });
+
+    try {
+      await callAs(harness, asVisitor('198.51.100.50', 'wrong'));
+      await callAs(harness, asVisitor('198.51.100.51', 'wrong'));
+      await callAs(harness, asVisitor('198.51.100.52'));
+
+      expect(captured).toHaveLength(1);
+      expect((captured[0] as Error).message).toMatch(/^Web tier key mismatch:/);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('reports nothing when the key matches', async () => {
+    const captured: unknown[] = [];
+    const harness = await createTestHarness({
+      env: tierEnv,
+      errorReporter: { capture: (error) => captured.push(error) },
+    });
+
+    try {
+      await callAs(harness, asVisitor('198.51.100.60'));
+
+      expect(captured).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
   it('ignores the forwarded visitor when no key is configured', async () => {
     const harness = await createTestHarness({ env: { RATE_LIMIT_MAX: 2 } });
 

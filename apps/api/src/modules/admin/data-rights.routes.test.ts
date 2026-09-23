@@ -10,6 +10,7 @@ import {
   legalAcceptances,
   messages,
   notifications,
+  operatorAlerts,
   reviews,
   users,
   vendorCategories,
@@ -1300,6 +1301,13 @@ describe('data rights', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({ identityDeleted: false });
+      // VEN-649: a delete that removed nothing pages the operator, not only the log.
+      await harness.flushEmail();
+      const alerts = await harness.database.db
+        .select({ kind: operatorAlerts.kind, subjectId: operatorAlerts.subjectId })
+        .from(operatorAlerts)
+        .where(eq(operatorAlerts.subjectId, unheld[0]!.id));
+      expect(alerts).toEqual([{ kind: 'auth_identity_kept', subjectId: unheld[0]!.id }]);
     });
 
     /*
@@ -1333,6 +1341,14 @@ describe('data rights', () => {
         expect(response.statusCode).toBe(200);
         expect(response.json()).toMatchObject({ identityDeleted: false });
         expect(harness.deletedAuthUsers).toEqual([]);
+        // No store is a lane's configuration, not a delete that went wrong: no page.
+        await harness.flushEmail();
+        expect(
+          await harness.database.db
+            .select()
+            .from(operatorAlerts)
+            .where(eq(operatorAlerts.subjectId, neonUser[0]!.id)),
+        ).toEqual([]);
       } finally {
         harness.app.authDirectory = directory;
       }

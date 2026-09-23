@@ -76,6 +76,17 @@ export function mirroredAuthName(value: string): string {
   return stripRefusedText(stripBidiControls(value)).normalize('NFC').trim();
 }
 
+/**
+ * An address as `users.email` stores it: trimmed and lowercased (VEN-649).
+ *
+ * The unique index is on `lower(email)` and a CHECK refuses anything else, so
+ * every writer goes through this — a mixed-case address from the provider
+ * would otherwise fail the insert rather than be one person's one account.
+ */
+export function mirroredAuthEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 /** First and last name out of Better Auth's single `name` field. */
 export function splitAuthName(name: string): { firstName: string; lastName: string } {
   const [first = '', ...rest] = name.trim().split(/\s+/);
@@ -89,7 +100,7 @@ export function splitAuthName(name: string): { firstName: string; lastName: stri
 function toNewUserRow(snapshot: AuthUserSnapshot): NewUserRow {
   return {
     authUserId: snapshot.authUserId,
-    email: snapshot.email,
+    email: mirroredAuthEmail(snapshot.email),
     role: normalizeRole(snapshot.roleHint),
     firstName: mirroredAuthName(snapshot.firstName),
     lastName: mirroredAuthName(snapshot.lastName),

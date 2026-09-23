@@ -17,6 +17,10 @@
  * `platform_balance_short` (VEN-644) is the daily reconciliation finding the
  * platform's Stripe balance below what it still owes vendors and customers —
  * money paid out to the bank, or spent on someone else's booking, too early.
+ *
+ * `auth_identity_kept` (VEN-649) is an account closure whose delete at Neon Auth
+ * removed nothing: the person may still be able to sign in, and only an
+ * operator looking at the provider can say why.
  */
 export const OPERATOR_ALERT_KINDS = [
   'dispute_opened',
@@ -31,6 +35,7 @@ export const OPERATOR_ALERT_KINDS = [
   'launch_switch_flipped',
   'auth_identity_deleted',
   'platform_balance_short',
+  'auth_identity_kept',
   'daily_digest',
 ] as const;
 export type OperatorAlertKind = (typeof OPERATOR_ALERT_KINDS)[number];

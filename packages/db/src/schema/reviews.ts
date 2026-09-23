@@ -27,9 +27,11 @@ export const reviews = pgTable(
     bookingId: uuid('booking_id')
       .notNull()
       .references(() => bookings.id, { onDelete: 'cascade' }),
+    // `restrict` (VEN-649): a vendor's reviews are their record, not the
+    // reviewer's to take with them on a stray hard delete.
     reviewerId: uuid('reviewer_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'restrict' }),
     /** Denormalized from the booking so vendor review queries avoid a join. */
     vendorId: uuid('vendor_id')
       .notNull()
@@ -82,9 +84,10 @@ export const reviewTombstones = pgTable(
     bookingId: uuid('booking_id')
       .notNull()
       .references(() => bookings.id, { onDelete: 'cascade' }),
+    // `restrict`, as on `reviews.reviewer_id` (VEN-649).
     reviewerId: uuid('reviewer_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'restrict' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

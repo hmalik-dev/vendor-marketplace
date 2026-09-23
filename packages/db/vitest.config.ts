@@ -9,7 +9,12 @@ export default defineConfig({
      * `vitest.contention.config.ts` and `pnpm test:contention`. Excluded here
      * rather than skipped at runtime, so this task never needs one.
      */
-    exclude: ['**/node_modules/**', '**/dist/**', 'src/**/*.contention.test.ts'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'src/**/*.contention.test.ts',
+      'src/**/*.neon.test.ts',
+    ],
     // Migration + seed suites each boot their own in-process Postgres.
     testTimeout: 60_000,
     hookTimeout: 60_000,

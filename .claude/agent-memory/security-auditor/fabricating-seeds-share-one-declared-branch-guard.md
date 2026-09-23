@@ -43,6 +43,12 @@ behind `assertSafeTarget`. That is now the whole gate on a switch the launch
 check requires ON in production: a second caller, or an exported flipper, turns
 this into a production control.
 
+Since VEN-649, `neon-auth-directory.neon.test.ts` (`pnpm test:neon`) writes a
+verified identity + session + account into `neon_auth` on whatever
+`NEON_AUTH_CONTRACT_DATABASE_URL` names, with no `assertSafeTarget` (its
+`connectionVariable` option fits). Flagged low: rows are a random-UUID throwaway
+removed in `afterAll`; nothing in CI sets the variable.
+
 Since VEN-407, `scripts/e2e-booking-dates.ts` (`e2e:dates shift-past <id>`) also
 sits behind it and rewrites _any_ booking's event date to yesterday (not scoped
 to the E2E vendor). Audited clean: no route, not in the `exports` map, no deploy

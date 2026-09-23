@@ -26,9 +26,12 @@ export const conversations = pgTable(
     id: uuid('id')
       .primaryKey()
       .default(sql`gen_random_uuid()`),
+    // `restrict` (VEN-649): a closure anonymises in place (VEN-614), so a hard
+    // delete that reaches this row is a mistake, and must not take the vendor's
+    // side of the thread with it.
     customerId: uuid('customer_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'restrict' }),
     vendorId: uuid('vendor_id')
       .notNull()
       .references(() => vendorProfiles.id, { onDelete: 'cascade' }),
@@ -67,9 +70,10 @@ export const messages = pgTable(
     conversationId: uuid('conversation_id')
       .notNull()
       .references(() => conversations.id, { onDelete: 'cascade' }),
+    // `restrict` for the same reason as `conversations.customer_id` (VEN-649).
     senderId: uuid('sender_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => users.id, { onDelete: 'restrict' }),
     /** Stored as plain text; React escapes on render. */
     content: text('content').notNull(),
     readAt: timestamp('read_at', { withTimezone: true }),
