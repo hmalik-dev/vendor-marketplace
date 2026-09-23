@@ -979,8 +979,8 @@ test('web: staging deploys a preview and aliases it to the staging host', async 
   const calls = [];
   const url = 'https://orla-abc123-team.vercel.app';
   const io = {
-    run: async (_command, args, options) => {
-      calls.push(args.slice(2).join(' '));
+    run: async (command, args, options) => {
+      calls.push(command === 'npx' ? args.slice(2).join(' ') : `${command} ${args.join(' ')}`);
       if (args[2] === 'deploy') {
         // Progress lines can follow the URL: it is the last line that is one, not the last line.
         options.write(`Inspect: https://vercel.com/x\n${url}\nPreview: ${url} [3s]\n`);
@@ -1007,6 +1007,7 @@ test('web: staging deploys a preview and aliases it to the staging host', async 
   );
 
   assert.deepEqual(calls, [
+    'git checkout -B staging',
     'pull --yes --environment=preview --git-branch=staging',
     'build',
     `deploy --prebuilt --env SENTRY_RELEASE=${SHA}`,
@@ -1090,6 +1091,10 @@ test('web: production stays a production deployment and is not aliased', async (
       'build --prod',
       `deploy --prebuilt --prod --env SENTRY_RELEASE=${SHA}`,
     ],
+  );
+  assert.ok(
+    !calls.some((call) => call.command === 'git'),
+    'production never checks out a branch; --prod is unambiguous already',
   );
 });
 
