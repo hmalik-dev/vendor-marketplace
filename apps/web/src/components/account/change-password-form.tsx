@@ -3,20 +3,28 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
+import { ACCOUNT_SETTINGS_PATH } from '@/components/account-menu';
 import { AuthField } from '@/components/auth/auth-field';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { changePassword } from '@/lib/auth/auth-requests';
+import { signInPathReturningTo } from '@/lib/return-path';
 
 type Message = { status: 'failed' | 'informational'; text: string };
 
 /** Sign-up's rule, so a new password is held to what the first one was. */
 const MIN_LENGTH = 10;
+/** Better Auth's own ceiling, refused here so it never reads as a wrong current password. */
+const MAX_LENGTH = 128;
 
 /** The copy for a change the form refuses on its own, or `null` when it may be sent. */
 function refusal(current: string, next: string, confirm: string): string | null {
   if (next.length < MIN_LENGTH) {
     return AUTH_COPY.changeTooShort;
+  }
+
+  if (next.length > MAX_LENGTH) {
+    return AUTH_COPY.changeTooLong;
   }
 
   if (next !== confirm) {
@@ -64,6 +72,11 @@ export function ChangePasswordForm(): React.ReactElement {
       setConfirm('');
       setMessage({ status: 'informational', text: AUTH_COPY.changeDone });
       router.refresh();
+      return;
+    }
+
+    if (outcome === 'signedOut') {
+      router.push(signInPathReturningTo(ACCOUNT_SETTINGS_PATH));
       return;
     }
 

@@ -903,6 +903,36 @@ describe('changing a password through the auth proxy (VEN-677)', () => {
     expect((await call(CHANGE, PASSWORDS, '6.6.8.1')).status).toBe(400);
   });
 
+  /*
+   * Only a 400 is a wrong current password. A 401 is a session revoked
+   * elsewhere that this instance still has cached, and charging it would let a
+   * revoked session spend its owner's budget.
+   */
+  it.each([401, 403])('does not charge a provider %i to the account', async (status) => {
+    upstreamPost.mockResolvedValue(Response.json({}, { status }));
+    for (let i = 0; i < 6; i++) {
+      await call(CHANGE, PASSWORDS, `7.7.7.${i}`);
+    }
+    upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID_PASSWORD' }, { status: 400 }));
+
+    expect((await call(CHANGE, PASSWORDS, '7.7.8.1')).status).toBe(400);
+  });
+
+  it('forwards the re-encoded body as JSON whatever type the client named', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ token: 't' }));
+
+    await POST(
+      new Request('http://localhost/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'content-type': 'text/plain', 'x-forwarded-for': '3.3.3.3' },
+        body: JSON.stringify(PASSWORDS),
+      }) as never,
+      { params: Promise.resolve({ path: [CHANGE] }) },
+    );
+
+    expect(upstreamPost.mock.calls[0]?.[0].headers.get('content-type')).toBe('application/json');
+  });
+
   it('never charges a change that lands, or the provider being down', async () => {
     upstreamPost.mockResolvedValue(Response.json({}, { status: 503 }));
     for (let i = 0; i < 6; i++) {

@@ -38,6 +38,7 @@ export const AUTH_COPY = {
   changeWrongCurrent: 'That is not your current password. Check it and try again.',
   changeSameAsCurrent: 'Choose a new password that is different from your current one.',
   changeTooShort: 'Your new password needs at least 10 characters.',
+  changeTooLong: 'Your new password can be at most 128 characters.',
   changeMismatch: 'The two new passwords do not match.',
   changeDone:
     'Your password is changed. You are still signed in here, and signed out everywhere else.',

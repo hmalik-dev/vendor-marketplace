@@ -37,6 +37,17 @@ only guards `setState`). Refusal banners are `failureCopy` constants, and the
 code step is reachable only after a password-correct unverified sign-in, so the
 banner is no oracle curl against the proxy did not already have.
 
+**`change-password` is the one signed-in account call** (VEN-677 audit,
+2026-09-23, PASS with lows): the proxy rebuilds the body from two fields and forces
+`revokeOtherSessions: true`; budget is `addr|change-password|sha256(userId)`, 5/10
+min, read-only check then charge (TOCTOU, same as sign-in). The caller's id can come
+from the minted cache (no revocation check), so charging upstream 401/403 lets a
+revoked session keep spending the owner's budget; Better Auth's wrong current password
+is 400 `INVALID_PASSWORD`. CSRF holds: SDK cookies are SameSite=Lax by default and the
+SDK forwards the browser's Origin to Neon. Change does not bump
+`sessions_invalidated_at` (deferred to VEN-670); a naive bump refuses the caller's own
+same-second re-mint.
+
 Related: the request-reset path hides account existence with a fixed 200 and
 `after()`; its sibling `email-otp/reset-password` returns the upstream status
 verbatim, so existence can leak there instead. See [[fixed-response-sibling-leak]].

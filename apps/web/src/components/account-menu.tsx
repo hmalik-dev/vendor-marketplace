@@ -91,7 +91,8 @@ export function AccountMenu({
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger
         ref={trigger}
-        aria-label="Account menu"
+        // On the console the line beside it carries only an address, so the trigger names the operator.
+        aria-label={tone === 'dark' ? `Account menu, ${name}` : 'Account menu'}
         /*
           44px of target around the frame's 32px circle, per `04-laws.md`. No
           `data-focus-own`: this is an unbordered control, and the base

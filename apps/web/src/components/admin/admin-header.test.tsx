@@ -101,7 +101,9 @@ describe('AdminHeader', () => {
     render(<AdminHeader email={EMAIL} name="Admin" />);
 
     // jsdom has no PointerEvent, and Radix opens a menu from the keyboard too.
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu' }), { key: 'Enter' });
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu, Admin' }), {
+      key: 'Enter',
+    });
     const items = within(screen.getByRole('menu')).getAllByRole('menuitem');
 
     expect(items.map((item) => [item.textContent, item.getAttribute('href')])).toEqual([
@@ -115,7 +117,8 @@ describe('AdminHeader', () => {
   it('draws the trigger’s monogram as frame `13` does: 30px, in the inverted pair', () => {
     render(<AdminHeader email={EMAIL} name="Admin" />);
 
-    const trigger = screen.getByRole('button', { name: 'Account menu' });
+    // The trigger names who is signed in: the line beside it carries only an address.
+    const trigger = screen.getByRole('button', { name: 'Account menu, Admin' });
     const circle = trigger.firstElementChild as HTMLElement;
 
     expect(circle.style.width).toBe('30px');

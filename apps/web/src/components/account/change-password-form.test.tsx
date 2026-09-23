@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_COPY } from '@/app/auth-copy';
 
 const refresh = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+const push = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push }) }));
 
 const { ChangePasswordForm } = await import('./change-password-form');
 
@@ -16,6 +17,7 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   refresh.mockReset();
+  push.mockReset();
   fetchMock.mockReset().mockResolvedValue(new Response('{}', { status: 200 }));
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -62,6 +64,13 @@ describe('ChangePasswordForm (VEN-677)', () => {
       'changeMismatch',
     ],
     [
+      'a new password over 128 characters',
+      'old-password',
+      'x'.repeat(129),
+      'x'.repeat(129),
+      'changeTooLong',
+    ],
+    [
       'a new password equal to the current one',
       'the-same-password',
       'the-same-password',
@@ -103,5 +112,14 @@ describe('ChangePasswordForm (VEN-677)', () => {
     expect(screen.getByText(AUTH_COPY[copy])).toBeDefined();
     expect(screen.queryByText('Invalid password upstream')).toBeNull();
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('sends a caller whose session ended elsewhere to sign in and back, not to a wrong-password line', async () => {
+    fetchMock.mockResolvedValue(new Response('{}', { status: 401 }));
+
+    await fill('the-old-password', 'a-new-password', 'a-new-password');
+
+    expect(push).toHaveBeenCalledExactlyOnceWith('/sign-in?returnTo=%2Faccount%2Fsettings');
+    expect(screen.queryByText(AUTH_COPY.changeWrongCurrent)).toBeNull();
   });
 });

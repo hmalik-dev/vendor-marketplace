@@ -238,14 +238,21 @@ describe('changePassword (VEN-677)', () => {
   });
 
   /*
-   * Better Auth answers a wrong current password 400 `INVALID_PASSWORD`; a 401
-   * or 403 here is the same refusal of this caller, and none of them may read
-   * as `unverified`, which would send a signed-in person to a code step.
+   * Better Auth answers a wrong current password 400 `INVALID_PASSWORD`; a 403
+   * must not read as `unverified`, which would send a signed-in person to a
+   * code step.
    */
-  it.each([400, 401, 403])('reads a %i as a refused current password', async (status) => {
+  it.each([400, 403])('reads a %i as a refused current password', async (status) => {
     stubFetchBody(status, { code: 'INVALID_PASSWORD' });
 
     await expect(changePassword(CHANGE)).resolves.toBe('rejected');
+  });
+
+  // The session ended elsewhere (a sign-out in another tab): not a wrong password.
+  it('reads a 401 as signed out', async () => {
+    stubFetch(401);
+
+    await expect(changePassword(CHANGE)).resolves.toBe('signedOut');
   });
 
   it('reads the per-account budget running out as throttled, not as a wrong password', async () => {

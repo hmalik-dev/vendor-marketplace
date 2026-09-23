@@ -575,8 +575,9 @@ function passwordsIn(body: string): PasswordChange | null {
  *   issues this device a fresh session, so the caller stays signed in here.
  * - **Wrong current passwords are budgeted per account**, not per address:
  *   the body names no email, so the bucket is the session's user id. Only the
- *   provider's refusal is charged, as for a password sign-in, so an outage
- *   spends nobody's budget and a successful change is never locked out.
+ *   provider's refusal of the current password is charged, as for a password
+ *   sign-in, so an outage spends nobody's budget and a successful change is
+ *   never locked out.
  * - **This process forgets the account's minted tokens** once the change
  *   lands, as sign-out and reset do, so a revoked cookie's cached JWT does not
  *   outlive it here. The API side of a live JWT is VEN-670's.
@@ -613,6 +614,7 @@ async function forwardChangePassword(
   const headers = new Headers(request.headers);
   headers.delete('content-length');
   headers.delete('content-encoding');
+  headers.set('content-type', 'application/json');
   const upstream = new Request(request.url, {
     method: 'POST',
     headers,
@@ -622,7 +624,12 @@ async function forwardChangePassword(
     .handler()
     .POST(upstream as NextRequest, context);
 
-  if (response.status === 400 || response.status === 401 || response.status === 403) {
+  /*
+   * Only a 400 (`INVALID_PASSWORD`) is a guess. A 401 is a session revoked
+   * elsewhere that this instance still had cached: charging it would let a
+   * revoked session spend its owner's budget.
+   */
+  if (response.status === 400) {
     await chargeAddress(userId, path);
   }
 
