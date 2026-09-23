@@ -47,6 +47,19 @@ function stalledFetch(): typeof fetch {
 }
 
 const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+
+/*
+ * The deadline is under test, not the visitor headers: with a web tier key set
+ * (a lane's env carries one, VEN-662) the server path awaits them before
+ * `fetch`, so a caller's abort would land before the request exists.
+ */
+beforeEach(() => {
+  vi.stubEnv('WEB_TIER_KEY', '');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 /** Every duration the code under test asked for, in order. */
 let asked: number[] = [];
 

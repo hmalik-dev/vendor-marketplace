@@ -264,6 +264,18 @@ jobs:
       - if: steps.secrets.outputs.run == 'true'
         run: pnpm install --frozen-lockfile
 
+      # One web-tier key per run, shared by the API, the web app and the
+      # journeys through the job environment: a sign-up records its role at the
+      # API's internal route, which exists only when the key is set (VEN-662),
+      # and the refused-vendor journey records the newcomer's role there itself.
+      # Generated, never a literal, and masked like the secrets above.
+      - name: Generate this run's web tier key
+        if: steps.secrets.outputs.run == 'true'
+        run: |
+          key=$(openssl rand -hex 32)
+          echo "::add-mask::$key"
+          echo "WEB_TIER_KEY=$key" >> "$GITHUB_ENV"
+
       # Uploads go to Neon Object Storage, which has no emulator, so this run
       # gets a storage-only branch of its own (`ci-<run>-<attempt>`, cut from
       # `dev`, no compute) and its STORAGE_* values reach the later steps through

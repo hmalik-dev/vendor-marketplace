@@ -117,7 +117,9 @@ export async function recordSignUpRoleFor(page: Page, role: SignUpRole): Promise
   const key = process.env.WEB_TIER_KEY;
 
   if (!key) {
-    throw new Error('WEB_TIER_KEY is not set — run this spec through `pnpm lane:exec`.');
+    throw new Error(
+      'WEB_TIER_KEY is not set: run this spec through `pnpm lane:exec`, or with the key the API holds (CI generates one per run).',
+    );
   }
 
   const session = (await (await page.request.get('/api/auth/get-session')).json()) as {
