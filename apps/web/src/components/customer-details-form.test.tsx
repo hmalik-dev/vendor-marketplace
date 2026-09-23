@@ -17,6 +17,14 @@ describe('CustomerDetailsForm', () => {
   });
   afterEach(cleanup);
 
+  /* Not the last step for everyone, so the screen claims no position in the flow. */
+  it('asks for the name under its heading alone, with no step eyebrow', () => {
+    render(<CustomerDetailsForm returnTo={null} />);
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('What should we call you?');
+    expect(screen.queryByText(/last step/i)).toBeNull();
+  });
+
   it('refuses an empty submission client-side, without calling the API', async () => {
     const user = userEvent.setup();
     render(<CustomerDetailsForm returnTo={null} />);
