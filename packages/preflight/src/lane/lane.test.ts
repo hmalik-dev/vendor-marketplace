@@ -157,6 +157,23 @@ describe('laneUp', () => {
     expect(parsed.NEXT_PUBLIC_SENTRY_DSN).toBe('');
   });
 
+  // VEN-662. A lane's sign-up needs a web tier key; a file from before it existed is rewritten.
+  it('gives a lane a web tier key, keeps it across a resume, and rewrites a file without one', async () => {
+    vi.stubEnv('DATABASE_URL', databaseUrl);
+    await laneUp(root, worktree, '42', deps());
+    const file = path.join(worktree, '.env.lane');
+    const key = parseLaneEnv(readFileSync(file, 'utf8')).WEB_TIER_KEY ?? '';
+
+    expect(key).toMatch(/^[0-9a-f]{64}$/);
+
+    await laneUp(root, worktree, '42', deps());
+    expect(parseLaneEnv(readFileSync(file, 'utf8')).WEB_TIER_KEY).toBe(key);
+
+    writeFileSync(file, readFileSync(file, 'utf8').replace(/^WEB_TIER_KEY=.*$/m, ''));
+    await laneUp(root, worktree, '42', deps());
+    expect(parseLaneEnv(readFileSync(file, 'utf8')).WEB_TIER_KEY).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   it('installs, builds and migrates exactly once, after the env file exists', async () => {
     const d = deps();
     await laneUp(root, worktree, '42', d);

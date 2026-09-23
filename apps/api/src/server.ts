@@ -73,6 +73,7 @@ import { customerRoutes } from './modules/customers/customers.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { throttleRoutes } from './modules/throttle/throttle.routes.js';
 import { sessionGenerationRoutes } from './modules/users/session-generation.routes.js';
+import { signUpRoleRoutes } from './modules/users/sign-up-role.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
 import { reviewRoutes } from './modules/reviews/reviews.routes.js';
@@ -605,6 +606,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     async (v1) => {
       await v1.register(throttleRoutes, { webTierKey: env.WEB_TIER_KEY });
       await v1.register(sessionGenerationRoutes, { webTierKey: env.WEB_TIER_KEY });
+      await v1.register(signUpRoleRoutes, { webTierKey: env.WEB_TIER_KEY });
       await v1.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
       await v1.register(adminCategoryRoutes);
       await v1.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });

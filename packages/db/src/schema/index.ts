@@ -24,3 +24,4 @@ export * from './refund-attempts.js';
 export * from './abuse-limits.js';
 export * from './email-send-days.js';
 export * from './replica-state.js';
+export * from './sign-up-roles.js';

@@ -36,6 +36,7 @@ const laneEnv = parseLaneEnv(
     manifest,
     'postgresql://localhost:5432/vendor_marketplace_lane_231',
     laneStorageFixture,
+    'a'.repeat(64),
   ),
 );
 

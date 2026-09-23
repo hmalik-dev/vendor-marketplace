@@ -597,6 +597,170 @@ describe('sign-in through the auth proxy', () => {
   });
 });
 
+describe('sign-up through the auth proxy (VEN-662)', () => {
+  const SIGN_UP = 'sign-up/email';
+  const KEY = 'k'.repeat(40);
+  const EMAIL = 'new.person@example.com';
+  const created = () =>
+    Response.json(
+      { token: 't', user: { id: 'auth-new-1', email: EMAIL } },
+      { headers: { 'set-cookie': 'session=abc; Path=/' } },
+    );
+
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', KEY);
+    resetThrottle();
+    upstreamPost.mockReset();
+    captureException.mockReset();
+    captureMessage.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * `fetch` as the proxy sees it: with a web tier key the throttle counts at
+   * the API too, so its calls are answered "not throttled" and only the
+   * record calls reach `record`.
+   */
+  function stubApi(record: (url: string, init: RequestInit) => Promise<Response>): void {
+    vi.stubGlobal('fetch', (url: string, init: RequestInit) =>
+      url.endsWith('/internal/throttle')
+        ? Promise.resolve(Response.json({ throttled: false }))
+        : record(url, init),
+    );
+  }
+
+  const NO_ROLE = Symbol('no role');
+
+  function signUp(role: unknown): Promise<Response> {
+    return call(SIGN_UP, {
+      email: EMAIL,
+      password: 'correct horse',
+      name: 'new.person',
+      ...(role === NO_ROLE ? {} : { role }),
+    });
+  }
+
+  it('forwards the sign-up without its role, then records the role against the new id', async () => {
+    upstreamPost.mockResolvedValue(created());
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ recorded: true }));
+    stubApi(fetchMock);
+
+    const response = await signUp('vendor');
+
+    expect(response.status).toBe(200);
+    expect(await upstreamPost.mock.calls[0]?.[0].json()).toEqual({
+      email: EMAIL,
+      password: 'correct horse',
+      name: 'new.person',
+    });
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/\/v1\/internal\/sign-up-role$/),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'x-web-tier-key': KEY }),
+        body: JSON.stringify({ authUserId: 'auth-new-1', role: 'vendor' }),
+      }),
+    );
+  });
+
+  it.each([['admin'], ['Vendor'], [''], [null], [NO_ROLE]])(
+    'refuses the role %s with a 400 before the provider is called',
+    async (role) => {
+      const fetchMock = vi.fn();
+      stubApi(fetchMock);
+
+      const response = await signUp(role);
+
+      expect(response.status).toBe(400);
+      expect(upstreamPost).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('retries a failed record once, and answers the sign-up when the retry lands', async () => {
+    upstreamPost.mockResolvedValue(created());
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce(Response.json({ recorded: true }));
+    stubApi(fetchMock);
+
+    const response = await signUp('customer');
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(captureMessage).not.toHaveBeenCalled();
+  });
+
+  it('answers a failure, not the sign-up’s 200, when the record fails twice — and reports the id, never the address', async () => {
+    upstreamPost.mockResolvedValue(created());
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({}, { status: 500 }))
+      .mockRejectedValueOnce(new Error('down'));
+    stubApi(fetchMock);
+
+    const response = await signUp('vendor');
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ code: 'SIGN_UP_UNRECORDED' });
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Each attempt carries its own two-second deadline.
+    const deadlines = timeout.mock.results.filter((_, i) => timeout.mock.calls[i]?.[0] === 2_000);
+    for (const [, init] of fetchMock.mock.calls as [string, RequestInit][]) {
+      expect(deadlines.map((result) => result.value)).toContain(init.signal);
+    }
+    expect(captureMessage).toHaveBeenCalledExactlyOnceWith(
+      'Could not record the role chosen at sign-up',
+      { level: 'error', extra: { authUserId: 'auth-new-1' } },
+    );
+    expect(JSON.stringify(captureMessage.mock.calls)).not.toContain(EMAIL);
+  });
+
+  it('answers a failure when the provider’s sign-up answer names no account id', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ token: 't' }));
+    const fetchMock = vi.fn();
+    stubApi(fetchMock);
+
+    const response = await signUp('vendor');
+
+    expect(response.status).toBe(503);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(captureMessage).toHaveBeenCalledExactlyOnceWith(
+      'A sign-up answer named no account id, so its role was not recorded',
+      { level: 'error' },
+    );
+  });
+
+  it('passes a refused sign-up through and records nothing', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ code: 'USER_ALREADY_EXISTS' }, { status: 422 }));
+    const fetchMock = vi.fn();
+    stubApi(fetchMock);
+
+    const response = await signUp('vendor');
+
+    expect(response.status).toBe(422);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 AUTH_UNAVAILABLE and creates no account with no web tier key to record with', async () => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+
+    const response = await signUp('vendor');
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ code: 'AUTH_UNAVAILABLE' });
+    expect(upstreamPost).not.toHaveBeenCalled();
+  });
+});
+
 describe('the auth proxy without an auth configuration (VEN-635)', () => {
   beforeEach(() => {
     resetThrottle();

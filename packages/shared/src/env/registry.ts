@@ -448,7 +448,7 @@ export const ENV_REGISTRY = [
     shape: /^[A-Za-z0-9_-]{32,}$/,
     placeholder: 'openssl-rand-hex-32-...',
     description:
-      "Shared between the web app and the API so the API can key its rate limit on the visitor the web tier forwards rather than on the web platform's one egress address. Required on a deployment: without it every visitor shares one address and the per-IP limit counts them as one. Optional locally. A different value per environment (VEN-649): a key leaked from staging must not let anyone choose the address production's rate limiter counts.",
+      "Shared between the web app and the API so the API can key its rate limit on the visitor the web tier forwards rather than on the web platform's one egress address. Required on a deployment: without it every visitor shares one address and the per-IP limit counts them as one. It also carries the role chosen at sign-up to the API (VEN-662), so without it the auth proxy refuses every sign-up with 503. Optional locally, where `pnpm lane:up` gives each lane its own. A different value per environment (VEN-649): a key leaked from staging must not let anyone choose the address production's rate limiter counts.",
     setup: APP_SETUP,
   },
   {

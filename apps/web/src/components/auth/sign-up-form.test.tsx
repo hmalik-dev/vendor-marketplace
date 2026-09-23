@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { AUTH_COPY } from '@/app/auth-copy';
-import { readSignUpRole } from '@/lib/auth/signup-role';
 
 const replace = vi.fn();
 const refresh = vi.fn();
@@ -188,6 +187,7 @@ describe('SignUpForm', () => {
       email: 'sam@example.com',
       password: 'correct-horse-battery',
       name: 'sam',
+      role: 'vendor',
     });
   });
 
@@ -238,20 +238,24 @@ describe('SignUpForm', () => {
     expect(screen.getByRole('button', { name: 'Send a new code' })).toBeDefined();
   });
 
-  it('remembers the chosen role for the accept-terms screen once the account exists', async () => {
+  /* VEN-662: the server holds the choice; this browser keeps no copy of it. */
+  it('sends the chosen role with the sign-up and writes nothing to browser storage', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
     const user = userEvent.setup();
-    render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
 
+    await user.click(screen.getByRole('radio', { name: new RegExp(VENDOR) }));
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
     await screen.findByLabelText('Verification code');
 
-    expect(readSignUpRole('sam@example.com')).toBe('vendor');
-    /* Remembered for this address only: another sign-in on this browser does not inherit it. */
-    expect(readSignUpRole('other@example.com')).toBeNull();
+    expect(signUpWithEmail).toHaveBeenCalledWith(expect.objectContaining({ role: 'vendor' }));
+    expect(setItem).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem('signup_role')).toBeNull();
+    setItem.mockRestore();
   });
 
-  it('does not remember a role, or leave the form, when the sign-up is refused', async () => {
+  it('does not leave the form when the sign-up is refused', async () => {
     signUpWithEmail.mockResolvedValue('rejected');
     const user = userEvent.setup();
     render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
@@ -260,7 +264,6 @@ describe('SignUpForm', () => {
     await user.click(screen.getByRole('button', { name: CREATE }));
 
     expect(await screen.findByText(/could not create that account/)).toBeDefined();
-    expect(readSignUpRole('sam@example.com')).toBeNull();
     expect(screen.queryByLabelText('Verification code')).toBeNull();
   });
 
@@ -283,7 +286,6 @@ describe('SignUpForm', () => {
       ),
     ).toBeDefined();
     expect(screen.queryByText(/could not create that account/)).toBeNull();
-    expect(readSignUpRole('sam@example.com')).toBeNull();
     expect(screen.queryByLabelText('Verification code')).toBeNull();
   });
 

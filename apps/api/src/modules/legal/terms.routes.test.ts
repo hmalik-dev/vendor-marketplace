@@ -8,7 +8,9 @@ import {
   vendorCategories,
   vendorInvites,
   vendorProfiles,
+  signUpRoles,
 } from '@vendor-marketplace/db/schema';
+import { recordSignUpRole } from '../users/sign-up-roles.dao.js';
 import { forgetPlatformSwitches } from '../platform-settings/platform-settings.service.js';
 import {
   CURRENT_TERMS_VERSION,
@@ -88,6 +90,7 @@ describe('the Terms of Service acceptance gate', () => {
   afterEach(async () => {
     // The acceptances go with the account: the table refuses a direct delete.
     await harness.database.db.delete(users);
+    await harness.database.db.delete(signUpRoles);
   });
 
   afterAll(async () => {
@@ -141,6 +144,7 @@ describe('the Terms of Service acceptance gate', () => {
         acceptedAt: null,
         explicitTickRequired: false,
         account: { exists: false, role: null },
+        signUpRole: null,
         suggestedRole: null,
         vendorWaitlist: { exists: false, complete: false },
       });
@@ -935,6 +939,117 @@ describe('the Terms of Service acceptance gate', () => {
         expect(user?.id).toBe(existingUser!.id);
         expect(profile).toBeNull();
       });
+    });
+  });
+
+  /**
+   * VEN-662: the role chosen on `/sign-up` is recorded against the identity by
+   * the web tier's proxy, so the first acceptance reads it rather than asking.
+   */
+  describe('the role recorded at sign-up (VEN-662)', () => {
+    const noRole = { version: CURRENT_TERMS_VERSION };
+
+    function pendingRows() {
+      return harness.database.db.select().from(signUpRoles);
+    }
+
+    async function inviteOnly(on: boolean) {
+      await harness.database.db
+        .insert(platformSettings)
+        .values({ vendorInviteOnly: on })
+        .onConflictDoUpdate({ target: platformSettings.id, set: { vendorInviteOnly: on } });
+      forgetPlatformSwitches(harness.database.db);
+    }
+
+    it('reports the recorded role on the read, before any account exists', async () => {
+      await recordSignUpRole(harness.database.db, CUSTOMER, 'vendor');
+
+      const response = await status(CUSTOMER);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        accepted: false,
+        account: { exists: false, role: null },
+        signUpRole: 'vendor',
+      });
+      expect(await harness.database.db.select().from(users)).toHaveLength(0);
+    });
+
+    it('never reads one identity’s record for another (acceptance 5)', async () => {
+      await recordSignUpRole(harness.database.db, VENDOR, 'vendor');
+
+      expect((await status(CUSTOMER)).json()).toMatchObject({ signUpRole: null });
+      expect((await status(VENDOR)).json()).toMatchObject({ signUpRole: 'vendor' });
+      expect((await accept(CUSTOMER, noRole)).statusCode).toBe(400);
+      expect(await harness.database.db.select().from(users)).toHaveLength(0);
+    });
+
+    it('reads an expired record as absent', async () => {
+      await recordSignUpRole(
+        harness.database.db,
+        CUSTOMER,
+        'customer',
+        new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+      );
+
+      expect((await status(CUSTOMER)).json()).toMatchObject({ signUpRole: null });
+      expect((await accept(CUSTOMER, noRole)).statusCode).toBe(400);
+    });
+
+    it('creates a customer from a stored customer with no role in the body, and spends the record', async () => {
+      await recordSignUpRole(harness.database.db, CUSTOMER, 'customer');
+
+      const response = await accept(CUSTOMER, noRole);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        accepted: true,
+        account: { exists: true, role: 'customer' },
+        signUpRole: null,
+      });
+      expect((await harness.database.db.select().from(users))[0]?.role).toBe('customer');
+      expect(await pendingRows()).toEqual([]);
+    });
+
+    it('lets the stored role win over a different one in the body, and reports it', async () => {
+      await recordSignUpRole(harness.database.db, CUSTOMER, 'customer');
+
+      const response = await accept(CUSTOMER, { ...noRole, role: 'vendor' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ account: { exists: true, role: 'customer' } });
+      expect((await harness.database.db.select().from(users))[0]?.role).toBe('customer');
+    });
+
+    it('admits a stored vendor through the gate when the gate is off', async () => {
+      await recordSignUpRole(harness.database.db, VENDOR, 'vendor');
+
+      const response = await accept(VENDOR, noRole);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ account: { exists: true, role: 'vendor' } });
+      expect(await pendingRows()).toEqual([]);
+    });
+
+    it('refuses a stored vendor the gate refuses, seeds the waitlist and keeps the record', async () => {
+      await inviteOnly(true);
+      await recordSignUpRole(harness.database.db, VENDOR, 'vendor');
+
+      try {
+        const response = await accept(VENDOR, noRole);
+
+        expect(response.statusCode).toBe(403);
+        expect(response.json()).toMatchObject({ error: 'vendor_not_invited' });
+        expect(await harness.database.db.select().from(users)).toHaveLength(0);
+        expect(
+          (await harness.database.db.select().from(vendorApplications)).map((row) => row.email),
+        ).toEqual([`${VENDOR}@example.com`]);
+        expect((await pendingRows()).map((row) => row.role)).toEqual(['vendor']);
+      } finally {
+        await harness.database.db.delete(vendorApplications);
+        await harness.database.db.delete(platformSettings);
+        forgetPlatformSwitches(harness.database.db);
+      }
     });
   });
 });

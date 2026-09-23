@@ -43,6 +43,7 @@ const EXPECTED_TABLES = [
   'review_tombstones',
   'reviews',
   'service_packages',
+  'sign_up_roles',
   'step_up_challenges',
   'step_up_grants',
   'stream_tickets',

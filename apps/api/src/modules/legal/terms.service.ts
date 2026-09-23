@@ -9,6 +9,7 @@ import type { AppDatabase } from '../../lib/database.js';
 import { conflict, unauthorized, validationFailed } from '../../lib/errors.js';
 import { findUserByAuthId, findUserByAuthIdIncludingRetired } from '../users/users.dao.js';
 import { displayName, normalizeRole, syncUserFromAuth } from '../users/users.service.js';
+import { deleteSignUpRole, findSignUpRole } from '../users/sign-up-roles.dao.js';
 import {
   admitVendor,
   invitedRoleHint,
@@ -48,9 +49,9 @@ export interface AcceptanceContext {
  *
  * An account row answers from the database — the acceptance it holds and the
  * **stored** role, which is what the screen shows read-only. A session with no
- * row yet (every first sign-in) holds nothing, and the one thing worth asking
- * is whether its address carries an unused invite, which preselects `vendor`
- * and nothing more: the person still confirms it.
+ * row yet (every first sign-in) answers with the role recorded for this
+ * identity at sign-up (VEN-662), which the screen states rather than asks, and
+ * whether its address carries an unused invite or a waitlist row.
  */
 export async function readTermsStatus(
   db: AppDatabase,
@@ -63,6 +64,8 @@ export async function readTermsStatus(
     return termsStatusOf(db, user);
   }
 
+  const signUpRole = await findSignUpRole(db, authUserId);
+
   /*
    * Best effort: the suggestion only preselects a choice the person confirms,
    * so an identity provider that is briefly down must not take this screen —
@@ -74,7 +77,7 @@ export async function readTermsStatus(
   );
 
   if (email === null) {
-    return unacceptedTermsStatus();
+    return { ...unacceptedTermsStatus(), signUpRole };
   }
 
   const [suggestedRole, vendorWaitlist] = await Promise.all([
@@ -82,7 +85,7 @@ export async function readTermsStatus(
     readVendorWaitlistStatus(db, email),
   ]);
 
-  return { ...unacceptedTermsStatus(), suggestedRole, vendorWaitlist };
+  return { ...unacceptedTermsStatus(), signUpRole, suggestedRole, vendorWaitlist };
 }
 
 /** The status of an account that exists: its acceptance and the role the server stored. */
@@ -120,6 +123,7 @@ function unacceptedTermsStatus(): TermsAcceptanceStatus {
     acceptedAt: null,
     explicitTickRequired: false,
     account: { exists: false, role: null },
+    signUpRole: null,
     suggestedRole: null,
     vendorWaitlist: { exists: false, complete: false },
   };
@@ -279,14 +283,17 @@ export async function acceptTerms(
   }
 
   /*
-   * **A role is required, and nothing supplies one.** The account is created
-   * with what the person confirmed on this screen, never with a browser hint
-   * that may be gone, an invite that may not be theirs, or a default: a vendor
-   * who verified on another device would otherwise become a customer for good
-   * (VEN-507). Refused before the identity read, so nothing is fetched or
-   * written for a request that cannot succeed.
+   * **A role is required, and nothing defaults one.** The account is created
+   * with the role recorded for this identity at sign-up (VEN-662) — which wins
+   * over one in the body, so the choice the form said "can't be changed later"
+   * is the one that stands — and only where nothing was recorded, with the
+   * body's (a page served before the record existed still sends it). Never an
+   * invite that may not be theirs, or a default: a vendor who verified on
+   * another device would otherwise become a customer for good (VEN-507).
+   * Refused before the identity read, so nothing is fetched or written for a
+   * request that cannot succeed.
    */
-  const role = normalizeRole(input.role);
+  const role = (await findSignUpRole(db, authUserId)) ?? normalizeRole(input.role);
 
   /*
    * The identity read stays outside the transaction: it is a network call, and
@@ -315,6 +322,9 @@ export async function acceptTerms(
       await admitVendorWithDraftProfile(tx, row, log);
 
       await insertAcceptance(tx, termsAcceptanceRow(row, context, 'continue_notice'));
+
+      // Spent with the account it created; a refused vendor keeps theirs for a return visit.
+      await deleteSignUpRole(tx, authUserId);
 
       return row;
     });
