@@ -49,6 +49,44 @@ const BUILD_SECRETS = {
   NEON_AUTH_COOKIE_SECRET: fake('cookie-secret'),
 };
 
+// Every `RUNTIME_VARS` entry present, matching `/api/ready`'s shape once VEN-631 lands.
+const RUNTIME_ENV_PRESENT = {
+  NEON_AUTH_BASE_URL: true,
+  NEON_AUTH_COOKIE_SECRET: true,
+  WEB_TIER_KEY: true,
+  DEPLOY_ENV: true,
+  WEB_URL: true,
+};
+const RUNTIME_ENV_ABSENT = Object.fromEntries(
+  Object.keys(RUNTIME_ENV_PRESENT).map((name) => [name, false]),
+);
+const SIGN_IN_HTML = '<html><body><form><input type="email" name="email" /></form></body></html>';
+
+/**
+ * A healthy origin for both `webNamesRelease` and `webServesCoreFlows`:
+ * `/api/ready` names `commit` and reports `runtimeEnv`, `/api/auth/get-session`
+ * answers a null JSON session, `/sign-in` renders the form's marker, and
+ * anything else (the home page) answers 200.
+ */
+function coreFlowsFetch({ commit = SHA, runtimeEnv = RUNTIME_ENV_PRESENT } = {}) {
+  return async (url) => {
+    const { pathname } = new URL(url);
+    if (pathname === '/api/ready') {
+      return Response.json({ commit, runtimeEnv });
+    }
+    if (pathname === '/api/auth/get-session') {
+      return new Response('null', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (pathname === '/sign-in') {
+      return new Response(SIGN_IN_HTML, { status: 200 });
+    }
+    return new Response('ok', { status: 200 });
+  };
+}
+
 function recordingIo() {
   const calls = [];
   const lines = [];
@@ -164,15 +202,19 @@ test('preflight: partly configured fails naming what is missing and where it is 
   );
 });
 
-test('workflows: smoke is gated on its URL, ci and smoke read-only, every deploy action SHA-pinned', () => {
-  const SMOKE = parse(readFileSync(path.join(ROOT, '.github/workflows/smoke.yml'), 'utf8'));
-  assert.equal(SMOKE.jobs.smoke.if, "vars.SMOKE_API_URL != ''");
-  assert.doesNotMatch(JSON.stringify(SMOKE), /railway\.app/);
-  assert.deepEqual(SMOKE.permissions, { contents: 'read' });
+test('workflows: ci is read-only and every deploy action is SHA-pinned', () => {
   assert.deepEqual(CI.permissions, { contents: 'read' });
   for (const step of JOB.steps.filter((candidate) => candidate.uses)) {
     assert.match(step.uses, /^[\w./-]+@[0-9a-f]{40}$/, step.uses);
   }
+});
+
+// VEN-632: `smoke.yml` duplicated `ready`'s own check and never actually ran it
+// (main is never deployed, so its `SMOKE_COMMIT` could never match); `ready`
+// now proves auth, sign-in and the home page itself, so there is nothing left
+// for a separate post-deploy workflow to check that this gate does not.
+test('workflows: the post-deploy smoke workflow is gone, not merely disabled', () => {
+  assert.throws(() => readFileSync(path.join(ROOT, '.github/workflows/smoke.yml')), /ENOENT/);
 });
 
 test('preflight: one missing input still fails, by name', () => {
@@ -363,12 +405,13 @@ test('web: builds under the release and upload credential, and deploys without t
   }
 });
 
-test('ready: polls through the smoke check for this release, with a bounded deadline', async () => {
+test('ready: polls through the smoke check, then proves the web serves auth, sign-in and home', async () => {
   const { io, calls } = recordingIo();
   const asked = [];
+  const fetchWithLog = coreFlowsFetch();
   io.fetch = async (url) => {
-    asked.push(url);
-    return Response.json({ commit: SHA });
+    asked.push(new URL(url).pathname);
+    return fetchWithLog(url);
   };
   await PHASES.ready(
     {
@@ -380,7 +423,7 @@ test('ready: polls through the smoke check for this release, with a bounded dead
     io,
   );
 
-  assert.deepEqual(asked, ['https://orla.test/api/ready']);
+  assert.deepEqual(asked, ['/api/ready', '/api/auth/get-session', '/sign-in', '/']);
   assert.deepEqual(
     calls.map(({ command, args, env }) => ({ command, args, env })),
     [
@@ -649,10 +692,28 @@ function expand(value, context) {
 function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '', webCommit = SHA }) {
   const dir = mkdtempSync(path.join(tmpdir(), 'deploy-dry-run-'));
   try {
-    // The web's `/api/ready` answer, for the one child that fetches it: node itself is not stubbed.
+    // The web's answers, for the two children that fetch it: node itself is not stubbed.
+    // `/api/ready` carries this run's commit and reports every runtime variable
+    // present; `/api/auth/get-session`, `/sign-in` and the home page answer
+    // healthy so a passing dry run also clears `webServesCoreFlows` (VEN-632).
     writeFileSync(
       path.join(dir, 'web-fetch.mjs'),
-      `globalThis.fetch = async () => Response.json({ commit: ${JSON.stringify(webCommit)} });\n`,
+      `globalThis.fetch = async (url) => {
+  const { pathname } = new URL(url);
+  if (pathname === '/api/ready') {
+    return Response.json({
+      commit: ${JSON.stringify(webCommit)},
+      runtimeEnv: ${JSON.stringify(RUNTIME_ENV_PRESENT)},
+    });
+  }
+  if (pathname === '/api/auth/get-session') {
+    return new Response('null', { status: 200, headers: { 'content-type': 'application/json' } });
+  }
+  if (pathname === '/sign-in') {
+    return new Response(${JSON.stringify(SIGN_IN_HTML)}, { status: 200 });
+  }
+  return new Response('ok', { status: 200 });
+};\n`,
     );
     for (const tool of ['git', 'pnpm', 'npx']) {
       writeFileSync(path.join(dir, tool), STUB);
@@ -853,7 +914,14 @@ test('ready: a web still on the previous build is polled again until it names th
   const answers = ['b'.repeat(40), SHA];
   let asked = 0;
   let clock = 0;
-  io.fetch = async () => Response.json({ commit: answers[asked++] });
+  const healthy = coreFlowsFetch();
+  io.fetch = async (url) => {
+    const { pathname } = new URL(url);
+    if (pathname === '/api/ready') {
+      return Response.json({ commit: answers[asked++], runtimeEnv: RUNTIME_ENV_PRESENT });
+    }
+    return healthy(url);
+  };
   io.now = () => clock;
   io.sleep = async (ms) => {
     clock += ms;
@@ -871,6 +939,168 @@ test('ready: a web still on the previous build is polled again until it names th
 
   assert.equal(asked, 2);
   assert.equal(clock, 5_000);
+});
+
+test('ready: naming the right commit is not enough — a missing runtime variable still fails it, by name and never by value', async () => {
+  const { io } = recordingIo();
+  io.fetch = coreFlowsFetch({
+    runtimeEnv: { ...RUNTIME_ENV_PRESENT, NEON_AUTH_BASE_URL: false, WEB_TIER_KEY: false },
+  });
+  io.sleep = async () => {
+    throw new Error('must not retry a runtime-variable failure');
+  };
+
+  await assert.rejects(
+    PHASES.ready(
+      {
+        PATH: '/bin',
+        API_URL: 'https://api.orla.test',
+        WEB_URL: 'https://orla.test',
+        SENTRY_RELEASE: SHA,
+      },
+      io,
+    ),
+    (error) => {
+      assert.match(error.message, /missing NEON_AUTH_BASE_URL, WEB_TIER_KEY at runtime/);
+      assert.ok(!error.message.includes('true'), error.message);
+      return true;
+    },
+  );
+});
+
+// VEN-632 AC4: a web still on the build from before this ticket reports no
+// `runtimeEnv` key at all, not one that is `false`. Absent must read as
+// "unknown", or this gate would refuse every release until every web in the
+// fleet had redeployed — the failure that matters today is the one
+// `webServesCoreFlows` finds, not a check this old build predates.
+test('ready: a web with no runtimeEnv key at all is not held to the variable check — the failure falls through to webServesCoreFlows', async () => {
+  const { io } = recordingIo();
+  io.fetch = async (url) => {
+    const { pathname } = new URL(url);
+    if (pathname === '/api/ready') {
+      return Response.json({ commit: SHA });
+    }
+    if (pathname === '/api/auth/get-session') {
+      return new Response('', { status: 500 });
+    }
+    return coreFlowsFetch()(url);
+  };
+
+  await assert.rejects(
+    PHASES.ready(
+      {
+        PATH: '/bin',
+        API_URL: 'https://api.orla.test',
+        WEB_URL: 'https://orla.test',
+        SENTRY_RELEASE: SHA,
+        SMOKE_DEADLINE_MS: '0',
+      },
+      io,
+    ),
+    { message: 'web auth answered HTTP 500' },
+  );
+});
+
+test('webServesCoreFlows: any 5xx from get-session fails the release by status, not by echoing the body', async () => {
+  const { io } = recordingIo();
+  io.fetch = async (url) => {
+    const { pathname } = new URL(url);
+    if (pathname === '/api/auth/get-session') {
+      return new Response('{"secret":"leak-me-not"}', { status: 500 });
+    }
+    return coreFlowsFetch()(url);
+  };
+  io.sleep = async () => {
+    throw new Error('must not retry a hard failure before the deadline check runs once');
+  };
+
+  await assert.rejects(
+    PHASES.ready(
+      {
+        PATH: '/bin',
+        API_URL: 'https://api.orla.test',
+        WEB_URL: 'https://orla.test',
+        SENTRY_RELEASE: SHA,
+        SMOKE_DEADLINE_MS: '0',
+      },
+      io,
+    ),
+    { message: 'web auth answered HTTP 500' },
+  );
+});
+
+test('webServesCoreFlows: a 200 with an HTML session body fails, because JSON was required', async () => {
+  const { io } = recordingIo();
+  io.fetch = async (url) => {
+    const { pathname } = new URL(url);
+    if (pathname === '/api/auth/get-session') {
+      return new Response('<html>not json</html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      });
+    }
+    return coreFlowsFetch()(url);
+  };
+
+  await assert.rejects(
+    PHASES.ready(
+      {
+        PATH: '/bin',
+        API_URL: 'https://api.orla.test',
+        WEB_URL: 'https://orla.test',
+        SENTRY_RELEASE: SHA,
+        SMOKE_DEADLINE_MS: '0',
+      },
+      io,
+    ),
+    { message: 'web auth answered a non-JSON content-type (text/html)' },
+  );
+});
+
+test('webServesCoreFlows: /sign-in without the form marker fails, even at 200', async () => {
+  const { io } = recordingIo();
+  io.fetch = async (url) => {
+    const { pathname } = new URL(url);
+    if (pathname === '/sign-in') {
+      return new Response('<html><body>loading…</body></html>', { status: 200 });
+    }
+    return coreFlowsFetch()(url);
+  };
+
+  await assert.rejects(
+    PHASES.ready(
+      {
+        PATH: '/bin',
+        API_URL: 'https://api.orla.test',
+        WEB_URL: 'https://orla.test',
+        SENTRY_RELEASE: SHA,
+        SMOKE_DEADLINE_MS: '0',
+      },
+      io,
+    ),
+    { message: 'web sign-in did not render the sign-in form' },
+  );
+});
+
+/*
+ * Mutation check (VEN-632 AC2): `SIGN_IN_MARKER` is compared against
+ * `SIGN_IN_HTML`'s real markup, not a needle borrowed from the implementation.
+ * Changing `SIGN_IN_MARKER` in `deploy.mjs` to anything not present in that
+ * fixture makes this test fail — proving the guard reads the real value.
+ */
+test('webServesCoreFlows: passes on a healthy session, a rendered sign-in form and a 200 home page', async () => {
+  const { io } = recordingIo();
+  io.fetch = coreFlowsFetch();
+
+  await PHASES.ready(
+    {
+      PATH: '/bin',
+      API_URL: 'https://api.orla.test',
+      WEB_URL: 'https://orla.test',
+      SENTRY_RELEASE: SHA,
+    },
+    io,
+  );
 });
 
 test('ready: a web that never answers fails the release by name once the deadline passes', async () => {

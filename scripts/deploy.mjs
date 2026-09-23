@@ -301,51 +301,194 @@ export function missingInputs(env) {
 }
 
 /**
- * VEN-519. Polls `GET <web>/api/ready` until it names `SENTRY_RELEASE` (the
- * commit the API was just proven to serve) or the deadline passes. A short SHA
- * on either side still has to match, as in the API check. The failure names
- * both commits, never a value that is not one.
+ * GETs `url` with a 10s timeout, or returns `null` if the request itself
+ * throws (offline, DNS, timeout) — shared by `webNamesRelease` and
+ * `webServesCoreFlows` (VEN-632) so neither repeats the try/catch.
  */
-async function webNamesRelease(env, io) {
-  const fetchImpl = io.fetch ?? fetch;
+async function tryFetch(fetchImpl, url) {
+  try {
+    return await fetchImpl(url, { signal: AbortSignal.timeout(10_000) });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Retries `attempt` until it reports `ok`, or until 5s more would cross
+ * `SMOKE_DEADLINE_MS` (600000 default) — shared by `webNamesRelease` and
+ * `webServesCoreFlows` (VEN-632), so both post-deploy web checks give a
+ * build that is still coming up the same runway before either fails it.
+ */
+async function pollUntilDeadline(env, io, attempt) {
   const sleep = io.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const now = io.now ?? Date.now;
   const parsed = Number(env.SMOKE_DEADLINE_MS ?? '600000');
   const deadline = Number.isFinite(parsed) ? parsed : 600_000;
-  const web = webOrigin(env);
   const startedAt = now();
-  let serving = null;
-  let detail = '';
 
   for (;;) {
-    try {
-      const response = await fetchImpl(`${web}/api/ready`, {
-        signal: AbortSignal.timeout(10_000),
-      });
-      const body = response.ok ? await response.json() : null;
-      serving = typeof body?.commit === 'string' && body.commit !== '' ? body.commit : null;
-      detail = response.ok ? '' : `answered HTTP ${response.status}`;
-    } catch {
-      serving = null;
-      detail = 'did not answer';
-    }
-
-    const shortest = Math.min(serving?.length ?? 0, env.SENTRY_RELEASE.length);
-    if (shortest > 0 && serving.slice(0, shortest) === env.SENTRY_RELEASE.slice(0, shortest)) {
-      io.write(`web /api/ready names ${env.SENTRY_RELEASE.slice(0, 7)}\n`);
-      return;
-    }
-    if (now() - startedAt + 5_000 >= deadline) {
-      break;
+    const result = await attempt();
+    if (result.ok || now() - startedAt + 5_000 >= deadline) {
+      return result;
     }
     await sleep(5_000);
   }
+}
 
-  throw new PhaseError(
-    serving
-      ? `Web/API skew: the web serves ${serving.slice(0, 7)} but the API serves ${env.SENTRY_RELEASE.slice(0, 7)}.`
-      : `The web's /api/ready never named ${env.SENTRY_RELEASE.slice(0, 7)} (${detail || 'no commit in the answer'}).`,
-  );
+/**
+ * The variables the running web reads per request, not only at build time
+ * (VEN-632/VEN-631). Kept in sync by hand with `apps/web/src/app/api/ready/route.ts`'s
+ * `RUNTIME_VARS` — the route reports presence, this list says which presence
+ * flags `webNamesRelease` refuses a release without.
+ */
+const RUNTIME_VARS = [
+  'NEON_AUTH_BASE_URL',
+  'NEON_AUTH_COOKIE_SECRET',
+  'WEB_TIER_KEY',
+  'DEPLOY_ENV',
+  'WEB_URL',
+];
+
+/**
+ * VEN-519. Polls `GET <web>/api/ready` until it names `SENTRY_RELEASE` (the
+ * commit the API was just proven to serve) or the deadline passes. A short SHA
+ * on either side still has to match, as in the API check. The failure names
+ * both commits, never a value that is not one.
+ *
+ * VEN-631/VEN-632: naming the right commit is not enough — a build can see
+ * every runtime variable at build time and still run with none of them, which
+ * is exactly what left staging's auth down behind a green release. Once the
+ * commit matches, this also refuses to pass if `/api/ready`'s `runtimeEnv`
+ * reports any of `RUNTIME_VARS` explicitly `false`; the failure names which,
+ * never their values. A web still running the build from before this ticket
+ * reports no `runtimeEnv` at all — absent is "unknown", not "false", so an
+ * old deployment fails on `webServesCoreFlows` below, by its own name, rather
+ * than on a check its own build predates.
+ */
+async function webNamesRelease(env, io) {
+  const fetchImpl = io.fetch ?? fetch;
+  const web = webOrigin(env);
+
+  const result = await pollUntilDeadline(env, io, async () => {
+    const response = await tryFetch(fetchImpl, `${web}/api/ready`);
+    let serving = null;
+    let runtimeEnv = null;
+    let detail = 'did not answer';
+
+    if (response) {
+      try {
+        const body = response.ok ? await response.json() : null;
+        serving = typeof body?.commit === 'string' && body.commit !== '' ? body.commit : null;
+        runtimeEnv = body?.runtimeEnv ?? null;
+        detail = response.ok ? '' : `answered HTTP ${response.status}`;
+      } catch {
+        // A body that cannot be parsed is the same as not answering: retried, not fatal —
+        // a cold start can serve a truncated response before it is actually ready.
+        detail = 'did not answer';
+      }
+    }
+
+    const shortest = Math.min(serving?.length ?? 0, env.SENTRY_RELEASE.length);
+    const ok = shortest > 0 && serving.slice(0, shortest) === env.SENTRY_RELEASE.slice(0, shortest);
+    return { ok, serving, detail, runtimeEnv };
+  });
+
+  if (!result.ok) {
+    throw new PhaseError(
+      result.serving
+        ? `Web/API skew: the web serves ${result.serving.slice(0, 7)} but the API serves ${env.SENTRY_RELEASE.slice(0, 7)}.`
+        : `The web's /api/ready never named ${env.SENTRY_RELEASE.slice(0, 7)} (${result.detail || 'no commit in the answer'}).`,
+    );
+  }
+
+  const missing = RUNTIME_VARS.filter((name) => result.runtimeEnv?.[name] === false);
+  if (missing.length > 0) {
+    throw new PhaseError(
+      `The web serves ${env.SENTRY_RELEASE.slice(0, 7)} but is missing ${missing.join(', ')} at runtime (VEN-631); refusing to continue.`,
+    );
+  }
+
+  io.write(`web /api/ready names ${env.SENTRY_RELEASE.slice(0, 7)}\n`);
+}
+
+/** The sign-in form's stable marker (`sign-in-form.tsx`); a status code alone is not proof it rendered. */
+const SIGN_IN_MARKER = 'name="email"';
+
+/**
+ * VEN-632. `/api/ready` proves the build; this proves the runtime actually
+ * serves the flows a visitor needs. Same retry loop and deadline as
+ * `webNamesRelease`, a 10s timeout per request, through `io.fetch` so the
+ * suite can drive it — called after `webNamesRelease`, once the origin is
+ * proven to be on this build.
+ *
+ * Three checks, in order:
+ * 1. `GET /api/auth/get-session` with no cookie: any 5xx (or other non-2xx)
+ *    fails naming the status; a non-JSON body or one carrying an `error` key
+ *    fails too. The body itself is never echoed.
+ * 2. `GET /sign-in`: 200 and the HTML contains `SIGN_IN_MARKER` — a status
+ *    code alone passed during the outage this check exists for.
+ * 3. `GET /`: 200.
+ */
+async function webServesCoreFlows(env, io) {
+  const fetchImpl = io.fetch ?? fetch;
+  const web = webOrigin(env);
+
+  const result = await pollUntilDeadline(env, io, async () => {
+    const session = await tryFetch(fetchImpl, `${web}/api/auth/get-session`);
+    if (!session) {
+      return { ok: false, message: 'web auth did not answer' };
+    }
+    if (!session.ok) {
+      return { ok: false, message: `web auth answered HTTP ${session.status}` };
+    }
+    const contentType = session.headers.get('content-type') ?? '';
+    if (!contentType.includes('application/json')) {
+      return {
+        ok: false,
+        message: `web auth answered a non-JSON content-type (${contentType || 'none'})`,
+      };
+    }
+    let body;
+    try {
+      body = await session.json();
+    } catch {
+      return { ok: false, message: 'web auth answered a session body that could not be parsed' };
+    }
+    if (body !== null && (typeof body !== 'object' || Array.isArray(body) || 'error' in body)) {
+      return { ok: false, message: 'web auth answered an unexpected session body' };
+    }
+
+    const signIn = await tryFetch(fetchImpl, `${web}/sign-in`);
+    if (!signIn) {
+      return { ok: false, message: 'web sign-in did not answer' };
+    }
+    if (!signIn.ok) {
+      return { ok: false, message: `web sign-in answered HTTP ${signIn.status}` };
+    }
+    let html;
+    try {
+      html = await signIn.text();
+    } catch {
+      return { ok: false, message: 'web sign-in answered a body that could not be read' };
+    }
+    if (!html.includes(SIGN_IN_MARKER)) {
+      return { ok: false, message: 'web sign-in did not render the sign-in form' };
+    }
+
+    const home = await tryFetch(fetchImpl, web);
+    if (!home) {
+      return { ok: false, message: 'web home did not answer' };
+    }
+    if (!home.ok) {
+      return { ok: false, message: `web home answered HTTP ${home.status}` };
+    }
+
+    return { ok: true };
+  });
+
+  if (!result.ok) {
+    throw new PhaseError(result.message);
+  }
 }
 
 export const PHASES = {
@@ -656,6 +799,7 @@ export const PHASES = {
     });
 
     await webNamesRelease(env, io);
+    await webServesCoreFlows(env, io);
   },
 };
 
