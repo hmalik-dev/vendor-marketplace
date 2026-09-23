@@ -202,6 +202,40 @@ describe('SignUpForm', () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
+  it('asks Neon for the code once the account exists', async () => {
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+    await screen.findByLabelText('Verification code');
+
+    expect(resendVerificationCode).toHaveBeenCalledTimes(1);
+    expect(resendVerificationCode).toHaveBeenCalledWith('sam@example.com');
+    expect(screen.queryByText(/Too many attempts|could not reach/)).toBeNull();
+  });
+
+  /*
+   * VEN-620, seen live: Neon's own limiter answered the post-sign-up send 429
+   * ("Too many requests"), the account existed, and the code step showed
+   * nothing — asking for a code that was never mailed.
+   */
+  it.each([
+    ['throttled', 'Too many attempts. Wait a few minutes and try again.'],
+    ['unreachable', 'We could not reach the sign-in service. Try again in a moment.'],
+  ] as const)('says so on the code step when the code send is %s', async (outcome, copy) => {
+    resendVerificationCode.mockResolvedValue(outcome);
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole('button', { name: CREATE }));
+
+    expect(await screen.findByLabelText('Verification code')).toBeDefined();
+    expect(screen.getByText(copy)).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Send a new code' })).toBeDefined();
+  });
+
   it('remembers the chosen role for the accept-terms screen once the account exists', async () => {
     const user = userEvent.setup();
     render(<SignUpForm initialRole="vendor" vendorInviteOnly={false} />);
@@ -361,13 +395,16 @@ describe('SignUpForm', () => {
   });
 
   it('says to wait, not that the service is unreachable, when a resend is throttled', async () => {
-    resendVerificationCode.mockResolvedValue('throttled');
+    // The send right after sign-up succeeds; only the resend is refused.
+    resendVerificationCode.mockResolvedValueOnce('ok').mockResolvedValue('throttled');
     const user = userEvent.setup();
     render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
-    await user.click(await screen.findByRole('button', { name: 'Send a new code' }));
+    const resend = await screen.findByRole('button', { name: 'Send a new code' });
+    expect(screen.queryByText('Too many attempts. Wait a few minutes and try again.')).toBeNull();
+    await user.click(resend);
 
     expect(
       await screen.findByText('Too many attempts. Wait a few minutes and try again.'),
@@ -375,13 +412,18 @@ describe('SignUpForm', () => {
   });
 
   it('does not call an actual refusal a throttle when a resend is refused', async () => {
-    resendVerificationCode.mockResolvedValue('rejected');
+    // The send right after sign-up succeeds; only the resend is refused.
+    resendVerificationCode.mockResolvedValueOnce('ok').mockResolvedValue('rejected');
     const user = userEvent.setup();
     render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
 
     await fillCredentials(user);
     await user.click(screen.getByRole('button', { name: CREATE }));
-    await user.click(await screen.findByRole('button', { name: 'Send a new code' }));
+    const resend = await screen.findByRole('button', { name: 'Send a new code' });
+    expect(
+      screen.queryByText('We could not reach the sign-in service. Try again in a moment.'),
+    ).toBeNull();
+    await user.click(resend);
 
     expect(
       await screen.findByText('We could not reach the sign-in service. Try again in a moment.'),

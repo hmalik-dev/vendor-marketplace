@@ -23,32 +23,22 @@ afterEach(() => {
 });
 
 describe('signUpWithEmail', () => {
-  it('requests the verification code after the account is created', async () => {
-    const fetchMock = stubFetch(200, 200);
+  /*
+   * The code request is the caller's (VEN-620): folded in here, a refused send
+   * read as a successful sign-up and the code step waited on a mail never sent.
+   */
+  it('creates the account and asks for no code itself', async () => {
+    const fetchMock = stubFetch(200);
 
     await expect(signUpWithEmail(INPUT)).resolves.toBe('ok');
 
-    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      '/api/auth/sign-up/email',
-      '/api/auth/email-otp/send-verification-otp',
-    ]);
-    expect(JSON.parse(fetchMock.mock.calls[1]![1].body as string)).toEqual({
-      email: 'new@example.com',
-      type: 'email-verification',
-    });
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(['/api/auth/sign-up/email']);
   });
 
-  it('still reports ok when only the code send fails', async () => {
-    stubFetch(200, 500);
-
-    await expect(signUpWithEmail(INPUT)).resolves.toBe('ok');
-  });
-
-  it('requests no code when the sign-up is refused', async () => {
-    const fetchMock = stubFetch(422);
+  it('reports a refused sign-up', async () => {
+    stubFetch(422);
 
     await expect(signUpWithEmail(INPUT)).resolves.toBe('rejected');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
