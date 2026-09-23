@@ -29,7 +29,7 @@ async function fetchToken(): Promise<string | null> {
     credentials: 'same-origin',
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 || (await authUnavailable(response))) {
     cached = null;
     return null;
   }
@@ -48,6 +48,21 @@ async function fetchToken(): Promise<string | null> {
   cached = expiresAtMs === null ? null : { token: body.token, expiresAtMs };
 
   return body.token;
+}
+
+/**
+ * The route's 503 `AUTH_UNAVAILABLE` (VEN-635): with no auth configuration the
+ * server already renders every caller signed out, so the browser reads it the
+ * same way and public calls still go out unauthenticated. Any other 5xx stays
+ * a retryable failure.
+ */
+async function authUnavailable(response: Response): Promise<boolean> {
+  if (response.status !== 503) {
+    return false;
+  }
+
+  const body = (await response.json().catch(() => null)) as { code?: unknown } | null;
+  return body?.code === 'AUTH_UNAVAILABLE';
 }
 
 /**

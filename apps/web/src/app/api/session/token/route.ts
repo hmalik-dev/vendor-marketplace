@@ -9,9 +9,9 @@ import { authConfigured, getServerSession } from '@/lib/auth/server';
  * `no-store` because the answer is per caller and per moment; a shared cache
  * holding one visitor's token would hand it to the next.
  *
- * A missing auth configuration is a 503 `AUTH_UNAVAILABLE`, not a 401: the
- * caller may well be signed in, and `client.ts` treats a 5xx as retryable
- * rather than as signed out (VEN-635).
+ * A missing auth configuration is a 503 `AUTH_UNAVAILABLE` (VEN-635), so the
+ * outage is visible on the wire; `client.ts` reads that code as signed out,
+ * matching how the server renders the same caller.
  */
 export async function GET(): Promise<NextResponse> {
   if (!authConfigured()) {
