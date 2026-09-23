@@ -120,7 +120,7 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
 
     /* Neon requires a display name; the form asks for none (frame `12` has
        email and password only), so the address's local part stands in. */
-    const outcome = await signUpWithEmail({
+    const { outcome, codeSent } = await signUpWithEmail({
       email: email.trim(),
       password,
       name: email.trim().split('@')[0] || 'member',
@@ -128,9 +128,13 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
     });
 
     if (outcome === 'ok') {
-      /* The account exists whatever the send answers: the code step shows a
-         refused send and offers "Send a new code" rather than failing here. */
-      setSendOutcome(await resendVerificationCode(email.trim()));
+      /* Only when Neon mailed nothing: a second send rotates the code, and the
+         first mail's code — usually the one read — stops working. The account
+         exists whatever the send answers: the code step shows a refused send
+         and offers "Send a new code" rather than failing here. */
+      if (!codeSent) {
+        setSendOutcome(await resendVerificationCode(email.trim()));
+      }
       setBusy(false);
       setVerifying(true);
       return;

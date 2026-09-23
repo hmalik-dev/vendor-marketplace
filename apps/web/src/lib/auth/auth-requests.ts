@@ -85,22 +85,45 @@ async function outcomeOf(response: Response | null): Promise<AuthOutcome> {
   return 'rejected';
 }
 
+export interface SignUpResult {
+  outcome: AuthOutcome;
+  /**
+   * Whether Neon already mailed the code as part of the sign-up. Better Auth
+   * sends one on sign-up exactly when the branch requires verification
+   * (`sendOnSignUp` defaults to `requireEmailVerification`), and that same
+   * setting is what makes it answer `token: null` instead of opening a session.
+   * Production requires it; dev and staging do not, and mail nothing.
+   *
+   * A second request would rotate the code: Better Auth keeps one per address,
+   * so the first mail's code stops working while it is usually the one read
+   * first — a correctly typed code refused (VEN-620's real cause).
+   */
+  codeSent: boolean;
+}
+
 /**
- * Creates the account and nothing else. The role travels with it: the proxy
- * takes it out of what reaches Neon and records it at the API against the new
- * account (VEN-662), and answers a sign-up whose role it could not record as
- * failed (a 5xx, so `unreachable`). The code is asked for separately
- * (`resendVerificationCode`): on dev Neon Auth a sign-up alone emails nothing,
- * and Neon's own limiter can refuse that send (VEN-620), so the caller has to
- * see its outcome rather than have it folded into the sign-up's.
+ * Creates the account. The role travels with it: the proxy takes it out of
+ * what reaches Neon and records it at the API against the new account
+ * (VEN-662), and answers a sign-up whose role it could not record as failed
+ * (a 5xx, so `unreachable`). When Neon did not mail a code itself the caller
+ * asks for one (`resendVerificationCode`) and shows that send's outcome, since
+ * Neon's own limiter can refuse it (VEN-620).
  */
 export async function signUpWithEmail(input: {
   email: string;
   password: string;
   name: string;
   role: SignUpRole;
-}): Promise<AuthOutcome> {
-  return outcomeOf(await post('/sign-up/email', input));
+}): Promise<SignUpResult> {
+  const response = await post('/sign-up/email', input);
+  const outcome = await outcomeOf(response);
+
+  if (outcome !== 'ok' || !response) {
+    return { outcome, codeSent: false };
+  }
+
+  const body: { token?: unknown } = await response.json().catch(() => ({}));
+  return { outcome, codeSent: body.token === null };
 }
 
 /**

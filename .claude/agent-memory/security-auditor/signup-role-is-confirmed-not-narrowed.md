@@ -30,5 +30,12 @@ Fix offered: drop the record on a successful `email-otp/reset-password`.
 Re-open if the internal route ever takes an id from anything but the provider's
 answer, or if the key reaches a client bundle.
 
+**VEN-678 (audited 2026-09-23, PASS):** `signUpWithEmail` reads the relayed
+sign-up body only to derive `codeSent = token === null` and keeps nothing else.
+The proxy already hands the provider's body to the browser unchanged, so that
+read adds no exposure. Skipping the form's own send only lowers mail volume, and
+`sendOutcome` defaults to `'ok'`, so the resend offer still shows. Re-open if the
+body or the token is stored, logged or put in state.
+
 Related: [[terms-gate-is-a-five-state-session]], [[auth-proxy-parser-differential]],
 [[vendor-invite-gate-checks-before-the-row-it-creates]].

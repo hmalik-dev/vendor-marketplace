@@ -12,8 +12,9 @@ describe('initialsFor', () => {
     expect(initialsFor(name)).toBe(expected);
   });
 
-  it('falls back to a placeholder rather than rendering an empty circle', () => {
-    expect(initialsFor('   ')).toBe('?');
+  // The tone circle alone is the placeholder; a `?` there read as an error.
+  it('draws no glyph for no name, never a question mark', () => {
+    expect(initialsFor('   ')).toBe('');
   });
 });
 

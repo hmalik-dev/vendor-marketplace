@@ -97,8 +97,14 @@ export function AcceptTermsScreen({
      * be resolved, and that handler is the one place that knows where each
      * role starts and re-validates the destination before sending anybody to
      * it. `replace`, so Back does not return to a gate already cleared.
+     *
+     * A full load, not `router.replace`: the root layout's header was drawn
+     * while the account row could not be read, and a client navigation keeps
+     * it as drawn. `router.refresh()` straight after the replace is no answer —
+     * the refresh supersedes the navigation, which never commits, and the
+     * screen stays on "Recording…" (seen on a lane, VEN-678).
      */
-    router.replace(
+    window.location.replace(
       returnTo ? `/after-sign-in?returnTo=${encodeURIComponent(returnTo)}` : '/after-sign-in',
     );
   }
