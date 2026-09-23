@@ -93,7 +93,7 @@ describe('two accepts on one vendor date, on two real connections', () => {
       .where(eq(categories.slug, 'photography'))
       .limit(1);
 
-    const profile = await post(VENDOR, '/vendor/profile', {
+    const profile = await post(VENDOR, '/v1/vendor/profile', {
       businessName: 'Sunlit Studio',
       categoryIds: [photography!.id],
       city: 'Austin',
@@ -103,7 +103,7 @@ describe('two accepts on one vendor date, on two real connections', () => {
     expect(profile.statusCode).toBe(201);
     vendorId = profile.json().id;
 
-    const servicePackage = await post(VENDOR, '/vendor/packages', {
+    const servicePackage = await post(VENDOR, '/v1/vendor/packages', {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: 145_000,
@@ -124,7 +124,7 @@ describe('two accepts on one vendor date, on two real connections', () => {
       .where(eq(vendorProfiles.id, vendorId));
 
     // An accept needs the agreement in force (VEN-428), as checkout does.
-    const agreed = await post(VENDOR, '/vendor/agreement/accept', {
+    const agreed = await post(VENDOR, '/v1/vendor/agreement/accept', {
       version: CURRENT_VENDOR_AGREEMENT_VERSION,
     });
     expect(agreed.statusCode).toBe(200);
@@ -139,8 +139,8 @@ describe('two accepts on one vendor date, on two real connections', () => {
       guestCount: 120,
     };
 
-    const mine = await post(CUSTOMER, '/booking-requests', detail);
-    const theirs = await post(OTHER_CUSTOMER, '/booking-requests', detail);
+    const mine = await post(CUSTOMER, '/v1/booking-requests', detail);
+    const theirs = await post(OTHER_CUSTOMER, '/v1/booking-requests', detail);
     expect([mine.statusCode, theirs.statusCode]).toEqual([201, 201]);
     firstRequestId = mine.json().id;
     secondRequestId = theirs.json().id;
@@ -158,8 +158,8 @@ describe('two accepts on one vendor date, on two real connections', () => {
 
   it('lets exactly one win, and refuses the other with a 409', async () => {
     const responses = await Promise.all([
-      post(VENDOR, `/booking-requests/${firstRequestId}/accept`),
-      post(VENDOR, `/booking-requests/${secondRequestId}/accept`),
+      post(VENDOR, `/v1/booking-requests/${firstRequestId}/accept`),
+      post(VENDOR, `/v1/booking-requests/${secondRequestId}/accept`),
     ]);
 
     expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
