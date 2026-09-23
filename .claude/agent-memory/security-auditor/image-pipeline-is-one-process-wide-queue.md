@@ -21,11 +21,12 @@ down permanently with no signal.
 `MAX_INPUT_PIXELS` (40 MP) is checked twice: from `metadata()` (header only, no
 `limitInputPixels` on purpose, so the specific message survives) and again by
 `limitInputPixels` on both decodes. The format allowlist runs before the pixel
-check, so only jpeg/png ever reach it.
+check, so only jpeg/png/webp ever reach it (WebP added by VEN-618, audited clean:
+sharp 0.35 bundles a post-CVE-2023-4863 libwebp, default `pages: 1` decodes one
+frame of an animated file, and 40 MP sits well under WebP's 16383² ceiling).
 
-`SHARP_INPUT_OPTIONS` also carries `failOn: 'error'`, which is **less** sensitive
-than sharp's default `'warning'` — a loosening bundled into a hardening change,
-with no comment and no test pinning it.
+The earlier `failOn: 'error'` loosening is gone: `SHARP_INPUT_OPTIONS` is
+`limitInputPixels` only and keeps sharp's default `'warning'` (checked 2026-09-23).
 
 **Why:** VEN-464 bounded upload memory/pixels after an unbounded-concurrency
 decode path.

@@ -11,6 +11,16 @@ URL, and the **client** chooses what string is persisted into
 `coverImageUrl` and `users.avatarUrl`. Every other vendor's keys are readable
 with no auth at all — `GET /vendors/:slug` returns them raw.
 
+**VEN-618 (audited PASS 2026-09-23): new keys carry `storageOwnerSegment(id)` =
+sha256("storage-owner:"+users.id)[:32], not the raw id; every guard
+(`ownsObjectKey`, `assertOwnedImageRefs`, `countOwnedImages`,
+`removeOwnedObjects`) accepts both via `ownerSegments`. No cross-account overlap:
+a raw id is a 36-char dashed UUID, a digest 32 hex. Unkeyed by decision (a key
+rotation would orphan ownership); counterparties already see `senderId` /
+`customerId`, and legacy raw-id keys stay public for good. Migration 0085's
+`split_part(...) = user_id` predates it and only ever saw raw-id keys.**
+Where the text below says the owner segment is `users.id`, read "or its digest".
+
 **Two layers now exist, and they answer different questions.** `buildObjectKey`
 mints `<prefix>/<ownerId>/<uuid>.webp` where `ownerId` is `users.id`
 (`uploads.routes.ts` uses `uploader.id`, and all four write call sites pass

@@ -365,6 +365,12 @@ table is corrected as transcription drift under D30 — the same direction its
 Neither is a finding and neither is re-litigated per screen.
 `admin-delta-parity.test.ts` pins both with the ruling beside them.
 
+**Uploads read `JPG, PNG or WebP` where the frames draw `JPG or PNG` (VEN-618,
+2026-09-23).** WebP is an accepted input again, and the constraint line is built
+from `ACCEPTED_IMAGE_LABEL`, so every drop zone, requirements rail and refusal
+says so. `40-states.md` is updated; the frames are the record of the old list.
+Only the text differs.
+
 **Two console screens from the admin delta, ruled on landing (VEN-399).**
 
 - **The booking detail's Money card carries `Payout model` and `Completed`**,
