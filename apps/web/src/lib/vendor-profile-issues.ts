@@ -42,6 +42,8 @@ const PROFILE_FIELDS: readonly FieldTarget[] = [
     stateKey: 'businessName',
     label: 'Business name',
   },
+  { payloadKey: 'firstName', id: 'firstName', stateKey: 'firstName', label: 'First name' },
+  { payloadKey: 'lastName', id: 'lastName', stateKey: 'lastName', label: 'Last name' },
   { payloadKey: 'slug', id: 'slug', stateKey: 'slug', label: 'Profile link' },
   { payloadKey: 'tagline', id: 'tagline', stateKey: 'tagline', label: 'Your line' },
   {

@@ -8,6 +8,7 @@ import {
   describeBlockers,
   generateSlug,
   kmToMiles,
+  MAX_NAME_LENGTH,
   MAX_TAGLINE_LENGTH,
   MAX_VENDOR_BIO_LENGTH,
   MAX_YEARS_IN_BUSINESS,
@@ -75,6 +76,12 @@ export interface VendorProfileFormProps {
   profile: WireVendorProfile | null;
   categories: readonly Category[];
   allTags: readonly WireTag[];
+  /**
+   * `users.firstName`/`lastName`, not the vendor profile row (VEN-642) — the
+   * personal name a vendor's storefront cannot publish without, same as a
+   * customer cannot request a booking without one.
+   */
+  personalName: { firstName: string; lastName: string };
 }
 
 const RESPONSE_TIME_LABELS: Record<number, string> = {
@@ -137,6 +144,9 @@ const SECTION_ORDER = [
 
 export interface FormState {
   businessName: string;
+  /** `users.firstName`/`lastName`, not this row (VEN-642). */
+  firstName: string;
+  lastName: string;
   slug: string;
   bio: string;
   tagline: string;
@@ -154,9 +164,14 @@ export interface FormState {
   tagIds: string[];
 }
 
-function initialState(profile: WireVendorProfile | null): FormState {
+function initialState(
+  profile: WireVendorProfile | null,
+  personalName: { firstName: string; lastName: string },
+): FormState {
   return {
     businessName: profile?.businessName ?? '',
+    firstName: personalName.firstName,
+    lastName: personalName.lastName,
     slug: profile?.slug ?? '',
     bio: profile?.bio ?? '',
     tagline: profile?.tagline ?? '',
@@ -194,6 +209,16 @@ function initialState(profile: WireVendorProfile | null): FormState {
 function toPayload(form: FormState): Record<string, unknown> {
   return {
     businessName: form.businessName.trim(),
+    /*
+     * Sent together or not at all — `users.firstName`/`lastName` are `NOT
+     * NULL` (VEN-642), so a lone half would fail the schema's per-field
+     * minimum. Omitted rather than `''` means "leave alone", the same
+     * convention `slug` uses below: an update in progress that has not
+     * touched this yet must not blank out a name a vendor set earlier.
+     */
+    ...(form.firstName.trim() && form.lastName.trim()
+      ? { firstName: form.firstName.trim(), lastName: form.lastName.trim() }
+      : {}),
     slug: form.slug.trim() === '' ? undefined : form.slug.trim(),
     bio: form.bio.trim(),
     tagline: form.tagline.trim(),
@@ -270,6 +295,9 @@ export function liveBlockers(form: FormState): PublishBlockerKey[] {
   if (form.businessName.trim() === '') {
     blockers.push('businessName');
   }
+  if (form.firstName.trim() === '' || form.lastName.trim() === '') {
+    blockers.push('personalName');
+  }
   if (form.city.trim() === '' || form.state.trim() === '') {
     blockers.push('location');
   }
@@ -305,6 +333,7 @@ export function mergeBlockers(
 /** The blockers this form owns; the rest can only be resolved server-side. */
 const PUBLISH_BLOCKER_FORM_KEYS = [
   'businessName',
+  'personalName',
   'location',
   'categories',
   'bio',
@@ -338,10 +367,11 @@ export function VendorProfileForm({
   profile,
   categories,
   allTags,
+  personalName,
 }: VendorProfileFormProps): React.ReactElement {
   const request = useApi();
   const router = useRouter();
-  const [form, setForm] = useState<FormState>(() => initialState(profile));
+  const [form, setForm] = useState<FormState>(() => initialState(profile, personalName));
   // A tag the vendor holds but an operator has since deactivated is not in the
   // active list; without it the picker draws no pill and no Remove control, and
   // the vendor cannot see what they are saving.
@@ -352,7 +382,9 @@ export function VendorProfileForm({
     ],
     [allTags, profile],
   );
-  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(initialState(profile)));
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify(initialState(profile, personalName)),
+  );
   const [isSaving, setIsSaving] = useState(false);
   /*
    * What the API refused, kept until the vendor changes the control it names.
@@ -719,8 +751,12 @@ export function VendorProfileForm({
                   variant="secondary"
                   className="mt-2"
                   onClick={() => {
-                    setForm(initialState(changedTo));
-                    setSavedSnapshot(JSON.stringify(initialState(changedTo)));
+                    // `changedTo` is a `vendor_profiles` row; the personal name
+                    // lives on `users` (VEN-642) and this conflict never
+                    // touches it, so the value this screen was opened with
+                    // still holds.
+                    setForm(initialState(changedTo, personalName));
+                    setSavedSnapshot(JSON.stringify(initialState(changedTo, personalName)));
                     setChangedTo(null);
                   }}
                 >
@@ -836,6 +872,43 @@ export function VendorProfileForm({
                   <p className="mt-1 truncate text-xs text-stone-600">
                     {BRAND_DOMAIN}/vendors/{slugPreview}
                   </p>
+                </div>
+
+                {/*
+                  Its own row (`sm:col-span-2`), after the Business
+                  name/Profile link pair rather than between them — frame `09`
+                  pairs those two in one row, and inserting a row ahead of
+                  `slug` pushed it out of that pairing into an empty second
+                  cell (parity pass, VEN-642).
+                */}
+                <div className="grid grid-cols-2 gap-3 sm:col-span-2">
+                  <div>
+                    <Label htmlFor="firstName">First name</Label>
+                    <Input
+                      id="firstName"
+                      autoComplete="given-name"
+                      value={form.firstName}
+                      onChange={(event) => update('firstName', event.target.value)}
+                      maxLength={MAX_NAME_LENGTH}
+                      className="mt-1.5 bg-stone-0"
+                      {...errorProps(validation.issueFor('firstName'))}
+                    />
+                    <FieldMessage issue={validation.issueFor('firstName')} />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="lastName">Last name</Label>
+                    <Input
+                      id="lastName"
+                      autoComplete="family-name"
+                      value={form.lastName}
+                      onChange={(event) => update('lastName', event.target.value)}
+                      maxLength={MAX_NAME_LENGTH}
+                      className="mt-1.5 bg-stone-0"
+                      {...errorProps(validation.issueFor('lastName'))}
+                    />
+                    <FieldMessage issue={validation.issueFor('lastName')} />
+                  </div>
                 </div>
 
                 <div className="sm:col-span-2">

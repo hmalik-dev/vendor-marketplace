@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const getCategories = vi.fn();
 const getActiveTags = vi.fn();
 
-vi.mock('@/lib/current-user', () => ({ requireRole: vi.fn(async () => undefined) }));
+vi.mock('@/lib/current-user', () => ({
+  requireRole: vi.fn(async () => ({ firstName: 'Test', lastName: 'Vendor' })),
+}));
 
 vi.mock('@/lib/vendor-data', () => ({
   getCategories: (options: unknown) => getCategories(options),

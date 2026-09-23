@@ -29,6 +29,15 @@ export interface NeonAuthDirectory {
    * claiming it "deleted" would be a lie it cannot take back.
    */
   deleteIdentity: (id: string) => Promise<boolean>;
+  /**
+   * Writes the identity's own `name` field (VEN-642) — the one Neon Auth
+   * itself holds, distinct from `users.firstName`/`lastName`. Without this,
+   * the sign-up form's synthetic email-prefix placeholder stays the identity's
+   * name forever, and the scheduled reconcile (`auth-sync.reconcile.ts`) mirrors
+   * it straight back onto `users` the moment a real name is written there,
+   * silently reverting it. Answers whether a row existed to update.
+   */
+  updateName: (id: string, name: string) => Promise<boolean>;
   close: () => Promise<void>;
 }
 
@@ -39,6 +48,7 @@ export type SqlExecutor = (query: string, params: unknown[]) => Promise<Record<s
 const LOOKUP = `select id::text as id, email, name, image from neon_auth."user" where id::text = any($1::text[])`;
 const SELECT_EMAIL = `select email from neon_auth."user" where id::text = $1`;
 const DELETE_USER = `delete from neon_auth."user" where id::text = $1`;
+const UPDATE_NAME = `update neon_auth."user" set name = $2 where id::text = $1 returning id::text as id`;
 /** The whole identifier, or a `<flow>-` prefix on it: never a substring, which would reach other people's codes. */
 const DELETE_CODES = `delete from neon_auth.verification where lower(identifier) = lower($1) or lower(identifier) like '%-' || replace(replace(replace(lower($1), '\\', '\\\\'), '%', '\\%'), '_', '\\_')`;
 
@@ -80,6 +90,10 @@ export function createNeonAuthDirectoryOver(
       }
 
       return true;
+    },
+    updateName: async (id, name) => {
+      const rows = await execute(UPDATE_NAME, [id, name]);
+      return rows.length > 0;
     },
     close,
   };

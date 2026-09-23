@@ -47,9 +47,52 @@ describe('GET /after-sign-in', () => {
   });
 
   it('starts a customer on the marketplace home rather than a dashboard', async () => {
-    getCurrentUser.mockResolvedValue({ id: 'u2', firstName: 'Ada', role: 'customer' });
+    getCurrentUser.mockResolvedValue({
+      id: 'u2',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      role: 'customer',
+    });
 
     expect(locationOf(await GET(REQUEST))).toBe('/');
+  });
+
+  /*
+   * VEN-642: `users.firstName`/`lastName` are `NOT NULL`, and the only value a
+   * fresh sign-up ever gives them is the sign-up form's synthetic
+   * email-prefix placeholder — split so `lastName` lands empty. A customer in
+   * that state is sent to the mandatory name step instead of anywhere else.
+   */
+  it('sends a nameless customer to the mandatory name step instead of home', async () => {
+    getCurrentUser.mockResolvedValue({
+      id: 'u4',
+      firstName: 'ada',
+      lastName: '',
+      role: 'customer',
+    });
+
+    expect(locationOf(await GET(REQUEST))).toBe('/sign-up/customer-details');
+  });
+
+  it('carries the destination through the name step, same as sign-in', async () => {
+    getCurrentUser.mockResolvedValue({
+      id: 'u4',
+      firstName: 'ada',
+      lastName: '',
+      role: 'customer',
+    });
+
+    const response = await GET(requestReturningTo('/vendors/june-harlow/request'));
+
+    expect(absoluteLocationOf(response)).toBe(
+      'http://localhost:3000/sign-up/customer-details?returnTo=%2Fvendors%2Fjune-harlow%2Frequest',
+    );
+  });
+
+  it('never sends a vendor to the customer name step', async () => {
+    getCurrentUser.mockResolvedValue({ id: 'u5', firstName: 'evie', lastName: '', role: 'vendor' });
+
+    expect(locationOf(await GET(REQUEST))).toBe('/vendor/dashboard');
   });
 
   it('starts an admin on the operations console', async () => {
@@ -83,7 +126,12 @@ describe('GET /after-sign-in', () => {
    */
   describe('the carried destination', () => {
     it('returns a customer to where they were going, not the role default', async () => {
-      getCurrentUser.mockResolvedValue({ id: 'u1', firstName: 'Ada', role: 'customer' });
+      getCurrentUser.mockResolvedValue({
+        id: 'u1',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        role: 'customer',
+      });
 
       const response = await GET(
         requestReturningTo('/vendors/june-harlow/request?package=abc&date=2026-12-05'),
@@ -101,7 +149,12 @@ describe('GET /after-sign-in', () => {
       ['a path that normalises scheme-relative', '/x/..//evil.test'],
       ['a dot-segment loop back into sign-in', '/x/../sign-in'],
     ])('ignores %s and uses the role default', async (_label, value) => {
-      getCurrentUser.mockResolvedValue({ id: 'u1', firstName: 'Ada', role: 'customer' });
+      getCurrentUser.mockResolvedValue({
+        id: 'u1',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        role: 'customer',
+      });
 
       const response = await GET(requestReturningTo(value));
 
@@ -129,7 +182,12 @@ describe('GET /after-sign-in', () => {
     ] as const)(
       'starts %s carrying %s on %s instead of that blank page',
       async (_label, role, returnTo, expected) => {
-        getCurrentUser.mockResolvedValue({ id: 'u1', firstName: 'Ada', role });
+        getCurrentUser.mockResolvedValue({
+          id: 'u1',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          role,
+        });
 
         const response = await GET(requestReturningTo(returnTo));
 

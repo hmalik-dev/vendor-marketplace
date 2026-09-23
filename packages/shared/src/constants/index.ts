@@ -130,6 +130,11 @@ export const PUBLISH_BLOCKERS = {
     short: 'a short bio',
     message: 'Write a short bio so customers know what you do',
   },
+  personalName: {
+    section: 'business',
+    short: 'your name',
+    message: 'Add your first and last name',
+  },
   responseTime: {
     section: 'responseTime',
     short: 'response time',

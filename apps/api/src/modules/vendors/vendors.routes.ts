@@ -129,11 +129,13 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: { body: createVendorProfileSchema, response: { 201: vendorProfileDetailSchema } },
     },
     async (request, reply) => {
+      const user = assertRole(request.auth, ['vendor']);
       const profile = await createVendorProfile(
         app.db,
-        assertRole(request.auth, ['vendor']).id,
+        user.id,
         request.body,
         app.storagePublicUrl,
+        { authUserId: user.authUserId, directory: app.authDirectory, log: request.log },
       );
 
       return reply.status(201).header('location', OWN_PROFILE_PATH).send(profile);
@@ -146,14 +148,18 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
       onRequest: vendorOnlyBeforeValidation,
       schema: { body: updateVendorProfileSchema, response: { 200: vendorProfileDetailSchema } },
     },
-    async (request) =>
-      updateVendorProfile(
+    async (request) => {
+      const user = assertRole(request.auth, ['vendor']);
+
+      return updateVendorProfile(
         app.db,
         app.storage,
-        assertRole(request.auth, ['vendor']).id,
+        user.id,
         request.body,
         app.storagePublicUrl,
         request.log,
-      ),
+        { authUserId: user.authUserId, directory: app.authDirectory, log: request.log },
+      );
+    },
   );
 };

@@ -96,7 +96,7 @@ describe('PublishBlockerBanner', () => {
   it('can only ever name a real gate key', () => {
     render(<PublishBlockerBanner blockers={PUBLISH_BLOCKER_KEYS} isPublished={false} />);
 
-    expect(screen.getByText(/7 things left/)).toBeTruthy();
+    expect(screen.getByText(/8 things left/)).toBeTruthy();
     expect(screen.queryByText(/payout/i)).toBeNull();
   });
 });

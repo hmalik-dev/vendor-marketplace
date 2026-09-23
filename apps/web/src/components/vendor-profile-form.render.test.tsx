@@ -43,7 +43,14 @@ afterEach(() => {
 
 /** A vendor onboarding: no profile row yet, so the form is in create mode. */
 function renderOnboarding(): void {
-  render(<VendorProfileForm profile={null} categories={CATEGORIES} allTags={[]} />);
+  render(
+    <VendorProfileForm
+      profile={null}
+      categories={CATEGORIES}
+      allTags={[]}
+      personalName={{ firstName: '', lastName: '' }}
+    />,
+  );
 }
 
 /**
@@ -103,7 +110,12 @@ describe('a tag an operator deactivated after the vendor chose it', () => {
 
 function renderSaved(overrides: Partial<WireVendorProfile> = {}): void {
   render(
-    <VendorProfileForm profile={savedProfile(overrides)} categories={CATEGORIES} allTags={[]} />,
+    <VendorProfileForm
+      profile={savedProfile(overrides)}
+      categories={CATEGORIES}
+      allTags={[]}
+      personalName={{ firstName: 'Grace', lastName: 'Vendor' }}
+    />,
   );
 }
 

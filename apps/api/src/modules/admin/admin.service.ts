@@ -75,7 +75,11 @@ import {
   updateVendorProfileById,
 } from '../vendors/vendors.dao.js';
 import { holdsCurrentAgreement } from '../vendors/legal-agreement.service.js';
-import { publishBlockers, unpublishForMissingPackages } from '../vendors/vendors.service.js';
+import {
+  isCompleteName,
+  publishBlockers,
+  unpublishForMissingPackages,
+} from '../vendors/vendors.service.js';
 import { normalizeTagName } from '../tags/tags.service.js';
 import { banOperatorById, hasAnotherLiveOperator } from '../users/users.dao.js';
 import { resolveDispute } from '../payments/payments.service.js';
@@ -1128,7 +1132,13 @@ export async function setVendorPublished(
       const categoryIds = await findVendorCategoryIds(tx, vendor.id);
       const activePackages = await countActivePackages(tx, vendor.id);
       const holdsAgreement = await holdsCurrentAgreement(tx, vendor.userId);
-      const blockers = publishBlockers(vendor, categoryIds, activePackages, holdsAgreement);
+      const blockers = publishBlockers(
+        vendor,
+        categoryIds,
+        activePackages,
+        holdsAgreement,
+        isCompleteName(owner.firstName, owner.lastName),
+      );
 
       /*
        * A held storefront is released by republishing it, so a vendor who has

@@ -482,6 +482,19 @@ export const updateUserSchema = z
   );
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
+/**
+ * First and last name alone, both required — the shape the customer-details
+ * interstitial and the vendor profile editor's personal-name fields validate
+ * against before sending a `PUT /users/me` that satisfies `updateUserSchema`
+ * (VEN-642). A dedicated schema rather than `updateUserSchema.pick(...)`: that
+ * schema is a `ZodEffects` (its `.refine()`s), which does not support `.pick`.
+ */
+export const personalNameInputSchema = z.object({
+  firstName: trimmedString(MAX_NAME_LENGTH),
+  lastName: trimmedString(MAX_NAME_LENGTH),
+});
+export type PersonalNameInput = z.infer<typeof personalNameInputSchema>;
+
 // --- Customer profiles -----------------------------------------------------
 
 /**
@@ -647,6 +660,14 @@ export const createVendorProfileSchema = z.object({
   bio: freeText()
     .max(MAX_VENDOR_BIO_LENGTH, `Keep your bio under ${MAX_VENDOR_BIO_LENGTH} characters`)
     .optional(),
+  /*
+   * Personal, not business, identity (VEN-642): written to `users`, not
+   * `vendor_profiles`. Optional here the same way `bio` is — a vendor can save
+   * a draft profile before supplying it — and gated at publish time instead,
+   * by `publishBlockers`' `personalName` key.
+   */
+  firstName: freeText().min(1, 'Enter your first name').max(MAX_NAME_LENGTH).optional(),
+  lastName: freeText().min(1, 'Enter your last name').max(MAX_NAME_LENGTH).optional(),
   tagline: freeText()
     .max(MAX_TAGLINE_LENGTH, `Keep it to ${MAX_TAGLINE_LENGTH} characters — it is one line`)
     .optional(),
@@ -696,6 +717,17 @@ function hasFieldBesidesEditVersion(value: { updatedAt?: Date | undefined }): bo
 }
 
 /**
+ * `firstName` and `lastName` write onto `users`, not this row (VEN-642), and
+ * `personalName`'s publish gate reads both halves together — so a lone half
+ * sent alongside `isPublished: true` must not be able to complete the pair
+ * with whatever the row already held and pass a check the actual write (which
+ * only ever writes both together) never performs.
+ */
+function hasBothNamesOrNeither(value: { firstName?: string; lastName?: string }): boolean {
+  return (value.firstName === undefined) === (value.lastName === undefined);
+}
+
+/**
  * Every create field is optional on update, plus the publish toggle. Derived
  * fields (`avgRating`, `reviewCount`) and Stripe fields are deliberately absent
  * — they are only ever written by their owning service.
@@ -705,6 +737,10 @@ export const updateVendorProfileSchema = createVendorProfileSchema
   .extend({ isPublished: z.boolean().optional(), updatedAt: editVersionSchema })
   .refine(hasFieldBesidesEditVersion, {
     message: 'Provide at least one field to update',
+  })
+  .refine(hasBothNamesOrNeither, {
+    message: 'Provide both your first and last name, or neither.',
+    path: ['lastName'],
   });
 export type UpdateVendorProfileInput = z.infer<typeof updateVendorProfileSchema>;
 

@@ -42,6 +42,7 @@ const VENDOR = 'user_vendor';
 const OTHER_VENDOR = 'user_vendor_two';
 const CUSTOMER = 'user_customer';
 const OTHER_CUSTOMER = 'user_customer_two';
+const NAMELESS_CUSTOMER = 'user_customer_nameless';
 
 const NOW = new Date();
 const EVENT_DATE = toDateString(addDays(NOW, 30));
@@ -178,6 +179,19 @@ describe('/booking-requests', () => {
       });
     }
 
+    /*
+     * Blank, like a fresh sign-up whose only name is the sign-up form's
+     * synthetic email-prefix placeholder split with no space in it (VEN-642).
+     */
+    harness.authUsers.set(NAMELESS_CUSTOMER, {
+      authUserId: NAMELESS_CUSTOMER,
+      email: 'nameless@example.com',
+      firstName: '',
+      lastName: '',
+      roleHint: 'customer',
+      avatarUrl: null,
+    });
+
     const rows = await harness.database.db
       .select({ id: categories.id })
       .from(categories)
@@ -231,6 +245,20 @@ describe('/booking-requests', () => {
       const response = await createRequest(vendorId, { packageId }, OTHER_VENDOR);
 
       expect(response.statusCode).toBe(403);
+    });
+
+    /*
+     * Independent of the customer-details interstitial (VEN-642): a direct
+     * call must not be able to route around the UI step, since the vendor
+     * later reads `customer.firstName` off this same request.
+     */
+    it('refuses a request from a customer with no name on file', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+
+      const response = await createRequest(vendorId, { packageId }, NAMELESS_CUSTOMER);
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('VALIDATION_ERROR');
     });
 
     /**
