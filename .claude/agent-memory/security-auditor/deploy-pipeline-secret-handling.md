@@ -29,6 +29,19 @@ The worst sink is `web`'s staging step: `vercel alias set <preview> <host of
 WEB_URL>` repoints whatever host that variable names, with no second factor and
 no undo, and `ready` then polls the same variable and goes green.
 
+**VEN-609 — sender phase.** Env/argv/redaction clean. It puts a **full-access**
+Resend key (Resend has no read-only scope: full access mints keys, deletes the
+domain, sends as it, reads sent bodies incl. admin step-up codes) into _both_
+GitHub environments; with one Resend team, staging's copy controls production
+mail. Docs set no deployment-branch policy on the environments.
+
+**`productionShape` gates nothing automated.** `shapeFor('deployed')` returns
+the base shape, and neither deploy.mjs nor boot runs `--env production`; only
+a manual `pnpm preflight --env production` does. VEN-609's `POSTGRES_TLS_URL`
+regex is bypassable: postgres.js 3.4.9 (`index.js:437` reduce) takes the
+**last** duplicate param, decodes `ssl%6Dode`, and ignores a `#` fragment.
+Neon refuses plaintext server-side, so it is low; parse, do not regex.
+
 **How to apply:** a new per-environment input needs either a tier-named
 variable (a repository fallback then cannot be the other tier's value) or a
 canary compared against `DEPLOY_TARGET`. See

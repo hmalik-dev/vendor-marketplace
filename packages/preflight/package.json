@@ -13,7 +13,8 @@
     "migrations:check": "tsx src/migrations/cli.ts",
     "secrets:scan": "tsx src/secrets/cli.ts",
     "smoke": "tsx src/smoke/cli.ts",
-    "launch:check": "tsx src/launch/cli.ts"
+    "launch:check": "tsx src/launch/cli.ts",
+    "release:sender": "tsx src/launch/sender-cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1118.0",

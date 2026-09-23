@@ -547,6 +547,39 @@ test('workflow: preflight is told exactly which inputs are set, and never a secr
   assert.ok(!Object.values(preflight.env).some((value) => /secrets\.[A-Z_]+ \}\}/.test(value)));
 });
 
+test('workflow: only the sender step is handed the Resend key, with EMAIL_FROM, before migrate', () => {
+  const sender = JOB.steps.find((step) => step.run === 'node scripts/deploy.mjs sender');
+  const holders = JOB.steps.filter((step) =>
+    Object.values(step.env ?? {}).some((value) => value.includes(`secrets.${RESEND_KEY} }}`)),
+  );
+
+  assert.deepEqual(holders, [sender]);
+  assert.deepEqual(sender.env, {
+    EMAIL_FROM: '${{ vars.EMAIL_FROM }}',
+    [RESEND_KEY]: `\${{ secrets.${RESEND_KEY} }}`,
+  });
+  const order = JOB.steps.map((step) => step.run);
+  assert.ok(
+    order.indexOf('node scripts/deploy.mjs sender') <
+      order.indexOf('node scripts/deploy.mjs migrate'),
+  );
+});
+
+test('sender: runs the check with only its two inputs, and refuses without them', async () => {
+  const { calls, io } = recordingIo();
+  const env = { PATH: '/bin', EMAIL_FROM: 'noreply@orla.test', [RESEND_KEY]: fake('resend') };
+
+  await PHASES.sender({ ...env, DATABASE_URL_UNPOOLED: UNPOOLED, API_HOST: 'railway' }, io);
+  assert.deepEqual(calls, [{ command: 'pnpm', args: ['release:sender'], env }]);
+
+  for (const name of ['EMAIL_FROM', RESEND_KEY]) {
+    await assert.rejects(
+      PHASES.sender({ ...env, [name]: '' }, io),
+      new RegExp(`Missing ${name}; refusing to continue`),
+    );
+  }
+});
+
 test('workflow: only the web step is handed the two build secrets', () => {
   for (const step of JOB.steps) {
     const holders = Object.entries(step.env ?? {}).filter(([, value]) =>
@@ -699,6 +732,7 @@ const SECRETS = Object.fromEntries(
     'SENTRY_AUTH_TOKEN',
     'WEB_TIER_KEY',
     'NEON_AUTH_COOKIE_SECRET',
+    'RESEND_API_KEY',
   ].map((name) => [name, name === 'DATABASE_URL_UNPOOLED' ? UNPOOLED : fake(name.toLowerCase())]),
 );
 const VARS = {
@@ -711,7 +745,11 @@ const VARS = {
   SENTRY_WEB_PROJECT: 'orla-web',
   API_URL: 'https://api.orla.test',
   WEB_URL: 'https://orla.test',
+  EMAIL_FROM: 'Orla <noreply@orla.test>',
 };
+
+/** The Resend key's name, spelled once; its value is always composed. */
+const RESEND_KEY = 'RESEND_API_KEY';
 
 /*
  * The stubs print their environment, so each phase's children really do write
@@ -736,6 +774,7 @@ test('dry run: a configured release runs migrate → api → web → poll, in th
     'git ls-remote origin',
     'pnpm install --frozen-lockfile',
     'pnpm turbo run',
+    'pnpm release:sender',
     'pnpm db:migrate',
     'pnpm db:seed',
     'npx --yes @railway/cli@5.57.2',
@@ -769,6 +808,17 @@ test('dry run: a failed migration aborts before either service is deployed', () 
     result.invocations.join('\n'),
   );
   assertNoSecretPrinted(result.printed);
+});
+
+test('dry run: an unverified sender stops the release before anything is migrated or deployed', () => {
+  const result = dryRun({ secrets: SECRETS, vars: VARS, fail: 'release:sender' });
+
+  assert.equal(result.failedAt, 'Refuse to release from an unverified email sender');
+  assert.equal(result.invocations.at(-1), 'pnpm release:sender');
+  assert.match(result.printed, /::error::pnpm release:sender exited with 1/);
+  assertNoSecretPrinted(result.printed);
+  // Handed to the check, and redacted from its output like every other credential.
+  assert.match(result.printed, new RegExp(`^${RESEND_KEY}=\\*\\*\\*$`, 'm'));
 });
 
 test('dry run: a readiness poll that fails fails the release', () => {
@@ -889,10 +939,11 @@ test("dry run: a staging push migrates staging first, then deploys, and looks up
 
   assert.equal(result.failedAt, null, result.printed);
   assert.match(result.printed, /Deploying a1b2c3d to staging\./);
-  assert.deepEqual(result.invocations.slice(0, 5), [
+  assert.deepEqual(result.invocations.slice(0, 6), [
     'git ls-remote origin',
     'pnpm install --frozen-lockfile',
     'pnpm turbo run',
+    'pnpm release:sender',
     'pnpm db:migrate',
     'pnpm db:seed',
   ]);
