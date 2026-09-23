@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  BRAND_DESCRIPTION,
   BRAND_NAME,
   CATEGORY_SEEDS,
   LANDING_CATEGORY_COUNT,
@@ -142,7 +143,7 @@ describe('HomePage', () => {
     const heading = screen.getByRole('heading', { level: 1 });
 
     expect(heading.textContent).toBe('Book your vendorswithout the back-and-forth.');
-    expect(screen.getByText('Now booking in Austin')).toBeDefined();
+    expect(screen.getByText('Early access')).toBeDefined();
   });
 
   /*
@@ -153,7 +154,7 @@ describe('HomePage', () => {
   it('sizes the hero badge on the 12px step the frame draws it at', async () => {
     render(await HomePage());
 
-    const badge = screen.getByText(/Now booking in/).closest('p');
+    const badge = screen.getByText('Early access').closest('p');
 
     expect(badge?.className).toContain('text-meta');
     expect(badge?.className).not.toContain('text-xs');
@@ -340,6 +341,19 @@ describe('HomePage', () => {
   });
 
   /*
+   * VEN-639. The meta, share-card and Twitter descriptions all read from the
+   * same `DESCRIPTION` constant, so a city claim removed from one and left in
+   * another would still ship. Asserting against the shared `BRAND_DESCRIPTION`
+   * also catches the constant drifting back into a hand-typed copy of it.
+   */
+  it('carries no city-specific booking claim in any description', () => {
+    expect(metadata.description).toBe(BRAND_DESCRIPTION);
+    expect(metadata.openGraph?.description).toBe(BRAND_DESCRIPTION);
+    expect(metadata.twitter?.description).toBe(BRAND_DESCRIPTION);
+    expect(BRAND_DESCRIPTION).not.toMatch(/Austin|Now booking/);
+  });
+
+  /*
    * Every other page composes through `pageTitle`, which appends the brand and
    * a separator — eight characters of the budget before the page has said
    * anything of its own. This
@@ -431,7 +445,7 @@ describe('HomePage', () => {
     // The badge used to read "412 vendors in Austin" and the cards "64 vendors
     // · from $850". Both are deferred until the numbers are real, so neither
     // may carry a digit at all — design/design-plan/98-post-mvp.md.
-    expect(screen.getByText('Now booking in Austin').textContent).not.toMatch(/\d/);
+    expect(screen.getByText('Early access').textContent).not.toMatch(/\d/);
 
     const grid = screen.getByRole('list', { name: 'Browse by category' });
     for (const card of within(grid).getAllByRole('listitem')) {
@@ -974,7 +988,7 @@ describe('HomePage, signed in as a customer', () => {
       'Book your vendorswithout the back-and-forth.',
     );
     expect(screen.getByTestId('hero-search')).toBeDefined();
-    expect(screen.getByText('Now booking in Austin')).toBeDefined();
+    expect(screen.getByText('Early access')).toBeDefined();
   });
 
   it('drops the acquisition sections, leaving the trust band as the ending', async () => {

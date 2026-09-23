@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
+  BRAND_DESCRIPTION,
   BRAND_NAME,
   CATEGORY_SEEDS,
   CATEGORY_SLUGS,
@@ -25,10 +26,10 @@ import { offeredJumpCategories } from '@/lib/jump-categories';
 import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
 
 /**
- * The one market that is live. It is a fact about the business rather than a
- * measurement, so unlike a vendor count it can be stated on day one — and it
- * is what makes "Now booking in Austin" true. A city picker replaces it once
- * there is a second market (design/design-plan/98-post-mvp.md).
+ * The metro `areaServed` below names for search engines. The hero badge no
+ * longer states it — it reads "Early access" instead (VEN-639), because the
+ * account holder has not yet committed to a launch city and the badge's
+ * "Now booking in {city}" claim was never true.
  */
 const LAUNCH_CITY = 'Austin';
 const LAUNCH_REGION = 'TX';
@@ -131,7 +132,7 @@ const VENDOR_STEPS = [
 const VENDOR_ENTRY_PATH = FOR_VENDORS_PATH;
 const VENDOR_PAYOUTS_PATH = `${FOR_VENDORS_PATH}#${FOR_VENDORS_PAYOUTS_ANCHOR}`;
 
-const DESCRIPTION = `Compare real availability and pricing from event vendors near you, send one request, and pay securely once the date is locked in. Now booking in ${LAUNCH_CITY}.`;
+const DESCRIPTION = BRAND_DESCRIPTION;
 
 /*
  * The origin this deployment actually answers on, not `BRAND_DOMAIN`.
@@ -407,7 +408,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
                   aria-hidden="true"
                   className="size-1 rounded-full bg-clay-400 min-[90rem]:size-1.25"
                 />
-                Now booking in {LAUNCH_CITY}
+                Early access
               </p>
 
               {/*

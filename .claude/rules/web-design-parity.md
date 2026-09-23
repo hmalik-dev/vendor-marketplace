@@ -46,8 +46,14 @@ attribute. Ruled 2026-09-04 (D30); the worked example is in `04-laws.md`.
 was overruled.** Do not file it again. Live overrides: sub-16px avatar monograms
 render Instrument Sans though the frames draw serif (D24); **no trigger draws the
 `▾` the frames draw except the vendor-type picker** (D25, amended by #426 on
-2026-09-06); and `01-foundations.md` records two colour values as accepted
-deviations. The caret has been re-filed four times.
+2026-09-06); `01-foundations.md` records two colour values as accepted
+deviations; and the hero badge reads **"Early access"** where frame `01
+Landing` and `31-content-voice.md` draw "Now booking in Austin" (VEN-639,
+2026-09-23) — the account holder ruled the city claim a stale placeholder
+before any launch city was chosen, in the same vein as #426 overriding the
+caret ruling. Layout, style, colour, font and access are unchanged; only the
+text differs, which is the whole point of the override. The caret has been
+re-filed four times.
 
 **The caret exception, both ways round (#426).** The account holder asked for it
 back on the vendor-type segment of the landing hero and of `/search` — one
