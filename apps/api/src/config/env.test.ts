@@ -37,6 +37,7 @@ delete REQUIRED.WEBHOOK_SIGNING_FIXTURE;
 // Optional, but the key-list test needs it present to see it parsed.
 REQUIRED.WEB_TIER_KEY = 'w'.repeat(40);
 REQUIRED.EMAIL_SINK_ADDRESS = 'sink@orla.test';
+REQUIRED.EMAIL_DAILY_SEND_CAP = '25';
 
 /*
  * Resend's key is composed rather than written out, for the same reason and one

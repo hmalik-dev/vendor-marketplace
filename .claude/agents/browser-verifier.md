@@ -23,6 +23,10 @@ never type a password, never print a credential. **After loading a storageState,
 navigate once and discard that render, then navigate again** — the first
 paint of a restored context reads signed-out by construction (#321).
 
+Do not send real email unless the criteria are about an email flow
+(`.claude/rules/email.md`). The lane's gateway is log-only by default and the
+lane mailbox still records every message; "an email was sent" is read there.
+
 ## The matrix
 
 Always: **signed out** (public surface renders; protected routes redirect, no

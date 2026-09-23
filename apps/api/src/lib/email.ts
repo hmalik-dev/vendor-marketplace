@@ -66,6 +66,14 @@ export interface EmailMessage {
    * idempotency keys at `lib/stripe.ts:370` and `admin.service.ts:268`.
    */
   idempotencyKey: string;
+  /**
+   * Mail the operator needs to run the platform — a step-up code, an operator
+   * alert or digest (VEN-661). It may spend `ESSENTIAL_SEND_HEADROOM` slots past
+   * the daily cap, so the cap an anonymous flood of support messages can reach
+   * never locks the operator out of the console that would stop it. A spent
+   * Resend quota still refuses it; nothing can send past that.
+   */
+  essential?: boolean;
 }
 
 /**
@@ -136,6 +144,12 @@ export function createResendGateway({ apiKey, from }: ResendOptions): EmailGatew
       });
 
       if (!response.ok) {
+        const quota = response.status === 429 ? await readQuotaErrorName(response) : null;
+
+        if (quota !== null) {
+          throw new EmailQuotaExceededError(quota);
+        }
+
         /*
          * The status only. A Resend error body can echo the recipient address
          * back, and this string reaches the log — `log-redaction.ts` cannot
@@ -147,6 +161,47 @@ export function createResendGateway({ apiKey, from }: ResendOptions): EmailGatew
       return { providerMessageId: await readMessageId(response) };
     },
   };
+}
+
+/**
+ * Resend's names for a spent quota (VEN-661). Its third 429, `rate_limit_exceeded`,
+ * is a per-second limit that clears on its own and stays an ordinary failure.
+ */
+const QUOTA_ERROR_NAMES: ReadonlySet<string> = new Set([
+  'daily_quota_exceeded',
+  'monthly_quota_exceeded',
+]);
+
+/**
+ * Resend refused the send because the account's quota is spent. Nothing sent
+ * today will get through, so `withDailySendCap` closes the day on it.
+ */
+export class EmailQuotaExceededError extends Error {
+  constructor(readonly code: string) {
+    super(`Resend refused the send (429 ${code})`);
+    this.name = 'EmailQuotaExceededError';
+  }
+}
+
+/**
+ * The error body's `name` when it is one of `QUOTA_ERROR_NAMES`, else null.
+ *
+ * Only the name is read, and only from that fixed set: it is Resend's own enum,
+ * whereas the rest of the body can echo the recipient back.
+ */
+async function readQuotaErrorName(response: Response): Promise<string | null> {
+  try {
+    const body: unknown = await response.json();
+
+    if (typeof body === 'object' && body !== null && 'name' in body) {
+      const { name } = body as { name: unknown };
+      return typeof name === 'string' && QUOTA_ERROR_NAMES.has(name) ? name : null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -202,13 +257,13 @@ export function withEmailSink(gateway: EmailGateway, sinkAddress: string): Email
  * sink address has nowhere safe to send. The recipient stays out of the log for
  * the reason `createResendGateway` keeps it out of its errors.
  */
-export function createLogOnlyGateway(log: { info(obj: object, msg: string): void }): EmailGateway {
+export function createLogOnlyGateway(
+  log: { info(obj: object, msg: string): void },
+  reason = 'email not delivered outside production',
+): EmailGateway {
   return {
     async send(message) {
-      log.info(
-        { idempotencyKey: message.idempotencyKey },
-        'email not delivered outside production',
-      );
+      log.info({ idempotencyKey: message.idempotencyKey }, reason);
       return { providerMessageId: null };
     },
   };
@@ -219,16 +274,46 @@ export interface EmailGatewayOptions extends ResendOptions {
   deployEnv: string;
   /** `EMAIL_SINK_ADDRESS`. */
   sinkAddress?: string | undefined;
+  /** `dailySendCapFor(deployEnv, EMAIL_DAILY_SEND_CAP)`; 0 sends nothing. */
+  dailyCap: number;
   log: Parameters<typeof createLogOnlyGateway>[0];
 }
 
-/** The gateway for a tier: Resend as-is in production, the sink or nothing elsewhere. */
+/**
+ * Sends per UTC day when `EMAIL_DAILY_SEND_CAP` is unset (VEN-661).
+ *
+ * Production's sits below Resend's free plan's 100 a day, so our own cap pages
+ * before the provider starts refusing. Every other tier's is 0 — it spends no
+ * quota at all — so a lane or staging sends real mail only when the ticket
+ * touches an email flow and someone sets the variable on purpose.
+ */
+export const DEFAULT_DAILY_SEND_CAP = { production: 80, elsewhere: 0 } as const;
+
+export function dailySendCapFor(deployEnv: string, configured: number | undefined): number {
+  return (
+    configured ??
+    (deployEnv === 'production'
+      ? DEFAULT_DAILY_SEND_CAP.production
+      : DEFAULT_DAILY_SEND_CAP.elsewhere)
+  );
+}
+
+/**
+ * The gateway for a tier: Resend as-is in production, the sink or nothing
+ * elsewhere, and nothing anywhere whose cap is 0. The cap itself is enforced by
+ * `withDailySendCap`, which needs the database and so is applied by the plugin.
+ */
 export function createEmailGateway({
   deployEnv,
   sinkAddress,
+  dailyCap,
   log,
   ...resend
 }: EmailGatewayOptions): EmailGateway {
+  if (dailyCap === 0) {
+    return createLogOnlyGateway(log, 'email not delivered: EMAIL_DAILY_SEND_CAP is 0 on this tier');
+  }
+
   if (deployEnv === 'production') {
     return createResendGateway(resend);
   }

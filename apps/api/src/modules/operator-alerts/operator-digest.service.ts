@@ -162,6 +162,7 @@ export async function runOperatorDigest(
       to: deps.to,
       ...renderOperatorEmail({ summary, details, link: `${deps.webOrigin}/admin` }),
       idempotencyKey: claim,
+      essential: true,
     });
     return 'sent';
   } catch (error) {

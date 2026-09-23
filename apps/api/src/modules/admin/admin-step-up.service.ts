@@ -62,6 +62,7 @@ export async function startStepUp(
         .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
         .join(''),
       idempotencyKey: randomUUID(),
+      essential: true,
     });
   } catch (error) {
     deps.store.cancelChallenge(adminId);
