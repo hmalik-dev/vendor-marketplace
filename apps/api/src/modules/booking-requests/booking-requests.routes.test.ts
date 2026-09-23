@@ -704,6 +704,55 @@ describe('/v1/booking-requests', () => {
       expect(second.json<RequestBody>().id).toBe(first.json<RequestBody>().id);
     });
 
+    /*
+     * VEN-669: the key is vendor, customer, date and package — not the details.
+     * A second custom request for the same date with a different occasion is
+     * still the first one (`created: false`, so 200), and what comes back is
+     * the stored row: the new event type never reached the vendor. The web
+     * reads that 200 to say so rather than showing "Sent".
+     */
+    it('answers a repeat with different details with the stored request, not a new one', async () => {
+      const { vendorId } = await createVendor(VENDOR, 'Wren & Field');
+
+      const first = await createRequest(vendorId, {
+        customDetails: 'A two-hour engagement shoot in the botanical garden.',
+      });
+      const repeat = await createRequest(vendorId, {
+        eventType: 'birthday',
+        guestCount: 40,
+        customDetails: 'Duplicate date test request for a birthday party.',
+      });
+
+      expect(first.statusCode).toBe(201);
+      expect(repeat.statusCode).toBe(200);
+      expect(repeat.json<RequestBody>().id).toBe(first.json<RequestBody>().id);
+      expect(repeat.json()).toMatchObject({ eventType: 'wedding', guestCount: 120 });
+
+      const rows = await harness.database.db
+        .select({ id: bookingRequests.id })
+        .from(bookingRequests);
+      expect(rows).toHaveLength(1);
+    });
+
+    it('creates a second request for a different package on the same date', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
+      const otherPackage = await post(VENDOR, '/v1/vendor/packages', {
+        name: 'Half day coverage',
+        description: 'Three hours of coverage with one photographer on site.',
+        priceCents: 80_000,
+        priceType: 'fixed',
+        inclusions: ['3 hours'],
+      });
+      expect(otherPackage.statusCode).toBe(201);
+
+      const first = await createRequest(vendorId, { packageId });
+      const second = await createRequest(vendorId, { packageId: otherPackage.json().id });
+
+      expect(first.statusCode).toBe(201);
+      expect(second.statusCode).toBe(201);
+      expect(second.json<RequestBody>().id).not.toBe(first.json<RequestBody>().id);
+    });
+
     it('lets the customer ask again once the first request is no longer live', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Wren & Field');
 

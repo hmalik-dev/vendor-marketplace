@@ -302,6 +302,8 @@ export function BookingRequestScreen({
   const [dateOpen, setDateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState<{ id: string; expiresAt: Date | null } | null>(null);
+  /** The live request a repeat submission was answered with (VEN-669). */
+  const [existing, setExisting] = useState<{ id: string; eventDate: string } | null>(null);
   const [sendFailure, setSendFailure] = useState<string | null>(null);
 
   /*
@@ -491,6 +493,7 @@ export function BookingRequestScreen({
   async function send(): Promise<void> {
     setSubmitting(true);
     setSendFailure(null);
+    let status: number | null = null;
 
     try {
       const created = await request('/booking-requests', {
@@ -508,6 +511,9 @@ export function BookingRequestScreen({
          */
         schema: wireBookingRequestSchema.pick({ id: true, expiresAt: true }),
         method: 'POST',
+        onStatus: (answered) => {
+          status = answered;
+        },
         body: {
           vendorId,
           ...(servicePackage ? { packageId: servicePackage.id } : {}),
@@ -522,6 +528,17 @@ export function BookingRequestScreen({
           ...(details ? { customDetails: details } : {}),
         },
       });
+
+      /*
+       * 200, not 201: a request to this vendor for this date (and package) is
+       * still live, and the API answered with it instead of creating another.
+       * Nothing typed here reached the vendor, so saying "Sent" would be false,
+       * and the draft is kept because it has not served its purpose.
+       */
+      if (status === 200) {
+        setExisting({ id: created.id, eventDate: form.eventDate });
+        return;
+      }
 
       // Sent, so the draft has served its purpose: the next request to this
       // vendor should start empty rather than repeating one already made.
@@ -547,6 +564,17 @@ export function BookingRequestScreen({
         responseTimeHours={responseTimeHours}
         isPackaged={servicePackage !== null}
         expiresAt={sent.expiresAt}
+      />
+    );
+  }
+
+  if (existing) {
+    return (
+      <ExistingRequestPanel
+        businessName={vendor.businessName}
+        vendorSlug={vendorSlug}
+        requestId={existing.id}
+        eventDate={existing.eventDate}
       />
     );
   }
@@ -1044,6 +1072,57 @@ function SuccessPanel({
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="primary">
               <Link href="/bookings">See your requests</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href={`/vendors/${vendorSlug}`}>Back to {businessName}</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface ExistingRequestPanelProps {
+  businessName: string;
+  vendorSlug: string;
+  requestId: string;
+  eventDate: string;
+}
+
+/**
+ * What a repeat submission lands on (VEN-669). Steel, because it is
+ * information: nothing failed and nothing new is owed — the customer already
+ * asked, and the earlier request is where the conversation continues. No
+ * stepper, since step 3 would claim this request reached the vendor.
+ */
+function ExistingRequestPanel({
+  businessName,
+  vendorSlug,
+  requestId,
+  eventDate,
+}: ExistingRequestPanelProps): React.ReactElement {
+  return (
+    <div className="mx-auto w-full max-w-[660px] px-6 py-14 xl:px-10">
+      <div className="overflow-hidden rounded-[18px] bg-stone-0 shadow-[0_2px_10px_rgba(35,32,28,.06)]">
+        <div className="flex gap-2.5 bg-steel-50 px-6 py-4">
+          <span aria-hidden="true" className="mt-1.75 size-2 shrink-0 rounded-full bg-steel-600" />
+          <p className="text-sm leading-[1.55] text-steel-600">
+            Nothing new was sent. What you just entered did not reach {businessName}.
+          </p>
+        </div>
+
+        <div className="px-6 py-6">
+          <h1 className="mb-2 display-heading text-[26px] text-stone-900">
+            You already have a request with {businessName} for {formatEventDate(eventDate)}
+          </h1>
+          <p className="mb-5 text-md leading-prose text-stone-700">
+            It is still open, so a second one was not made. Open it to see where it stands.
+          </p>
+
+          <div className="flex flex-wrap gap-3">
+            <Button asChild variant="primary">
+              <Link href={`/bookings/${requestId}`}>Open that request</Link>
             </Button>
             <Button asChild variant="secondary">
               <Link href={`/vendors/${vendorSlug}`}>Back to {businessName}</Link>

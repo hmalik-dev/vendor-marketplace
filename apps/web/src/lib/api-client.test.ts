@@ -33,6 +33,27 @@ describe('apiRequest', () => {
     });
   });
 
+  it('tells onStatus which 2xx answered, so a 200 and a 201 can mean different things (VEN-669)', async () => {
+    const onStatus = vi.fn();
+    fetchMock.mockResolvedValueOnce(jsonResponse(201, { id: 'r1', name: 'new' }));
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { id: 'r1', name: 'existing' }));
+
+    await apiRequest('/booking-requests', { schema: bodySchema, method: 'POST', onStatus });
+    await apiRequest('/booking-requests', { schema: bodySchema, method: 'POST', onStatus });
+
+    expect(onStatus.mock.calls).toEqual([[201], [200]]);
+  });
+
+  it('does not call onStatus when the body fails its schema', async () => {
+    const onStatus = vi.fn();
+    fetchMock.mockResolvedValue(jsonResponse(200, { id: 'r1' }));
+
+    await expect(apiRequest('/users/me', { schema: bodySchema, onStatus })).rejects.toBeInstanceOf(
+      ApiClientError,
+    );
+    expect(onStatus).not.toHaveBeenCalled();
+  });
+
   it('calls the route under the API version prefix (VEN-650)', async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, { id: 'u1', name: 'Ada' }));
 
