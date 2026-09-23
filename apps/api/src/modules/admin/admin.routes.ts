@@ -357,6 +357,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
             request.params.userId,
             app.clock(),
             app.authDirectory?.deleteIdentity ?? null,
+            app.storage,
           ),
       );
     },

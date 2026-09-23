@@ -1,6 +1,5 @@
 import { portfolioItems, users, vendorProfiles } from '@vendor-marketplace/db/schema';
-import { sql } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { AppDatabase } from '../../lib/database.js';
 import { referencedPathSegments } from '../../lib/storage.js';
 
@@ -35,14 +34,44 @@ export async function withUploadSweepLock<T>(
   });
 }
 
-/** Every column that can hold an object key, per `findUnreferencedKeys`. */
-const KEY_COLUMNS: readonly AnyPgColumn[] = [
-  portfolioItems.imageUrl,
-  portfolioItems.thumbnailUrl,
-  vendorProfiles.profileImageUrl,
-  vendorProfiles.coverImageUrl,
-  users.avatarUrl,
-];
+/**
+ * Every column that can hold an object key, each read only where the account
+ * that owns the row is still open.
+ *
+ * A closed account keeps its rows for the financial record, image columns
+ * included (VEN-614). Counting those as references kept a closed vendor's
+ * photos public forever; ignoring them lets the sweep delete what the closure
+ * itself failed to, on its next run.
+ */
+function keyColumnReads(db: AppDatabase): (() => Promise<{ value: string | null }[]>)[] {
+  const open = isNull(users.deletedAt);
+  const owner = eq(users.id, vendorProfiles.userId);
+
+  return [
+    ...[portfolioItems.imageUrl, portfolioItems.thumbnailUrl].map(
+      (column) => () =>
+        db
+          .select({ value: column })
+          .from(portfolioItems)
+          .innerJoin(vendorProfiles, eq(vendorProfiles.id, portfolioItems.vendorId))
+          .innerJoin(users, owner)
+          .where(and(open, isNotNull(column))),
+    ),
+    ...[vendorProfiles.profileImageUrl, vendorProfiles.coverImageUrl].map(
+      (column) => () =>
+        db
+          .select({ value: column })
+          .from(vendorProfiles)
+          .innerJoin(users, owner)
+          .where(and(open, isNotNull(column))),
+    ),
+    () =>
+      db
+        .select({ value: users.avatarUrl })
+        .from(users)
+        .where(and(open, isNotNull(users.avatarUrl))),
+  ];
+}
 
 /**
  * Every object key some row still names, in the spellings the object resolves
@@ -62,11 +91,8 @@ const KEY_COLUMNS: readonly AnyPgColumn[] = [
 export async function loadReferencedKeys(db: AppDatabase): Promise<Set<string>> {
   const referenced = new Set<string>();
 
-  for (const column of KEY_COLUMNS) {
-    const rows = await db
-      .select({ value: sql<string | null>`${column}` })
-      .from(column.table)
-      .where(sql`${column} is not null`);
+  for (const read of keyColumnReads(db)) {
+    const rows = await read();
 
     for (const { value } of rows) {
       if (value === null) {

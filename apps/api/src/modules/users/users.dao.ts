@@ -11,9 +11,16 @@ import {
 import type { AuthProvider, LegalAcceptanceDocument } from '@vendor-marketplace/shared';
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import type { AppDatabase } from '../../lib/database.js';
+import { closedAccountFields } from './closed-account.js';
 
-/** What a retirement reports: the retired row, or what stood in the way of it. */
-export type RetireOutcome<B> = { user: UserRow; profileRetired: boolean } | { blocked: B[] };
+/**
+ * What a retirement reports: the retired row, or what stood in the way of it.
+ * `Extra` widens the retired case for a caller that needs more out of the
+ * transaction than the row itself — `retireUserInTransaction`'s released
+ * address, below.
+ */
+export type RetireOutcome<B, Extra extends object = Record<never, never>> =
+  ({ user: UserRow; profileRetired: boolean } & Extra) | { blocked: B[] };
 
 /** Read inside the retirement's transaction, under the row lock, so it cannot go stale. */
 export type RetirementBlockers<B> = (tx: AppDatabase) => Promise<B[]>;
@@ -759,7 +766,9 @@ async function retireUserWhere<B>(
    * retirement itself.
    */
   if (retired && 'user' in retired) {
-    await handAddressToWaiter(db, retired.user.email);
+    await handAddressToWaiter(db, retired.releasedEmail);
+
+    return { user: retired.user, profileRetired: retired.profileRetired };
   }
 
   return retired;
@@ -771,7 +780,7 @@ async function retireUserInTransaction<B>(
   lock?: SQL,
   guard?: RetirementGuard<B>,
   audit?: RetirementAudit,
-): Promise<RetireOutcome<B> | null> {
+): Promise<RetireOutcome<B, { releasedEmail: string }> | null> {
   return db.transaction(async (tx) => {
     if (lock) {
       await tx.execute(lock);
@@ -799,10 +808,26 @@ async function retireUserInTransaction<B>(
       }
     }
 
+    /*
+     * Read and locked before the write, because the write replaces the address
+     * with its tombstone (VEN-614) and the real one is still owed to a waiter
+     * once this commits. The `UPDATE` repeats the predicate, so the claim is
+     * unchanged: a concurrent closure that committed first leaves it no row.
+     */
+    const [target] = await tx
+      .select({ id: users.id, role: users.role, email: users.email })
+      .from(users)
+      .where(where)
+      .for('update');
+
+    if (!target) {
+      return null;
+    }
+
     const updated = await tx
       .update(users)
-      .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
-      .where(where)
+      .set({ ...closedAccountFields(target), deletedAt: sql`now()`, updatedAt: sql`now()` })
+      .where(and(eq(users.id, target.id), where))
       .returning();
 
     const row = updated?.[0];
@@ -821,7 +846,7 @@ async function retireUserInTransaction<B>(
 
     await audit?.(tx, { profileRetired });
 
-    return { user: row, profileRetired };
+    return { user: row, profileRetired, releasedEmail: target.email };
   });
 }
 

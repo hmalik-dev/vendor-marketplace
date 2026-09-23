@@ -1,4 +1,5 @@
-import { users } from '@vendor-marketplace/db/schema';
+import { portfolioItems, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { eq } from 'drizzle-orm';
 import { UPLOAD_ORPHAN_GRACE_MS } from '@vendor-marketplace/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -124,6 +125,60 @@ describe('sweepOrphanedUploads', () => {
     expect(result).toEqual({ ran: true, scanned: 5, orphaned: 2 });
     expect(pages.filter((token) => token !== undefined).length).toBeGreaterThan(0);
     expect(stored()).toEqual([FRESH_ORPHAN, REFERENCED, REFERENCED_THUMB].sort());
+  });
+
+  /*
+   * VEN-614: a closed account's rows stay for the money, and their image
+   * columns with them. Counted as live, those references kept a closed
+   * vendor's photos public forever and gave a failed closure delete nothing to
+   * retry it; ignored, the sweep finishes what the closure started.
+   */
+  it('deletes objects that only a closed account still names', async () => {
+    const closedId = 'a0000000-0000-4000-8000-000000000002';
+    const avatar = `customer-profile/${closedId}/avatar.webp`;
+    const profile = `vendor-profile/${closedId}/face.webp`;
+    const cover = `vendor-cover/${closedId}/cover.webp`;
+    const portfolio = `portfolio/${closedId}/work.webp`;
+    const portfolioThumb = `portfolio/${closedId}/work-thumb.webp`;
+
+    await harness.database.db.insert(users).values({
+      id: closedId,
+      authUserId: 'user_sweep_closed',
+      email: 'sweep-closed@example.com',
+      role: 'vendor',
+      firstName: 'Cam',
+      lastName: 'Ray',
+      avatarUrl: avatar,
+      deletedAt: NOW,
+    });
+    const [vendor] = await harness.database.db
+      .insert(vendorProfiles)
+      .values({
+        userId: closedId,
+        businessName: 'Closed Studio',
+        slug: 'closed-studio-sweep',
+        profileImageUrl: profile,
+        coverImageUrl: cover,
+        isDeleted: true,
+      })
+      .returning({ id: vendorProfiles.id });
+    await harness.database.db
+      .insert(portfolioItems)
+      .values({ vendorId: vendor!.id, imageUrl: portfolio, thumbnailUrl: portfolioThumb });
+
+    seed();
+    for (const key of [avatar, profile, cover, portfolio, portfolioThumb]) {
+      put(key, OLD);
+    }
+
+    const result = await sweep();
+
+    expect(result).toEqual({ ran: true, scanned: 10, orphaned: 7 });
+    expect(stored()).toEqual([FRESH_ORPHAN, REFERENCED, REFERENCED_THUMB].sort());
+
+    await harness.database.db.delete(portfolioItems);
+    await harness.database.db.delete(vendorProfiles);
+    await harness.database.db.delete(users).where(eq(users.id, closedId));
   });
 
   it('under dry run deletes nothing and reports what it would have', async () => {
