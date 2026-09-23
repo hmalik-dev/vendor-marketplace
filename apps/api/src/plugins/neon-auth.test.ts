@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { exportJWK, generateKeyPair, createLocalJWKSet, SignJWT, type JWTPayload } from 'jose';
 import {
   legalAcceptances,
@@ -52,7 +53,11 @@ describe('the Neon Auth trust boundary', () => {
   let jwks: ReturnType<typeof createLocalJWKSet>;
   let sign: (
     claims: JWTPayload,
-    options?: { expiresIn?: string | number; key?: Parameters<SignJWT['sign']>[0] },
+    options?: {
+      expiresIn?: string | number;
+      key?: Parameters<SignJWT['sign']>[0];
+      issuedAt?: number;
+    },
   ) => Promise<string>;
 
   beforeAll(async () => {
@@ -64,7 +69,7 @@ describe('the Neon Auth trust boundary', () => {
     sign = (claims, options = {}) =>
       new SignJWT(claims)
         .setProtectedHeader({ alg: 'EdDSA', kid: KID })
-        .setIssuedAt()
+        .setIssuedAt(options.issuedAt ?? Math.floor(Date.now() / 1000))
         .setIssuer(ORIGIN)
         .setAudience(ORIGIN)
         .setExpirationTime(options.expiresIn ?? '15m')
@@ -246,6 +251,73 @@ describe('the Neon Auth trust boundary', () => {
     const rows = await harness.database.db.select().from(users);
     expect(rows.find((row) => row.authUserId === authUserId)?.avatarUrl).toBe(stored);
     expect((await get('/users/me', token)).statusCode).toBe(200);
+  });
+
+  it('answers 401 to a token minted before the account’s sessions were invalidated (VEN-628)', async () => {
+    const authUserId = 'neon-user-invalidated';
+    const before = await sign(claims({ sub: authUserId, email: 'invalidated@example.com' }));
+
+    const accepted = await harness.app.inject({
+      method: 'POST',
+      url: '/legal/terms/accept',
+      headers: { authorization: `Bearer ${before}` },
+      payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect((await get('/users/me', before)).statusCode).toBe(200);
+
+    await harness.database.db
+      .update(users)
+      .set({ sessionsInvalidatedAt: new Date(Date.now() + 60_000) })
+      .where(eq(users.authUserId, authUserId));
+
+    expect((await get('/users/me', before)).statusCode).toBe(401);
+  });
+
+  it('accepts a token minted after the invalidation it should outrun', async () => {
+    const authUserId = 'neon-user-post-invalidate';
+    const stale = await sign(claims({ sub: authUserId, email: 'post-invalidate@example.com' }));
+    await harness.app.inject({
+      method: 'POST',
+      url: '/legal/terms/accept',
+      headers: { authorization: `Bearer ${stale}` },
+      payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
+    });
+
+    await harness.database.db
+      .update(users)
+      .set({ sessionsInvalidatedAt: new Date(Date.now() - 60_000) })
+      .where(eq(users.authUserId, authUserId));
+
+    const fresh = await sign(claims({ sub: authUserId, email: 'post-invalidate@example.com' }));
+    expect((await get('/users/me', fresh)).statusCode).toBe(200);
+  });
+
+  it('accepts a token minted in the same whole second as the invalidation write (VEN-628)', async () => {
+    const authUserId = 'neon-user-same-second';
+    const setup = await sign(claims({ sub: authUserId, email: 'same-second@example.com' }));
+    await harness.app.inject({
+      method: 'POST',
+      url: '/legal/terms/accept',
+      headers: { authorization: `Bearer ${setup}` },
+      payload: { version: CURRENT_TERMS_VERSION, accepted: true, role: 'customer' },
+    });
+
+    // `iat` is whole seconds; `now()` carries microseconds. A token issued
+    // 900ms into the same second the invalidation was written must still be
+    // accepted — refusing it would be punishing a race neither clock can
+    // resolve, not a real replay.
+    const wholeSecond = Math.floor(Date.now() / 1000);
+    await harness.database.db
+      .update(users)
+      .set({ sessionsInvalidatedAt: new Date(wholeSecond * 1000 + 900) })
+      .where(eq(users.authUserId, authUserId));
+
+    const sameSecond = await sign(claims({ sub: authUserId, email: 'same-second@example.com' }), {
+      issuedAt: wholeSecond,
+    });
+
+    expect((await get('/users/me', sameSecond)).statusCode).toBe(200);
   });
 
   it('refuses a vendor sign-up with no invite and creates no account', async () => {

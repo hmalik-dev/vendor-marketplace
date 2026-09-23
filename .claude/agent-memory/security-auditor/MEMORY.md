@@ -22,7 +22,7 @@
 
 - [Neon Auth cutover boundaries](neon-auth-cutover-boundaries.md) — verification sound, role double-narrowed; the unthrottled `/api/auth` proxy is the new surface
 - [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` is null for a gated account; `requireAuthSubject` (pre-Neon name, retired by VEN-447) is the deliberate exception
-- [The server session cache's key is the whole gate](server-session-cache-key-is-the-cookie.md) — a hit skips the SDK's signature and revocation check; a second `*session_token` cookie keys the victim's JWT
+- [The server session cache's key is the whole gate](server-session-cache-key-is-the-cookie.md) — a hit skips the SDK's signature and revocation check; VEN-628's per-user `sessions_invalidated_at` outruns the other instances' caches
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` renders a booking amount with no `force-dynamic`
 - [Email is a label, the auth id is the key (the pre-rename column is gone)](email-uniqueness-is-partial-nothing-joins-by-email.md) — `users_email_key` is partial; nothing resolves a person by email
 - [Closing an account releases its address](closed-account-address-is-released.md) — `users_email_key` is partial since #451; the old permanent-500 memory was stale

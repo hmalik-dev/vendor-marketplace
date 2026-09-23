@@ -12,7 +12,12 @@ vi.mock('next/headers', () => ({ cookies: async () => ({ getAll }) }));
 vi.mock('react', () => ({ cache: <T>(fn: T): T => fn }));
 
 import { API_REQUEST_TIMEOUT_MS } from '@/lib/api-client';
-import { clearServerSessions, forgetSessionsFor, getServerSession } from './server';
+import {
+  clearServerSessions,
+  forgetSessionsFor,
+  getServerSession,
+  mintedUserIdForCaller,
+} from './server';
 
 const NOW = Date.UTC(2026, 8, 20, 12, 0, 0);
 
@@ -226,5 +231,39 @@ describe('getServerSession', () => {
     token.mockResolvedValueOnce({ data: { token: minted }, error: null });
     expect(await getServerSession()).toEqual({ userId: 'user-1', token: minted });
     expect(token).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('mintedUserIdForCaller', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEON_AUTH_BASE_URL', 'https://auth.example.test');
+    vi.stubEnv('NEON_AUTH_COOKIE_SECRET', 'x'.repeat(32));
+    getSession.mockReset();
+    token.mockReset();
+    getAll.mockReset();
+    clearServerSessions();
+  });
+
+  it('reads the user id cached under the caller’s own cookie, with no call to Neon Auth', async () => {
+    signedInAs('user-1', 'cookie-a');
+    token.mockResolvedValue({ data: { token: jwt(NOW / 1000 + 900) }, error: null });
+    await getServerSession();
+    getSession.mockClear();
+
+    getAll.mockReturnValue([{ name: '__Secure-neon-auth.session_token', value: 'cookie-a' }]);
+    await expect(mintedUserIdForCaller()).resolves.toBe('user-1');
+    expect(getSession).not.toHaveBeenCalled();
+  });
+
+  it('answers undefined for a cookie nothing is cached under', async () => {
+    getAll.mockReturnValue([{ name: '__Secure-neon-auth.session_token', value: 'never-rendered' }]);
+
+    await expect(mintedUserIdForCaller()).resolves.toBeUndefined();
+  });
+
+  it('answers undefined with no session cookie at all', async () => {
+    getAll.mockReturnValue([]);
+
+    await expect(mintedUserIdForCaller()).resolves.toBeUndefined();
   });
 });

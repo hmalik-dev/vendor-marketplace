@@ -148,7 +148,27 @@ export async function resetPasswordWithCode(input: {
   return outcomeOf(await post('/email-otp/reset-password', input));
 }
 
+/**
+ * Ends the session through the proxy. Rejects only when the outcome is
+ * genuinely unknown — a network failure, the proxy's own throttle, or the
+ * provider erroring — so a caller can tell a real failure from one that only
+ * looked like it (VEN-628): `post` swallows a network error into `null`,
+ * which this checks for alongside the response.
+ *
+ * An ordinary 4xx (other than 429) is **not** a failure here: Better Auth
+ * answers one when the caller has no live session to end — the double
+ * sign-out from a second tab, or a stale button clicked twice — and by then
+ * there is nothing this browser is still signed into either way. Resolving
+ * lets the caller proceed exactly as it would for a real sign-out; treating
+ * it as a failure would strand that caller on the page, unable to leave no
+ * matter how many times they click the same control.
+ */
 export async function signOut(): Promise<void> {
-  await post('/sign-out', null);
+  const response = await post('/sign-out', null);
+
+  if (response === null || response.status === 429 || response.status >= 500) {
+    throw new Error('Could not sign out');
+  }
+
   clearSessionToken();
 }

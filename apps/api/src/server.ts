@@ -67,6 +67,7 @@ import { placeRoutes } from './modules/places/places.routes.js';
 import { customerRoutes } from './modules/customers/customers.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { throttleRoutes } from './modules/throttle/throttle.routes.js';
+import { sessionGenerationRoutes } from './modules/users/session-generation.routes.js';
 import { packageRoutes } from './modules/packages/packages.routes.js';
 import { portfolioRoutes } from './modules/portfolio/portfolio.routes.js';
 import { reviewRoutes } from './modules/reviews/reviews.routes.js';
@@ -545,6 +546,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
 
   await app.register(healthRoutes);
   await app.register(throttleRoutes, { webTierKey: env.WEB_TIER_KEY });
+  await app.register(sessionGenerationRoutes, { webTierKey: env.WEB_TIER_KEY });
   await app.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
   await app.register(adminCategoryRoutes);
   await app.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });

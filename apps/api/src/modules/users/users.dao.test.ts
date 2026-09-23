@@ -2,7 +2,12 @@ import { eq } from 'drizzle-orm';
 import { users } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
-import { insertUserIfAbsent, retireUserByAuthId, updateUserByAuthId } from './users.dao.js';
+import {
+  insertUserIfAbsent,
+  invalidateSessionsFor,
+  retireUserByAuthId,
+  updateUserByAuthId,
+} from './users.dao.js';
 
 /**
  * One harness for the whole file. Two `createTestHarness()` instances in one
@@ -56,6 +61,28 @@ afterAll(async () => {
  * the sentence below. One of those two matches and the other does not, on every
  * run, with no concurrency involved.
  */
+describe('invalidateSessionsFor (VEN-628)', () => {
+  it('sets the invalidation timestamp on the named user, and no other row', async () => {
+    const db = harness.database.db;
+    await db.insert(users).values(newUser('auth-invalidate-1', 'a1@example.com'));
+    await db.insert(users).values(newUser('auth-invalidate-2', 'a2@example.com'));
+
+    await invalidateSessionsFor(db, 'auth-invalidate-1');
+
+    const [named] = await db.select().from(users).where(eq(users.authUserId, 'auth-invalidate-1'));
+    const [other] = await db.select().from(users).where(eq(users.authUserId, 'auth-invalidate-2'));
+
+    expect(named?.sessionsInvalidatedAt).not.toBeNull();
+    expect(other?.sessionsInvalidatedAt).toBeNull();
+  });
+
+  it('is a no-op for an auth subject with no row', async () => {
+    await expect(
+      invalidateSessionsFor(harness.database.db, 'no-such-subject'),
+    ).resolves.toBeUndefined();
+  });
+});
+
 describe('insertUserIfAbsent, when the insert is declined', () => {
   const HELD_EMAIL = 'ada@example.com';
 

@@ -124,6 +124,23 @@ export async function findSessionSubject(
   return rows?.[0] ?? null;
 }
 
+/**
+ * Bumps `sessions_invalidated_at` to "now", so a JWT minted before this call
+ * fails the auth hook's `iat` comparison even though it is still signed and
+ * unexpired (VEN-628). A no-op for an auth subject with no row yet — nothing
+ * to invalidate, and the acceptance gate handles that subject on its own path.
+ */
+export async function invalidateSessionsFor(db: AppDatabase, authUserId: string): Promise<void> {
+  if (!authUserId) {
+    return;
+  }
+
+  await db
+    .update(users)
+    .set({ sessionsInvalidatedAt: sql`now()` })
+    .where(eq(users.authUserId, authUserId));
+}
+
 export async function findUserById(db: AppDatabase, id: string): Promise<UserRow | null> {
   if (!id) {
     return null;
