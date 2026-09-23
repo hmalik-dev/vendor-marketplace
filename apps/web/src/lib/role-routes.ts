@@ -1,12 +1,7 @@
 import type { UserRole } from '@vendor-marketplace/shared';
-import { safeReturnPath } from './return-path';
+import { CUSTOMER_DETAILS_PATH, safeReturnPath } from './return-path';
 
-/**
- * The mandatory name step a customer with no `firstName`/`lastName` yet lands
- * on right after `/accept-terms`, before anywhere else (VEN-642). Named to
- * match the vendor sign-up flow's `VENDOR_DETAILS_PATH` sibling.
- */
-export const CUSTOMER_DETAILS_PATH = '/sign-up/customer-details';
+export { CUSTOMER_DETAILS_PATH };
 
 /** Where each role's own dashboard lives. */
 export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
@@ -172,5 +167,13 @@ export function roleCanReach(role: UserRole, path: string): boolean {
 export function postSignInPath(role: UserRole, returnTo: string | null | undefined): string {
   const safe = safeReturnPath(returnTo);
 
-  return safe !== null && roleCanReach(role, safe) ? safe : POST_SIGN_IN_PATH_BY_ROLE[role];
+  /*
+   * The name step is carried so a signed-out visit to it resumes (VEN-653),
+   * but it is never a destination from here: a customer who still owes it is
+   * sent there before this runs, and forwarding one who has cleared it would
+   * bounce them straight back through this handler.
+   */
+  return safe !== null && pathnameOf(safe) !== CUSTOMER_DETAILS_PATH && roleCanReach(role, safe)
+    ? safe
+    : POST_SIGN_IN_PATH_BY_ROLE[role];
 }
