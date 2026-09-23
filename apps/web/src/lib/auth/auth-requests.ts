@@ -52,6 +52,8 @@ async function post(path: string, body: Record<string, string> | null): Promise<
  * is not guaranteed to survive a second wrong submission of the same code.
  */
 async function outcomeOf(response: Response | null): Promise<AuthOutcome> {
+  // A 5xx includes the proxy's own 503 `AUTH_UNAVAILABLE` for a missing auth
+  // configuration (VEN-635), which the forms explain with the same copy.
   if (!response || response.status >= 500) {
     return 'unreachable';
   }

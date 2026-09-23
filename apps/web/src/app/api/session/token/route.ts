@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/server';
+import { authConfigured, getServerSession } from '@/lib/auth/server';
 
 /**
  * The bearer token for the signed-in browser, for `use-api` and the event
@@ -8,8 +8,19 @@ import { getServerSession } from '@/lib/auth/server';
  *
  * `no-store` because the answer is per caller and per moment; a shared cache
  * holding one visitor's token would hand it to the next.
+ *
+ * A missing auth configuration is a 503 `AUTH_UNAVAILABLE`, not a 401: the
+ * caller may well be signed in, and `client.ts` treats a 5xx as retryable
+ * rather than as signed out (VEN-635).
  */
 export async function GET(): Promise<NextResponse> {
+  if (!authConfigured()) {
+    return NextResponse.json(
+      { code: 'AUTH_UNAVAILABLE' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
   const session = await getServerSession();
 
   if (!session) {

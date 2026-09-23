@@ -1,14 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getServerSession = vi.fn();
+const authConfigured = vi.fn<() => boolean>();
 
-vi.mock('@/lib/auth/server', () => ({ getServerSession: () => getServerSession() }));
+vi.mock('@/lib/auth/server', () => ({
+  authConfigured: () => authConfigured(),
+  getServerSession: () => getServerSession(),
+}));
 
 const { GET } = await import('./route');
 
 describe('GET /api/session/token', () => {
   beforeEach(() => {
     getServerSession.mockReset();
+    authConfigured.mockReset().mockReturnValue(true);
+  });
+
+  it('answers 503 AUTH_UNAVAILABLE, uncached, when auth is not configured (VEN-635)', async () => {
+    authConfigured.mockReturnValue(false);
+
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    await expect(response.json()).resolves.toEqual({ code: 'AUTH_UNAVAILABLE' });
+    expect(getServerSession).not.toHaveBeenCalled();
   });
 
   it('answers 401 with no token, uncached, when nobody is signed in', async () => {
