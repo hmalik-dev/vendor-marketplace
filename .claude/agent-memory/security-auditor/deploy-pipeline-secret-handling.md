@@ -15,7 +15,11 @@ a checkout pinned to `workflow_run.head_sha`.
 **The one soft spot on output:** `PhaseError`s from `run()` quote `command` and
 `args.join(' ').slice(0, 60)`, and `main()` prints them verbatim to `::error::`,
 **not** through `redact`. Safe only while every credential travels in `env`
-(`API_HOSTS[*].credentialVariable`), never in argv.
+(`API_HOSTS[*].credentialVariable`), never in argv. Any **non**-PhaseError
+(e.g. a V8 `SyntaxError` from `response.json()`, which quotes a body snippet)
+prints only `<phase> failed unexpectedly`, so a body can reach CI only if a
+PhaseError message interpolates it. VEN-632's web probes (`/api/ready`,
+`/api/auth/get-session`, `/sign-in`, `/`) echo status and content-type only.
 
 **VEN-494 — the branch is the environment.** `head_branch` (`staging` or
 `production`) becomes `environment:`, the concurrency group and `DEPLOY_TARGET`;

@@ -24,3 +24,10 @@ every `toThrow(<the guard message>)` in the file goes red.
 Then diff that set against the stub, and against the workflow-level `env:` block —
 `grep '^KEY=' .env` returning 1 while `grep KEY .github/workflows/ci.yml` returns
 nothing is the tell. Related: [[review-checklist-repo-wide-source-guards-fire-on-new-files]].
+
+**The inverse direction too.** A test asserting a variable is _absent_ (a presence
+flag `false`, an "unset" branch) without `vi.stubEnv(name, '')` is red in CI:
+ci.yml's workflow-level `env:` sets `NEON_AUTH_BASE_URL` and
+`NEON_AUTH_COOKIE_SECRET`, and turbo's `globalPassThroughEnv` hands them to
+`pnpm test`. VEN-632's `/api/ready` route test asserted `runtimeEnv` all-false.
+Question: "for each var this test expects unset, is it in ci.yml's top `env:`?"

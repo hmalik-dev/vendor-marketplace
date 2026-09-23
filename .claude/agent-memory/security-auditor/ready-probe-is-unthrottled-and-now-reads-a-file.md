@@ -28,3 +28,10 @@ Disclosure side is settled: the response publishes `database: 'behind'` and
 counts stay in `request.log.error` as integers. See
 [[err-serializer-is-the-log-sink]] and
 [[error-handler-4xx-passthrough-leaks-sdk-messages]] for why the 500 body is safe.
+
+**The web's `/api/ready` publishes `runtimeEnv` presence booleans** (VEN-632,
+audited PASS 2026-09-22): five names, `Boolean(process.env[name])`, never a
+value. Accepted: constant `true` on a healthy tier; a `false` only discloses a
+misconfiguration the release gate already refuses (e.g. `WEB_TIER_KEY` false
+means the auth proxy throttle fell back to per-instance counts). Do not
+re-report; do re-open if a value, length or prefix is ever added.
