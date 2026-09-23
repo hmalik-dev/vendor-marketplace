@@ -8,6 +8,8 @@
  * of answering — would have been caught by a single request.
  */
 
+import { API_VERSION_PREFIX } from '@vendor-marketplace/shared';
+
 export interface SmokeOptions {
   apiUrl: string;
   webUrl: string;
@@ -177,7 +179,7 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
 
   const vendor = await untilDeadline<{ name: string; slug: string } | null>(async () => {
     const response = await fetchWithTimeout(
-      `${api}/vendors?pageSize=1`,
+      `${api}${API_VERSION_PREFIX}/vendors?pageSize=1`,
       requestTimeoutMs,
       fetchImpl,
     );

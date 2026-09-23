@@ -57,7 +57,7 @@ describe('GET /vendors — the New badge reads the instance clock', () => {
   it('calls a vendor created now old, when the instance clock is past the window', async () => {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer('user_a'),
       payload: {
         businessName: 'Joined Today',
@@ -73,7 +73,7 @@ describe('GET /vendors — the New badge reads the instance clock', () => {
     // Publishing is blocked without an active package — `publishBlockers`.
     const pkg = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer('user_a'),
       payload: {
         name: 'Full day',
@@ -86,13 +86,13 @@ describe('GET /vendors — the New badge reads the instance clock', () => {
     await acceptVendorAgreementAs(harness, 'user_a');
     const published = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer('user_a'),
       payload: { isPublished: true },
     });
     expect(published.statusCode).toBe(200);
 
-    const response = await harness.app.inject({ method: 'GET', url: '/vendors' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/vendors' });
     expect(response.statusCode).toBe(200);
 
     // `new Date()` in the DAO would answer `true` here — the row really was

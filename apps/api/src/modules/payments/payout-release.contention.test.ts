@@ -113,7 +113,7 @@ describe('two payout sweeps racing one booking, on two real connections', () => 
       .where(eq(categories.slug, 'photography'))
       .limit(1);
 
-    const profile = await inject('POST', '/vendor/profile', VENDOR, {
+    const profile = await inject('POST', '/v1/vendor/profile', VENDOR, {
       businessName: 'Sunlit Studio',
       categoryIds: [photography!.id],
       city: 'Austin',
@@ -123,7 +123,7 @@ describe('two payout sweeps racing one booking, on two real connections', () => 
     expect(profile.statusCode).toBe(201);
     const vendorId: string = profile.json().id;
 
-    const servicePackage = await inject('POST', '/vendor/packages', VENDOR, {
+    const servicePackage = await inject('POST', '/v1/vendor/packages', VENDOR, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: PRICE_CENTS,
@@ -142,12 +142,12 @@ describe('two payout sweeps racing one booking, on two real connections', () => 
      * agreement (#427), and this fixture reaches checkout — so without this the
      * booking under test never exists and the race has nothing to race over.
      */
-    const agreed = await inject('POST', '/vendor/agreement/accept', VENDOR, {
+    const agreed = await inject('POST', '/v1/vendor/agreement/accept', VENDOR, {
       version: CURRENT_VENDOR_AGREEMENT_VERSION,
     });
     expect(agreed.statusCode).toBe(200);
 
-    const request = await inject('POST', '/booking-requests', CUSTOMER, {
+    const request = await inject('POST', '/v1/booking-requests', CUSTOMER, {
       vendorId,
       packageId: servicePackage.json().id,
       eventDate: EVENT_DATE,
@@ -158,13 +158,13 @@ describe('two payout sweeps racing one booking, on two real connections', () => 
     expect(request.statusCode).toBe(201);
     const requestId: string = request.json().id;
 
-    expect((await inject('POST', `/booking-requests/${requestId}/accept`, VENDOR)).statusCode).toBe(
-      200,
-    );
+    expect(
+      (await inject('POST', `/v1/booking-requests/${requestId}/accept`, VENDOR)).statusCode,
+    ).toBe(200);
 
     const checkout = await inject(
       'POST',
-      `/customer/booking-requests/${requestId}/checkout`,
+      `/v1/customer/booking-requests/${requestId}/checkout`,
       CUSTOMER,
     );
     expect(checkout.statusCode).toBe(200);

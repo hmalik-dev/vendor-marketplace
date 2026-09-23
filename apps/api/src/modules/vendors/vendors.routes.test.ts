@@ -22,7 +22,7 @@ const CUSTOMER = 'user_customer';
 const VENDOR_NO_NAME = 'user_vendor_no_name';
 const VENDOR_HALF_NAME = 'user_vendor_half_name';
 
-describe('/vendor/profile', () => {
+describe('/v1/vendor/profile', () => {
   let harness: TestHarness;
   let photographyId: string;
   let cateringId: string;
@@ -116,7 +116,7 @@ describe('/vendor/profile', () => {
     it('rejects an unauthenticated request', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         payload: validBody(),
       });
 
@@ -127,7 +127,7 @@ describe('/vendor/profile', () => {
     it('rejects a customer', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(CUSTOMER),
         payload: validBody(),
       });
@@ -139,13 +139,13 @@ describe('/vendor/profile', () => {
     it('creates the profile and answers 201 with its location', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ bio: 'Documentary wedding photography.' }),
       });
 
       expect(response.statusCode).toBe(201);
-      expect(response.headers.location).toBe('/vendor/profile');
+      expect(response.headers.location).toBe('/v1/vendor/profile');
 
       const body = response.json();
       expect(body.businessName).toBe('Sunlit Studio');
@@ -161,7 +161,7 @@ describe('/vendor/profile', () => {
     it('persists the category selection', async () => {
       await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ categoryIds: [photographyId, cateringId] }),
       });
@@ -173,7 +173,7 @@ describe('/vendor/profile', () => {
     it('requires at least one category', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ categoryIds: [] }),
       });
@@ -185,7 +185,7 @@ describe('/vendor/profile', () => {
     it('rejects a category that does not exist', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ categoryIds: ['11111111-1111-4111-8111-111111111111'] }),
       });
@@ -203,7 +203,7 @@ describe('/vendor/profile', () => {
     it('names the offending field, so the editor can mark the right control', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ categoryIds: ['11111111-1111-4111-8111-111111111111'] }),
       });
@@ -215,7 +215,7 @@ describe('/vendor/profile', () => {
     it('says how to fix an unavailable category, not only that it failed', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ categoryIds: ['11111111-1111-4111-8111-111111111111'] }),
       });
@@ -228,7 +228,7 @@ describe('/vendor/profile', () => {
     it('requires a city and a state', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { businessName: 'Sunlit Studio', categoryIds: [photographyId] },
       });
@@ -239,14 +239,14 @@ describe('/vendor/profile', () => {
     it('disambiguates a slug that is already taken', async () => {
       await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody(),
       });
 
       const second = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(OTHER_VENDOR),
         payload: validBody(),
       });
@@ -258,7 +258,7 @@ describe('/vendor/profile', () => {
     it('falls back to a usable slug for a name with no ASCII equivalent', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ businessName: '写真スタジオ' }),
       });
@@ -270,7 +270,7 @@ describe('/vendor/profile', () => {
     it('never gives a storefront the slug the vendor application route answers (VEN-406)', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ businessName: 'Apply' }),
       });
@@ -282,14 +282,14 @@ describe('/vendor/profile', () => {
     it('refuses a second profile for the same vendor', async () => {
       await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody(),
       });
 
       const second = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ businessName: 'Another Studio' }),
       });
@@ -307,7 +307,7 @@ describe('/vendor/profile', () => {
         ['First Studio', 'Second Studio'].map((businessName) =>
           harness.app.inject({
             method: 'POST',
-            url: '/vendor/profile',
+            url: '/v1/vendor/profile',
             headers: bearer(VENDOR),
             payload: validBody({ businessName }),
           }),
@@ -325,7 +325,7 @@ describe('/vendor/profile', () => {
     it('answers 404 before a profile exists', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
       });
 
@@ -336,14 +336,14 @@ describe('/vendor/profile', () => {
     it('returns the profile with its selections once created', async () => {
       await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ bio: 'Documentary wedding photography.' }),
       });
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
       });
 
@@ -358,14 +358,14 @@ describe('/vendor/profile', () => {
     it('does not leak another vendor’s profile', async () => {
       await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody(),
       });
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(OTHER_VENDOR),
       });
 
@@ -377,7 +377,7 @@ describe('/vendor/profile', () => {
     async function createProfile(overrides: Record<string, unknown> = {}): Promise<void> {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody(overrides),
       });
@@ -388,7 +388,7 @@ describe('/vendor/profile', () => {
     async function addPackage(): Promise<void> {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
         payload: {
           name: 'Half-day coverage',
@@ -402,7 +402,7 @@ describe('/vendor/profile', () => {
     it('answers 404 when there is nothing to edit', async () => {
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { bio: 'Hello' },
       });
@@ -415,7 +415,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { city: 'Dallas' },
       });
@@ -429,7 +429,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { categoryIds: [cateringId] },
       });
@@ -443,7 +443,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { businessName: 'Moonlit Studio' },
       });
@@ -459,7 +459,7 @@ describe('/vendor/profile', () => {
 
         const published = await harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR),
           payload: { isPublished: true },
         });
@@ -469,7 +469,7 @@ describe('/vendor/profile', () => {
       async function renameTo(authUserId: string, slug: string): Promise<string> {
         const response = await harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(authUserId),
           payload: { slug },
         });
@@ -481,7 +481,7 @@ describe('/vendor/profile', () => {
       async function successorOf(slug: string): Promise<{ status: number; body: unknown }> {
         const response = await harness.app.inject({
           method: 'GET',
-          url: `/vendors/${slug}/successor`,
+          url: `/v1/vendors/${slug}/successor`,
         });
 
         return { status: response.statusCode, body: response.json() };
@@ -498,7 +498,7 @@ describe('/vendor/profile', () => {
         });
         // The current slug is not an alias of itself, and the old one is no profile.
         expect((await successorOf('moonlit-studio')).status).toBe(404);
-        const old = await harness.app.inject({ method: 'GET', url: '/vendors/sunlit-studio' });
+        const old = await harness.app.inject({ method: 'GET', url: '/v1/vendors/sunlit-studio' });
         expect(old.statusCode).toBe(404);
       });
 
@@ -518,7 +518,7 @@ describe('/vendor/profile', () => {
 
         const other = await harness.app.inject({
           method: 'POST',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(OTHER_VENDOR),
           payload: validBody({ businessName: 'Sunlit Studio' }),
         });
@@ -537,7 +537,10 @@ describe('/vendor/profile', () => {
 
         expect((await successorOf('sunlit-studio')).status).toBe(404);
         expect((await successorOf('moonlit-studio')).body).toEqual({ slug: 'sunlit-studio' });
-        const current = await harness.app.inject({ method: 'GET', url: '/vendors/sunlit-studio' });
+        const current = await harness.app.inject({
+          method: 'GET',
+          url: '/v1/vendors/sunlit-studio',
+        });
         expect(current.statusCode).toBe(200);
       });
 
@@ -547,7 +550,7 @@ describe('/vendor/profile', () => {
 
         const other = await harness.app.inject({
           method: 'POST',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(OTHER_VENDOR),
           payload: validBody({ businessName: 'Sunlit Studio' }),
         });
@@ -577,7 +580,7 @@ describe('/vendor/profile', () => {
 
         const paused = await harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR),
           payload: { isPublished: false },
         });
@@ -600,7 +603,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         // `STORAGE_PUBLIC_URL` is `http://cdn.test` in the harness.
         payload: { coverImageUrl: `http://cdn.test/${key}` },
@@ -620,7 +623,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -636,7 +639,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -656,7 +659,7 @@ describe('/vendor/profile', () => {
 
       const blocked = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -666,7 +669,7 @@ describe('/vendor/profile', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { responseTimeHours: 24 },
       });
@@ -674,7 +677,7 @@ describe('/vendor/profile', () => {
       await acceptVendorAgreementAs(harness, VENDOR);
       const published = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -693,7 +696,7 @@ describe('/vendor/profile', () => {
       async function createNamelessProfile(): Promise<void> {
         const response = await harness.app.inject({
           method: 'POST',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR_NO_NAME),
           payload: validBody(),
         });
@@ -705,7 +708,7 @@ describe('/vendor/profile', () => {
 
         const response = await harness.app.inject({
           method: 'GET',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR_NO_NAME),
         });
 
@@ -716,13 +719,13 @@ describe('/vendor/profile', () => {
         await createNamelessProfile();
         await harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR_NO_NAME),
           payload: { bio: 'Documentary wedding photography.', responseTimeHours: 24 },
         });
         await harness.app.inject({
           method: 'POST',
-          url: '/vendor/packages',
+          url: '/v1/vendor/packages',
           headers: bearer(VENDOR_NO_NAME),
           payload: {
             name: 'Half-day coverage',
@@ -734,7 +737,7 @@ describe('/vendor/profile', () => {
 
         const response = await harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR_NO_NAME),
           payload: { isPublished: true },
         });
@@ -747,13 +750,13 @@ describe('/vendor/profile', () => {
         await createNamelessProfile();
         await harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR_NO_NAME),
           payload: { bio: 'Documentary wedding photography.', responseTimeHours: 24 },
         });
         await harness.app.inject({
           method: 'POST',
-          url: '/vendor/packages',
+          url: '/v1/vendor/packages',
           headers: bearer(VENDOR_NO_NAME),
           payload: {
             name: 'Half-day coverage',
@@ -765,7 +768,7 @@ describe('/vendor/profile', () => {
 
         const response = await harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR_NO_NAME),
           payload: { firstName: 'Priya', lastName: 'Nair', isPublished: true },
         });
@@ -802,20 +805,20 @@ describe('/vendor/profile', () => {
       it('refuses a lone name half sent alongside a publish, rather than completing it from the stored row', async () => {
         const created = await harness.app.inject({
           method: 'POST',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR_HALF_NAME),
           payload: validBody(),
         });
         expect(created.statusCode).toBe(201);
         await harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR_HALF_NAME),
           payload: { bio: 'Documentary wedding photography.', responseTimeHours: 24 },
         });
         await harness.app.inject({
           method: 'POST',
-          url: '/vendor/packages',
+          url: '/v1/vendor/packages',
           headers: bearer(VENDOR_HALF_NAME),
           payload: {
             name: 'Half-day coverage',
@@ -827,7 +830,7 @@ describe('/vendor/profile', () => {
 
         const response = await harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR_HALF_NAME),
           payload: { lastName: 'Nair', isPublished: true },
         });
@@ -849,7 +852,7 @@ describe('/vendor/profile', () => {
         await acceptVendorAgreementAs(harness, VENDOR);
         const live = await harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR),
           payload: { isPublished: true },
         });
@@ -859,7 +862,7 @@ describe('/vendor/profile', () => {
       async function put(payload: Record<string, unknown>) {
         return harness.app.inject({
           method: 'PUT',
-          url: '/vendor/profile',
+          url: '/v1/vendor/profile',
           headers: bearer(VENDOR),
           payload,
         });
@@ -937,7 +940,7 @@ describe('/vendor/profile', () => {
       await acceptVendorAgreementAs(harness, VENDOR);
       const live = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -945,7 +948,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: false },
       });
@@ -959,7 +962,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
       });
 
@@ -976,7 +979,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { avgRating: 5, reviewCount: 99 },
       });
@@ -993,7 +996,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { bio: '   ' },
       });
@@ -1011,7 +1014,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { address: '' },
       });
@@ -1025,7 +1028,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { yearsInBusiness: null, responseTimeHours: null },
       });
@@ -1043,14 +1046,14 @@ describe('/vendor/profile', () => {
       await createProfile({ bio: 'Documentary wedding photography.' });
       await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { bio: '' },
       });
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { isPublished: true },
       });
@@ -1063,7 +1066,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { responseTimeHours: 7 },
       });
@@ -1084,7 +1087,7 @@ describe('/vendor/profile', () => {
     async function createProfile(overrides: Record<string, unknown> = {}): Promise<void> {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody(overrides),
       });
@@ -1121,7 +1124,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ tagIds }),
       });
@@ -1141,7 +1144,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ tagIds: [hidden] }),
       });
@@ -1154,7 +1157,7 @@ describe('/vendor/profile', () => {
 
       const retry = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody(),
       });
@@ -1167,7 +1170,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { businessName: 'Sunlit Studio Co', tagIds },
       });
@@ -1182,7 +1185,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { businessName: 'Renamed Studio', tagIds: [hidden] },
       });
@@ -1199,14 +1202,14 @@ describe('/vendor/profile', () => {
       const tagIds = await activeTagIds('language', 1);
       await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ tagIds }),
       });
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { businessName: 'Sunlit Studio Co' },
       });
@@ -1221,7 +1224,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { tagIds: [only, only] },
       });
@@ -1236,7 +1239,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { tagIds: ['00000000-0000-4000-8000-0000000000ff'] },
       });
@@ -1251,7 +1254,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { tagIds },
       });
@@ -1270,7 +1273,7 @@ describe('/vendor/profile', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { tagIds },
       });
@@ -1285,13 +1288,13 @@ describe('/vendor/profile', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { tagIds: [first] },
       });
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { tagIds: [second] },
       });
@@ -1305,14 +1308,14 @@ describe('/vendor/profile', () => {
       const tagIds = await activeTagIds('language', 1);
       await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: validBody({ tagIds }),
       });
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { tagIds: [] },
       });

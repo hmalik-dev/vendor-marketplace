@@ -16,9 +16,10 @@ import {
   type FastifyPluginAsyncZod,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
-import { createDatabase } from '@vendor-marketplace/db';
+import { createDatabase, createListener } from '@vendor-marketplace/db';
 import { bootEnv } from './config/boot.js';
 import {
+  API_VERSION_PREFIX,
   MAX_UPLOAD_BYTES,
   OPERATOR_DIGEST_POLL_INTERVAL_MS,
   EMAIL_RETRY_SWEEP_INTERVAL_MS,
@@ -47,6 +48,8 @@ import { databasePlugin } from './plugins/database.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { createErrorReporter, type ErrorReporter } from './lib/error-reporting.js';
 import { eventsPlugin } from './plugins/events.js';
+import type { ListenFn } from './lib/event-bus.js';
+import { postgresRateLimitStore } from './lib/rate-limit-store.js';
 import { operatorAlertsPlugin } from './plugins/operator-alerts.js';
 import { stepUpPlugin } from './plugins/step-up.js';
 import type { StepUpStore } from './lib/step-up.js';
@@ -181,6 +184,12 @@ export interface BuildServerOptions {
   operatorAlertWait?: (ms: number) => Promise<void>;
   /** Step-up seam; the suites pass a store that is always fresh unless the suite is about step-up. */
   stepUp?: StepUpStore;
+  /**
+   * `LISTEN` on a connection of its own, which is how live events published by
+   * the other API instances reach this one's streams (VEN-650). Required: an
+   * instance that cannot hear the others would quietly drop their messages.
+   */
+  realtimeListen: ListenFn;
   /**
    * The error tracker seam. Defaults to Sentry when `SENTRY_DSN` is set and to
    * silence when it is not — which the env registry allows only off a
@@ -439,6 +448,8 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     methods: [...ALLOWED_METHODS],
   });
   await app.register(rateLimit, {
+    // Shared by every instance, so a second replica is not a second budget (VEN-650).
+    store: postgresRateLimitStore(db),
     max: env.RATE_LIMIT_MAX,
     timeWindow: '1 minute',
     keyGenerator: (request) => rateLimitKey(request, env.WEB_TIER_KEY, reportTierKeyMismatch),
@@ -512,7 +523,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   await app.register(backgroundPlugin);
   await app.register(clockPlugin, options.clock ? { clock: options.clock } : {});
   await app.register(databasePlugin, { db });
-  await app.register(eventsPlugin);
+  await app.register(eventsPlugin, { listen: options.realtimeListen });
   await app.register(storagePlugin, { storage, publicUrl: env.STORAGE_PUBLIC_URL });
   await app.register(stripePlugin, {
     secretKey: env.STRIPE_SECRET_KEY,
@@ -580,49 +591,67 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     reporter: errorReporter,
   });
 
+  // Unversioned: the host's probes and the release gate call these by a fixed path.
   await app.register(healthRoutes);
-  await app.register(throttleRoutes, { webTierKey: env.WEB_TIER_KEY });
-  await app.register(sessionGenerationRoutes, { webTierKey: env.WEB_TIER_KEY });
-  await app.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
-  await app.register(adminCategoryRoutes);
-  await app.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });
-  await app.register(vendorApplicationRoutes, { webOrigin: canonicalWebOrigin(env) });
-  await app.register(categoryRoutes);
-  await app.register(tagRoutes);
-  await app.register(placeRoutes);
-  await app.register(userRoutes);
-  await app.register(customerRoutes);
-  await app.register(vendorRoutes);
-  await app.register(recordingRoutes(stripeConnectRoutes, moneyRoutes), {
-    returnOrigin: canonicalWebOrigin(env),
-  });
-  await app.register(legalAgreementRoutes);
-  await app.register(termsRoutes);
-  await app.register(packageRoutes);
-  await app.register(portfolioRoutes);
-  await app.register(reviewRoutes, { webOrigin: canonicalWebOrigin(env) });
-  await app.register(availabilityRoutes);
-  await app.register(bookingRequestRoutes, {
-    webOrigin: canonicalWebOrigin(env),
-    rateLimitMax: env.BOOKING_REQUEST_RATE_LIMIT_MAX,
-    platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
-  });
-  await app.register(messagingRoutes, {
-    allowedOrigins: allowedOrigins(env),
-    conversationRateLimitMax: env.CONVERSATION_RATE_LIMIT_MAX,
-    messageRateLimitMax: env.MESSAGE_RATE_LIMIT_MAX,
-    ...(options.streamHeartbeatMs ? { heartbeatMs: options.streamHeartbeatMs } : {}),
-  });
-  await app.register(uploadRoutes, {
-    rateLimitMax: env.UPLOAD_RATE_LIMIT_MAX,
-    objectLimit: env.UPLOAD_OBJECT_LIMIT,
-  });
-  await app.register(supportRoutes, {
-    supportEmailTo: env.SUPPORT_EMAIL_TO,
-    webOrigin: canonicalWebOrigin(env),
-  });
-  await app.register(reportRoutes, { supportEmailTo: env.SUPPORT_EMAIL_TO });
   /*
+   * Every other route, under one version prefix (VEN-650). Browsers call the
+   * API directly, so a route that has to change shape ships beside the old
+   * one under a new prefix rather than breaking tabs opened on the last release.
+   */
+  await app.register(
+    async (v1) => {
+      await v1.register(throttleRoutes, { webTierKey: env.WEB_TIER_KEY });
+      await v1.register(sessionGenerationRoutes, { webTierKey: env.WEB_TIER_KEY });
+      await v1.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
+      await v1.register(adminCategoryRoutes);
+      await v1.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });
+      await v1.register(vendorApplicationRoutes, { webOrigin: canonicalWebOrigin(env) });
+      await v1.register(categoryRoutes);
+      await v1.register(tagRoutes);
+      await v1.register(placeRoutes);
+      await v1.register(userRoutes);
+      await v1.register(customerRoutes);
+      await v1.register(vendorRoutes);
+      await v1.register(recordingRoutes(stripeConnectRoutes, moneyRoutes), {
+        returnOrigin: canonicalWebOrigin(env),
+      });
+      await v1.register(legalAgreementRoutes);
+      await v1.register(termsRoutes);
+      await v1.register(packageRoutes);
+      await v1.register(portfolioRoutes);
+      await v1.register(reviewRoutes, { webOrigin: canonicalWebOrigin(env) });
+      await v1.register(availabilityRoutes);
+      await v1.register(bookingRequestRoutes, {
+        webOrigin: canonicalWebOrigin(env),
+        rateLimitMax: env.BOOKING_REQUEST_RATE_LIMIT_MAX,
+        platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
+      });
+      await v1.register(messagingRoutes, {
+        allowedOrigins: allowedOrigins(env),
+        conversationRateLimitMax: env.CONVERSATION_RATE_LIMIT_MAX,
+        messageRateLimitMax: env.MESSAGE_RATE_LIMIT_MAX,
+        ...(options.streamHeartbeatMs ? { heartbeatMs: options.streamHeartbeatMs } : {}),
+      });
+      await v1.register(uploadRoutes, {
+        rateLimitMax: env.UPLOAD_RATE_LIMIT_MAX,
+        objectLimit: env.UPLOAD_OBJECT_LIMIT,
+      });
+      await v1.register(supportRoutes, {
+        supportEmailTo: env.SUPPORT_EMAIL_TO,
+        webOrigin: canonicalWebOrigin(env),
+      });
+      await v1.register(reportRoutes, { supportEmailTo: env.SUPPORT_EMAIL_TO });
+      await v1.register(recordingRoutes(paymentRoutes, moneyRoutes), {
+        platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
+        webOrigin: canonicalWebOrigin(env),
+      });
+    },
+    { prefix: API_VERSION_PREFIX },
+  );
+  /*
+   * Unversioned too: the webhook URLs are registered in the Stripe and Resend
+   * consoles, and moving one is a console action, not a deploy.
+   *
    * The one route this API registers conditionally, and the condition is an
    * environment fact rather than a plugin's business — so it is decided here,
    * beside every other env-driven wiring choice, and the plugin keeps a
@@ -645,10 +674,6 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
       ...options.webhooks,
     });
   }
-  await app.register(recordingRoutes(paymentRoutes, moneyRoutes), {
-    platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
-    webOrigin: canonicalWebOrigin(env),
-  });
   await app.register(recordingRoutes(stripeWebhookRoutes, moneyRoutes), {
     rateLimitMax: env.RATE_LIMIT_MAX * WEBHOOK_RATE_LIMIT_FACTOR,
     platformFeeRate: env.STRIPE_PLATFORM_FEE_RATE,
@@ -686,10 +711,16 @@ let bootstrapped: Promise<FastifyInstance> | undefined;
 async function bootstrap(): Promise<FastifyInstance> {
   const env = bootEnv();
   const { db } = createDatabase();
+  const listener = createListener(env.DATABASE_URL);
 
   // `buildServer` awaits `app.ready()`, which is what makes `app.server` able
   // to accept an emitted request below.
-  return buildServer({ env, db, storage: createS3Storage(env) });
+  return buildServer({
+    env,
+    db,
+    storage: createS3Storage(env),
+    realtimeListen: listener.listen,
+  });
 }
 
 export default async function handler(

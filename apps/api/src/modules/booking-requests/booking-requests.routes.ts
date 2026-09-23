@@ -111,7 +111,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
       // of the request that already exists.
       return reply
         .status(outcome.created ? 201 : 200)
-        .header('location', `${REQUESTS_PATH}/${outcome.request.id}`)
+        .header('location', `${app.prefix}${REQUESTS_PATH}/${outcome.request.id}`)
         .send(outcome.request);
     },
   );

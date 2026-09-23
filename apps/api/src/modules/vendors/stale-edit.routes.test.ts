@@ -53,7 +53,7 @@ describe('stale edits to a vendor profile and its packages', () => {
   async function createProfile(): Promise<{ updatedAt: string }> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -71,7 +71,7 @@ describe('stale edits to a vendor profile and its packages', () => {
   async function putProfile(payload: Record<string, unknown>) {
     return harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload,
     });
@@ -80,7 +80,7 @@ describe('stale edits to a vendor profile and its packages', () => {
   async function createPackage(): Promise<{ id: string; updatedAt: string }> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Half-day coverage',
@@ -95,7 +95,7 @@ describe('stale edits to a vendor profile and its packages', () => {
   async function putPackage(id: string, payload: Record<string, unknown>) {
     return harness.app.inject({
       method: 'PUT',
-      url: `/vendor/packages/${id}`,
+      url: `/v1/vendor/packages/${id}`,
       headers: bearer(VENDOR),
       payload,
     });
@@ -177,7 +177,7 @@ describe('stale edits to a vendor profile and its packages', () => {
       const stale = await putProfile({ categoryIds: [cateringId], updatedAt: created.updatedAt });
       const current = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
       });
 

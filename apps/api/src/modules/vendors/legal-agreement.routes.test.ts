@@ -34,7 +34,7 @@ describe('the vendor agreement', () => {
   async function seedVendorProfile(user: string, businessName: string): Promise<void> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(user),
       payload: {
         businessName,
@@ -51,7 +51,7 @@ describe('the vendor agreement', () => {
   function read(user?: string) {
     return harness.app.inject({
       method: 'GET',
-      url: '/vendor/agreement',
+      url: '/v1/vendor/agreement',
       ...(user ? { headers: bearer(user) } : {}),
     });
   }
@@ -59,7 +59,7 @@ describe('the vendor agreement', () => {
   function accept(user: string | undefined, version = CURRENT_VENDOR_AGREEMENT_VERSION) {
     return harness.app.inject({
       method: 'POST',
-      url: '/vendor/agreement/accept',
+      url: '/v1/vendor/agreement/accept',
       ...(user ? { headers: bearer(user) } : {}),
       payload: { version },
     });

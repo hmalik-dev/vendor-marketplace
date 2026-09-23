@@ -18,7 +18,7 @@ describe('POST /internal/throttle', () => {
   function charge(bucket: string, limit: number, key: string | null = KEY) {
     return harness.app.inject({
       method: 'POST',
-      url: '/internal/throttle',
+      url: '/v1/internal/throttle',
       headers: key ? { [WEB_TIER_KEY_HEADER]: key } : {},
       payload: { bucket, windowMs: 60_000, limit },
     });
@@ -51,7 +51,7 @@ describe('POST /internal/throttle', () => {
     const peek = () =>
       harness.app.inject({
         method: 'POST',
-        url: '/internal/throttle',
+        url: '/v1/internal/throttle',
         headers: { [WEB_TIER_KEY_HEADER]: KEY },
         payload: { bucket: 'peek', windowMs: 60_000, limit: 1, record: false },
       });
@@ -67,7 +67,7 @@ describe('POST /internal/throttle', () => {
   it('refuses a keyless caller before reading its body', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/internal/throttle',
+      url: '/v1/internal/throttle',
       headers: { 'content-type': 'application/json' },
       payload: 'x'.repeat(4_000),
     });
@@ -79,7 +79,7 @@ describe('POST /internal/throttle', () => {
   it('rejects a body outside the bounds', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/internal/throttle',
+      url: '/v1/internal/throttle',
       headers: { [WEB_TIER_KEY_HEADER]: KEY },
       payload: { bucket: 'x', windowMs: 60_000, limit: 1_000_000 },
     });
@@ -93,7 +93,7 @@ describe('POST /internal/throttle', () => {
     try {
       const response = await local.app.inject({
         method: 'POST',
-        url: '/internal/throttle',
+        url: '/v1/internal/throttle',
         headers: { [WEB_TIER_KEY_HEADER]: KEY },
         payload: { bucket: 'x', windowMs: 60_000, limit: 3 },
       });
@@ -115,7 +115,7 @@ describe('POST /internal/throttle', () => {
       await charge('shared', 2);
       const response = await second.app.inject({
         method: 'POST',
-        url: '/internal/throttle',
+        url: '/v1/internal/throttle',
         headers: { [WEB_TIER_KEY_HEADER]: KEY },
         payload: { bucket: 'shared', windowMs: 60_000, limit: 2 },
       });

@@ -25,7 +25,7 @@ describe('GET /categories', () => {
   });
 
   it('answers non-empty once the database has been seeded, the way a fresh lane is', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/categories' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/categories' });
 
     expect(response.statusCode).toBe(200);
 
@@ -36,7 +36,7 @@ describe('GET /categories', () => {
   });
 
   it('is reachable with no authentication, since every vendor surface reads it before sign-in', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/categories' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/categories' });
 
     expect(response.statusCode).toBe(200);
   });

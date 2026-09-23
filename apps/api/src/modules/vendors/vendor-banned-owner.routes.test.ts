@@ -31,7 +31,7 @@ describe('a vendor whose owner is banned', () => {
   async function seedPublished(): Promise<{ vendorId: string; packageId: string }> {
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Fernbank Studio',
@@ -47,7 +47,7 @@ describe('a vendor whose owner is banned', () => {
 
     const servicePackage = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Full day coverage',
@@ -60,7 +60,7 @@ describe('a vendor whose owner is banned', () => {
     // Nearby availability offers a vendor only as an alternative to a day they lack.
     const blocked = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/availability',
+      url: '/v1/vendor/availability',
       headers: bearer(VENDOR),
       payload: { entries: [{ date: EVENT_DATE, status: 'blocked' }] },
     });
@@ -69,7 +69,7 @@ describe('a vendor whose owner is banned', () => {
     await acceptVendorAgreementAs(harness, VENDOR);
     const published = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: { isPublished: true },
     });
@@ -87,7 +87,7 @@ describe('a vendor whose owner is banned', () => {
   function requestBooking(vendorId: string, packageId: string, eventDate: string) {
     return harness.app.inject({
       method: 'POST',
-      url: '/booking-requests',
+      url: '/v1/booking-requests',
       headers: bearer(CUSTOMER),
       payload: {
         vendorId,
@@ -145,10 +145,10 @@ describe('a vendor whose owner is banned', () => {
   it('is absent from search, the storefront, availability and booking', async () => {
     const { vendorId, packageId } = await seedPublished();
 
-    const before = await harness.app.inject({ method: 'GET', url: '/vendors' });
+    const before = await harness.app.inject({ method: 'GET', url: '/v1/vendors' });
     expect(before.json().total).toBe(1);
 
-    const nearbyUrl = `/vendors/availability/nearby?date=${EVENT_DATE}`;
+    const nearbyUrl = `/v1/vendors/availability/nearby?date=${EVENT_DATE}`;
     const nearbyBefore = await harness.app.inject({ method: 'GET', url: nearbyUrl });
     expect(nearbyBefore.json().items).toHaveLength(1);
 
@@ -156,13 +156,13 @@ describe('a vendor whose owner is banned', () => {
 
     await ban(VENDOR, true);
 
-    const search = await harness.app.inject({ method: 'GET', url: '/vendors' });
+    const search = await harness.app.inject({ method: 'GET', url: '/v1/vendors' });
     expect(search.statusCode).toBe(200);
     expect(search.json().total).toBe(0);
     expect(search.json().items).toEqual([]);
 
     const slug = before.json().items[0].slug as string;
-    const storefront = await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` });
+    const storefront = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}` });
     expect(storefront.statusCode).toBe(404);
 
     const nearby = await harness.app.inject({ method: 'GET', url: nearbyUrl });
@@ -174,7 +174,7 @@ describe('a vendor whose owner is banned', () => {
 
     await ban(VENDOR, false);
 
-    const restored = await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` });
+    const restored = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}` });
     expect(restored.statusCode).toBe(200);
   });
 

@@ -1,4 +1,5 @@
 export * from './client.js';
+export { createListener, directConnectionString, type DatabaseListener } from './listener.js';
 export { asBookingActor, BOOKING_ACTOR_SETTING, setBookingActor } from './booking-actor.js';
 export { refreshCustomerBookingCounts } from './seed-support.js';
 export { loadEnv } from './load-env.js';

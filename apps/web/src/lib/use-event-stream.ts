@@ -2,13 +2,13 @@
 
 import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { useEffect, useRef, useState } from 'react';
-import { apiOrigin } from '@/config/public-env';
+import { apiBaseUrl } from '@/lib/api-base-url';
 import { ApiClientError, apiRequest } from '@/lib/api-client';
 import { getSessionToken } from '@/lib/auth/client';
 import { useRefusalRedirect } from '@/lib/use-api';
 import { wireStreamTicketSchema } from '@/lib/wire-schemas';
 
-const BASE_URL = apiOrigin();
+const BASE_URL = apiBaseUrl();
 
 /**
  * Trades the session for one stream ticket.

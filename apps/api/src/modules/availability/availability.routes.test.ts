@@ -50,7 +50,7 @@ describe('/vendor/availability', () => {
   async function createProfile(authUserId: string, businessName: string): Promise<string> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(authUserId),
       payload: {
         businessName,
@@ -71,7 +71,7 @@ describe('/vendor/availability', () => {
   ): Promise<ReturnType<TestHarness['app']['inject']>> {
     return harness.app.inject({
       method: 'PUT',
-      url: '/vendor/availability',
+      url: '/v1/vendor/availability',
       headers: bearer(authUserId),
       payload: { entries },
     });
@@ -114,7 +114,7 @@ describe('/vendor/availability', () => {
 
   describe('authorization', () => {
     it('rejects an unauthenticated request', async () => {
-      const response = await harness.app.inject({ method: 'GET', url: '/vendor/availability' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/vendor/availability' });
 
       expect(response.statusCode).toBe(401);
     });
@@ -122,7 +122,7 @@ describe('/vendor/availability', () => {
     it('rejects a customer', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer(CUSTOMER),
       });
 
@@ -136,7 +136,7 @@ describe('/vendor/availability', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer(VENDOR),
       });
 
@@ -151,7 +151,7 @@ describe('/vendor/availability', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer(VENDOR),
       });
 
@@ -168,7 +168,7 @@ describe('/vendor/availability', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer(VENDOR),
       });
 
@@ -209,7 +209,7 @@ describe('/vendor/availability', () => {
 
       const created = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
         payload: {
           name: 'Full day coverage',
@@ -229,7 +229,7 @@ describe('/vendor/availability', () => {
       // Accepting a request needs the agreement in force (VEN-428), as checkout does.
       const agreed = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/agreement/accept',
+        url: '/v1/vendor/agreement/accept',
         headers: bearer(VENDOR),
         payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
       });
@@ -237,7 +237,7 @@ describe('/vendor/availability', () => {
 
       const request = await harness.app.inject({
         method: 'POST',
-        url: '/booking-requests',
+        url: '/v1/booking-requests',
         headers: bearer(CUSTOMER),
         payload: { vendorId, packageId: created.json().id, eventDate: date },
       });
@@ -255,7 +255,7 @@ describe('/vendor/availability', () => {
       const requestId = await requestOn(TOMORROW);
       const accepted = await harness.app.inject({
         method: 'POST',
-        url: `/booking-requests/${requestId}/accept`,
+        url: `/v1/booking-requests/${requestId}/accept`,
         headers: bearer(VENDOR),
       });
       expect(accepted.statusCode).toBe(200);
@@ -288,7 +288,7 @@ describe('/vendor/availability', () => {
     async function calendar(): Promise<{ date: string; status: string }[]> {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer(VENDOR),
       });
 
@@ -323,7 +323,7 @@ describe('/vendor/availability', () => {
 
       const accepted = await harness.app.inject({
         method: 'POST',
-        url: `/booking-requests/${requestId}/accept`,
+        url: `/v1/booking-requests/${requestId}/accept`,
         headers: bearer(VENDOR),
       });
       expect(accepted.statusCode).toBe(200);
@@ -341,7 +341,7 @@ describe('/vendor/availability', () => {
 
       await harness.app.inject({
         method: 'POST',
-        url: `/booking-requests/${requestId}/decline`,
+        url: `/v1/booking-requests/${requestId}/decline`,
         headers: bearer(VENDOR),
       });
 
@@ -458,7 +458,7 @@ describe('/vendor/availability', () => {
     async function profileFor(): Promise<string> {
       const response = await derived.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: {
           businessName: 'Sunlit Studio',
@@ -475,7 +475,7 @@ describe('/vendor/availability', () => {
     async function read(): Promise<{ date: string; status: string }[]> {
       const response = await derived.app.inject({
         method: 'GET',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer(VENDOR),
       });
       expect(response.statusCode).toBe(200);
@@ -730,7 +730,7 @@ describe('/vendor/availability', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer(VENDOR),
       });
 

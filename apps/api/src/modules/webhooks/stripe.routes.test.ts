@@ -18,7 +18,7 @@ describe('POST /webhooks/stripe', () => {
   async function seedOnboardingVendor(): Promise<string> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer('vendor_a'),
       payload: {
         businessName: 'First Light',
@@ -38,7 +38,7 @@ describe('POST /webhooks/stripe', () => {
      */
     const agreed = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/agreement/accept',
+      url: '/v1/vendor/agreement/accept',
       headers: bearer('vendor_a'),
       payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
     });
@@ -46,7 +46,7 @@ describe('POST /webhooks/stripe', () => {
 
     const connected = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/stripe/connect',
+      url: '/v1/vendor/stripe/connect',
       headers: bearer('vendor_a'),
     });
     expect(connected.statusCode).toBe(200);

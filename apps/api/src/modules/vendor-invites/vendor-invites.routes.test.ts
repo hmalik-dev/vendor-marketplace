@@ -97,7 +97,7 @@ describe('the vendor gate', () => {
     actor: string,
     role: unknown = harness.authUsers.get(actor)?.roleHint,
   ): Promise<Response> {
-    return inject('POST', '/legal/terms/accept', actor, {
+    return inject('POST', '/v1/legal/terms/accept', actor, {
       version: CURRENT_TERMS_VERSION,
       accepted: true,
       ...(role === NO_ROLE ? {} : { role }),
@@ -145,7 +145,7 @@ describe('the vendor gate', () => {
   function apply(actor: string, body: Record<string, unknown>): Promise<Response> {
     return harness.app.inject({
       method: 'POST',
-      url: '/vendor-applications',
+      url: '/v1/vendor-applications',
       ...fromANewVisitor(),
       headers: bearer(actor),
       payload: body,
@@ -277,7 +277,7 @@ describe('the vendor gate', () => {
         .from(users)
         .where(eq(users.authUserId, customer));
       expect(row).toEqual({ role: 'customer' });
-      expect((await inject('GET', '/users/me', customer)).statusCode).toBe(200);
+      expect((await inject('GET', '/v1/users/me', customer)).statusCode).toBe(200);
     });
 
     it('creates an invited vendor, matching the address case-insensitively, and stamps the invite', async () => {
@@ -303,7 +303,7 @@ describe('the vendor gate', () => {
       const later = freshIdentity('customer', 'signed-in-later@example.com');
       const before = await counts();
 
-      const status = await inject('GET', '/legal/terms', later);
+      const status = await inject('GET', '/v1/legal/terms', later);
       expect(status.json()).toMatchObject({
         account: { exists: false, role: null },
         suggestedRole: 'vendor',
@@ -345,7 +345,7 @@ describe('the vendor gate', () => {
       await setGate(true);
       const person = freshIdentity('vendor');
 
-      const status = await inject('GET', '/legal/terms', person);
+      const status = await inject('GET', '/v1/legal/terms', person);
 
       expect(status.json()).toMatchObject({ suggestedRole: null });
     });
@@ -445,7 +445,7 @@ describe('the vendor gate', () => {
       expect(refused.statusCode).toBe(403);
       expect(refused.json()).toMatchObject({ error: 'vendor_not_invited' });
 
-      for (const url of ['/users/me', '/vendor/dashboard', '/vendor/profile']) {
+      for (const url of ['/v1/users/me', '/v1/vendor/dashboard', '/v1/vendor/profile']) {
         const response = await inject('GET', url, vendor);
         expect({ url, status: response.statusCode, error: response.json().error }).toEqual({
           url,
@@ -464,7 +464,7 @@ describe('the vendor gate', () => {
 
   describe('the operator switch', () => {
     it('flips through /admin/settings with an audit row', async () => {
-      const response = await inject('PUT', '/admin/settings', ADMIN, { vendorInviteOnly: true });
+      const response = await inject('PUT', '/v1/admin/settings', ADMIN, { vendorInviteOnly: true });
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({ vendorInviteOnly: true });
@@ -475,7 +475,7 @@ describe('the vendor gate', () => {
       expect(audit.map((row) => [row.action, row.detail])).toEqual([
         ['platform_setting_changed', { field: 'vendorInviteOnly', before: false, after: true }],
       ]);
-      expect((await inject('GET', '/vendor-applications/gate', null)).json()).toEqual({
+      expect((await inject('GET', '/v1/vendor-applications/gate', null)).json()).toEqual({
         vendorInviteOnly: true,
       });
     });
@@ -485,7 +485,7 @@ describe('the vendor gate', () => {
     it('refuses a signed-out submit and writes nothing (AC15)', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor-applications',
+        url: '/v1/vendor-applications',
         ...fromANewVisitor(),
         payload: application('drifter@example.com'),
       });
@@ -560,7 +560,7 @@ describe('the vendor gate', () => {
     it('refuses a signed-out call', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendor-applications/me',
+        url: '/v1/vendor-applications/me',
         ...fromANewVisitor(),
       });
       expect(response.statusCode).toBe(401);
@@ -570,11 +570,11 @@ describe('the vendor gate', () => {
       const vendor = freshIdentity('vendor', 'never-refused@example.com');
       await setGate(true);
 
-      const first = await inject('GET', '/vendor-applications/me', vendor);
+      const first = await inject('GET', '/v1/vendor-applications/me', vendor);
       expect(first.statusCode).toBe(200);
       expect(first.json()).toMatchObject({ email: 'never-refused@example.com', complete: false });
 
-      const second = await inject('GET', '/vendor-applications/me', vendor);
+      const second = await inject('GET', '/v1/vendor-applications/me', vendor);
       expect(second.statusCode).toBe(200);
       // Landing here twice, with no actual refusal, writes nothing at all (VEN-512).
       expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(0);
@@ -583,37 +583,39 @@ describe('the vendor gate', () => {
     it('reflects the row a real refusal already wrote, and twice leaves exactly one row (AC13)', async () => {
       const vendor = await refusedVendor('arriving@example.com');
 
-      const first = await inject('GET', '/vendor-applications/me', vendor.actor);
+      const first = await inject('GET', '/v1/vendor-applications/me', vendor.actor);
       expect(first.statusCode).toBe(200);
       expect(first.json()).toMatchObject({ email: 'arriving@example.com', complete: false });
 
-      const second = await inject('GET', '/vendor-applications/me', vendor.actor);
+      const second = await inject('GET', '/v1/vendor-applications/me', vendor.actor);
       expect(second.statusCode).toBe(200);
       expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(1);
 
       await apply(vendor.actor, application(vendor.email));
-      const after = await inject('GET', '/vendor-applications/me', vendor.actor);
+      const after = await inject('GET', '/v1/vendor-applications/me', vendor.actor);
       expect(after.json()).toMatchObject({ complete: true });
     });
 
     it('reads back empty for an invited address, an address with a live account, or with the gate off (VEN-512)', async () => {
       const invited = await refusedVendor('now-invited@example.com');
       await invite('now-invited@example.com');
-      expect((await inject('GET', '/vendor-applications/me', invited.actor)).json()).toMatchObject({
+      expect(
+        (await inject('GET', '/v1/vendor-applications/me', invited.actor)).json(),
+      ).toMatchObject({
         complete: false,
         businessName: null,
       });
 
       await setGate(false);
       const ungated = freshIdentity('vendor', 'gate-is-off@example.com');
-      expect((await inject('GET', '/vendor-applications/me', ungated)).json()).toMatchObject({
+      expect((await inject('GET', '/v1/vendor-applications/me', ungated)).json()).toMatchObject({
         businessName: null,
       });
       await setGate(true);
 
       const customer = freshIdentity('customer', 'has-an-account@example.com');
       expect((await accept(customer)).statusCode).toBe(200);
-      expect((await inject('GET', '/vendor-applications/me', customer)).json()).toMatchObject({
+      expect((await inject('GET', '/v1/vendor-applications/me', customer)).json()).toMatchObject({
         businessName: null,
       });
     });
@@ -630,12 +632,12 @@ describe('the vendor gate', () => {
 
       for (const actor of [customer, vendor]) {
         for (const [method, url, payload] of [
-          ['GET', '/admin/vendor-applications', undefined],
-          ['PUT', `/admin/vendor-applications/${id}`, { decision: 'invite' }],
-          ['POST', '/admin/vendor-applications/invite', { applicationIds: [id] }],
-          ['GET', '/admin/vendor-invites', undefined],
-          ['POST', '/admin/vendor-invites', { email: 'x@example.com' }],
-          ['DELETE', `/admin/vendor-invites/${id}`, undefined],
+          ['GET', '/v1/admin/vendor-applications', undefined],
+          ['PUT', `/v1/admin/vendor-applications/${id}`, { decision: 'invite' }],
+          ['POST', '/v1/admin/vendor-applications/invite', { applicationIds: [id] }],
+          ['GET', '/v1/admin/vendor-invites', undefined],
+          ['POST', '/v1/admin/vendor-invites', { email: 'x@example.com' }],
+          ['DELETE', `/v1/admin/vendor-invites/${id}`, undefined],
         ] as const) {
           const response = await inject(method, url, actor, payload);
           expect({ actor, url: `${method} ${url}`, status: response.statusCode }).toEqual({
@@ -646,10 +648,10 @@ describe('the vendor gate', () => {
         }
       }
 
-      expect((await inject('GET', '/admin/vendor-invites', null)).statusCode).toBe(401);
+      expect((await inject('GET', '/v1/admin/vendor-invites', null)).statusCode).toBe(401);
       expect(
         (
-          await inject('POST', '/admin/vendor-applications/invite', null, {
+          await inject('POST', '/v1/admin/vendor-applications/invite', null, {
             applicationIds: [id],
           })
         ).statusCode,
@@ -663,19 +665,19 @@ describe('the vendor gate', () => {
       // assertions are about the invite the decision below sends, not that one.
       await harness.flushEmail();
       harness.email.sent.length = 0;
-      const listed = await inject('GET', '/admin/vendor-applications', ADMIN);
+      const listed = await inject('GET', '/v1/admin/vendor-applications', ADMIN);
       expect(listed.statusCode).toBe(200);
       const [row] = listed.json().items;
       expect(row).toMatchObject({ email: 'newcomer@example.com', status: 'new', complete: true });
 
-      const decided = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
+      const decided = await inject('PUT', `/v1/admin/vendor-applications/${row.id}`, ADMIN, {
         decision: 'invite',
       });
       await harness.flushEmail();
 
       expect(decided.statusCode).toBe(200);
       expect(decided.json()).toMatchObject({ id: row.id, status: 'invited' });
-      const invites = (await inject('GET', '/admin/vendor-invites', ADMIN)).json().items;
+      const invites = (await inject('GET', '/v1/admin/vendor-invites', ADMIN)).json().items;
       expect(invites).toMatchObject([
         { email: 'newcomer@example.com', invitedByName: 'Ada Operator', acceptedAt: null },
       ]);
@@ -689,7 +691,7 @@ describe('the vendor gate', () => {
       expect(harness.email.sent[0]!.text).toContain(`${TEST_ENV.WEB_URL}${VENDOR_SIGN_IN_PATH}`);
       expect(harness.email.sent[0]!.text).not.toContain('Sign up');
 
-      const again = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
+      const again = await inject('PUT', `/v1/admin/vendor-applications/${row.id}`, ADMIN, {
         decision: 'invite',
       });
       expect(again.statusCode).toBe(409);
@@ -700,9 +702,9 @@ describe('the vendor gate', () => {
       await apply(vendor.actor, application(vendor.email));
       await invite('both@example.com');
       await harness.database.db.update(vendorApplications).set({ status: 'new' });
-      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      const [row] = (await inject('GET', '/v1/admin/vendor-applications', ADMIN)).json().items;
 
-      const decided = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
+      const decided = await inject('PUT', `/v1/admin/vendor-applications/${row.id}`, ADMIN, {
         decision: 'decline',
       });
 
@@ -718,9 +720,9 @@ describe('the vendor gate', () => {
       // assertion below, which is about the decline sending no *invite* email.
       await harness.flushEmail();
       harness.email.sent.length = 0;
-      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      const [row] = (await inject('GET', '/v1/admin/vendor-applications', ADMIN)).json().items;
 
-      const decided = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
+      const decided = await inject('PUT', `/v1/admin/vendor-applications/${row.id}`, ADMIN, {
         decision: 'decline',
       });
       await harness.flushEmail();
@@ -734,42 +736,46 @@ describe('the vendor gate', () => {
       const vendor = freshIdentity('vendor', 'unfinished@example.com');
       await setGate(true);
       expect((await accept(vendor)).statusCode).toBe(403);
-      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      const [row] = (await inject('GET', '/v1/admin/vendor-applications', ADMIN)).json().items;
       expect(row).toMatchObject({ email: 'unfinished@example.com', complete: false });
 
-      const decided = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
+      const decided = await inject('PUT', `/v1/admin/vendor-applications/${row.id}`, ADMIN, {
         decision: 'invite',
       });
       expect(decided.statusCode).toBe(409);
 
-      const direct = await inject('POST', '/admin/vendor-invites', ADMIN, {
+      const direct = await inject('POST', '/v1/admin/vendor-invites', ADMIN, {
         email: 'unfinished@example.com',
       });
       expect(direct.statusCode).toBe(201);
     });
 
     it('invites by address, refuses a duplicate, and revokes only an unused invite', async () => {
-      const created = await inject('POST', '/admin/vendor-invites', ADMIN, {
+      const created = await inject('POST', '/v1/admin/vendor-invites', ADMIN, {
         email: 'Direct@Example.com',
       });
       await harness.flushEmail();
 
       expect(created.statusCode).toBe(201);
       expect(created.json()).toMatchObject({ email: 'direct@example.com', acceptedAt: null });
-      expect(created.headers.location).toBe(`/admin/vendor-invites/${created.json().id}`);
+      expect(created.headers.location).toBe(`/v1/admin/vendor-invites/${created.json().id}`);
       expect(harness.email.sent.map((message) => message.to)).toEqual(['direct@example.com']);
 
-      const duplicate = await inject('POST', '/admin/vendor-invites', ADMIN, {
+      const duplicate = await inject('POST', '/v1/admin/vendor-invites', ADMIN, {
         email: 'direct@example.com',
       });
       expect(duplicate.statusCode).toBe(409);
 
       await harness.database.db.update(vendorInvites).set({ acceptedAt: new Date() });
-      const used = await inject('DELETE', `/admin/vendor-invites/${created.json().id}`, ADMIN);
+      const used = await inject('DELETE', `/v1/admin/vendor-invites/${created.json().id}`, ADMIN);
       expect(used.statusCode).toBe(409);
 
       await harness.database.db.update(vendorInvites).set({ acceptedAt: null });
-      const revoked = await inject('DELETE', `/admin/vendor-invites/${created.json().id}`, ADMIN);
+      const revoked = await inject(
+        'DELETE',
+        `/v1/admin/vendor-invites/${created.json().id}`,
+        ADMIN,
+      );
       expect(revoked.statusCode).toBe(204);
       expect(await harness.database.db.select().from(vendorInvites)).toHaveLength(0);
     });
@@ -780,7 +786,7 @@ describe('the vendor gate', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/vendor-applications',
+        url: '/v1/vendor-applications',
         ...fromANewVisitor(),
         headers: bearer(customer),
         payload: application('holder@example.com'),
@@ -807,7 +813,7 @@ describe('the vendor gate', () => {
       const customer = freshIdentity('customer', 'taken@example.com');
       expect((await accept(customer)).statusCode).toBe(200);
 
-      const response = await inject('POST', '/admin/vendor-invites', ADMIN, {
+      const response = await inject('POST', '/v1/admin/vendor-invites', ADMIN, {
         email: 'Taken@Example.com',
       });
       await harness.flushEmail();
@@ -825,9 +831,9 @@ describe('the vendor gate', () => {
       // The address changes its mind and becomes a customer instead — an account now exists.
       const customer = freshIdentity('customer', 'late@example.com');
       expect((await accept(customer)).statusCode).toBe(200);
-      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      const [row] = (await inject('GET', '/v1/admin/vendor-applications', ADMIN)).json().items;
 
-      const response = await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, {
+      const response = await inject('PUT', `/v1/admin/vendor-applications/${row.id}`, ADMIN, {
         decision: 'invite',
       });
 
@@ -838,33 +844,39 @@ describe('the vendor gate', () => {
     it('puts a declined applicant back to declined when a direct invite is revoked', async () => {
       const vendor = await refusedVendor('declined-twice@example.com');
       await apply(vendor.actor, application(vendor.email));
-      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
-      await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, { decision: 'decline' });
+      const [row] = (await inject('GET', '/v1/admin/vendor-applications', ADMIN)).json().items;
+      await inject('PUT', `/v1/admin/vendor-applications/${row.id}`, ADMIN, {
+        decision: 'decline',
+      });
 
-      const created = await inject('POST', '/admin/vendor-invites', ADMIN, {
+      const created = await inject('POST', '/v1/admin/vendor-invites', ADMIN, {
         email: 'declined-twice@example.com',
       });
       expect(created.statusCode).toBe(201);
       const [invited] = await harness.database.db.select().from(vendorApplications);
       expect(invited?.status).toBe('invited');
 
-      const revoked = await inject('DELETE', `/admin/vendor-invites/${created.json().id}`, ADMIN);
+      const revoked = await inject(
+        'DELETE',
+        `/v1/admin/vendor-invites/${created.json().id}`,
+        ADMIN,
+      );
       expect(revoked.statusCode).toBe(204);
 
       const [restored] = await harness.database.db.select().from(vendorApplications);
       expect(restored).toMatchObject({ status: 'declined', statusBeforeInvite: null });
-      const list = (await inject('GET', '/admin/vendor-applications', ADMIN)).json();
+      const list = (await inject('GET', '/v1/admin/vendor-applications', ADMIN)).json();
       expect(list.waiting).toBe(0);
     });
 
     it('puts a waiting applicant back to waiting when their invite is revoked', async () => {
       const vendor = await refusedVendor('waiting@example.com');
       await apply(vendor.actor, application(vendor.email));
-      const created = await inject('POST', '/admin/vendor-invites', ADMIN, {
+      const created = await inject('POST', '/v1/admin/vendor-invites', ADMIN, {
         email: 'waiting@example.com',
       });
 
-      await inject('DELETE', `/admin/vendor-invites/${created.json().id}`, ADMIN);
+      await inject('DELETE', `/v1/admin/vendor-invites/${created.json().id}`, ADMIN);
 
       const [row] = await harness.database.db.select().from(vendorApplications);
       expect(row?.status).toBe('new');
@@ -1055,18 +1067,18 @@ describe('the vendor gate', () => {
           Array.from({ length: 17 }, (_, index) => ({ email: `invitee-${index}@example.com` })),
         );
 
-      const first = (await inject('GET', '/admin/vendor-applications', ADMIN)).json();
+      const first = (await inject('GET', '/v1/admin/vendor-applications', ADMIN)).json();
       expect(first).toMatchObject({ total: APPLICATIONS, waiting: APPLICATIONS - 3, page: 1 });
       expect(first.items).toHaveLength(first.pageSize);
 
       // The oldest applicant is on the last page, not silently dropped.
       const lastPage = Math.ceil(APPLICATIONS / first.pageSize);
       const last = (
-        await inject('GET', `/admin/vendor-applications?page=${lastPage}`, ADMIN)
+        await inject('GET', `/v1/admin/vendor-applications?page=${lastPage}`, ADMIN)
       ).json();
       expect(last.items.at(-1)).toMatchObject({ email: 'applicant-0@example.com' });
 
-      const invites = (await inject('GET', '/admin/vendor-invites?page=2', ADMIN)).json();
+      const invites = (await inject('GET', '/v1/admin/vendor-invites?page=2', ADMIN)).json();
       expect(invites).toMatchObject({ total: 17, page: 2 });
       expect(invites.items).toHaveLength(17 - invites.pageSize);
     });
@@ -1084,7 +1096,7 @@ describe('the vendor gate', () => {
         const vendor = await refusedVendor(email);
         await apply(vendor.actor, application(email));
       }
-      const items = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
+      const items = (await inject('GET', '/v1/admin/vendor-applications', ADMIN)).json().items;
       // Each `apply` above queued its own waitlist confirmation; settle and clear
       // them so a test's own email assertions read only the invite it sent.
       await harness.flushEmail();
@@ -1097,7 +1109,7 @@ describe('the vendor gate', () => {
     it('invites three applications in one action: invites, audit rows, statuses and emails (AC1)', async () => {
       const ids = await threeApplications('bulk-invite');
 
-      const response = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+      const response = await inject('POST', '/v1/admin/vendor-applications/invite', ADMIN, {
         applicationIds: ids,
       });
       await harness.flushEmail();
@@ -1129,12 +1141,12 @@ describe('the vendor gate', () => {
     it('reports already_invited for an already-invited applicant, and writes nothing new (AC2)', async () => {
       const vendor = await refusedVendor('bulk-already@example.com');
       await apply(vendor.actor, application(vendor.email));
-      const [row] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
-      await inject('PUT', `/admin/vendor-applications/${row.id}`, ADMIN, { decision: 'invite' });
+      const [row] = (await inject('GET', '/v1/admin/vendor-applications', ADMIN)).json().items;
+      await inject('PUT', `/v1/admin/vendor-applications/${row.id}`, ADMIN, { decision: 'invite' });
       await harness.flushEmail();
       harness.email.sent.length = 0;
 
-      const response = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+      const response = await inject('POST', '/v1/admin/vendor-applications/invite', ADMIN, {
         applicationIds: [row.id],
       });
 
@@ -1159,18 +1171,19 @@ describe('the vendor gate', () => {
     it('reports a declined or unknown id as not_found_or_decided and an incomplete one as incomplete, without failing the request (AC3)', async () => {
       const declinedVendor = await refusedVendor('bulk-declined@example.com');
       await apply(declinedVendor.actor, application(declinedVendor.email));
-      const [declinedRow] = (await inject('GET', '/admin/vendor-applications', ADMIN)).json().items;
-      await inject('PUT', `/admin/vendor-applications/${declinedRow.id}`, ADMIN, {
+      const [declinedRow] = (await inject('GET', '/v1/admin/vendor-applications', ADMIN)).json()
+        .items;
+      await inject('PUT', `/v1/admin/vendor-applications/${declinedRow.id}`, ADMIN, {
         decision: 'decline',
       });
 
       await refusedVendor('bulk-incomplete@example.com');
-      const incompleteRow = (await inject('GET', '/admin/vendor-applications', ADMIN))
+      const incompleteRow = (await inject('GET', '/v1/admin/vendor-applications', ADMIN))
         .json()
         .items.find((row: { email: string }) => row.email === 'bulk-incomplete@example.com');
       const unknownId = fakeId(1);
 
-      const response = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+      const response = await inject('POST', '/v1/admin/vendor-applications/invite', ADMIN, {
         applicationIds: [declinedRow.id, incompleteRow.id, unknownId],
       });
 
@@ -1195,7 +1208,7 @@ describe('the vendor gate', () => {
 
       // `failNext` fires on the first send the service makes, which is the first id in the array.
       harness.email.failNext = true;
-      const response = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+      const response = await inject('POST', '/v1/admin/vendor-applications/invite', ADMIN, {
         applicationIds: ids,
       });
       await harness.flushEmail();
@@ -1220,13 +1233,13 @@ describe('the vendor gate', () => {
     it('refuses more than 50 ids, an empty list and a non-uuid, with the standard error shape (AC5)', async () => {
       const tooMany = Array.from({ length: 51 }, (_, index) => fakeId(index));
 
-      const over = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+      const over = await inject('POST', '/v1/admin/vendor-applications/invite', ADMIN, {
         applicationIds: tooMany,
       });
-      const empty = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+      const empty = await inject('POST', '/v1/admin/vendor-applications/invite', ADMIN, {
         applicationIds: [],
       });
-      const malformed = await inject('POST', '/admin/vendor-applications/invite', ADMIN, {
+      const malformed = await inject('POST', '/v1/admin/vendor-applications/invite', ADMIN, {
         applicationIds: ['not-a-uuid'],
       });
 

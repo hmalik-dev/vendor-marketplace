@@ -46,7 +46,10 @@ export const portfolioRoutes: FastifyPluginAsyncZod = async (app) => {
         app.storagePublicUrl,
       );
 
-      return reply.status(201).header('location', `${PORTFOLIO_PATH}/${created.id}`).send(created);
+      return reply
+        .status(201)
+        .header('location', `${app.prefix}${PORTFOLIO_PATH}/${created.id}`)
+        .send(created);
     },
   );
 

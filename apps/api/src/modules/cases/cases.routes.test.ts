@@ -87,7 +87,7 @@ describe('the operations case queue (#431)', () => {
   async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
@@ -118,7 +118,7 @@ describe('the operations case queue (#431)', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -184,7 +184,7 @@ describe('the operations case queue (#431)', () => {
   async function report(body: Record<string, unknown>) {
     return harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       headers: bearer(CUSTOMER),
       ...fromANewVisitor(),
       payload: { topic: 'booking-or-payment', message: 'The photographer never showed.', ...body },
@@ -194,7 +194,7 @@ describe('the operations case queue (#431)', () => {
   async function readCases(query = '') {
     const response = await harness.app.inject({
       method: 'GET',
-      url: `/admin/cases${query}`,
+      url: `/v1/admin/cases${query}`,
       headers: bearer(ADMIN),
     });
     expect(response.statusCode).toBe(200);
@@ -205,7 +205,7 @@ describe('the operations case queue (#431)', () => {
   async function readCase(caseId: string) {
     const response = await harness.app.inject({
       method: 'GET',
-      url: `/admin/cases/${caseId}`,
+      url: `/v1/admin/cases/${caseId}`,
       headers: bearer(ADMIN),
     });
     expect(response.statusCode).toBe(200);
@@ -374,7 +374,7 @@ describe('the operations case queue (#431)', () => {
     // The widening that drops the search is counted like the other two.
     const unmatched = await harness.app.inject({
       method: 'GET',
-      url: '/admin/cases?q=nobody-at-all',
+      url: '/v1/admin/cases?q=nobody-at-all',
       headers: bearer(ADMIN),
     });
     expect(unmatched.json().widenings).toEqual([{ key: 'q', count: 1 }]);
@@ -414,7 +414,7 @@ describe('the operations case queue (#431)', () => {
 
     const resolved = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/bookings/${fixture.bookingId}/dispute`,
+      url: `/v1/admin/bookings/${fixture.bookingId}/dispute`,
       headers: bearer(ADMIN),
       payload: { outcome: 'vendor' },
     });
@@ -438,7 +438,7 @@ describe('the operations case queue (#431)', () => {
 
     const resolved = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/bookings/${fixture.bookingId}/dispute`,
+      url: `/v1/admin/bookings/${fixture.bookingId}/dispute`,
       headers: bearer(ADMIN),
       payload: { outcome: 'customer' },
     });
@@ -460,7 +460,7 @@ describe('the operations case queue (#431)', () => {
     for (const outcome of ['vendor', 'customer'] as const) {
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/bookings/${fixture.bookingId}/dispute`,
+        url: `/v1/admin/bookings/${fixture.bookingId}/dispute`,
         headers: bearer(ADMIN),
         payload: { outcome },
       });
@@ -479,7 +479,7 @@ describe('the operations case queue (#431)', () => {
 
     const closed = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/cases/${plain!.id}/resolve`,
+      url: `/v1/admin/cases/${plain!.id}/resolve`,
       headers: bearer(ADMIN),
     });
     expect(closed.statusCode).toBe(200);
@@ -506,7 +506,7 @@ describe('the operations case queue (#431)', () => {
     // The second press finds nothing open and says so rather than overwriting.
     const again = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/cases/${plain!.id}/resolve`,
+      url: `/v1/admin/cases/${plain!.id}/resolve`,
       headers: bearer(ADMIN),
     });
     expect(again.statusCode).toBe(409);
@@ -517,7 +517,7 @@ describe('the operations case queue (#431)', () => {
      */
     const refused = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/cases/${holding!.id}/resolve`,
+      url: `/v1/admin/cases/${holding!.id}/resolve`,
       headers: bearer(ADMIN),
     });
     expect(refused.statusCode).toBe(409);
@@ -717,7 +717,7 @@ describe('the operations case queue (#431)', () => {
     function rule(bookingId: string, outcome: 'vendor' | 'customer') {
       return harness.app.inject({
         method: 'PUT',
-        url: `/admin/bookings/${bookingId}/dispute`,
+        url: `/v1/admin/bookings/${bookingId}/dispute`,
         headers: bearer(ADMIN),
         payload: { outcome },
       });
@@ -1123,9 +1123,9 @@ describe('the operations case queue (#431)', () => {
     const caseId = (await readCases()).items[0]!.id;
 
     const routes = [
-      { method: 'GET', url: '/admin/cases?status=not-a-status' },
-      { method: 'GET', url: `/admin/cases/${caseId}` },
-      { method: 'PUT', url: `/admin/cases/${caseId}/resolve` },
+      { method: 'GET', url: '/v1/admin/cases?status=not-a-status' },
+      { method: 'GET', url: `/v1/admin/cases/${caseId}` },
+      { method: 'PUT', url: `/v1/admin/cases/${caseId}/resolve` },
     ] as const;
 
     for (const route of routes) {
@@ -1197,10 +1197,10 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
   });
 
   it('lifts the hold and records the failure on the case', async () => {
-    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(ADMIN) });
+    await harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(ADMIN) });
     await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
 
-    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
+    await harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(CUSTOMER) });
     const customers = await harness.database.db
       .select({ id: users.id })
       .from(users)
@@ -1216,7 +1216,7 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
 
     await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -1262,7 +1262,7 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
 
     const sent = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       headers: bearer(CUSTOMER),
       ...fromANewVisitor(),
       payload: { topic: 'booking-or-payment', message: 'Nobody came.', bookingId },
@@ -1271,7 +1271,7 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
 
     const page = await harness.app.inject({
       method: 'GET',
-      url: '/admin/cases',
+      url: '/v1/admin/cases',
       headers: bearer(ADMIN),
     });
     const cases = wireCasePageSchema.parse(page.json());
@@ -1280,7 +1280,7 @@ describe('a report whose email is refused (#431 acceptance 3)', () => {
 
     const detail = await harness.app.inject({
       method: 'GET',
-      url: `/admin/cases/${cases.items[0]!.id}`,
+      url: `/v1/admin/cases/${cases.items[0]!.id}`,
       headers: bearer(ADMIN),
     });
     const parsed = wireCaseDetailSchema.parse(detail.json());
@@ -1324,7 +1324,7 @@ describe('a case row that cannot be written (#431 security review)', () => {
   });
 
   it('logs the driver code and never the message body or the sender address', async () => {
-    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
+    await harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(CUSTOMER) });
 
     /*
      * **An insert failure with the caller's text bound to it.** Postgres
@@ -1346,7 +1346,7 @@ describe('a case row that cannot be written (#431 security review)', () => {
 
     const sent = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       headers: bearer(CUSTOMER),
       ...fromANewVisitor(),
       payload: { topic: 'trust-and-safety', message: secret },

@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
+import type { BusEnvelope, EventBus, EventBusLog } from './event-bus.js';
 
 /**
  * A typed server-sent event. One stream carries both kinds, because a browser
@@ -12,20 +14,44 @@ export type StreamEvent =
 /** Concurrent streams one user may hold on one instance (VEN-462). */
 export const MAX_STREAMS_PER_USER = 5;
 
+export interface EventHubOptions {
+  /** What carries events to the other instances. Without one the hub reaches only its own streams. */
+  bus?: EventBus;
+  log?: EventBusLog;
+}
+
 /**
- * The open SSE connections, by user.
+ * The open SSE connections, by user, and the fan-out to them.
  *
  * A `Set` per user rather than one connection: somebody with the site open in
  * three tabs is one user with three streams, and a message has to reach all of
  * them or two tabs quietly go stale.
  *
- * This lives in process memory, which is the honest limit of it — with more
- * than one API instance a subscriber on instance A will not see an event
- * published on instance B. Crossing that needs a shared bus (Redis, Postgres
- * LISTEN/NOTIFY); it is recorded rather than pretended away.
+ * The connections are this process's own; the events are not (VEN-650). A
+ * publish is delivered to this instance's streams at once and sent over the
+ * bus to every other instance, which delivers it to theirs — so a message sent
+ * through instance A reaches a tab whose stream is held by instance B. The
+ * sender skips its own echo by `origin`, so nothing is delivered twice.
  */
 export class EventHub {
   private readonly connections = new Map<string, Set<ServerResponse>>();
+  readonly #origin = randomUUID();
+  readonly #bus: EventBus | undefined;
+  readonly #log: EventBusLog | undefined;
+
+  constructor(options: EventHubOptions = {}) {
+    this.#bus = options.bus;
+    this.#log = options.log;
+  }
+
+  /** Starts taking events from the other instances; returns the function that stops. */
+  async start(): Promise<() => Promise<void>> {
+    if (!this.#bus) {
+      return async () => undefined;
+    }
+
+    return this.#bus.listen((envelope) => this.#receive(envelope));
+  }
 
   /**
    * Registers a connection and returns the function that removes it, or `null`
@@ -56,13 +82,22 @@ export class EventHub {
   }
 
   /**
-   * Pushes to every connection this user has open.
+   * Pushes to every connection this user has open, on every instance.
    *
-   * A write to a socket the client has already dropped throws, and that must
-   * not fail the request that triggered it — sending a message is not allowed
-   * to fail because the recipient closed a tab.
+   * Never throws and never waits: sending a message is not allowed to fail
+   * because the recipient closed a tab, or because the bus is down — the
+   * message is stored either way, and a stream that reconnects re-reads it.
    */
   publish(userId: string, event: StreamEvent): void {
+    this.#deliver(userId, event);
+    this.#broadcast({ origin: this.#origin, userId, kind: 'publish', event });
+  }
+
+  /**
+   * A write to a socket the client has already dropped throws; that socket is
+   * forgotten rather than failing the publish.
+   */
+  #deliver(userId: string, event: StreamEvent): void {
     const targets = this.connections.get(userId);
 
     if (!targets) {
@@ -86,10 +121,16 @@ export class EventHub {
   }
 
   /**
-   * Ends every stream one user has open — a ban or a closure, after which a
-   * tab left open must stop receiving message content and notifications.
+   * Ends every stream one user has open, on every instance — a ban or a
+   * closure, after which a tab left open must stop receiving message content
+   * and notifications.
    */
   closeFor(userId: string): void {
+    this.#end(userId);
+    this.#broadcast({ origin: this.#origin, userId, kind: 'close' });
+  }
+
+  #end(userId: string): void {
     const targets = this.connections.get(userId);
 
     if (!targets) {
@@ -105,6 +146,32 @@ export class EventHub {
         // Already gone; nothing to close.
       }
     }
+  }
+
+  #receive(envelope: BusEnvelope): void {
+    if (envelope.origin === this.#origin) {
+      return;
+    }
+
+    if (envelope.kind === 'close') {
+      this.#end(envelope.userId);
+    } else {
+      this.#deliver(envelope.userId, envelope.event);
+    }
+  }
+
+  #broadcast(envelope: BusEnvelope): void {
+    if (!this.#bus) {
+      return;
+    }
+
+    // Fire-and-forget by design (see `publish`); the failure is logged, not thrown.
+    void this.#bus.send(envelope).catch((error: unknown) => {
+      this.#log?.error(
+        { err: error, userId: envelope.userId, kind: envelope.kind },
+        'A realtime event could not be sent to the other instances',
+      );
+    });
   }
 
   /** Ends every open stream — the shutdown path, so sockets are not leaked. */

@@ -62,7 +62,7 @@ describe('starting payout onboarding twice at once, against a real Postgres', ()
       .limit(1);
     const profile = await harness!.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Fernbank Studio',
@@ -76,7 +76,7 @@ describe('starting payout onboarding twice at once, against a real Postgres', ()
     expect(profile.statusCode).toBe(201);
     const agreed = await harness!.app.inject({
       method: 'POST',
-      url: '/vendor/agreement/accept',
+      url: '/v1/vendor/agreement/accept',
       headers: bearer(VENDOR),
       payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
     });
@@ -86,7 +86,7 @@ describe('starting payout onboarding twice at once, against a real Postgres', ()
       [1, 2].map(() =>
         harness!.app.inject({
           method: 'POST',
-          url: '/vendor/stripe/connect',
+          url: '/v1/vendor/stripe/connect',
           headers: bearer(VENDOR),
         }),
       ),

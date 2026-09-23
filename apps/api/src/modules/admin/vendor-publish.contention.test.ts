@@ -41,7 +41,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
   async function seedVendor(): Promise<void> {
     const profile = await harness!.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Fernbank Studio',
@@ -57,7 +57,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
 
     const servicePackage = await harness!.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Full day coverage',
@@ -135,7 +135,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
   it('lets exactly one of two concurrent unpublishes through', async () => {
     const published = await harness!.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: { isPublished: true },
     });
@@ -144,7 +144,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
     const unpublish = (actor: string) =>
       harness!.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendorId}/publish`,
+        url: `/v1/admin/vendors/${vendorId}/publish`,
         headers: bearer(actor),
         payload: { isPublished: false },
       });
@@ -174,13 +174,13 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
     const [publish, deactivate] = await Promise.all([
       harness!.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendorId}/publish`,
+        url: `/v1/admin/vendors/${vendorId}/publish`,
         headers: bearer(ADMIN_ONE),
         payload: { isPublished: true },
       }),
       harness!.app.inject({
         method: 'PUT',
-        url: `/admin/packages/${packageId}/active`,
+        url: `/v1/admin/packages/${packageId}/active`,
         headers: bearer(ADMIN_TWO),
         payload: { isActive: false },
       }),
@@ -227,7 +227,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
   it('never leaves a storefront published and held at once', async () => {
     const published = await harness!.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: { isPublished: true },
     });
@@ -235,7 +235,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
 
     const paused = await harness!.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: { isPublished: false },
     });
@@ -247,7 +247,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
        * read that checks the hold and the write that acts on it. */
       harness!.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: {
           businessName: 'Fernbank Studio',
@@ -260,7 +260,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
       }),
       harness!.app.inject({
         method: 'PUT',
-        url: `/admin/vendors/${vendorId}/publish`,
+        url: `/v1/admin/vendors/${vendorId}/publish`,
         headers: bearer(ADMIN_ONE),
         payload: { isPublished: false },
       }),

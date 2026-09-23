@@ -24,7 +24,7 @@ describe('POST /internal/session-generation (VEN-628)', () => {
   function bump(authUserId: string, key: string | null = KEY) {
     return harness.app.inject({
       method: 'POST',
-      url: '/internal/session-generation',
+      url: '/v1/internal/session-generation',
       headers: key ? { [WEB_TIER_KEY_HEADER]: key } : {},
       payload: { authUserId },
     });
@@ -67,7 +67,7 @@ describe('POST /internal/session-generation (VEN-628)', () => {
     try {
       const response = await local.app.inject({
         method: 'POST',
-        url: '/internal/session-generation',
+        url: '/v1/internal/session-generation',
         payload: { authUserId: 'auth-x' },
       });
       expect(response.statusCode).toBe(404);

@@ -261,7 +261,7 @@ describe('the email retry sweep', () => {
 
       const before = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendor-invites',
+        url: '/v1/admin/vendor-invites',
         headers,
       });
       expect(before.json().items[0]).toMatchObject({
@@ -272,7 +272,7 @@ describe('the email retry sweep', () => {
 
       const resent = await harness.app.inject({
         method: 'POST',
-        url: `/admin/vendor-invites/${id}/resend`,
+        url: `/v1/admin/vendor-invites/${id}/resend`,
         headers,
       });
       expect(resent.statusCode).toBe(200);
@@ -283,7 +283,7 @@ describe('the email retry sweep', () => {
 
       const again = await harness.app.inject({
         method: 'POST',
-        url: `/admin/vendor-invites/${id}/resend`,
+        url: `/v1/admin/vendor-invites/${id}/resend`,
         headers,
       });
       expect(again.statusCode).toBe(409);
@@ -296,7 +296,7 @@ describe('the email retry sweep', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: `/admin/vendor-invites/${id}/resend`,
+        url: `/v1/admin/vendor-invites/${id}/resend`,
         headers: bearer(adminAuthId),
       });
 
@@ -311,14 +311,14 @@ describe('the email retry sweep', () => {
     it('answers 404 for an unknown invite and refuses a non-admin', async () => {
       const missing = await harness.app.inject({
         method: 'POST',
-        url: '/admin/vendor-invites/44444444-4444-4444-8444-444444444444/resend',
+        url: '/v1/admin/vendor-invites/44444444-4444-4444-8444-444444444444/resend',
         headers: bearer(adminAuthId),
       });
       expect(missing.statusCode).toBe(404);
 
       const customer = await harness.app.inject({
         method: 'POST',
-        url: '/admin/vendor-invites/44444444-4444-4444-8444-444444444444/resend',
+        url: '/v1/admin/vendor-invites/44444444-4444-4444-8444-444444444444/resend',
         headers: bearer('user_retry_reader'),
       });
       expect(customer.statusCode).toBe(403);
@@ -330,7 +330,7 @@ describe('the email retry sweep', () => {
 
       const created = await harness.app.inject({
         method: 'POST',
-        url: '/admin/vendor-invites',
+        url: '/v1/admin/vendor-invites',
         headers,
         payload: { email: 'first-send-fails@example.com' },
       });

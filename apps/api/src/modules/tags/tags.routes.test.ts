@@ -34,7 +34,7 @@ describe('tag routes', () => {
   async function createVendorProfile(): Promise<{ vendorId: string }> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -61,7 +61,7 @@ describe('tag routes', () => {
   ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
     return harness.app.inject({
       method: 'POST',
-      url: '/tags/suggest',
+      url: '/v1/tags/suggest',
       headers: bearer(actor),
       payload: { suggestedName, category: 'language' },
     });
@@ -107,14 +107,14 @@ describe('tag routes', () => {
 
   describe('GET /tags', () => {
     it('is reachable without a session', async () => {
-      const response = await harness.app.inject({ method: 'GET', url: '/tags' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/tags' });
 
       expect(response.statusCode).toBe(200);
       expect(response.json().length).toBeGreaterThan(0);
     });
 
     it('covers every picker section and no others', async () => {
-      const response = await harness.app.inject({ method: 'GET', url: '/tags' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/tags' });
       const seen = new Set<string>(
         response.json().map((tag: { category: string }) => tag.category),
       );
@@ -130,7 +130,7 @@ describe('tag routes', () => {
      * left-over projection would still be serialised.
      */
     it('carries no vendor-category scope on any row', async () => {
-      const response = await harness.app.inject({ method: 'GET', url: '/tags' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/tags' });
       const rows = response.json() as Record<string, unknown>[];
 
       expect(rows.length).toBeGreaterThan(0);
@@ -144,7 +144,7 @@ describe('tag routes', () => {
       const spanishId = await tagIdByName('Spanish');
       await harness.database.db.update(tags).set({ isActive: false }).where(eq(tags.id, spanishId));
 
-      const response = await harness.app.inject({ method: 'GET', url: '/tags' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/tags' });
       const ids = response.json().map((tag: { id: string }) => tag.id);
 
       expect(ids).not.toContain(spanishId);
@@ -165,7 +165,7 @@ describe('tag routes', () => {
     it('rejects a customer', async () => {
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(CUSTOMER),
         payload: { suggestedName: 'Amharic', category: 'language' },
       });
@@ -178,7 +178,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: 'Amharic', category: 'language' },
       });
@@ -196,7 +196,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: 'Spanish', category: 'language' },
       });
@@ -210,7 +210,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: 'spanish', category: 'language' },
       });
@@ -223,7 +223,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: '  south   asian ', category: 'cultural' },
       });
@@ -236,7 +236,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: 'Spanish', category: 'cultural' },
       });
@@ -251,7 +251,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: 'Spanish', category: 'language' },
       });
@@ -263,14 +263,14 @@ describe('tag routes', () => {
       await createVendorProfile();
       await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: 'Amharic', category: 'language' },
       });
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: '  AMHARIC  ', category: 'language' },
       });
@@ -395,7 +395,7 @@ describe('tag routes', () => {
       await createVendorProfile();
       await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: 'Amharic', category: 'language' },
       });
@@ -403,7 +403,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: 'Amharic', category: 'language' },
       });
@@ -416,7 +416,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: '   ', category: 'language' },
       });
@@ -428,12 +428,12 @@ describe('tag routes', () => {
       await createVendorProfile();
       await harness.app.inject({
         method: 'POST',
-        url: '/tags/suggest',
+        url: '/v1/tags/suggest',
         headers: bearer(VENDOR),
         payload: { suggestedName: 'Amharic', category: 'language' },
       });
 
-      const response = await harness.app.inject({ method: 'GET', url: '/tags' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/tags' });
       const names = response.json().map((tag: { name: string }) => tag.name);
 
       expect(names).not.toContain('Amharic');
@@ -446,7 +446,7 @@ describe('tag routes', () => {
       const otherId = await tagIdByName('French');
       const created = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: {
           businessName: 'Sunlit Studio',
@@ -466,7 +466,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { tagline: 'Golden hour', tagIds: [heldId, otherId] },
       });
@@ -485,7 +485,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { tagIds: [otherId] },
       });
@@ -502,7 +502,7 @@ describe('tag routes', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { tagIds: [otherId, hiddenId] },
       });
@@ -514,7 +514,7 @@ describe('tag routes', () => {
 
   describe('GET /categories', () => {
     it('lists the seeded categories in display order', async () => {
-      const response = await harness.app.inject({ method: 'GET', url: '/categories' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/categories' });
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
@@ -527,7 +527,7 @@ describe('tag routes', () => {
         .set({ isActive: false })
         .where(eq(categories.slug, 'photography'));
 
-      const response = await harness.app.inject({ method: 'GET', url: '/categories' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/categories' });
       const slugs = response.json().map((category: { slug: string }) => category.slug);
       expect(slugs).not.toContain('photography');
 

@@ -39,7 +39,7 @@ describe('admin booking detail and requests', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Fernbank Studio',
@@ -108,17 +108,17 @@ describe('admin booking detail and requests', () => {
   it('refuses everyone but an admin on both routes, before validating', async () => {
     await seedParties();
 
-    for (const url of [`/admin/bookings/${MISSING_ID}`, '/admin/requests']) {
+    for (const url of [`/v1/admin/bookings/${MISSING_ID}`, '/v1/admin/requests']) {
       expect((await get(url, null)).statusCode).toBe(401);
       expect((await get(url, CUSTOMER)).statusCode).toBe(403);
       expect((await get(url, VENDOR)).statusCode).toBe(403);
     }
-    expect((await get('/admin/bookings/not-a-uuid', VENDOR)).statusCode).toBe(403);
-    expect((await get('/admin/requests?status=bogus', CUSTOMER)).statusCode).toBe(403);
+    expect((await get('/v1/admin/bookings/not-a-uuid', VENDOR)).statusCode).toBe(403);
+    expect((await get('/v1/admin/requests?status=bogus', CUSTOMER)).statusCode).toBe(403);
 
-    expect((await get('/admin/bookings/not-a-uuid')).statusCode).toBe(400);
-    expect((await get('/admin/requests?status=bogus')).statusCode).toBe(400);
-    const missing = await get(`/admin/bookings/${MISSING_ID}`);
+    expect((await get('/v1/admin/bookings/not-a-uuid')).statusCode).toBe(400);
+    expect((await get('/v1/admin/requests?status=bogus')).statusCode).toBe(400);
+    const missing = await get(`/v1/admin/bookings/${MISSING_ID}`);
     expect(missing.statusCode).toBe(404);
     expect(missing.json().message).toBe('No booking with that id');
   });
@@ -166,7 +166,7 @@ describe('admin booking detail and requests', () => {
       })
       .returning({ id: bookings.id });
 
-    const response = await get(`/admin/bookings/${booking!.id}`);
+    const response = await get(`/v1/admin/bookings/${booking!.id}`);
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
@@ -249,12 +249,12 @@ describe('admin booking detail and requests', () => {
     const refunded = await insertBooking('2026-10-10', 'cancelled', 0, 'pi_test_not_owed');
     const owed = await insertBooking('2026-10-11', 'confirmed', 105_600, 'pi_test_owed');
 
-    const detail = await get(`/admin/bookings/${refunded}`);
+    const detail = await get(`/v1/admin/bookings/${refunded}`);
     expect(detail.statusCode).toBe(200);
     expect(detail.json().payoutStatus).toBe('not-owed');
-    expect((await get(`/admin/bookings/${owed}`)).json().payoutStatus).toBe('pending');
+    expect((await get(`/v1/admin/bookings/${owed}`)).json().payoutStatus).toBe('pending');
 
-    const list = await get('/admin/payments');
+    const list = await get('/v1/admin/payments');
     const statuses = new Map(
       list
         .json()
@@ -328,7 +328,7 @@ describe('admin booking detail and requests', () => {
       ])
       .returning({ id: notifications.id });
 
-    const body = (await get(`/admin/bookings/${subject.id}`)).json();
+    const body = (await get(`/v1/admin/bookings/${subject.id}`)).json();
 
     expect(body.notifications).toEqual({
       total: 2,
@@ -378,7 +378,7 @@ describe('admin booking detail and requests', () => {
       })
       .returning({ id: bookings.id });
 
-    const body = (await get(`/admin/bookings/${booking!.id}`)).json();
+    const body = (await get(`/v1/admin/bookings/${booking!.id}`)).json();
 
     expect(body).toMatchObject({
       status: 'completed',
@@ -456,7 +456,7 @@ describe('admin booking detail and requests', () => {
       .returning({ id: bookingRequests.id, status: bookingRequests.status });
     const idOf = (status: string): string => seeded.find((row) => row.status === status)!.id;
 
-    const all = await get('/admin/requests');
+    const all = await get('/v1/admin/requests');
     expect(all.statusCode).toBe(200);
     expect(all.json()).toMatchObject({ total: 6, page: 1, widenings: [] });
     expect(all.json().items).toEqual([
@@ -480,7 +480,7 @@ describe('admin booking detail and requests', () => {
     ]);
 
     for (const status of ['pending', 'quoted', 'accepted', 'declined', 'expired', 'cancelled']) {
-      const page = (await get(`/admin/requests?status=${status}`)).json();
+      const page = (await get(`/v1/admin/requests?status=${status}`)).json();
       expect(page.items.map((row: { id: string }) => row.id)).toEqual([idOf(status)]);
       expect(page.total).toBe(1);
     }
@@ -491,12 +491,12 @@ describe('admin booking detail and requests', () => {
       lapsed: [idOf('expired'), idOf('cancelled')],
     };
     for (const [group, ids] of Object.entries(groups)) {
-      const page = (await get(`/admin/requests?group=${group}`)).json();
+      const page = (await get(`/v1/admin/requests?group=${group}`)).json();
       expect(page.items.map((row: { id: string }) => row.id)).toEqual(ids);
     }
 
     // A status outside its group finds nothing, and the counted ways out say what does.
-    const empty = (await get('/admin/requests?group=live&status=declined')).json();
+    const empty = (await get('/v1/admin/requests?group=live&status=declined')).json();
     expect(empty.items).toEqual([]);
     expect(empty.total).toBe(0);
     expect(empty.widenings).toEqual([
@@ -528,9 +528,9 @@ describe('admin booking detail and requests', () => {
       })
       .returning({ id: bookingRequests.id });
 
-    const adminRead = (await get('/admin/requests?status=expired')).json();
-    const underQuoted = (await get('/admin/requests?status=quoted')).json();
-    const underLive = (await get('/admin/requests?group=live')).json();
+    const adminRead = (await get('/v1/admin/requests?status=expired')).json();
+    const underQuoted = (await get('/v1/admin/requests?status=quoted')).json();
+    const underLive = (await get('/v1/admin/requests?group=live')).json();
     const stored = await db
       .select({ status: bookingRequests.status })
       .from(bookingRequests)
@@ -541,7 +541,7 @@ describe('admin booking detail and requests', () => {
     expect(underLive.items).toEqual([]);
     expect(stored).toEqual([{ status: 'quoted' }]);
 
-    const participant = await get(`/booking-requests/${lapsed!.id}`, CUSTOMER);
+    const participant = await get(`/v1/booking-requests/${lapsed!.id}`, CUSTOMER);
     expect(participant.statusCode).toBe(200);
     expect(adminRead.items[0].status).toBe(participant.json().status);
     expect(participant.json().status).toBe('expired');

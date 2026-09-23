@@ -16,7 +16,7 @@
  */
 import { createHash } from 'node:crypto';
 import { WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
-import { apiOrigin } from '../../config/public-env';
+import { apiBaseUrl } from '../api-base-url';
 import { visitorAddress } from '../visitor-address';
 
 const WINDOW_MS = 60_000;
@@ -157,7 +157,7 @@ async function chargeShared(
   }
 
   try {
-    const response = await fetch(`${apiOrigin(process.env.API_URL)}/internal/throttle`, {
+    const response = await fetch(`${apiBaseUrl(process.env.API_URL)}/internal/throttle`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', [WEB_TIER_KEY_HEADER]: key },
       body: JSON.stringify({ bucket, windowMs, limit, record }),

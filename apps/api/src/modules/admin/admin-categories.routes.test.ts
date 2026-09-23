@@ -59,7 +59,7 @@ describe('admin category management', () => {
   const setActive = (categoryId: string, isActive: boolean, authUserId = ADMIN) =>
     harness.app.inject({
       method: 'PUT',
-      url: `/admin/categories/${categoryId}`,
+      url: `/v1/admin/categories/${categoryId}`,
       headers: bearer(authUserId),
       payload: { isActive },
     });
@@ -68,7 +68,7 @@ describe('admin category management', () => {
   const reorder = async (categoryIds: string[], basedOn?: string[]) =>
     harness.app.inject({
       method: 'PUT',
-      url: '/admin/categories/order',
+      url: '/v1/admin/categories/order',
       headers: bearer(ADMIN),
       payload: {
         categoryIds,
@@ -80,7 +80,7 @@ describe('admin category management', () => {
   async function publishVendorInBoth(): Promise<void> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Two Trades',
@@ -95,7 +95,7 @@ describe('admin category management', () => {
 
     const pkg = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/packages',
+      url: '/v1/vendor/packages',
       headers: bearer(VENDOR),
       payload: {
         name: 'Package',
@@ -108,7 +108,7 @@ describe('admin category management', () => {
     await acceptVendorAgreementAs(harness, VENDOR);
     const published = await harness.app.inject({
       method: 'PUT',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: { isPublished: true },
     });
@@ -161,9 +161,9 @@ describe('admin category management', () => {
 
   describe('authorization', () => {
     it.each([
-      ['GET', '/admin/categories', undefined],
-      ['PUT', '/admin/categories/order', { categoryIds: ['not-a-uuid'] }],
-      ['PUT', '/admin/categories/not-a-uuid', { isActive: 'nope' }],
+      ['GET', '/v1/admin/categories', undefined],
+      ['PUT', '/v1/admin/categories/order', { categoryIds: ['not-a-uuid'] }],
+      ['PUT', '/v1/admin/categories/not-a-uuid', { isActive: 'nope' }],
     ] as const)(
       'refuses %s %s to a customer with 403 before validating',
       async (method, url, payload) => {
@@ -179,7 +179,7 @@ describe('admin category management', () => {
     );
 
     it('refuses an anonymous caller with 401', async () => {
-      const response = await harness.app.inject({ method: 'GET', url: '/admin/categories' });
+      const response = await harness.app.inject({ method: 'GET', url: '/v1/admin/categories' });
 
       expect(response.statusCode).toBe(401);
     });
@@ -191,7 +191,7 @@ describe('admin category management', () => {
 
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/admin/categories',
+      url: '/v1/admin/categories',
       headers: bearer(ADMIN),
     });
 
@@ -268,7 +268,7 @@ describe('admin category management', () => {
 
     it('drops a deactivated category from /categories and brings it back on reactivation', async () => {
       await setActive(cateringId, false);
-      const hidden = await harness.app.inject({ method: 'GET', url: '/categories' });
+      const hidden = await harness.app.inject({ method: 'GET', url: '/v1/categories' });
       expect(hidden.statusCode).toBe(200);
       expect((hidden.json() as Array<{ id: string }>).map((row) => row.id)).not.toContain(
         cateringId,
@@ -276,14 +276,14 @@ describe('admin category management', () => {
       expect(hidden.json()).toHaveLength(CATEGORY_SEEDS.length - 1);
 
       await setActive(cateringId, true);
-      const shown = await harness.app.inject({ method: 'GET', url: '/categories' });
+      const shown = await harness.app.inject({ method: 'GET', url: '/v1/categories' });
       expect((shown.json() as Array<{ id: string }>).map((row) => row.id)).toContain(cateringId);
     });
 
     it('drops a deactivated category from the search facets', async () => {
       await publishVendorInBoth();
 
-      const before = await harness.app.inject({ method: 'GET', url: '/vendors' });
+      const before = await harness.app.inject({ method: 'GET', url: '/v1/vendors' });
       expect(before.statusCode).toBe(200);
       expect(before.json().facets.categories).toEqual(
         expect.arrayContaining([
@@ -294,7 +294,7 @@ describe('admin category management', () => {
 
       await setActive(cateringId, false);
 
-      const after = await harness.app.inject({ method: 'GET', url: '/vendors' });
+      const after = await harness.app.inject({ method: 'GET', url: '/v1/vendors' });
       expect(after.json().facets.categories).toEqual([{ categoryId: photographyId, count: 1 }]);
     });
 
@@ -302,7 +302,7 @@ describe('admin category management', () => {
       await publishVendorInBoth();
       await setActive(cateringId, false);
 
-      const cards = await harness.app.inject({ method: 'GET', url: '/vendors' });
+      const cards = await harness.app.inject({ method: 'GET', url: '/v1/vendors' });
       expect(
         (cards.json().items as Array<{ categories: Array<{ slug: string }> }>)[0]!.categories.map(
           (category) => category.slug,
@@ -311,7 +311,7 @@ describe('admin category management', () => {
 
       const filtered = await harness.app.inject({
         method: 'GET',
-        url: '/vendors?category=catering',
+        url: '/v1/vendors?category=catering',
       });
       expect(filtered.statusCode).toBe(200);
       expect(filtered.json().total).toBe(0);
@@ -327,7 +327,7 @@ describe('admin category management', () => {
 
       const saved = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { bio: 'Still two trades.', categoryIds: [photographyId, cateringId] },
       });
@@ -336,7 +336,7 @@ describe('admin category management', () => {
       await setActive(cateringId, true);
       const admin = await harness.app.inject({
         method: 'GET',
-        url: '/admin/categories',
+        url: '/v1/admin/categories',
         headers: bearer(ADMIN),
       });
       expect(
@@ -353,7 +353,7 @@ describe('admin category management', () => {
 
       const saved = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(VENDOR),
         payload: { categoryIds: [photographyId, decor!.id] },
       });
@@ -376,7 +376,7 @@ describe('admin category management', () => {
         reversed.map((_, index) => index + 1),
       );
 
-      const publicList = await harness.app.inject({ method: 'GET', url: '/categories' });
+      const publicList = await harness.app.inject({ method: 'GET', url: '/v1/categories' });
       expect((publicList.json() as Array<{ id: string }>).map((row) => row.id)).toEqual(reversed);
     });
 

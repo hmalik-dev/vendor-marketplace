@@ -5,7 +5,8 @@ import {
   type EventType,
   type NotificationItem,
   type OpenedConversation,
-  type Paginated,
+  type CursorPage,
+  type KeysetCursor,
   type SendMessageResult,
 } from '@vendor-marketplace/shared';
 import { withRequestIdentity } from '@vendor-marketplace/db';
@@ -16,14 +17,12 @@ import type { EventHub } from '../../lib/event-stream.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import {
-  countMessages,
-  countNotifications,
   countEarlierUnreadInConversation,
   countUnreadPerConversation,
   findConversationById,
   findConversationsFor,
   findLastMessagePreviews,
-  findMessages,
+  findMessagesBefore,
   findNotifications,
   findOpenableVendor,
   insertMessage,
@@ -288,28 +287,25 @@ async function requireParticipant(
 /**
  * One page of a thread.
  *
- * Page 1 is the **newest** page and each page reads oldest-first, so a client
- * renders page 1 and prepends page 2 above it to walk backwards through the
- * history. See `findMessages` for why that direction, and #402 for what the
- * other one hid.
+ * The first page is the **newest** and each page reads oldest-first, so a
+ * client renders it and prepends the page before `nextBefore` above it to walk
+ * backwards through the history. See `findMessages` for why that direction,
+ * #402 for what the other one hid, and `findMessagesBefore` for why by cursor.
  */
 export async function listMessages(
   db: AppDatabase,
   user: AuthenticatedUser,
   conversationId: string,
-  page: number,
+  before: KeysetCursor | undefined,
   pageSize: number,
-): Promise<Paginated<SendMessageResult>> {
+): Promise<CursorPage<SendMessageResult>> {
   await requireParticipant(db, user, conversationId);
 
-  const [rows, total] = await withRequestIdentity(db, identityOf(user), (tx) =>
-    Promise.all([
-      findMessages(tx, conversationId, pageSize, (page - 1) * pageSize),
-      countMessages(tx, conversationId),
-    ]),
+  const page = await withRequestIdentity(db, identityOf(user), (tx) =>
+    findMessagesBefore(tx, conversationId, pageSize, before),
   );
 
-  return { items: rows.map(toMessage), total, page, pageSize };
+  return { ...page, items: page.items.map(toMessage) };
 }
 
 function toMessage(row: MessageRow): SendMessageResult {
@@ -439,15 +435,12 @@ export async function readConversation(
 export async function listNotifications(
   db: AppDatabase,
   user: AuthenticatedUser,
-  page: number,
+  before: KeysetCursor | undefined,
   pageSize: number,
-): Promise<Paginated<NotificationItem>> {
-  const [rows, total] = await Promise.all([
-    findNotifications(db, user.id, pageSize, (page - 1) * pageSize),
-    countNotifications(db, user.id),
-  ]);
+): Promise<CursorPage<NotificationItem>> {
+  const page = await findNotifications(db, user.id, pageSize, before);
 
-  return { items: rows.map(toNotification), total, page, pageSize };
+  return { ...page, items: page.items.map(toNotification) };
 }
 
 export async function readNotification(

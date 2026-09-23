@@ -6,7 +6,7 @@ import {
   type ErrorCode,
 } from '@vendor-marketplace/shared';
 import type { z } from 'zod';
-import { apiOrigin } from '@/config/public-env';
+import { apiBaseUrl } from '@/lib/api-base-url';
 
 /**
  * Browser calls need an absolute origin at build time; server calls may use a
@@ -14,9 +14,10 @@ import { apiOrigin } from '@/config/public-env';
  *
  * The origin itself comes from `apiOrigin()`, which owns the development
  * fallback for all three callers — this module, `use-api` and
- * `use-event-stream` each carried their own copy of the same literal.
+ * `use-event-stream` each carried their own copy of the same literal — and
+ * `apiBaseUrl()` adds the version prefix the routes are served under.
  */
-const BASE_URL = apiOrigin(process.env.API_URL);
+const BASE_URL = apiBaseUrl(process.env.API_URL);
 
 /**
  * How long any one **server-side** call to the API may take before it is

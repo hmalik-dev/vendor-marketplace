@@ -1,5 +1,6 @@
 import { setUserRole } from './set-user-role.js';
-import { seedReferenceData } from '@vendor-marketplace/db';
+import { PGlite } from '@electric-sql/pglite';
+import { createListener, seedReferenceData } from '@vendor-marketplace/db';
 import {
   CURRENT_TERMS_VERSION,
   CURRENT_VENDOR_AGREEMENT_VERSION,
@@ -13,6 +14,7 @@ import type { ApiEnv } from '../config/env.js';
 import type { AppDatabase } from '../lib/database.js';
 import type { EmailGateway, EmailMessage } from '../lib/email.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
+import type { ListenFn } from '../lib/event-bus.js';
 import { publicUrlFor, type ObjectStorage } from '../lib/storage.js';
 import {
   paymentIntentIdempotencyKey,
@@ -50,7 +52,7 @@ import type { Clock } from '../plugins/clock.js';
 
 /** A store that treats every operator as freshly confirmed; see `enforceStepUp`. */
 class AlwaysFreshStepUpStore extends StepUpStore {
-  override isFresh(): boolean {
+  override async isFresh(): Promise<boolean> {
     return true;
   }
 }
@@ -133,6 +135,32 @@ export const TEST_ENV: ApiEnv = {
 export interface HarnessDatabase {
   db: AppDatabase;
   close: () => Promise<void>;
+}
+
+/**
+ * The `LISTEN` the server's event bus runs on, over whichever engine the suite
+ * gave it: PGlite's own, or — for the real Postgres the contention suites use
+ * — a connection of its own, ended when the server stops listening, so a
+ * suite that closes only the app leaves nothing reconnecting behind it.
+ */
+function listenerFor(database: HarnessDatabase): ListenFn {
+  if ('client' in database && database.client instanceof PGlite) {
+    const client = database.client;
+    return (channel, onPayload) => client.listen(channel, onPayload);
+  }
+
+  if ('url' in database && typeof database.url === 'string') {
+    const listener = createListener(database.url);
+    return async (channel, onPayload) => {
+      const stop = await listener.listen(channel, onPayload);
+      return async () => {
+        await stop();
+        await listener.close();
+      };
+    };
+  }
+
+  throw new Error('The harness cannot LISTEN on this database: give it PGlite or a Postgres url');
 }
 
 export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestDatabase> {
@@ -1170,6 +1198,7 @@ export async function createTestHarness(
     env: { ...TEST_ENV, ...options.env },
     db: database.db,
     storage,
+    realtimeListen: listenerFor(database),
     /*
      * The payout sweep never runs on a timer in a suite. It moves money against
      * whatever fixtures happen to be due, so a tick landing between an `inject`
@@ -1192,7 +1221,7 @@ export async function createTestHarness(
     platformBalanceIntervalMs: 0,
     // Alert send retries do not wait on a real timer in a suite.
     operatorAlertWait: async () => undefined,
-    ...(options.enforceStepUp ? {} : { stepUp: new AlwaysFreshStepUpStore() }),
+    ...(options.enforceStepUp ? {} : { stepUp: new AlwaysFreshStepUpStore(database.db) }),
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.requestTimeoutMs ? { requestTimeoutMs: options.requestTimeoutMs } : {}),
@@ -1346,7 +1375,7 @@ export async function acceptVendorAgreementAs(
 ): Promise<void> {
   const accepted = await harness.app.inject({
     method: 'POST',
-    url: '/vendor/agreement/accept',
+    url: '/v1/vendor/agreement/accept',
     headers: bearer(authUserId),
     payload: { version: CURRENT_VENDOR_AGREEMENT_VERSION },
   });
@@ -1380,7 +1409,7 @@ export async function signInAs(
 ): Promise<string> {
   const response = await harness.app.inject({
     method: 'GET',
-    url: '/users/me',
+    url: '/v1/users/me',
     headers: bearer(authUserId),
   });
 

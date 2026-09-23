@@ -88,7 +88,7 @@ describe('two payment intents succeeding for one request, on real connections', 
   /** An accepted request on its own event date, and the intent its checkout opened. */
   async function checkedOutRequest(): Promise<{ requestId: string; firstIntentId: string }> {
     daysOut += 1;
-    const request = await inject('POST', '/booking-requests', CUSTOMER, {
+    const request = await inject('POST', '/v1/booking-requests', CUSTOMER, {
       vendorId: vendorProfileId,
       packageId,
       eventDate: toDateString(addDays(START, daysOut)),
@@ -99,13 +99,13 @@ describe('two payment intents succeeding for one request, on real connections', 
     expect(request.statusCode).toBe(201);
     const requestId: string = request.json().id;
 
-    expect((await inject('POST', `/booking-requests/${requestId}/accept`, VENDOR)).statusCode).toBe(
-      200,
-    );
+    expect(
+      (await inject('POST', `/v1/booking-requests/${requestId}/accept`, VENDOR)).statusCode,
+    ).toBe(200);
 
     const checkout = await inject(
       'POST',
-      `/customer/booking-requests/${requestId}/checkout`,
+      `/v1/customer/booking-requests/${requestId}/checkout`,
       CUSTOMER,
     );
     expect(checkout.statusCode).toBe(200);
@@ -178,7 +178,7 @@ describe('two payment intents succeeding for one request, on real connections', 
       .where(eq(categories.slug, 'photography'))
       .limit(1);
 
-    const profile = await inject('POST', '/vendor/profile', VENDOR, {
+    const profile = await inject('POST', '/v1/vendor/profile', VENDOR, {
       businessName: 'Sunlit Studio',
       categoryIds: [photography!.id],
       city: 'Austin',
@@ -188,7 +188,7 @@ describe('two payment intents succeeding for one request, on real connections', 
     expect(profile.statusCode).toBe(201);
     vendorProfileId = profile.json().id;
 
-    const servicePackage = await inject('POST', '/vendor/packages', VENDOR, {
+    const servicePackage = await inject('POST', '/v1/vendor/packages', VENDOR, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: PRICE_CENTS,
@@ -205,7 +205,7 @@ describe('two payment intents succeeding for one request, on real connections', 
 
     expect(
       (
-        await inject('POST', '/vendor/agreement/accept', VENDOR, {
+        await inject('POST', '/v1/vendor/agreement/accept', VENDOR, {
           version: CURRENT_VENDOR_AGREEMENT_VERSION,
         })
       ).statusCode,

@@ -64,7 +64,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
   async function issueTicket(): Promise<string> {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/events/stream-ticket',
+      url: '/v1/events/stream-ticket',
       headers: bearer(CUSTOMER),
     });
 
@@ -76,7 +76,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
   it('issues a ticket to an authenticated caller', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/events/stream-ticket',
+      url: '/v1/events/stream-ticket',
       headers: bearer(CUSTOMER),
     });
 
@@ -101,7 +101,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
   it('refuses to issue one to an anonymous caller', async () => {
     const response = await harness.app.inject({
       method: 'POST',
-      url: '/events/stream-ticket',
+      url: '/v1/events/stream-ticket',
     });
 
     expect(response.statusCode).toBe(401);
@@ -116,14 +116,14 @@ describe('the event stream authenticates with a ticket, not the session', () => 
   it('no longer accepts a session token in the URL', async () => {
     const response = await harness.app.inject({
       method: 'GET',
-      url: `/events/stream?token=${encodeURIComponent('token-' + CUSTOMER)}`,
+      url: `/v1/events/stream?token=${encodeURIComponent('token-' + CUSTOMER)}`,
     });
 
     expect(response.statusCode).toBe(401);
   });
 
   it('refuses a stream with no ticket at all', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/events/stream' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/events/stream' });
 
     expect(response.statusCode).toBe(401);
     expect(response.json().error).toBe('UNAUTHORIZED');
@@ -132,7 +132,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
   it('refuses a ticket that was never issued', async () => {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/events/stream?ticket=not-a-real-ticket',
+      url: '/v1/events/stream?ticket=not-a-real-ticket',
     });
 
     expect(response.statusCode).toBe(401);
@@ -149,7 +149,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
 
     // The stream never ends, so the connection is abandoned rather than
     // awaited — spending the ticket is what this asserts, not the body.
-    void harness.app.inject({ method: 'GET', url: `/events/stream?ticket=${ticket}` });
+    void harness.app.inject({ method: 'GET', url: `/v1/events/stream?ticket=${ticket}` });
     /*
      * Waits for the ticket to actually be spent rather than assuming it
      * happens within one macrotask. Any hook ahead of the handler that awaits
@@ -160,7 +160,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
 
     const replay = await harness.app.inject({
       method: 'GET',
-      url: `/events/stream?ticket=${ticket}`,
+      url: `/v1/events/stream?ticket=${ticket}`,
     });
 
     expect(replay.statusCode).toBe(401);
@@ -183,7 +183,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
     const subscribe = vi.spyOn(harness.app.events, 'subscribe');
     const ticket = await issueTicket();
 
-    void harness.app.inject({ method: 'GET', url: `/events/stream?ticket=${ticket}` });
+    void harness.app.inject({ method: 'GET', url: `/v1/events/stream?ticket=${ticket}` });
     await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1));
 
     const [subscribedId] = subscribe.mock.calls[0] ?? [];
@@ -213,7 +213,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
 
     const response = await harness.app.inject({
       method: 'GET',
-      url: `/events/stream?ticket=${ticket}`,
+      url: `/v1/events/stream?ticket=${ticket}`,
     });
 
     try {
@@ -238,7 +238,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
 
     const response = await harness.app.inject({
       method: 'GET',
-      url: `/events/stream?ticket=${ticket}`,
+      url: `/v1/events/stream?ticket=${ticket}`,
     });
 
     try {
@@ -263,7 +263,7 @@ describe('the event stream authenticates with a ticket, not the session', () => 
     // Provisioned through a guarded route, the way `issueTicket` does the customer.
     await harness.app.inject({
       method: 'POST',
-      url: '/events/stream-ticket',
+      url: '/v1/events/stream-ticket',
       headers: bearer('user_admin_stream'),
     });
     await setUserRole(harness.database.db, 'admin', eq(users.authUserId, 'user_admin_stream'));
@@ -276,12 +276,12 @@ describe('the event stream authenticates with a ticket, not the session', () => 
     // Earlier tests in this file abandoned their streams open, so this one is not alone.
     const before = harness.app.events.countFor(row!.id);
 
-    const stream = harness.app.inject({ method: 'GET', url: `/events/stream?ticket=${ticket}` });
+    const stream = harness.app.inject({ method: 'GET', url: `/v1/events/stream?ticket=${ticket}` });
     await vi.waitFor(() => expect(harness.app.events.countFor(row!.id)).toBe(before + 1));
 
     const ban = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/users/${row!.id}/ban`,
+      url: `/v1/admin/users/${row!.id}/ban`,
       headers: bearer('user_admin_stream'),
     });
     expect(ban.statusCode).toBe(200);
@@ -324,18 +324,18 @@ describe('no URL the API logs carries a credential', () => {
    * page load actually makes, including the stream itself.
    */
   it('writes no JWT-shaped value for an authenticated session', async () => {
-    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
+    await harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(CUSTOMER) });
 
     const issued = await harness.app.inject({
       method: 'POST',
-      url: '/events/stream-ticket',
+      url: '/v1/events/stream-ticket',
       headers: bearer(CUSTOMER),
     });
     expect(issued.statusCode).toBe(200);
 
     void harness.app.inject({
       method: 'GET',
-      url: `/events/stream?ticket=${issued.json().ticket}`,
+      url: `/v1/events/stream?ticket=${issued.json().ticket}`,
     });
     await new Promise((resolve) => setImmediate(resolve));
 
@@ -351,7 +351,7 @@ describe('no URL the API logs carries a credential', () => {
   it('redacts a query value even when a credential reaches a URL again', async () => {
     await harness.app.inject({
       method: 'GET',
-      url: '/events/stream?token=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4In0.signature',
+      url: '/v1/events/stream?token=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ4In0.signature',
     });
 
     const logs = captured.join('');
@@ -360,7 +360,10 @@ describe('no URL the API logs carries a credential', () => {
   });
 
   it('still logs the path and parameter names, so the log stays readable', async () => {
-    await harness.app.inject({ method: 'GET', url: '/vendors?category=photography&city=Austin' });
+    await harness.app.inject({
+      method: 'GET',
+      url: '/v1/vendors?category=photography&city=Austin',
+    });
 
     const logs = captured.join('');
     expect(logs).toContain('/vendors?category=[redacted]&city=[redacted]');

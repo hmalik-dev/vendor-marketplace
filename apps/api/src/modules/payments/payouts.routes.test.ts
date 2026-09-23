@@ -118,7 +118,7 @@ describe('payouts', () => {
     actor: string | null,
     message = REPORT,
   ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
-    return inject('POST', '/support/messages', actor, {
+    return inject('POST', '/v1/support/messages', actor, {
       topic: 'booking-or-payment',
       message,
       bookingId,
@@ -161,7 +161,7 @@ describe('payouts', () => {
 
   /** A published, payout-ready vendor with one package. */
   async function createVendor(): Promise<{ vendorId: string; packageId: string }> {
-    const profile = await inject('POST', '/vendor/profile', VENDOR, {
+    const profile = await inject('POST', '/v1/vendor/profile', VENDOR, {
       businessName: 'Sunlit Studio',
       categoryIds: [photographyId],
       city: 'Austin',
@@ -171,7 +171,7 @@ describe('payouts', () => {
     expect(profile.statusCode).toBe(201);
     const vendorId: string = profile.json().id;
 
-    const created = await inject('POST', '/vendor/packages', VENDOR, {
+    const created = await inject('POST', '/v1/vendor/packages', VENDOR, {
       name: 'Full day coverage',
       description: 'Six hours of coverage with two photographers on site.',
       priceCents: PRICE_CENTS,
@@ -192,7 +192,7 @@ describe('payouts', () => {
      * correctly refuses. Accepted through the real route rather than inserted,
      * because that is how a vendor reaches this state.
      */
-    const accepted = await inject('POST', '/vendor/agreement/accept', VENDOR, {
+    const accepted = await inject('POST', '/v1/vendor/agreement/accept', VENDOR, {
       version: CURRENT_VENDOR_AGREEMENT_VERSION,
     });
     expect(accepted.statusCode).toBe(200);
@@ -204,7 +204,7 @@ describe('payouts', () => {
   async function paidBooking(): Promise<typeof bookings.$inferSelect> {
     const { vendorId, packageId } = await createVendor();
 
-    const request = await inject('POST', '/booking-requests', CUSTOMER, {
+    const request = await inject('POST', '/v1/booking-requests', CUSTOMER, {
       vendorId,
       packageId,
       eventDate: EVENT_DATE,
@@ -215,13 +215,13 @@ describe('payouts', () => {
     expect(request.statusCode).toBe(201);
     const requestId: string = request.json().id;
 
-    expect((await inject('POST', `/booking-requests/${requestId}/accept`, VENDOR)).statusCode).toBe(
-      200,
-    );
+    expect(
+      (await inject('POST', `/v1/booking-requests/${requestId}/accept`, VENDOR)).statusCode,
+    ).toBe(200);
 
     const checkout = await inject(
       'POST',
-      `/customer/booking-requests/${requestId}/checkout`,
+      `/v1/customer/booking-requests/${requestId}/checkout`,
       CUSTOMER,
     );
     expect(checkout.statusCode).toBe(200);
@@ -290,7 +290,7 @@ describe('payouts', () => {
    */
   /** Returns the operator's own id, which #434's action rows are keyed by. */
   async function signInAsAdmin(): Promise<string> {
-    expect((await inject('GET', '/users/me', ADMIN)).statusCode).toBe(200);
+    expect((await inject('GET', '/v1/users/me', ADMIN)).statusCode).toBe(200);
     await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
 
     const rows = await harness.database.db
@@ -441,7 +441,7 @@ describe('payouts', () => {
       await harness.flushEmail();
       expect(operatorMail()).toEqual([]);
 
-      const retried = await inject('PUT', `/admin/bookings/${paid.id}/payout/retry`, ADMIN);
+      const retried = await inject('PUT', `/v1/admin/bookings/${paid.id}/payout/retry`, ADMIN);
       await harness.flushEmail();
 
       expect(retried.statusCode).toBe(200);
@@ -482,7 +482,12 @@ describe('payouts', () => {
 
     it('refuses a cancelled booking, and says the sweep owns the residual', async () => {
       const paid = await paidBooking();
-      const cancelled = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      const cancelled = await inject(
+        'PUT',
+        `/v1/customer/bookings/${paid.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
       expect(cancelled.statusCode).toBe(200);
       clockNow = AFTER_RELEASE;
 
@@ -585,9 +590,9 @@ describe('payouts', () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
 
-      expect((await inject('PUT', `/vendor/bookings/${paid.id}/complete`, VENDOR)).statusCode).toBe(
-        200,
-      );
+      expect(
+        (await inject('PUT', `/v1/vendor/bookings/${paid.id}/complete`, VENDOR)).statusCode,
+      ).toBe(200);
       expect((await currentBooking()).status).toBe('completed');
 
       expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
@@ -598,7 +603,7 @@ describe('payouts', () => {
     it('releases a completed booking on the same date as any other', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
-      await inject('PUT', `/vendor/bookings/${paid.id}/complete`, VENDOR);
+      await inject('PUT', `/v1/vendor/bookings/${paid.id}/complete`, VENDOR);
 
       clockNow = AFTER_RELEASE;
       expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
@@ -853,7 +858,7 @@ describe('payouts', () => {
       await report(paid.id, CUSTOMER);
       await signInAsAdmin();
 
-      const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+      const resolved = await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, {
         outcome: 'customer',
       });
 
@@ -871,7 +876,12 @@ describe('payouts', () => {
       const orphan = await orphanedTransfer(paid.requestId);
       clockNow = addDays(START, 28);
 
-      const cancelled = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      const cancelled = await inject(
+        'PUT',
+        `/v1/customer/bookings/${paid.id}/cancel`,
+        CUSTOMER,
+        {},
+      );
       expect(cancelled.statusCode).toBe(200);
       clockNow = AFTER_RELEASE;
 
@@ -938,7 +948,7 @@ describe('payouts', () => {
 
     it('never touches a cancelled booking', async () => {
       const paid = await paidBooking();
-      await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
       clockNow = AFTER_RELEASE;
 
       expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
@@ -1168,7 +1178,7 @@ describe('payouts', () => {
       clockNow = AFTER_RELEASE;
 
       await signInAsAdmin();
-      const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+      const resolved = await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, {
         outcome: 'vendor',
       });
 
@@ -1190,11 +1200,11 @@ describe('payouts', () => {
     it('restores a completed booking to completed, not to confirmed', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
-      await inject('PUT', `/vendor/bookings/${paid.id}/complete`, VENDOR);
+      await inject('PUT', `/v1/vendor/bookings/${paid.id}/complete`, VENDOR);
       await report(paid.id, CUSTOMER);
 
       await signInAsAdmin();
-      const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+      const resolved = await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, {
         outcome: 'vendor',
       });
 
@@ -1209,7 +1219,7 @@ describe('payouts', () => {
       clockNow = AFTER_RELEASE;
 
       await signInAsAdmin();
-      const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+      const resolved = await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, {
         outcome: 'customer',
       });
 
@@ -1244,7 +1254,7 @@ describe('payouts', () => {
       const paid = await paidBooking();
 
       await signInAsAdmin();
-      const response = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+      const response = await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, {
         outcome: 'vendor',
       });
 
@@ -1270,7 +1280,7 @@ describe('payouts', () => {
       clockNow = AFTER_RELEASE;
 
       const actorId = await signInAsAdmin();
-      const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+      const resolved = await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, {
         outcome: 'customer',
       });
 
@@ -1303,7 +1313,7 @@ describe('payouts', () => {
       await report(paid.id, CUSTOMER);
 
       await signInAsAdmin();
-      const resolved = await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, {
+      const resolved = await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, {
         outcome: 'vendor',
       });
 
@@ -1355,7 +1365,7 @@ describe('payouts', () => {
       clockNow = JUST_AFTER_EVENT;
       await report(paid.id, CUSTOMER);
 
-      const response = await inject('PUT', `/vendor/bookings/${paid.id}/complete`, VENDOR);
+      const response = await inject('PUT', `/v1/vendor/bookings/${paid.id}/complete`, VENDOR);
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toBe(
@@ -1488,7 +1498,7 @@ describe('payouts', () => {
 
       /* The operator settles it, and the customer reports again. */
       expect(
-        (await inject('PUT', `/admin/bookings/${paid.id}/dispute`, ADMIN, { outcome: 'vendor' }))
+        (await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, { outcome: 'vendor' }))
           .statusCode,
       ).toBe(200);
       expect((await report(paid.id, CUSTOMER, 'The second report.')).statusCode).toBe(200);
@@ -1594,7 +1604,7 @@ describe('payouts', () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
 
-      const response = await inject('POST', '/support/messages', null, {
+      const response = await inject('POST', '/v1/support/messages', null, {
         topic: 'booking-or-payment',
         email: 'stranger@example.com',
         message: REPORT,
@@ -1618,7 +1628,7 @@ describe('payouts', () => {
       it('answers the customer with the booking, and the release column', async () => {
         const paid = await paidBooking();
 
-        const response = await inject('GET', `/customer/bookings/${paid.id}`, CUSTOMER);
+        const response = await inject('GET', `/v1/customer/bookings/${paid.id}`, CUSTOMER);
 
         expect(response.statusCode).toBe(200);
         expect(response.json()).toMatchObject({
@@ -1639,7 +1649,7 @@ describe('payouts', () => {
       it('reports the release once the sweep has actually moved the money', async () => {
         const released = await releasedBooking();
 
-        const response = await inject('GET', `/customer/bookings/${released.id}`, CUSTOMER);
+        const response = await inject('GET', `/v1/customer/bookings/${released.id}`, CUSTOMER);
 
         expect(response.statusCode).toBe(200);
         expect(response.json().payoutReleasedAt).not.toBeNull();
@@ -1651,7 +1661,7 @@ describe('payouts', () => {
       ])('answers 404 to %s', async (_who, actor) => {
         const paid = await paidBooking();
 
-        expect((await inject('GET', `/customer/bookings/${paid.id}`, actor())).statusCode).toBe(
+        expect((await inject('GET', `/v1/customer/bookings/${paid.id}`, actor())).statusCode).toBe(
           404,
         );
       });
@@ -1659,7 +1669,9 @@ describe('payouts', () => {
       it('answers 401 to a signed-out visitor', async () => {
         const paid = await paidBooking();
 
-        expect((await inject('GET', `/customer/bookings/${paid.id}`, null)).statusCode).toBe(401);
+        expect((await inject('GET', `/v1/customer/bookings/${paid.id}`, null)).statusCode).toBe(
+          401,
+        );
       });
     });
 
@@ -1691,7 +1703,7 @@ describe('payouts', () => {
 
       const response = await inject(
         'PUT',
-        `/customer/bookings/${released.id}/cancel`,
+        `/v1/customer/bookings/${released.id}/cancel`,
         CUSTOMER,
         {},
       );
@@ -1708,7 +1720,7 @@ describe('payouts', () => {
       const paid = await paidBooking();
 
       expect(
-        (await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {})).statusCode,
+        (await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {})).statusCode,
       ).toBe(200);
 
       expect(harness.stripe.refunds).toHaveLength(1);
@@ -1733,7 +1745,7 @@ describe('payouts', () => {
       // Inside the cutoff (36 hours out) and still future in every zone.
       clockNow = addDays(new Date(`${EVENT_DATE}T12:00:00Z`), -2);
 
-      const response = await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      const response = await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
       expect(response.statusCode).toBe(200);
       expect(response.json().refundCents).toBe(PRICE_CENTS / 2);
@@ -1754,7 +1766,7 @@ describe('payouts', () => {
     it('owes the vendor nothing after a full refund', async () => {
       const paid = await paidBooking();
 
-      await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
       expect((await currentBooking()).vendorPayoutCents).toBe(0);
 
@@ -1767,7 +1779,7 @@ describe('payouts', () => {
     it('records the amount that moved on the late-cancellation tier', async () => {
       const paid = await paidBooking();
       clockNow = addDays(new Date(`${EVENT_DATE}T12:00:00Z`), -2);
-      await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
       expect((await currentBooking()).refundAmountCents).toBe(PRICE_CENTS / 2);
     });
@@ -1778,7 +1790,7 @@ describe('payouts', () => {
      */
     it('does not name a reversal to the vendor for a booking never paid out', async () => {
       const paid = await paidBooking();
-      await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
+      await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {});
 
       const rows = await harness.database.db
         .select()
@@ -1798,7 +1810,7 @@ describe('payouts', () => {
     it('names the stored amount and the release date the sweep will pay on', async () => {
       await paidBooking();
 
-      const response = await inject('GET', '/vendor/dashboard', VENDOR);
+      const response = await inject('GET', '/v1/vendor/dashboard', VENDOR);
 
       expect(response.statusCode).toBe(200);
       const { next, pendingCents } = response.json().payouts;
@@ -1835,7 +1847,7 @@ describe('payouts', () => {
       clockNow = JUST_AFTER_EVENT;
       await report(paid.id, CUSTOMER);
 
-      const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
+      const { payouts } = (await inject('GET', '/v1/vendor/dashboard', VENDOR)).json();
 
       expect(payouts.heldCents).toBe(EXPECTED_PAYOUT_CENTS);
       expect(payouts.heldCount).toBe(1);
@@ -1852,9 +1864,9 @@ describe('payouts', () => {
     it('still names a completed booking whose payout has not gone out', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
-      await inject('PUT', `/vendor/bookings/${paid.id}/complete`, VENDOR);
+      await inject('PUT', `/v1/vendor/bookings/${paid.id}/complete`, VENDOR);
 
-      expect((await inject('GET', '/vendor/dashboard', VENDOR)).json().payouts).toMatchObject({
+      expect((await inject('GET', '/v1/vendor/dashboard', VENDOR)).json().payouts).toMatchObject({
         pendingCents: EXPECTED_PAYOUT_CENTS,
         pendingCount: 1,
         heldCents: 0,
@@ -1864,7 +1876,7 @@ describe('payouts', () => {
     it('names nothing once the payout has gone out', async () => {
       await releasedBooking();
 
-      const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
+      const { payouts } = (await inject('GET', '/v1/vendor/dashboard', VENDOR)).json();
       expect(payouts.next).toBeNull();
       expect(payouts.pendingCents).toBe(0);
     });
@@ -1883,7 +1895,7 @@ describe('payouts', () => {
       const paid = await paidBooking();
       clockNow = addDays(new Date(`${EVENT_DATE}T12:00:00Z`), -2);
       expect(
-        (await inject('PUT', `/customer/bookings/${paid.id}/cancel`, CUSTOMER, {})).statusCode,
+        (await inject('PUT', `/v1/customer/bookings/${paid.id}/cancel`, CUSTOMER, {})).statusCode,
       ).toBe(200);
       clockNow = AFTER_RELEASE;
 
@@ -1939,7 +1951,7 @@ describe('payouts', () => {
       const cancelled = await lateCancelledBooking();
       await openChargebackCase(cancelled.id);
 
-      const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
+      const { payouts } = (await inject('GET', '/v1/vendor/dashboard', VENDOR)).json();
 
       expect(payouts.heldCents).toBe(RETAINED_CENTS);
       expect(payouts.heldCount).toBe(1);
@@ -1950,7 +1962,7 @@ describe('payouts', () => {
     it('still pays an uncontested cancelled residual and reports it pending', async () => {
       await lateCancelledBooking();
 
-      const { payouts } = (await inject('GET', '/vendor/dashboard', VENDOR)).json();
+      const { payouts } = (await inject('GET', '/v1/vendor/dashboard', VENDOR)).json();
       expect(payouts.pendingCents).toBe(RETAINED_CENTS);
       expect(payouts.heldCents).toBe(0);
     });

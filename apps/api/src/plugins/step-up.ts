@@ -15,7 +15,7 @@ export interface StepUpPluginOptions {
 /** Decorates the instance with the store every irreversible admin route asks. */
 export const stepUpPlugin = fp<StepUpPluginOptions>(
   async (app, options) => {
-    app.decorate('stepUp', options.store ?? new StepUpStore());
+    app.decorate('stepUp', options.store ?? new StepUpStore(app.db));
   },
-  { name: 'step-up' },
+  { name: 'step-up', dependencies: ['database'] },
 );

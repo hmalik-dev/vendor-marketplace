@@ -47,7 +47,7 @@ describe('the admin action log', () => {
   async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
@@ -68,7 +68,7 @@ describe('the admin action log', () => {
   async function createVendorProfile(): Promise<{ profileId: string; userId: string }> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -201,7 +201,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -225,12 +225,12 @@ describe('the admin action log', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/unban`,
+        url: `/v1/admin/users/${vendor.userId}/unban`,
         headers: bearer(ADMIN),
       });
 
@@ -250,7 +250,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${reviewId}`,
+        url: `/v1/admin/reviews/${reviewId}`,
         headers: bearer(ADMIN),
       });
 
@@ -275,7 +275,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tags/${tagId}`,
+        url: `/v1/admin/tags/${tagId}`,
         headers: bearer(ADMIN),
         payload: { name: 'Soya Free' },
       });
@@ -306,7 +306,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tags/${created[0]!.id}`,
+        url: `/v1/admin/tags/${created[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { name: 'Soy Free' },
       });
@@ -333,7 +333,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${suggestionId}`,
+        url: `/v1/admin/tag-suggestions/${suggestionId}`,
         headers: bearer(ADMIN),
         payload: { action: 'approve' },
       });
@@ -364,7 +364,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${suggested[0]!.id}`,
+        url: `/v1/admin/tag-suggestions/${suggested[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { action: 'reject', adminNote: 'Already covered by the dietary vocabulary.' },
       });
@@ -395,7 +395,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${suggested[0]!.id}`,
+        url: `/v1/admin/tag-suggestions/${suggested[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { action: 'approve' },
       });
@@ -413,7 +413,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${actorId}/ban`,
+        url: `/v1/admin/users/${actorId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -428,12 +428,12 @@ describe('the admin action log', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
       const again = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -447,7 +447,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${missing}`,
+        url: `/v1/admin/reviews/${missing}`,
         headers: bearer(ADMIN),
       });
 
@@ -472,7 +472,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tags/${target[0]!.id}`,
+        url: `/v1/admin/tags/${target[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { name: 'Soy Free' },
       });
@@ -492,13 +492,13 @@ describe('the admin action log', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${suggested[0]!.id}`,
+        url: `/v1/admin/tag-suggestions/${suggested[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { action: 'reject', adminNote: 'Already covered.' },
       });
       const again = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${suggested[0]!.id}`,
+        url: `/v1/admin/tag-suggestions/${suggested[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { action: 'reject', adminNote: 'Already covered.' },
       });
@@ -529,12 +529,12 @@ describe('the admin action log', () => {
 
       await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${reviewId}`,
+        url: `/v1/admin/reviews/${reviewId}`,
         headers: bearer(ADMIN),
       });
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
@@ -544,7 +544,7 @@ describe('the admin action log', () => {
         .returning({ id: tagSuggestions.id });
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/tag-suggestions/${suggested[0]!.id}`,
+        url: `/v1/admin/tag-suggestions/${suggested[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { action: 'reject', adminNote: ADMIN_NOTE },
       });
@@ -566,7 +566,7 @@ describe('the admin action log', () => {
 
       const invited = await harness.app.inject({
         method: 'POST',
-        url: '/admin/vendor-invites',
+        url: '/v1/admin/vendor-invites',
         headers: bearer(ADMIN),
         payload: { email: 'invitee@example.com' },
       });
@@ -574,7 +574,7 @@ describe('the admin action log', () => {
 
       const revoked = await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/vendor-invites/${invited.json().id}`,
+        url: `/v1/admin/vendor-invites/${invited.json().id}`,
         headers: bearer(ADMIN),
       });
       expect(revoked.statusCode).toBe(204);
@@ -591,7 +591,7 @@ describe('the admin action log', () => {
         .returning({ id: vendorApplications.id });
       const declined = await harness.app.inject({
         method: 'PUT',
-        url: `/admin/vendor-applications/${applications[0]!.id}`,
+        url: `/v1/admin/vendor-applications/${applications[0]!.id}`,
         headers: bearer(ADMIN),
         payload: { decision: 'decline' },
       });
@@ -623,7 +623,7 @@ describe('the admin action log', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/activity?action=not-an-action&page=0',
+        url: '/v1/admin/activity?action=not-an-action&page=0',
         headers: bearer(CUSTOMER),
       });
 
@@ -639,18 +639,18 @@ describe('the admin action log', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/unban`,
+        url: `/v1/admin/users/${vendor.userId}/unban`,
         headers: bearer(ADMIN),
       });
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/activity',
+        url: '/v1/admin/activity',
         headers: bearer(ADMIN),
       });
 
@@ -678,18 +678,18 @@ describe('the admin action log', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/unban`,
+        url: `/v1/admin/users/${vendor.userId}/unban`,
         headers: bearer(OTHER_ADMIN),
       });
 
       const mine = await harness.app.inject({
         method: 'GET',
-        url: `/admin/activity?actor=${firstActor}`,
+        url: `/v1/admin/activity?actor=${firstActor}`,
         headers: bearer(ADMIN),
       });
 
@@ -699,7 +699,7 @@ describe('the admin action log', () => {
 
       const theirs = await harness.app.inject({
         method: 'GET',
-        url: `/admin/activity?actor=${secondActor}`,
+        url: `/v1/admin/activity?actor=${secondActor}`,
         headers: bearer(ADMIN),
       });
 
@@ -723,18 +723,18 @@ describe('the admin action log', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
       await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${reviewId}`,
+        url: `/v1/admin/reviews/${reviewId}`,
         headers: bearer(ADMIN),
       });
 
       const onTheAccount = await harness.app.inject({
         method: 'GET',
-        url: `/admin/activity?subject=${vendor.userId}`,
+        url: `/v1/admin/activity?subject=${vendor.userId}`,
         headers: bearer(ADMIN),
       });
 
@@ -747,7 +747,7 @@ describe('the admin action log', () => {
 
       const onTheReview = await harness.app.inject({
         method: 'GET',
-        url: `/admin/activity?subject=${reviewId}`,
+        url: `/v1/admin/activity?subject=${reviewId}`,
         headers: bearer(ADMIN),
       });
 
@@ -765,13 +765,13 @@ describe('the admin action log', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
 
       const none = await harness.app.inject({
         method: 'GET',
-        url: '/admin/activity?action=dispute_resolved',
+        url: '/v1/admin/activity?action=dispute_resolved',
         headers: bearer(ADMIN),
       });
 
@@ -789,18 +789,18 @@ describe('the admin action log', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
       await harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${reviewId}`,
+        url: `/v1/admin/reviews/${reviewId}`,
         headers: bearer(ADMIN),
       });
 
       const reviewsOnly = await harness.app.inject({
         method: 'GET',
-        url: '/admin/activity?subjectType=review',
+        url: '/v1/admin/activity?subjectType=review',
         headers: bearer(ADMIN),
       });
 
@@ -814,7 +814,7 @@ describe('the admin action log', () => {
 
       const empty = await harness.app.inject({
         method: 'GET',
-        url: '/admin/activity?subjectType=booking',
+        url: '/v1/admin/activity?subjectType=booking',
         headers: bearer(ADMIN),
       });
 
@@ -853,7 +853,7 @@ describe('the admin action log', () => {
       const read = async (range: string) => {
         const response = await harness.app.inject({
           method: 'GET',
-          url: `/admin/activity?range=${range}`,
+          url: `/v1/admin/activity?range=${range}`,
           headers: bearer(ADMIN),
         });
         expect(response.statusCode).toBe(200);
@@ -870,7 +870,7 @@ describe('the admin action log', () => {
 
       const refused = await harness.app.inject({
         method: 'GET',
-        url: '/admin/activity?range=90d',
+        url: '/v1/admin/activity?range=90d',
         headers: bearer(ADMIN),
       });
       expect(refused.statusCode).toBe(400);
@@ -885,18 +885,18 @@ describe('the admin action log', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/ban`,
+        url: `/v1/admin/users/${vendor.userId}/ban`,
         headers: bearer(ADMIN),
       });
       await harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendor.userId}/unban`,
+        url: `/v1/admin/users/${vendor.userId}/unban`,
         headers: bearer(ADMIN),
       });
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/activity/actors',
+        url: '/v1/admin/activity/actors',
         headers: bearer(ADMIN),
       });
 
@@ -906,7 +906,7 @@ describe('the admin action log', () => {
 
       const refused = await harness.app.inject({
         method: 'GET',
-        url: '/admin/activity/actors',
+        url: '/v1/admin/activity/actors',
         headers: bearer(VENDOR),
       });
       expect(refused.statusCode).toBe(403);
@@ -972,7 +972,7 @@ describe('a failed action write', () => {
     }
 
     for (const who of [ADMIN, CUSTOMER, VENDOR]) {
-      await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(who) });
+      await harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(who) });
     }
     await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
 
@@ -983,7 +983,7 @@ describe('a failed action write', () => {
       .limit(1);
     await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -1060,7 +1060,7 @@ describe('a failed action write', () => {
     const response = await withActionLogMissing(() =>
       harness.app.inject({
         method: 'DELETE',
-        url: `/admin/reviews/${reviewId}`,
+        url: `/v1/admin/reviews/${reviewId}`,
         headers: bearer(ADMIN),
       }),
     );
@@ -1084,7 +1084,7 @@ describe('a failed action write', () => {
     const response = await withActionLogMissing(() =>
       harness.app.inject({
         method: 'PUT',
-        url: `/admin/users/${vendorUserId}/ban`,
+        url: `/v1/admin/users/${vendorUserId}/ban`,
         headers: bearer(ADMIN),
       }),
     );
@@ -1102,7 +1102,7 @@ describe('a failed action write', () => {
   it('records the ban once the table is reachable', async () => {
     const response = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/users/${vendorUserId}/ban`,
+      url: `/v1/admin/users/${vendorUserId}/ban`,
       headers: bearer(ADMIN),
     });
 

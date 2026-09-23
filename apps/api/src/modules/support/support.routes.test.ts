@@ -70,7 +70,7 @@ describe('POST /support/messages', () => {
   it('takes a signed-out message with an email address and hands back a reference', async () => {
     const result = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       payload: { topic: 'something-else', email: 'visitor@example.com', message: MESSAGE },
     });
@@ -111,7 +111,7 @@ describe('POST /support/messages', () => {
   it('refuses a signed-out message with no email address, naming the field', async () => {
     const result = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       payload: { topic: 'something-else', message: MESSAGE },
     });
@@ -128,7 +128,7 @@ describe('POST /support/messages', () => {
   it('answers a signed-in sender at their account address, ignoring any they supply', async () => {
     const result = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       headers: bearer(CUSTOMER),
       payload: {
@@ -161,7 +161,7 @@ describe('POST /support/messages', () => {
    * keeps answering at the stored address.
    */
   it('still answers a signed-in sender whose address is diverged at the stored address', async () => {
-    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
+    await harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(CUSTOMER) });
     await harness.database.db
       .update(users)
       .set({ pendingEmail: 'alan.new@example.com', emailSyncFailedAt: new Date() })
@@ -170,7 +170,7 @@ describe('POST /support/messages', () => {
     try {
       const result = await harness.app.inject({
         method: 'POST',
-        url: '/support/messages',
+        url: '/v1/support/messages',
         ...fromANewVisitor(),
         headers: bearer(CUSTOMER),
         payload: { topic: 'booking-or-payment', message: MESSAGE },
@@ -192,7 +192,7 @@ describe('POST /support/messages', () => {
   it('returns the address the answer goes to in the receipt', async () => {
     const result = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       headers: bearer(CUSTOMER),
       payload: { topic: 'something-else', email: 'attacker@example.com', message: MESSAGE },
@@ -210,13 +210,13 @@ describe('POST /support/messages', () => {
     ['a suspended account', { isBanned: true }],
     ['a retired account', { deletedAt: new Date('2026-06-01T00:00:00.000Z') }],
   ])('takes a message from %s, as a visitor, and writes the case', async (_label, lock) => {
-    await harness.app.inject({ method: 'GET', url: '/users/me', headers: bearer(CUSTOMER) });
+    await harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(CUSTOMER) });
     await harness.database.db.update(users).set(lock).where(eq(users.authUserId, CUSTOMER));
 
     try {
       const result = await harness.app.inject({
         method: 'POST',
-        url: '/support/messages',
+        url: '/v1/support/messages',
         ...fromANewVisitor(),
         headers: bearer(CUSTOMER),
         payload: { topic: 'something-else', email: 'locked@example.com', message: MESSAGE },
@@ -245,7 +245,7 @@ describe('POST /support/messages', () => {
   it('carries the error digest, route and timestamp into the report', async () => {
     const result = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       payload: {
         topic: 'something-broke',
@@ -267,7 +267,7 @@ describe('POST /support/messages', () => {
     for (const topic of SUPPORT_TOPICS) {
       const result = await harness.app.inject({
         method: 'POST',
-        url: '/support/messages',
+        url: '/v1/support/messages',
         ...fromANewVisitor(),
         payload: { topic, email: 'visitor@example.com', message: MESSAGE },
       });
@@ -280,7 +280,7 @@ describe('POST /support/messages', () => {
   it('refuses a topic outside the five', async () => {
     const result = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       payload: { topic: 'refund-me-now', email: 'visitor@example.com', message: MESSAGE },
     });
@@ -296,7 +296,7 @@ describe('POST /support/messages', () => {
 
     const accepted = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       payload: { topic: 'something-else', email: 'visitor@example.com', message: longest },
     });
@@ -305,7 +305,7 @@ describe('POST /support/messages', () => {
 
     const refused = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       payload: { topic: 'something-else', email: 'visitor@example.com', message: `${longest}a` },
     });
@@ -315,7 +315,7 @@ describe('POST /support/messages', () => {
   it('refuses an empty message', async () => {
     const result = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       payload: { topic: 'something-else', email: 'visitor@example.com', message: '   ' },
     });
@@ -335,7 +335,7 @@ describe('POST /support/messages', () => {
     const send = async (): Promise<LightMyRequestResponse> =>
       harness.app.inject({
         method: 'POST',
-        url: '/support/messages',
+        url: '/v1/support/messages',
         ...caller,
         payload: { topic: 'something-else', email: 'visitor@example.com', message: MESSAGE },
       });
@@ -352,7 +352,7 @@ describe('POST /support/messages', () => {
   it('refuses an error route that is not a same-origin path', async () => {
     const result = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       payload: {
         topic: 'something-broke',
@@ -377,7 +377,7 @@ describe('POST /support/messages', () => {
     async (route) => {
       const result = await harness.app.inject({
         method: 'POST',
-        url: '/support/messages',
+        url: '/v1/support/messages',
         ...fromANewVisitor(),
         payload: {
           topic: 'something-broke',
@@ -437,7 +437,7 @@ describe('POST /support/messages, against a transport that refuses', () => {
   it('still issues a reference, and names transport rather than the input', async () => {
     const result = await harness.app.inject({
       method: 'POST',
-      url: '/support/messages',
+      url: '/v1/support/messages',
       ...fromANewVisitor(),
       payload: { topic: 'something-broke', email: 'visitor@example.com', message: MESSAGE },
     });
@@ -483,7 +483,7 @@ describe('POST /support/messages behind Railway', () => {
       const send = async (realIp: string): Promise<number> => {
         const result = await harness.app.inject({
           method: 'POST',
-          url: '/support/messages',
+          url: '/v1/support/messages',
           remoteAddress: '10.250.0.7',
           headers: { 'x-real-ip': realIp },
           payload: { topic: 'something-else', email: 'visitor@example.com', message: MESSAGE },

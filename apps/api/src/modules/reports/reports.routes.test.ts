@@ -82,7 +82,7 @@ describe('reporting and message visibility (#436)', () => {
   async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
@@ -109,7 +109,7 @@ describe('reporting and message visibility (#436)', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -217,7 +217,7 @@ describe('reporting and message visibility (#436)', () => {
   ) {
     return harness.app.inject({
       method: 'POST',
-      url: '/reports',
+      url: '/v1/reports',
       ...(authUserId ? { headers: bearer(authUserId) } : {}),
       payload: { subjectType, subjectId, reason: 'off-platform-payment', ...overrides },
     });
@@ -261,7 +261,7 @@ describe('reporting and message visibility (#436)', () => {
 
     return harness.app.inject({
       method: 'GET',
-      url: `/admin/conversations/${conversationId}/messages?caseId=${grant}`,
+      url: `/v1/admin/conversations/${conversationId}/messages?caseId=${grant}`,
       headers: bearer(authUserId),
     });
   }
@@ -485,7 +485,7 @@ describe('reporting and message visibility (#436)', () => {
 
     const listed = await harness.app.inject({
       method: 'GET',
-      url: '/admin/cases',
+      url: '/v1/admin/cases',
       headers: bearer(ADMIN),
     });
     expect(listed.statusCode).toBe(200);
@@ -689,7 +689,7 @@ describe('reporting and message visibility (#436)', () => {
     const [row] = await casesFor(fixture.conversationId);
     const closed = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/cases/${row!.id}/resolve`,
+      url: `/v1/admin/cases/${row!.id}/resolve`,
       headers: bearer(ADMIN),
     });
     expect(closed.statusCode).toBe(200);
@@ -921,7 +921,7 @@ describe('reporting and message visibility (#436)', () => {
     for (const method of ['POST', 'PUT', 'PATCH', 'DELETE'] as const) {
       const response = await harness.app.inject({
         method,
-        url: `/admin/conversations/${fixture.conversationId}/messages`,
+        url: `/v1/admin/conversations/${fixture.conversationId}/messages`,
         headers: bearer(ADMIN),
         payload: { content: 'This is the platform speaking.' },
       });

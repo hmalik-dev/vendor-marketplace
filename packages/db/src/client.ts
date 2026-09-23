@@ -9,6 +9,8 @@ export interface CreateDatabaseOptions {
   connectionString?: string;
   /** Connection pool size. Scripts should use 1. */
   max?: number;
+  /** Session settings sent as startup parameters, so every connection — and every reconnect — has them. */
+  connection?: Record<string, string>;
 }
 
 /**
@@ -26,6 +28,9 @@ export function createDatabase(options: CreateDatabaseOptions = {}): {
     throw new Error('DATABASE_URL is not set. Run `pnpm preflight` for the fix.');
   }
 
-  const client = postgres(connectionString, { max: options.max ?? 10 });
+  const client = postgres(connectionString, {
+    max: options.max ?? 10,
+    ...(options.connection ? { connection: options.connection } : {}),
+  });
   return { db: drizzle(client, { schema }), client };
 }

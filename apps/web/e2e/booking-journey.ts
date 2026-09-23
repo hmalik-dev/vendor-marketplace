@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { expect, type Page } from '@playwright/test';
 import { parse } from 'dotenv';
 
+import { API_VERSION_PREFIX } from '@vendor-marketplace/shared';
 import { resolveE2EApiUrl } from './base-url.js';
 import { AUTH_DIR, pageToken } from './fixtures.js';
 import { E2E_VENDOR_SLUG } from './fixtures-data.js';
@@ -27,7 +28,8 @@ export const TEST_CARDS = {
   declined: '4000000000000002',
 } as const;
 
-const API_URL = resolveE2EApiUrl();
+// The API's routes, under their version prefix (VEN-650).
+const API_URL = `${resolveE2EApiUrl()}${API_VERSION_PREFIX}`;
 
 /** The seeded package's occasion slug; any event type is accepted for a package request. */
 const EVENT_TYPE = 'wedding';

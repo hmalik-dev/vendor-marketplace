@@ -1,4 +1,4 @@
-import { createDatabase } from '@vendor-marketplace/db';
+import { createDatabase, createListener } from '@vendor-marketplace/db';
 import { bootEnv } from './config/boot.js';
 import { createS3Storage } from './lib/storage.js';
 import { buildServer } from './server.js';
@@ -10,8 +10,14 @@ async function main(): Promise<void> {
   // handler). Real process variables still win over anything in the file.
   const env = bootEnv();
   const { db, client } = createDatabase();
+  const listener = createListener(env.DATABASE_URL);
 
-  const app = await buildServer({ env, db, storage: createS3Storage(env) });
+  const app = await buildServer({
+    env,
+    db,
+    storage: createS3Storage(env),
+    realtimeListen: listener.listen,
+  });
 
   /*
    * A deploy stops the old container by sending SIGTERM and waiting. Closing
@@ -31,7 +37,7 @@ async function main(): Promise<void> {
 
     try {
       await app.close();
-      await client.end();
+      await Promise.all([client.end(), listener.close()]);
       process.exit(0);
     } catch (error) {
       app.log.error({ err: error }, 'Shutdown did not complete cleanly');

@@ -41,7 +41,7 @@ describe('GET /places', () => {
     body.map((row) => `${row.city}, ${row.state}`);
 
   async function places(query: string): Promise<{ city: string; state: string }[]> {
-    const response = await harness.app.inject({ method: 'GET', url: `/places?q=${query}` });
+    const response = await harness.app.inject({ method: 'GET', url: `/v1/places?q=${query}` });
     expect(response.statusCode).toBe(200);
     return response.json();
   }
@@ -105,7 +105,7 @@ describe('GET /places', () => {
   });
 
   it('refuses a request with no query rather than answering with everything', async () => {
-    for (const url of ['/places', '/places?q=']) {
+    for (const url of ['/v1/places', '/v1/places?q=']) {
       const response = await harness.app.inject({ method: 'GET', url });
       expect(response.statusCode).toBe(400);
     }
@@ -116,7 +116,7 @@ describe('GET /places', () => {
   });
 
   it('is reachable unauthenticated, since the search bar is on every public page', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/places?q=austin' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/places?q=austin' });
 
     expect(response.statusCode).toBe(200);
   });

@@ -26,6 +26,8 @@ export interface PostgresTestDatabase {
   db: PostgresJsDatabase<typeof schema>;
   /** The throwaway database's name, so a suite can assert it was cleaned up. */
   name: string;
+  /** Its connection string, for a suite that has to open a connection of its own shape. */
+  url: string;
   /**
    * A single-connection handle whose every connection runs as `role`, the way a
    * deployed API's would (a startup `role`, so the owner's privileges, and its
@@ -150,6 +152,7 @@ export async function createPostgresTestDatabase(
   return {
     db,
     name,
+    url: target.toString(),
     connectAs,
     close: async () => {
       if (closed) {

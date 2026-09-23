@@ -58,7 +58,7 @@ describe('operator alerts', () => {
   async function signIn(authUserId: string): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
@@ -84,7 +84,7 @@ describe('operator alerts', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -389,7 +389,7 @@ describe('operator alerts', () => {
 
     const filed = await harness.app.inject({
       method: 'POST',
-      url: '/reports',
+      url: '/v1/reports',
       headers: bearer(CUSTOMER),
       payload: {
         subjectType: 'vendor_profile',
@@ -417,7 +417,7 @@ describe('operator alerts', () => {
 
     const cancelled = await harness.app.inject({
       method: 'PUT',
-      url: `/customer/bookings/${fixture.bookingId}/cancel`,
+      url: `/v1/customer/bookings/${fixture.bookingId}/cancel`,
       headers: bearer(CUSTOMER),
       payload: {},
     });
@@ -436,7 +436,7 @@ describe('operator alerts', () => {
 
     const cancelled = await harness.app.inject({
       method: 'PUT',
-      url: `/customer/bookings/${fixture.bookingId}/cancel`,
+      url: `/v1/customer/bookings/${fixture.bookingId}/cancel`,
       headers: bearer(CUSTOMER),
       payload: {},
     });
@@ -552,7 +552,7 @@ describe('operator alerts', () => {
 
     const banned = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/users/${vendorUserId}/ban`,
+      url: `/v1/admin/users/${vendorUserId}/ban`,
       headers: bearer(ADMIN),
     });
     expect(banned.statusCode).toBe(200);
@@ -570,7 +570,7 @@ describe('operator alerts', () => {
     await deliverDispute('dp_alert_pii', fixture.paymentIntentId);
     await harness.app.inject({
       method: 'POST',
-      url: '/reports',
+      url: '/v1/reports',
       headers: bearer(CUSTOMER),
       payload: {
         subjectType: 'vendor_profile',

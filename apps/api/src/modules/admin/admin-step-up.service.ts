@@ -45,7 +45,7 @@ export async function startStepUp(
     throw notFound('No account with that id');
   }
 
-  const { code, expiresAt } = deps.store.issue(adminId, now);
+  const { code, expiresAt } = await deps.store.issue(adminId, now);
   const minutes = STEP_UP_CODE_TTL_MS / 60_000;
   const text = [
     `Your ${BRAND_NAME} confirmation code is ${code}.`,
@@ -64,7 +64,7 @@ export async function startStepUp(
       idempotencyKey: randomUUID(),
     });
   } catch (error) {
-    deps.store.cancelChallenge(adminId);
+    await deps.store.cancelChallenge(adminId);
     deps.log.error({ err: error, adminId }, 'The step-up code could not be emailed');
     throw new AppError(
       503,
@@ -77,13 +77,13 @@ export async function startStepUp(
 }
 
 /** Spends the emailed code. A wrong, spent or expired one is the same refusal. */
-export function completeStepUp(
+export async function completeStepUp(
   store: StepUpStore,
   adminId: string,
   code: string,
   now: Date,
-): AdminStepUpResult {
-  const expiresAt = store.verify(adminId, code, now);
+): Promise<AdminStepUpResult> {
+  const expiresAt = await store.verify(adminId, code, now);
 
   if (!expiresAt) {
     throw new AppError(
@@ -111,8 +111,8 @@ export interface CeilingDeps {
  *
  * The audit row lands **last** on a ban, after the refunds (a closure's rides its
  * retirement, first), so the count alone would let concurrent requests all read "under" — `inFlight` closes that
- * within an instance. Across replicas it can overshoot by the concurrency, and
- * the step-up store already makes this a single-instance control.
+ * within an instance. Across replicas it can overshoot by the concurrency of
+ * one operator's own requests, which the hourly bound tolerates.
  *
  * The refusal is checked before the work, so no refund is issued for it.
  */

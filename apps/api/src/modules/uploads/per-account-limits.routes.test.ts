@@ -62,7 +62,7 @@ describe('per-account limits (VEN-484)', () => {
     });
     const me = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(me.statusCode).toBe(200);
@@ -106,7 +106,7 @@ describe('per-account limits (VEN-484)', () => {
       users: [VENDOR_ONE, VENDOR_TWO],
       request: (authUserId: string) => ({
         method: 'POST' as const,
-        url: '/upload/image?prefix=portfolio',
+        url: '/v1/upload/image?prefix=portfolio',
         headers: { ...MULTIPART_HEADERS, ...bearer(authUserId) },
         payload: unreadableImage(),
       }),
@@ -118,7 +118,7 @@ describe('per-account limits (VEN-484)', () => {
       users: [CUSTOMER_ONE, CUSTOMER_TWO],
       request: (authUserId: string) => ({
         method: 'POST' as const,
-        url: `/conversations/${randomUUID()}/messages`,
+        url: `/v1/conversations/${randomUUID()}/messages`,
         headers: bearer(authUserId),
         payload: { content: 'Hello' },
       }),
@@ -130,7 +130,7 @@ describe('per-account limits (VEN-484)', () => {
       users: [CUSTOMER_ONE, CUSTOMER_TWO],
       request: (authUserId: string) => ({
         method: 'POST' as const,
-        url: '/conversations',
+        url: '/v1/conversations',
         headers: bearer(authUserId),
         payload: { vendorSlug: 'nobody-here' },
       }),
@@ -142,7 +142,7 @@ describe('per-account limits (VEN-484)', () => {
       users: [CUSTOMER_ONE, CUSTOMER_TWO],
       request: (authUserId: string) => ({
         method: 'POST' as const,
-        url: '/booking-requests',
+        url: '/v1/booking-requests',
         headers: bearer(authUserId),
         payload: {
           vendorId: randomUUID(),
@@ -204,7 +204,7 @@ describe('the per-account upload cap (VEN-484)', () => {
   it('refuses at the cap, counts images not thumbnails, and frees a slot on delete', async () => {
     const me = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(VENDOR),
     });
     const id: string = me.json().id;
@@ -219,7 +219,7 @@ describe('the per-account upload cap (VEN-484)', () => {
 
       return harness.app.inject({
         method: 'POST',
-        url: '/upload/image?prefix=portfolio',
+        url: '/v1/upload/image?prefix=portfolio',
         headers: { ...MULTIPART_HEADERS, ...bearer(VENDOR) },
         payload: Buffer.concat([
           Buffer.from(

@@ -4,8 +4,8 @@ import {
   notificationItemSchema,
   openConversationSchema,
   openedConversationSchema,
-  paginatedSchema,
-  paginationQuerySchema,
+  cursorPageSchema,
+  cursorQuerySchema,
   sendMessageResultSchema,
   sendMessageSchema,
   streamTicketSchema,
@@ -125,7 +125,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
       if (created) {
         return reply
           .status(201)
-          .header('location', `/conversations/${conversation.id}`)
+          .header('location', `${app.prefix}/conversations/${conversation.id}`)
           .send(conversation);
       }
 
@@ -139,8 +139,8 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
       onRequest: requireAuthBeforeValidation,
       schema: {
         params: conversationParamsSchema,
-        querystring: paginationQuerySchema,
-        response: { 200: paginatedSchema(sendMessageResultSchema) },
+        querystring: cursorQuerySchema,
+        response: { 200: cursorPageSchema(sendMessageResultSchema) },
       },
     },
     async (request) =>
@@ -148,7 +148,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
         app.db,
         authenticated(request.auth),
         request.params.conversationId,
-        request.query.page,
+        request.query.before,
         MESSAGE_PAGE_SIZE,
       ),
   );
@@ -200,15 +200,15 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
     {
       onRequest: requireAuthBeforeValidation,
       schema: {
-        querystring: paginationQuerySchema,
-        response: { 200: paginatedSchema(notificationItemSchema) },
+        querystring: cursorQuerySchema,
+        response: { 200: cursorPageSchema(notificationItemSchema) },
       },
     },
     async (request) =>
       listNotifications(
         app.db,
         authenticated(request.auth),
-        request.query.page,
+        request.query.before,
         NOTIFICATION_PAGE_SIZE,
       ),
   );

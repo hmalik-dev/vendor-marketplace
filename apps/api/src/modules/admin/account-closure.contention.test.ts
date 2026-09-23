@@ -125,7 +125,7 @@ describe('closing an account while a payment confirms its booking', () => {
       .limit(1);
     const profile = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -150,7 +150,7 @@ describe('closing an account while a payment confirms its booking', () => {
 
     const closing = harness!.app.inject({
       method: 'POST',
-      url: `/admin/users/${customerId}/close`,
+      url: `/v1/admin/users/${customerId}/close`,
       headers: bearer(ADMIN),
     });
 

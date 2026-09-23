@@ -36,7 +36,7 @@ describe('admin vendor detail', () => {
   async function seedVendor(): Promise<{ id: string; userId: string; packageIds: string[] }> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Fernbank Studio',
@@ -53,7 +53,7 @@ describe('admin vendor detail', () => {
     for (const priceCents of [90_000, 150_000]) {
       const pkg = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(VENDOR),
         payload: {
           name: `Package ${priceCents}`,
@@ -81,7 +81,7 @@ describe('admin vendor detail', () => {
   function readDetail(vendorId: string, authUserId: string | null = ADMIN) {
     return harness.app.inject({
       method: 'GET',
-      url: `/admin/vendors/${vendorId}`,
+      url: `/v1/admin/vendors/${vendorId}`,
       headers: authUserId ? bearer(authUserId) : {},
     });
   }
@@ -192,7 +192,7 @@ describe('admin vendor detail', () => {
     const vendor = await seedVendor();
     const photo = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/portfolio',
+      url: '/v1/vendor/portfolio',
       headers: bearer(VENDOR),
       payload: {
         imageUrl: `portfolio/${vendorUserId}/4242.webp`,
@@ -234,7 +234,7 @@ describe('admin vendor detail', () => {
 
     const deactivated = await harness.app.inject({
       method: 'PUT',
-      url: `/admin/packages/${vendor.packageIds[0]}/active`,
+      url: `/v1/admin/packages/${vendor.packageIds[0]}/active`,
       headers: bearer(ADMIN),
       payload: { isActive: false },
     });
@@ -242,7 +242,7 @@ describe('admin vendor detail', () => {
 
     const removed = await harness.app.inject({
       method: 'DELETE',
-      url: `/admin/portfolio-items/${photoId}`,
+      url: `/v1/admin/portfolio-items/${photoId}`,
       headers: bearer(ADMIN),
     });
     expect(removed.statusCode).toBe(204);

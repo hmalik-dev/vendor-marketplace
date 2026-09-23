@@ -69,7 +69,7 @@ describe('admin payout health', () => {
   async function signIn(authUserId: string, promoteToAdmin = false): Promise<string> {
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/users/me',
+      url: '/v1/users/me',
       headers: bearer(authUserId),
     });
     expect(response.statusCode).toBe(200);
@@ -91,7 +91,7 @@ describe('admin payout health', () => {
   async function createVendorProfile(): Promise<string> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Sunlit Studio',
@@ -177,7 +177,7 @@ describe('admin payout health', () => {
   async function payments(query = ''): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
     return harness.app.inject({
       method: 'GET',
-      url: `/admin/payments${query}`,
+      url: `/v1/admin/payments${query}`,
       headers: bearer(ADMIN),
     });
   }
@@ -188,7 +188,7 @@ describe('admin payout health', () => {
   ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
     return harness.app.inject({
       method: 'PUT',
-      url: `/admin/bookings/${bookingId}/payout/retry`,
+      url: `/v1/admin/bookings/${bookingId}/payout/retry`,
       headers: bearer(actor),
     });
   }
@@ -364,7 +364,7 @@ describe('admin payout health', () => {
         });
         const detail = await harness.app.inject({
           method: 'GET',
-          url: `/admin/bookings/${bookingId}`,
+          url: `/v1/admin/bookings/${bookingId}`,
           headers: bearer(ADMIN),
         });
         expect(detail.json()).toMatchObject({ payoutStranded: true });
@@ -717,7 +717,7 @@ describe('admin payout health', () => {
 
       const created = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(UNAGREED_VENDOR),
         payload: {
           businessName: 'Moonlit Studio',
@@ -814,7 +814,7 @@ describe('admin payout health', () => {
     }> {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/metrics',
+        url: '/v1/admin/metrics',
         headers: bearer(ADMIN),
       });
       expect(response.statusCode).toBe(200);
@@ -892,7 +892,7 @@ describe('admin payout health', () => {
     async function vendorRow(): Promise<Record<string, unknown>> {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/admin/vendors',
+        url: '/v1/admin/vendors',
         headers: bearer(ADMIN),
       });
       expect(response.statusCode).toBe(200);

@@ -66,7 +66,7 @@ describe('a query failure that reaches the logger unguarded', () => {
 
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(VENDOR),
       payload: {
         businessName: 'Serialiser Studio',

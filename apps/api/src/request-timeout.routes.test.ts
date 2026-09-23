@@ -8,7 +8,7 @@ import { bearer, createTestHarness, type TestHarness } from './testing/test-serv
 
 const VENDOR = 'user_vendor_timeout';
 const BOUNDARY = '----timeoutboundary';
-const UPLOAD_PATH = '/upload/image?prefix=vendor-profile';
+const UPLOAD_PATH = '/v1/upload/image?prefix=vendor-profile';
 const REQUEST_TIMEOUT_MS = 2_000;
 /** Over the timeout plus scheduling slack, so a pass is never a race. */
 const CUT_OFF_WITHIN_MS = REQUEST_TIMEOUT_MS + 1_500;
@@ -70,7 +70,7 @@ describe('the request timeout', () => {
   ])('does not close an open event stream opened by %s', async (_name, extraHeader) => {
     const issued = await harness.app.inject({
       method: 'POST',
-      url: '/events/stream-ticket',
+      url: '/v1/events/stream-ticket',
       headers: bearer(VENDOR),
     });
     const ticket: string = issued.json().ticket;
@@ -86,7 +86,7 @@ describe('the request timeout', () => {
     });
     socket.on('error', () => {});
     socket.write(
-      `GET /events/stream?ticket=${ticket} HTTP/1.1\r\nHost: localhost\r\n${extraHeader}\r\n`,
+      `GET /v1/events/stream?ticket=${ticket} HTTP/1.1\r\nHost: localhost\r\n${extraHeader}\r\n`,
     );
 
     await vi.waitFor(() => expect(received).toContain('text/event-stream'));

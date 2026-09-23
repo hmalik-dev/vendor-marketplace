@@ -35,7 +35,7 @@ describe('GET /vendors/:slug', () => {
   async function seedVendor(spec: VendorSpec): Promise<{ id: string; slug: string }> {
     const created = await harness.app.inject({
       method: 'POST',
-      url: '/vendor/profile',
+      url: '/v1/vendor/profile',
       headers: bearer(spec.user),
       payload: {
         businessName: spec.businessName,
@@ -52,7 +52,7 @@ describe('GET /vendors/:slug', () => {
     for (const priceCents of spec.prices ?? [150_000]) {
       const pkg = await harness.app.inject({
         method: 'POST',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer(spec.user),
         payload: {
           name: `Package ${priceCents}`,
@@ -67,7 +67,7 @@ describe('GET /vendors/:slug', () => {
       await acceptVendorAgreementAs(harness, spec.user);
       const published = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/profile',
+        url: '/v1/vendor/profile',
         headers: bearer(spec.user),
         payload: { isPublished: true },
       });
@@ -133,7 +133,7 @@ describe('GET /vendors/:slug', () => {
   it('returns the published profile a visitor asked for', async () => {
     const { slug } = await seedVendor({ user: 'vendor-a', businessName: 'Kessler and Co' });
 
-    const response = await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` });
+    const response = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}` });
 
     expect(response.statusCode).toBe(200);
     const profile = response.json();
@@ -154,7 +154,7 @@ describe('GET /vendors/:slug', () => {
     const [tag] = await harness.database.db.select().from(tags).where(eq(tags.isActive, true));
     await harness.database.db.insert(vendorTags).values({ vendorId: id, tagId: tag!.id });
 
-    const response = await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` });
+    const response = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}` });
 
     expect(response.statusCode).toBe(200);
     expect(response.json().tags).toEqual([
@@ -169,7 +169,9 @@ describe('GET /vendors/:slug', () => {
       prices: [400_000, 145_000, 250_000],
     });
 
-    const profile = (await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` })).json();
+    const profile = (
+      await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}` })
+    ).json();
 
     expect(profile.startingPriceCents).toBe(145_000);
     expect(profile.packages).toHaveLength(3);
@@ -187,7 +189,7 @@ describe('GET /vendors/:slug', () => {
       publish: false,
     });
 
-    const response = await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` });
+    const response = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}` });
 
     expect(response.statusCode).toBe(404);
   });
@@ -200,19 +202,19 @@ describe('GET /vendors/:slug', () => {
       .set({ isDeleted: true })
       .where(eq(vendorProfiles.id, id));
 
-    const response = await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` });
+    const response = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}` });
 
     expect(response.statusCode).toBe(404);
   });
 
   it('answers 404 for a slug that never existed', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/vendors/no-such-vendor' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/vendors/no-such-vendor' });
 
     expect(response.statusCode).toBe(404);
   });
 
   it('rejects a slug the column could not hold before it reaches the database', async () => {
-    const response = await harness.app.inject({ method: 'GET', url: '/vendors/Not%20A%20Slug' });
+    const response = await harness.app.inject({ method: 'GET', url: '/v1/vendors/Not%20A%20Slug' });
 
     expect(response.statusCode).toBe(400);
   });
@@ -225,7 +227,9 @@ describe('GET /vendors/:slug', () => {
   it('never exposes the private columns of a profile', async () => {
     const { slug } = await seedVendor({ user: 'vendor-e', businessName: 'Private Parts' });
 
-    const profile = (await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` })).json();
+    const profile = (
+      await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}` })
+    ).json();
 
     for (const key of [
       'userId',
@@ -243,7 +247,9 @@ describe('GET /vendors/:slug', () => {
   it('reports no completed events for a vendor who has taken no bookings', async () => {
     const { slug } = await seedVendor({ user: 'vendor-f', businessName: 'Brand New' });
 
-    const profile = (await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` })).json();
+    const profile = (
+      await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}` })
+    ).json();
 
     expect(profile.completedEventCount).toBe(0);
   });
@@ -261,7 +267,7 @@ describe('GET /vendors/:slug', () => {
 
       await harness.app.inject({
         method: 'POST',
-        url: '/vendor/packages',
+        url: '/v1/vendor/packages',
         headers: bearer('vendor-h'),
         payload: {
           name: 'Eight hour coverage',
@@ -271,7 +277,10 @@ describe('GET /vendors/:slug', () => {
         },
       });
 
-      const response = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
 
       expect(response.statusCode).toBe(200);
 
@@ -290,7 +299,10 @@ describe('GET /vendors/:slug', () => {
     it('still returns null for a package with no duration set', async () => {
       const vendor = await seedVendor({ user: 'vendor-i', businessName: 'No Duration Co' });
 
-      const response = await harness.app.inject({ method: 'GET', url: `/vendors/${vendor.slug}` });
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/${vendor.slug}`,
+      });
 
       expect(response.statusCode).toBe(200);
       expect(response.json().packages[0].durationHours).toBeNull();
@@ -303,7 +315,7 @@ describe('GET /vendors/:slug', () => {
 
       const blocked = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer('vendor-a'),
         payload: { entries: [{ date: futureDate(30), status: 'blocked' }] },
       });
@@ -311,7 +323,7 @@ describe('GET /vendors/:slug', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${slug}/availability`,
+        url: `/v1/vendors/${slug}/availability`,
       });
 
       expect(response.statusCode).toBe(200);
@@ -340,7 +352,7 @@ describe('GET /vendors/:slug', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${slug}/availability`,
+        url: `/v1/vendors/${slug}/availability`,
       });
 
       expect(response.statusCode).toBe(200);
@@ -361,7 +373,7 @@ describe('GET /vendors/:slug', () => {
 
       await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer('vendor-c'),
         payload: {
           entries: [{ date: futureDate(31), status: 'blocked', note: 'Sarah & Tom, deposit paid' }],
@@ -370,7 +382,7 @@ describe('GET /vendors/:slug', () => {
 
       const own = await harness.app.inject({
         method: 'GET',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer('vendor-c'),
       });
 
@@ -403,7 +415,7 @@ describe('GET /vendors/:slug', () => {
 
       const blocked = await harness.app.inject({
         method: 'PUT',
-        url: '/vendor/availability',
+        url: '/v1/vendor/availability',
         headers: bearer('vendor-yesterday'),
         payload: { entries: [{ date: futureDate(-1), status: 'blocked' }] },
       });
@@ -411,7 +423,7 @@ describe('GET /vendors/:slug', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${slug}/availability`,
+        url: `/v1/vendors/${slug}/availability`,
       });
 
       expect(response.statusCode).toBe(200);
@@ -435,7 +447,7 @@ describe('GET /vendors/:slug', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${slug}/availability`,
+        url: `/v1/vendors/${slug}/availability`,
       });
 
       expect(response.statusCode).toBe(200);
@@ -455,7 +467,7 @@ describe('GET /vendors/:slug', () => {
 
       const response = await harness.app.inject({
         method: 'GET',
-        url: `/vendors/${slug}/availability`,
+        url: `/v1/vendors/${slug}/availability`,
       });
 
       expect(response.statusCode).toBe(404);
@@ -464,7 +476,7 @@ describe('GET /vendors/:slug', () => {
     it('answers 404 for a slug that never existed', async () => {
       const response = await harness.app.inject({
         method: 'GET',
-        url: '/vendors/no-such-vendor/availability',
+        url: '/v1/vendors/no-such-vendor/availability',
       });
 
       expect(response.statusCode).toBe(404);
@@ -474,7 +486,7 @@ describe('GET /vendors/:slug', () => {
   it('is readable without a token, because discovery cannot need an account', async () => {
     const { slug } = await seedVendor({ user: 'vendor-g', businessName: 'Open House' });
 
-    const response = await harness.app.inject({ method: 'GET', url: `/vendors/${slug}` });
+    const response = await harness.app.inject({ method: 'GET', url: `/v1/vendors/${slug}` });
 
     expect(response.statusCode).toBe(200);
     expect(response.json().slug).toBe(slug);
