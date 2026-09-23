@@ -2,10 +2,21 @@ import type { Metadata } from 'next';
 import { permanentRedirect } from 'next/navigation';
 import { pageTitle } from '@vendor-marketplace/shared';
 import { SearchShell } from '@/components/search/search-shell';
+import { searchCanonicalPath, selfCanonical } from '@/lib/canonical';
 import { successorSearchPath, type SearchParams } from '@/lib/search-params';
 import { getActiveTags, getCategories } from '@/lib/vendor-data';
 
-export const metadata: Metadata = { title: pageTitle('Find a vendor') };
+/** Self-canonical, keeping only the category the sitemap lists (VEN-606). */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  return {
+    title: pageTitle('Find a vendor'),
+    ...selfCanonical(searchCanonicalPath(await searchParams)),
+  };
+}
 
 /**
  * Discovery is public and unauthenticated — requiring an account to look is how

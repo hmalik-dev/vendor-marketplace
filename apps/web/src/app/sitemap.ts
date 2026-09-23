@@ -6,7 +6,7 @@ import {
   vendorSearchResultSchema,
 } from '@vendor-marketplace/shared';
 import type { MetadataRoute } from 'next';
-import { siteOrigin } from '@/config/env';
+import { searchIndexed, siteOrigin } from '@/config/env';
 import { apiRequest } from '@/lib/api-client';
 
 /**
@@ -56,6 +56,11 @@ async function publishedVendorSlugs(): Promise<string[]> {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // A tier that must not be indexed names no URL to crawl (VEN-606).
+  if (!searchIndexed()) {
+    return [];
+  }
+
   const origin = siteOrigin();
 
   const entries: MetadataRoute.Sitemap = [

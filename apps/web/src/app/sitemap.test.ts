@@ -1,7 +1,10 @@
 import { CATEGORY_SEEDS } from '@vendor-marketplace/shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/config/env', () => ({ siteOrigin: () => 'https://orla.example.com' }));
+vi.mock('@/config/env', async (actual) => ({
+  ...(await actual<typeof import('@/config/env')>()),
+  siteOrigin: () => 'https://orla.example.com',
+}));
 
 const apiRequest = vi.fn();
 vi.mock('@/lib/api-client', () => ({ apiRequest: (p: string, o: unknown) => apiRequest(p, o) }));
@@ -18,8 +21,32 @@ function page(slugs: string[], total = slugs.length): unknown {
   };
 }
 
-describe('sitemap', () => {
-  beforeEach(() => apiRequest.mockReset());
+afterEach(() => vi.unstubAllEnvs());
+
+/* VEN-606: a non-production tier lists nothing, so it names no URL to crawl. */
+describe.each([
+  ['staging', 'staging'],
+  ['local', 'local'],
+  ['unset', undefined],
+])('sitemap on a %s tier', (_label, tier) => {
+  beforeEach(() => {
+    apiRequest.mockReset();
+    vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', tier);
+  });
+
+  it('is empty and never reads the vendor list', async () => {
+    apiRequest.mockResolvedValue(page(['june-harlow']));
+
+    expect(await sitemap()).toEqual([]);
+    expect(apiRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('sitemap in production', () => {
+  beforeEach(() => {
+    apiRequest.mockReset();
+    vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', 'production');
+  });
 
   it('lists one entry per published vendor, read from the API', async () => {
     apiRequest.mockResolvedValue(page(['june-harlow', 'kessler-co']));

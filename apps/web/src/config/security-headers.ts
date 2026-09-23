@@ -211,6 +211,11 @@ export interface SecurityHeaderOptions {
    * outlives the header.
    */
   https: boolean;
+  /**
+   * Whether this tier may be indexed (`searchIndexed`). Required rather than
+   * defaulted, so a caller that forgets it cannot open a tier to crawlers.
+   */
+  indexed: boolean;
 }
 
 /** The headers that are the same on every response. The CSP is per-request: see `middleware.ts`. */
@@ -252,6 +257,16 @@ export function securityHeaders(options: SecurityHeaderOptions): HeaderRule[] {
       // decision to take once the domain is settled, not with the first deploy.
       value: 'max-age=63072000; includeSubDomains',
     });
+  }
+
+  /*
+   * VEN-606: Vercel sends `x-robots-tag: noindex` on per-deployment URLs but
+   * not on a branch alias, so staging's stable address was indexable. Sent on
+   * every response, assets and API routes included, because a crawler can
+   * reach any of them.
+   */
+  if (!options.indexed) {
+    headers.push({ key: 'X-Robots-Tag', value: 'noindex, nofollow' });
   }
 
   return headers;

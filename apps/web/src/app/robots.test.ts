@@ -1,10 +1,33 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/config/env', () => ({ siteOrigin: () => 'https://orla.example.com' }));
+vi.mock('@/config/env', async (actual) => ({
+  ...(await actual<typeof import('@/config/env')>()),
+  siteOrigin: () => 'https://orla.example.com',
+}));
 
 const { default: robots } = await import('./robots');
 
-describe('robots', () => {
+afterEach(() => vi.unstubAllEnvs());
+
+/*
+ * VEN-606: staging answered `Allow: /` and advertised its sitemap, so a crawler
+ * that found the branch alias indexed a second copy of the marketplace. Only
+ * production may be indexed, and a tier nobody named is not production.
+ */
+describe.each([
+  ['staging', 'staging'],
+  ['local', 'local'],
+  ['unset', undefined],
+])('robots on a %s tier', (_label, tier) => {
+  beforeEach(() => vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', tier));
+
+  it('disallows everything and advertises no sitemap', () => {
+    expect(robots()).toEqual({ rules: [{ userAgent: '*', disallow: '/' }] });
+  });
+});
+
+describe('robots in production', () => {
+  beforeEach(() => vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', 'production'));
   afterEach(() => vi.resetModules());
 
   /*

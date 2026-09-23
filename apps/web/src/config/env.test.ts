@@ -1,6 +1,6 @@
 import { findVariable, registryKeys } from '@vendor-marketplace/shared/env';
-import { describe, expect, it } from 'vitest';
-import { assertWebEnv, servesOverTls, siteOrigin } from './env';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { assertWebEnv, searchIndexed, servesOverTls, siteOrigin } from './env';
 import {
   LOCAL_API_ORIGIN,
   LOCAL_WEB_ORIGIN,
@@ -228,6 +228,51 @@ function env(values: Record<string, string>): NodeJS.ProcessEnv {
 }
 
 describe('siteOrigin', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  /*
+   * VEN-606: staging's robots.txt named the staging host while its sitemap,
+   * canonicals and `og:url` named production. The build had staging's
+   * `WEB_URL`; the running deployment did not, and fell back to Vercel's
+   * production domain. `next.config.ts` now inlines the origin the build
+   * resolved as `SITE_ORIGIN`, and every later read returns it.
+   */
+  it("returns the build's origin at runtime, whatever the runtime environment says", () => {
+    expect(
+      siteOrigin(
+        env({
+          SITE_ORIGIN: 'https://staging.orla.example',
+          VERCEL_PROJECT_PRODUCTION_URL: 'project.vercel.app',
+        }),
+      ),
+    ).toBe('https://staging.orla.example');
+  });
+
+  it('resolves a staging build to the staging WEB_URL, not the production domain', () => {
+    expect(
+      siteOrigin(
+        env({
+          DEPLOY_ENV: 'staging',
+          WEB_URL: 'https://staging.orla.example',
+          VERCEL: '1',
+          VERCEL_PROJECT_PRODUCTION_URL: 'project.vercel.app',
+          VERCEL_URL: 'project-abc123.vercel.app',
+        }),
+      ),
+    ).toBe('https://staging.orla.example');
+  });
+
+  /*
+   * The inlining only works on the literal `process.env.SITE_ORIGIN`, so the
+   * default argument must read that expression rather than a key of a copy.
+   */
+  it('reads the inlined SITE_ORIGIN when called with no argument', () => {
+    vi.stubEnv('WEB_URL', 'https://runtime.orla.example');
+    vi.stubEnv('SITE_ORIGIN', 'https://staging.orla.example');
+
+    expect(siteOrigin()).toBe('https://staging.orla.example');
+  });
+
   it('uses an explicitly configured origin', () => {
     expect(siteOrigin(env({ WEB_URL: 'https://canonical.example' }))).toBe(
       'https://canonical.example',
@@ -394,5 +439,32 @@ describe('assertWebEnv Stripe mode', () => {
 
   it('refuses a deployed build with DEPLOY_ENV unset, naming it', () => {
     expect(() => assertWebEnv({ ...VALID, VERCEL: '1' })).toThrow(/DEPLOY_ENV is required/);
+  });
+});
+
+/*
+ * VEN-606: only production may be indexed, and a tier nobody named is not
+ * production — a missing value must mean noindex, never index.
+ */
+describe('searchIndexed', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('indexes production', () => {
+    expect(searchIndexed('production')).toBe(true);
+  });
+
+  it.each([['staging'], ['local'], [''], ['Production'], [' production'], [undefined]])(
+    'does not index %j',
+    (tier) => {
+      expect(searchIndexed(tier)).toBe(false);
+    },
+  );
+
+  it('reads the tier next.config.ts inlined when called with no argument', () => {
+    vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', 'production');
+    expect(searchIndexed()).toBe(true);
+
+    vi.stubEnv('NEXT_PUBLIC_DEPLOY_ENV', 'staging');
+    expect(searchIndexed()).toBe(false);
   });
 });

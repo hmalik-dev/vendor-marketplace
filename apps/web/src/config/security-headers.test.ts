@@ -22,7 +22,7 @@ function headerMap(options: Parameters<typeof securityHeaders>[0]): Record<strin
 describe('securityHeaders', () => {
   /* The acceptance check for #30 greps for exactly these four. */
   it('sends the four headers the launch gate checks for', () => {
-    const headers = headerMap({ https: true });
+    const headers = headerMap({ https: true, indexed: true });
 
     expect(headers['Strict-Transport-Security']).toBe('max-age=63072000; includeSubDomains');
     expect(headers['X-Content-Type-Options']).toBe('nosniff');
@@ -36,15 +36,19 @@ describe('securityHeaders', () => {
    * unreachable in that browser long after the mistake was fixed.
    */
   it('omits HSTS off HTTPS', () => {
-    expect(headerMap({ https: false })).not.toHaveProperty('Strict-Transport-Security');
+    expect(headerMap({ https: false, indexed: true })).not.toHaveProperty(
+      'Strict-Transport-Security',
+    );
   });
 
   it('never sends preload, which is an irreversible submission', () => {
-    expect(headerMap({ https: true })['Strict-Transport-Security']).not.toContain('preload');
+    expect(headerMap({ https: true, indexed: true })['Strict-Transport-Security']).not.toContain(
+      'preload',
+    );
   });
 
   it('denies the permissions nothing here uses', () => {
-    const policy = headerMap({ https: true })['Permissions-Policy'];
+    const policy = headerMap({ https: true, indexed: true })['Permissions-Policy'];
 
     for (const feature of ['camera', 'microphone', 'geolocation']) {
       expect(policy).toContain(`${feature}=()`);
@@ -58,7 +62,7 @@ describe('securityHeaders', () => {
    * Stripe's script origins, not only `self` (#396).
    */
   it('lets this page and the Stripe frame use the Payment Request API', () => {
-    const policy = headerMap({ https: true })['Permissions-Policy'];
+    const policy = headerMap({ https: true, indexed: true })['Permissions-Policy'];
 
     expect(policy).toContain('payment=(self "https://js.stripe.com" "https://*.js.stripe.com")');
     expect(policy).not.toContain('payment=()');
@@ -66,10 +70,25 @@ describe('securityHeaders', () => {
 
   /* The CSP needs a per-request nonce, so it is the middleware's, not a static header. */
   it('sends no CSP itself', () => {
-    const names = securityHeaders({ https: true }).map((rule) => rule.key);
+    const names = securityHeaders({ https: true, indexed: true }).map((rule) => rule.key);
 
     expect(names).not.toContain('Content-Security-Policy');
     expect(names).not.toContain('Content-Security-Policy-Report-Only');
+  });
+});
+
+/*
+ * VEN-606: Vercel adds `x-robots-tag: noindex` to per-deployment URLs but not
+ * to a branch alias, so staging's stable address was indexable. The header is
+ * this app's to send, on every response a non-production tier serves.
+ */
+describe('X-Robots-Tag', () => {
+  it('tells crawlers to neither index nor follow a non-production tier', () => {
+    expect(headerMap({ https: true, indexed: false })['X-Robots-Tag']).toBe('noindex, nofollow');
+  });
+
+  it('is absent in production, where the site is meant to be found', () => {
+    expect(headerMap({ https: true, indexed: true })).not.toHaveProperty('X-Robots-Tag');
   });
 });
 
