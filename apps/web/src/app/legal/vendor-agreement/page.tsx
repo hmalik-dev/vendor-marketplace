@@ -1,13 +1,14 @@
 import { LEGAL_PATHS, pageTitle } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import { LegalPage } from '@/components/legal/legal-page';
+import { selfCanonical } from '@/lib/canonical';
 import { vendorAgreementDocument } from '@/lib/legal-content';
 
 const document = vendorAgreementDocument();
 
 export const metadata: Metadata = {
   title: pageTitle(document.title),
-  alternates: { canonical: LEGAL_PATHS['vendor-agreement'] },
+  ...selfCanonical(LEGAL_PATHS['vendor-agreement']),
 };
 
 /**

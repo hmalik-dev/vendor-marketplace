@@ -4,6 +4,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { Suspense } from 'react';
 import { BRAND_DESCRIPTION, BRAND_NAME } from '@vendor-marketplace/shared';
 import { siteOrigin } from '@/config/env';
+import { SITE_OPEN_GRAPH } from '@/lib/canonical';
 import { analyticsEnabled } from '@/lib/analytics-enabled';
 import { getServerSession } from '@/lib/auth/server';
 import { ErrorReportingUser } from '@/components/errors/error-reporting-user';
@@ -57,14 +58,8 @@ export const metadata: Metadata = {
   */
   title: BRAND_NAME,
   description: BRAND_DESCRIPTION,
-  alternates: { canonical: '/' },
-  openGraph: {
-    type: 'website',
-    siteName: BRAND_NAME,
-    title: BRAND_NAME,
-    description: BRAND_DESCRIPTION,
-    url: '/',
-  },
+  // No canonical and no `og:url`: each page declares its own (VEN-606).
+  openGraph: SITE_OPEN_GRAPH,
   // `summary_large_image` is what turns the 1200x630 card into a full-width
   // preview rather than a thumbnail beside the text.
   twitter: { card: 'summary_large_image', title: BRAND_NAME, description: BRAND_DESCRIPTION },

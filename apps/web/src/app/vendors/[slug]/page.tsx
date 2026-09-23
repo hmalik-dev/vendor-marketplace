@@ -19,6 +19,7 @@ import { ProfileHeader } from '@/components/vendors/profile/profile-header';
 import { ProfileTabs } from '@/components/vendors/profile/profile-tabs';
 import { ReviewsPane } from '@/components/vendors/profile/reviews-pane';
 import { siteOrigin } from '@/config/env';
+import { SITE_OPEN_GRAPH } from '@/lib/canonical';
 import { readRoleForChrome } from '@/lib/current-user';
 import {
   getPublicVendorAvailability,
@@ -134,7 +135,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url: `/vendors/${vendor.slug}`,
       title: vendor.businessName,
       description,
-      ...(vendor.coverImageUrl ? { images: [{ url: vendor.coverImageUrl }] } : {}),
+      // No cover falls back to the site card rather than to no image at all.
+      images: vendor.coverImageUrl ? [{ url: vendor.coverImageUrl }] : SITE_OPEN_GRAPH.images,
     },
   };
 }

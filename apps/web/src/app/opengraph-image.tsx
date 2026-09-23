@@ -1,5 +1,6 @@
 import { BRAND_NAME, BRAND_TAGLINE } from '@vendor-marketplace/shared';
 import { ImageResponse } from 'next/og';
+import { SHARE_IMAGE_ALT, SHARE_IMAGE_SIZE } from '@/lib/canonical';
 import { shareCardFonts } from './_fonts/load';
 
 /**
@@ -12,9 +13,9 @@ import { shareCardFonts } from './_fonts/load';
  * stale PNG behind. No photography: the stock imagery on the landing page is
  * licensed for the site, and a card is a different surface.
  */
-export const size = { width: 1200, height: 630 };
+export const size = SHARE_IMAGE_SIZE;
 export const contentType = 'image/png';
-export const alt = `${BRAND_NAME} — ${BRAND_TAGLINE}`;
+export const alt = SHARE_IMAGE_ALT;
 
 /** The mark, at the ratios `02-brand-and-logo.md` defines it by. */
 const DIAMETER = 96;

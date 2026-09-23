@@ -1,11 +1,15 @@
-import { pageTitle } from '@vendor-marketplace/shared';
+import { LEGAL_PATHS, pageTitle } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import { LegalPage } from '@/components/legal/legal-page';
+import { selfCanonical } from '@/lib/canonical';
 import { legalDocument } from '@/lib/legal-content';
 
 const document = legalDocument('privacy');
 
-export const metadata: Metadata = { title: pageTitle(document.title) };
+export const metadata: Metadata = {
+  title: pageTitle(document.title),
+  ...selfCanonical(LEGAL_PATHS.privacy),
+};
 
 /**
  * Frame `31 Privacy Policy` — the same shell as `/terms`, one page-specific

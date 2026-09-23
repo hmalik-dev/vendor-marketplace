@@ -1,11 +1,15 @@
-import { pageTitle } from '@vendor-marketplace/shared';
+import { LEGAL_PATHS, pageTitle } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import { LegalPage } from '@/components/legal/legal-page';
+import { selfCanonical } from '@/lib/canonical';
 import { legalDocument } from '@/lib/legal-content';
 
 const document = legalDocument('cookies');
 
-export const metadata: Metadata = { title: pageTitle(document.title) };
+export const metadata: Metadata = {
+  title: pageTitle(document.title),
+  ...selfCanonical(LEGAL_PATHS.cookies),
+};
 
 /**
  * Frame `31 Cookie notice` — deliberately thin, and deliberately without a

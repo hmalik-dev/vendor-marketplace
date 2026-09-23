@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { siteOrigin } from '@/config/env';
+import { searchIndexed } from '@/config/indexing';
 
 /**
  * Everything a signed-in person sees is disallowed, and everything a visitor
@@ -25,6 +26,11 @@ const PRIVATE_PATHS = [
 ];
 
 export default function robots(): MetadataRoute.Robots {
+  // Outside production nothing is crawled and no sitemap is advertised (VEN-606).
+  if (!searchIndexed()) {
+    return { rules: [{ userAgent: '*', disallow: '/' }] };
+  }
+
   const origin = siteOrigin();
 
   return {

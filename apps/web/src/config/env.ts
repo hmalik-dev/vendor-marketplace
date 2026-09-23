@@ -109,8 +109,27 @@ function assertStripeMode(env: WebEnv, source: NodeJS.ProcessEnv): WebEnv {
  * value —
  * whether that value was defaulted or set by hand, because a localhost
  * canonical on a public origin is never what was meant.
+ *
+ * **The build's answer is the answer (VEN-606).** `next.config.ts` resolves
+ * this once and inlines it as `SITE_ORIGIN`, and every later call returns that.
+ * Staging built with its own `WEB_URL` and ran without it, so robots.txt named
+ * staging while the ISR sitemap, the canonicals and `og:url` fell back to
+ * Vercel's production domain. One resolution, at build, cannot disagree with
+ * itself.
  */
-export function siteOrigin(source: NodeJS.ProcessEnv = process.env): string {
+export function siteOrigin(
+  /*
+   * The literal `process.env.SITE_ORIGIN` is what Next inlines, so the default
+   * names it explicitly: a key read off a copy of `process.env` is not.
+   */
+  source: NodeJS.ProcessEnv = { ...process.env, SITE_ORIGIN: process.env.SITE_ORIGIN },
+): string {
+  const built = source.SITE_ORIGIN?.trim();
+
+  if (built) {
+    return built;
+  }
+
   const configured = (source.WEB_URL ?? '').split(',')[0]?.trim().replace(/\/+$/, '') ?? '';
   const deployed = deploymentPlatform(source)?.origin;
 

@@ -7,7 +7,7 @@
 - [The deployment gate fails open on an unnamed host](deployment-gate-detects-by-marker-and-fails-open.md) — no marker + no `NODE_ENV=production` sets the laptop value silently
 - [Credential fixtures assembled at runtime](credential-fixtures-assembled-at-runtime.md) — a PreToolUse hook blocks credential-shaped literals on any bash line
 - [.env.lane mode is not repaired on rewrite](lane-env-file-mode-not-repaired.md) — `mode` applies only on create; nothing asserts 0600
-- [TLS headers key on the build-time origin](tls-headers-key-on-build-time-origin.md) — `headers()` is baked at build; `deploymentOrigin` outranks WEB_URL
+- [TLS headers key on the build-time origin](tls-headers-key-on-build-time-origin.md) — `headers()` is baked at build; `deploymentOrigin` outranks WEB_URL; VEN-606 bakes `SITE_ORIGIN` too
 - [A new secret header has three registries](new-secret-header-has-three-registries.md) — pino `redact`, Sentry `CREDENTIAL_HEADER`, and a placeholder that must fail its own shape
 - [The Resend secret's absence is refusal](resend-webhook-absence-is-refusal.md) — optional on every target is correct; no route exists without a secret
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — never add script-src hosts; CSP_ENFORCE only turns enforcement on
