@@ -15,7 +15,8 @@ export interface SessionGenerationRoutesOptions {
  * timestamp this writes. Same trust model as `/internal/throttle` — only the
  * web tier may call it, proved with the same shared key, and it is a no-op
  * response either way so a caller that lost the race with the DB never turns
- * a completed sign-out into a visible failure.
+ * a completed sign-out into a visible failure. It also ends the user's open
+ * live streams on every instance: they were authorised by those tokens.
  */
 export const sessionGenerationRoutes: FastifyPluginAsyncZod<
   SessionGenerationRoutesOptions
@@ -32,7 +33,12 @@ export const sessionGenerationRoutes: FastifyPluginAsyncZod<
       },
     },
     async (request) => {
-      await invalidateSessionsFor(app.db, request.body.authUserId);
+      const userId = await invalidateSessionsFor(app.db, request.body.authUserId);
+
+      // Every token before now is dead, so every stream opened under one is too (VEN-670).
+      if (userId !== null) {
+        app.events.closeFor(userId);
+      }
 
       return { invalidated: true as const };
     },

@@ -76,10 +76,8 @@ describe('invalidateSessionsFor (VEN-628)', () => {
     expect(other?.sessionsInvalidatedAt).toBeNull();
   });
 
-  it('is a no-op for an auth subject with no row', async () => {
-    await expect(
-      invalidateSessionsFor(harness.database.db, 'no-such-subject'),
-    ).resolves.toBeUndefined();
+  it('is a no-op for an auth subject with no row, and names no account', async () => {
+    await expect(invalidateSessionsFor(harness.database.db, 'no-such-subject')).resolves.toBeNull();
   });
 });
 
