@@ -76,6 +76,22 @@ describe('the server-side deadline', () => {
     );
   });
 
+  // VEN-619: names the stalled request in `web.log`, which CI uploads on
+  // failure — before this, the only trace there was Next's own generic
+  // `[ResponseAborted: ]`.
+  it('logs the stalled request, with the query string dropped (VEN-619)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal('fetch', stalledFetch());
+
+    await expect(
+      apiRequest('/vendors?q=june+harlow', { schema: bodySchema }),
+    ).rejects.toBeInstanceOf(ApiTimeoutError);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('GET /vendors '));
+    expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining('june+harlow'));
+    errorSpy.mockRestore();
+  });
+
   it('is not an ApiClientError, so a timeout can never be read as a 404', async () => {
     vi.stubGlobal('fetch', stalledFetch());
 

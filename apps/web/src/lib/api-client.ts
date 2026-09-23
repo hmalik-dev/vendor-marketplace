@@ -244,8 +244,12 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
         // there: it names the stalled request in `web.log`, which CI uploads
         // on failure — before this, a stuck render's only trace there was
         // Next's own generic `[ResponseAborted: ]` (VEN-619).
+        //
+        // The query string is dropped: the API redacts it from its own logs
+        // (#215) because a search or filter value can carry what a customer
+        // typed, and this line must not reopen that on the web side.
         console.error(
-          `[api-timeout] ${method} ${path} did not answer within ${API_REQUEST_TIMEOUT_MS}ms`,
+          `[api-timeout] ${method} ${path.split('?')[0]} did not answer within ${API_REQUEST_TIMEOUT_MS}ms`,
         );
         throw new ApiTimeoutError(path, API_REQUEST_TIMEOUT_MS);
       }
