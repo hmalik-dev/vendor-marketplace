@@ -1,6 +1,7 @@
 import { createNeonAuth } from '@neondatabase/auth/next/server';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
+import { API_REQUEST_TIMEOUT_MS } from '@/lib/api-client';
 import { tokenExpiryMs } from './token-expiry';
 
 /**
@@ -41,10 +42,58 @@ export interface ServerSession {
 }
 
 /**
+ * Races `auth.getSession()`/`auth.token()` against {@link API_REQUEST_TIMEOUT_MS}
+ * and answers `{ data: null }` if it loses — the same shape the Neon SDK itself
+ * answers for "nobody is signed in", so a caller here needs no separate timeout
+ * case. The timer is cleared either way, so a fast upstream leaves nothing
+ * running past this call, and a rejection that isn't the timeout still
+ * propagates.
+ *
+ * The Neon Auth SDK's `getSession`/`token` take no `AbortSignal`, so this
+ * cannot cancel the underlying request the way `api-client.ts` cancels its own
+ * `fetch` — it only stops *this render* from waiting on it. A render that gave
+ * up while the upstream is still wedged is still the fix: without a deadline
+ * here, `/` and `/accept-terms` held an open connection until CI's own runner
+ * timeout ended the job (VEN-619).
+ *
+ * `label` is logged only on the timeout path, to `stderr` — which CI's
+ * `next start` redirects to `web.log`, uploaded by the `stack-logs` artifact
+ * step on failure. Before this, that log named nothing: a stuck render's only
+ * trace was Next's own `[ResponseAborted: ]`, printed once the platform ended
+ * the connection, with no hint of which upstream call it was still waiting on.
+ */
+function withDeadline<T>(
+  promise: Promise<{ data: T | null }>,
+  label: string,
+): Promise<{ data: T | null }> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      console.error(
+        `[auth-timeout] Neon Auth's ${label} did not answer within ${API_REQUEST_TIMEOUT_MS}ms`,
+      );
+      resolve({ data: null });
+    }, API_REQUEST_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
  * Reads the signed-in caller on the server, or `null`.
  *
  * Never throws for "nobody is signed in": the Neon SDK answers `{ data: null }`
  * for that, and every caller here treats it as the redirect-to-sign-in case.
+ * `withDeadline` answers the same shape when the call blows its deadline, so
+ * that case needs no separate handling here either — matching how a 429 from
+ * Neon Auth is already read as signed out below.
  * `cache()`d because the header, the footer and the page each ask in one render.
  */
 export const getServerSession = cache(
@@ -62,19 +111,22 @@ export const getServerSession = cache(
     }
 
     const auth = neonAuth();
-    const { data: session } = await auth.getSession();
 
-    if (!session?.user) {
+    const sessionResult = await withDeadline(auth.getSession(), 'getSession');
+
+    if (!sessionResult.data?.user) {
       return null;
     }
+    const { user } = sessionResult.data;
 
-    const { data } = await auth.token();
+    const tokenResult = await withDeadline(auth.token(), 'token');
 
-    if (!data?.token) {
+    if (!tokenResult.data?.token) {
       return null;
     }
+    const { token } = tokenResult.data;
 
-    const minted: ServerSession = { userId: session.user.id, token: data.token };
+    const minted: ServerSession = { userId: user.id, token };
     remember(cookieValue, minted);
 
     return minted;

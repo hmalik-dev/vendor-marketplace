@@ -29,6 +29,13 @@ sign-out the entry survives, keyed by the cookie the proxy just revoked, for up
 to the JWT's remaining life (~14 min). The `/api/auth/sign-out` proxy sees that
 cookie and is the one place that can evict it.
 
+**VEN-619 deadline (audited clean):** `withDeadline` folds a stalled
+`getSession`/`token` into `{data:null}` → signed out, the 429 precedent; it
+never reaches `remember()`, and every caller maps null to redirect/401/signed-out
+chrome. The web never authorizes on this read; the API re-verifies the token.
+The `[api-timeout]` line prints the path _with query_ (admin `?q=` holds a
+customer name/email), but `ApiTimeoutError.message` already carried it — not new.
+
 **How to apply:** any future cache in front of a session read is judged on its
 key, not its TTL — ask what a caller can put in the key and who else can hold
 the same one. Related: [[neon-auth-cutover-boundaries]],
