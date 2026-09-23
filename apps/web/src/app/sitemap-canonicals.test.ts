@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { siteOrigin } from '@/config/env';
 
 /*
  * VEN-606, acceptance 3: every URL the production sitemap offers a crawler
@@ -8,9 +9,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * the legal pages all told a crawler they were duplicates of the homepage —
  * the sitemap and the pages it named contradicted each other.
  *
- * Next merges `alternates` and `openGraph` per key: a page that sets one
- * replaces the layout's whole object, and a page that does not inherits it.
- * That is the resolution emulated here, against the real modules.
+ * The root layout now declares neither, so each page's own metadata is the
+ * whole answer: that is what is read here, from the real modules. The layout
+ * is not imported — its stylesheet cannot be loaded under Vitest — and
+ * `metadataBase` is the `siteOrigin()` it sets.
  */
 
 const VENDOR_SLUG = 'june-harlow';
@@ -31,14 +33,6 @@ vi.mock('@/lib/vendor-data', async (actual) => ({
   getPublicVendorProfile: (slug: string) =>
     Promise.resolve({ slug, businessName: 'June Harlow', bio: null, city: null, state: null }),
 }));
-
-// The root layout is imported for its metadata alone; its stylesheet and fonts
-// are build-time assets Vitest does not process.
-vi.mock('./globals.css', () => ({}));
-vi.mock('next/font/google', () => {
-  const font = () => ({ variable: '' });
-  return { Instrument_Sans: font, Instrument_Serif: font, JetBrains_Mono: font };
-});
 
 vi.mock('@/lib/auth/server', () => ({ getServerSession: () => Promise.resolve(null) }));
 
@@ -101,7 +95,6 @@ describe('every production sitemap URL is its own canonical', () => {
 
   it('declares a self-referencing canonical and og:url on each <loc>', async () => {
     const { default: sitemap } = await import('./sitemap');
-    const { metadata: layout } = await import('./layout');
     const urls = (await sitemap()).map((entry) => new URL(entry.url));
 
     // The shape the sitemap must still have, so the loop below covers it.
@@ -113,9 +106,9 @@ describe('every production sitemap URL is its own canonical', () => {
 
     for (const url of urls) {
       const page = await resolvedMetadata(url);
-      const base = page.metadataBase ?? layout.metadataBase;
-      const canonical = absolute((page.alternates ?? layout.alternates)?.canonical, base);
-      const openGraph = page.openGraph ?? layout.openGraph;
+      const base = page.metadataBase ?? siteOrigin();
+      const canonical = absolute(page.alternates?.canonical, base);
+      const openGraph = page.openGraph;
       const ogUrl = absolute(openGraph?.url, base);
 
       if (canonical !== url.href) {
