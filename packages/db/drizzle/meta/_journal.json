@@ -624,6 +624,13 @@
       "when": 1790177177687,
       "tag": "0088_one_account_per_address",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1790180275480,
+      "tag": "0089_closed_accounts_forget_the_person",
+      "breakpoints": true
     }
   ]
 }

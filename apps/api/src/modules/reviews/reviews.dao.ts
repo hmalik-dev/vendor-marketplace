@@ -19,6 +19,7 @@ import {
   type ReviewRow,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import { CLOSED_REVIEWER_NAME } from '../users/closed-account.js';
 
 /**
  * A booking, seen from the question "may this person review it?".
@@ -188,15 +189,22 @@ export async function findUnreviewedCompletedBooking(
  * leave the database — a route that selects it and trims it later is one
  * refactor away from returning it. A missing surname yields the first name
  * alone rather than a trailing full stop.
+ *
+ * A closed reviewer's review stays, and still counts toward the rating, under
+ * "Former customer" (VEN-614, ruled 2026-09-23): the vendor keeps what they
+ * earned and the identity is gone.
  */
 const reviewerDisplayName = sql<string>`
-  trim(
-    ${users.firstName} || ' ' ||
-    case
-      when ${users.lastName} is null or ${users.lastName} = '' then ''
-      else left(${users.lastName}, 1) || '.'
-    end
-  )
+  case
+    when ${users.deletedAt} is not null then ${CLOSED_REVIEWER_NAME}
+    else trim(
+      ${users.firstName} || ' ' ||
+      case
+        when ${users.lastName} is null or ${users.lastName} = '' then ''
+        else left(${users.lastName}, 1) || '.'
+      end
+    )
+  end
 `;
 
 /**

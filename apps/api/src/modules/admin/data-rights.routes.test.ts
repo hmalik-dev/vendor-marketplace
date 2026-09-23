@@ -11,6 +11,7 @@ import {
   messages,
   notifications,
   operatorAlerts,
+  portfolioItems,
   reviews,
   users,
   vendorCategories,
@@ -33,6 +34,7 @@ import { LAST_OPERATOR_REFUSAL } from './data-rights.service.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { reconcileAuthUsers } from '../auth-sync/auth-sync.reconcile.js';
 import { bookingContextFor } from '../payments/payments.service.js';
+import { setReviewVisibilityAndRecalculate } from '../reviews/reviews.dao.js';
 
 /**
  * Data rights — #438.
@@ -1088,14 +1090,11 @@ describe('data rights', () => {
         .from(users)
         .where(eq(users.email, address));
 
-      expect(rows).toHaveLength(2);
+      /* The retired row gave the address up for a tombstone (VEN-614). */
+      expect(rows).toHaveLength(1);
 
-      const retired = rows.find((row) => row.id === closedId);
-      const returning = rows.find((row) => row.id === returningId);
+      const returning = rows[0];
 
-      /* The retired row stays retired, and stays readable under its address. */
-      expect(retired).toMatchObject({ email: address, authUserId: CUSTOMER });
-      expect(retired?.deletedAt).not.toBeNull();
       expect(returning).toMatchObject({
         email: address,
         authUserId: RETURNING,
@@ -1421,6 +1420,10 @@ describe('data rights', () => {
      * An empty search on the live view, for a person whose account was closed,
      * counts the closed set as its way out; from the closed view the same key
      * counts the live set. Each count is the rows its link lands on.
+     *
+     * The closed account is searched for by its id: closure replaced the name
+     * and address with `closed+<id>@invalid` (VEN-614), so the id is what an
+     * operator still has to find it by.
      */
     it('counts the other set as the status route out of an empty customers search', async () => {
       await signIn(ADMIN, true);
@@ -1436,7 +1439,7 @@ describe('data rights', () => {
 
       const live = await harness.app.inject({
         method: 'GET',
-        url: `/admin/customers?q=${CUSTOMER}`,
+        url: `/admin/customers?q=${closedId}`,
         headers: bearer(ADMIN),
       });
       expect(live.json().total).toBe(0);
@@ -1632,6 +1635,179 @@ describe('data rights', () => {
       });
 
       expect(response.statusCode).toBe(403);
+    });
+  });
+
+  /**
+   * VEN-614: closure removes the person and keeps the financial record.
+   *
+   * The row stays, because bookings, payouts and legal acceptances hold foreign
+   * keys to it; what identified the person on it does not.
+   */
+  describe('what a closure removes', () => {
+    it('anonymises the account row and leaves its bookings and acceptances readable', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile();
+      const bookingId = await createBooking(
+        customerId,
+        vendor.profileId,
+        '2025-05-01',
+        'completed',
+      );
+      await harness.database.db
+        .insert(conversations)
+        .values({ customerId, vendorId: vendor.profileId });
+
+      await harness.database.db
+        .update(users)
+        .set({
+          phone: '512-555-0142',
+          bio: 'Planning my wedding!',
+          city: 'Austin',
+          state: 'TX',
+          avatarUrl: `customer-profile/${customerId}/me.webp`,
+          pendingEmail: 'next@example.com',
+        })
+        .where(eq(users.id, customerId));
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${customerId}/close`,
+        headers: bearer(ADMIN),
+      });
+      expect(response.statusCode).toBe(200);
+
+      const [row] = await harness.database.db.select().from(users).where(eq(users.id, customerId));
+      expect(row).toMatchObject({
+        email: `closed+${customerId}@invalid`,
+        firstName: 'Former customer',
+        lastName: '',
+        phone: null,
+        bio: null,
+        city: null,
+        state: null,
+        avatarUrl: null,
+        pendingEmail: null,
+        authUserId: CUSTOMER,
+      });
+      expect(row!.deletedAt).not.toBeNull();
+
+      /* Payouts are columns on the booking, so the booking row is the payout record. */
+      const [booking] = await harness.database.db
+        .select({ customerId: bookings.customerId, vendorPayoutCents: bookings.vendorPayoutCents })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+      expect(booking).toEqual({ customerId, vendorPayoutCents: 105_600 });
+
+      const acceptances = await harness.database.db
+        .select({ document: legalAcceptances.document })
+        .from(legalAcceptances)
+        .where(eq(legalAcceptances.acceptedByUserId, customerId));
+      expect(acceptances.map((acceptance) => acceptance.document)).toEqual(['terms_of_service']);
+
+      /* The vendor's thread names them the way the ruling says, not "Former c". */
+      const threads = await harness.app.inject({
+        method: 'GET',
+        url: '/conversations',
+        headers: bearer(VENDOR),
+      });
+      expect(threads.statusCode).toBe(200);
+      expect(
+        threads.json().map((thread: { otherPartyName: string }) => thread.otherPartyName),
+      ).toEqual(['Former customer']);
+    });
+
+    it('shows a closed customer’s review as a former customer’s, still counted in the rating', async () => {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile();
+      const bookingId = await createBooking(
+        customerId,
+        vendor.profileId,
+        '2025-05-01',
+        'completed',
+      );
+
+      const [review] = await harness.database.db
+        .insert(reviews)
+        .values({
+          bookingId,
+          reviewerId: customerId,
+          vendorId: vendor.profileId,
+          type: 'customer_to_vendor',
+          rating: 4,
+          content: 'Lovely photos, on time.',
+        })
+        .returning({ id: reviews.id });
+
+      const closed = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${customerId}/close`,
+        headers: bearer(ADMIN),
+      });
+      expect(closed.statusCode).toBe(200);
+
+      const listed = await harness.app.inject({
+        method: 'GET',
+        url: `/vendors/${vendor.slug}/reviews`,
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().items).toEqual([
+        expect.objectContaining({ id: review!.id, reviewerName: 'Former customer', rating: 4 }),
+      ]);
+      expect(listed.json().summary).toMatchObject({ avgRating: 4, reviewCount: 1 });
+
+      /*
+       * The stored rating is recomputed from the same predicate, and agrees.
+       * Hidden and shown again, because showing a shown review recomputes nothing.
+       */
+      await setReviewVisibilityAndRecalculate(harness.database.db, review!.id, false);
+      await setReviewVisibilityAndRecalculate(harness.database.db, review!.id, true);
+      const [profile] = await harness.database.db
+        .select({ avgRating: vendorProfiles.avgRating, reviewCount: vendorProfiles.reviewCount })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendor.profileId));
+      expect(profile).toEqual({ avgRating: '4.00', reviewCount: 1 });
+    });
+
+    it('deletes every object a closed vendor uploaded, and nobody else’s', async () => {
+      await signIn(ADMIN, true);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile();
+      const otherOwner = 'b0000000-0000-4000-8000-000000000009';
+      const owned = [
+        `vendor-profile/${vendor.userId}/face.webp`,
+        `vendor-profile/${vendor.userId}/face-thumb.webp`,
+        `vendor-cover/${vendor.userId}/cover.webp`,
+        `portfolio/${vendor.userId}/work.webp`,
+        `portfolio/${vendor.userId}/work-thumb.webp`,
+      ];
+      const kept = `portfolio/${otherOwner}/work.webp`;
+
+      harness.storedObjects.length = 0;
+      for (const key of [...owned, kept]) {
+        harness.storedObjects.push({ key, body: Buffer.from('x'), contentType: 'image/webp' });
+      }
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ profileImageUrl: owned[0], coverImageUrl: owned[2] })
+        .where(eq(vendorProfiles.id, vendor.profileId));
+      await harness.database.db
+        .insert(portfolioItems)
+        .values({ vendorId: vendor.profileId, imageUrl: owned[3]!, thumbnailUrl: owned[4]! });
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/admin/users/${vendor.userId}/close`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(harness.storedObjects.map((object) => object.key)).toEqual([kept]);
+      harness.storedObjects.length = 0;
     });
   });
 

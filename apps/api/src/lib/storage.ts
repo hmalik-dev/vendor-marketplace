@@ -342,6 +342,38 @@ export function assertOwnedImageRefs(
 }
 
 /**
+ * Deletes every object `ownerId` uploaded, in every namespace, thumbnails and
+ * never-referenced uploads included — for a closed account (VEN-614).
+ *
+ * Found by the owner segment of the key rather than from the rows, which is
+ * what `buildObjectKey` puts it there for: only this owner's objects can match,
+ * and an object no row names any more goes too.
+ */
+export async function removeOwnedObjects(
+  storage: Pick<ObjectStorage, 'list' | 'remove'>,
+  ownerId: string,
+): Promise<number> {
+  if (!ownerId || ownerId.includes('/')) {
+    throw new Error('Removing owned objects needs a single-segment owner id');
+  }
+
+  let removed = 0;
+
+  for (const prefix of STORAGE_PREFIXES) {
+    let token: string | undefined;
+
+    do {
+      const page = await storage.list(`${prefix}/${ownerId}`, token ? { token } : undefined);
+      await storage.remove(page.objects.map((object) => object.key));
+      removed += page.objects.length;
+      token = page.nextToken;
+    } while (token);
+  }
+
+  return removed;
+}
+
+/**
  * How many images `ownerId` holds across every namespace, counting no further
  * than `stopAt` — the cap check only needs to know whether the limit is reached.
  * A thumbnail is the sibling of an image, not an upload of its own.

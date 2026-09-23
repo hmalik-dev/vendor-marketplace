@@ -9,6 +9,7 @@ import type {
 } from '@vendor-marketplace/shared';
 import type { LegalAcceptanceRow, UserRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
+import { removeOwnedObjects, type ObjectStorage } from '../../lib/storage.js';
 import { isSeededIdentity, type AuthIdentityDeleter } from '../auth-sync/identity.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import {
@@ -556,6 +557,7 @@ export async function closeAccount(
   now: Date,
   /** `null` where the deployment has no connection to Neon Auth's schema. */
   deleteIdentity: AuthIdentityDeleter | null,
+  storage: Pick<ObjectStorage, 'list' | 'remove'>,
 ): Promise<AdminCloseAccountResult> {
   const user = await findUserRecord(context.db, userId);
 
@@ -691,6 +693,22 @@ export async function closeAccount(
       'An account closure left bookings confirmed; they need an operator',
     );
   }
+
+  /*
+   * The person's uploads go once the closure has committed (VEN-614): a closed
+   * vendor's storefront images and a customer's avatar are public URLs, and
+   * the rows that named them are kept for the financial record. Best-effort,
+   * like everything after the commit: the upload sweep no longer counts a
+   * closed account's rows as references, so it deletes whatever this missed.
+   */
+  await bestEffortNotice(
+    context,
+    { userId },
+    async () => {
+      await removeOwnedObjects(storage, user.id);
+    },
+    "An account closure could not delete the account's uploads; the upload sweep will retry",
+  );
 
   /*
    * The identity itself goes, not just its sessions — last, and deliberately.

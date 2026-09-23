@@ -1,3 +1,4 @@
+- [Admin close-account needs an email step-up, read from the lane mailbox](admin-close-account-requires-email-stepup.md) — one confirm click 403s STEP_UP_REQUIRED; get the code from GET /__lane/mailbox/latest, not a real inbox
 - [E2E seed has only one pending booking request](e2e-seed-has-only-one-pending-booking-request.md) — no payable/accepted booking exists; clicking Accept to make one is denied by auto-mode as a shared-resource mutation UNLESS the ticket itself names the sequence (amended VEN-647)
 - [Lane DB reads need the postgres driver, not psql](lane-db-reads-need-the-postgres-driver-not-psql.md) — `lane:exec ... psql "$DATABASE_URL"` is blocked by the worktree-guard hook and psql isn't installed; use the `postgres` npm package from inside packages/db instead
 - [E2E vendor blocked on payout setup](e2e-vendor-blocked-on-payout-setup.md) — Accept POSTs 402 until Stripe payout is complete; no in-app UI to clear it; Decline/read-only criteria still verifiable
