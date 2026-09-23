@@ -23,7 +23,7 @@ import { assertSafeTarget } from './scripts/safe-target.js';
 // The fabricating writers' guard: never a production-named database or branch.
 assertSafeTarget('a Neon Auth contract identity', undefined, {
   connectionVariable: 'NEON_AUTH_CONTRACT_DATABASE_URL',
-  action: 'write',
+  action: 'seed',
 });
 const url = process.env['NEON_AUTH_CONTRACT_DATABASE_URL'];
 
