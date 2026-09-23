@@ -1,5 +1,6 @@
 import { type Browser, type Page } from '@playwright/test';
 import {
+  API_VERSION_PREFIX,
   ERROR_CODES,
   TERMS_ACCEPTANCE_PATH,
   VENDOR_DETAILS_PATH,
@@ -138,7 +139,8 @@ test.describe('a refused vendor sign-up', () => {
 
         const [acceptResponse] = await Promise.all([
           page.waitForResponse(
-            (response) => new URL(response.url()).pathname === '/legal/terms/accept',
+            (response) =>
+              new URL(response.url()).pathname === `${API_VERSION_PREFIX}/legal/terms/accept`,
           ),
           page.getByRole('button', { name: 'Continue' }).click(),
         ]);
