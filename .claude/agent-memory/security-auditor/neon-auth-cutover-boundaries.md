@@ -46,6 +46,11 @@ the localStorage `signup_role` value as trusted input.
   second connection (`NEON_AUTH_DATABASE_URL`, required off baseline/local).
   Queries are module constants and parameterised; the one wart is the
   verification cleanup matching the address as a **substring** of `identifier`.
+  **VEN-642 added `updateName`** (audited clean 2026-09-23): `$1`/`$2` bound,
+  and every caller passes `request.auth.authUserId` (verified JWT → local row),
+  never a body id. Input is `freeText` (bidi stripped, NFC, refused chars); the
+  reconcile re-splits `name` on whitespace, so a synced `firstName` can only
+  shrink, never widen the vendor's pre-accept `firstName + lastInitial` view.
 
 **How to apply:** audit any new `/api/auth/*` allowlist entry as an account
 operation, and any new writer of `users` rows as a second provider writing into
