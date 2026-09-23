@@ -100,6 +100,11 @@ first. Both branches were empty of user rows and both held 0000–0009.
       reaches production's mail too. Every release fails at the sender step until Resend reports
       that domain `verified`. The deployed API also refuses to boot without
       its own `EMAIL_FROM` now; the `orla.com` default is not ours.
+      Exception for the friends beta (VEN-626): `EMAIL_FROM=onboarding@resend.dev`,
+      Resend's shared test sender, passes this step with no domain of our
+      own — mail then reaches only the Resend account owner. It is not an
+      option once real users are on the platform (VEN-595); buy and verify a
+      domain first (VEN-563).
 - [ ] **Legal wording** (VEN-378). The terms, privacy and cookie pages exist, but
       their wording is placeholder nobody has relied on. A lawyer reads them —
       above all the staff-message-access clause (#436) under _Who else sees it_

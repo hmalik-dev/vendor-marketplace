@@ -44,6 +44,11 @@ each has its own secrets and variables.
 3. **Sender** (VEN-609): Resend must report `EMAIL_FROM`'s domain as
    `verified`, or nothing ships. A key that cannot list domains (a
    sending-only key) fails too, since the release cannot prove the sender.
+   Exception (VEN-626): `EMAIL_FROM=onboarding@resend.dev`, Resend's shared
+   test sender, passes this step without a domain — it delivers only to the
+   Resend account owner, and it is the friends-beta accommodation until a real
+   domain exists (VEN-563). `launch:check`, the real-money gate, still fails
+   it; no other `resend.dev` address qualifies.
 4. **Migrate** the environment's database over its `DATABASE_URL_UNPOOLED`, then
    the idempotent reference seed. `NEON_BRANCH` must equal the environment
    name and the URL's host must equal `NEON_HOST`, so neither a mis-set branch

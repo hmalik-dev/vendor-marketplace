@@ -43,6 +43,77 @@ async function check(get: HttpGet, from = FROM) {
   return results[0]!;
 }
 
+describe('the Resend shared test sender exception (VEN-626)', () => {
+  const unreachable: HttpGet = async () => {
+    throw new Error('must not call the Resend domains endpoint for the shared test sender');
+  };
+
+  it('passes onboarding@resend.dev, naming the limit, without calling the domains endpoint', async () => {
+    expect(await check(unreachable, 'onboarding@resend.dev')).toEqual({
+      group: 'resend',
+      name: 'resend sending domain',
+      status: 'PASS',
+      detail:
+        "onboarding@resend.dev is Resend's shared test sender — delivers only to the Resend account owner; verify a domain (VEN-563) before real users",
+    });
+  });
+
+  it('passes the same address wrapped in a display name', async () => {
+    expect(await check(unreachable, 'Orla <onboarding@resend.dev>')).toMatchObject({
+      status: 'PASS',
+    });
+  });
+
+  it.each([
+    ['delivered@resend.dev', 'resend.dev'],
+    ['x-onboarding@resend.dev', 'resend.dev'],
+    ['Orla <onboarding@resend.dev.evil.test>', 'resend.dev.evil.test'],
+  ])('fails %s — only the exact shared address qualifies, not the domain', async (from, domain) => {
+    expect(await check(domains('verified'), from)).toMatchObject({
+      status: 'FAIL',
+      detail: `${domain} is not in the Resend account (expected verified)`,
+    });
+  });
+
+  /*
+   * The script the deploy step runs, invoked directly: the exception passes
+   * without a Resend double at all, since the shared sender never reaches the
+   * domain probe — the line an operator reads in the Actions log, and the
+   * exit code that lets the release continue past it.
+   */
+  it('the release:sender script passes the shared test sender, calling Resend for nothing', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'release-sender-'));
+    try {
+      const fake = path.join(dir, 'resend-fetch.mjs');
+      writeFileSync(
+        fake,
+        'globalThis.fetch = async () => { throw new Error("must not call Resend for the shared test sender"); };\n',
+      );
+      const result = spawnSync(
+        process.execPath,
+        ['--import', pathToFileURL(fake).href, '--import', 'tsx', 'src/launch/sender-cli.ts'],
+        {
+          cwd: PACKAGE_ROOT,
+          env: {
+            PATH: process.env.PATH,
+            EMAIL_FROM: 'onboarding@resend.dev',
+            RESEND_API_KEY: RESEND,
+          },
+          encoding: 'utf8',
+        },
+      );
+
+      expect(result.stderr).toBe('');
+      expect(result.stdout).toContain(
+        "PASS    resend sending domain: onboarding@resend.dev is Resend's shared test sender — delivers only to the Resend account owner; verify a domain (VEN-563) before real users",
+      );
+      expect(result.status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('the release sender check (VEN-609)', () => {
   it('passes a verified sending domain', async () => {
     expect(await check(domains('verified'))).toEqual({
