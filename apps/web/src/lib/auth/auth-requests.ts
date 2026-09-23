@@ -202,3 +202,27 @@ export async function signOut(): Promise<void> {
 
   clearSessionToken();
 }
+
+/**
+ * Changes the signed-in caller's password (VEN-677). The proxy always ends
+ * the account's other sessions and keeps this one, with a fresh cookie, so the
+ * cached token is dropped for the next read to mint anew.
+ *
+ * `rejected` is a wrong current password: every 4xx but the proxy's per-account
+ * 429, including a 403, which `outcomeOf` would read as `unverified` — a
+ * signed-in person has nothing left to verify.
+ */
+export async function changePassword(input: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<AuthOutcome> {
+  const outcome = await outcomeOf(await post('/change-password', input));
+
+  if (outcome === 'ok') {
+    clearSessionToken();
+  }
+
+  return outcome === 'ok' || outcome === 'throttled' || outcome === 'unreachable'
+    ? outcome
+    : 'rejected';
+}

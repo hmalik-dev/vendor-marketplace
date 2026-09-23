@@ -87,6 +87,10 @@ const forward =
       return forwardReset(request, context, path);
     }
 
+    if (method === 'POST' && joined === 'change-password') {
+      return forwardChangePassword(request, context, path);
+    }
+
     if (method === 'POST' && addressLimit(path) !== null) {
       return forwardBudgeted(request, context, path);
     }
@@ -538,6 +542,93 @@ async function forwardReset(
   }
 
   return NextResponse.json({ success: true });
+}
+
+type PasswordChange = { currentPassword: string; newPassword: string };
+
+const isFilled = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
+
+/** The two passwords a change carries, and nothing else the client sent; `null` when either is missing. */
+function passwordsIn(body: string): PasswordChange | null {
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    const current = parsed.currentPassword;
+    const next = parsed.newPassword;
+
+    return isFilled(current) && isFilled(next)
+      ? { currentPassword: current, newPassword: next }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A signed-in password change (VEN-677). Three things the client does not get
+ * to decide:
+ *
+ * - **Every other session ends.** `revokeOtherSessions` is always `true`,
+ *   whatever was sent: a change is often made because the account may be
+ *   compromised, the same reason a reset ends them (VEN-518). Better Auth then
+ *   issues this device a fresh session, so the caller stays signed in here.
+ * - **Wrong current passwords are budgeted per account**, not per address:
+ *   the body names no email, so the bucket is the session's user id. Only the
+ *   provider's refusal is charged, as for a password sign-in, so an outage
+ *   spends nobody's budget and a successful change is never locked out.
+ * - **This process forgets the account's minted tokens** once the change
+ *   lands, as sign-out and reset do, so a revoked cookie's cached JWT does not
+ *   outlive it here. The API side of a live JWT is VEN-670's.
+ */
+async function forwardChangePassword(
+  request: NextRequest,
+  context: RouteContext,
+  path: string[],
+): Promise<Response> {
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  const change = passwordsIn(await request.text());
+
+  if (change === null) {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  const userId = await resolveCallerId();
+
+  if (userId === undefined) {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Read-only: the budget is spent by refusals below, never by asking.
+  if (await chargeAddress(userId, path, Date.now(), false)) {
+    return NextResponse.json(
+      { message: 'Too many attempts' },
+      { status: 429, headers: { 'Retry-After': '600' } },
+    );
+  }
+
+  const headers = new Headers(request.headers);
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  const upstream = new Request(request.url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ...change, revokeOtherSessions: true }),
+  });
+  const response = await neonAuth()
+    .handler()
+    .POST(upstream as NextRequest, context);
+
+  if (response.status === 400 || response.status === 401 || response.status === 403) {
+    await chargeAddress(userId, path);
+  }
+
+  if (response.ok) {
+    forgetSessionsFor(userId);
+  }
+
+  return response;
 }
 
 export const GET = forward('GET');

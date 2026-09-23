@@ -805,3 +805,116 @@ describe('the auth proxy without an auth configuration (VEN-635)', () => {
     expect(afterTasks).toHaveLength(1);
   });
 });
+
+describe('changing a password through the auth proxy (VEN-677)', () => {
+  const CHANGE = 'change-password';
+  const PASSWORDS = { currentPassword: 'the-old-password', newPassword: 'a-new-password' };
+
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    resetThrottle();
+    upstreamPost.mockReset();
+    forgetSessionsFor.mockReset();
+    mintedUserIdForCaller.mockResolvedValue('user-9');
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('forwards revokeOtherSessions: true even when the client asked to keep them', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ token: 't', user: { id: 'user-9' } }));
+
+    const response = await call(CHANGE, { ...PASSWORDS, revokeOtherSessions: false });
+
+    expect(response.status).toBe(200);
+    expect(upstreamPost).toHaveBeenCalledOnce();
+    expect(await upstreamPost.mock.calls[0]?.[0].json()).toEqual({
+      ...PASSWORDS,
+      revokeOtherSessions: true,
+    });
+  });
+
+  it('forgets every cached session of the account once the change lands', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ token: 't', user: { id: 'user-9' } }));
+
+    await call(CHANGE, PASSWORDS);
+
+    expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
+  });
+
+  it('asks Neon Auth for the caller when nothing is cached for their cookie', async () => {
+    mintedUserIdForCaller.mockResolvedValue(undefined);
+    getSession.mockResolvedValue({ data: { user: { id: 'user-cold' } } });
+    upstreamPost.mockResolvedValue(Response.json({ token: 't' }));
+
+    await call(CHANGE, PASSWORDS);
+
+    expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-cold');
+  });
+
+  it('refuses a caller with no session before the provider is called', async () => {
+    mintedUserIdForCaller.mockResolvedValue(undefined);
+
+    const response = await call(CHANGE, PASSWORDS);
+
+    expect(response.status).toBe(401);
+    expect(upstreamPost).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no current password', { newPassword: 'a-new-password' }],
+    ['a non-string new password', { currentPassword: 'x', newPassword: 12 }],
+    ['a body that is not an object', 'nope'],
+  ])('refuses %s without forwarding it', async (_name, body) => {
+    const response = await call(CHANGE, body);
+
+    expect(response.status).toBe(400);
+    expect(upstreamPost).not.toHaveBeenCalled();
+  });
+
+  it('forgets nothing when the provider refuses the current password', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID_PASSWORD' }, { status: 400 }));
+
+    const response = await call(CHANGE, PASSWORDS);
+
+    expect(response.status).toBe(400);
+    expect(forgetSessionsFor).not.toHaveBeenCalled();
+  });
+
+  it('charges wrong current passwords to the account, whoever sends them, then throttles', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID_PASSWORD' }, { status: 400 }));
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      statuses.push((await call(CHANGE, PASSWORDS, `6.6.6.${i}`)).status);
+    }
+
+    expect(statuses).toEqual([400, 400, 400, 400, 400, 429, 429]);
+    expect(upstreamPost).toHaveBeenCalledTimes(5);
+  });
+
+  it('keeps one account’s budget apart from another’s', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID_PASSWORD' }, { status: 400 }));
+    for (let i = 0; i < 5; i++) {
+      await call(CHANGE, PASSWORDS, `6.6.7.${i}`);
+    }
+
+    mintedUserIdForCaller.mockResolvedValue('user-other');
+
+    expect((await call(CHANGE, PASSWORDS, '6.6.8.1')).status).toBe(400);
+  });
+
+  it('never charges a change that lands, or the provider being down', async () => {
+    upstreamPost.mockResolvedValue(Response.json({}, { status: 503 }));
+    for (let i = 0; i < 6; i++) {
+      await call(CHANGE, PASSWORDS, `5.5.5.${i}`);
+    }
+    upstreamPost.mockResolvedValue(Response.json({ token: 't' }));
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      statuses.push((await call(CHANGE, PASSWORDS, `5.5.6.${i}`)).status);
+    }
+
+    expect(statuses).toEqual(Array(6).fill(200));
+  });
+});

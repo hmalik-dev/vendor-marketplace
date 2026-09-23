@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminHeader } from './admin-header';
 
@@ -91,5 +91,37 @@ describe('AdminHeader', () => {
     render(<AdminHeader email={EMAIL} name="Admin" />);
     expect(screen.queryByTestId('tier-marker')).toBeNull();
     vi.unstubAllEnvs();
+  });
+
+  /*
+   * VEN-677, ruled by the account holder: the console's avatar opens the same
+   * account menu as the site header's, with its first row back to the console.
+   */
+  it('opens the account menu: the console, settings, support and sign out', () => {
+    render(<AdminHeader email={EMAIL} name="Admin" />);
+
+    // jsdom has no PointerEvent, and Radix opens a menu from the keyboard too.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu' }), { key: 'Enter' });
+    const items = within(screen.getByRole('menu')).getAllByRole('menuitem');
+
+    expect(items.map((item) => [item.textContent, item.getAttribute('href')])).toEqual([
+      ['Admin', '/admin'],
+      ['Account settings', '/account/settings'],
+      ['Contact support', '/support'],
+      ['Sign out', null],
+    ]);
+  });
+
+  it('draws the trigger’s monogram as frame `13` does: 30px, in the inverted pair', () => {
+    render(<AdminHeader email={EMAIL} name="Admin" />);
+
+    const trigger = screen.getByRole('button', { name: 'Account menu' });
+    const circle = trigger.firstElementChild as HTMLElement;
+
+    expect(circle.style.width).toBe('30px');
+    expect(circle.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['bg-stone-700', 'text-clay-150']),
+    );
+    expect(trigger.className.split(/\s+/)).toContain('-mx-[7px]');
   });
 });

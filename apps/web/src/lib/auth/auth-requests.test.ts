@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  changePassword,
   requestPasswordReset,
   signInWithEmail,
   signOut,
@@ -221,5 +222,47 @@ describe('an auth proxy with no auth configuration (VEN-635)', () => {
     stubFetchBody(503, { code: 'AUTH_UNAVAILABLE' });
 
     await expect(requestPasswordReset('nobody@example.invalid')).resolves.toBe('unreachable');
+  });
+});
+
+describe('changePassword (VEN-677)', () => {
+  const CHANGE = { currentPassword: 'the-old-password', newPassword: 'a-new-password' };
+
+  it('asks the proxy to change it, and sends only the two passwords', async () => {
+    const fetchMock = stubFetch(200);
+
+    await expect(changePassword(CHANGE)).resolves.toBe('ok');
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/auth/change-password');
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(CHANGE);
+  });
+
+  /*
+   * Better Auth answers a wrong current password 400 `INVALID_PASSWORD`; a 401
+   * or 403 here is the same refusal of this caller, and none of them may read
+   * as `unverified`, which would send a signed-in person to a code step.
+   */
+  it.each([400, 401, 403])('reads a %i as a refused current password', async (status) => {
+    stubFetchBody(status, { code: 'INVALID_PASSWORD' });
+
+    await expect(changePassword(CHANGE)).resolves.toBe('rejected');
+  });
+
+  it('reads the per-account budget running out as throttled, not as a wrong password', async () => {
+    stubFetch(429);
+
+    await expect(changePassword(CHANGE)).resolves.toBe('throttled');
+  });
+
+  it.each([500, 503])('reads a %i as unreachable', async (status) => {
+    stubFetch(status);
+
+    await expect(changePassword(CHANGE)).resolves.toBe('unreachable');
+  });
+
+  it('reads a request that never reaches the proxy as unreachable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+
+    await expect(changePassword(CHANGE)).resolves.toBe('unreachable');
   });
 });
