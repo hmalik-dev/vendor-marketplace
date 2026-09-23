@@ -6,6 +6,9 @@ import type { AppDatabase } from './database.js';
 /** How often a process clears windows that ended, at most. */
 const PURGE_INTERVAL_MS = 60_000;
 
+/** Latched keys one process holds before it drops the ones whose window has ended. */
+const LATCH_SWEEP_SIZE = 10_000;
+
 export interface RateLimitStoreOptions {
   /** Injectable clock; the suite drives a window's end rather than waiting for it. */
   now?: () => number;
@@ -27,6 +30,12 @@ interface RouteInfo {
  * goes up while the window is open and restarts at 1 once it has ended — the
  * same semantics as the in-memory store it replaces.
  *
+ * A caller already over its limit is refused from memory until its window
+ * ends, without another write: a flood past the ceiling would otherwise be
+ * one upsert per refused request on one hot row, queueing every other
+ * query behind it. Each key costs at most `max + 1` writes per window per
+ * instance.
+ *
  * Returned as a class because the plugin constructs its store itself.
  */
 export function postgresRateLimitStore(
@@ -35,6 +44,31 @@ export function postgresRateLimitStore(
 ): new (params: FastifyRateLimitOptions) => FastifyRateLimitStore {
   const now = options.now ?? Date.now;
   let purgedAt = Number.NEGATIVE_INFINITY;
+  /** Keys over their limit, and when the window that refused them ends. */
+  const refusedUntil = new Map<string, number>();
+
+  function latched(key: string, nowMs: number): number | null {
+    const until = refusedUntil.get(key);
+    if (until === undefined) {
+      return null;
+    }
+    if (until > nowMs) {
+      return until;
+    }
+    refusedUntil.delete(key);
+    return null;
+  }
+
+  function latch(key: string, until: number, nowMs: number): void {
+    if (refusedUntil.size >= LATCH_SWEEP_SIZE) {
+      for (const [held, end] of refusedUntil) {
+        if (end <= nowMs) {
+          refusedUntil.delete(held);
+        }
+      }
+    }
+    refusedUntil.set(key, until);
+  }
 
   async function purge(nowMs: number): Promise<void> {
     if (nowMs - purgedAt < PURGE_INTERVAL_MS) {
@@ -47,8 +81,15 @@ export function postgresRateLimitStore(
   async function charge(
     key: string,
     timeWindow: number,
+    max: number,
   ): Promise<{ current: number; ttl: number }> {
     const nowMs = now();
+    const refused = latched(key, nowMs);
+
+    if (refused !== null) {
+      return { current: max + 1, ttl: refused - nowMs };
+    }
+
     const at = sql`${new Date(nowMs).toISOString()}::timestamptz`;
     const ended = sql`${rateLimitCounters.windowEndsAt} <= ${at}`;
 
@@ -70,7 +111,12 @@ export function postgresRateLimitStore(
       throw new Error('The rate-limit counter upsert returned no row');
     }
 
-    return { current: row.hits, ttl: Math.max(0, row.windowEndsAt.getTime() - nowMs) };
+    const windowEndsMs = row.windowEndsAt.getTime();
+    if (row.hits > max) {
+      latch(key, windowEndsMs, nowMs);
+    }
+
+    return { current: row.hits, ttl: Math.max(0, windowEndsMs - nowMs) };
   }
 
   class PostgresRateLimitStore implements FastifyRateLimitStore {
@@ -80,8 +126,8 @@ export function postgresRateLimitStore(
       this.#prefix = prefix;
     }
 
-    incr(key: string, callback: StoreCallback, timeWindow: number): void {
-      charge(`${this.#prefix}${key}`, timeWindow).then(
+    incr(key: string, callback: StoreCallback, timeWindow: number, max: number): void {
+      charge(`${this.#prefix}${key}`, timeWindow, max).then(
         (result) => callback(null, result),
         (error: unknown) => callback(error instanceof Error ? error : new Error(String(error))),
       );

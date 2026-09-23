@@ -1,6 +1,6 @@
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 import { stepUpChallenges, stepUpGrants } from '@vendor-marketplace/db/schema';
-import { and, eq, gt, sql } from 'drizzle-orm';
+import { and, eq, gt, lt, sql } from 'drizzle-orm';
 import type { onRequestAsyncHookHandler } from 'fastify';
 import {
   ERROR_CODES,
@@ -66,7 +66,14 @@ export class StepUpStore {
     const [challenge] = await this.#db
       .update(stepUpChallenges)
       .set({ attempts: sql`${stepUpChallenges.attempts} + 1` })
-      .where(and(eq(stepUpChallenges.adminId, adminId), gt(stepUpChallenges.expiresAt, now)))
+      .where(
+        and(
+          eq(stepUpChallenges.adminId, adminId),
+          gt(stepUpChallenges.expiresAt, now),
+          // Concurrent guesses each count, and none past the cap is compared.
+          lt(stepUpChallenges.attempts, STEP_UP_MAX_ATTEMPTS),
+        ),
+      )
       .returning({ digest: stepUpChallenges.digest, attempts: stepUpChallenges.attempts });
 
     if (!challenge) {

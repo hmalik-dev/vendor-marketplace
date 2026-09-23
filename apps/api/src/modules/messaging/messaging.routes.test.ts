@@ -900,7 +900,14 @@ describe('messaging', () => {
     it('refuses a cursor that is not one, before reading anything', async () => {
       const conversationId = await openConversation();
 
-      for (const before of ['2', '2026-04-01T09:00:00Z,not-an-id', '2026-04-01T09:00:00.123Z,x']) {
+      for (const before of [
+        '2',
+        '2026-04-01T09:00:00Z,not-an-id',
+        '2026-04-01T09:00:00.123Z,x',
+        // Shaped like a cursor, but no such instant: a failed cast used to answer 500.
+        '2026-02-30T00:00:00.000000Z,00000000-0000-4000-8000-000000000000',
+        '2026-04-01T25:00:00.000000Z,00000000-0000-4000-8000-000000000000',
+      ]) {
         const response = await harness.app.inject({
           method: 'GET',
           url: `/v1/conversations/${conversationId}/messages?before=${encodeURIComponent(before)}`,
