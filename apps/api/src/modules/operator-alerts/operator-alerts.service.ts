@@ -357,7 +357,7 @@ export function platformBalanceShortAlert(input: {
     details: [
       `Stripe holds ${formatPrice(balanceCents)} (${formatPrice(input.availableCents)} available, ${formatPrice(input.pendingCents)} pending) against ${formatPrice(requiredCents)} still owed.`,
       `Owed: ${formatPrice(input.unreleasedPayoutCents)} in vendor payouts not yet sent, and ${formatPrice(input.refundableExposureCents)} more that bookings could still refund.`,
-      'Confirm the platform payout schedule is manual and find the payout that left early: docs/runbook-platform-balance.md.',
+      'Confirm the platform payout schedule is manual, then find what left the balance — a payout, a refund or a dispute: docs/runbook-platform-balance.md.',
     ],
     adminPath: '/admin/payments',
   };

@@ -2374,8 +2374,12 @@ customer's money.
    and shortly after boot) compares USD available + pending with unreleased
    vendor payouts plus what bookings could still refund beyond the vendor's share
    (the rest of an unreleased booking's total; the commission of one released in
-   the last 120 days, the chargeback window). Short → one `platform_balance_short`
-   operator alert per UTC day.
+   the last 120 days, the chargeback window). That refundable part is counted net
+   of a 4.4% + 30¢ fee allowance, because the balance only ever holds a charge net
+   of Stripe's fee (D1) and a gross comparison is short from the first booking.
+   A booking with an open chargeback is left out, since Stripe took its money when
+   the dispute opened. Short → one `platform_balance_short` operator alert per UTC
+   day, checked against the recorded alerts rather than the six-hour dedupe.
 3. **Transfers do not pass `source_transaction`.** Stripe's docs: with it, "the
    transfer request returns success regardless of your available balance **if the
    related charge hasn't settled yet**", and the destination's funds become

@@ -119,6 +119,24 @@ export async function clearStripeWebhookFailures(db: AppDatabase, failure: strin
   await db.delete(stripeWebhookFailures).where(eq(stripeWebhookFailures.failure, failure));
 }
 
+/**
+ * Whether any alert of this kind was ever recorded for this subject — for a
+ * kind whose subject is a date, whether that day has already been told.
+ */
+export async function hasAlertFor(
+  db: AppDatabase,
+  kind: ImmediateOperatorAlertKind,
+  subjectId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: operatorAlerts.id })
+    .from(operatorAlerts)
+    .where(and(eq(operatorAlerts.kind, kind), eq(operatorAlerts.subjectId, subjectId)))
+    .limit(1);
+
+  return rows.length > 0;
+}
+
 /** Whether today's digest has already been claimed by any instance. */
 export async function isDigestClaimed(db: AppDatabase, localDate: string): Promise<boolean> {
   const rows = await db

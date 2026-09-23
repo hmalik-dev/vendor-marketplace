@@ -100,8 +100,8 @@ export const PAYOUT_FAILURE_ALERT_ATTEMPTS = 3;
 /**
  * How often the platform balance is reconciled against what it owes (VEN-644).
  * Each instance also runs it shortly after boot, so a deploy more often than
- * daily still checks; the alert's subject is the UTC date, so one day raises
- * at most one email however many instances or restarts ran it.
+ * daily still checks; a run skips the alert once one was recorded for that UTC
+ * date, so a day raises one email however many instances or restarts ran it.
  */
 export const PLATFORM_BALANCE_RECONCILE_INTERVAL_MS = 24 * 60 * 60_000;
 
@@ -111,3 +111,14 @@ export const PLATFORM_BALANCE_RECONCILE_INTERVAL_MS = 24 * 60 * 60_000;
  * window. Commission older than this is the platform's to pay out.
  */
 export const REFUND_EXPOSURE_AFTER_RELEASE_DAYS = 120;
+
+/**
+ * The Stripe processing fee the reconciliation assumes each booking's charge
+ * already lost, as basis points of its total plus a fixed amount. The balance
+ * only ever holds a charge net of that fee, which the platform absorbs out of
+ * its commission (D1), so the refundable commission is counted net of it.
+ * Deliberately the upper end — 2.9% + 30¢ plus 1.5% for an international card —
+ * so a real fee never reads as a shortfall; the vendor's share is never reduced.
+ */
+export const STRIPE_FEE_ALLOWANCE_BPS = 440;
+export const STRIPE_FEE_ALLOWANCE_FIXED_CENTS = 30;

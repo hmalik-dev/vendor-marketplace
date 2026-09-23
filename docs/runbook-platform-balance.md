@@ -24,7 +24,10 @@ null`, `payout_model = 'separate'`, `vendor_payout_cents > 0`), plus what each
   live booking could still refund beyond the vendor's share — for an unreleased
   booking the rest of its total, for one released in the last 120 days (the
   card networks' chargeback window) its commission. A refund after release
-  takes the vendor's share back by reversing the transfer (D31).
+  takes the vendor's share back by reversing the transfer (D31). The
+  refundable part is counted net of a 4.4% + 30¢ Stripe fee allowance, because
+  the balance never held the fee (D1). A booking with an open chargeback is
+  left out: Stripe already took that money when the dispute opened.
 
 The result is logged each run (`Platform balance covers what it owes`, with
 `balanceCents` and `requiredCents`). When the balance is short, the operator gets
@@ -34,7 +37,12 @@ one `platform_balance_short` email that day.
 
 1. Stripe Dashboard → Balance → Payouts: find the payout that left. A payout
    while the schedule is manual means somebody took one by hand, or the schedule
-   was changed; check Settings → Payouts first and set it back to Manual.
+   was changed; check Settings → Payouts first and set it back to Manual. No
+   payout? Look at Balance → Transactions for a refund or dispute fee larger
+   than the allowance, or a Dashboard refund nobody recorded.
+   Before launch, staging and production share one test-mode Stripe account
+   while each reads only its own bookings, so a test-mode alert is not
+   evidence on its own.
 2. Top the balance up by the shortfall the alert names (Balance → Add to
    balance), before the next sweep tries a transfer it cannot cover. A transfer
    that already failed is retried by the sweep; it does not need re-sending.

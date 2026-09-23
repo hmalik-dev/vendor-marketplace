@@ -25,6 +25,8 @@ import {
 import {
   HELD_PAYOUT_STATUSES,
   REFUND_EXPOSURE_AFTER_RELEASE_DAYS,
+  STRIPE_FEE_ALLOWANCE_BPS,
+  STRIPE_FEE_ALLOWANCE_FIXED_CENTS,
   type LegalAcceptanceDocument,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
@@ -483,6 +485,10 @@ export interface PlatformLiabilities {
    * by reversing the transfer (D31), so only the commission part is the
    * platform's own. Released bookings count while a chargeback can still land
    * (`REFUND_EXPOSURE_AFTER_RELEASE_DAYS`); older commission is headroom.
+   *
+   * Net of the Stripe fee the charge already lost (`STRIPE_FEE_ALLOWANCE_*`):
+   * the balance never held it, so counting it would read every booking as a
+   * shortfall from the day it was paid.
    */
   refundableExposureCents: number;
 }
@@ -491,6 +497,11 @@ export interface PlatformLiabilities {
  * The money the platform holds for other people, read for the daily balance
  * reconciliation. Composes `payoutOwedClauses` so the figure owed to vendors
  * names exactly the rows the sweep will pay.
+ *
+ * A booking with an open chargeback is left out altogether. Stripe took the
+ * disputed amount out of the balance when the dispute opened, and the row
+ * records no amount for it, so counting the booking would ask the balance to
+ * hold that money twice. A won dispute returns the funds with the payout.
  */
 export async function readPlatformLiabilities(
   db: AppDatabase,
@@ -499,6 +510,9 @@ export async function readPlatformLiabilities(
   const exposureFrom = new Date(
     now.getTime() - REFUND_EXPOSURE_AFTER_RELEASE_DAYS * 24 * 60 * 60_000,
   );
+  // Qualified by hand: Drizzle drops the table from a single-table select, and
+  // an unqualified `id` inside the subquery would be `support_cases.id`.
+  const bookingId = sql`${bookings}.${sql.identifier(bookings.id.name)}`;
   const rows = await db
     .select({
       unreleasedPayoutCents:
@@ -506,7 +520,7 @@ export async function readPlatformLiabilities(
           Number,
         ),
       refundableExposureCents:
-        sql<number>`coalesce(sum(greatest(${bookings.totalAmountCents} - coalesce(${bookings.refundAmountCents}, 0) - ${bookings.externalRefundCents} - ${bookings.vendorPayoutCents}, 0)) filter (where ${bookings.status} <> 'cancelled'), 0)`.mapWith(
+        sql<number>`coalesce(sum(greatest(${bookings.totalAmountCents} - coalesce(${bookings.refundAmountCents}, 0) - ${bookings.externalRefundCents} - ${bookings.vendorPayoutCents} - (${bookings.totalAmountCents} * ${STRIPE_FEE_ALLOWANCE_BPS}::integer / 10000 + ${STRIPE_FEE_ALLOWANCE_FIXED_CENTS}::integer), 0)) filter (where ${bookings.status} <> 'cancelled'), 0)`.mapWith(
           Number,
         ),
     })
@@ -515,6 +529,12 @@ export async function readPlatformLiabilities(
       and(
         eq(bookings.payoutModel, 'separate'),
         or(isNull(bookings.payoutReleasedAt), gte(bookings.payoutReleasedAt, exposureFrom)),
+        sql`not exists (
+          select 1 from ${supportCases}
+          where ${supportCases.bookingId} = ${bookingId}
+            and ${supportCases.origin} = 'chargeback'
+            and ${supportCases.status} = 'open'
+        )`,
       ),
     );
 

@@ -6,6 +6,7 @@ import {
   type AlertResult,
   type OperatorAlerts,
 } from '../operator-alerts/operator-alerts.service.js';
+import { hasAlertFor } from '../operator-alerts/operator-alerts.dao.js';
 import { readPlatformLiabilities } from './payouts.dao.js';
 
 export interface PlatformBalanceDeps {
@@ -52,8 +53,19 @@ export async function reconcilePlatformBalance(
   }
 
   deps.log.error(figures, 'Platform balance is short of what it owes');
+
+  /*
+   * One email per UTC day. `alertNow`'s own dedupe is a six-hour window, and a
+   * boot run after a midday deploy lands well outside the morning's.
+   */
+  const date = now.toISOString().slice(0, 10);
+
+  if (await hasAlertFor(deps.db, 'platform_balance_short', date)) {
+    return { balanceCents, requiredCents, alert: 'deduplicated' };
+  }
+
   const alert = await deps.alerts.alertNow(
-    platformBalanceShortAlert({ date: now.toISOString().slice(0, 10), ...balance, ...liabilities }),
+    platformBalanceShortAlert({ date, ...balance, ...liabilities }),
   );
 
   return { balanceCents, requiredCents, alert };
