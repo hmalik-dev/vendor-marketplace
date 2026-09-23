@@ -265,6 +265,9 @@ test.describe('the console Refine bar', () => {
     const unfiltered = await unfilteredBaseline(scriptlessAdminPage);
 
     await scriptlessAdminPage.goto(FILTERED);
+    // `listing` reads the DOM, which also holds a screen streamed into a
+    // `hidden` node no script will reveal (VEN-654); a keyboard user needs it drawn.
+    await expect(scriptlessAdminPage.getByRole('button', { name: DIRECTION.option })).toBeVisible();
     const filtered = await listing(scriptlessAdminPage);
     expectNarrowed(filtered, unfiltered);
 
