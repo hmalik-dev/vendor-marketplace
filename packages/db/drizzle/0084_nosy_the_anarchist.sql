@@ -1,1 +1,0 @@
-ALTER TYPE "public"."operator_alert_kind" ADD VALUE 'platform_balance_short' BEFORE 'daily_digest';
