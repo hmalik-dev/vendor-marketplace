@@ -30,6 +30,7 @@ import {
 } from '../lib/stripe.js';
 import type {
   PaymentIntentSnapshot,
+  PlatformBalance,
   StripeAccountCapabilities,
   StripeAccountStatus,
   StripeConnectGateway,
@@ -393,6 +394,8 @@ export type FakeAccountStatus = StripeAccountCapabilities &
  * service asked Stripe to do.
  */
 export interface FakeStripe extends StripeConnectGateway {
+  /** What `retrievePlatformBalance` answers; a suite sets it. Starts empty. */
+  platformBalance: PlatformBalance;
   /** Accounts the fake has minted, in creation order. */
   createdAccounts: {
     accountId: string;
@@ -592,6 +595,7 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   const paymentIntentKeys: string[] = [];
 
   const fake: FakeStripe = {
+    platformBalance: { availableCents: 0, pendingCents: 0 },
     cancelRequests,
     paymentIntentKeys,
     createdAccounts,
@@ -1016,6 +1020,8 @@ function createFakeStripe(deployEnv: string): FakeStripe {
     retrieveChargeIntent: async (chargeId) =>
       chargeId.startsWith('ch_') ? chargeId.slice('ch_'.length) : null,
 
+    retrievePlatformBalance: async () => ({ ...fake.platformBalance }),
+
     findRefund: async (paymentIntentId) => {
       /*
        * The same status filter the real adapter applies. A `failed` refund put
@@ -1176,6 +1182,8 @@ export async function createTestHarness(
     uploadSweepIntervalMs: 0,
     // The digest likewise: suites call `runOperatorDigest` with a pinned clock.
     operatorDigestIntervalMs: 0,
+    // And the balance reconciliation: suites call `reconcilePlatformBalance`.
+    platformBalanceIntervalMs: 0,
     // Alert send retries do not wait on a real timer in a suite.
     operatorAlertWait: async () => undefined,
     ...(options.enforceStepUp ? {} : { stepUp: new AlwaysFreshStepUpStore() }),

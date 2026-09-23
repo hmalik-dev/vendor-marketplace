@@ -19,6 +19,14 @@ const LIVE_PUBLISHABLE_PREFIX = 'pk_live_';
 /** Stripe's own minimum for a statement descriptor. */
 const MIN_DESCRIPTOR_LENGTH = 5;
 const PLACEHOLDER_DESCRIPTOR = /\b(test|example|placeholder|todo|x{3,})\b/i;
+/**
+ * Why the platform account must be on manual payouts (VEN-644). Under separate
+ * charges and transfers a customer's payment waits in the platform balance
+ * until the sweep sends the vendor's share after the event; Stripe's default
+ * automatic schedule would pay it to the platform's bank first.
+ */
+export const MANUAL_PAYOUTS_REASON =
+  "automatic payouts send vendors' unreleased money to the platform's bank";
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
 
@@ -174,6 +182,7 @@ function accountResults(body: unknown): LaunchResult[] {
     descriptor.trim().length >= MIN_DESCRIPTOR_LENGTH &&
     !PLACEHOLDER_DESCRIPTOR.test(descriptor);
   const businessName = field(body, 'business_profile', 'name');
+  const payoutInterval = field(body, 'settings', 'payouts', 'schedule', 'interval');
 
   return [
     flag('charges_enabled'),
@@ -191,6 +200,13 @@ function accountResults(body: unknown): LaunchResult[] {
       isString(businessName) && businessName ? businessName : 'unset',
       businessName === BRAND_NAME,
       BRAND_NAME,
+    ),
+    judge(
+      'stripe',
+      'stripe payout schedule',
+      isString(payoutInterval) && payoutInterval ? payoutInterval : 'unset',
+      payoutInterval === 'manual',
+      `manual — ${MANUAL_PAYOUTS_REASON}`,
     ),
   ];
 }

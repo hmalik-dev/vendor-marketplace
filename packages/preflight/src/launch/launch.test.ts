@@ -4,6 +4,7 @@ import { REPO_ROOT } from '../context.js';
 import type { LaunchDatabase } from './database.js';
 import { readOnlyGet, type HttpGet } from './http.js';
 import { mask } from './mask.js';
+import { MANUAL_PAYOUTS_REASON } from './providers.js';
 import { loadHandledStripeEvents, loadSeedMarkers, loadStripeApiVersion } from './repo-modules.js';
 import { renderLaunchReport, runLaunchChecks, type LaunchOptions } from './run.js';
 import type { LaunchResult } from './types.js';
@@ -100,7 +101,10 @@ function doubles(
       return json({
         charges_enabled: live,
         payouts_enabled: live,
-        settings: { payments: { statement_descriptor: live ? 'ORLA EVENTS' : null } },
+        settings: {
+          payments: { statement_descriptor: live ? 'ORLA EVENTS' : null },
+          payouts: { schedule: { interval: live ? 'manual' : 'daily' } },
+        },
         business_profile: { name: live ? BRAND_NAME : 'Sandbox' },
       });
     }
@@ -179,6 +183,10 @@ describe('launch:check against test-mode doubles', () => {
     expect(find(results, 'stripe business name')).toMatchObject({
       status: 'FAIL',
       detail: `Sandbox (expected ${BRAND_NAME})`,
+    });
+    expect(find(results, 'stripe payout schedule')).toMatchObject({
+      status: 'FAIL',
+      detail: `daily (expected manual — ${MANUAL_PAYOUTS_REASON})`,
     });
     expect(find(results, 'resend sending domain')).toMatchObject({
       status: 'FAIL',
@@ -284,6 +292,28 @@ describe('launch:check against correctly configured doubles', () => {
     expect(find(results, 'neon auth identity store').detail).toBe(
       'identities read from ep-x.us-east-2.aws.neon.tech',
     );
+  });
+
+  it('passes a platform account on manual payouts', async () => {
+    const results = await runLaunchChecks(options('live'));
+
+    expect(find(results, 'stripe payout schedule')).toMatchObject({
+      status: 'PASS',
+      detail: 'manual',
+    });
+  });
+
+  it('fails a platform account whose payout schedule is unreadable', async () => {
+    const get: HttpGet = async (url) =>
+      new URL(url).pathname === '/v1/account'
+        ? { status: 200, headers: new Headers(), body: { settings: {} } }
+        : doubles('live').get(url);
+    const results = await runLaunchChecks(options('live', { get }));
+
+    expect(find(results, 'stripe payout schedule')).toMatchObject({
+      status: 'FAIL',
+      detail: `unset (expected manual — ${MANUAL_PAYOUTS_REASON})`,
+    });
   });
 
   it('reads the booking cap and the vendor invite gate', async () => {

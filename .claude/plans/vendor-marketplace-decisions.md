@@ -2355,3 +2355,32 @@ added surface.
 
 **AC2 does not apply.** It requires the limit to be raisable; D44 establishes
 that no self-serve path to raise it exists.
+
+---
+
+### D45: The Platform Account Pays Out by Hand; Transfers Carry No `source_transaction` — *2026-09-23*
+
+**Decision (VEN-644).** Closes the question D31 left open. Under separate charges
+and transfers (#423) every customer's payment waits in the platform balance until
+the sweep transfers the vendor's share after the event, so Stripe's default
+automatic payout schedule would send that money to the bank within days and the
+transfer would later fail with `balance_insufficient` — or succeed on a newer
+customer's money.
+
+1. **The platform account's payout schedule is `manual`.** `pnpm launch:check`
+   fails `stripe payout schedule` until it is. Commission is paid out by hand from
+   the headroom the reconciliation reports (`docs/runbook-platform-balance.md`).
+2. **A daily reconciliation** (`reconcilePlatformBalance`, every instance, daily
+   and shortly after boot) compares USD available + pending with unreleased
+   vendor payouts plus what bookings could still refund beyond the vendor's share
+   (the rest of an unreleased booking's total; the commission of one released in
+   the last 120 days, the chargeback window). Short → one `platform_balance_short`
+   operator alert per UTC day.
+3. **Transfers do not pass `source_transaction`.** Stripe's docs: with it, "the
+   transfer request returns success regardless of your available balance **if the
+   related charge hasn't settled yet**", and the destination's funds become
+   available when the charge's do. Our transfers go out 72h after the event, long
+   after the charge settled, so it would guard nothing the manual schedule does not
+   already guard. It would cost a stored charge id (`latest_charge`) the booking
+   does not keep, and Stripe overwrites the transfer's `transfer_group` with the
+   charge's, which `findTransfer` keys on. Rejected, not deferred.

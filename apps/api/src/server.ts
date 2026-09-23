@@ -25,6 +25,7 @@ import {
   EXPIRY_SWEEP_INTERVAL_MS,
   AUTH_RECONCILE_INTERVAL_MS,
   PAYOUT_SWEEP_INTERVAL_MS,
+  PLATFORM_BALANCE_RECONCILE_INTERVAL_MS,
   UPLOAD_SWEEP_INTERVAL_MS,
   VISITOR_IP_HEADER,
   WEB_TIER_KEY_HEADER,
@@ -54,6 +55,7 @@ import { expirySweepPlugin } from './plugins/expiry-sweep.js';
 import { uploadSweepPlugin } from './plugins/upload-sweep.js';
 import { authReconcilePlugin } from './plugins/auth-reconcile.js';
 import { payoutReleasePlugin } from './plugins/payout-release.js';
+import { platformBalancePlugin } from './plugins/platform-balance.js';
 import { storagePlugin } from './plugins/storage.js';
 import { emailPlugin } from './plugins/email.js';
 import { stripePlugin } from './plugins/stripe.js';
@@ -170,6 +172,11 @@ export interface BuildServerOptions {
    * disables it. On by default for `payoutSweepIntervalMs`'s reason.
    */
   operatorDigestIntervalMs?: number;
+  /**
+   * How often the platform balance is reconciled against what it owes; `0`
+   * disables it. On by default for `payoutSweepIntervalMs`'s reason.
+   */
+  platformBalanceIntervalMs?: number;
   /** Pause between operator alert send retries; defaults to a real timer. */
   operatorAlertWait?: (ms: number) => Promise<void>;
   /** Step-up seam; the suites pass a store that is always fresh unless the suite is about step-up. */
@@ -521,6 +528,10 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     intervalMs: options.payoutSweepIntervalMs ?? PAYOUT_SWEEP_INTERVAL_MS,
     reporter: errorReporter,
     webOrigin: canonicalWebOrigin(env),
+  });
+  await app.register(platformBalancePlugin, {
+    intervalMs: options.platformBalanceIntervalMs ?? PLATFORM_BALANCE_RECONCILE_INTERVAL_MS,
+    reporter: errorReporter,
   });
   await app.register(authReconcilePlugin, {
     intervalMs: options.authReconcileIntervalMs ?? AUTH_RECONCILE_INTERVAL_MS,

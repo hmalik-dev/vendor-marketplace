@@ -4,11 +4,13 @@ import {
   desc,
   eq,
   gt,
+  gte,
   inArray,
   isNull,
   lte,
   not,
   notInArray,
+  or,
   sql,
   type SQL,
   type SQLWrapper,
@@ -20,7 +22,11 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { HELD_PAYOUT_STATUSES, type LegalAcceptanceDocument } from '@vendor-marketplace/shared';
+import {
+  HELD_PAYOUT_STATUSES,
+  REFUND_EXPOSURE_AFTER_RELEASE_DAYS,
+  type LegalAcceptanceDocument,
+} from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 
 /** Typed so a renamed enum member is a compile error, not an `EXISTS` that matches nothing. */
@@ -465,3 +471,52 @@ export async function recordPayoutFailure(
  * `completed` booking to `disputed` and back would have left the customer's
  * completed-bookings figure stale until some unrelated booking of theirs moved.
  */
+
+/** What the platform balance must still cover (VEN-644), in cents. */
+export interface PlatformLiabilities {
+  /** Vendors' shares not yet transferred: `payoutOwedClauses`' rows. */
+  unreleasedPayoutCents: number;
+  /**
+   * What a live booking could still refund beyond the vendor's share: its
+   * total, less what was already refunded and less that share. The share is
+   * counted above while unreleased, and after release a refund takes it back
+   * by reversing the transfer (D31), so only the commission part is the
+   * platform's own. Released bookings count while a chargeback can still land
+   * (`REFUND_EXPOSURE_AFTER_RELEASE_DAYS`); older commission is headroom.
+   */
+  refundableExposureCents: number;
+}
+
+/**
+ * The money the platform holds for other people, read for the daily balance
+ * reconciliation. Composes `payoutOwedClauses` so the figure owed to vendors
+ * names exactly the rows the sweep will pay.
+ */
+export async function readPlatformLiabilities(
+  db: AppDatabase,
+  now: Date,
+): Promise<PlatformLiabilities> {
+  const exposureFrom = new Date(
+    now.getTime() - REFUND_EXPOSURE_AFTER_RELEASE_DAYS * 24 * 60 * 60_000,
+  );
+  const rows = await db
+    .select({
+      unreleasedPayoutCents:
+        sql<number>`coalesce(sum(${bookings.vendorPayoutCents}) filter (where ${and(...payoutOwedClauses())}), 0)`.mapWith(
+          Number,
+        ),
+      refundableExposureCents:
+        sql<number>`coalesce(sum(greatest(${bookings.totalAmountCents} - coalesce(${bookings.refundAmountCents}, 0) - ${bookings.externalRefundCents} - ${bookings.vendorPayoutCents}, 0)) filter (where ${bookings.status} <> 'cancelled'), 0)`.mapWith(
+          Number,
+        ),
+    })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.payoutModel, 'separate'),
+        or(isNull(bookings.payoutReleasedAt), gte(bookings.payoutReleasedAt, exposureFrom)),
+      ),
+    );
+
+  return rows[0] ?? { unreleasedPayoutCents: 0, refundableExposureCents: 0 };
+}

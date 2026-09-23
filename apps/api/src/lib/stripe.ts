@@ -177,6 +177,26 @@ export interface StripeConnectGateway {
    * charge, and the platform keys everything on the intent.
    */
   retrieveChargeIntent(chargeId: string): Promise<string | null>;
+
+  /**
+   * The platform's own USD balance (VEN-644), which the daily reconciliation
+   * compares with what the platform still owes vendors and customers.
+   */
+  retrievePlatformBalance(): Promise<PlatformBalance>;
+}
+
+/** The platform account's USD balance, in cents. */
+export interface PlatformBalance {
+  availableCents: number;
+  /** Charges not yet settled; they will become available without any action. */
+  pendingCents: number;
+}
+
+/** Sums the USD entries of one side of a Stripe balance; other currencies are not ours. */
+export function usdCents(entries: readonly { amount: number; currency: string }[]): number {
+  return entries
+    .filter((entry) => entry.currency === 'usd')
+    .reduce((sum, entry) => sum + entry.amount, 0);
 }
 
 /**
@@ -1260,6 +1280,15 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
       return typeof charge.payment_intent === 'string'
         ? charge.payment_intent
         : (charge.payment_intent?.id ?? null);
+    },
+
+    async retrievePlatformBalance() {
+      const balance = await stripe.balance.retrieve();
+
+      return {
+        availableCents: usdCents(balance.available),
+        pendingCents: usdCents(balance.pending),
+      };
     },
 
     async findRefund(paymentIntentId) {
