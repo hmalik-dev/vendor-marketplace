@@ -211,6 +211,18 @@ describe('/users/me', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({ firstName: 'Katherine', lastName: 'Johnson' });
+
+      /*
+       * VEN-642, AC8: the Neon Auth identity itself, not only `users` — read
+       * back rather than inferred, so the sign-up form's synthetic
+       * email-prefix placeholder does not survive the next reconcile pass
+       * (`auth-sync.reconcile.ts` mirrors the identity's name back onto
+       * `users` the moment they disagree).
+       */
+      expect(harness.authUsers.get('user_nameless2')).toMatchObject({
+        firstName: 'Katherine',
+        lastName: 'Johnson',
+      });
     });
 
     it('refuses a suspended account', async () => {

@@ -41,7 +41,7 @@ import {
   insertAcceptance,
 } from '../modules/legal/legal-acceptance.dao.js';
 import type { NeonAuthPluginOptions } from '../plugins/neon-auth.js';
-import { displayName, syncUserFromAuth } from '../modules/users/users.service.js';
+import { displayName, splitAuthName, syncUserFromAuth } from '../modules/users/users.service.js';
 import type { AuthUserSnapshot } from '../modules/users/users.service.js';
 import { buildServer } from '../server.js';
 import { StepUpStore } from '../lib/step-up.js';
@@ -1266,6 +1266,21 @@ export async function createTestHarness(
 
           deletedAuthUsers.push(authUserId);
           return authUsers.delete(authUserId);
+        },
+        /*
+         * Written straight onto the registered snapshot (VEN-642), so a later
+         * `lookup` — and the reconcile pass — see exactly what a suite's own
+         * `PUT /users/me` or `PUT /vendor/profile` sent, the same as a real
+         * Neon Auth identity would after `updateName`.
+         */
+        updateName: async (authUserId, name) => {
+          const snapshot = authUsers.get(authUserId);
+          if (!snapshot) {
+            return false;
+          }
+
+          authUsers.set(authUserId, { ...snapshot, ...splitAuthName(name) });
+          return true;
         },
         close: async () => {},
       },

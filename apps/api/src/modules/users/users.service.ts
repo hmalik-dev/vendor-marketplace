@@ -7,6 +7,7 @@ import {
   type SignUpRole,
 } from '@vendor-marketplace/shared';
 import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
+import type { NeonAuthDirectory } from '@vendor-marketplace/db';
 import type { AppDatabase } from '../../lib/database.js';
 import { accountSuspended, notFound, unauthorized, validationFailed } from '../../lib/errors.js';
 import { assertOwnedImageRefs } from '../../lib/storage.js';
@@ -166,6 +167,42 @@ export async function getUserProfile(db: AppDatabase, userId: string): Promise<U
 }
 
 /**
+ * Writes a real name onto the Neon Auth identity itself, wherever
+ * `users.firstName`/`lastName` are written from something other than the
+ * identity's own name (VEN-642) — the customer-details step and the vendor
+ * profile editor. Without this the scheduled reconcile
+ * (`auth-sync.reconcile.ts`) reads the sign-up form's unchanged synthetic
+ * email-prefix placeholder back off the identity and mirrors it onto `users`
+ * the next time it runs, silently reverting a name the account holder just
+ * gave.
+ *
+ * Best-effort: `directory` is `null` on a lane (no `NEON_AUTH_DATABASE_URL`),
+ * and a transient failure here must not undo a `users` write that already
+ * committed — the next successful call catches it up, since a real name never
+ * changes back to the placeholder on its own.
+ */
+export async function syncAuthDisplayName(
+  directory: NeonAuthDirectory | null,
+  authUserId: string,
+  firstName: string,
+  lastName: string,
+  log?: { warn: (details: unknown, message: string) => void },
+): Promise<void> {
+  if (!directory) {
+    return;
+  }
+
+  try {
+    await directory.updateName(authUserId, `${firstName} ${lastName}`.trim());
+  } catch (error) {
+    log?.warn(
+      { err: error, authUserId },
+      'Could not sync the display name onto the Neon Auth identity',
+    );
+  }
+}
+
+/**
  * Applies a self-service profile edit. Identity, role, ban, and derived
  * counters are absent from `updateUserSchema`, so they cannot be reached here.
  */
@@ -173,6 +210,11 @@ export async function updateUserProfile(
   db: AppDatabase,
   userId: string,
   input: UpdateUserInput,
+  authSync?: {
+    authUserId: string;
+    directory: NeonAuthDirectory | null;
+    log?: { warn: (details: unknown, message: string) => void };
+  },
 ): Promise<User> {
   assertOwnedImageRefs([input.avatarUrl], userId);
 
@@ -199,6 +241,16 @@ export async function updateUserProfile(
   const row = await updateUserById(db, userId, input);
   if (!row) {
     throw notFound('User not found');
+  }
+
+  if (authSync && input.firstName !== undefined && input.lastName !== undefined) {
+    await syncAuthDisplayName(
+      authSync.directory,
+      authSync.authUserId,
+      input.firstName,
+      input.lastName,
+      authSync.log,
+    );
   }
 
   return toUser(row);

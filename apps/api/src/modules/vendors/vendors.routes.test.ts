@@ -20,6 +20,7 @@ const VENDOR = 'user_vendor';
 const OTHER_VENDOR = 'user_vendor_two';
 const CUSTOMER = 'user_customer';
 const VENDOR_NO_NAME = 'user_vendor_no_name';
+const VENDOR_HALF_NAME = 'user_vendor_half_name';
 
 describe('/vendor/profile', () => {
   let harness: TestHarness;
@@ -77,6 +78,22 @@ describe('/vendor/profile', () => {
       authUserId: VENDOR_NO_NAME,
       email: 'nameless@example.com',
       firstName: '',
+      lastName: '',
+      roleHint: 'vendor',
+      avatarUrl: null,
+    });
+
+    /*
+     * The realistic shape of a fresh sign-up (VEN-642): the sign-up form's
+     * synthetic email-prefix name has no space in it, so `splitAuthName`
+     * lands it entirely in `firstName` and leaves `lastName` empty — not both
+     * halves blank, which `VENDOR_NO_NAME` above is for a simpler blocker
+     * check but never actually occurs.
+     */
+    harness.authUsers.set(VENDOR_HALF_NAME, {
+      authUserId: VENDOR_HALF_NAME,
+      email: 'halfname@example.com',
+      firstName: 'ada',
       lastName: '',
       roleHint: 'vendor',
       avatarUrl: null,
@@ -599,6 +616,65 @@ describe('/vendor/profile', () => {
           .from(users)
           .where(eq(users.email, 'nameless@example.com'));
         expect(row).toMatchObject({ firstName: 'Priya', lastName: 'Nair' });
+
+        /*
+         * VEN-642, AC8: the Neon Auth identity itself, not only `users` — so
+         * the sign-up form's synthetic email-prefix placeholder does not
+         * survive the next reconcile pass.
+         */
+        expect(harness.authUsers.get(VENDOR_NO_NAME)).toMatchObject({
+          firstName: 'Priya',
+          lastName: 'Nair',
+        });
+      });
+
+      /*
+       * Regression: `hasPersonalName` used to fill a missing half from the
+       * stored row for the publish check, while the actual write only ever
+       * wrote both halves together — so a lone half sent alongside
+       * `isPublished: true` passed the gate but never reached `users`,
+       * publishing a storefront still missing half its owner's name.
+       */
+      it('refuses a lone name half sent alongside a publish, rather than completing it from the stored row', async () => {
+        const created = await harness.app.inject({
+          method: 'POST',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR_HALF_NAME),
+          payload: validBody(),
+        });
+        expect(created.statusCode).toBe(201);
+        await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR_HALF_NAME),
+          payload: { bio: 'Documentary wedding photography.', responseTimeHours: 24 },
+        });
+        await harness.app.inject({
+          method: 'POST',
+          url: '/vendor/packages',
+          headers: bearer(VENDOR_HALF_NAME),
+          payload: {
+            name: 'Half-day coverage',
+            description: 'Four hours of documentary coverage and edited photos.',
+            priceCents: 120_000,
+          },
+        });
+        await acceptVendorAgreementAs(harness, VENDOR_HALF_NAME);
+
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR_HALF_NAME),
+          payload: { lastName: 'Nair', isPublished: true },
+        });
+
+        expect(response.statusCode).toBe(400);
+
+        const [row] = await harness.database.db
+          .select({ firstName: users.firstName, lastName: users.lastName })
+          .from(users)
+          .where(eq(users.email, 'halfname@example.com'));
+        expect(row).toMatchObject({ firstName: 'ada', lastName: '' });
       });
     });
 

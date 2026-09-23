@@ -16,6 +16,14 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       onRequest: requireAuthBeforeValidation,
       schema: { body: updateUserSchema, response: { 200: userSchema } },
     },
-    async (request) => updateUserProfile(app.db, authenticated(request.auth).id, request.body),
+    async (request) => {
+      const user = authenticated(request.auth);
+
+      return updateUserProfile(app.db, user.id, request.body, {
+        authUserId: user.authUserId,
+        directory: app.authDirectory,
+        log: request.log,
+      });
+    },
   );
 };

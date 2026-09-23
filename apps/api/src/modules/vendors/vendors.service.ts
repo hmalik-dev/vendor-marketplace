@@ -21,6 +21,7 @@ import type {
   VendorApplicationRow,
   VendorProfileRow,
 } from '@vendor-marketplace/db/schema';
+import type { NeonAuthDirectory } from '@vendor-marketplace/db';
 import type { AppDatabase } from '../../lib/database.js';
 import { findApplicationForDraftProfile } from '../vendor-invites/vendor-invites.dao.js';
 import { categoryFacets, searchVendors } from './vendor-search.dao.js';
@@ -44,6 +45,7 @@ import { resolveVendorTagSelection } from '../tags/tags.service.js';
 import { lockVendorProfile } from '../admin/admin.dao.js';
 import { countActivePackages } from '../packages/packages.dao.js';
 import { findUserById, updateUserById } from '../users/users.dao.js';
+import { syncAuthDisplayName } from '../users/users.service.js';
 import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import {
   findActiveCategoryIds,
@@ -316,6 +318,13 @@ async function assertCategoriesSelectable(
   return unique;
 }
 
+/** What a personal-name write needs to also reach the Neon Auth identity (VEN-642). */
+export interface AuthNameSync {
+  authUserId: string;
+  directory: NeonAuthDirectory | null;
+  log?: { warn: (details: unknown, message: string) => void };
+}
+
 /** Whether both halves of a personal name are actually there, not just present as a key. */
 export function isCompleteName(
   firstName: string | undefined,
@@ -414,6 +423,7 @@ export async function createVendorProfile(
   userId: string,
   input: CreateVendorProfileInput,
   publicBaseUrl: string,
+  authSync?: AuthNameSync,
 ): Promise<VendorProfileDetail> {
   assertOwnedImageRefs([input.profileImageUrl, input.coverImageUrl], userId);
   assertStorageOriginRefs([input.profileImageUrl, input.coverImageUrl], publicBaseUrl);
@@ -479,6 +489,17 @@ export async function createVendorProfile(
     .catch((error: unknown) => {
       throw asProfileConflict(error) ?? error;
     });
+
+  // Outside the transaction: a network call to Neon Auth, not a database write.
+  if (authSync && input.firstName !== undefined && input.lastName !== undefined) {
+    await syncAuthDisplayName(
+      authSync.directory,
+      authSync.authUserId,
+      input.firstName,
+      input.lastName,
+      authSync.log,
+    );
+  }
 
   return loadDetail(db, row);
 }
@@ -587,6 +608,7 @@ export async function updateVendorProfile(
   input: UpdateVendorProfileInput,
   publicBaseUrl: string,
   log?: { warn: (details: unknown, message: string) => void },
+  authSync?: AuthNameSync,
 ): Promise<VendorProfileDetail> {
   assertOwnedImageRefs([input.profileImageUrl, input.coverImageUrl], userId);
   assertStorageOriginRefs([input.profileImageUrl, input.coverImageUrl], publicBaseUrl);
@@ -885,6 +907,17 @@ export async function updateVendorProfile(
     ],
     log,
   );
+
+  // Outside the transaction: a network call to Neon Auth, not a database write.
+  if (authSync && input.firstName !== undefined && input.lastName !== undefined) {
+    await syncAuthDisplayName(
+      authSync.directory,
+      authSync.authUserId,
+      input.firstName,
+      input.lastName,
+      authSync.log,
+    );
+  }
 
   return loadDetail(db, row);
 }
