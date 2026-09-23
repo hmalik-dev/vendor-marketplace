@@ -201,7 +201,7 @@ async function invalidateSessionsAtApi(userId: string | undefined): Promise<void
     });
 
     if (!response.ok) {
-      Sentry.captureMessage('Could not bound a signed-out session’s JWT', {
+      Sentry.captureMessage("Could not bound a signed-out session's JWT", {
         level: 'warning',
         extra: { status: response.status },
       });
