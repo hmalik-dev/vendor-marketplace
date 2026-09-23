@@ -6,6 +6,7 @@ import {
   tags,
   vendorCategories,
   vendorProfiles,
+  vendorSlugAliases,
   vendorTags,
 } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
@@ -85,6 +86,25 @@ export async function findPublicVendorBySlug(
     .limit(1);
 
   return row ?? null;
+}
+
+/**
+ * The current slug of the publicly visible vendor that once used `slug`, or
+ * null. A hidden vendor's old address names nothing, exactly as its current one
+ * does.
+ */
+export async function findCurrentSlugForAlias(
+  db: AppDatabase,
+  slug: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ slug: vendorProfiles.slug })
+    .from(vendorSlugAliases)
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, vendorSlugAliases.vendorId))
+    .where(and(VENDOR_VISIBLE, eq(vendorSlugAliases.slug, slug)))
+    .limit(1);
+
+  return row?.slug ?? null;
 }
 
 export async function findVendorCategories(

@@ -51,6 +51,7 @@ const EXPECTED_TABLES = [
   'vendor_categories',
   'vendor_invites',
   'vendor_profiles',
+  'vendor_slug_aliases',
   'vendor_tags',
 ];
 

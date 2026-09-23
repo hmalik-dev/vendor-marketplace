@@ -451,6 +451,140 @@ describe('/vendor/profile', () => {
       expect(response.json().slug).toBe('moonlit-studio');
     });
 
+    describe('a renamed slug (VEN-648)', () => {
+      async function publishSunlit(): Promise<void> {
+        await createProfile({ bio: 'Documentary wedding photography.', responseTimeHours: 24 });
+        await addPackage();
+        await acceptVendorAgreementAs(harness, VENDOR);
+
+        const published = await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR),
+          payload: { isPublished: true },
+        });
+        expect(published.statusCode).toBe(200);
+      }
+
+      async function renameTo(authUserId: string, slug: string): Promise<string> {
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(authUserId),
+          payload: { slug },
+        });
+        expect(response.statusCode).toBe(200);
+
+        return response.json().slug;
+      }
+
+      async function successorOf(slug: string): Promise<{ status: number; body: unknown }> {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: `/vendors/${slug}/successor`,
+        });
+
+        return { status: response.statusCode, body: response.json() };
+      }
+
+      it('leads from the old slug to the new one, and only there', async () => {
+        await publishSunlit();
+
+        expect(await renameTo(VENDOR, 'moonlit-studio')).toBe('moonlit-studio');
+
+        expect(await successorOf('sunlit-studio')).toEqual({
+          status: 200,
+          body: { slug: 'moonlit-studio' },
+        });
+        // The current slug is not an alias of itself, and the old one is no profile.
+        expect((await successorOf('moonlit-studio')).status).toBe(404);
+        const old = await harness.app.inject({ method: 'GET', url: '/vendors/sunlit-studio' });
+        expect(old.statusCode).toBe(404);
+      });
+
+      it('follows a chain of renames to where the vendor is now, in one hop', async () => {
+        await publishSunlit();
+
+        await renameTo(VENDOR, 'moonlit-studio');
+        await renameTo(VENDOR, 'starlit-studio');
+
+        expect((await successorOf('sunlit-studio')).body).toEqual({ slug: 'starlit-studio' });
+        expect((await successorOf('moonlit-studio')).body).toEqual({ slug: 'starlit-studio' });
+      });
+
+      it('is never handed to another vendor, by name or by request', async () => {
+        await publishSunlit();
+        await renameTo(VENDOR, 'moonlit-studio');
+
+        const other = await harness.app.inject({
+          method: 'POST',
+          url: '/vendor/profile',
+          headers: bearer(OTHER_VENDOR),
+          payload: validBody({ businessName: 'Sunlit Studio' }),
+        });
+        expect(other.statusCode).toBe(201);
+        expect(other.json().slug).toBe('sunlit-studio-2');
+
+        expect(await renameTo(OTHER_VENDOR, 'sunlit-studio')).toBe('sunlit-studio-2');
+        expect((await successorOf('sunlit-studio')).body).toEqual({ slug: 'moonlit-studio' });
+      });
+
+      it('can be taken back by the vendor who gave it up', async () => {
+        await publishSunlit();
+        await renameTo(VENDOR, 'moonlit-studio');
+
+        expect(await renameTo(VENDOR, 'sunlit-studio')).toBe('sunlit-studio');
+
+        expect((await successorOf('sunlit-studio')).status).toBe(404);
+        expect((await successorOf('moonlit-studio')).body).toEqual({ slug: 'sunlit-studio' });
+        const current = await harness.app.inject({ method: 'GET', url: '/vendors/sunlit-studio' });
+        expect(current.statusCode).toBe(200);
+      });
+
+      it('names nothing while the vendor is not public', async () => {
+        await publishSunlit();
+        await renameTo(VENDOR, 'moonlit-studio');
+
+        const paused = await harness.app.inject({
+          method: 'PUT',
+          url: '/vendor/profile',
+          headers: bearer(VENDOR),
+          payload: { isPublished: false },
+        });
+        expect(paused.statusCode).toBe(200);
+
+        expect(await successorOf('sunlit-studio')).toEqual({
+          status: 404,
+          body: expect.objectContaining({ message: 'That vendor page is not available' }),
+        });
+      });
+    });
+
+    it('stores an image sent as a storage URL as its key (VEN-648)', async () => {
+      await createProfile();
+      const [owner] = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.authUserId, VENDOR));
+      const key = `vendor-cover/${owner!.id}/cover.webp`;
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/vendor/profile',
+        headers: bearer(VENDOR),
+        // `STORAGE_PUBLIC_URL` is `http://cdn.test` in the harness.
+        payload: { coverImageUrl: `http://cdn.test/${key}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().coverImageUrl).toBe(key);
+      const [row] = await harness.database.db
+        .select({ coverImageUrl: vendorProfiles.coverImageUrl })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.userId, owner!.id));
+      expect(row).toEqual({ coverImageUrl: key });
+    });
+
     it('refuses to publish while prerequisites are outstanding', async () => {
       await createProfile();
 

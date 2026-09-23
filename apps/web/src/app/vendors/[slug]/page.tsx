@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import {
   BRAND_NAME,
   addDays,
@@ -24,6 +24,7 @@ import {
   getPublicVendorAvailability,
   getPublicVendorProfile,
   getPublicVendorReviews,
+  getVendorSlugSuccessor,
   readOwnVendorProfileIdForChrome,
 } from '@/lib/vendor-data';
 
@@ -189,6 +190,13 @@ export default async function VendorProfilePage({
    * the same in every case.
    */
   if (!vendor) {
+    // A slug the vendor has since changed: its old links still lead there (VEN-648).
+    const current = await getVendorSlugSuccessor(slug);
+
+    if (current !== null) {
+      permanentRedirect(`/vendors/${current}`);
+    }
+
     notFound();
   }
 

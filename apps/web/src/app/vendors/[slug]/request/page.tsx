@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import {
   isUniversallyPastDate,
   pageTitle,
@@ -10,7 +10,11 @@ import {
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
 import { requireRole } from '@/lib/current-user';
 import { parseGuestCountParam } from '@/lib/guest-count';
-import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
+import {
+  getPublicVendorAvailability,
+  getPublicVendorProfile,
+  getVendorSlugSuccessor,
+} from '@/lib/vendor-data';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -43,11 +47,6 @@ export default async function BookingRequestPage({
 }: PageProps): Promise<React.ReactElement> {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
 
-  const vendor = await getPublicVendorProfile(slug);
-  if (!vendor) {
-    notFound();
-  }
-
   /*
    * Signing in comes back here, with the package and date the customer already
    * chose in the rail — losing them meant starting the booking over.
@@ -57,6 +56,18 @@ export default async function BookingRequestPage({
   if (query.date) returnQuery.set('date', query.date);
   if (query.guests) returnQuery.set('guests', query.guests);
   const returnSuffix = returnQuery.toString();
+
+  const vendor = await getPublicVendorProfile(slug);
+  if (!vendor) {
+    // A slug the vendor has since changed, with the customer's choices kept (VEN-648).
+    const current = await getVendorSlugSuccessor(slug);
+
+    if (current !== null) {
+      permanentRedirect(`/vendors/${current}/request${returnSuffix ? `?${returnSuffix}` : ''}`);
+    }
+
+    notFound();
+  }
 
   /*
    * The same gate the API applies, rather than a subset of it.

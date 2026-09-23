@@ -575,6 +575,20 @@
       "when": 1790138181299,
       "tag": "0081_lame_spot",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1790171592877,
+      "tag": "0082_brave_agent_zero",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1790171599222,
+      "tag": "0083_image_columns_hold_keys",
+      "breakpoints": true
     }
   ]
 }

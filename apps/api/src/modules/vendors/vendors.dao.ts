@@ -4,6 +4,7 @@ import {
   tags,
   vendorCategories,
   vendorProfiles,
+  vendorSlugAliases,
   vendorTags,
   type NewVendorProfileRow,
   type TagRow,
@@ -37,6 +38,10 @@ export async function findVendorProfileByUserId(
  * Slug uniqueness check. Includes soft-deleted rows on purpose: the unique
  * index covers them too, so ignoring them would produce a constraint violation
  * instead of a validation message.
+ *
+ * A slug another vendor gave up is taken too (VEN-648): its old links still
+ * lead to that vendor, and handing it on would send them to a different
+ * business. The vendor who gave it up may take it back.
  */
 export async function slugExists(
   db: AppDatabase,
@@ -47,13 +52,37 @@ export async function slugExists(
     return false;
   }
 
-  const rows = await db
-    .select({ id: vendorProfiles.id })
-    .from(vendorProfiles)
-    .where(eq(vendorProfiles.slug, slug))
-    .limit(2);
+  const [current, aliases] = await Promise.all([
+    db
+      .select({ id: vendorProfiles.id })
+      .from(vendorProfiles)
+      .where(eq(vendorProfiles.slug, slug))
+      .limit(2),
+    db
+      .select({ id: vendorSlugAliases.vendorId })
+      .from(vendorSlugAliases)
+      .where(eq(vendorSlugAliases.slug, slug))
+      .limit(1),
+  ]);
 
-  return rows.some((row) => row.id !== exceptVendorId);
+  return [...current, ...aliases].some((row) => row.id !== exceptVendorId);
+}
+
+/**
+ * Records a slug change so the old address keeps leading to this vendor: the
+ * slug given up becomes an alias, and one this vendor is taking back stops
+ * being one. Run inside the transaction that writes the new slug.
+ */
+export async function recordSlugChange(
+  db: AppDatabase,
+  vendorId: string,
+  from: string,
+  to: string,
+): Promise<void> {
+  await db
+    .delete(vendorSlugAliases)
+    .where(and(eq(vendorSlugAliases.slug, to), eq(vendorSlugAliases.vendorId, vendorId)));
+  await db.insert(vendorSlugAliases).values({ slug: from, vendorId }).onConflictDoNothing();
 }
 
 export async function insertVendorProfile(

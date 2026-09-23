@@ -1,4 +1,4 @@
-import { categories, users, vendorProfiles } from '@vendor-marketplace/db/schema';
+import { categories, portfolioItems, users, vendorProfiles } from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -127,10 +127,20 @@ describe('/vendor/portfolio', () => {
 
       const body = response.json();
       expect(response.headers.location).toBe(`/vendor/portfolio/${body.id}`);
-      expect(body.imageUrl).toBe(IMAGE_URL);
-      expect(body.thumbnailUrl).toBe(THUMBNAIL_URL);
+      // Sent as `<STORAGE_PUBLIC_URL>/<key>`, stored and served as the key (VEN-648).
+      expect(body.imageUrl).toBe('portfolio/one.webp');
+      expect(body.thumbnailUrl).toBe('portfolio/one-thumb.webp');
       expect(body.caption).toBe('Golden hour');
       expect(body.displayOrder).toBe(0);
+
+      const [row] = await harness.database.db
+        .select({ imageUrl: portfolioItems.imageUrl, thumbnailUrl: portfolioItems.thumbnailUrl })
+        .from(portfolioItems)
+        .where(eq(portfolioItems.id, body.id));
+      expect(row).toEqual({
+        imageUrl: 'portfolio/one.webp',
+        thumbnailUrl: 'portfolio/one-thumb.webp',
+      });
     });
 
     it('rejects a caption-only body with no image', async () => {

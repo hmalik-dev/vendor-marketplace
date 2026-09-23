@@ -5,6 +5,7 @@ import {
   myVendorApplicationSchema,
   slugSchema,
   vendorSignUpGateSchema,
+  vendorSlugSuccessorSchema,
   type Category,
   type MyVendorApplication,
   type VendorSignUpGate,
@@ -441,6 +442,33 @@ export const getPublicVendorProfile = cache(
     }
   },
 );
+
+/**
+ * The current slug of a storefront that gave up `slug`, or null (VEN-648).
+ *
+ * Read only once the profile read has come back empty, so a live storefront
+ * costs nothing extra. A slug nobody gave up is the ordinary 404; any other
+ * failure propagates, as the profile read's does.
+ */
+export const getVendorSlugSuccessor = cache(async (slug: string): Promise<string | null> => {
+  if (!slugSchema.safeParse(slug).success) {
+    return null;
+  }
+
+  try {
+    const successor = await apiRequest(`/vendors/${encodeURIComponent(slug)}/successor`, {
+      schema: vendorSlugSuccessorSchema,
+    });
+
+    return successor.slug;
+  } catch (error) {
+    if (error instanceof ApiClientError && (error.statusCode === 404 || error.statusCode === 400)) {
+      return null;
+    }
+
+    throw error;
+  }
+});
 
 /**
  * The vendor's calendar for the profile's Availability tab.

@@ -8,6 +8,7 @@ import {
   vendorSearchResultSchema,
   publicVendorProfileSchema,
   vendorSlugParamsSchema,
+  vendorSlugSuccessorSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import { publicAvailabilitySchema, vendorDashboardSchema } from '@vendor-marketplace/shared';
@@ -21,7 +22,11 @@ import {
   searchPublishedVendors,
   updateVendorProfile,
 } from './vendors.service.js';
-import { getPublicVendorAvailability, getPublicVendorProfile } from './vendor-profile.service.js';
+import {
+  getPublicVendorAvailability,
+  getPublicVendorProfile,
+  getVendorSlugSuccessor,
+} from './vendor-profile.service.js';
 import { findNearbyAvailability } from './nearby-availability.service.js';
 
 /** Where a vendor's own profile lives, used as the `Location` on creation. */
@@ -102,6 +107,21 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => getPublicVendorProfile(app.db, request.params.slug),
+  );
+
+  /**
+   * Where a renamed storefront lives now (VEN-648). Public for the same reason
+   * the profile is: the old link is followed by whoever holds it.
+   */
+  app.get(
+    '/vendors/:slug/successor',
+    {
+      schema: {
+        params: vendorSlugParamsSchema,
+        response: { 200: vendorSlugSuccessorSchema },
+      },
+    },
+    async (request) => getVendorSlugSuccessor(app.db, request.params.slug),
   );
 
   /** The calendar behind the profile's Availability tab. */

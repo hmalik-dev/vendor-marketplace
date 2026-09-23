@@ -36,6 +36,7 @@ import {
 import {
   assertOwnedImageRefs,
   assertStorageOriginRefs,
+  storedImageRef,
   thumbnailKeyFor,
   type ObjectStorage,
 } from '../../lib/storage.js';
@@ -56,6 +57,7 @@ import {
   insertVendorProfile,
   lockVendorProfileAtVersion,
   replaceVendorCategories,
+  recordSlugChange,
   slugExists,
   touchVendorProfile,
   updateVendorProfileById,
@@ -467,8 +469,8 @@ export async function createVendorProfile(
     longitude: input.longitude?.toString() ?? null,
     serviceRadiusKm: input.serviceRadiusKm ?? null,
     responseTimeHours: input.responseTimeHours ?? null,
-    profileImageUrl: input.profileImageUrl ?? null,
-    coverImageUrl: input.coverImageUrl ?? null,
+    profileImageUrl: storedImageRef(input.profileImageUrl ?? null, publicBaseUrl),
+    coverImageUrl: storedImageRef(input.coverImageUrl ?? null, publicBaseUrl),
   };
 
   const row = await db
@@ -673,10 +675,16 @@ export async function updateVendorProfile(
     patch.responseTimeHours = input.responseTimeHours;
   }
   if (input.profileImageUrl !== undefined) {
-    patch.profileImageUrl = keepStoredKey(existing.profileImageUrl, input.profileImageUrl);
+    patch.profileImageUrl = keepStoredKey(
+      existing.profileImageUrl,
+      storedImageRef(input.profileImageUrl, publicBaseUrl),
+    );
   }
   if (input.coverImageUrl !== undefined) {
-    patch.coverImageUrl = keepStoredKey(existing.coverImageUrl, input.coverImageUrl);
+    patch.coverImageUrl = keepStoredKey(
+      existing.coverImageUrl,
+      storedImageRef(input.coverImageUrl, publicBaseUrl),
+    );
   }
 
   // Resolved before anything is written, and concurrently — see
@@ -844,6 +852,10 @@ export async function updateVendorProfile(
        * `moderation_hold = true`: on search, `Held` in the console, and the
        * operator's own republish answering 409 with no lever left but a ban.
        */
+      if (patch.slug !== undefined && patch.slug !== existing.slug) {
+        await recordSlugChange(tx, existing.id, existing.slug, patch.slug);
+      }
+
       const updated = await updateVendorProfileById(tx, existing.id, patch, {
         requireUnheld: patch.isPublished === true,
       });

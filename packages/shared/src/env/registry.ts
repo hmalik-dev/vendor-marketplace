@@ -597,7 +597,9 @@ export const ENV_REGISTRY = [
     /*
      * The same base, readable in the browser.
      *
-     * The database stores object keys, so a URL is built at the render
+     * The image columns hold object keys, never this base: the API strips it
+     * from a reference written as a URL, and migration `0083` converted the
+     * rows written before that (VEN-648). So a URL is built at the render
      * boundary — and some of those renders happen in client components (the
      * upload preview, the message avatars). Both halves must resolve to the
      * same host, which is why this mirrors `STORAGE_PUBLIC_URL` rather than being a

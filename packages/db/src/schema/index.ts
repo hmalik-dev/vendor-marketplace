@@ -1,6 +1,7 @@
 export * from './enums.js';
 export * from './users.js';
 export * from './vendor-profiles.js';
+export * from './vendor-slug-aliases.js';
 export * from './categories.js';
 export * from './tags.js';
 export * from './portfolio-items.js';
