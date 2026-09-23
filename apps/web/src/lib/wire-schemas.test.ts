@@ -218,6 +218,8 @@ describe('wireBookingViewSchema carries the payout release back as a Date', () =
     cancelledBy: null,
     refundAmountCents: null,
     payoutReleasedAt: null,
+    fullRefundCutoffHours: 48,
+    lateRefundRateBps: 5_000,
     createdAt: ISO,
     updatedAt: ISO,
   };

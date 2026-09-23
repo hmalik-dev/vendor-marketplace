@@ -4,6 +4,7 @@ import {
   ERROR_CODES,
   addDays,
   disclosesCustomerContact,
+  eventTimeZoneFor,
   isUniversallyPastDate,
   pageWindow,
   parseDurationHours,
@@ -18,8 +19,10 @@ import {
   type CreateBookingRequestInput,
   type HistoryPageQuery,
   type NotificationType,
+  type PackageSnapshot,
   type QuoteBookingRequestInput,
 } from '@vendor-marketplace/shared';
+import { setBookingActor } from '@vendor-marketplace/db';
 import type {
   BookingRequestRow,
   NewBookingRequestRow,
@@ -166,15 +169,55 @@ function toVendorSummary(vendor: VendorSummaryRow): BookingRequestDetail['vendor
   };
 }
 
-function toPackageSummary(row: ServicePackageRow): NonNullable<BookingRequestDetail['package']> {
+/**
+ * The package as it stood when the vendor accepted, frozen onto the request
+ * (VEN-647). `priceCents` is the locked price, the one the customer is charged,
+ * not whatever the package row says at the moment of acceptance.
+ */
+function toPackageSnapshot(row: ServicePackageRow, priceCents: number): PackageSnapshot {
   return {
     id: row.id,
     name: row.name,
-    priceCents: row.priceCents,
-    priceType: row.priceType,
-    durationHours: parseDurationHours(row.durationHours),
+    description: row.description,
     inclusions: row.inclusions ?? [],
+    durationHours: parseDurationHours(row.durationHours),
+    priceCents,
+    priceType: row.priceType,
   };
+}
+
+/**
+ * The package a request names: its snapshot once accepted, the live row before
+ * that — and for requests accepted before the snapshot existed, which have no
+ * other record of it.
+ */
+function toPackageSummary(
+  request: BookingRequestRow,
+  live: ServicePackageRow | null,
+): BookingRequestDetail['package'] {
+  const snapshot = request.packageSnapshot;
+
+  if (snapshot) {
+    return {
+      id: snapshot.id,
+      name: snapshot.name,
+      priceCents: snapshot.priceCents,
+      priceType: snapshot.priceType,
+      durationHours: snapshot.durationHours,
+      inclusions: snapshot.inclusions,
+    };
+  }
+
+  return live
+    ? {
+        id: live.id,
+        name: live.name,
+        priceCents: live.priceCents,
+        priceType: live.priceType,
+        durationHours: parseDurationHours(live.durationHours),
+        inclusions: live.inclusions ?? [],
+      }
+    : null;
 }
 
 /** The empty identity, for a customer row that has since been deleted. */
@@ -224,7 +267,7 @@ function toDetail(
       email: disclosed && customer.email !== '' ? customer.email : null,
       phone: disclosed ? customer.phone : null,
     },
-    package: servicePackage ? toPackageSummary(servicePackage) : null,
+    package: toPackageSummary(row, servicePackage),
     settlement,
   };
 }
@@ -694,6 +737,7 @@ export async function createBookingRequest(
     // Locked at the price on offer today; a later package edit cannot move it.
     finalPriceCents: servicePackage?.priceCents ?? null,
     expiresAt: replyDeadline(now, input.eventDate),
+    eventTimezone: eventTimeZoneFor(vendor.city, vendor.state),
   };
 
   /*
@@ -707,6 +751,7 @@ export async function createBookingRequest(
    * not survive a half-finished attempt.
    */
   const created = await db.transaction(async (tx) => {
+    await setBookingActor(tx, user.id);
     const row = await insertRequest(tx, values);
 
     if (!row) {
@@ -994,6 +1039,8 @@ export async function transitionRequest(
    * requests, because that is the thing there is exactly one of per date.
    */
   const updated = await db.transaction(async (tx) => {
+    await setBookingActor(tx, user.id);
+
     if (target === 'accepted') {
       await lockHeldDate(tx, row.vendorId, row.eventDate);
 
@@ -1235,9 +1282,17 @@ async function prepareTransition({
    */
   const acceptance = { acceptedAt, expiresAt: paymentDeadline(acceptedAt, row.eventDate) };
 
-  return row.finalPriceCents === null && row.quotedPriceCents !== null
-    ? { ...acceptance, finalPriceCents: row.quotedPriceCents }
-    : acceptance;
+  const finalPriceCents = row.finalPriceCents ?? row.quotedPriceCents;
+  const [servicePackage] = row.packageId ? await findPackagesByIds(db, [row.packageId]) : [];
+
+  return {
+    ...acceptance,
+    finalPriceCents,
+    packageSnapshot:
+      servicePackage && finalPriceCents !== null
+        ? toPackageSnapshot(servicePackage, finalPriceCents)
+        : null,
+  };
 }
 
 /** Tells the other party what just happened to the request they are in. */

@@ -7,6 +7,7 @@ export * from './portfolio-items.js';
 export * from './service-packages.js';
 export * from './availability.js';
 export * from './bookings.js';
+export * from './booking-events.js';
 export * from './messaging.js';
 export * from './reviews.js';
 export * from './legal-acceptances.js';

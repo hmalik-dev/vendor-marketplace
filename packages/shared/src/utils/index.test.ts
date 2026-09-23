@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { FULL_REFUND_CUTOFF_HOURS, PAYOUT_RELEASE_HOURS } from '../constants/index.js';
+import {
+  CURRENT_REFUND_TERMS,
+  FULL_REFUND_CUTOFF_HOURS,
+  PAYOUT_RELEASE_HOURS,
+} from '../constants/index.js';
 import {
   addDays,
   calculateFees,
@@ -173,7 +177,12 @@ describe('calculateRefund', () => {
   const TOTAL = 145_000;
 
   it('returns everything at exactly the cutoff', () => {
-    const quote = calculateRefund(TOTAL, EVENT, new Date('2026-06-12T00:00:00Z'));
+    const quote = calculateRefund(
+      TOTAL,
+      EVENT,
+      CURRENT_REFUND_TERMS,
+      new Date('2026-06-12T00:00:00Z'),
+    );
 
     expect(quote.refundCents).toBe(145_000);
     expect(quote.isFullRefund).toBe(true);
@@ -181,14 +190,21 @@ describe('calculateRefund', () => {
   });
 
   it('returns half one minute inside the cutoff', () => {
-    const quote = calculateRefund(TOTAL, EVENT, new Date('2026-06-12T00:01:00Z'));
+    const quote = calculateRefund(
+      TOTAL,
+      EVENT,
+      CURRENT_REFUND_TERMS,
+      new Date('2026-06-12T00:01:00Z'),
+    );
 
     expect(quote.refundCents).toBe(72_500);
     expect(quote.isFullRefund).toBe(false);
   });
 
   it('returns half once the event day has already begun', () => {
-    expect(calculateRefund(TOTAL, EVENT, new Date('2026-06-20T00:00:00Z'))).toEqual({
+    expect(
+      calculateRefund(TOTAL, EVENT, CURRENT_REFUND_TERMS, new Date('2026-06-20T00:00:00Z')),
+    ).toEqual({
       refundCents: 72_500,
       isFullRefund: false,
       hoursUntilEvent: 0,
@@ -197,7 +213,12 @@ describe('calculateRefund', () => {
 
   /* An odd total must not lose or invent a cent between the two halves. */
   it('rounds a half refund to a whole cent', () => {
-    const quote = calculateRefund(2_501, EVENT, new Date('2026-06-13T12:00:00Z'));
+    const quote = calculateRefund(
+      2_501,
+      EVENT,
+      CURRENT_REFUND_TERMS,
+      new Date('2026-06-13T12:00:00Z'),
+    );
 
     expect(quote.refundCents).toBe(1_251);
     expect(TOTAL % 2).toBe(0);
@@ -211,14 +232,36 @@ describe('calculateRefund', () => {
    */
   it('measures from midnight UTC on the event date', () => {
     expect(
-      calculateRefund(TOTAL, EVENT, new Date('2026-06-11T23:59:00Z')).hoursUntilEvent,
+      calculateRefund(TOTAL, EVENT, CURRENT_REFUND_TERMS, new Date('2026-06-11T23:59:00Z'))
+        .hoursUntilEvent,
     ).toBeCloseTo(48.02, 1);
   });
 
+  /*
+   * VEN-647: the terms come from the booking, not the constants. A booking sold
+   * under a 72-hour, 25% policy keeps it after the constants change, and one
+   * sold under today's terms is not re-priced by a stricter policy later.
+   */
+  it('prices a cancellation by the terms it is handed, not the constants', () => {
+    const soldUnderOldTerms = { fullRefundCutoffHours: 72, lateRefundRateBps: 2_500 };
+    const sixtyHoursOut = new Date('2026-06-11T12:00:00Z');
+
+    expect(calculateRefund(TOTAL, EVENT, soldUnderOldTerms, sixtyHoursOut)).toEqual({
+      refundCents: 36_250,
+      isFullRefund: false,
+      hoursUntilEvent: 60,
+    });
+    expect(calculateRefund(TOTAL, EVENT, CURRENT_REFUND_TERMS, sixtyHoursOut).refundCents).toBe(
+      145_000,
+    );
+  });
+
   it('rejects a total that is not whole cents, and a date that is not a date', () => {
-    expect(() => calculateRefund(10.5, EVENT)).toThrow(/integer/i);
-    expect(() => calculateRefund(-1, EVENT)).toThrow(/integer/i);
-    expect(() => calculateRefund(TOTAL, 'not-a-date')).toThrow(/calendar date/i);
+    expect(() => calculateRefund(10.5, EVENT, CURRENT_REFUND_TERMS)).toThrow(/integer/i);
+    expect(() => calculateRefund(-1, EVENT, CURRENT_REFUND_TERMS)).toThrow(/integer/i);
+    expect(() => calculateRefund(TOTAL, 'not-a-date', CURRENT_REFUND_TERMS)).toThrow(
+      /calendar date/i,
+    );
   });
 });
 

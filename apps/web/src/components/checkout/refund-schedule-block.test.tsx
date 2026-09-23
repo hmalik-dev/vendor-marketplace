@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import {
+  CURRENT_REFUND_TERMS,
   calculateRefund,
   formatPrice,
   refundSchedule,
@@ -122,7 +123,7 @@ describe('the refund schedule block', () => {
  * written here — if the two can disagree, eventually they will.
  */
 describe('what the block draws is what calculateRefund returns', () => {
-  const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE) ?? [];
+  const rows = refundSchedule(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS) ?? [];
   const event = new Date(`${EVENT_DATE}T00:00:00Z`).getTime();
 
   const samples: [string, Date][] = [
@@ -140,7 +141,7 @@ describe('what the block draws is what calculateRefund returns', () => {
     block({ onlyCurrent: true, now });
 
     const governing = currentRow(rows, now) as RefundScheduleRow;
-    const quoted = calculateRefund(TOTAL_CENTS, EVENT_DATE, now).refundCents;
+    const quoted = calculateRefund(TOTAL_CENTS, EVENT_DATE, CURRENT_REFUND_TERMS, now).refundCents;
 
     if (governing.kind === 'release') {
       /*

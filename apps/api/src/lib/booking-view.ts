@@ -40,6 +40,8 @@ export function toBookingView(booking: BookingRow): Booking {
     cancelledBy: booking.cancelledBy,
     refundAmountCents: booking.refundAmountCents,
     payoutReleasedAt: booking.payoutReleasedAt,
+    fullRefundCutoffHours: booking.fullRefundCutoffHours,
+    lateRefundRateBps: booking.lateRefundRateBps,
     createdAt: booking.createdAt,
     updatedAt: booking.updatedAt,
   };

@@ -24,6 +24,7 @@ import {
 const EXPECTED_TABLES = [
   'admin_actions',
   'availability',
+  'booking_events',
   'booking_requests',
   'bookings',
   'categories',

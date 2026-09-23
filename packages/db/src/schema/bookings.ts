@@ -1,10 +1,17 @@
-import type { EventType } from '@vendor-marketplace/shared';
+import {
+  CURRENT_REFUND_TERMS,
+  DEFAULT_CURRENCY,
+  type EventType,
+  type PackageSnapshot,
+} from '@vendor-marketplace/shared';
 import { sql } from 'drizzle-orm';
 import {
+  char,
   check,
   date,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   time,
@@ -67,6 +74,23 @@ export const bookingRequests = pgTable(
     quoteNote: text('quote_note'),
     /** Locked price: package price at request time, or the accepted quote. */
     finalPriceCents: integer('final_price_cents'),
+    /**
+     * The package as it stood at acceptance (VEN-647), written once by the
+     * accept and refused a second write by `booking_requests_package_snapshot_write_once`.
+     * Null on a custom request, on a request not yet accepted, and on requests
+     * accepted before this column — those read the live package, which is the
+     * only record of them there is.
+     */
+    packageSnapshot: jsonb('package_snapshot').$type<PackageSnapshot>(),
+    /**
+     * The IANA zone the event happens in, from the vendor's city at request
+     * time (VEN-647). Recorded, not yet read: the refund cutoff stays midnight
+     * UTC (VEN-615). Null for rows written before it and for a vendor with no
+     * state on file.
+     */
+    eventTimezone: varchar('event_timezone', { length: 64 }),
+    /** ISO 4217, upper case. Every amount on this row is in it. */
+    currency: char('currency', { length: 3 }).notNull().default(DEFAULT_CURRENCY),
     /**
      * When the vendor accepted. Checkout opens on "Maya accepted your request
      * on May 2", and `updated_at` cannot supply that date — writing the intent
@@ -315,6 +339,24 @@ export const bookings = pgTable(
      * not a cancellation's. `0` means none.
      */
     externalRefundCents: integer('external_refund_cents').notNull().default(0),
+    /**
+     * The cancellation terms this booking was sold under (VEN-647), which
+     * `calculateRefund` reads instead of the constants: a policy change must not
+     * re-price a booking already paid for. Written by `recordSuccessfulPayment`
+     * from `CURRENT_REFUND_TERMS`; the defaults are the same terms, so a row the
+     * previous release writes during the deploy window, and every row before
+     * this column, carries the terms that were in force when it was sold.
+     */
+    fullRefundCutoffHours: integer('full_refund_cutoff_hours')
+      .notNull()
+      .default(CURRENT_REFUND_TERMS.fullRefundCutoffHours),
+    lateRefundRateBps: integer('late_refund_rate_bps')
+      .notNull()
+      .default(CURRENT_REFUND_TERMS.lateRefundRateBps),
+    /** Copied from the request when the booking is written. */
+    eventTimezone: varchar('event_timezone', { length: 64 }),
+    /** ISO 4217, upper case. Every amount on this row is in it. */
+    currency: char('currency', { length: 3 }).notNull().default(DEFAULT_CURRENCY),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -402,6 +444,14 @@ export const bookings = pgTable(
       sql`${table.refundAmountCents} IS NULL OR (${table.refundAmountCents} >= 0 AND ${table.refundAmountCents} <= ${table.totalAmountCents})`,
     ),
     check('bookings_external_refund_cents_non_negative', sql`${table.externalRefundCents} >= 0`),
+    check(
+      'bookings_full_refund_cutoff_hours_non_negative',
+      sql`${table.fullRefundCutoffHours} >= 0`,
+    ),
+    check(
+      'bookings_late_refund_rate_bps_range',
+      sql`${table.lateRefundRateBps} >= 0 AND ${table.lateRefundRateBps} <= 10000`,
+    ),
     // The same guarantee as `booking_requests_accepted_date_key`, for the row
     // that outlives the request: a cancelled or completed booking frees the
     // constraint, a confirmed one holds the date (VEN-482).

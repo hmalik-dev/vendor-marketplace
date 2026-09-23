@@ -1,5 +1,6 @@
 import {
   availability,
+  bookingEvents,
   bookingRequests,
   bookings,
   categories,
@@ -20,7 +21,7 @@ import {
   toDateString,
   formatPrice,
 } from '@vendor-marketplace/shared';
-import { eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   bearer,
@@ -2107,6 +2108,261 @@ describe('payments', () => {
         'The date is free again on your calendar. This booking had not been paid out yet, so ' +
           'nothing is taken back out of your Stripe balance.',
       );
+    });
+  });
+
+  /*
+   * VEN-647. A booking records what was agreed — the package, the cancellation
+   * terms, the zone, the currency — and how it got there. Each test changes the
+   * live source after the agreement and asserts the record did not follow it.
+   */
+  describe('what was agreed (VEN-647)', () => {
+    async function userIdOf(authUserId: string): Promise<string> {
+      const [row] = await harness.database.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.authUserId, authUserId));
+
+      return row!.id;
+    }
+
+    it('keeps the accepted package through a later edit, at checkout and on the request', async () => {
+      const requestId = await acceptedRequest();
+      const [request] = await harness.database.db
+        .select()
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+
+      const edited = await inject('PUT', `/vendor/packages/${request!.packageId}`, VENDOR, {
+        name: 'Half day, renamed',
+        description: 'Three hours now.',
+        priceCents: 99_000,
+        priceType: 'fixed',
+        durationHours: 3,
+        inclusions: ['3 hours'],
+      });
+      expect(edited.statusCode).toBe(200);
+
+      const checkout = await inject(
+        'POST',
+        `/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+      expect(checkout.statusCode).toBe(200);
+      expect(checkout.json().servicePackage).toEqual({
+        name: 'Full day coverage',
+        durationHours: 6,
+      });
+      expect(checkout.json().amountCents).toBe(PRICE_CENTS);
+
+      const detail = await inject('GET', `/booking-requests/${requestId}`, CUSTOMER);
+      expect(detail.statusCode).toBe(200);
+      expect(detail.json().package).toEqual({
+        id: request!.packageId,
+        name: 'Full day coverage',
+        priceCents: PRICE_CENTS,
+        priceType: 'fixed',
+        durationHours: 6,
+        inclusions: ['6 hours'],
+      });
+
+      expect(request!.packageSnapshot).toEqual({
+        id: request!.packageId,
+        name: 'Full day coverage',
+        description: 'Six hours of coverage with two photographers on site.',
+        inclusions: ['6 hours'],
+        durationHours: 6,
+        priceCents: PRICE_CENTS,
+        priceType: 'fixed',
+      });
+    });
+
+    it('refuses a second write to the snapshot', async () => {
+      const requestId = await acceptedRequest();
+
+      await expect(
+        harness.database.db
+          .update(bookingRequests)
+          .set({
+            packageSnapshot: {
+              id: requestId,
+              name: 'Rewritten',
+              description: '',
+              inclusions: [],
+              durationHours: null,
+              priceCents: 1,
+              priceType: 'fixed',
+            },
+          })
+          .where(eq(bookingRequests.id, requestId)),
+      ).rejects.toThrow();
+    });
+
+    it('stores the refund terms it was sold under and refunds by them after a policy change', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [sold] = await harness.database.db.select().from(bookings);
+
+      expect([sold!.fullRefundCutoffHours, sold!.lateRefundRateBps]).toEqual([48, 5_000]);
+      expect(sold!.currency).toBe('USD');
+
+      /*
+       * The policy this booking was sold under differs from today's constants:
+       * 96 hours and a quarter back. Sixty hours out, the constants would refund
+       * in full; the booking's own terms refund a quarter.
+       */
+      await harness.database.db
+        .update(bookings)
+        .set({ fullRefundCutoffHours: 96, lateRefundRateBps: 2_500 })
+        .where(eq(bookings.id, sold!.id));
+      clockNow = new Date(new Date(`${EVENT_DATE}T00:00:00Z`).getTime() - 60 * 60 * 60 * 1000);
+
+      const response = await inject('PUT', `/customer/bookings/${sold!.id}/cancel`, CUSTOMER, {});
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().refundCents).toBe(36_250);
+      expect(response.json().isFullRefund).toBe(false);
+    });
+
+    it('captures the zone for a Los Angeles vendor on the request and the booking', async () => {
+      const { vendorId, packageId } = await createVendor();
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ city: 'Los Angeles', state: 'CA' })
+        .where(eq(vendorProfiles.id, vendorId));
+
+      const created = await inject('POST', '/booking-requests', CUSTOMER, {
+        vendorId,
+        packageId,
+        eventDate: EVENT_DATE,
+      });
+      expect(created.statusCode).toBe(201);
+      const requestId: string = created.json().id;
+      expect(
+        (await inject('POST', `/booking-requests/${requestId}/accept`, VENDOR)).statusCode,
+      ).toBe(200);
+      await payFor(requestId);
+
+      const [request] = await harness.database.db
+        .select()
+        .from(bookingRequests)
+        .where(eq(bookingRequests.id, requestId));
+      const [booking] = await harness.database.db.select().from(bookings);
+
+      expect([request!.eventTimezone, request!.currency]).toEqual(['America/Los_Angeles', 'USD']);
+      expect(booking!.eventTimezone).toBe('America/Los_Angeles');
+    });
+
+    it('records every transition with its actor, in order, and refuses to rewrite one', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      expect(
+        (await inject('PUT', `/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {})).statusCode,
+      ).toBe(200);
+
+      const customerId = await userIdOf(CUSTOMER);
+      const vendorUserId = await userIdOf(VENDOR);
+      const history = await harness.database.db
+        .select({
+          subjectType: bookingEvents.subjectType,
+          subjectId: bookingEvents.subjectId,
+          fromStatus: bookingEvents.fromStatus,
+          toStatus: bookingEvents.toStatus,
+          actorUserId: bookingEvents.actorUserId,
+          payload: bookingEvents.payload,
+        })
+        .from(bookingEvents)
+        .where(inArray(bookingEvents.subjectId, [requestId, booking!.id]))
+        .orderBy(asc(bookingEvents.at), asc(bookingEvents.id));
+
+      /*
+       * `at` is the transaction's start, so the two rows one cancellation writes
+       * share it; compare them as a set and the rest in order.
+       */
+      expect(history.slice(0, 3)).toEqual([
+        {
+          subjectType: 'booking_request',
+          subjectId: requestId,
+          fromStatus: null,
+          toStatus: 'pending',
+          actorUserId: customerId,
+          payload: { finalPriceCents: PRICE_CENTS },
+        },
+        {
+          subjectType: 'booking_request',
+          subjectId: requestId,
+          fromStatus: 'pending',
+          toStatus: 'accepted',
+          actorUserId: vendorUserId,
+          payload: { finalPriceCents: PRICE_CENTS },
+        },
+        {
+          subjectType: 'booking',
+          subjectId: booking!.id,
+          fromStatus: null,
+          toStatus: 'confirmed',
+          actorUserId: null,
+          payload: { totalAmountCents: PRICE_CENTS },
+        },
+      ]);
+      expect(history.slice(3)).toHaveLength(2);
+      expect(history.slice(3)).toEqual(
+        expect.arrayContaining([
+          {
+            subjectType: 'booking',
+            subjectId: booking!.id,
+            fromStatus: 'confirmed',
+            toStatus: 'cancelled',
+            actorUserId: customerId,
+            payload: { refundAmountCents: PRICE_CENTS, cancelledBy: 'customer' },
+          },
+          {
+            subjectType: 'booking_request',
+            subjectId: requestId,
+            fromStatus: 'accepted',
+            toStatus: 'cancelled',
+            actorUserId: customerId,
+            payload: { finalPriceCents: PRICE_CENTS },
+          },
+        ]),
+      );
+
+      await expect(
+        harness.database.db
+          .update(bookingEvents)
+          .set({ toStatus: 'completed' })
+          .where(eq(bookingEvents.subjectId, booking!.id)),
+      ).rejects.toThrow();
+      await expect(
+        harness.database.db.delete(bookingEvents).where(eq(bookingEvents.subjectId, requestId)),
+      ).rejects.toThrow();
+    });
+
+    it('attributes an expiry to the system', async () => {
+      const { vendorId, packageId } = await createVendor();
+      const created = await inject('POST', '/booking-requests', CUSTOMER, {
+        vendorId,
+        packageId,
+        eventDate: EVENT_DATE,
+      });
+      const requestId: string = created.json().id;
+      clockNow = addDays(START, 8);
+
+      expect((await inject('GET', `/booking-requests/${requestId}`, CUSTOMER)).json().status).toBe(
+        'expired',
+      );
+
+      const [expiry] = await harness.database.db
+        .select({
+          fromStatus: bookingEvents.fromStatus,
+          toStatus: bookingEvents.toStatus,
+          actorUserId: bookingEvents.actorUserId,
+        })
+        .from(bookingEvents)
+        .where(and(eq(bookingEvents.subjectId, requestId), eq(bookingEvents.toStatus, 'expired')));
+
+      expect(expiry).toEqual({ fromStatus: 'pending', toStatus: 'expired', actorUserId: null });
     });
   });
 });

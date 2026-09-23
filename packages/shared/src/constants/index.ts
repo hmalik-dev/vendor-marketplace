@@ -353,6 +353,14 @@ export type PayoutModel = (typeof PAYOUT_MODELS)[number];
 export const BOOKING_CANCELLED_BY = ['customer', 'admin'] as const;
 export type BookingCancelledBy = (typeof BOOKING_CANCELLED_BY)[number];
 
+/**
+ * The two rows whose status transitions `booking_events` records (VEN-647).
+ * Stored beside the subject id because that id carries no foreign key: the
+ * history has to outlive the row it is about.
+ */
+export const BOOKING_EVENT_SUBJECTS = ['booking_request', 'booking'] as const;
+export type BookingEventSubject = (typeof BOOKING_EVENT_SUBJECTS)[number];
+
 export const REVIEW_TYPES = ['customer_to_vendor', 'vendor_to_customer'] as const;
 export type ReviewType = (typeof REVIEW_TYPES)[number];
 
@@ -1121,6 +1129,29 @@ export const FULL_REFUND_CUTOFF_HOURS = 48;
 
 /** Refund fraction when cancelling inside the full-refund cutoff. */
 export const LATE_CANCELLATION_REFUND_RATE = 0.5;
+
+/**
+ * The cancellation terms a booking is sold under, stored on the booking row
+ * (VEN-647) so a change to the two constants above re-prices only the bookings
+ * sold after it. The rate travels as basis points: an integer column, and no
+ * float between the policy and the refund.
+ */
+export interface RefundTerms {
+  fullRefundCutoffHours: number;
+  lateRefundRateBps: number;
+}
+
+/** Basis points in a whole: `5000` is half. */
+export const BPS_PER_UNIT = 10_000;
+
+/** The terms in force now — what a booking paid for today is sold under. */
+export const CURRENT_REFUND_TERMS: RefundTerms = {
+  fullRefundCutoffHours: FULL_REFUND_CUTOFF_HOURS,
+  lateRefundRateBps: Math.round(LATE_CANCELLATION_REFUND_RATE * BPS_PER_UNIT),
+};
+
+/** Every money row is in this currency until the product sells in another. */
+export const DEFAULT_CURRENCY = 'USD';
 
 /**
  * How long after the event date the vendor's share is transferred. **D35.**
