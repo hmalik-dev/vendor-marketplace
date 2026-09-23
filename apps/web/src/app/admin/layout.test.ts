@@ -53,3 +53,10 @@ describe('the admin layout resolves the role before anything else', () => {
     }
   });
 });
+
+// Moved from `loading-boundaries.test.ts`, whose admin exemption it justified (VEN-654).
+describe('the admin layout keeps the console out of search results', () => {
+  it('declares robots noindex for every page under it', () => {
+    expect(layout).toMatch(/robots:\s*\{\s*index:\s*false/);
+  });
+});
