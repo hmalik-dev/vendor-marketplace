@@ -24,7 +24,12 @@ import { fileURLToPath } from 'node:url';
 import { resolveBaseUrl } from './e2e-base-url.mjs';
 import { resolveRoles } from './e2e-roles.mjs';
 import { describeFailure } from './e2e-diagnostics.mjs';
-import { signInRefusal, waitForSession, withRetry } from './e2e-sign-in.mjs';
+import {
+  keepOffTheImageOptimizer,
+  signInRefusal,
+  waitForSession,
+  withRetry,
+} from './e2e-sign-in.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = resolveBaseUrl();
@@ -50,6 +55,7 @@ function readEnvFile(name) {
 
 async function signIn(browser, role, email, password) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await keepOffTheImageOptimizer(context);
   const page = await context.newPage();
   try {
     await page.goto(`${BASE}/sign-in`, { waitUntil: 'domcontentloaded' });

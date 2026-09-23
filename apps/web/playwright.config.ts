@@ -47,6 +47,8 @@ export default defineConfig({
    * spec's module-level `assertStagingEnvironment()`.
    */
   testIgnore: STAGING_SPEC_IGNORE,
+  // Fills `next start`'s image cache before a journey can wedge it (VEN-655).
+  globalSetup: './e2e/global-setup.ts',
   // A journey drives several pages; the default 30s is tight once a cold Next
   // route compiles on first hit.
   timeout: 90_000,

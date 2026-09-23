@@ -111,3 +111,20 @@ export async function withRetry(
     }
   }
 }
+
+/**
+ * Every `/_next/image` request the sign-in browser would make, answered in the
+ * browser instead (VEN-655).
+ *
+ * The customer lands on `/`, and the context is closed as soon as the session
+ * exists — mid-render, with the category art's first optimization in flight.
+ * Under `next start`, a client that leaves before a cold optimization finishes
+ * wedges that image for the life of the server, and this runs before the
+ * suite's own warm-up (`apps/web/e2e/warm-image-optimizer.ts`) can fill the
+ * cache. A route abort never reaches the server, so there is nothing to wedge.
+ */
+export const IMAGE_OPTIMIZER_PATTERN = /\/_next\/image\?/;
+
+export async function keepOffTheImageOptimizer(context) {
+  await context.route(IMAGE_OPTIMIZER_PATTERN, (route) => route.abort());
+}
