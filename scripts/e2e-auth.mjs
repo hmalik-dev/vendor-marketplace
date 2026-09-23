@@ -18,12 +18,13 @@
 // code. The operator account is one of them; its `users.role` is granted by
 // `db:seed:e2e`, never by signing in.
 import { chromium } from 'playwright';
-import { readFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveBaseUrl } from './e2e-base-url.mjs';
 import { resolveRoles } from './e2e-roles.mjs';
 import { describeFailure } from './e2e-diagnostics.mjs';
+import { signInRefusal, waitForSession, withRetry } from './e2e-sign-in.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = resolveBaseUrl();
@@ -73,24 +74,45 @@ async function signIn(browser, role, email, password) {
       .getByLabel(/password/i)
       .first()
       .fill(password);
+    /*
+     * Done on the provider's answer and the cookie it sets, not when the page
+     * leaves `/sign-in`: that is the role's home rendering, and a home that
+     * never finishes is the journeys' failure to report, not this step's
+     * (VEN-602). Registered before the click so the answer cannot be missed.
+     */
+    const answered = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname.endsWith('/sign-in/email'),
+      { timeout: 30000 },
+    );
+    // Awaited below; this only keeps a click that throws first from orphaning it.
+    answered.catch(() => {});
     await page
       .getByRole('button', { name: /^(sign in|continue)$/i })
       .first()
       .click();
 
-    await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), { timeout: 30000 });
+    const response = await answered;
+    const refusal = signInRefusal(response.status(), await response.json().catch(() => null));
+    if (refusal) throw refusal;
+    await waitForSession(() => context.cookies());
 
-    const cookies = await context.cookies();
-    if (!cookies.some((c) => c.name.includes('neon-auth'))) {
-      throw new Error('signed in but no Neon Auth session cookie was set');
-    }
+    /* Where it went is only logged; a home still rendering is named, not waited on. */
+    const landed = await page
+      .waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
+        timeout: 5000,
+        waitUntil: 'commit',
+      })
+      .then(() => new URL(page.url()).pathname)
+      .catch(() => 'nowhere yet: the home had not rendered');
 
     mkdirSync(AUTH_DIR, { recursive: true });
     const out = resolve(AUTH_DIR, `${role}.json`);
     await context.storageState({ path: out });
-    console.log(
-      `  ${role}: saved -> .auth/${role}.json  (landed on ${new URL(page.url()).pathname})`,
-    );
+    // A failed try before this one left its capture; the upload step must not read it as current.
+    rmSync(resolve(DIAGNOSTICS_DIR, `${role}-sign-in-failure.png`), { force: true });
+    console.log(`  ${role}: saved -> .auth/${role}.json  (landed on ${landed})`);
   } catch (error) {
     mkdirSync(DIAGNOSTICS_DIR, { recursive: true });
     error.diagnosis = await describeFailure(page, {
@@ -138,7 +160,11 @@ try {
       continue;
     }
     try {
-      await signIn(browser, role, email, password);
+      // Each attempt opens its own context, so a retry starts signed out.
+      await withRetry(() => signIn(browser, role, email, password), {
+        onRetry: (error, n) =>
+          console.log(`  ${role}: attempt ${n} failed — ${error.message.split('\n')[0]}; retrying`),
+      });
     } catch (error) {
       // Never echo the credential, only the failure.
       console.error(`  ${role}: FAILED — ${error.message.split('\n')[0]}`);
