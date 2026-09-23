@@ -119,6 +119,17 @@ describe('the DEPLOY_ENV guards', () => {
     expect(() => bootEnv(source)).toThrow(/DEPLOY_ENV is required on a deployment/);
   });
 
+  /*
+   * VEN-609. EMAIL_FROM's default names a domain nobody verified with Resend,
+   * so a deployment that never set it would boot and have every send refused.
+   */
+  it('refuses a deployment that never set EMAIL_FROM, naming it', () => {
+    stubDeployed({ ...HTTPS });
+    const { EMAIL_FROM: _from, ...source } = process.env;
+
+    expect(() => bootEnv(source)).toThrow(/EMAIL_FROM is required on a deployment/);
+  });
+
   it('refuses a hosted platform that declares DEPLOY_ENV=local, but not a local container', () => {
     stubDeployed({ ...HTTPS, DEPLOY_ENV: 'local', STRIPE_SECRET_KEY: TEST_KEY });
     expect(() => bootEnv()).not.toThrow();

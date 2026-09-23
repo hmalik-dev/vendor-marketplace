@@ -91,6 +91,15 @@ first. Both branches were empty of user rows and both held 0000–0009.
       see them otherwise, and preflight fails by name without them. On
       rotation, change all three places: Vercel, Railway (`WEB_TIER_KEY`) and
       GitHub.
+- [ ] **Release sender check** (VEN-609). On both `staging` and `production`,
+      add the variable `EMAIL_FROM` (the same value Railway's API has) and
+      the secret `RESEND_API_KEY`, a full-access Resend key so it can list
+      domains. Resend has no read-only scope, so this key can send, read
+      sent mail and mint keys: create one per environment, used nowhere
+      else, and note that on a Resend team both tiers share, staging's key
+      reaches production's mail too. Every release fails at the sender step until Resend reports
+      that domain `verified`. The deployed API also refuses to boot without
+      its own `EMAIL_FROM` now; the `orla.com` default is not ours.
 - [ ] **Legal wording** (VEN-378). The terms, privacy and cookie pages exist, but
       their wording is placeholder nobody has relied on. A lawyer reads them —
       above all the staff-message-access clause (#436) under _Who else sees it_

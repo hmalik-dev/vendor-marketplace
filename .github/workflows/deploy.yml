@@ -5,6 +5,7 @@
 #   environment, so each has its own secrets and variables
 #     → gate       the commit is still that branch's tip
 #     → preflight  an input not configured → fails by name, so a release never reads green having shipped nothing
+#     → sender     Resend has verified EMAIL_FROM's domain, or nothing ships (VEN-609)
 #     → migrate    DATABASE_URL_UNPOOLED only (NEON_BRANCH must name the
 #                  environment), then the idempotent reference seed
 #     → api        deploy the API image; the host's own branch auto-deploy is
@@ -107,6 +108,8 @@ jobs:
           HAS_NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET != '' }}
           HAS_API_URL: ${{ vars.API_URL != '' }}
           HAS_WEB_URL: ${{ vars.WEB_URL != '' }}
+          HAS_EMAIL_FROM: ${{ vars.EMAIL_FROM != '' }}
+          HAS_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY != '' }}
           API_HOST: ${{ vars.API_HOST }}
         run: node scripts/deploy.mjs preflight
 
@@ -125,6 +128,15 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm turbo run build --filter=@vendor-marketplace/db --filter=@vendor-marketplace/shared
+
+      # VEN-609: before anything moves, Resend must say EMAIL_FROM's domain is
+      # verified. The key must be able to list domains; a sending-only one fails.
+      - name: Refuse to release from an unverified email sender
+        if: steps.gate.outputs.deploy == 'true' && steps.preflight.outputs.ready == 'true'
+        env:
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: node scripts/deploy.mjs sender
 
       # The unpooled URL and nothing else: no DATABASE_URL reaches this step, so
       # DDL cannot route through the pooler. NEON_BRANCH is not a secret: it

@@ -314,6 +314,7 @@ describe('parseEnv on a deployment', () => {
     'STORAGE_REGION',
     'STORAGE_PUBLIC_URL',
     'SUPPORT_EMAIL_TO',
+    'EMAIL_FROM',
   ] as const;
 
   /*
@@ -357,6 +358,7 @@ describe('parseEnv on a deployment', () => {
     STORAGE_REGION: 'us-east-2',
     STORAGE_PUBLIC_URL: 'https://cdn.orla.test/uploads',
     SUPPORT_EMAIL_TO: 'support@orla.test',
+    EMAIL_FROM: 'Orla <noreply@orla.test>',
     SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',
   };
 
@@ -551,6 +553,7 @@ describe('SENTRY_DSN at boot', () => {
     STORAGE_REGION: 'us-east-2',
     STORAGE_PUBLIC_URL: 'https://cdn.orla.test/uploads',
     SUPPORT_EMAIL_TO: 'support@orla.test',
+    EMAIL_FROM: 'Orla <noreply@orla.test>',
     SENTRY_DSN: DSN,
   };
 

@@ -268,7 +268,8 @@ function stripeProbes({ env, get, handledStripeEvents, stripeApiVersion }: Launc
   ];
 }
 
-function resendProbes({ env, get }: LaunchOptions): Probe[] {
+/** Also the deploy's sender check (`sender.ts`), which has only the environment and a reader. */
+export function resendProbes({ env, get }: Pick<LaunchOptions, 'env' | 'get'>): Probe[] {
   const name = 'resend sending domain';
 
   return [

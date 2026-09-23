@@ -2,7 +2,7 @@
 /**
  * VEN-397, VEN-494. The phases `.github/workflows/deploy.yml` runs, one per step:
  *
- *   gate → preflight → migrate → api → web → ready
+ *   gate → preflight → sender → migrate → api → web → ready
  *
  * Each run targets one environment, `staging` or `production`, named by the
  * branch CI ran on (`DEPLOY_TARGET`); nothing else deploys, and `main` never does.
@@ -92,6 +92,9 @@ export const REQUIRED_INPUTS = [
   { name: 'NEON_AUTH_COOKIE_SECRET', kind: 'secret' },
   { name: 'API_URL', kind: 'variable' },
   { name: 'WEB_URL', kind: 'variable' },
+  // VEN-609: the API's sender, repeated here so the release can prove Resend verified it.
+  { name: 'EMAIL_FROM', kind: 'variable' },
+  { name: 'RESEND_API_KEY', kind: 'secret' },
 ];
 
 /** The environment variable preflight reads to learn whether `name` is set. */
@@ -406,6 +409,24 @@ export const PHASES = {
 
     if (!blank(env.GITHUB_OUTPUT)) appendFileSync(env.GITHUB_OUTPUT, 'ready=true\n');
     io.write('Every deploy input is configured.\n');
+  },
+
+  /*
+   * VEN-609. The sending domain must be verified in Resend before anything
+   * moves: an unverified one is refused on every send and the API only logs
+   * it, so booking email, the admin step-up code and the operator pager would
+   * all go quiet behind a green release. The check is launch:check's own
+   * probe (`packages/preflight/src/launch/sender.ts`), where a key that cannot
+   * list domains fails rather than asking a person to look.
+   */
+  async sender(env, io) {
+    need(env, ['EMAIL_FROM', 'RESEND_API_KEY']);
+
+    await io.run('pnpm', ['release:sender'], {
+      env: pick(env, [...TOOL_ENV, 'EMAIL_FROM', 'RESEND_API_KEY']),
+      redact: redactor([env.RESEND_API_KEY]),
+      write: io.write,
+    });
   },
 
   /*
