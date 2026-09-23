@@ -334,6 +334,36 @@ export function payoutFailedAlert(input: {
 }
 
 /**
+ * The platform's Stripe balance is below what it still owes (VEN-644): money
+ * waiting for vendors, or refundable to customers, has left it — paid out to
+ * the bank, or spent on another booking's transfer. The next payout or refund
+ * it cannot cover fails with `balance_insufficient`.
+ */
+export function platformBalanceShortAlert(input: {
+  /** The UTC date checked, `YYYY-MM-DD`: one alert per day. */
+  date: string;
+  availableCents: number;
+  pendingCents: number;
+  unreleasedPayoutCents: number;
+  refundableExposureCents: number;
+}): OperatorAlert {
+  const balanceCents = input.availableCents + input.pendingCents;
+  const requiredCents = input.unreleasedPayoutCents + input.refundableExposureCents;
+
+  return {
+    kind: 'platform_balance_short',
+    subjectId: input.date,
+    summary: `The platform balance is ${formatPrice(requiredCents - balanceCents)} short of what it owes`,
+    details: [
+      `Stripe holds ${formatPrice(balanceCents)} (${formatPrice(input.availableCents)} available, ${formatPrice(input.pendingCents)} pending) against ${formatPrice(requiredCents)} still owed.`,
+      `Owed: ${formatPrice(input.unreleasedPayoutCents)} in vendor payouts not yet sent, and ${formatPrice(input.refundableExposureCents)} more that bookings could still refund.`,
+      'Confirm the platform payout schedule is manual, then find what left the balance — a payout, a refund or a dispute: docs/runbook-platform-balance.md.',
+    ],
+    adminPath: '/admin/payments',
+  };
+}
+
+/**
  * A refund that should have gone back to a customer did not — or, with a
  * `refundId`, one that did go out but whose booking row could not be moved to
  * match (VEN-472), so the money and the row disagree.

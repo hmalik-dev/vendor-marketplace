@@ -37,3 +37,7 @@ deployment is.
 - The fake gateway tags with `TEST_ENV.DEPLOY_ENV` (`'local'`), not the harness's
   `env` override — a suite created with `DEPLOY_ENV: 'staging'` that runs a real
   checkout silently takes the foreign branch.
+- VEN-644's daily balance reconciliation compares the **shared** account's
+  balance with **one** tier's liabilities, so pre-live it is noise or masking
+  across tiers (correctness, not a trust boundary). Audited PASS 2026-09-23:
+  alert/log carry only cents, the launch probe reuses the existing GET `/account`.

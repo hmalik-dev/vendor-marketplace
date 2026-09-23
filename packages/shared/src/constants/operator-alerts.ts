@@ -13,6 +13,10 @@
  * `auth_identity_deleted` (VEN-480) is an account Neon Auth no longer knows that
  * still holds confirmed bookings. The reconcile never closes it: refunding those
  * bookings is an operator's decision, made through the console's closure.
+ *
+ * `platform_balance_short` (VEN-644) is the daily reconciliation finding the
+ * platform's Stripe balance below what it still owes vendors and customers —
+ * money paid out to the bank, or spent on someone else's booking, too early.
  */
 export const OPERATOR_ALERT_KINDS = [
   'dispute_opened',
@@ -26,6 +30,7 @@ export const OPERATOR_ALERT_KINDS = [
   'report_filed',
   'launch_switch_flipped',
   'auth_identity_deleted',
+  'platform_balance_short',
   'daily_digest',
 ] as const;
 export type OperatorAlertKind = (typeof OPERATOR_ALERT_KINDS)[number];
@@ -91,3 +96,29 @@ export type StripeWebhookFailureKind = (typeof STRIPE_WEBHOOK_FAILURE_KINDS)[num
  * heals itself; three in a row is money a person has to look at.
  */
 export const PAYOUT_FAILURE_ALERT_ATTEMPTS = 3;
+
+/**
+ * How often the platform balance is reconciled against what it owes (VEN-644).
+ * Each instance also runs it shortly after boot, so a deploy more often than
+ * daily still checks; a run skips the alert once one was recorded for that UTC
+ * date, so a day raises one email however many instances or restarts ran it.
+ */
+export const PLATFORM_BALANCE_RECONCILE_INTERVAL_MS = 24 * 60 * 60_000;
+
+/**
+ * How long after its payout is released a booking's commission still counts
+ * as refundable in that reconciliation: the card networks' 120-day chargeback
+ * window. Commission older than this is the platform's to pay out.
+ */
+export const REFUND_EXPOSURE_AFTER_RELEASE_DAYS = 120;
+
+/**
+ * The Stripe processing fee the reconciliation assumes each booking's charge
+ * already lost, as basis points of its total plus a fixed amount. The balance
+ * only ever holds a charge net of that fee, which the platform absorbs out of
+ * its commission (D1), so the refundable commission is counted net of it.
+ * Deliberately the upper end — 2.9% + 30¢ plus 1.5% for an international card —
+ * so a real fee never reads as a shortfall; the vendor's share is never reduced.
+ */
+export const STRIPE_FEE_ALLOWANCE_BPS = 440;
+export const STRIPE_FEE_ALLOWANCE_FIXED_CENTS = 30;

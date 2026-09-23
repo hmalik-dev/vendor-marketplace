@@ -22,8 +22,25 @@ import {
   sumUsableRefunds,
   transferGroupFor,
   transferParams,
+  usdCents,
   type StripeConnectGateway,
 } from './stripe.js';
+
+describe('usdCents', () => {
+  it('adds up the USD entries of a balance and ignores other currencies', () => {
+    expect(
+      usdCents([
+        { amount: 120_000, currency: 'usd' },
+        { amount: 9_999, currency: 'eur' },
+        { amount: -2_500, currency: 'usd' },
+      ]),
+    ).toBe(117_500);
+  });
+
+  it('reads an empty balance as zero', () => {
+    expect(usdCents([])).toBe(0);
+  });
+});
 
 describe('isRefusedAccountCreation', () => {
   it('counts a v1 invalid_request_error and a v2 invalid_fields body as refusals', () => {
