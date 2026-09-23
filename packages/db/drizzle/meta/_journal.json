@@ -568,6 +568,13 @@
       "when": 1790073337581,
       "tag": "0080_cool_kitty_pryde",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1790138181299,
+      "tag": "0081_lame_spot",
+      "breakpoints": true
     }
   ]
 }

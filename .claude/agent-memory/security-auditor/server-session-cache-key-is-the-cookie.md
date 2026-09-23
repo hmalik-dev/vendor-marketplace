@@ -36,6 +36,16 @@ chrome. The web never authorizes on this read; the API re-verifies the token.
 The `[api-timeout]` line prints the path _with query_ (admin `?q=` holds a
 customer name/email), but `ApiTimeoutError.message` already carried it — not new.
 
+**VEN-628 sign-out bound (audited 2026-09-23):** the sign-out proxy reads the
+caller's id off this cache (`mintedUserIdForCaller`, same key, sound) or a live
+`getSession`, then bumps a **per-user** `users.sessions_invalidated_at` via
+`POST /internal/session-generation` (WEB_TIER_KEY-gated, constant 200 — sound).
+The API compares it to the token's `iat` after `verify()` on the same string —
+sound. The failure is scope: other devices keep a live Neon session while their
+JWTs are refused, and every other instance's cache keeps serving the refused JWT
+until it lapses; `iat` is whole seconds, so a re-mint in the sign-out's own
+second is refused and then cached. Pair a per-user bump with `revoke-sessions`.
+
 **How to apply:** any future cache in front of a session read is judged on its
 key, not its TTL — ask what a caller can put in the key and who else can hold
 the same one. Related: [[neon-auth-cutover-boundaries]],

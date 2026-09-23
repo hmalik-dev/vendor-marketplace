@@ -5,10 +5,14 @@ const upstreamPost = vi.fn<(request: Request, context: Context) => Promise<Respo
 const afterTasks: Array<() => Promise<void>> = [];
 
 const forgetSessionsFor = vi.fn();
+const mintedUserIdForCaller = vi.fn<() => Promise<string | undefined>>();
+const getSession = vi.fn();
 vi.mock('@/lib/auth/server', () => ({
   forgetSessionsFor: (userId: string) => forgetSessionsFor(userId),
+  mintedUserIdForCaller: () => mintedUserIdForCaller(),
   neonAuth: () => ({
     handler: () => ({ POST: upstreamPost, GET: vi.fn() }),
+    getSession: () => getSession(),
   }),
 }));
 const captureException = vi.fn();
@@ -25,8 +29,14 @@ vi.mock('next/server', async (importOriginal) => ({
 const { POST } = await import('./route');
 const { resetThrottle } = await import('@/lib/auth/proxy-throttle');
 
+beforeEach(() => {
+  mintedUserIdForCaller.mockReset().mockResolvedValue(undefined);
+  getSession.mockReset().mockResolvedValue({ data: null });
+});
+
 const REQUEST = 'email-otp/request-password-reset';
 const RESET = 'email-otp/reset-password';
+const SIGN_OUT = 'sign-out';
 
 function call(path: string, body: unknown, ip = '1.1.1.1'): Promise<Response> {
   const request = new Request(`http://localhost/api/auth/${path}`, {
@@ -344,6 +354,148 @@ describe('password reset through the auth proxy', () => {
 
     expect(response.status).toBe(404);
     expect(upstreamPost).not.toHaveBeenCalled();
+  });
+});
+
+describe('signing out through the auth proxy (VEN-628)', () => {
+  beforeEach(() => {
+    resetThrottle();
+    upstreamPost.mockReset();
+    forgetSessionsFor.mockReset();
+    captureMessage.mockReset();
+    captureException.mockReset();
+    // Every sign-out revokes every session first; unless a test cares which
+    // path got which answer, both calls succeed.
+    upstreamPost.mockResolvedValue(Response.json({ success: true }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('forgets the caller’s cached session once the provider confirms sign-out', async () => {
+    mintedUserIdForCaller.mockResolvedValue('user-9');
+    upstreamPost.mockResolvedValue(Response.json({ success: true }));
+
+    const response = await call(SIGN_OUT, {});
+
+    expect(response.status).toBe(200);
+    expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
+    // The cache already named the caller; no need to ask Neon Auth again.
+    expect(getSession).not.toHaveBeenCalled();
+  });
+
+  it('asks Neon Auth for the caller’s id when nothing is cached for their cookie', async () => {
+    mintedUserIdForCaller.mockResolvedValue(undefined);
+    getSession.mockResolvedValue({ data: { user: { id: 'user-cold' } } });
+    upstreamPost.mockResolvedValue(Response.json({ success: true }));
+
+    await call(SIGN_OUT, {});
+
+    expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-cold');
+  });
+
+  it('forgets nothing and reports it when the caller cannot be identified either way', async () => {
+    await call(SIGN_OUT, {});
+
+    expect(forgetSessionsFor).not.toHaveBeenCalled();
+    expect(captureMessage).toHaveBeenCalledWith(
+      'Signed out a caller this process could not identify',
+      { level: 'warning' },
+    );
+  });
+
+  it('revokes every session for the account before ending the caller’s own, with their cookie', async () => {
+    mintedUserIdForCaller.mockResolvedValue('user-9');
+    const calls: Array<{ path: string; cookie: string | null }> = [];
+    upstreamPost.mockImplementation(async (request, context) => {
+      const { path } = await context.params;
+      calls.push({ path: path.join('/'), cookie: request.headers.get('cookie') });
+      return Response.json({ success: true });
+    });
+
+    const request = new Request('http://localhost/api/auth/sign-out', {
+      method: 'POST',
+      headers: {
+        'x-forwarded-for': '1.1.1.1',
+        cookie: '__Secure-neon-auth.session_token=abc',
+      },
+    });
+    await POST(request as never, { params: Promise.resolve({ path: SIGN_OUT.split('/') }) });
+
+    expect(calls).toEqual([
+      { path: 'revoke-sessions', cookie: '__Secure-neon-auth.session_token=abc' },
+      { path: 'sign-out', cookie: '__Secure-neon-auth.session_token=abc' },
+    ]);
+  });
+
+  it('still ends the caller’s own session, and reports it, when revoking every other one fails', async () => {
+    mintedUserIdForCaller.mockResolvedValue('user-9');
+    upstreamPost.mockImplementation(async (request, context) => {
+      const { path } = await context.params;
+      return path.join('/') === 'revoke-sessions'
+        ? Response.json({ message: 'down' }, { status: 500 })
+        : Response.json({ success: true });
+    });
+
+    const response = await call(SIGN_OUT, {});
+
+    expect(response.status).toBe(200);
+    expect(captureMessage).toHaveBeenCalledWith('Could not end every session on sign-out', {
+      level: 'warning',
+      extra: { status: 500 },
+    });
+    expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
+  });
+
+  it('does not touch the cache when the provider refuses to sign out', async () => {
+    mintedUserIdForCaller.mockResolvedValue('user-9');
+    upstreamPost.mockResolvedValue(Response.json({ message: 'down' }, { status: 500 }));
+
+    const response = await call(SIGN_OUT, {});
+
+    expect(response.status).toBe(500);
+    expect(forgetSessionsFor).not.toHaveBeenCalled();
+  });
+
+  it('bounds the minted JWT at the API once a web tier key is configured', async () => {
+    vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+    mintedUserIdForCaller.mockResolvedValue('user-9');
+    upstreamPost.mockResolvedValue(Response.json({ success: true }));
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ invalidated: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await call(SIGN_OUT, {});
+
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('/internal/session-generation'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ authUserId: 'user-9' }),
+      }),
+    );
+  });
+
+  it('reports, rather than fails on, an unreachable session-generation call', async () => {
+    vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+    mintedUserIdForCaller.mockResolvedValue('user-9');
+    upstreamPost.mockResolvedValue(Response.json({ success: true }));
+    const failure = new Error('down');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(failure));
+
+    const response = await call(SIGN_OUT, {});
+
+    expect(response.status).toBe(200);
+    expect(captureException).toHaveBeenCalledWith(failure);
+  });
+
+  it('never calls the internal endpoint with no web tier key configured', async () => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    mintedUserIdForCaller.mockResolvedValue('user-9');
+    upstreamPost.mockResolvedValue(Response.json({ success: true }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await call(SIGN_OUT, {});
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

@@ -144,10 +144,13 @@ export const getServerSession = cache(
  * cookie that would refresh it, so the answer is kept here instead.
  *
  * It is kept for the life of the JWT it holds — the same 15 minutes the API
- * already honours that token for, so nothing outlives what a token in the
- * browser could do anyway. Keyed by the session cookie, which is the credential
- * the caller already holds: a sign-out deletes the cookie, so the entry is
- * never asked for again.
+ * already honours that token for. That bound assumed the browser's own copy
+ * was the only copy: a value captured elsewhere (a shared device, a
+ * compromised proxy) can still be replayed after the browser signs out and
+ * deletes its cookie, so nothing here deletes *itself* on sign-out. Instead
+ * the sign-out proxy calls {@link forgetSessionsFor} explicitly, by the user
+ * id it read off this same cache before forwarding the call (VEN-628) — the
+ * entry cannot outlive that request.
  */
 const REFRESH_WINDOW_MS = 60_000;
 const MAX_REMEMBERED_SESSIONS = 5_000;
@@ -204,6 +207,19 @@ function remember(cookieValue: string, session: ServerSession): void {
   if (mintedSessions.size < MAX_REMEMBERED_SESSIONS) {
     mintedSessions.set(cookieValue, { ...session, expiresAtMs });
   }
+}
+
+/**
+ * The user id this process has cached the caller's own session cookie under,
+ * or `undefined` when nothing is cached for it — a cold cache, or no session
+ * cookie at all. The sign-out proxy uses this to know whose entries to forget
+ * with {@link forgetSessionsFor} without an extra round trip to Neon Auth just
+ * to ask (VEN-628): the cache is already keyed by this exact cookie value.
+ */
+export async function mintedUserIdForCaller(): Promise<string | undefined> {
+  const cookieValue = await sessionCookieValue();
+
+  return cookieValue === null ? undefined : mintedSessions.get(cookieValue)?.userId;
 }
 
 /**

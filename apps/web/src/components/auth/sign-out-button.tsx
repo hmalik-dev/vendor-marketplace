@@ -1,6 +1,8 @@
 'use client';
 
 import { Slot } from 'radix-ui';
+import { toast } from 'sonner';
+import { AUTH_COPY } from '@/app/auth-copy';
 import { signOut } from '@/lib/auth/auth-requests';
 
 interface SignOutButtonProps {
@@ -16,6 +18,13 @@ interface SignOutButtonProps {
  * header, footer, the role-gated layouts — is rebuilt signed out and no client
  * cache holds the last person's data. The account menu is ours end to end: the
  * visitor never reaches a provider-hosted panel.
+ *
+ * A failed call stays on the page instead (VEN-628): navigating home anyway
+ * left someone looking at a page that reads signed-out while the cookie was
+ * never actually revoked, which is worse than staying put and saying so. A
+ * toast rather than inline copy, because this one control renders inside a
+ * dropdown menu item, a drawer row and a footer link — three places with no
+ * room of their own for a sentence.
  */
 export function SignOutButton({
   children,
@@ -24,10 +33,10 @@ export function SignOutButton({
   return (
     <Slot.Root
       onClick={() => {
-        const leave = (): void => window.location.assign(redirectUrl);
-
-        /* Leave either way: a failed call must not strand someone on a page that says they are in. */
-        void signOut().then(leave, leave);
+        void signOut().then(
+          () => window.location.assign(redirectUrl),
+          () => toast.error(AUTH_COPY.unreachable),
+        );
       }}
     >
       {children}

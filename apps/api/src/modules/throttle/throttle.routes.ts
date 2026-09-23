@@ -1,24 +1,12 @@
-import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { throttleChargeSchema, WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
-import { notFound, unauthorized } from '../../lib/errors.js';
+import { throttleChargeSchema } from '@vendor-marketplace/shared';
 import { chargeThrottle } from '../../lib/throttle.js';
+import { requireWebTierKey } from '../../lib/web-tier-key.js';
 
 export interface ThrottleRoutesOptions {
   /** `WEB_TIER_KEY`. Unset (local only) and the route does not exist. */
   webTierKey: string | undefined;
-}
-
-function keyMatches(presented: unknown, secret: string): boolean {
-  if (typeof presented !== 'string') {
-    return false;
-  }
-
-  const expected = Buffer.from(secret);
-  const given = Buffer.from(presented);
-
-  return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
 /**
@@ -40,19 +28,7 @@ export const throttleRoutes: FastifyPluginAsyncZod<ThrottleRoutesOptions> = asyn
     {
       config: { rateLimit: false },
       bodyLimit: 1_024,
-      /*
-       * Before the body is parsed: the route is exempt from the limiter, so the
-       * key must be checked ahead of any work an anonymous caller could cause.
-       */
-      onRequest: async (request) => {
-        if (options.webTierKey === undefined) {
-          throw notFound();
-        }
-
-        if (!keyMatches(request.headers[WEB_TIER_KEY_HEADER], options.webTierKey)) {
-          throw unauthorized();
-        }
-      },
+      onRequest: requireWebTierKey(options.webTierKey),
       schema: {
         body: throttleChargeSchema,
         response: { 200: z.object({ throttled: z.boolean() }) },

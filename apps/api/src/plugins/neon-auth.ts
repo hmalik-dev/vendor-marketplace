@@ -122,6 +122,28 @@ function stringClaim(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+/**
+ * Reads `iat` (as epoch milliseconds) from an already-verified token's payload,
+ * without a second signature check — `verify` above has already proven the
+ * payload is what the issuer signed. Used only to compare against
+ * `users.sessions_invalidated_at` (VEN-628); a token with no readable `iat`
+ * compares as `null` and is never refused on that basis alone.
+ */
+function issuedAtMs(token: string): number | null {
+  const payload = token.split('.')[1];
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const json = Buffer.from(payload, 'base64url').toString('utf8');
+    const iat = (JSON.parse(json) as { iat?: unknown }).iat;
+    return typeof iat === 'number' ? iat * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The default verifier: signature, issuer, audience, expiry and a verified address. */
 export function createNeonTokenVerifier(baseUrl: string, jwks?: JWTVerifyGetKey): TokenVerifier {
   const keys = jwks ?? jwksFor(baseUrl);
@@ -255,6 +277,28 @@ export const neonAuthPlugin = fp<NeonAuthPluginOptions>(
       }
 
       const { user } = subject;
+
+      /*
+       * A Neon Auth JWT is stateless and stays verifiable until it expires
+       * regardless of sign-out (VEN-628) — this is the bound on that window.
+       * `sessions_invalidated_at` is bumped once, by the web tier's sign-out
+       * proxy; any token minted before it is refused the same way an expired
+       * one is, so a captured token cannot outlive the sign-out that should
+       * have ended it by more than the time this column takes to write.
+       *
+       * Compared at whole-second resolution, floored down: `iat` is seconds
+       * (a JWT convention) but `now()` carries microseconds, so a token
+       * minted in the same wall-clock second as the write — on a re-sign-in
+       * immediately after, say — must not be refused for its whole
+       * remaining life over a sub-second race neither clock can resolve.
+       */
+      if (
+        user.sessionsInvalidatedAt !== null &&
+        (issuedAtMs(token) ?? Infinity) <
+          Math.floor(user.sessionsInvalidatedAt.getTime() / 1000) * 1000
+      ) {
+        throw unauthorized('Session token is invalid or expired');
+      }
 
       if (user.isBanned) {
         if (openToLockedOut) {

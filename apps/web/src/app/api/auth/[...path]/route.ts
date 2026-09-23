@@ -1,8 +1,10 @@
 import * as Sentry from '@sentry/nextjs';
 import type { NextRequest } from 'next/server';
 import { after, NextResponse } from 'next/server';
-import { forgetSessionsFor, neonAuth } from '@/lib/auth/server';
+import { WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
+import { forgetSessionsFor, mintedUserIdForCaller, neonAuth } from '@/lib/auth/server';
 import { isProxiedAuthCall } from '@/lib/auth/proxy-allowlist';
+import { apiOrigin } from '@/config/public-env';
 import {
   addressLimit,
   callerAddress,
@@ -54,6 +56,10 @@ const forward =
     }
 
     const joined = path.join('/');
+    if (method === 'POST' && joined === SIGN_OUT) {
+      return forwardSignOut(request, context);
+    }
+
     if (method === 'POST' && RESET_PATHS.has(joined)) {
       return forwardReset(request, context, path);
     }
@@ -64,6 +70,146 @@ const forward =
 
     return neonAuth().handler()[method](request, context);
   };
+
+const SIGN_OUT = 'sign-out';
+const SESSION_GENERATION_TIMEOUT_MS = 2_000;
+const CALLER_ID_TIMEOUT_MS = 2_000;
+
+/**
+ * Ends every session the account holds at the provider, then closes the two
+ * windows a revoked cookie could otherwise still be replayed through
+ * (VEN-628):
+ *
+ * 1. This process's own minted-token cache (`server.ts`) — read the caller's
+ *    user id off the cache entry the cookie is already keyed by, no extra
+ *    round trip to Neon needed, then forget every entry for that user.
+ * 2. The JWT itself, which stays verifiable at the API regardless of
+ *    sign-out — bumping `sessions_invalidated_at` bounds how long one minted
+ *    before this call keeps working. Best-effort: a failure here is reported
+ *    rather than turned into a failed sign-out, since the cookie is already
+ *    gone and the cache already cleared.
+ *
+ * Signing out revokes every session the account holds, not just the caller's
+ * own cookie — the ticket's title is "ends the session everywhere", and the
+ * JWT bound above only makes sense once every device's underlying session is
+ * actually gone at the provider too, rather than merely refused locally
+ * while Neon still thinks it is live. `revokeEverySessionForCaller` runs
+ * first, while the caller's cookie is still valid.
+ */
+async function forwardSignOut(request: NextRequest, context: RouteContext): Promise<Response> {
+  const userId = await resolveCallerId();
+
+  await revokeEverySessionForCaller(request);
+
+  const response = await neonAuth().handler().POST(request, context);
+
+  if (!response.ok) {
+    return response;
+  }
+
+  if (userId !== undefined) {
+    forgetSessionsFor(userId);
+  } else {
+    // Nothing local to clear, but worth knowing how often this happens: it
+    // is the one case `invalidateSessionsAtApi` below also skips.
+    Sentry.captureMessage('Signed out a caller this process could not identify', {
+      level: 'warning',
+    });
+  }
+
+  await invalidateSessionsAtApi(userId);
+
+  return response;
+}
+
+/**
+ * The caller's own user id, from the cache their cookie is already keyed
+ * under when this process minted it — no round trip needed — or, on a cache
+ * miss (a cold instance, or a session this instance never rendered), one call
+ * to Neon Auth with the same cookie, bounded so a wedged upstream cannot hold
+ * sign-out open (VEN-619 is the same argument for `server.ts`'s own reads).
+ * Never throws: an unreachable provider here means the id is unknown, not
+ * that sign-out failed.
+ */
+async function resolveCallerId(): Promise<string | undefined> {
+  const cached = await mintedUserIdForCaller();
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const session = await Promise.race([
+    neonAuth()
+      .getSession()
+      .catch(() => ({ data: null })),
+    new Promise<{ data: null }>((resolve) => {
+      setTimeout(() => resolve({ data: null }), CALLER_ID_TIMEOUT_MS);
+    }),
+  ]);
+
+  return session.data?.user?.id;
+}
+
+/**
+ * Ends every session this account holds at the provider — not only the
+ * caller's own — reusing the exact mechanism `endEverySession` below already
+ * proved for password reset (VEN-518). The difference is this caller is
+ * already authenticated, so their own live cookie is the credential
+ * `revoke-sessions` needs, forwarded as-is; `endEverySession` has to sign in
+ * fresh first because it starts from an unauthenticated reset request.
+ * Best-effort and silent either way: sign-out below still runs and still
+ * answers the browser regardless, and a caller with no live cookie (a second
+ * tab signing out after the first already did) simply has nothing to revoke.
+ */
+async function revokeEverySessionForCaller(request: NextRequest): Promise<void> {
+  try {
+    const headers = new Headers(request.headers);
+    headers.delete('content-length');
+    headers.delete('content-encoding');
+    headers.set('content-type', 'application/json');
+
+    const revoke = segments('revoke-sessions');
+    const revoked = await neonAuth()
+      .handler()
+      .POST(authCall(request, revoke, headers, '{}') as NextRequest, {
+        params: Promise.resolve({ path: revoke }),
+      });
+
+    if (!revoked.ok) {
+      Sentry.captureMessage('Could not end every session on sign-out', {
+        level: 'warning',
+        extra: { status: revoked.status },
+      });
+    }
+  } catch (error) {
+    Sentry.captureException(error);
+  }
+}
+
+async function invalidateSessionsAtApi(userId: string | undefined): Promise<void> {
+  const key = process.env.WEB_TIER_KEY;
+
+  if (userId === undefined || !key) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${apiOrigin()}/internal/session-generation`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', [WEB_TIER_KEY_HEADER]: key },
+      body: JSON.stringify({ authUserId: userId }),
+      signal: AbortSignal.timeout(SESSION_GENERATION_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      Sentry.captureMessage('Could not bound a signed-out session’s JWT', {
+        level: 'warning',
+        extra: { status: response.status },
+      });
+    }
+  } catch (error) {
+    Sentry.captureException(error);
+  }
+}
 
 const MAX_BODY_BYTES = 4096;
 const REQUEST_RESET = 'email-otp/request-password-reset';

@@ -103,6 +103,14 @@ export const users = pgTable(
      */
     pendingEmail: varchar('pending_email', { length: 255 }),
     emailSyncFailedAt: timestamp('email_sync_failed_at', { withTimezone: true }),
+    /**
+     * Set to "now" on sign-out (VEN-628). A Neon Auth JWT stays valid — and
+     * verifiable — until it expires regardless of sign-out, since Neon issues
+     * it stateless; the API refuses one anyway once it was minted before this
+     * timestamp, by comparing the token's own `iat` against this column, which
+     * the auth hook already reads on every authenticated request.
+     */
+    sessionsInvalidatedAt: timestamp('sessions_invalidated_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

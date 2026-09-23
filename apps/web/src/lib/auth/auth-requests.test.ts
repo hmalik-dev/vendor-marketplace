@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { signInWithEmail, signUpWithEmail, verifyEmailCode } from './auth-requests';
+import { signInWithEmail, signOut, signUpWithEmail, verifyEmailCode } from './auth-requests';
 
 const INPUT = { email: 'new@example.com', password: 'a-long-password', name: 'new' };
 
@@ -123,5 +123,42 @@ describe('signInWithEmail', () => {
     await expect(
       signInWithEmail({ email: 'new@example.com', password: 'a-long-password' }),
     ).resolves.toBe('unverified');
+  });
+});
+
+describe('signOut', () => {
+  it('resolves once the proxy confirms the session ended', async () => {
+    stubFetch(200);
+
+    await expect(signOut()).resolves.toBeUndefined();
+  });
+
+  // VEN-628: a caller has to be able to tell this apart from a real sign-out,
+  // rather than being told it worked when the cookie is still live.
+  it('rejects when the provider errors', async () => {
+    stubFetch(500);
+
+    await expect(signOut()).rejects.toThrow();
+  });
+
+  it('rejects when the proxy throttles the call', async () => {
+    stubFetch(429);
+
+    await expect(signOut()).rejects.toThrow();
+  });
+
+  it('rejects when the request never reaches the proxy', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+
+    await expect(signOut()).rejects.toThrow();
+  });
+
+  // A second tab signing out after the first has nothing left to end, and
+  // Better Auth answers a 4xx for it — that is not a failure this browser
+  // needs to hear about, since it has nothing to stay signed into either way.
+  it('resolves for an ordinary 4xx, since there is no live session left either way', async () => {
+    stubFetch(400);
+
+    await expect(signOut()).resolves.toBeUndefined();
   });
 });
