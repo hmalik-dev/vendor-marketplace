@@ -5,6 +5,7 @@ import {
   isPastDate,
   LOCKED_AVAILABILITY_STATUSES,
   type AvailabilityStatus,
+  type VendorSettableAvailabilityStatus,
 } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -375,7 +376,7 @@ export function AvailabilityCalendar({
 
   const apply = async (
     dates: readonly string[],
-    status: 'available' | 'blocked',
+    status: VendorSettableAvailabilityStatus,
   ): Promise<void> => {
     const editable = dates.filter(isEditable);
 
