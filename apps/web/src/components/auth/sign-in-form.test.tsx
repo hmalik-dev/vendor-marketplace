@@ -122,7 +122,7 @@ describe('SignInForm', () => {
 
     expect(
       await screen.findByText(
-        'Too many wrong passwords from this device. Wait a few minutes, or reset your password to sign in now.',
+        'Too many sign-in attempts from this device. Wait a few minutes and try again, or reset your password.',
       ),
     ).toBeDefined();
     expect(screen.getByRole('link', { name: 'Forgot password?' })).toBeDefined();

@@ -53,7 +53,7 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
       return;
     }
 
-    // A throttled sign-in names the way in that is never throttled: the reset.
+    // A throttled sign-in also names the password reset, which does not depend on the sign-in budget.
     setFailure(
       outcome === 'throttled'
         ? AUTH_COPY.signInThrottled

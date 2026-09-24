@@ -220,9 +220,11 @@ const pairHits = new Map<string, number[]>();
  * spend it and lock the owner out. So a caller is refused for one of two
  * reasons: it spent its own budget for the address, or the address budget is
  * spent and it has already failed once itself. A caller with no failure of its
- * own for the address is never refused, so the owner gets in with the right
- * password, and a stranger rotating callers gets one guess from each. The
- * per-caller budget on the path and the provider's own limits stay behind both.
+ * own for the address is not refused by the address budget, so the owner gets
+ * in with the right password; a stranger rotating callers gets one guess from
+ * each, up to a hard ceiling per address that binds every caller. The product
+ * writes no cookie of its own (`no-cookie-consent.test.ts`), so there is no
+ * device token to exempt the owner by.
  */
 async function chargePair(
   address: string,
@@ -265,20 +267,62 @@ async function chargePair(
   return record ? recent.length > limit : recent.length >= limit;
 }
 
+/**
+ * Wrong passwords per account address, from every caller together, past which
+ * even a caller with no failure of its own is refused: the bound on guessing
+ * one account with many addresses (VEN-630). Ten times the per-caller budget, so
+ * a stranger has to hold that many failures' worth of callers to reach it.
+ */
+const SIGN_IN_CEILING = 10 * SIGN_IN_ADDRESS_LIMIT;
+/** Stands for "every caller" in a pair bucket; no address is written `*`. */
+const ALL_CALLERS = '*';
+
+/**
+ * The caller as the sign-in budget counts it: an IPv6 address by its /64, since
+ * one host holds a whole /64 and would otherwise be a fresh caller per request.
+ */
+export function signInCaller(caller: string): string {
+  if (!caller.includes(':') || caller.includes('.')) {
+    return caller;
+  }
+
+  const [head = '', tail] = caller.toLowerCase().split('::');
+  const front = head === '' ? [] : head.split(':');
+  const back = tail === undefined || tail === '' ? [] : tail.split(':');
+  const groups =
+    tail === undefined
+      ? front
+      : [
+          ...front,
+          ...Array<string>(Math.max(0, 8 - front.length - back.length)).fill('0'),
+          ...back,
+        ];
+
+  return `${groups
+    .slice(0, 4)
+    .map((group) => group.padStart(4, '0'))
+    .join(':')}::/64`;
+}
+
 /** Read-only: whether this caller may try a password for this address now. */
 export async function isSignInRefused(
   address: string,
   caller: string,
   now: number = Date.now(),
 ): Promise<boolean> {
-  if (await chargePair(address, caller, SIGN_IN_ADDRESS_LIMIT, false, now)) {
+  const who = signInCaller(caller);
+
+  if (
+    (await chargePair(address, who, SIGN_IN_ADDRESS_LIMIT, false, now)) ||
+    (await chargePair(address, ALL_CALLERS, SIGN_IN_CEILING, false, now))
+  ) {
     return true;
   }
 
-  // The address budget binds only a caller that has already failed for it.
+  // Below the ceiling, the address budget binds only a caller that has already failed for it.
   return (
     (await chargeAddress(address, SIGN_IN_PATH, now, false)) &&
-    (await chargePair(address, caller, 1, false, now))
+    (await chargePair(address, who, 1, false, now))
   );
 }
 
@@ -289,7 +333,8 @@ export async function recordSignInFailure(
   now: number = Date.now(),
 ): Promise<void> {
   await chargeAddress(address, SIGN_IN_PATH, now);
-  await chargePair(address, caller, SIGN_IN_ADDRESS_LIMIT, true, now);
+  await chargePair(address, signInCaller(caller), SIGN_IN_ADDRESS_LIMIT, true, now);
+  await chargePair(address, ALL_CALLERS, SIGN_IN_CEILING, true, now);
 }
 
 /** Test seam: forgets every recorded call. */

@@ -57,7 +57,7 @@ export const AUTH_COPY = {
   sessionEndFailed: 'We could not sign that device out. Try again in a moment.',
   throttled: "This isn't going through right now. Wait a few minutes and try again.",
   signInThrottled:
-    'Too many wrong passwords from this device. Wait a few minutes, or reset your password to sign in now.',
+    'Too many sign-in attempts from this device. Wait a few minutes and try again, or reset your password.',
   unreachable: 'We could not reach the sign-in service. Try again in a moment.',
 } as const;
 
