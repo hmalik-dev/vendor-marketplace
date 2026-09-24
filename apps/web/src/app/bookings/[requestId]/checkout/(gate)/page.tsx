@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { expiryCountdown, pageTitle } from '@vendor-marketplace/shared';
 import { CheckoutScreen } from '@/components/checkout/checkout-screen';
 import {
@@ -40,6 +41,10 @@ export default async function CheckoutPage({ params }: PageProps): Promise<React
    */
   const requestId = await gateCheckout({ params });
   const outcome = await openCheckout(requestId);
+
+  if (outcome.state === 'paid') {
+    redirect(`/bookings/${requestId}/confirmed`);
+  }
 
   if (outcome.state === 'not-found') {
     throw new Error('Booking request vanished after the checkout gate read it');

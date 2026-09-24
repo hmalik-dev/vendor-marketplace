@@ -81,6 +81,20 @@ const FUNNEL = /^(?:search|vendors\/\[slug\]|bookings\/\[requestId\])(?:\/|$)/;
 /** The calls that set a response status or gate a session; none may run under a boundary. */
 const STATUS_CALLS = /\b(?:notFound|redirect|permanentRedirect|requireRole|requireCurrentUser)\(/g;
 
+/**
+ * Pages under a boundary that may still call `redirect(`, and how many times.
+ * The count is checked exactly, so an entry cannot outlive its call.
+ *
+ * Checkout (VEN-637): a request that turns paid between the gate and the POST
+ * that opens checkout. Only that POST can tell, and it mints a payment intent,
+ * so it cannot run in the layout above the boundary (a link prefetch renders
+ * layouts). The customer lands on their confirmation either way; the price of
+ * the streamed redirect is a 200 in place of a 307, on a race window.
+ */
+const STREAMED_REDIRECTS: Record<string, number> = {
+  'bookings/[requestId]/checkout/(gate)': 1,
+};
+
 describe('every route has a loading boundary or a stated reason it cannot', () => {
   it('finds the routes, so it cannot pass vacuously', () => {
     expect(ALL_PAGES.length).toBeGreaterThan(40);
@@ -98,6 +112,12 @@ describe('every route has a loading boundary or a stated reason it cannot', () =
       });
     },
   );
+
+  it('names only pages that exist as streamed-redirect exemptions', () => {
+    expect(
+      Object.keys(STREAMED_REDIRECTS).filter((segment) => !ALL_PAGES.includes(segment)),
+    ).toEqual([]);
+  });
 
   it('lists only routes that exist', () => {
     expect(Object.keys(NO_BOUNDARY).filter((segment) => !ALL_PAGES.includes(segment))).toEqual([]);
@@ -129,7 +149,9 @@ describe('every route has a loading boundary or a stated reason it cannot', () =
 
       const source = readFileSync(join(APP_DIR, segment, 'page.tsx'), 'utf8');
 
-      expect(source.match(STATUS_CALLS) ?? []).toEqual([]);
+      expect(source.match(STATUS_CALLS) ?? []).toEqual(
+        Array<string>(STREAMED_REDIRECTS[segment] ?? 0).fill('redirect('),
+      );
     },
   );
 });
