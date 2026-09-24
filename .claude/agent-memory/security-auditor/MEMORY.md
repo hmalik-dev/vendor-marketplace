@@ -66,7 +66,7 @@
 - [D31's proportional split is now our arithmetic](refund-proportionality-is-now-ours-to-state.md) — pre-release cancel states no retained half
 - [The payout sweep is a second money mover](payout-sweep-is-a-second-money-mover.md) — it locks rows cancel/dispute do not
 - [`payoutOwedClauses` is shared with the sweep](payout-owed-clauses-is-shared-with-the-sweep.md) — widening the read widens the transfer claim
-- [Settlement is a fourth money projection](settlement-is-a-third-money-projection.md) — no ownership predicate; callers pre-authorize
+- [Settlement is a fourth money projection](settlement-is-a-third-money-projection.md) — no ownership predicate; VEN-725 statement DAO vendorId filter fails open
 - [Legacy destination rows are guarded twice](legacy-destination-rows-guarded-in-one-place.md) — VEN-658 zero-transfer release matches it; deploy window open
 - [Launch switches gate new intents, not open ones](launch-switches-gate-new-intents-not-open-ones.md) — an issued client secret survives
 - [Idempotency guards orphan their side effects](idempotency-guards-orphan-side-effects.md) — `ON CONFLICT DO NOTHING` fronts non-tx writes

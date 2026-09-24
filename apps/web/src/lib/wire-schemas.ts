@@ -564,6 +564,9 @@ export type WireAdminPaymentPage = z.infer<typeof wireAdminPaymentPageSchema>;
 export const wireAdminTaxYearsSchema = z.object({ years: z.array(z.number().int()) });
 export type WireAdminTaxYears = z.infer<typeof wireAdminTaxYearsSchema>;
 
+/** The years a vendor has a yearly statement for (VEN-725): the same shape as the admin's list. */
+export const wireVendorTaxYearsSchema = wireAdminTaxYearsSchema;
+
 /**
  * The retry's answer, with its date coerced — **the one that gets away** (#432).
  *

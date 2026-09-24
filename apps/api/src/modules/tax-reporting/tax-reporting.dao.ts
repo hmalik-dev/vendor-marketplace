@@ -1,9 +1,16 @@
 import { bookings, vendorProfiles } from '@vendor-marketplace/db/schema';
-import { and, asc, eq, gt, gte, isNotNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, isNotNull, sql } from 'drizzle-orm';
 import type { AppDatabase } from '../../lib/database.js';
 
 export interface SettledBookingRow {
+  bookingId: string;
   vendorId: string;
+  /** The event's calendar date, `YYYY-MM-DD`. */
+  eventDate: string;
+  /** Refunded to the customer by Orla or in the Stripe Dashboard: the two columns the payout code subtracts. */
+  refundedCents: number;
+  vendorPayoutCents: number;
+  debtNettedCents: number;
   stripeAccountId: string;
   totalAmountCents: number;
   /** When the vendor's share moved: the transfer for `separate`, the charge for `destination`. */
@@ -18,7 +25,13 @@ export interface SettledBookingRow {
  */
 const settledAtExpr = sql<Date | null>`case when ${bookings.payoutModel} = 'separate' then ${bookings.payoutReleasedAt} else ${bookings.paidAt} end`;
 
-const yearStart = (year: number): Date => new Date(Date.UTC(year, 0, 1));
+/**
+ * `settledAtExpr` is a raw `sql` template, so Drizzle has no column encoder for
+ * a value compared against it and the postgres-js driver refuses a bare `Date`
+ * parameter. Bind the instant as ISO text and cast it in the statement.
+ */
+const yearStart = (year: number) =>
+  sql`${new Date(Date.UTC(year, 0, 1)).toISOString()}::timestamptz`;
 
 /**
  * Bookings whose vendor share was settled in `year` (UTC), by `settledAtExpr`,
@@ -34,7 +47,12 @@ export async function settledBookings(
 ): Promise<SettledBookingRow[]> {
   const rows = await db
     .select({
+      bookingId: bookings.id,
       vendorId: bookings.vendorId,
+      eventDate: bookings.eventDate,
+      refundedCents: sql<number>`coalesce(${bookings.refundAmountCents}, 0) + ${bookings.externalRefundCents}`,
+      vendorPayoutCents: bookings.vendorPayoutCents,
+      debtNettedCents: bookings.debtNettedCents,
       stripeAccountId: vendorProfiles.stripeAccountId,
       totalAmountCents: bookings.totalAmountCents,
       settledAt: sql<Date | string>`${settledAtExpr}`.as('settled_at'),
@@ -43,8 +61,8 @@ export async function settledBookings(
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
     .where(
       and(
-        gte(settledAtExpr, yearStart(year)),
-        lt(settledAtExpr, yearStart(year + 1)),
+        sql`${settledAtExpr} >= ${yearStart(year)}`,
+        sql`${settledAtExpr} < ${yearStart(year + 1)}`,
         gt(bookings.vendorPayoutCents, 0),
         isNotNull(vendorProfiles.stripeAccountId),
         vendorId ? eq(bookings.vendorId, vendorId) : undefined,
@@ -59,8 +77,11 @@ export async function settledBookings(
   }));
 }
 
-/** The calendar years (UTC) that have at least one settled booking, newest first. */
-export async function taxYearsWithSettledBookings(db: AppDatabase): Promise<number[]> {
+/** The calendar years (UTC) that have at least one settled booking, newest first; one vendor's when given. */
+export async function taxYearsWithSettledBookings(
+  db: AppDatabase,
+  vendorId?: string,
+): Promise<number[]> {
   const year = sql<number>`extract(year from ${settledAtExpr} at time zone 'UTC')::int`;
   const rows = await db
     .selectDistinct({ year })
@@ -71,6 +92,7 @@ export async function taxYearsWithSettledBookings(db: AppDatabase): Promise<numb
         isNotNull(settledAtExpr),
         gt(bookings.vendorPayoutCents, 0),
         isNotNull(vendorProfiles.stripeAccountId),
+        vendorId ? eq(bookings.vendorId, vendorId) : undefined,
       ),
     );
 
