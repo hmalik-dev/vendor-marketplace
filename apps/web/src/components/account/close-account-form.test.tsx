@@ -42,8 +42,12 @@ async function reachTheConfirmation(role: 'customer' | 'vendor' = 'customer') {
 
 describe('CloseAccountForm (VEN-680)', () => {
   it('names the bookings that refuse the closure and offers no way to proceed', () => {
-    render(<CloseAccountForm role="customer" email={EMAIL} blockers={[BLOCKER]} />);
+    const { container } = render(
+      <CloseAccountForm role="customer" email={EMAIL} blockers={[BLOCKER]} />,
+    );
 
+    // A list inside the banner's paragraph is invalid HTML and a hydration error in the browser.
+    expect(container.querySelector('p p, p ul')).toBeNull();
     expect(screen.getByText('Cancel your upcoming booking first')).toBeDefined();
     expect(screen.getByText(/with Sunlit Studio/).textContent).toContain('2099');
     expect(screen.getByRole('link', { name: 'your bookings' }).getAttribute('href')).toBe(

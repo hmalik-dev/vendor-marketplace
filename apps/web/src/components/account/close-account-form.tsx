@@ -69,26 +69,27 @@ export function CloseAccountForm({
 
   if (blockers.length > 0) {
     return (
-      <Banner
-        status="pending"
-        title={`Cancel your upcoming ${blockers.length === 1 ? 'booking' : 'bookings'} first`}
-      >
-        <p>
+      <div className="flex flex-col gap-4">
+        {/* `Banner` wraps its children in a `<p>`, so the list sits beside it, not inside. */}
+        <Banner
+          status="pending"
+          title={`Cancel your upcoming ${blockers.length === 1 ? 'booking' : 'bookings'} first`}
+        >
           Closing your account never prices a cancellation for you. Cancel{' '}
           {blockers.length === 1 ? 'this booking' : 'these bookings'} from{' '}
           <Link href={BOOKINGS_PATH} className="font-semibold underline">
             your bookings
           </Link>
           , where the refund is priced the way every cancellation is.
-        </p>
-        <ul className="mt-3 list-disc pl-5">
+        </Banner>
+        <ul className="list-disc pl-5 text-sm text-stone-700">
           {blockers.map((blocker) => (
             <li key={blocker.bookingId}>
               {formatEventDate(blocker.eventDate)} with {blocker.counterpartyName}
             </li>
           ))}
         </ul>
-      </Banner>
+      </div>
     );
   }
 
