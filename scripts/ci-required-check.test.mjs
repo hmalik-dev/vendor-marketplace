@@ -35,6 +35,42 @@ test('the required check waits for every job that runs a check, and runs even wh
   assert.equal(CI.jobs.e2e.needs, 'verify');
 });
 
+// VEN-593. The scoping lives in the job's steps, so each mutation below is a
+// step a refactor could quietly drop: none of them turns the suite red on its own.
+test('the e2e job keeps its check name and scopes the run without skipping the job', () => {
+  const { e2e } = CI.jobs;
+  assert.equal(e2e.name, 'End-to-end journeys');
+  assert.equal(e2e.if, undefined, 'a job-level condition would skip a required check');
+  const [checkout, select, secrets] = e2e.steps;
+  // The pull request diff is the merge commit against its first parent.
+  assert.equal(checkout.with['fetch-depth'], 2);
+  assert.equal(select.id, 'select');
+  assert.match(select.run, /HEAD\^1 HEAD/);
+  assert.match(select.run, /node scripts\/e2e-ci\.mjs select /);
+  // A diff that cannot be read, and a release, must reach the full suite.
+  assert.match(select.run, /<diff unavailable>/);
+  assert.match(select.run, /BASE_REF" = production/);
+  assert.equal(e2e.permissions.actions, 'read');
+  // `none` ends the job green: every later step reads this step's output.
+  assert.equal(secrets.id, 'secrets');
+  assert.equal(secrets.if, "steps.select.outputs.suite != 'none'");
+});
+
+test('the journeys step runs the scoped list only for an explicit `scoped`, else the full suite', () => {
+  const run = CI.jobs.e2e.steps.find((step) => step.name === 'Run the journeys');
+  assert.equal(run.env.SUITE, '${{ steps.select.outputs.suite }}');
+  assert.equal(run.env.SPECS, '${{ steps.select.outputs.specs }}');
+  assert.match(run.run, /\[ "\$SUITE" = scoped \] && \[ -n "\$SPECS" \]/);
+  assert.match(run.run, /playwright test --pass-with-no-tests "\$\{files\[@\]\}"/);
+  assert.match(run.run, /else\n\s+pnpm --filter @vendor-marketplace\/web test:e2e\n/);
+});
+
+test('every step of the e2e job that uses an action pins it to a commit', () => {
+  for (const { uses } of CI.jobs.e2e.steps.filter((step) => step.uses)) {
+    assert.match(uses, /@[0-9a-f]{40}$/);
+  }
+});
+
 test('every test package is covered by a shard, and each shard set is complete', () => {
   const sets = new Map();
   for (const { pkg, shard } of CI.jobs.test.strategy.matrix.include) {

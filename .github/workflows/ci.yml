@@ -254,6 +254,8 @@ jobs:
     # This job holds the Stripe and auth secrets, so its token reads and nothing more.
     permissions:
       contents: read
+      # Read-only: the journey selection asks for `main`'s last successful run.
+      actions: read
     # One run per branch. The workflow-level group already cancels a superseded
     # push; this also keeps two runs of one branch off the shared E2E accounts
     # and the pinned Stripe connected account at once.
@@ -331,7 +333,8 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
-          BEFORE_SHA: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           changed="$RUNNER_TEMP/changed-files.txt"
           if [ "$EVENT_NAME" = pull_request ] && [ "$BASE_REF" = production ]; then
@@ -340,8 +343,17 @@ jobs:
             git diff --name-only --no-renames HEAD^1 HEAD > "$changed" \
               || echo '<diff unavailable>' > "$changed"
           else
-            git fetch --no-tags --depth=1 origin "$BEFORE_SHA" \
-              && git diff --name-only --no-renames "$BEFORE_SHA" HEAD > "$changed" \
+            # A push is diffed against the last `main` run of this workflow that
+            # succeeded, not against `github.event.before`: a run superseded by the
+            # next merge is cancelled, and diffing only the last push would leave its
+            # changes unchecked on `main` for good. The compare API must call the
+            # result `ahead` (an ancestor, not a rerun of an older commit) and list
+            # fewer than the 300 files it truncates at; else the full suite.
+            last=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1" \
+              --jq '.workflow_runs[0].head_sha // empty') \
+              && [ -n "$last" ] \
+              && gh api "repos/$REPO/compare/$last...$GITHUB_SHA" \
+                --jq 'if .status == "ahead" and (.files | length) < 300 then .files[] | (.filename, (.previous_filename // empty)) else "<diff unavailable>" end' > "$changed" \
               || echo '<diff unavailable>' > "$changed"
           fi
           node scripts/e2e-ci.mjs select "$changed"
@@ -496,6 +508,9 @@ jobs:
           retention-days: 14
 
       # Only an explicit `scoped` narrows the run; anything else is the full suite.
+      # A scoped list can name a spec the diff deleted or one the config ignores
+      # (`*.staging.spec.ts`), which matches nothing: that is no journey to run,
+      # not a failure, so the scoped run alone passes with no tests.
       - name: Run the journeys
         if: steps.secrets.outputs.run == 'true'
         env:
@@ -506,7 +521,7 @@ jobs:
             files=()
             IFS=, read -ra names <<< "$SPECS"
             for name in "${names[@]}"; do files+=("e2e/$name"); done
-            pnpm --filter @vendor-marketplace/web exec playwright test "${files[@]}"
+            pnpm --filter @vendor-marketplace/web exec playwright test --pass-with-no-tests "${files[@]}"
           else
             pnpm --filter @vendor-marketplace/web test:e2e
           fi
