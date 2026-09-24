@@ -31,7 +31,7 @@ import {
 } from '../../testing/test-server.js';
 import { expireLapsedRequests } from '../booking-requests/booking-requests.service.js';
 import { recordReplacementIntent } from './payments.dao.js';
-import { bookingContextFor, expiryGuardFor } from './payments.service.js';
+import { bookingContextFor, expiryGuardFor, recordSuccessfulPayment } from './payments.service.js';
 
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
@@ -969,6 +969,82 @@ describe('payments', () => {
       expect(held?.status).toBe('booked');
       expect(held?.date).toBe(EVENT_DATE);
       expect(booking?.requestId).toBe(requestId);
+    });
+
+    describe('the fee rate fixed at acceptance (VEN-712)', () => {
+      const RAISED_RATE = 0.2;
+
+      /** Checks out and settles the intent, then books it under a rate other than the one accepted at. */
+      const payAtRate = async (requestId: string, rate: number): Promise<void> => {
+        const checkout = await inject(
+          'POST',
+          `/v1/customer/booking-requests/${requestId}/checkout`,
+          CUSTOMER,
+        );
+        const intentId: string = checkout.json().paymentIntentId;
+        harness.stripe.succeed(intentId);
+        const intent = harness.stripe.paymentIntents.get(intentId)!;
+
+        const recorded = await recordSuccessfulPayment(
+          {
+            ...bookingContextFor(harness.app, harness.app.log, 'https://web.test'),
+            platformFeeRate: rate,
+          },
+          intent,
+        );
+        expect(recorded.outcome).toBe('booked');
+      };
+
+      it('stores the accepted rate on the request and the booking', async () => {
+        const requestId = await acceptedRequest();
+        const [request] = await harness.database.db
+          .select({ bps: bookingRequests.platformFeeBps })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId));
+        expect(request?.bps).toBe(1200);
+
+        await payFor(requestId);
+
+        const [booking] = await harness.database.db.select().from(bookings);
+        expect(booking?.platformFeeBps).toBe(1200);
+      });
+
+      it('does not move the split when the env rate changes after acceptance', async () => {
+        const requestId = await acceptedRequest();
+
+        await payAtRate(requestId, RAISED_RATE);
+
+        const [booking] = await harness.database.db.select().from(bookings);
+        expect(booking?.platformFeeCents).toBe(EXPECTED_FEE_CENTS);
+        expect(booking?.vendorPayoutCents).toBe(EXPECTED_PAYOUT_CENTS);
+        expect(booking?.platformFeeBps).toBe(1200);
+      });
+
+      it('prices a request accepted before the column existed at the env rate', async () => {
+        const requestId = await acceptedRequest();
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ platformFeeBps: null })
+          .where(eq(bookingRequests.id, requestId));
+
+        await payAtRate(requestId, RAISED_RATE);
+
+        const [booking] = await harness.database.db.select().from(bookings);
+        expect(booking?.platformFeeCents).toBe(29_000);
+        expect(booking?.vendorPayoutCents).toBe(116_000);
+        expect(booking?.platformFeeBps).toBe(2000);
+      });
+
+      it('refuses a rate outside 0..10000 basis points at the database', async () => {
+        const requestId = await acceptedRequest();
+
+        await expect(
+          harness.database.db
+            .update(bookingRequests)
+            .set({ platformFeeBps: 10_001 })
+            .where(eq(bookingRequests.id, requestId)),
+        ).rejects.toThrow();
+      });
     });
 
     /**

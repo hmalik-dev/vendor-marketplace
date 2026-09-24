@@ -99,6 +99,13 @@ export const bookingRequests = pgTable(
      */
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
     /**
+     * The platform fee rate in force when the vendor accepted, in basis points
+     * (VEN-712). A booking row does not exist until payment, so the rate is
+     * fixed here and copied onto the booking. Null on a request accepted before
+     * this column, and on one not yet accepted: payment then reads the env rate.
+     */
+    platformFeeBps: integer('platform_fee_bps'),
+    /**
      * The intent the customer is paying through, recorded before they confirm.
      *
      * This is the reconciliation handle. A webhook that never arrives leaves a
@@ -149,6 +156,10 @@ export const bookingRequests = pgTable(
     check(
       'booking_requests_guest_count_non_negative',
       sql`${table.guestCount} IS NULL OR ${table.guestCount} >= 0`,
+    ),
+    check(
+      'booking_requests_platform_fee_bps_range',
+      sql`${table.platformFeeBps} IS NULL OR (${table.platformFeeBps} >= 0 AND ${table.platformFeeBps} <= 10000)`,
     ),
     index('booking_requests_customer_status_idx').on(table.customerId, table.status),
     index('booking_requests_vendor_status_idx').on(table.vendorId, table.status),
@@ -230,6 +241,12 @@ export const bookings = pgTable(
     totalAmountCents: integer('total_amount_cents').notNull(),
     /** Platform commission at the rate in force when payment succeeded. */
     platformFeeCents: integer('platform_fee_cents').notNull(),
+    /**
+     * The rate `platformFeeCents` was priced at, in basis points: the one fixed
+     * when the vendor accepted, or the env rate for a request accepted before
+     * that existed (VEN-712). Nullable so the previous release can keep writing.
+     */
+    platformFeeBps: integer('platform_fee_bps'),
     /**
      * What the vendor is still owed, in cents.
      *
@@ -448,6 +465,10 @@ export const bookings = pgTable(
      */
     check('bookings_total_amount_cents_positive', sql`${table.totalAmountCents} > 0`),
     check('bookings_platform_fee_cents_non_negative', sql`${table.platformFeeCents} >= 0`),
+    check(
+      'bookings_platform_fee_bps_range',
+      sql`${table.platformFeeBps} IS NULL OR (${table.platformFeeBps} >= 0 AND ${table.platformFeeBps} <= 10000)`,
+    ),
     check('bookings_vendor_payout_cents_non_negative', sql`${table.vendorPayoutCents} >= 0`),
     check('bookings_vendor_owed_cents_non_negative', sql`${table.vendorOwedCents} >= 0`),
     check(

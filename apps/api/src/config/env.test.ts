@@ -526,6 +526,18 @@ describe('parseEnv on a deployment', () => {
     expect(env.STRIPE_PLATFORM_FEE_RATE).toBe(0.12);
   });
 
+  /*
+   * The fallback for a request accepted before VEN-712 is this value, so a
+   * deployment must never hold a different one from the legal copy: an unset
+   * variable resolves to it and a divergent one does not boot.
+   */
+  it('resolves the deployed fallback fee rate to the legal rate when unset', () => {
+    const source = { ...DEPLOYED };
+    delete source.STRIPE_PLATFORM_FEE_RATE;
+
+    expect(parseEnv(source).STRIPE_PLATFORM_FEE_RATE).toBe(0.12);
+  });
+
   it('refuses a commission that differs from the rate the legal copy states', () => {
     expect(() => parseEnv({ ...DEPLOYED, STRIPE_PLATFORM_FEE_RATE: '0.15' })).toThrow(
       /STRIPE_PLATFORM_FEE_RATE: must equal the 0\.12 the legal copy states/,
