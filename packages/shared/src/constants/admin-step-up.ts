@@ -32,4 +32,5 @@ export const ADMIN_CEILING_ACTIONS = [
   'user_closed',
   'admin_account_closed',
   'user_data_exported',
+  'tax_report_exported',
 ] as const;

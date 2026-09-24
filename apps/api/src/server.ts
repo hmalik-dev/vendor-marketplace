@@ -65,6 +65,7 @@ import { stripePlugin } from './plugins/stripe.js';
 import { availabilityRoutes } from './modules/availability/availability.routes.js';
 import { bookingRequestRoutes } from './modules/booking-requests/booking-requests.routes.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
+import { taxReportingRoutes } from './modules/tax-reporting/tax-reporting.routes.js';
 import { adminCategoryRoutes } from './modules/admin/admin-categories.routes.js';
 import { categoryRoutes } from './modules/categories/categories.routes.js';
 import { platformNoticeRoutes } from './modules/platform-settings/platform-notice.routes.js';
@@ -612,6 +613,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
       await v1.register(sessionGenerationRoutes, { webTierKey: env.WEB_TIER_KEY });
       await v1.register(signUpRoleRoutes, { webTierKey: env.WEB_TIER_KEY });
       await v1.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
+      await v1.register(taxReportingRoutes, { webOrigin: canonicalWebOrigin(env) });
       await v1.register(adminCategoryRoutes);
       await v1.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });
       await v1.register(vendorApplicationRoutes, { webOrigin: canonicalWebOrigin(env) });
