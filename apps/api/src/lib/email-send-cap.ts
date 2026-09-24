@@ -1,5 +1,5 @@
 import { emailSendDays } from '@vendor-marketplace/db/schema';
-import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { AppDatabase } from './database.js';
 import { EmailQuotaExceededError, type EmailGateway } from './email.js';
 import type { ErrorReporter } from './error-reporting.js';
@@ -39,9 +39,15 @@ export function sendDay(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
 
+/** The larger of `cap` and the cap the day has already recorded (VEN-688). */
+function greatestCap(cap: number): SQL<number> {
+  return sql<number>`greatest(coalesce(${emailSendDays.cap}, 0), ${cap}::int)`;
+}
+
 /**
  * Takes one slot of `day`'s budget, or answers false when the day is closed or
- * already at `cap`.
+ * already at its cap — the greater of `cap` and the one the day has recorded, so an
+ * instance still running the cap a redeploy just raised cannot close the day.
  *
  * An `essential` send ignores a `cap` closure and may go `ESSENTIAL_SEND_HEADROOM`
  * past it; a `quota` closure refuses it like any other.
@@ -55,30 +61,39 @@ export async function reserveSend(
   cap: number,
   essential = false,
 ): Promise<boolean> {
+  const effectiveCap = greatestCap(cap);
   const rows = await db
     .insert(emailSendDays)
-    .values({ day, sent: 1 })
+    .values({ day, sent: 1, cap })
     .onConflictDoUpdate({
       target: emailSendDays.day,
-      set: { sent: sql`${emailSendDays.sent} + 1` },
+      set: { sent: sql`${emailSendDays.sent} + 1`, cap: effectiveCap },
       setWhere: essential
         ? and(
             or(isNull(emailSendDays.closedReason), eq(emailSendDays.closedReason, 'cap')),
-            lt(emailSendDays.sent, cap + ESSENTIAL_SEND_HEADROOM),
+            lt(emailSendDays.sent, sql`${effectiveCap} + ${ESSENTIAL_SEND_HEADROOM}`),
           )
-        : and(isNull(emailSendDays.closedReason), lt(emailSendDays.sent, cap)),
+        : and(isNull(emailSendDays.closedReason), lt(emailSendDays.sent, effectiveCap)),
     })
     .returning({ sent: emailSendDays.sent });
 
   return rows.length > 0;
 }
 
-/** Closes `day` for `reason`. True only for the call that closed it, which is the one that pages. */
+/**
+ * Closes `day` for `reason`. True only for the call that closed it, which is the one that pages.
+ *
+ * A `cap` closure passes the cap it hit and is refused when the day has since
+ * been given room (VEN-688): the refusal and this close are two statements, and
+ * a redeploy that raised the cap can land between them. Without the check the
+ * old instance would close the day the new one had just reopened.
+ */
 export async function closeSendDay(
   db: AppDatabase,
   day: string,
   reason: SendingClosedReason,
   now: Date,
+  hitCap?: number,
 ): Promise<boolean> {
   const rows = await db
     .insert(emailSendDays)
@@ -86,7 +101,10 @@ export async function closeSendDay(
     .onConflictDoUpdate({
       target: emailSendDays.day,
       set: { closedReason: reason, closedAt: now },
-      setWhere: isNull(emailSendDays.closedReason),
+      setWhere: and(
+        isNull(emailSendDays.closedReason),
+        hitCap === undefined ? undefined : gte(emailSendDays.sent, greatestCap(hitCap)),
+      ),
     })
     .returning({ day: emailSendDays.day });
 
@@ -94,15 +112,26 @@ export async function closeSendDay(
 }
 
 /**
- * Reopens `day` when it was closed by a cap lower than `cap` — the boot after the
- * admin raised `EMAIL_DAILY_SEND_CAP`, which is a redeploy. A `quota` closure
- * stays: only Resend can lift that.
+ * Records `cap` on `day` and reopens it when it was closed by a cap lower than
+ * `cap` — the boot after the admin raised `EMAIL_DAILY_SEND_CAP`, which is a
+ * redeploy. A `quota` closure stays: only Resend can lift that.
+ *
+ * The recording is what makes the raise survive the rolling deploy (VEN-688):
+ * it happens even while the day is open, and `reserveSend` reads it, so the
+ * old instance still serving cannot take the day back to its own lower cap.
+ * The day keeps the highest cap it was given, so lowering the variable takes
+ * effect at the next UTC day.
  */
 export async function reopenCapClosedDay(
   db: AppDatabase,
   day: string,
   cap: number,
 ): Promise<boolean> {
+  await db
+    .insert(emailSendDays)
+    .values({ day, sent: 0, cap })
+    .onConflictDoUpdate({ target: emailSendDays.day, set: { cap: greatestCap(cap) } });
+
   const rows = await db
     .update(emailSendDays)
     .set({ closedReason: null, closedAt: null })
@@ -110,7 +139,7 @@ export async function reopenCapClosedDay(
       and(
         eq(emailSendDays.day, day),
         eq(emailSendDays.closedReason, 'cap'),
-        lt(emailSendDays.sent, cap),
+        lt(emailSendDays.sent, greatestCap(cap)),
       ),
     )
     .returning({ day: emailSendDays.day });
@@ -160,7 +189,7 @@ export function withDailySendCap(
   async function close(day: string, reason: SendingClosedReason): Promise<never> {
     const error = new EmailSendingClosedError(reason, day);
 
-    if (await closeSendDay(db, day, reason, clock())) {
+    if (await closeSendDay(db, day, reason, clock(), reason === 'cap' ? cap : undefined)) {
       log.error({ day, reason, cap }, error.message);
       reporter.capture(error);
       throw error;

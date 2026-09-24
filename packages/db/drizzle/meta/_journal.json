@@ -722,6 +722,13 @@
       "when": 1790263208734,
       "tag": "0102_admin_replaces_operator",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1790284577204,
+      "tag": "0103_cold_tomorrow_man",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { runTick } from '../lib/sweep.js';
+import { createTickTracker, runTick } from '../lib/sweep.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { releaseDuePayouts } from '../modules/payments/payouts.service.js';
 
@@ -46,8 +46,8 @@ const BOOT_JITTER_MS = 5_000;
  * keyed on the booking. Its own doc comment has the detail.
  *
  * The timer is `unref`'d so it never holds the process open, and cleared on
- * close so a shutdown mid-sweep drains rather than being interrupted by the
- * next tick.
+ * close so a shutdown mid-sweep is not interrupted by the next tick, and closing
+ * waits for the tick that is running before the email queue drains.
  */
 export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
   async (app, options) => {
@@ -106,7 +106,8 @@ export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
       }
     };
 
-    const timer = setInterval(() => void tick(), options.intervalMs);
+    const ticks = createTickTracker();
+    const timer = setInterval(() => ticks.start(tick), options.intervalMs);
     timer.unref();
 
     /*
@@ -119,13 +120,15 @@ export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
     let bootTimer: NodeJS.Timeout | undefined;
 
     app.addHook('onReady', async () => {
-      bootTimer = setTimeout(() => void tick(), bootDelayMs);
+      bootTimer = setTimeout(() => ticks.start(tick), bootDelayMs);
       bootTimer.unref();
     });
 
     app.addHook('onClose', async () => {
       clearInterval(timer);
       clearTimeout(bootTimer);
+      // Before `background` drains: a tick queues the vendor's payout email (VEN-688).
+      await ticks.settled();
     });
   },
   { name: 'payout-release', dependencies: ['clock', 'admin-alerts'] },

@@ -12,10 +12,15 @@ import type { NotificationRow } from '@vendor-marketplace/db';
 import type { AppDatabase } from '../../lib/database.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import type { EmailGateway, EmailSendResult } from '../../lib/email.js';
+import { EmailSendingClosedError, sendDay } from '../../lib/email-send-cap.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import type { BackgroundWork } from '../../lib/background.js';
 import type { ErrorReporter } from '../../lib/error-reporting.js';
-import { emailAttemptHistory, insertEmailDelivery } from './email-delivery.dao.js';
+import {
+  emailAttemptHistory,
+  insertEmailDelivery,
+  SEND_CLOSED_FAILURE_REASON,
+} from './email-delivery.dao.js';
 import { findNotificationRecipient } from './notification-email.dao.js';
 
 /**
@@ -164,7 +169,9 @@ export function queueNotificationEmail(
   row: NotificationEmailRow,
   audience: 'customer' | 'vendor' = 'customer',
 ): void {
-  deps.background.run(() => sendNotificationEmail(deps, row, audience));
+  deps.background.run(async () => {
+    await sendNotificationEmail(deps, row, audience);
+  });
 }
 
 /**
@@ -180,14 +187,16 @@ export async function sendNotificationEmail(
   row: NotificationEmailRow,
   /** `vendor` when the recipient reads this on their own side of the product. */
   audience: 'customer' | 'vendor' = 'customer',
-): Promise<void> {
+): Promise<boolean> {
   const type = row.type as NotificationType;
   const vendorLabel = audience === 'vendor' ? VENDOR_EMAIL_LABELS[type] : undefined;
   const label = vendorLabel ?? EMAIL_LABELS[type];
 
   if (!label) {
-    return;
+    return false;
   }
+
+  let sendingClosed = false;
 
   try {
     const recipient = await findNotificationRecipient(deps.db, row.userId);
@@ -202,7 +211,7 @@ export async function sendNotificationEmail(
         { notificationId: row.id },
         'Skipped an email for a user that no longer exists',
       );
-      return;
+      return false;
     }
 
     if ('emailDiverged' in recipient) {
@@ -211,7 +220,7 @@ export async function sendNotificationEmail(
         { notificationId: row.id, userId: row.userId, reason: 'email-diverged' },
         'Skipped an email while the account address disagrees with auth',
       );
-      return;
+      return false;
     }
 
     /*
@@ -240,7 +249,13 @@ export async function sendNotificationEmail(
        * is #439's first half: a send that never happened used to leave nothing
        * behind but a log line on a process that may have rotated.
        */
-      await recordFailedAttempt(deps, row, recipient.email, reasonFor(error));
+      if (error instanceof EmailSendingClosedError) {
+        // Not an attempt (VEN-688): the row keeps the email findable for tomorrow's budget.
+        sendingClosed = true;
+        await recordRefusedAttempt(deps, row, recipient.email);
+      } else {
+        await recordFailedAttempt(deps, row, recipient.email, reasonFor(error));
+      }
       throw error;
     }
 
@@ -260,6 +275,8 @@ export async function sendNotificationEmail(
       'Transactional email failed to send; the operation itself succeeded',
     );
   }
+
+  return sendingClosed;
 }
 
 /**
@@ -319,6 +336,54 @@ async function recordFailedAttempt(
     deps.reporter?.capture(
       new Error(`Transactional email undeliverable after every attempt: ${row.type}`),
       {},
+    );
+  }
+}
+
+const MS_PER_DAY = 24 * 60 * 60_000;
+
+/**
+ * Records a send the closed day refused, which is not an attempt (VEN-688), and
+ * reports the email when its retry window ends before the day reopens.
+ *
+ * The sweep is skipped for the rest of a closed UTC day and drops a message
+ * whose first attempt is older than `EMAIL_RETRY_WINDOW_MS`, so one whose window
+ * ends before the next midnight is lost exactly as `recordFailedAttempt`'s
+ * last attempt is, and is reported the same way.
+ */
+async function recordRefusedAttempt(
+  deps: NotificationEmailDeps,
+  row: NotificationEmailRow,
+  recipientEmail: string,
+): Promise<void> {
+  await recordDelivery(deps, row, recipientEmail, {
+    outcome: 'failed',
+    providerMessageId: null,
+    failureReason: SEND_CLOSED_FAILURE_REASON,
+  });
+
+  try {
+    const { firstSentAt } = await emailAttemptHistory(deps.db, row.id);
+    const nextDay = Date.parse(`${sendDay(new Date(Date.now() + MS_PER_DAY))}T00:00:00Z`);
+
+    if (firstSentAt === null || firstSentAt.getTime() + EMAIL_RETRY_WINDOW_MS > nextDay) {
+      return;
+    }
+
+    deps.log.error(
+      { notificationId: row.id, type: row.type },
+      'A transactional email was refused by the closed day and its retry window ends before sending reopens',
+    );
+    deps.reporter?.capture(
+      new Error(
+        `Transactional email undeliverable, window ends before sending reopens: ${row.type}`,
+      ),
+      {},
+    );
+  } catch (error) {
+    deps.log.error(
+      { notificationId: row.id, reason: error instanceof Error ? error.name : 'unknown' },
+      'Could not check the retry window of a refused email',
     );
   }
 }

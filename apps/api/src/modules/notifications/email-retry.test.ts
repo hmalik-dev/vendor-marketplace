@@ -19,7 +19,8 @@ import {
   type TestHarness,
 } from '../../testing/test-server.js';
 import type { ErrorReporter } from '../../lib/error-reporting.js';
-import { closeSendDay, sendDay } from '../../lib/email-send-cap.js';
+import { closeSendDay, EmailSendingClosedError, sendDay } from '../../lib/email-send-cap.js';
+import type { EmailGateway } from '../../lib/email.js';
 import { sendNotificationEmail } from './notification-email.js';
 import { retryFailedEmails } from './email-retry.service.js';
 
@@ -78,6 +79,7 @@ describe('the email retry sweep', () => {
   function sweep(
     at?: Date,
     reporter?: ErrorReporter,
+    email: EmailGateway = harness.email,
   ): Promise<{
     notifications: number;
     invites: number;
@@ -85,7 +87,7 @@ describe('the email retry sweep', () => {
   }> {
     const shared = {
       db: harness.database.db,
-      email: harness.email,
+      email,
       log: harness.app.log,
       webOrigin: 'https://web.test',
       background: harness.app.background,
@@ -157,6 +159,77 @@ describe('the email retry sweep', () => {
 
       expect((await sweep()).notifications).toBe(1);
       expect(harness.email.sent).toHaveLength(1);
+    });
+
+    it('stops the batch when the cap closes mid-tick, and the refusal costs no attempt (VEN-688)', async () => {
+      const second = await failedNotification(3 * HOUR_MS);
+      // A second failed attempt: one more failure would have been its last of three.
+      await harness.database.db.insert(emailDeliveries).values({
+        notificationId: second,
+        userId,
+        recipientEmail: 'reader@example.com',
+        notificationType: 'booking_confirmed',
+        outcome: 'failed',
+        providerMessageId: null,
+        failureReason: 'Resend refused the send (500)',
+        sentAt: new Date(Date.now() - 2 * HOUR_MS),
+      });
+      const untried = await failedNotification(HOUR_MS);
+      const now = new Date();
+      // A gateway that meets the cap: the send runs inside the claim's transaction, so it cannot write the day row here.
+      const capHits = vi.fn(async () => {
+        throw new EmailSendingClosedError('cap', sendDay(now));
+      });
+
+      const first = await sweep(now, undefined, { send: capHits });
+
+      expect(first.notifications).toBe(1);
+      expect(capHits).toHaveBeenCalledTimes(1);
+      expect(await outcomes(second)).toEqual(['failed', 'failed', 'failed']);
+      expect(await outcomes(untried)).toEqual(['failed']);
+
+      // The next sweep with sending open: claimable again although it now has three rows.
+      expect((await sweep(now)).notifications).toBe(2);
+      expect(await outcomes(second)).toEqual(['failed', 'failed', 'failed', 'sent']);
+      expect(await outcomes(untried)).toEqual(['failed', 'sent']);
+    });
+
+    describe('a refusal whose retry window ends before sending reopens (VEN-688)', () => {
+      const NOON = new Date('2026-09-23T12:00:00Z');
+      const closedDay: EmailGateway = {
+        send: async () => {
+          throw new EmailSendingClosedError('cap', '2026-09-23');
+        },
+      };
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      async function refusedAt(ageMs: number): Promise<ReturnType<typeof vi.fn>> {
+        vi.useFakeTimers({ toFake: ['Date'], now: NOON });
+        const capture = vi.fn();
+        await failedNotification(ageMs);
+
+        await sweep(NOON, { capture }, closedDay);
+
+        return capture;
+      }
+
+      it('reports an email first tried 23 hours ago: the window ends at 13:00, before midnight', async () => {
+        const capture = await refusedAt(23 * HOUR_MS);
+
+        expect(capture).toHaveBeenCalledTimes(1);
+        expect(capture.mock.calls[0]?.[0]).toEqual(
+          new Error(
+            'Transactional email undeliverable, window ends before sending reopens: booking_confirmed',
+          ),
+        );
+      });
+
+      it('stays quiet for an email tried an hour ago: tomorrow still has room in its window', async () => {
+        expect(await refusedAt(HOUR_MS)).not.toHaveBeenCalled();
+      });
     });
   });
 

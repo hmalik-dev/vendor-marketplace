@@ -1,5 +1,6 @@
 import {
   emailDeliveries,
+  emailSendDays,
   notifications,
   users,
   vendorInvites,
@@ -11,6 +12,7 @@ import {
   type PostgresTestDatabase,
 } from '@vendor-marketplace/db/testing/postgres';
 import type { EmailGateway, EmailMessage } from '../../lib/email.js';
+import { reserveSend, withDailySendCap } from '../../lib/email-send-cap.js';
 import { createBackgroundWork } from '../../lib/background.js';
 import { resendVendorInvite } from '../vendor-invites/vendor-invites.service.js';
 import { retryFailedEmails, type EmailRetryDeps } from './email-retry.service.js';
@@ -164,5 +166,107 @@ describe('the email retry sweep, under real contention', () => {
     await sweep;
     expect(await refusal).toMatchObject({ statusCode: 409 });
     expect(sent).toHaveLength(1);
+  });
+
+  /*
+   * VEN-688, on real connections: the send runs inside the claim's transaction
+   * and the cap's own queries need a second connection, which PGlite cannot give.
+   */
+  it('stops at the cap mid-tick, spends no attempt on the refusal, and resumes the next UTC day', async () => {
+    const dayOne = new Date('2026-09-23T12:00:00Z');
+    const dayTwo = new Date('2026-09-24T00:30:00Z');
+    let clock = dayOne;
+    const capped = withDailySendCap(
+      {
+        send: async (message) => (
+          sent.push(message),
+          { providerMessageId: `resend-${message.idempotencyKey}` }
+        ),
+      },
+      { db: database.db, cap: 3, clock: () => clock, reporter: { capture: () => undefined }, log },
+    );
+    const insertFailed = async (ageMs: number, failures: number): Promise<string> => {
+      const [row] = await database.db
+        .insert(notifications)
+        .values({
+          userId: USER_ID,
+          type: 'booking_confirmed',
+          title: 'Your booking is confirmed',
+          data: { bookingId: '33333333-3333-4333-8333-333333333333' },
+        })
+        .returning({ id: notifications.id });
+
+      for (let attempt = 0; attempt < failures; attempt += 1) {
+        await database.db.insert(emailDeliveries).values({
+          notificationId: row!.id,
+          userId: USER_ID,
+          recipientEmail: 'reader@example.com',
+          notificationType: 'booking_confirmed',
+          outcome: 'failed',
+          sentAt: new Date(dayOne.getTime() - ageMs + attempt * 60_000),
+        });
+      }
+
+      return row!.id;
+    };
+    const twoFailures = await insertFailed(4 * HOUR_MS, 2);
+    const oneFailure = await insertFailed(HOUR_MS, 1);
+    await database.db.insert(vendorInvites).values({
+      email: 'invitee@example.com',
+      emailAttempts: 1,
+      emailLastAttemptAt: new Date(dayOne.getTime() - HOUR_MS),
+      emailFailureReason: 'Resend refused the send (500)',
+    });
+    // Other sends took the day's three slots.
+    for (let slot = 0; slot < 3; slot += 1) {
+      await reserveSend(database.db, '2026-09-23', 3);
+    }
+
+    const sweepAt = (at: Date) => {
+      clock = at;
+      const shared = { ...deps().notifications, email: capped };
+
+      return retryFailedEmails(
+        { notifications: shared, invites: { ...shared, now: () => at } },
+        () => at,
+      );
+    };
+
+    expect(await sweepAt(dayOne)).toEqual({
+      notifications: 1,
+      invites: 0,
+      applicationConfirmations: 0,
+    });
+    expect(sent).toEqual([]);
+
+    const days = await database.db.select().from(emailSendDays);
+    expect(days.map((day) => [day.day, day.closedReason])).toEqual([['2026-09-23', 'cap']]);
+
+    const failuresOf = async (id: string) =>
+      (
+        await database.db
+          .select({ reason: emailDeliveries.failureReason })
+          .from(emailDeliveries)
+          .where(eq(emailDeliveries.notificationId, id))
+      ).length;
+    // Two failures plus the recorded refusal; the untried notification is untouched.
+    expect(await failuresOf(twoFailures)).toBe(3);
+    expect(await failuresOf(oneFailure)).toBe(1);
+
+    // Still closed that evening: nothing more is tried.
+    expect(await sweepAt(new Date('2026-09-23T18:00:00Z'))).toEqual({
+      notifications: 0,
+      invites: 0,
+      applicationConfirmations: 0,
+    });
+
+    // The next UTC day: the refused message has three rows and is still claimed, as is the rest.
+    const next = await sweepAt(dayTwo);
+    expect(next.notifications).toBe(2);
+    expect(next.invites).toBe(1);
+    expect(sent.map((message) => message.idempotencyKey)).toEqual(
+      expect.arrayContaining([twoFailures, oneFailure]),
+    );
+    expect(sent).toHaveLength(3);
   });
 });

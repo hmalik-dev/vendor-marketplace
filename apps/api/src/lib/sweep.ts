@@ -33,6 +33,43 @@ export interface RunTickOptions {
   maxRuntimeMs?: number;
 }
 
+/**
+ * Keeps hold of the ticks a plugin has started, so `onClose` can wait for them
+ * (VEN-688).
+ *
+ * `BackgroundWork.drain` settles only what was queued when it is called, and a
+ * tick that is still running queues its emails afterwards: a deploy during an
+ * expiry or payout tick would commit "expired" / "released" and exit before the
+ * delivery row exists. Closing awaits the ticks first, then the queue drains.
+ */
+export interface TickTracker {
+  /** Starts `tick` and remembers it until it settles. */
+  start(tick: () => Promise<void>): void;
+  /** Resolves once every started tick has settled, however it ended. */
+  settled(): Promise<void>;
+}
+
+export function createTickTracker(): TickTracker {
+  const inFlight = new Set<Promise<void>>();
+
+  return {
+    start(tick) {
+      const running = tick();
+      const forget = (): void => {
+        inFlight.delete(running);
+      };
+
+      inFlight.add(running);
+      // A rejection is the tick's own to report; this only stops tracking it.
+      running.then(forget, forget);
+    },
+
+    async settled() {
+      await Promise.allSettled([...inFlight]);
+    },
+  };
+}
+
 export type TickOutcome = 'completed' | 'overrun';
 
 /** What the reporter receives when a tick outlives its deadline. */

@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import fp from 'fastify-plugin';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { releaseDuePayouts } from '../modules/payments/payouts.service.js';
+import { backgroundPlugin } from './background.js';
 import { payoutReleasePlugin } from './payout-release.js';
 
 vi.mock('../modules/payments/payouts.service.js', () => ({
@@ -15,6 +16,8 @@ const LONGEST_BOOT_DELAY_MS = 35_000;
 async function bootedApp(): Promise<ReturnType<typeof Fastify>> {
   const app = Fastify();
 
+  // Registered first, as `buildServer` does, so its close hook runs after the sweep's.
+  await app.register(backgroundPlugin);
   await app.register(
     fp(
       async (instance) => {
@@ -92,5 +95,43 @@ describe('the payout sweep schedule', () => {
     await vi.advanceTimersByTimeAsync(LONGEST_BOOT_DELAY_MS);
 
     expect(releaseDuePayouts).not.toHaveBeenCalled();
+  });
+
+  /*
+   * VEN-688: a deploy during a tick committed "released" and exited before the
+   * email the tick queues had a delivery row, because `drain` settles only what
+   * is queued when it runs.
+   */
+  it('waits for the running sweep before draining the email queue, so its emails are sent', async () => {
+    const sent: string[] = [];
+    let finishSweep: () => void = () => undefined;
+
+    vi.mocked(releaseDuePayouts).mockImplementationOnce(async (context) => {
+      await new Promise<void>((resolve) => {
+        finishSweep = resolve;
+      });
+      context.notify?.mail.background.run(async () => {
+        await Promise.resolve();
+        sent.push('payout released');
+      });
+
+      return { released: 1, skipped: 0, failed: 0 };
+    });
+    const app = await bootedApp();
+    // The boot sweep: the tick's own deadline is ten minutes, so it is still running.
+    await vi.advanceTimersByTimeAsync(LONGEST_BOOT_DELAY_MS);
+
+    let closed = false;
+    const closing = app.close().then(() => {
+      closed = true;
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(closed).toBe(false);
+
+    finishSweep();
+    await closing;
+
+    expect(sent).toEqual(['payout released']);
   });
 });
