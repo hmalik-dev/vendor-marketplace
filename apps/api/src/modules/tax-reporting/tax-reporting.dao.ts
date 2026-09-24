@@ -1,5 +1,5 @@
 import { bookings, vendorProfiles } from '@vendor-marketplace/db/schema';
-import { and, asc, eq, gt, gte, isNotNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, isNotNull, sql } from 'drizzle-orm';
 import type { AppDatabase } from '../../lib/database.js';
 
 export interface SettledBookingRow {
@@ -25,7 +25,13 @@ export interface SettledBookingRow {
  */
 const settledAtExpr = sql<Date | null>`case when ${bookings.payoutModel} = 'separate' then ${bookings.payoutReleasedAt} else ${bookings.paidAt} end`;
 
-const yearStart = (year: number): Date => new Date(Date.UTC(year, 0, 1));
+/**
+ * `settledAtExpr` is a raw `sql` template, so Drizzle has no column encoder for
+ * a value compared against it and the postgres-js driver refuses a bare `Date`
+ * parameter. Bind the instant as ISO text and cast it in the statement.
+ */
+const yearStart = (year: number) =>
+  sql`${new Date(Date.UTC(year, 0, 1)).toISOString()}::timestamptz`;
 
 /**
  * Bookings whose vendor share was settled in `year` (UTC), by `settledAtExpr`,
@@ -55,8 +61,8 @@ export async function settledBookings(
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
     .where(
       and(
-        gte(settledAtExpr, yearStart(year)),
-        lt(settledAtExpr, yearStart(year + 1)),
+        sql`${settledAtExpr} >= ${yearStart(year)}`,
+        sql`${settledAtExpr} < ${yearStart(year + 1)}`,
         gt(bookings.vendorPayoutCents, 0),
         isNotNull(vendorProfiles.stripeAccountId),
         vendorId ? eq(bookings.vendorId, vendorId) : undefined,
