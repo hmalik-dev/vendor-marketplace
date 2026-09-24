@@ -70,7 +70,11 @@ import {
   cancelBookingAndFreeDate,
   confirmBooking,
   findBookingById,
+  findBookingIdByTransferId,
   lockBookingById,
+  lowerReleasedVendorPayout,
+  recordVendorOwed,
+  zeroUnreleasedVendorPayout,
   findAnyBookingByRequest,
   findBookingByRequest,
   findPayableRequest,
@@ -2184,4 +2188,175 @@ export async function resolveDispute(
   });
 
   return toBookingView(cancelled);
+}
+
+/** What a transfer reversal Stripe reported did to the booking it paid. */
+export type TransferReversalOutcome = 'transfer-reversed' | 'transfer-unchanged';
+
+/**
+ * A transfer was reversed at Stripe — from the Dashboard, or by our own
+ * cancellation — and the booking's payout state follows it (VEN-645).
+ *
+ * **What the row records is what Stripe holds.** The reversal is read back from
+ * Stripe and the vendor's share is lowered to the unreversed remainder. It never
+ * clears `payout_released_at`, so the sweep does not pay a reversed transfer
+ * out again, and a cancellation's own reversal changes nothing because that path
+ * has already written the same remainder.
+ */
+export async function recordTransferReversal(
+  context: Pick<BookingContext, 'db' | 'stripe' | 'log'>,
+  transferId: string,
+): Promise<TransferReversalOutcome> {
+  /* Before Stripe is asked: a transfer no booking here paid is not ours to read. */
+  if (!(await findBookingIdByTransferId(context.db, transferId))) {
+    return 'transfer-unchanged';
+  }
+
+  const transfer = await context.stripe.retrieveTransfer(transferId);
+  const bookingId = await lowerReleasedVendorPayout(
+    context.db,
+    transferId,
+    Math.max(transfer.amountCents - transfer.reversedCents, 0),
+  );
+
+  if (!bookingId) {
+    return 'transfer-unchanged';
+  }
+
+  context.log.warn(
+    { bookingId, transferId, reversedCents: transfer.reversedCents },
+    'A payout transfer was reversed at Stripe and the booking now records the remainder',
+  );
+
+  return 'transfer-reversed';
+}
+
+/** How a lost chargeback ended a booking's money. */
+export type LostChargebackOutcome = 'vendor-owes' | 'payout-ended' | 'unchanged';
+
+const LOST_CHARGEBACK_REASON =
+  'The card network ruled against the platform on a chargeback and took the payment back';
+
+/**
+ * The card network ruled against the platform for `amountCents`: the customer has
+ * that money back and the platform has been debited, so the booking reaches an
+ * end state (VEN-645).
+ *
+ * - **The whole payment, payout not yet sent:** the vendor's share is zero and
+ *   the booking is cancelled, which frees the date. Nothing is refunded, because
+ *   the network already made the customer whole — a second refund would pay
+ *   them twice.
+ * - **A payout already sent, or a loss smaller than the payment:** the vendor
+ *   holds money the platform lost, so the amount they owe (never more than their
+ *   share) is recorded on the booking for the console and for VEN-658's
+ *   recovery. The booking stands, and a hold a partial loss placed is lifted,
+ *   because the event still happened.
+ *
+ * Idempotent under redelivery: the second run finds a zero payout, or an owed
+ * figure already written, and changes nothing.
+ */
+export async function settleLostChargeback(
+  context: BookingContext,
+  bookingId: string,
+  amountCents: number,
+  now: Date,
+): Promise<LostChargebackOutcome> {
+  const settled = await context.db.transaction(async (tx) => {
+    const locked = await lockBookingById(tx, bookingId);
+
+    if (!locked) {
+      return null;
+    }
+
+    const paid = locked.payoutReleasedAt !== null || locked.payoutModel === 'destination';
+
+    if (paid || amountCents < locked.totalAmountCents) {
+      const owedCents = Math.min(amountCents, locked.vendorPayoutCents);
+      const record = locked.vendorOwedCents === 0 && owedCents > 0;
+
+      if (record) {
+        await recordVendorOwed(tx, bookingId, owedCents);
+      }
+
+      if (locked.status === 'disputed') {
+        /* A destination payout is already the vendor's, so that booking ends; a partial loss on money still held does not. */
+        await (paid
+          ? cancelBookingAndFreeDate(
+              tx,
+              bookingId,
+              {
+                cancelledAt: now,
+                cancellationReason: LOST_CHARGEBACK_REASON,
+                cancelledBy: 'admin',
+                refundAmountCents: null,
+                vendorPayoutCents: locked.vendorPayoutCents,
+                disputeReason: null,
+              },
+              'disputed',
+              locked.payoutReleasedAt,
+            )
+          : liftDisputeHold({ ...context, db: tx }, locked));
+      }
+
+      return {
+        outcome: record ? ('vendor-owes' as const) : ('unchanged' as const),
+        cancelled: null,
+      };
+    }
+
+    if (locked.status === 'cancelled') {
+      if (locked.vendorPayoutCents === 0) {
+        return { outcome: 'unchanged' as const, cancelled: null };
+      }
+
+      await zeroUnreleasedVendorPayout(tx, bookingId);
+
+      return { outcome: 'payout-ended' as const, cancelled: null };
+    }
+
+    const cancelled = await cancelBookingAndFreeDate(
+      tx,
+      bookingId,
+      {
+        cancelledAt: now,
+        cancellationReason: LOST_CHARGEBACK_REASON,
+        cancelledBy: 'admin',
+        refundAmountCents: null,
+        vendorPayoutCents: 0,
+        disputeReason: null,
+      },
+      locked.status,
+      null,
+    );
+
+    return { outcome: 'payout-ended' as const, cancelled };
+  });
+
+  if (!settled) {
+    return 'unchanged';
+  }
+
+  const { outcome, cancelled } = settled;
+
+  if (cancelled) {
+    const vendorUserId = await findVendorUserId(context.db, cancelled.vendorId);
+
+    if (vendorUserId) {
+      await bestEffortNotice(context, { bookingId }, () =>
+        notify(
+          context,
+          vendorUserId,
+          'booking_cancelled',
+          {
+            title: 'A booking was cancelled after a chargeback',
+            body: "The customer's bank took the payment back and the card network upheld it, so this booking is cancelled and its payout will not be sent.",
+            bookingId,
+          },
+          'vendor',
+        ),
+      );
+    }
+  }
+
+  return outcome;
 }

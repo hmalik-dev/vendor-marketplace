@@ -37,7 +37,9 @@ import type {
   StripeAccountStatus,
   StripeConnectGateway,
   StripeDisputeSnapshot,
+  StripeEarlyFraudWarningSnapshot,
   StripeEventNotification,
+  StripePayoutSnapshot,
 } from '../lib/stripe.js';
 import {
   findAcceptanceOfVersion,
@@ -580,6 +582,10 @@ export interface FakeStripe extends StripeConnectGateway {
    * the same two steps Stripe takes.
    */
   disputes: Map<string, StripeDisputeSnapshot>;
+  /** Bank payouts on connected accounts, by payout id (VEN-645). */
+  payouts: Map<string, StripePayoutSnapshot>;
+  /** Radar early fraud warnings, by id (VEN-645). */
+  fraudWarnings: Map<string, StripeEarlyFraudWarningSnapshot>;
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
   /** Moves an intent to `canceled`, as Stripe does once it can never be paid. */
@@ -625,6 +631,8 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   /** Idempotency keys whose result was a failure, replayed as Stripe does. */
   const failedTransferKeys = new Map<string, string>();
   const disputes = new Map<string, StripeDisputeSnapshot>();
+  const payouts = new Map<string, StripePayoutSnapshot>();
+  const fraudWarnings = new Map<string, StripeEarlyFraudWarningSnapshot>();
   const cancelRequests: string[] = [];
   const paymentIntentKeys: string[] = [];
 
@@ -662,6 +670,8 @@ function createFakeStripe(deployEnv: string): FakeStripe {
     reversalsToRefuse,
     failedTransferKeys,
     disputes,
+    payouts,
+    fraudWarnings,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
 
     cancel: (paymentIntentId) => {
@@ -1049,6 +1059,40 @@ function createFakeStripe(deployEnv: string): FakeStripe {
         paymentIntentId: refund.paymentIntentId,
         amountCents: refund.amountCents,
       };
+    },
+
+    retrieveTransfer: async (transferId) => {
+      const transfer = transfers.find((candidate) => candidate.transferId === transferId);
+
+      if (!transfer) {
+        throw new Error(`No fake transfer ${transferId}`);
+      }
+
+      return {
+        transferId,
+        amountCents: transfer.amountCents,
+        reversedCents: transfer.reversedCents,
+      };
+    },
+
+    retrieveConnectedPayout: async (payoutId) => {
+      const payout = payouts.get(payoutId);
+
+      if (!payout) {
+        throw new Error(`No fake payout ${payoutId}`);
+      }
+
+      return payout;
+    },
+
+    retrieveEarlyFraudWarning: async (warningId) => {
+      const warning = fraudWarnings.get(warningId);
+
+      if (!warning) {
+        throw new Error(`No fake early fraud warning ${warningId}`);
+      }
+
+      return warning;
     },
 
     retrieveChargeIntent: async (chargeId) =>
