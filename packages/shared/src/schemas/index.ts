@@ -2071,6 +2071,16 @@ export interface CursorPage<T> {
   nextBefore: string | null;
 }
 
+/**
+ * One page of the list (VEN-611). `hasUnread` covers **every** conversation,
+ * not just this page: the sidebar's dot reads the first page, and an unread
+ * message on an older thread must still light it.
+ */
+export const conversationPageSchema = cursorPageSchema(conversationSummarySchema).extend({
+  hasUnread: z.boolean(),
+});
+export type ConversationPage = z.infer<typeof conversationPageSchema>;
+
 export const vendorSearchQuerySchema = z
   .object({
     /**

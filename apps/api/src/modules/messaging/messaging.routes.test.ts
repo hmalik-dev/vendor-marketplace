@@ -11,6 +11,7 @@ import {
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import {
+  DEFAULT_PAGE_SIZE,
   KEYSET_CURSOR_PATTERN,
   MESSAGE_MAX_LENGTH,
   addDays,
@@ -321,7 +322,155 @@ describe('messaging', () => {
         headers: bearer(OUTSIDER),
       });
 
-      expect(response.json()).toEqual([]);
+      expect(response.json().items).toEqual([]);
+    });
+
+    describe('paged by cursor (VEN-611)', () => {
+      type Row = {
+        id: string;
+        lastMessageAt: string | null;
+        lastMessagePreview: string | null;
+        unreadCount: number;
+      };
+      type Page = { items: Row[]; nextBefore: string | null; hasUnread: boolean };
+
+      /** The vendor's threads: `openConversation`'s, plus 59 more with a customer each. */
+      async function seedSixty(): Promise<string[]> {
+        const first = await openConversation();
+        const [head] = await harness.database.db.select().from(conversations);
+        const customers = await harness.database.db
+          .insert(users)
+          .values(
+            Array.from({ length: 59 }, (_, index) => ({
+              authUserId: `seed_paging_customer_${index}`,
+              authProvider: 'seed' as const,
+              email: `seed_paging_${index}@example.com`,
+              role: 'customer' as const,
+              firstName: 'Paged',
+              lastName: `Customer${index}`,
+            })),
+          )
+          .returning({ id: users.id });
+        const base = new Date('2026-05-01T09:00:00Z').getTime();
+        const inserted = await harness.database.db
+          .insert(conversations)
+          .values(
+            customers.map((customer, index) => ({
+              customerId: customer.id,
+              vendorId: head!.vendorId,
+              bookingRequestId: null,
+              createdAt: new Date(base + index * 1_000),
+              // Pairs share an instant, so the id tiebreak is what keeps the order total.
+              lastMessageAt: new Date(base + Math.floor(index / 2) * 60_000),
+            })),
+          )
+          .returning({ id: conversations.id });
+        await harness.database.db
+          .update(conversations)
+          .set({ lastMessageAt: new Date(base + 10 * 3_600_000) })
+          .where(eq(conversations.id, first));
+
+        return [first, ...inserted.map((row) => row.id)];
+      }
+
+      async function listPage(before?: string | null): Promise<Page> {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: before
+            ? `/v1/conversations?before=${encodeURIComponent(before)}`
+            : '/v1/conversations',
+          headers: bearer(VENDOR),
+        });
+        expect(response.statusCode).toBe(200);
+
+        return response.json();
+      }
+
+      async function pagesOf(): Promise<Page[]> {
+        const pages = [await listPage()];
+        while (pages.at(-1)!.nextBefore) {
+          pages.push(await listPage(pages.at(-1)!.nextBefore));
+        }
+
+        return pages;
+      }
+
+      it('returns a page and a cursor, and following cursors yields every thread exactly once in order', async () => {
+        const conversationIds = await seedSixty();
+
+        const first = await listPage();
+        expect(first.items).toHaveLength(DEFAULT_PAGE_SIZE);
+        expect(first.nextBefore).toMatch(KEYSET_CURSOR_PATTERN);
+
+        const pages = await pagesOf();
+        expect(pages.map((page) => page.items.length)).toEqual([20, 20, 20]);
+        expect(pages.at(-1)!.nextBefore).toBeNull();
+
+        const rows = pages.flatMap((page) => page.items);
+        expect(rows).toHaveLength(60);
+        expect(new Set(rows.map((row) => row.id))).toEqual(new Set(conversationIds));
+
+        const sortKey = (row: Row) => (row.lastMessageAt ? Date.parse(row.lastMessageAt) : 0);
+        for (let index = 1; index < rows.length; index += 1) {
+          const [above, below] = [rows[index - 1]!, rows[index]!];
+          const ordered =
+            sortKey(above) > sortKey(below) ||
+            (sortKey(above) === sortKey(below) && above.id > below.id);
+          expect(ordered).toBe(true);
+        }
+      });
+
+      it('computes the preview and unread count of a thread that is on page three', async () => {
+        await seedSixty();
+        const oldest = (await pagesOf()).flatMap((page) => page.items).at(-1)!;
+        const senderId = await idOf(CUSTOMER);
+        await harness.database.db
+          .insert(messages)
+          .values({ conversationId: oldest.id, senderId, content: 'Deep in the list' });
+
+        const rows = (await pagesOf()).flatMap((page) => page.items);
+
+        expect(rows.findIndex((row) => row.id === oldest.id)).toBeGreaterThanOrEqual(
+          DEFAULT_PAGE_SIZE * 2,
+        );
+        expect(rows.find((row) => row.id === oldest.id)).toMatchObject({
+          lastMessagePreview: 'Deep in the list',
+          unreadCount: 1,
+        });
+        expect(rows.filter((row) => row.lastMessagePreview !== null)).toHaveLength(1);
+        // The unread message is on the last page; the flag still reaches the first.
+        expect((await listPage()).hasUnread).toBe(true);
+      });
+
+      it('pages threads nobody has written in, none skipped or repeated', async () => {
+        const conversationIds = await seedSixty();
+        await harness.database.db.update(conversations).set({ lastMessageAt: null });
+
+        const rows = (await pagesOf()).flatMap((page) => page.items);
+
+        expect(rows.every((row) => row.lastMessageAt === null)).toBe(true);
+        expect(new Set(rows.map((row) => row.id))).toEqual(new Set(conversationIds));
+        expect(rows).toHaveLength(60);
+
+        // Newest-created first, so `Send a message`'s fresh thread is not lost among old empties.
+        const created = await harness.database.db
+          .select({ id: conversations.id, createdAt: conversations.createdAt })
+          .from(conversations);
+        const createdAt = new Map(created.map((row) => [row.id, row.createdAt.getTime()]));
+        expect(rows.map((row) => createdAt.get(row.id))).toEqual(
+          [...createdAt.values()].sort((a, b) => b - a),
+        );
+      });
+
+      it('refuses a cursor that is not one', async () => {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: '/v1/conversations?before=not-a-cursor',
+          headers: bearer(VENDOR),
+        });
+
+        expect(response.statusCode).toBe(400);
+      });
     });
 
     /*
@@ -356,7 +505,7 @@ describe('messaging', () => {
         headers: bearer(OTHER_VENDOR),
       });
 
-      expect(theirs.json()).toEqual([]);
+      expect(theirs.json().items).toEqual([]);
 
       // And the vendor the thread does belong to still sees it.
       const mine = await harness.app.inject({
@@ -364,7 +513,7 @@ describe('messaging', () => {
         url: '/v1/conversations',
         headers: bearer(VENDOR),
       });
-      expect(mine.json().map((row: { id: string }) => row.id)).toEqual([conversationId]);
+      expect(mine.json().items.map((row: { id: string }) => row.id)).toEqual([conversationId]);
     });
   });
 
@@ -383,7 +532,7 @@ describe('messaging', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      const [thread] = response.json();
+      const [thread] = response.json().items;
       expect(thread.lastMessagePreview).toBeNull();
       expect(thread.unreadCount).toBe(0);
     });
@@ -421,7 +570,7 @@ describe('messaging', () => {
         headers: bearer(CUSTOMER),
       });
 
-      const threads = response.json() as { id: string; lastMessagePreview: string | null }[];
+      const threads = response.json().items as { id: string; lastMessagePreview: string | null }[];
       expect(threads).toHaveLength(2);
       expect(threads[0]?.id).toBe(conversationId);
       expect(threads[0]?.lastMessagePreview).toBe('Are you free that weekend?');
@@ -443,9 +592,9 @@ describe('messaging', () => {
         headers: bearer(VENDOR),
       });
 
-      expect(asCustomer.json()[0].otherPartyName).toBe('Sunlit Studio');
+      expect(asCustomer.json().items[0].otherPartyName).toBe('Sunlit Studio');
       // First name and one initial — never the full name before acceptance.
-      expect(asVendor.json()[0].otherPartyName).toBe('Test U');
+      expect(asVendor.json().items[0].otherPartyName).toBe('Test U');
     });
 
     /* The line that makes a list of names navigable. */
@@ -458,7 +607,7 @@ describe('messaging', () => {
         headers: bearer(CUSTOMER),
       });
 
-      expect(response.json()[0].bookingContext).toMatch(/^[A-Z][a-z]{2} \d{1,2} wedding$/);
+      expect(response.json().items[0].bookingContext).toMatch(/^[A-Z][a-z]{2} \d{1,2} wedding$/);
     });
 
     /*
@@ -482,11 +631,11 @@ describe('messaging', () => {
         });
 
         expect(list.statusCode).toBe(200);
-        expect(list.json()).toHaveLength(2);
+        expect(list.json().items).toHaveLength(2);
 
         const contexts = list
           .json()
-          .map((row: { bookingContext: string | null }) => row.bookingContext);
+          .items.map((row: { bookingContext: string | null }) => row.bookingContext);
 
         expect(new Set(contexts).size).toBe(2);
         expect(contexts).toEqual(
@@ -543,8 +692,8 @@ describe('messaging', () => {
       });
 
       // The sender's own message is not unread to them.
-      expect(own.json()[0].unreadCount).toBe(0);
-      expect(theirs.json()[0].unreadCount).toBe(1);
+      expect(own.json().items[0].unreadCount).toBe(0);
+      expect(theirs.json().items[0].unreadCount).toBe(1);
     });
 
     it('clears the unread count when the thread is opened', async () => {
@@ -563,7 +712,7 @@ describe('messaging', () => {
         url: '/v1/conversations',
         headers: bearer(VENDOR),
       });
-      expect(after.json()[0].unreadCount).toBe(0);
+      expect(after.json().items[0].unreadCount).toBe(0);
     });
   });
 
@@ -667,9 +816,9 @@ describe('messaging', () => {
         headers: bearer(CUSTOMER),
       });
 
-      expect(list.json()).toHaveLength(2);
+      expect(list.json().items).toHaveLength(2);
       expect(
-        list.json().map((row: { bookingContext: string | null }) => row.bookingContext),
+        list.json().items.map((row: { bookingContext: string | null }) => row.bookingContext),
       ).toEqual(expect.arrayContaining([null, expect.stringMatching(/wedding$/)]));
     });
 
@@ -811,7 +960,7 @@ describe('messaging', () => {
         headers: bearer(CUSTOMER),
       });
 
-      expect(response.json()[0].lastMessagePreview).toBe('Please do.');
+      expect(response.json().items[0].lastMessagePreview).toBe('Please do.');
     });
 
     /*
@@ -830,7 +979,7 @@ describe('messaging', () => {
         headers: bearer(CUSTOMER),
       });
 
-      expect(response.json()[0].lastMessagePreview).toBe('A'.repeat(120));
+      expect(response.json().items[0].lastMessagePreview).toBe('A'.repeat(120));
     });
 
     /*
@@ -950,7 +1099,7 @@ describe('messaging', () => {
             url: '/v1/conversations',
             headers: bearer(CUSTOMER),
           });
-          return response.json()[0].lastMessagePreview;
+          return response.json().items[0].lastMessagePreview;
         }),
       );
 
@@ -1018,7 +1167,7 @@ describe('messaging', () => {
         url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
-      expect(before.json()[0].lastMessageAt).toBeNull();
+      expect(before.json().items[0].lastMessageAt).toBeNull();
 
       await send(CUSTOMER, conversationId, 'Are you free that weekend?');
 
@@ -1027,8 +1176,8 @@ describe('messaging', () => {
         url: '/v1/conversations',
         headers: bearer(CUSTOMER),
       });
-      expect(after.json()[0].lastMessageAt).not.toBeNull();
-      expect(after.json()[0].lastMessagePreview).toBe('Are you free that weekend?');
+      expect(after.json().items[0].lastMessageAt).not.toBeNull();
+      expect(after.json().items[0].lastMessagePreview).toBe('Are you free that weekend?');
     });
   });
 

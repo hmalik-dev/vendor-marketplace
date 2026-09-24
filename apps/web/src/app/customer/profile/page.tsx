@@ -7,7 +7,7 @@ import {
   type BudgetTier,
 } from '@vendor-marketplace/shared';
 import { BookingsSidebar } from '@/components/bookings/bookings-sidebar';
-import { getOwnConversations } from '@/lib/messaging-data';
+import { getOwnConversationBand } from '@/lib/messaging-data';
 import { CustomerHistory, CustomerReviews } from '@/components/customer/customer-history';
 import { CustomerProfileForm } from '@/components/customer/customer-profile-form';
 import { Avatar } from '@/components/ui/avatar';
@@ -55,17 +55,17 @@ export default async function CustomerProfilePage({
   const [user, query] = await Promise.all([requireRole('customer'), searchParams]);
   const tab: Tab = isTab(query.tab) ? query.tab : 'profile';
 
-  const [requests, bookings, reviews, conversations] = await Promise.all([
+  const [requests, bookings, reviews, band] = await Promise.all([
     getOwnBookingRequests(),
     getOwnBookings(),
     getOwnCustomerReviews(),
     /*
       For the sidebar's unread dot, which is shared with `/bookings` and must not
-      say different things on the two pages that draw it. `getOwnConversations`
-      fails soft to `[]`, so an unreachable messaging API costs the dot rather
+      say different things on the two pages that draw it. `getOwnConversationBand`
+      fails soft to an empty band, so an unreachable messaging API costs the dot rather
       than this page.
     */
-    getOwnConversations(),
+    getOwnConversationBand(),
   ]);
 
   /*
@@ -91,7 +91,7 @@ export default async function CustomerProfilePage({
     <div className="flex min-h-[calc(100dvh-var(--header-height))]">
       <BookingsSidebar
         bookingCount={bookingCount}
-        hasUnreadMessages={conversations.some((conversation) => conversation.unreadCount > 0)}
+        hasUnreadMessages={band.hasUnread}
         current="profile"
       />
       <div className="min-w-0 flex-1 px-6 pt-6.5 pb-12 xl:px-10">

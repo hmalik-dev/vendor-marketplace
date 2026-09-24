@@ -371,7 +371,9 @@ export const wireConversationSchema = conversationSummarySchema.extend({
   lastMessageAt: z.coerce.date().nullable(),
 });
 export type WireConversation = z.infer<typeof wireConversationSchema>;
-export const wireConversationListSchema = z.array(wireConversationSchema);
+export const wireConversationPageSchema = cursorPageSchema(wireConversationSchema).extend({
+  hasUnread: z.boolean(),
+});
 
 export const wireMessageSchema = sendMessageResultSchema.extend({
   readAt: z.coerce.date().nullable(),
