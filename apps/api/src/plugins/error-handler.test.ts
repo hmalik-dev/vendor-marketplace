@@ -89,6 +89,45 @@ describe('error handler 4xx passthrough', () => {
 });
 
 /**
+ * A statement or lock timeout is the database protecting the pool (VEN-607):
+ * the client is told to retry, and is never shown the SQL.
+ */
+describe('error handler database timeouts', () => {
+  let app: FastifyInstance | undefined;
+
+  afterEach(async () => {
+    await app?.close();
+    app = undefined;
+  });
+
+  it.each([
+    ['57014', 'canceling statement due to statement timeout'],
+    ['55P03', 'canceling statement due to lock timeout'],
+  ])('answers SQLSTATE %s with a 503 SERVICE_BUSY and no SQL', async (code, reason) => {
+    const instance = Fastify({ logger: false });
+    await instance.register(errorHandlerPlugin);
+    instance.get('/boom', async () => {
+      throw new Error('Failed query: update "bookings" set "status" = $1 where "id" = $2', {
+        cause: Object.assign(new Error(reason), { code }),
+      });
+    });
+    await instance.ready();
+    app = instance;
+
+    const response = await instance.inject({ method: 'GET', url: '/boom' });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      statusCode: 503,
+      error: 'SERVICE_BUSY',
+      message: 'This is taking longer than expected. Please try again in a moment.',
+    });
+    expect(response.body).not.toContain('bookings');
+    expect(response.body).not.toContain('timeout');
+  });
+});
+
+/**
  * A wrapped error's `cause` reaches the log.
  *
  * Drizzle wraps every failure in a `DrizzleQueryError` whose own message is the
