@@ -5,7 +5,7 @@
  * `pnpm test:agents`.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -41,13 +41,21 @@ test('every test package is covered by a shard, and each shard set is complete',
     const [i, n] = shard.split('/').map(Number);
     sets.set(pkg, [...(sets.get(pkg) ?? []), { i, n }]);
   }
-  assert.deepEqual([...sets.keys()].sort(), [
-    '@vendor-marketplace/api',
-    '@vendor-marketplace/db',
-    '@vendor-marketplace/preflight',
-    '@vendor-marketplace/shared',
-    '@vendor-marketplace/web',
-  ]);
+  // What `turbo run test` used to find by itself: every workspace package with a
+  // `test` script. The shards call vitest directly, so that script must be
+  // exactly that, or whatever else it did would silently stop running in CI.
+  const testPackages = ['apps', 'packages'].flatMap((dir) =>
+    readdirSync(path.join(ROOT, dir))
+      .map((name) => path.join(ROOT, dir, name, 'package.json'))
+      .filter((file) => existsSync(file))
+      .map((file) => JSON.parse(readFileSync(file, 'utf8')))
+      .filter((manifest) => manifest.scripts?.test !== undefined),
+  );
+  assert.ok(testPackages.length >= 5, 'expected the workspace packages to be found');
+  for (const { name, scripts } of testPackages) {
+    assert.equal(scripts.test, 'vitest run', `${name}: the shards run vitest, not this script`);
+  }
+  assert.deepEqual([...sets.keys()].sort(), testPackages.map((manifest) => manifest.name).sort());
   for (const [pkg, shards] of sets) {
     const total = shards[0].n;
     assert.ok(
