@@ -35,3 +35,4 @@
 - [RSC error boundary needs a real server throw, not route interception](rsc-error-boundary-needs-a-real-server-throw-not-route-interception.md) — a 500-body `route.fulfill` on a client RSC nav falls back to a full reload instead of hitting error.tsx
 - [VEN-677 change-password trips the legacy provider-surface guard](ven677-change-password-trips-legacy-provider-surface-guard.md) — the proxied call and the component's own filename both match auth-account-surfaces.test.ts's regex; run that suite on any new Better-Auth-named route
 - [Server-side fault injection via an outside-repo proxy](server-side-fault-injection-via-proxy.md) — page.route cannot hit a Next server read; proxy + baked web build; API paths are /v1/*, and .env.lane holds live keys (do not Read)
+- [Failed lane seed leaves admin without a users row](failed-lane-seed-leaves-admin-without-users-row.md) — Neon 429 seed => admin lands on /accept-terms; retry db:seed:e2e once, then re-mint admin auth
