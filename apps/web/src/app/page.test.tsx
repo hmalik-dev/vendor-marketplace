@@ -174,7 +174,7 @@ describe('HomePage', () => {
     // The hero is the block that holds the headline and stops short of the
     // category section, which shares its outer <section>.
     const cards = container.querySelector('#categories-heading')?.closest('section');
-    let hero = container.querySelector('h1');
+    let hero: HTMLElement | null = container.querySelector('h1');
     while (hero?.parentElement && !hero.parentElement.contains(cards ?? null)) {
       hero = hero.parentElement;
     }

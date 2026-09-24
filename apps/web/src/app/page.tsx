@@ -378,7 +378,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
             copy and the bar stacked. Grid distributes that surplus across the
             rows it spans, so row 1 — the copy — grew by half of it and carried
             the bar down with it: the bar measured y=372.25 against the frame's
-            352.5, and the jump chips inherited the same +19.75.
+            352.5.
 
             Sizing row 1 to `min-content` pins it to the copy, and `1fr` gives
             row 2 the whole surplus, which the bar then sits at the top of. The
