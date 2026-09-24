@@ -621,7 +621,7 @@ export async function setUserBanned(
    * human (#400): a ban carrying one left money with Stripe and a booking still
    * standing, and the log is where that is found again later.
    */
-  if (unwoundAnything(unwound)) {
+  if (unwoundAnything(unwound) || unwound.halted) {
     await recordAdminActionBestEffort(context, {
       actorId,
       action: 'account_unwind_finished',
@@ -632,6 +632,9 @@ export async function setUserBanned(
         bookingsCancelled: unwound.bookingsCancelled,
         refundsIssued: unwound.refundsIssued,
         refundsFailed: unwound.refundsFailed,
+        ...(unwound.halted
+          ? { halted: 'account reinstated', bookingsLeftUntouched: unwound.bookingsLeftUntouched }
+          : {}),
       },
     });
   }
@@ -644,7 +647,7 @@ export async function setUserBanned(
    */
   return {
     userId: targetId,
-    isBanned: true,
+    isBanned: !unwound.halted,
     requestsDeclined: unwound.requestsDeclined,
     bookingsCancelled: unwound.bookingsCancelled,
     refundsIssued: unwound.refundsIssued,

@@ -55,6 +55,11 @@ describe('admin routes', () => {
   const signIn = (authUserId: string, promoteToAdmin = false): Promise<string> =>
     signInAs(harness, authUserId, promoteToAdmin);
 
+  /** What a suspension has already committed by the time its unwind runs (VEN-693 halts on a lifted flag). */
+  async function markBanned(userId: string): Promise<void> {
+    await harness.database.db.update(users).set({ isBanned: true }).where(eq(users.id, userId));
+  }
+
   async function createVendorProfile(
     overrides: { isPublished?: boolean; stripeOnboarded?: boolean } = {},
   ): Promise<{ profileId: string; userId: string }> {
@@ -771,6 +776,7 @@ describe('admin routes', () => {
       await signIn(ADMIN, true);
       const customerId = await signIn(CUSTOMER);
       const vendor = await createVendorProfile({ isPublished: true });
+      await markBanned(vendor.userId);
       const bookingId = await createFutureBooking(customerId, vendor.profileId);
       /* A ban is taken once, so the unwind is re-run as an admin's retry would. */
       const unwind = () =>
@@ -809,6 +815,7 @@ describe('admin routes', () => {
     it('refunds a booking confirmed between the unwind snapshot and its end', async () => {
       const customerId = await signIn(CUSTOMER);
       const vendor = await createVendorProfile({ isPublished: true });
+      await markBanned(vendor.userId);
       const snapshotted = await createFutureBooking(customerId, vendor.profileId);
       let late = '';
       harness.stripe.duringNextRefund = async () => {
@@ -849,6 +856,7 @@ describe('admin routes', () => {
     it('alerts and zeroes the payout when a refunded booking cannot be cancelled', async () => {
       const customerId = await signIn(CUSTOMER);
       const vendor = await createVendorProfile({ isPublished: true });
+      await markBanned(vendor.userId);
       const bookingId = await createFutureBooking(customerId, vendor.profileId);
       const dispatched: AlertSource[] = [];
       harness.stripe.duringNextRefund = async () => {

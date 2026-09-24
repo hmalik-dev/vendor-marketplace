@@ -9,6 +9,7 @@ import { insertNotification } from '../messaging/messaging.dao.js';
 import { refundFailedAlert } from '../admin-alerts/admin-alerts.service.js';
 import { cancelBookingAndFreeDate, zeroUnreleasedVendorPayout } from '../payments/payments.dao.js';
 import { createRefundOnce, type BookingContext } from '../payments/payments.service.js';
+import { findUserById } from '../users/users.dao.js';
 import {
   declineOpenRequests,
   findConfirmedBookingsToUnwind,
@@ -185,6 +186,35 @@ export interface AccountUnwindResult {
    * them is a decision nobody has made yet. Always `0` for an admin unwind.
    */
   bookingsLeftForReview: number;
+  /**
+   * Set when an admin reinstated the account while this suspension was still
+   * unwinding (VEN-693): the unwind stopped, and the bookings it never reached
+   * are still confirmed, counted in `bookingsLeftUntouched`.
+   */
+  halted: boolean;
+  bookingsLeftUntouched: number;
+}
+
+/**
+ * Whether a suspension's unwind must stop because the account is live again.
+ *
+ * Only an admin suspension can be reinstated; a closure or deletion has no
+ * unban, so the read is skipped for them. It runs before every booking, so an
+ * unban stops the unwind at the next one, at the cost of one indexed read
+ * against a Stripe round trip per booking.
+ */
+async function reinstated(
+  context: AdminContext,
+  targetId: string,
+  copy: AccountUnwindCopy,
+): Promise<boolean> {
+  if (copy.initiatedBy !== 'admin') {
+    return false;
+  }
+
+  const target = await findUserById(context.db, targetId);
+
+  return target !== null && !target.isBanned;
 }
 
 /** Whether an unwind changed anything, so a re-run of a finished one writes no audit row. */
@@ -243,6 +273,22 @@ export async function unwindAccountBookings(
   );
   const first = await unwindBatch(context, targetId, now, copy, snapshot);
 
+  if (first.halted || (await reinstated(context, targetId, copy))) {
+    return {
+      requestsDeclined: 0,
+      bookingsCancelled: first.bookingsCancelled,
+      refundsIssued: first.refundsIssued,
+      refundsFailed: first.refundsFailed,
+      bookingsLeftForReview: first.bookingsLeftForReview,
+      halted: true,
+      bookingsLeftUntouched: first.halted
+        ? first.bookingsLeftUntouched
+        : (
+            await findConfirmedBookingsToUnwind(context.db, targetId, vendorProfileId, floorDate)
+          ).filter((booking) => !snapshot.some(({ id }) => id === booking.id)).length,
+    };
+  }
+
   const requestsDeclined = await declineOpenRequests(context.db, targetId, vendorProfileId, now);
 
   /*
@@ -265,6 +311,8 @@ export async function unwindAccountBookings(
     refundsIssued: first.refundsIssued + closing.refundsIssued,
     refundsFailed: first.refundsFailed + closing.refundsFailed,
     bookingsLeftForReview: first.bookingsLeftForReview + closing.bookingsLeftForReview,
+    halted: closing.halted,
+    bookingsLeftUntouched: closing.bookingsLeftUntouched,
   };
 }
 
@@ -275,12 +323,24 @@ async function unwindBatch(
   copy: AccountUnwindCopy,
   affected: BanAffectedBooking[],
 ): Promise<Omit<AccountUnwindResult, 'requestsDeclined'>> {
+  let halted = false;
+  let bookingsLeftUntouched = 0;
   let refundsIssued = 0;
   let bookingsCancelled = 0;
   let refundsFailed = 0;
   let bookingsLeftForReview = 0;
 
-  for (const booking of affected) {
+  for (const [index, booking] of affected.entries()) {
+    if (await reinstated(context, targetId, copy)) {
+      halted = true;
+      bookingsLeftUntouched = affected.length - index;
+      context.log.warn(
+        { targetId, bookingsLeftUntouched, operation: copy.operation },
+        'Unwind halted: account reinstated',
+      );
+      break;
+    }
+
     /*
      * The account holder is walking away from a booking **they** paid for, so
      * this loop's full refund is the wrong price: D3 tiers a customer's
@@ -576,6 +636,8 @@ async function unwindBatch(
     refundsIssued,
     refundsFailed,
     bookingsLeftForReview,
+    halted,
+    bookingsLeftUntouched,
   };
 }
 
