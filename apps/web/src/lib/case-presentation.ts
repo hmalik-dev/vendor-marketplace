@@ -37,6 +37,10 @@ export function caseSubject(supportCase: {
     return 'Chargeback';
   }
 
+  if (supportCase.origin === 'fraud_warning') {
+    return 'Early fraud warning';
+  }
+
   /*
    * An in-product report's topic is `trust-and-safety` by construction (#436),
    * so printing it would label every one of them identically. The reason and
@@ -68,6 +72,7 @@ export const CASE_ARRIVAL: Record<SupportCaseOrigin, string> = {
   support_message: 'Contact support',
   chargeback: 'Stripe webhook',
   user_report: 'Reported in the product',
+  fraud_warning: 'Stripe Radar webhook',
 };
 
 /**

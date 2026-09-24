@@ -51,6 +51,7 @@ function supportCase(overrides: Partial<WireAdminCaseDetail> = {}): WireAdminCas
       totalAmountCents: 260_000,
       platformFeeCents: 28_600,
       vendorPayoutCents: 231_400,
+      vendorOwedCents: 0,
       refundAmountCents: null,
       paidAt: new Date('2026-08-20T16:41:00Z'),
       payoutReleasedAt: null,

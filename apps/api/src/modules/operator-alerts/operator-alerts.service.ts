@@ -288,6 +288,59 @@ export function unmatchedDisputeAlert(input: {
   };
 }
 
+/**
+ * A card issuer warned Stripe that a booking's charge looks fraudulent
+ * (VEN-645). Nothing is frozen or refunded; a person rules on the case.
+ */
+export function earlyFraudWarningAlert(input: {
+  caseId: string;
+  reference: string;
+  bookingId: string;
+  fraudType: string;
+}): OperatorAlert {
+  return {
+    kind: 'early_fraud_warning',
+    subjectId: input.caseId,
+    summary: `Early fraud warning on booking ${input.bookingId}`,
+    details: [
+      `The card issuer flagged the charge as "${input.fraudType}". A chargeback often follows within days.`,
+      `Booking: ${input.bookingId}`,
+      `Case: ${input.reference} (${input.caseId})`,
+    ],
+    adminPath: `/admin/cases/${input.caseId}`,
+  };
+}
+
+/**
+ * Stripe could not send a vendor's payout to their bank (VEN-645). Distinct from
+ * `payoutFailedAlert`, which is this platform's own transfer to the vendor's
+ * Stripe balance failing; here the money reached the vendor's account and the
+ * bank refused it. Shares `payout_failed`'s kind with its own `po:` subject.
+ */
+export async function vendorBankPayoutFailedAlert(
+  db: AppDatabase,
+  stripeAccountId: string,
+  payout: { payoutId: string; amountCents: number; failureMessage: string | null },
+): Promise<OperatorAlert | null> {
+  const vendor = await findVendorAlertSubject(db, stripeAccountId);
+
+  if (!vendor) {
+    return null;
+  }
+
+  return {
+    kind: 'payout_failed',
+    subjectId: `po:${payout.payoutId}`,
+    summary: `${vendor.businessName}'s bank payout failed`,
+    details: [
+      `Stripe could not send ${formatPrice(payout.amountCents)} from connected account ${stripeAccountId} to the vendor's bank.`,
+      `Stripe reason: ${payout.failureMessage ?? 'not given'}`,
+      `Vendor: ${vendor.vendorId}`,
+    ],
+    adminPath: `/admin/users/${vendor.userId}`,
+  };
+}
+
 /** Stripe moved a vendor who could be paid to one who cannot. */
 export async function vendorPayoutsDisabledAlert(
   db: AppDatabase,
