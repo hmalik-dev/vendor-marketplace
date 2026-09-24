@@ -362,6 +362,7 @@ export function MessagesScreen({
    */
   const readSeq = useRef(0);
   const readSucceeded = useRef(new Map<string, number>());
+  const latestRead = useRef(new Map<string, number>());
   const markRead = useCallback(
     async (conversationId: string) => {
       // Read from the latest render, not from inside the updater, which React
@@ -376,6 +377,7 @@ export function MessagesScreen({
        */
       readSeq.current += 1;
       const seq = readSeq.current;
+      latestRead.current.set(conversationId, seq);
 
       setConversations((rows) =>
         rows.map((row) => (row.id === conversationId ? { ...row, unreadCount: 0 } : row)),
@@ -386,7 +388,18 @@ export function MessagesScreen({
           schema: wireMessagePageSchema.nullable(),
           method: 'PUT',
         });
-        readSucceeded.current.set(conversationId, seq);
+        readSucceeded.current.set(
+          conversationId,
+          Math.max(readSucceeded.current.get(conversationId) ?? 0, seq),
+        );
+
+        // An earlier read that failed meanwhile may have put a count back.
+        if (latestRead.current.get(conversationId) === seq) {
+          setConversations((rows) =>
+            rows.map((row) => (row.id === conversationId ? { ...row, unreadCount: 0 } : row)),
+          );
+        }
+
         window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
       } catch (error: unknown) {
         reportSwallowedError('messages: marking a conversation read failed', error);

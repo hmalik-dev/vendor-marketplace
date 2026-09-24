@@ -93,6 +93,8 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
   const trigger = useRef<HTMLButtonElement>(null);
 
   const markedRead = useRef(new Set<string>());
+  const confirmed = useRef(new Set<string>());
+  const readsOut = useRef(new Map<string, number>());
 
   const unread = items.filter((item) => item.readAt === null).length;
 
@@ -207,15 +209,19 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
       current.map((item) => (item.id === id ? { ...item, readAt: new Date() } : item)),
     );
 
+    readsOut.current.set(id, (readsOut.current.get(id) ?? 0) + 1);
+
     try {
       await call(`/notifications/${id}/read`, {
         schema: wireNotificationPageSchema.nullable(),
         method: 'PUT',
       });
+      confirmRead([id]);
     } catch (error: unknown) {
       reportSwallowedError('notifications: marking one read failed', error);
-      markedRead.current.delete(id);
-      restoreUnread(before.filter((item) => item.id === id));
+      settleRefused(before.filter((item) => item.id === id));
+    } finally {
+      readsOut.current.set(id, (readsOut.current.get(id) ?? 1) - 1);
     }
   }
 
@@ -224,16 +230,47 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
     before.forEach((item) => markedRead.current.add(item.id));
     setItems((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date() })));
 
+    before.forEach((item) =>
+      readsOut.current.set(item.id, (readsOut.current.get(item.id) ?? 0) + 1),
+    );
+
     try {
       await call('/notifications/read-all', {
         schema: wireNotificationPageSchema.nullable(),
         method: 'PUT',
       });
+      confirmRead(before.map((item) => item.id));
     } catch (error: unknown) {
       reportSwallowedError('notifications: marking all read failed', error);
-      before.forEach((item) => markedRead.current.delete(item.id));
-      restoreUnread(before);
+      settleRefused(before);
+    } finally {
+      before.forEach((item) =>
+        readsOut.current.set(item.id, (readsOut.current.get(item.id) ?? 1) - 1),
+      );
     }
+  }
+
+  /** The server has these read: keep them read over any stale page, and heal a wrong restore. */
+  function confirmRead(ids: readonly string[]): void {
+    const read = new Set(ids);
+    ids.forEach((id) => confirmed.current.add(id));
+    setItems((current) =>
+      current.map((item) =>
+        read.has(item.id) && item.readAt === null ? { ...item, readAt: new Date() } : item,
+      ),
+    );
+  }
+
+  /**
+   * A refused read puts its rows back, unless another read of the same row is
+   * still out or already succeeded: that one told the server the same thing.
+   */
+  function settleRefused(rows: readonly WireNotification[]): void {
+    const restorable = rows.filter(
+      (row) => !confirmed.current.has(row.id) && (readsOut.current.get(row.id) ?? 0) <= 1,
+    );
+    restorable.forEach((row) => markedRead.current.delete(row.id));
+    restoreUnread(restorable);
   }
 
   /** Puts the rows this call struck through back to unread. */
