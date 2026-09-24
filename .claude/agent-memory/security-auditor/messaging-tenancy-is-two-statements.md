@@ -48,6 +48,13 @@ re-tests the empty branch. Verified to fail when the `user_id` filter is dropped
 from the first statement. See [[booking-reads-gate-on-two-separate-paths]] for
 the same shape elsewhere.
 
+VEN-726 (2026-09-24) added `select ... for update` on `conversations` inside
+the send tx. Under `app_api` that table is `app_api_unscoped` (USING true), so
+RLS never gates the lock; the gate is `sendMessage`'s `findConversationById` +
+`sideOf` in JS, which runs before it. `insertMessage` already row-locked it via
+the `last_message_at` UPDATE, so no new contention. The backlog count stays
+internal. Audited clean.
+
 `POST /conversations` is `requireRole('customer')` as of #402; rows written
 before that where `customer_id` belongs to a vendor or admin account are still
 readable and writable by it, because every other messaging route gates on
