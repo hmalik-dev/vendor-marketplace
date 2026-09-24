@@ -4350,6 +4350,27 @@ export const adminStepUpResultSchema = z.object({ expiresAt: z.coerce.date() });
 export type AdminStepUpResult = z.infer<typeof adminStepUpResultSchema>;
 
 /*
+ * A person closing their own account from account settings (VEN-680): the
+ * address typed back and the emailed code, both required, so a stolen session
+ * alone cannot end an account.
+ */
+export const closeOwnAccountSchema = z.object({
+  email: z.string().trim().min(1, 'Enter the email address on this account').max(320),
+  code: adminStepUpVerifySchema.shape.code,
+});
+export type CloseOwnAccount = z.infer<typeof closeOwnAccountSchema>;
+
+/** What the person is told once it is done: when, and nothing about the unwind. */
+export const closeOwnAccountResultSchema = z.object({ closedAt: z.coerce.date() });
+export type CloseOwnAccountResult = z.infer<typeof closeOwnAccountResultSchema>;
+
+/** The bookings that would refuse the closure, read before the person asks for a code. */
+export const closeOwnAccountReadinessSchema = z.object({
+  blockers: z.array(adminCloseBlockerSchema),
+});
+export type CloseOwnAccountReadiness = z.infer<typeof closeOwnAccountReadinessSchema>;
+
+/*
  * One charge to the API's shared throttle counter (VEN-462), sent by the web
  * tier. The bucket is an opaque key made of printable ASCII, so it carries no
  * prose and no address; `record: false` reads the count without adding a hit.

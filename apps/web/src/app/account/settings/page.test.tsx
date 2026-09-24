@@ -17,8 +17,8 @@ describe('AccountSettingsPage (VEN-703)', () => {
     requireCurrentUser.mockReset();
   });
 
-  it.each(['customer', 'vendor', 'admin'] as const)(
-    'lists exactly the name and password rows for a %s, opening their own pages',
+  it.each(['customer', 'vendor'] as const)(
+    'lists the name, password and close rows for a %s, opening their own pages',
     async (role) => {
       requireCurrentUser.mockResolvedValue({ role, firstName: 'Ada', lastName: 'Lovelace' });
 
@@ -29,12 +29,30 @@ describe('AccountSettingsPage (VEN-703)', () => {
       expect(rows.map((row) => row.getAttribute('href'))).toEqual([
         '/account/settings/name',
         '/account/settings/password',
+        '/account/settings/close',
       ]);
       expect(within(rows[0]!).getByText('Your name')).toBeDefined();
       expect(within(rows[0]!).getByText('Ada Lovelace')).toBeDefined();
       expect(within(rows[1]!).getByText('Password')).toBeDefined();
+      expect(within(rows[2]!).getByText('Close account')).toBeDefined();
     },
   );
+
+  it('offers an admin the name and password rows and no way to close the account', async () => {
+    requireCurrentUser.mockResolvedValue({
+      role: 'admin',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+    });
+
+    render(await AccountSettingsPage({ searchParams: NO_QUERY }));
+
+    expect(screen.getAllByRole('link').map((row) => row.getAttribute('href'))).toEqual([
+      '/account/settings/name',
+      '/account/settings/password',
+    ]);
+    expect(screen.queryByText('Close account')).toBeNull();
+  });
 
   it('shows the confirmation the name page sends the reader back with', async () => {
     requireCurrentUser.mockResolvedValue({ role: 'customer', firstName: 'Ada', lastName: 'B' });

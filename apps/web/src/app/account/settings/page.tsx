@@ -6,6 +6,7 @@ import {
   type SettingsRowData,
 } from '@/components/account/settings-layout';
 import {
+  ACCOUNT_CLOSE_PATH,
   ACCOUNT_NAME_PATH,
   ACCOUNT_PASSWORD_PATH,
   ACCOUNT_SETTINGS_PATH,
@@ -52,6 +53,16 @@ export default async function AccountSettingsPage({
     },
     { id: 'password', label: 'Password', value: '••••••••••', href: ACCOUNT_PASSWORD_PATH },
   ];
+
+  // An operator's account is closed from the console, which keeps its own guards.
+  if (user.role !== 'admin') {
+    rows.push({
+      id: 'close',
+      label: 'Close account',
+      value: 'Retire your account and sign out everywhere',
+      href: ACCOUNT_CLOSE_PATH,
+    });
+  }
 
   return (
     <SettingsLayout title="Account settings">

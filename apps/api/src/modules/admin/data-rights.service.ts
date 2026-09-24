@@ -5,13 +5,24 @@ import type {
   AdminCloseBlocker,
   AdminUserDataRights,
   AdminUserExport,
+  CloseOwnAccount,
+  CloseOwnAccountReadiness,
+  CloseOwnAccountResult,
   LegalAcceptanceRecord,
 } from '@vendor-marketplace/shared';
 import type { LegalAcceptanceRow, UserRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { removeOwnedObjects, type ObjectStorage } from '../../lib/storage.js';
 import { isSeededIdentity, type AuthIdentityDeleter } from '../auth-sync/identity.js';
-import { conflict, forbidden, notFound } from '../../lib/errors.js';
+import {
+  conflict,
+  forbidden,
+  notFound,
+  validationFailed,
+  type AppError,
+} from '../../lib/errors.js';
+import type { StepUpStore } from '../../lib/step-up.js';
+import { completeStepUp } from './admin-step-up.service.js';
 import {
   hasAnotherLiveOperator,
   retireOperatorById,
@@ -556,6 +567,16 @@ async function deleteAndConfirm(
   return completed && removed;
 }
 
+/** The 409 that refuses a closure while future confirmed bookings stand (D39). */
+function blockedByBookings(blocked: AdminCloseBlocker[]): AppError {
+  return conflict(
+    `This account holds ${blocked.length} upcoming confirmed ${
+      blocked.length === 1 ? 'booking' : 'bookings'
+    }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
+    { bookings: blocked },
+  );
+}
+
 export async function closeAccount(
   context: AdminContext,
   actorId: string,
@@ -598,6 +619,26 @@ export async function closeAccount(
     throw forbidden('You cannot close your own account');
   }
 
+  return runClosure(context, actorId, user, now, deleteIdentity, storage);
+}
+
+/**
+ * The closure itself, past the checks that are about **who is asking**: the
+ * operator route's last-operator and self-closure refusals stay in
+ * `closeAccount`, and a person closing their own account reaches this through
+ * `closeOwnAccount` with its own confirmation. One core, so both leave the
+ * marketplace in the same state.
+ */
+async function runClosure(
+  context: AdminContext,
+  actorId: string,
+  user: UserRow,
+  now: Date,
+  deleteIdentity: AuthIdentityDeleter | null,
+  storage: Pick<ObjectStorage, 'list' | 'remove'>,
+): Promise<AdminCloseAccountResult> {
+  const userId = user.id;
+  const operatorTarget = user.role === 'admin';
   const profile = await findVendorProfileRecord(context.db, userId);
 
   /*
@@ -654,12 +695,7 @@ export async function closeAccount(
     }
 
     if (result && 'blocked' in result) {
-      throw conflict(
-        `This account holds ${result.blocked.length} upcoming confirmed ${
-          result.blocked.length === 1 ? 'booking' : 'bookings'
-        }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
-        { bookings: result.blocked },
-      );
+      throw blockedByBookings(result.blocked);
     }
 
     if (!result) {
@@ -784,6 +820,93 @@ export async function closeAccount(
     profileRetired: retired.profileRetired,
     identityDeleted,
   };
+}
+
+/** Refused for an operator account: the console is the only door, and it keeps its own guards. */
+export const OPERATOR_SELF_CLOSURE_REFUSAL =
+  'Admin accounts cannot be closed from account settings. Ask another admin to close it from the console.';
+
+/** The address typed back is compared the way sign-in compares it. */
+function sameAddress(typed: string, onFile: string): boolean {
+  return typed.trim().toLowerCase() === onFile.trim().toLowerCase();
+}
+
+async function readOwnCloser(db: AppDatabase, userId: string): Promise<UserRow> {
+  const user = await findUserRecord(db, userId);
+
+  if (!user) {
+    throw notFound('No account with that id');
+  }
+
+  if (user.role === 'admin') {
+    throw forbidden(OPERATOR_SELF_CLOSURE_REFUSAL);
+  }
+
+  return user;
+}
+
+/**
+ * What would refuse the caller's own closure right now, so the settings page
+ * can say so before it asks for a code (VEN-680).
+ */
+export async function readOwnCloseReadiness(
+  db: AppDatabase,
+  userId: string,
+  now: Date,
+): Promise<CloseOwnAccountReadiness> {
+  const user = await readOwnCloser(db, userId);
+
+  return { blockers: user.deletedAt ? [] : await closeBlockers(db, userId, now) };
+}
+
+/**
+ * A customer or vendor closes **their own** account (VEN-680): the closure an
+ * operator performs, run for the caller after a fresh proof — the address typed
+ * back and the emailed code — so a stolen session alone cannot do it.
+ *
+ * Order matters. The typed address and the D39 refusal are checked **before**
+ * the code is spent, so a mistyped address or a standing booking costs the
+ * person nothing; the core re-reads the blockers under the row lock, which is
+ * the check that holds. The audit row names the person as its actor: a retired
+ * row keeps its id, so the foreign key holds. An operator account is refused
+ * here and keeps its own guards on the console route.
+ *
+ * A closed account answers 409 through the core; one whose unwind was
+ * interrupted is finished by re-running the closure (VEN-478) and skips the
+ * proof, since nothing new is being ended. A closed person's session no longer
+ * resolves, so over HTTP the console's route is what finishes it; this branch
+ * is the service's own.
+ */
+export async function closeOwnAccount(
+  context: AdminContext,
+  userId: string,
+  confirmation: CloseOwnAccount,
+  now: Date,
+  deleteIdentity: AuthIdentityDeleter | null,
+  storage: Pick<ObjectStorage, 'list' | 'remove'>,
+  stepUp: StepUpStore,
+): Promise<CloseOwnAccountResult> {
+  const user = await readOwnCloser(context.db, userId);
+
+  if (!user.deletedAt) {
+    if (!sameAddress(confirmation.email, user.email)) {
+      throw validationFailed('That is not the email address on this account.');
+    }
+
+    const blockers = await closeBlockers(context.db, userId, now);
+
+    if (blockers.length > 0) {
+      throw blockedByBookings(blockers);
+    }
+
+    await completeStepUp(stepUp, userId, confirmation.code, now);
+    // The grant a spent code buys opens admin routes and nothing here needs it.
+    await stepUp.revoke(userId);
+  }
+
+  const closed = await runClosure(context, userId, user, now, deleteIdentity, storage);
+
+  return { closedAt: closed.closedAt };
 }
 
 /**
