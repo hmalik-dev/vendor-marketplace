@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { promisify } from 'node:util';
@@ -47,7 +48,7 @@ test('an admin closes another admin only after typing their address exactly', as
     );
   }
 
-  const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const stamp = `${Date.now()}-${randomUUID().slice(0, 8)}`;
   // The `+auth_test` suffix is what `DISPOSABLE_ADMIN_EMAIL` fences the helper to.
   const email = `e2e-admin-${stamp}+auth_test@example.com`;
   const authUserId = `seed_e2e_admin_${stamp}`;
