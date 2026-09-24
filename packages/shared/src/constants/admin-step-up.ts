@@ -30,6 +30,6 @@ export const ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR = 10;
 export const ADMIN_CEILING_ACTIONS = [
   'user_banned',
   'user_closed',
-  'operator_account_closed',
+  'admin_account_closed',
   'user_data_exported',
 ] as const;

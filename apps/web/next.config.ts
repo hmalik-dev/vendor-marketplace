@@ -12,7 +12,6 @@ import {
   IMAGE_SIZES,
   imageRemotePatterns,
 } from './src/config/image-optimizer';
-import { LEGACY_REDIRECTS } from './src/config/legacy-redirects';
 import {
   CSP_NONCE_PLACEHOLDER,
   contentSecurityPolicy,
@@ -153,10 +152,6 @@ const nextConfig: NextConfig = {
     qualities: [IMAGE_QUALITY],
     deviceSizes: DEVICE_SIZES,
     imageSizes: IMAGE_SIZES,
-  },
-
-  async redirects() {
-    return [...LEGACY_REDIRECTS];
   },
 
   async headers() {

@@ -53,7 +53,7 @@ export async function recordAlertUnlessRecent(
 ): Promise<string | null> {
   return db.transaction(async (tx) => {
     await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtextextended(${`operator_alert:${input.kind}:${input.subjectId}`}, 0))`,
+      sql`select pg_advisory_xact_lock(hashtextextended(${`admin_alert:${input.kind}:${input.subjectId}`}, 0))`,
     );
 
     const recent = await tx
@@ -153,7 +153,7 @@ export async function isDigestClaimed(db: AppDatabase, localDate: string): Promi
  * Claims the digest for one admin-local date, answering the row id to the
  * one instance whose insert won and null to every other.
  *
- * The partial unique index `operator_alerts_digest_date_key` is the arbiter; an
+ * The partial unique index `admin_alerts_digest_date_key` is the arbiter; an
  * untargeted `do nothing` is enough because it is the only unique constraint an
  * insert with a generated id can collide with.
  */

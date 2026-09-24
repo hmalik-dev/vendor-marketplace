@@ -45,7 +45,7 @@ describe('admin alerts on two real connections', () => {
         log: harness!.app.log,
         background: harness!.app.background,
         clock: () => now,
-        to: TEST_ENV.OPERATOR_ALERT_EMAIL,
+        to: TEST_ENV.ADMIN_ALERT_EMAIL,
         webOrigin: TEST_ENV.WEB_URL,
         wait: async () => undefined,
         timeZone: 'America/New_York',

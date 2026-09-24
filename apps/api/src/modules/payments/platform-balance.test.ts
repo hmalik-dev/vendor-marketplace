@@ -203,7 +203,7 @@ describe('the platform balance reconciliation (VEN-644)', () => {
     });
     expect(harness.email.sent).toHaveLength(1);
     expect(harness.email.sent[0]).toMatchObject({
-      to: TEST_ENV.OPERATOR_ALERT_EMAIL,
+      to: TEST_ENV.ADMIN_ALERT_EMAIL,
       subject: expect.stringContaining('The platform balance is $0.01 short of what it owes'),
     });
     expect(harness.email.sent[0]!.text).toContain(

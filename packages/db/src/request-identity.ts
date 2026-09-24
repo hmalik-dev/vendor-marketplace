@@ -54,7 +54,7 @@ export async function withRequestIdentity<T>(
 
   return db.transaction(async (tx) => {
     await tx.execute(
-      sql`select set_config('app.user_id', ${identity.userId}, true), set_config('app.role', ${identity.role}, true), set_config('app.operator', ${identity.admin === true ? 'true' : ''}, true)`,
+      sql`select set_config('app.user_id', ${identity.userId}, true), set_config('app.role', ${identity.role}, true), set_config('app.admin', ${identity.admin === true ? 'true' : ''}, true)`,
     );
 
     const result = await fn(tx);
@@ -66,7 +66,7 @@ export async function withRequestIdentity<T>(
      * from inheriting the identity. A throw needs no reset: it rolls back.
      */
     await tx.execute(
-      sql`select set_config('app.user_id', '', true), set_config('app.role', '', true), set_config('app.operator', '', true)`,
+      sql`select set_config('app.user_id', '', true), set_config('app.role', '', true), set_config('app.admin', '', true)`,
     );
 
     return result;

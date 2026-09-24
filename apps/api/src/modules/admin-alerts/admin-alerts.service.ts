@@ -53,7 +53,7 @@ export interface AdminAlertDeps {
   log: FastifyBaseLogger;
   background: BackgroundWork;
   clock: Clock;
-  /** `OPERATOR_ALERT_EMAIL`; absent only in development, where alerts are logged. */
+  /** `ADMIN_ALERT_EMAIL`; absent only in development, where alerts are logged. */
   to: string | undefined;
   /** `canonicalWebOrigin(env)`, which every console link is built on. */
   webOrigin: string;
@@ -164,7 +164,7 @@ export async function alertNow(deps: AdminAlertDeps, alert: AdminAlert): Promise
   if (deps.to === undefined) {
     deps.log.warn(
       { kind: alert.kind, subjectId: alert.subjectId, summary: alert.summary, link },
-      'Admin alert (OPERATOR_ALERT_EMAIL is not set, so it was logged rather than sent)',
+      'Admin alert (ADMIN_ALERT_EMAIL is not set, so it was logged rather than sent)',
     );
     return 'logged';
   }

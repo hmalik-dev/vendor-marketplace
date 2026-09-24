@@ -1390,7 +1390,7 @@ export const ADMIN_ACTIONS = [
    * from the auth provider's dashboard. The immutability trigger means a row written under
    * the wrong value stays wrong, so the distinction is made at the writer.
    */
-  'operator_account_closed',
+  'admin_account_closed',
   /*
    * Graduated moderation (#435) — the levers that are not a ban.
    *
@@ -1458,8 +1458,8 @@ export const ADMIN_ACTIONS = [
    * The detail carries the role the account held before the grant, which is
    * what a revoke restores; never the address, which the ids resolve to.
    */
-  'operator_granted',
-  'operator_revoked',
+  'admin_granted',
+  'admin_revoked',
   /**
    * An interrupted ban or closure was run to the end (VEN-478).
    *
@@ -1472,14 +1472,13 @@ export const ADMIN_ACTIONS = [
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
 /**
- * The stored strings for admin access changes. They predate the word "admin" and
- * live in append-only audit rows, so the code names them here once and VEN-697
- * renames the stored values by changing this constant with the migration.
+ * The stored strings for admin access changes, named once so the DAO and the
+ * closure writer cannot drift from the audit-row values.
  */
 export const ADMIN_ACCESS_ACTIONS = {
-  granted: 'operator_granted',
-  revoked: 'operator_revoked',
-  accountClosed: 'operator_account_closed',
+  granted: 'admin_granted',
+  revoked: 'admin_revoked',
+  accountClosed: 'admin_account_closed',
 } as const satisfies Record<string, AdminAction>;
 
 /**

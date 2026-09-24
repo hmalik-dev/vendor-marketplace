@@ -15,10 +15,10 @@ declare module 'fastify' {
 }
 
 export interface AdminAlertsPluginOptions {
-  /** `OPERATOR_ALERT_EMAIL`; undefined in development, where alerts are logged. */
+  /** `ADMIN_ALERT_EMAIL`; undefined in development, where alerts are logged. */
   to: string | undefined;
   webOrigin: string;
-  /** `OPERATOR_TIMEZONE`. */
+  /** `ADMIN_TIMEZONE`. */
   timeZone: string;
   /**
    * How often to ask whether the digest is due. **`0` disables the timer**, which

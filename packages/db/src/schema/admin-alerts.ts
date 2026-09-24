@@ -2,8 +2,8 @@ import { sql } from 'drizzle-orm';
 import { index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { ADMIN_ALERT_KINDS, ADMIN_ALERT_OUTCOMES } from '@vendor-marketplace/shared';
 
-export const adminAlertKindEnum = pgEnum('operator_alert_kind', ADMIN_ALERT_KINDS);
-export const adminAlertOutcomeEnum = pgEnum('operator_alert_outcome', ADMIN_ALERT_OUTCOMES);
+export const adminAlertKindEnum = pgEnum('admin_alert_kind', ADMIN_ALERT_KINDS);
+export const adminAlertOutcomeEnum = pgEnum('admin_alert_outcome', ADMIN_ALERT_OUTCOMES);
 
 /**
  * One row per email sent to the admin (VEN-405), and the dedupe record.
@@ -18,7 +18,7 @@ export const adminAlertOutcomeEnum = pgEnum('operator_alert_outcome', ADMIN_ALER
  * record the admin was pointed at.
  */
 export const adminAlerts = pgTable(
-  'operator_alerts',
+  'admin_alerts',
   {
     id: uuid('id')
       .primaryKey()
@@ -35,8 +35,8 @@ export const adminAlerts = pgTable(
     sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index('operator_alerts_kind_subject_sent_at_idx').on(table.kind, table.subjectId, table.sentAt),
-    uniqueIndex('operator_alerts_digest_date_key')
+    index('admin_alerts_kind_subject_sent_at_idx').on(table.kind, table.subjectId, table.sentAt),
+    uniqueIndex('admin_alerts_digest_date_key')
       .on(table.subjectId)
       .where(sql`${table.kind} = 'daily_digest'`),
   ],

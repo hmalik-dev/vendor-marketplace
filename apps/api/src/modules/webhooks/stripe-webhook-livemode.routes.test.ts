@@ -75,9 +75,7 @@ describe.each([
 
     // Only the direction that drops real money pages the admin.
     await harness.flushEmail();
-    const paged = harness.email.sent.filter(
-      (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
-    );
+    const paged = harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL);
     expect(paged).toHaveLength(eventLivemode ? 1 : 0);
     if (eventLivemode) {
       expect(paged[0]!.subject).toContain('Live Stripe events are being ignored');
