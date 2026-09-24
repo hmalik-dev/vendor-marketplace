@@ -186,7 +186,7 @@ export interface RequestListFilter {
  * step ahead of it. Every predicate that filters on status therefore has to
  * know about this, or it answers with the stale one.
  */
-function hasLapsed(now: Date): SQL {
+export function hasLapsed(now: Date): SQL {
   return and(
     inArray(bookingRequests.status, [...EXPIRABLE_BOOKING_REQUEST_STATUSES]),
     isNotNull(bookingRequests.expiresAt),
@@ -201,7 +201,7 @@ function hasLapsed(now: Date): SQL {
 }
 
 /** The booking a request became, if it ever became one — at most one row. */
-function bookingBehindRequest(): SQL {
+export function bookingBehindRequest(): SQL {
   return sql`(select 1 from ${bookings} where ${bookings.requestId} = ${bookingRequests.id})`;
 }
 
