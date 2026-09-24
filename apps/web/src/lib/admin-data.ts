@@ -24,6 +24,8 @@ import {
   wireAdminCustomerPageSchema,
   wireAdminMetricsSchema,
   wireAdminPaymentPageSchema,
+  wireAdminTaxYearsSchema,
+  type WireAdminTaxYears,
   wireAdminActivityPageSchema,
   wireAdminPlatformSettingsSchema,
   wireAdminVendorApplicationListSchema,
@@ -216,6 +218,10 @@ export async function getAdminBookingDetail(
 /** `Bookings · Requests` (VEN-399): every booking request, lazy expiry applied. */
 export async function getAdminRequests(query: string): Promise<WireAdminRequestPage> {
   return adminRead(`/admin/requests${query}`, wireAdminRequestPageSchema);
+}
+
+export async function getAdminTaxYears(): Promise<WireAdminTaxYears> {
+  return adminRead('/admin/tax/years', wireAdminTaxYearsSchema);
 }
 
 export async function getAdminPayments(query: string): Promise<WireAdminPaymentPage> {

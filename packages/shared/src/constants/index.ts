@@ -1471,6 +1471,11 @@ export const ADMIN_ACTIONS = [
    * updated, so the outcome — what the unwind then did — is a row of its own.
    */
   'account_unwind_finished',
+  /**
+   * An admin downloaded the year's 1099-K figures (VEN-722). The detail carries
+   * the tax year, the row count and the SHA-256 of the file, never a figure.
+   */
+  'tax_report_exported',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 

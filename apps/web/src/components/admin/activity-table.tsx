@@ -57,6 +57,7 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   payout_retried: 'Retried a payout',
   user_data_exported: 'Exported an account record',
   admin_exported: 'Exported a CSV',
+  tax_report_exported: 'Exported 1099-K figures',
   admin_data_read: 'Read customer data',
   user_closed: 'Closed an account',
   admin_account_closed: 'Closed an admin account',

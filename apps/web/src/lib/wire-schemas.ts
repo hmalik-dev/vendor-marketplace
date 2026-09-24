@@ -560,6 +560,10 @@ export const wireAdminPaymentPageSchema =
   paginatedSchema(wireAdminPaymentRowSchema).extend(wideningShape);
 export type WireAdminPaymentPage = z.infer<typeof wireAdminPaymentPageSchema>;
 
+/** Calendar years with settled bookings, for the 1099-K downloads (VEN-722). */
+export const wireAdminTaxYearsSchema = z.object({ years: z.array(z.number().int()) });
+export type WireAdminTaxYears = z.infer<typeof wireAdminTaxYearsSchema>;
+
 /**
  * The retry's answer, with its date coerced — **the one that gets away** (#432).
  *
