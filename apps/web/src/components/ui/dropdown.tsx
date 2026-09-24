@@ -177,7 +177,7 @@ export interface DropdownProps {
    * Called before Radix dismisses on Escape; `preventDefault()` keeps the panel
    * open. For a body with an inner view that Escape should leave first.
    */
-  onEscapeKeyDown?: (event: KeyboardEvent) => void;
+  onEscapeKeyDown?: (event: Event) => void;
   children: ReactNode;
 }
 

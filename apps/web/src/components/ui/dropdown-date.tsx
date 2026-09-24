@@ -391,7 +391,7 @@ export function DateDropdown({
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [quick]);
 
-  function onEscapeKeyDown(event: KeyboardEvent): void {
+  function onEscapeKeyDown(event: Event): void {
     if (quick) {
       event.preventDefault();
     }
