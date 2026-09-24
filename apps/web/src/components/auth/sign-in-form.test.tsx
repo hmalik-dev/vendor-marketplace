@@ -122,9 +122,10 @@ describe('SignInForm', () => {
 
     expect(
       await screen.findByText(
-        "This isn't going through right now. Wait a few minutes and try again.",
+        'Too many sign-in attempts from this device. Wait a few minutes and try again, or reset your password.',
       ),
     ).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toBeDefined();
     expect(screen.queryByText('That email and password did not match.')).toBeNull();
   });
 

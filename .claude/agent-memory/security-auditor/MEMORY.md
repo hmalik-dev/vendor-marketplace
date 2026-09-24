@@ -114,7 +114,7 @@
 - [`/ready` is unthrottled by design](ready-probe-is-unthrottled-and-now-reads-a-file.md) — presence booleans and RLS posture accepted
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — a shed 429 costs a DB write
 - [The daily send cap's closure is sticky](email-send-cap-closure-is-sticky.md) — blocks step-up codes till midnight; [VEN-680 codes](self-closure-step-up-codes-are-essential-mail.md)
-- [Auth proxy parser differential](auth-proxy-parser-differential.md) — body-derived rate-limit key fails closed; no retry on credential refusal; VEN-677/685 notes
+- [Auth proxy parser differential](auth-proxy-parser-differential.md) — body-derived key fails closed; VEN-630 per-caller sign-in budget is IP-rotatable
 
 ## Data layer, seeds and tooling
 
