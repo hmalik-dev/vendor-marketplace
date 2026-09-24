@@ -9,13 +9,21 @@ const getToken = vi.fn(
     }),
 );
 
-vi.mock('./auth/client', () => ({ getSessionToken: () => getToken() }));
+const refreshToken = vi.fn<(refused: string) => Promise<string | null>>();
+
+vi.mock('./auth/client', () => ({
+  getSessionToken: () => getToken(),
+  refreshRefusedSessionToken: (refused: string) => refreshToken(refused),
+}));
 
 const { useImageUpload, UploadTransportError } = await import('./use-api');
 
 /** Records whether anything was actually put on the wire. */
 class RecordingXhr {
   static sent: string[] = [];
+  static bearers: string[] = [];
+  /** Statuses the next requests answer with, first to last; 200 once it runs out. */
+  static statuses: number[] = [];
 
   status = 200;
   responseText = JSON.stringify({
@@ -31,7 +39,9 @@ class RecordingXhr {
   open(_method: string, url: string): void {
     this.url = url;
   }
-  setRequestHeader(): void {}
+  setRequestHeader(_name: string, value: string): void {
+    RecordingXhr.bearers.push(value);
+  }
   addEventListener(name: string, handler: () => void): void {
     this.listeners.set(name, handler);
   }
@@ -45,6 +55,14 @@ class RecordingXhr {
   /** Stays in flight until the test settles it, so abort has something to hit. */
   send(): void {
     RecordingXhr.sent.push(this.url);
+    this.status = RecordingXhr.statuses.shift() ?? 200;
+    if (this.status === 401) {
+      this.responseText = JSON.stringify({
+        statusCode: 401,
+        error: 'UNAUTHORIZED',
+        message: 'Session ended',
+      });
+    }
     RecordingXhr.inFlight = this;
   }
 
@@ -73,7 +91,10 @@ describe('useImageUpload cancellation', () => {
 
   beforeEach(() => {
     RecordingXhr.sent = [];
+    RecordingXhr.bearers = [];
+    RecordingXhr.statuses = [];
     RecordingXhr.inFlight = null;
+    refreshToken.mockReset();
     getToken.mockClear();
     // @ts-expect-error — a stand-in for the browser's XHR, not a full one.
     globalThis.XMLHttpRequest = RecordingXhr;
@@ -145,5 +166,36 @@ describe('useImageUpload cancellation', () => {
     controller.abort();
 
     await expect(pending).rejects.toBeInstanceOf(UploadTransportError);
+  });
+
+  it('re-mints once and resends when the API refuses the token (VEN-717)', async () => {
+    refreshToken.mockResolvedValue('token-fresh');
+    RecordingXhr.statuses = [401];
+    const { result } = renderHook(() => useImageUpload());
+
+    const pending = result.current(file(), 'portfolio', {});
+    resolveToken('token-abc');
+    await Promise.resolve();
+    RecordingXhr.inFlight?.complete();
+    await vi.waitFor(() => expect(RecordingXhr.sent).toHaveLength(2));
+    RecordingXhr.inFlight?.complete();
+
+    await expect(pending).resolves.toMatchObject({ imageKey: 'k.webp' });
+    expect(refreshToken).toHaveBeenCalledWith('token-abc');
+    expect(RecordingXhr.bearers).toEqual(['Bearer token-abc', 'Bearer token-fresh']);
+  });
+
+  it('leaves the refusal alone when the session is gone (VEN-717)', async () => {
+    refreshToken.mockResolvedValue(null);
+    RecordingXhr.statuses = [401];
+    const { result } = renderHook(() => useImageUpload());
+
+    const pending = result.current(file(), 'portfolio', {});
+    resolveToken('token-abc');
+    await Promise.resolve();
+    RecordingXhr.inFlight?.complete();
+
+    await expect(pending).rejects.toMatchObject({ statusCode: 401 });
+    expect(RecordingXhr.sent).toHaveLength(1);
   });
 });
