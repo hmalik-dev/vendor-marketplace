@@ -496,6 +496,15 @@ export const personalNameInputSchema = z.object({
 });
 export type PersonalNameInput = z.infer<typeof personalNameInputSchema>;
 
+/**
+ * Whether an account holds a real name. Sign-up gives a fresh customer a
+ * placeholder split so `lastName` lands empty, so blank on either side means
+ * the name step has not been cleared (VEN-642, VEN-701).
+ */
+export function hasPersonalName(user: { firstName: string; lastName: string }): boolean {
+  return user.firstName.trim() !== '' && user.lastName.trim() !== '';
+}
+
 // --- Customer profiles -----------------------------------------------------
 
 /**

@@ -262,3 +262,49 @@ describe('useApi and a session refused mid-session', () => {
     },
   );
 });
+
+/** The name gate's client half (VEN-701): one navigation to the step, off the pages it exempts. */
+describe('useApi and the name gate', () => {
+  const refusal = new ApiClientError(403, ERROR_CODES.NAME_REQUIRED, 'Add your name to continue.');
+
+  beforeEach(() => {
+    push.mockReset();
+    apiRequest.mockReset();
+    window.history.replaceState({}, '', '/vendors/june-harlow?package=1');
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('sends the reader to the name step once, carrying where they were', async () => {
+    apiRequest.mockRejectedValue(refusal);
+    const { result } = renderHook(() => useApi());
+
+    await expect(result.current('/conversations', { schema: z.unknown() })).rejects.toBe(refusal);
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith(
+      '/sign-up/customer-details?returnTo=%2Fvendors%2Fjune-harlow%3Fpackage%3D1',
+    );
+  });
+
+  it('does not navigate from the name step itself', async () => {
+    window.history.replaceState({}, '', '/sign-up/customer-details');
+    apiRequest.mockRejectedValue(refusal);
+    const { result } = renderHook(() => useApi());
+
+    await expect(result.current('/conversations', { schema: z.unknown() })).rejects.toBe(refusal);
+
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('does not read a name refusal as a suspension', async () => {
+    apiRequest.mockRejectedValue(refusal);
+    const { result } = renderHook(() => useApi());
+
+    await expect(result.current('/conversations', { schema: z.unknown() })).rejects.toBe(refusal);
+
+    expect(replace).not.toHaveBeenCalled();
+  });
+});

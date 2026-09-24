@@ -2,6 +2,7 @@
 
 import { MAX_NAME_LENGTH, personalNameInputSchema } from '@vendor-marketplace/shared';
 import { useId, useState } from 'react';
+import { SignOutButton } from '@/components/auth/sign-out-button';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -115,7 +116,7 @@ export function CustomerDetailsForm({ returnTo }: CustomerDetailsFormProps): Rea
           </div>
         </div>
 
-        <div className="mt-2">
+        <div className="mt-2 flex items-center gap-5">
           <Button
             type="submit"
             variant="primary"
@@ -126,6 +127,12 @@ export function CustomerDetailsForm({ returnTo }: CustomerDetailsFormProps): Rea
           >
             {saving ? 'Saving…' : 'Continue'}
           </Button>
+          {/* A mandatory step is not a trap (VEN-701): the way out is here, not only in the header menu. */}
+          <SignOutButton>
+            <Button type="button" variant="ghost" size="lg">
+              Sign out
+            </Button>
+          </SignOutButton>
         </div>
       </form>
     </div>
