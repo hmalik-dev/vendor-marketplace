@@ -5,7 +5,8 @@ import { FilteredEmpty } from '@/components/admin/filtered-empty';
 import { OutOfRange } from '@/components/admin/out-of-range';
 import { PaymentTable } from '@/components/admin/payment-table';
 import { PAYOUT_FAILING_LABEL } from '@/lib/booking-entries';
-import { getAdminPayments } from '@/lib/admin-data';
+import { TaxYearDownloads } from '@/components/admin/tax-year-downloads';
+import { getAdminPayments, getAdminTaxYears } from '@/lib/admin-data';
 import {
   adminQueryString,
   droppedKeys,
@@ -31,7 +32,10 @@ export default async function AdminPaymentsPage({
   const raw = await searchParams;
   const flag = oneOf(raw.flag, ADMIN_PAYMENT_FLAGS);
   const dropped = droppedKeys(raw, { flag });
-  const payments = await getAdminPayments(adminQueryString({ flag, page: pageNumber(raw.page) }));
+  const [payments, taxYears] = await Promise.all([
+    getAdminPayments(adminQueryString({ flag, page: pageNumber(raw.page) })),
+    getAdminTaxYears(),
+  ]);
 
   /*
    * Cancelled bookings are excluded from the sum, and carry a pill saying so.
@@ -68,21 +72,24 @@ export default async function AdminPaymentsPage({
       ]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH} params={{ flag }}>
-          {/*
+        <>
+          <FilterBar action={PATH} params={{ flag }}>
+            {/*
             The state this screen could not show (#432). Both columns behind it
             were written by the release sweep and read by nothing, so a vendor
             owed money by a transfer failing every quarter of an hour generated
             no signal anywhere in the console.
           */}
-          <FilterSelect
-            action={PATH}
-            name="flag"
-            label="Needs attention"
-            value={flag ?? ''}
-            options={[{ value: 'payout-failing', label: PAYOUT_FAILING_LABEL }]}
-          />
-        </FilterBar>
+            <FilterSelect
+              action={PATH}
+              name="flag"
+              label="Needs attention"
+              value={flag ?? ''}
+              options={[{ value: 'payout-failing', label: PAYOUT_FAILING_LABEL }]}
+            />
+          </FilterBar>
+          <TaxYearDownloads years={taxYears.years} />
+        </>
       }
       pager={{
         path: PATH,
