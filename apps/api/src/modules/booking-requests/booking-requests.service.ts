@@ -79,11 +79,12 @@ import type { CustomerIdentityRow, VendorSummaryRow } from './booking-requests.d
 /** The four things either party can do to a live request. */
 export type RequestAction = 'quote' | 'accept' | 'decline' | 'cancel';
 
-function invalidTransition(from: BookingRequestStatus, to: BookingRequestStatus): AppError {
+/** Worded without an article, so a vowel-led status ("accepted", "expired") reads right. */
+export function invalidTransition(from: BookingRequestStatus, to: BookingRequestStatus): AppError {
   return new AppError(
     409,
     ERROR_CODES.INVALID_STATE_TRANSITION,
-    `A ${from} request cannot become ${to}`,
+    `This request is already ${from}, so it can't be ${to}.`,
   );
 }
 
