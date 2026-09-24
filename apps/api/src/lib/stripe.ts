@@ -179,6 +179,21 @@ export interface StripeConnectGateway {
   retrieveChargeIntent(chargeId: string): Promise<string | null>;
 
   /**
+   * A transfer as Stripe holds it now (VEN-645). `transfer.reversed` names the
+   * transfer; how much of it is reversed is read here, never from the payload.
+   */
+  retrieveTransfer(transferId: string): Promise<StripeTransferSnapshot>;
+
+  /**
+   * A payout from a vendor's connected account to their bank (VEN-645), read
+   * **on** that account: the platform's own key cannot see it otherwise.
+   */
+  retrieveConnectedPayout(payoutId: string, accountId: string): Promise<StripePayoutSnapshot>;
+
+  /** A Radar early fraud warning, re-read for the reason every webhook here is (VEN-645). */
+  retrieveEarlyFraudWarning(warningId: string): Promise<StripeEarlyFraudWarningSnapshot>;
+
+  /**
    * The platform's own USD balance (VEN-644), which the daily reconciliation
    * compares with what the platform still owes vendors and customers.
    */
@@ -310,6 +325,24 @@ export interface StripeTransferSnapshot {
    * refuses as an over-reversal and which then wedges the booking.
    */
   reversedCents: number;
+}
+
+/** A vendor's bank payout as the failure alert needs it (VEN-645). */
+export interface StripePayoutSnapshot {
+  payoutId: string;
+  /** `paid`, `pending`, `in_transit`, `canceled`, `failed`. */
+  status: string;
+  amountCents: number;
+  /** Stripe's own words for why the bank refused it. */
+  failureMessage: string | null;
+}
+
+/** A card issuer's early fraud warning (VEN-645). */
+export interface StripeEarlyFraudWarningSnapshot {
+  warningId: string;
+  /** `fraudulent`, `misc`, `unauthorized_use_of_card`, … — Stripe's list, so a plain string. */
+  fraudType: string;
+  chargeId: string | null;
 }
 
 export interface ReverseTransferInput {
@@ -1265,6 +1298,38 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
             ? refund.payment_intent
             : (refund.payment_intent?.id ?? null),
         amountCents: refund.amount,
+      };
+    },
+
+    async retrieveTransfer(transferId) {
+      const transfer = await stripe.transfers.retrieve(transferId);
+
+      return {
+        transferId: transfer.id,
+        amountCents: transfer.amount,
+        reversedCents: transfer.amount_reversed,
+      };
+    },
+
+    async retrieveConnectedPayout(payoutId, accountId) {
+      const payout = await stripe.payouts.retrieve(payoutId, {}, { stripeAccount: accountId });
+
+      return {
+        payoutId: payout.id,
+        status: payout.status,
+        amountCents: payout.amount,
+        failureMessage: payout.failure_message ?? null,
+      };
+    },
+
+    async retrieveEarlyFraudWarning(warningId) {
+      const warning = await stripe.radar.earlyFraudWarnings.retrieve(warningId);
+
+      return {
+        warningId: warning.id,
+        fraudType: warning.fraud_type,
+        chargeId:
+          typeof warning.charge === 'string' ? warning.charge : (warning.charge?.id ?? null),
       };
     },
 
