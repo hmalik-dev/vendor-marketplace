@@ -926,7 +926,7 @@ export const CATEGORY_SLUGS = CATEGORY_SEEDS.map((category) => category.slug);
 export const LANDING_CATEGORY_COUNT = 6;
 
 /**
- * The four categories behind "Or jump straight to" in the landing hero.
+ * The four highest-intent categories the site footer links to.
  *
  * A shortcut past the search bar for the visitor who already knows what they
  * need, so it is the four highest-intent types rather than the first four of
