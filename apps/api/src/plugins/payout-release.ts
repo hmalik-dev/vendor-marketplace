@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin';
+import { runTick } from '../lib/sweep.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { releaseDuePayouts } from '../modules/payments/payouts.service.js';
 
@@ -70,24 +71,30 @@ export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
       running = true;
 
       try {
-        await releaseDuePayouts(
-          {
-            db: app.db,
-            stripe: app.stripe,
-            log: app.log,
-            alerts: app.operatorAlerts,
-            notify: {
-              hub: app.events,
-              mail: {
+        await runTick(
+          'payout-release',
+          async () => {
+            await releaseDuePayouts(
+              {
                 db: app.db,
-                email: app.email,
+                stripe: app.stripe,
                 log: app.log,
-                webOrigin: options.webOrigin,
-                background: app.background,
+                alerts: app.operatorAlerts,
+                notify: {
+                  hub: app.events,
+                  mail: {
+                    db: app.db,
+                    email: app.email,
+                    log: app.log,
+                    webOrigin: options.webOrigin,
+                    background: app.background,
+                  },
+                },
               },
-            },
+              app.clock(),
+            );
           },
-          app.clock(),
+          { intervalMs: options.intervalMs, reporter: options.reporter, log: app.log },
         );
       } catch (error) {
         // Logged and swallowed: an unhandled rejection here would take the

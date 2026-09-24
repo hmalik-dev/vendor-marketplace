@@ -77,6 +77,7 @@ describe('the Neon Auth reconcile schedule', () => {
   });
 
   it('does not stack a second pass behind a slow one', async () => {
+    const shortInterval = 10 * 60_000;
     let finish!: () => void;
     vi.mocked(reconcileAuthUsers).mockImplementationOnce(
       () =>
@@ -84,14 +85,27 @@ describe('the Neon Auth reconcile schedule', () => {
           finish = () => resolve({} as never);
         }),
     );
-    const app = await bootedApp();
+    const app = await bootedApp({ lookup: vi.fn() }, shortInterval);
 
     await vi.advanceTimersByTimeAsync(LONGEST_BOOT_DELAY_MS);
-    // The interval fires while the boot pass is still reading Neon Auth.
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS);
+    // The interval fires while the boot pass is still reading Neon Auth, inside its deadline.
+    await vi.advanceTimersByTimeAsync(shortInterval);
     expect(reconcileAuthUsers).toHaveBeenCalledTimes(1);
 
     finish();
+    await vi.advanceTimersByTimeAsync(shortInterval);
+    expect(reconcileAuthUsers).toHaveBeenCalledTimes(2);
+
+    await app.close();
+  });
+
+  it('abandons a pass that never settles, so the next interval still runs (VEN-671)', async () => {
+    vi.mocked(reconcileAuthUsers).mockImplementationOnce(() => new Promise(() => undefined));
+    const app = await bootedApp();
+
+    await vi.advanceTimersByTimeAsync(LONGEST_BOOT_DELAY_MS);
+    expect(reconcileAuthUsers).toHaveBeenCalledTimes(1);
+
     await vi.advanceTimersByTimeAsync(INTERVAL_MS);
     expect(reconcileAuthUsers).toHaveBeenCalledTimes(2);
 
