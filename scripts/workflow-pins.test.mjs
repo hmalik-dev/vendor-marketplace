@@ -16,12 +16,16 @@ const WORKFLOWS = path.join(ROOT, '.github', 'workflows');
 
 const USES = /^\s*(?:-\s+)?uses:\s*(\S+)/;
 const PINNED = /^[^@\s]+@[0-9a-f]{40}$/;
+// A `uses` key written in a form USES cannot read (inline map, quoted key, value
+// on the next line) is refused rather than skipped, so the guard fails closed.
+const USES_KEY = /\buses["']?\s*:/;
 
 /** Returns the `uses:` references that are neither local nor SHA-pinned. */
 export const unpinnedActions = (source) =>
   source
     .split('\n')
-    .map((line) => USES.exec(line)?.[1])
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .map((line) => USES.exec(line)?.[1] ?? (USES_KEY.test(line) ? line.trim() : undefined))
     .filter((ref) => ref !== undefined && !ref.startsWith('./') && !PINNED.test(ref));
 
 test('a tag pin, a branch pin and a bare reference are all refused', () => {
@@ -36,6 +40,17 @@ test('a tag pin, a branch pin and a bare reference are all refused', () => {
   ]);
   assert.deepEqual(unpinnedActions(`      - uses: actions/checkout@${sha} # v4\n`), []);
   assert.deepEqual(unpinnedActions('      - uses: ./.github/actions/local\n'), []);
+});
+
+test('a uses key written in an unusual YAML form is refused, not skipped', () => {
+  for (const line of [
+    '      - { uses: actions/checkout@v4 }',
+    '      - "uses": actions/checkout@v4',
+    '      - uses:',
+  ]) {
+    assert.deepEqual(unpinnedActions(`${line}\n`), [line.trim()]);
+  }
+  assert.deepEqual(unpinnedActions('      # uses: actions/checkout@v4\n'), []);
 });
 
 test('every action in every workflow is pinned to a commit SHA', () => {
