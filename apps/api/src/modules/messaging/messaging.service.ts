@@ -2,7 +2,6 @@ import {
   EVENT_TYPE_LABELS,
   VENDOR_PAYMENTS_PATH,
   type ConversationPage,
-  type ConversationSummary,
   type EventType,
   type NotificationItem,
   type OpenedConversation,
