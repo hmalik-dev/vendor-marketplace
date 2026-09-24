@@ -85,6 +85,7 @@ export const errorHandlerPlugin = fp<ErrorHandlerOptions>(
       reporter.capture(error, {
         userId: request.auth?.authUserId ?? null,
         route,
+        requestId: request.id,
         payment: route !== undefined && paymentRoutes.has(route),
       });
     };
