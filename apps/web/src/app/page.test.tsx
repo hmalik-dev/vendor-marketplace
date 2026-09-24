@@ -580,9 +580,9 @@ describe('HomePage', () => {
   });
 
   /*
-   * Both controls open `/for-vendors` (VEN-384): the CTA the page, the payouts
-   * link its second section. The `TODO` naming the page is gone with the
-   * fallback it described.
+   * Both controls open `/for-vendors` (VEN-384) from the top: the payouts link
+   * carries no fragment (VEN-705), because the hero states a payout fact of its
+   * own. The `TODO` naming the page is gone with the fallback it described.
    */
   it('points both band controls at /for-vendors', async () => {
     render(await HomePage());
@@ -593,7 +593,7 @@ describe('HomePage', () => {
     );
     expect(screen.getByRole('link', { name: 'See how payouts work' })).toHaveProperty(
       'href',
-      'http://localhost:3000/for-vendors#payouts',
+      'http://localhost:3000/for-vendors',
     );
   });
 
@@ -1034,7 +1034,7 @@ describe('HomePage, signed in as a customer', () => {
 
     expect(
       screen.getByText(
-        'Stripe holds your payment until your event is complete, then releases it to the vendor.',
+        'Your payment is held until your event is complete, then released to the vendor.',
       ),
     ).toBeDefined();
     expect(screen.queryByText(/Your \$2,050 for June Harlow Photography/)).toBeNull();
@@ -1106,7 +1106,7 @@ describe('HomePage, signed in as a customer', () => {
     // Degraded to the visitor's guarantees rather than to no page at all.
     expect(
       screen.getByText(
-        'Stripe holds your payment until your event is complete, then releases it to the vendor.',
+        'Your payment is held until your event is complete, then released to the vendor.',
       ),
     ).toBeDefined();
     expect(screen.queryByRole('region', { name: 'Your bookings at a glance' })).toBeNull();
