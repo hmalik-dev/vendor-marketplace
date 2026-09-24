@@ -167,6 +167,56 @@ describe('MessagesScreen', () => {
   });
 
   /*
+   * VEN-691. Two reads for one thread can be out at once (open + a message
+   * arriving on it). The first failing after the second succeeded must not put
+   * back a count the server already cleared.
+   */
+  it('stays read when an earlier read fails after a later one succeeded', async () => {
+    const puts: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
+    call.mockImplementation(async (path: string) => {
+      if (path.endsWith('/messages')) {
+        return page([]);
+      }
+      if (path === `/conversations/${CONVERSATION}/read`) {
+        return new Promise<null>((resolve, reject) => {
+          puts.push({ resolve: () => resolve(null), reject });
+        });
+      }
+      return null;
+    });
+    render(
+      <MessagesScreen
+        initialNextBefore={null}
+        initialConversations={[conversation({ unreadCount: 3 })]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+        listFailed={false}
+      />,
+    );
+
+    const name = () => within(screen.getByRole('list')).getByText('Kessler & Co.');
+    await waitFor(() => expect(puts).toHaveLength(1));
+
+    await act(async () => {
+      onEventRef.current?.({
+        type: 'new_message',
+        conversationId: CONVERSATION,
+        message: {
+          ...message('77777777-7777-4777-8777-777777777777', THEM, 'Just arrived'),
+          createdAt: new Date('2026-04-21T15:00:00Z').toISOString(),
+        },
+      });
+    });
+    await waitFor(() => expect(puts).toHaveLength(2));
+
+    await act(async () => puts[1]?.resolve());
+    await act(async () => puts[0]?.reject(new Error('nope')));
+
+    await waitFor(() => expect(name().className).toContain('font-medium'));
+    expect(name().className).not.toContain('font-bold');
+  });
+
+  /*
    * VEN-706. The header's `Messages` dot clears off this event, so a read that
    * the API accepted has to announce itself — and one it refused must not.
    */

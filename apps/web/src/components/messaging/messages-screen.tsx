@@ -360,12 +360,22 @@ export function MessagesScreen({
    * reader asked for. Reported as well, because a mark-read that fails
    * *every* time is a real defect that would otherwise never surface.
    */
+  const readSeq = useRef(0);
+  const readSucceeded = useRef(new Map<string, number>());
   const markRead = useCallback(
     async (conversationId: string) => {
       // Read from the latest render, not from inside the updater, which React
       // runs later than this line.
       const cleared =
         conversationsRef.current.find((row) => row.id === conversationId)?.unreadCount ?? 0;
+
+      /*
+       * Reads for one thread can overlap (open, then a message arriving on
+       * it). A failure puts the count back only if no *later* read succeeded,
+       * because that one told the server everything this one did (VEN-691).
+       */
+      readSeq.current += 1;
+      const seq = readSeq.current;
 
       setConversations((rows) =>
         rows.map((row) => (row.id === conversationId ? { ...row, unreadCount: 0 } : row)),
@@ -376,9 +386,15 @@ export function MessagesScreen({
           schema: wireMessagePageSchema.nullable(),
           method: 'PUT',
         });
+        readSucceeded.current.set(conversationId, seq);
         window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
       } catch (error: unknown) {
         reportSwallowedError('messages: marking a conversation read failed', error);
+
+        if ((readSucceeded.current.get(conversationId) ?? 0) > seq) {
+          return;
+        }
+
         setConversations((rows) =>
           rows.map((row) =>
             row.id === conversationId ? { ...row, unreadCount: row.unreadCount + cleared } : row,

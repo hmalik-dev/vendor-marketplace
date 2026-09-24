@@ -92,12 +92,26 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
    */
   const trigger = useRef<HTMLButtonElement>(null);
 
+  const markedRead = useRef(new Set<string>());
+
   const unread = items.filter((item) => item.readAt === null).length;
 
   const refresh = useCallback(async () => {
     try {
       const page = await call('/notifications', { schema: wireNotificationPageSchema });
-      setItems(page.items);
+      /*
+       * A page fetched before a read committed still lists that row unread
+       * (VEN-691), so what this reader has marked read is laid over it. Read
+       * never goes back to unread server-side; a refused read is removed from
+       * the set before it is restored.
+       */
+      setItems(
+        page.items.map((item) =>
+          item.readAt === null && markedRead.current.has(item.id)
+            ? { ...item, readAt: new Date() }
+            : item,
+        ),
+      );
     } catch {
       // The badge keeps its last known value rather than dropping to zero,
       // which would read as "all clear" when it means "we could not ask".
@@ -188,6 +202,7 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
    */
   async function markRead(id: string): Promise<void> {
     const before = items;
+    markedRead.current.add(id);
     setItems((current) =>
       current.map((item) => (item.id === id ? { ...item, readAt: new Date() } : item)),
     );
@@ -199,12 +214,14 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
       });
     } catch (error: unknown) {
       reportSwallowedError('notifications: marking one read failed', error);
+      markedRead.current.delete(id);
       restoreUnread(before.filter((item) => item.id === id));
     }
   }
 
   async function markAllRead(): Promise<void> {
     const before = items.filter((item) => item.readAt === null);
+    before.forEach((item) => markedRead.current.add(item.id));
     setItems((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? new Date() })));
 
     try {
@@ -214,6 +231,7 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
       });
     } catch (error: unknown) {
       reportSwallowedError('notifications: marking all read failed', error);
+      before.forEach((item) => markedRead.current.delete(item.id));
       restoreUnread(before);
     }
   }
