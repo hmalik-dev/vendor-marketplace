@@ -2270,8 +2270,10 @@ describe('payments', () => {
      * the customer's would be half, recorded as theirs, both sides told.
      */
     describe('by the vendor (VEN-659)', () => {
-      const vendorCancel = (bookingId: string, body: object = { reason: 'A family emergency.' }) =>
-        inject('PUT', `/v1/vendor/bookings/${bookingId}/cancel`, VENDOR, body);
+      const vendorCancel = (
+        bookingId: string,
+        body: Record<string, unknown> = { reason: 'A family emergency.' },
+      ) => inject('PUT', `/v1/vendor/bookings/${bookingId}/cancel`, VENDOR, body);
 
       it('refunds the full amount inside the customer late window, and frees the date', async () => {
         const requestId = await acceptedRequest();
