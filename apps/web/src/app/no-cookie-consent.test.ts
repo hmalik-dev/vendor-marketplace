@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { legalMarkdownSource } from '@/lib/legal-content';
 import { sourceFiles, TS_AND_TSX, WEB_SOURCE } from '@/testing/source-scan';
 
 /*
@@ -7,10 +8,10 @@ import { sourceFiles, TS_AND_TSX, WEB_SOURCE } from '@/testing/source-scan';
  *
  * The cookie notice states, as a fact about this codebase, that there is no
  * banner because there is nothing to consent to: the tree sets no cookies of
- * its own and loads no advertising, session-recording or unapproved analytics
+ * its own beyond one and loads no advertising, session-recording or unapproved analytics
  * script — Vercel Web Analytics, named in the notice since VEN-496, is the one
- * exception — so the only cookie is the identity provider's strictly-necessary
- * session cookie. That claim stops being true the moment somebody adds another
+ * exception — so the cookies are the identity provider's strictly-necessary
+ * session cookie and the revoke marker (VEN-713), both named in the notice. That claim stops being true the moment somebody adds another
  * tracker, and the page would go on saying it. This is the guard that fails
  * first.
  *
@@ -107,14 +108,34 @@ describe('there is no cookie consent mechanism, because there is nothing to cons
     /await\s+cookies\s*\(\s*\)\s*\)?\s*\.set\s*\(/i,
   ];
 
+  /**
+   * The one file that writes a cookie: the revoke marker (VEN-713), named in
+   * the notice. Exempting a file rather than a pattern keeps the guard loud for
+   * every other file; the test below pins what that file may write.
+   */
+  const COOKIE_WRITER = 'lib/auth/server.ts';
+
   it('writes no cookie of its own', () => {
-    const offenders = source.flatMap((file) =>
-      COOKIE_WRITES.filter((pattern) => pattern.test(file.code)).map(
-        (pattern) => `${file.name}: ${pattern.source}`,
-      ),
-    );
+    const offenders = source
+      .filter((file) => file.name !== COOKIE_WRITER)
+      .flatMap((file) =>
+        COOKIE_WRITES.filter((pattern) => pattern.test(file.code)).map(
+          (pattern) => `${file.name}: ${pattern.source}`,
+        ),
+      );
 
     expect(offenders).toEqual([]);
+  });
+
+  it('writes only the revoke marker the notice names, from the one exempt file', () => {
+    const writer = source.find((file) => file.name === COOKIE_WRITER);
+    const writes = COOKIE_WRITES.flatMap(
+      (pattern) => writer?.code.match(new RegExp(pattern, 'gi')) ?? [],
+    );
+
+    expect(writes).toHaveLength(1);
+    expect(writer?.code).toContain('.set(REVOKE_MARKER_COOKIE,');
+    expect(legalMarkdownSource('cookies')).toContain('`session-revoke-marker`');
   });
 
   /**
