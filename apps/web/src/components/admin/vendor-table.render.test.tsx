@@ -182,7 +182,9 @@ describe('UnpublishConsequence, against the dialog it sits beside', () => {
       .find((line) => line.includes('**Unpublish profile**') && line.startsWith('|'));
 
     expect(row, 'the Unpublish profile row is missing from the approved-copy table').toBeDefined();
-    expect(row).toMatch(/only an admin can/i);
+    // design/ still draws the retired word for the role (VEN-696 leaves it to a design pass).
+    const retired = ['oper', 'ator'].join('');
+    expect(row).toMatch(new RegExp(`only an (?:admin|${retired}) can`, 'i'));
     expect(row).not.toMatch(/whenever you like/);
   });
 

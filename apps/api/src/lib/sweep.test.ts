@@ -200,10 +200,10 @@ describe('every scheduled sweep plugin is monitored (VEN-671)', () => {
 
   it('finds the seven plugins that own a timer', () => {
     expect(sources.map(({ name }) => name).sort()).toEqual([
+      'admin-alerts.ts',
       'auth-reconcile.ts',
       'email-retry.ts',
       'expiry-sweep.ts',
-      'admin-alerts.ts',
       'payout-release.ts',
       'platform-balance.ts',
       'upload-sweep.ts',
