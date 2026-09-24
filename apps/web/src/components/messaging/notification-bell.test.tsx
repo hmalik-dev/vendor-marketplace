@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -336,6 +336,46 @@ describe('a mark-read the API refuses', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Notifications, 1 unread' })).toBeDefined(),
     );
+  });
+});
+
+/*
+ * VEN-691. A stream refresh whose GET read the database before the PUT
+ * committed returns the pre-write page; it must not un-read the item.
+ */
+describe('a mark-read the API accepted', () => {
+  const UNREAD = {
+    id: 'n1',
+    type: 'new_request',
+    title: 'New booking request',
+    body: 'A customer asked about Dec 19.',
+    data: {},
+    readAt: null,
+    createdAt: new Date('2026-12-19T15:00:00.000Z'),
+  };
+
+  it('stays read when a refresh returns the page from before the write', async () => {
+    let commit: () => void = () => {};
+    call.mockImplementation((async (path: string) => {
+      if (path === '/notifications/n1/read') {
+        return new Promise((resolve) => {
+          commit = () => resolve(null);
+        });
+      }
+      return { items: [UNREAD], total: 1, page: 1, pageSize: 20 };
+    }) as never);
+
+    const user = userEvent.setup();
+    render(<NotificationBell />);
+    await user.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+    await user.click(screen.getByRole('button', { name: /New booking request/ }));
+
+    // The stream's refresh lands while the PUT is out, and reads the old row.
+    await act(async () => streamHandlers.onEvent({ type: 'new_notification' }));
+    await act(async () => commit());
+
+    expect(screen.getByRole('button', { name: 'Notifications' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Notifications, 1 unread' })).toBeNull();
   });
 });
 
