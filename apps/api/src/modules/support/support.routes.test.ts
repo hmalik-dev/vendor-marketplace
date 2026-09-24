@@ -277,7 +277,57 @@ describe('POST /support/messages', () => {
     }
   });
 
-  it('refuses a topic outside the five', async () => {
+  it('sends a feature request under its own subject, leaves other subjects unchanged, and opens no case', async () => {
+    const send = async (topic: string): Promise<string> => {
+      const result = await harness.app.inject({
+        method: 'POST',
+        url: '/v1/support/messages',
+        ...fromANewVisitor(),
+        payload: { topic, email: 'visitor@example.com', message: MESSAGE },
+      });
+      expect(result.statusCode, topic).toBe(200);
+      return supportMessageReceiptSchema.parse(result.json()).reference;
+    };
+
+    const featureReference = await send('feature-request');
+    expect(harness.email.sent).toHaveLength(2);
+    expect(harness.email.sent[0]?.subject).toBe(`A feature request · ${featureReference}`);
+
+    harness.email.sent.length = 0;
+    const brokeReference = await send('something-broke');
+    expect(harness.email.sent[0]?.subject).toBe(`Something broke · ${brokeReference}`);
+
+    const featureCases = await harness.database.db
+      .select({ id: supportCases.id })
+      .from(supportCases)
+      .where(eq(supportCases.reference, featureReference));
+    const brokeCases = await harness.database.db
+      .select({ id: supportCases.id })
+      .from(supportCases)
+      .where(eq(supportCases.reference, brokeReference));
+    expect(featureCases).toHaveLength(0);
+    expect(brokeCases).toHaveLength(1);
+  });
+
+  it('refuses a feature request that names a booking, sending nothing and holding nothing', async () => {
+    const result = await harness.app.inject({
+      method: 'POST',
+      url: '/v1/support/messages',
+      ...fromANewVisitor(),
+      payload: {
+        topic: 'feature-request',
+        email: 'visitor@example.com',
+        message: MESSAGE,
+        bookingId: '4f0b6f7e-7b0e-4a55-9d0c-2f1d3a9c8b11',
+      },
+    });
+
+    expect(result.statusCode).toBe(400);
+    expect(result.json().message).toBe('A feature request cannot be attached to a booking');
+    expect(harness.email.sent).toHaveLength(0);
+  });
+
+  it('refuses a topic outside the list', async () => {
     const result = await harness.app.inject({
       method: 'POST',
       url: '/v1/support/messages',
