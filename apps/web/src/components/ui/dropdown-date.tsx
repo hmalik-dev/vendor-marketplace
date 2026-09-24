@@ -34,7 +34,7 @@ import { Dropdown, type DropdownWidth } from './dropdown';
  */
 
 /** How a day reads to a customer choosing one. */
-type DayState = 'available' | 'unavailable' | 'held' | 'past';
+type DayState = 'available' | 'unavailable' | 'held' | 'past' | 'beyond';
 
 /**
  * The vendor's five states, collapsed to what a customer can act on.
@@ -60,6 +60,7 @@ const DAY_STYLES: Record<DayState, string> = {
   unavailable: CELL_UNAVAILABLE,
   held: CELL_HELD,
   past: CELL_PAST,
+  beyond: CELL_PAST,
 };
 
 const DAY_LABELS: Record<DayState, string> = {
@@ -67,6 +68,7 @@ const DAY_LABELS: Record<DayState, string> = {
   unavailable: 'unavailable',
   held: 'held — someone else has asked',
   past: 'in the past',
+  beyond: 'too far ahead',
 };
 
 export interface DateDropdownProps {
@@ -90,8 +92,34 @@ export interface DateDropdownProps {
   scrim?: boolean;
 }
 
-/** A year of months is as far as any of these surfaces looks. */
+/**
+ * A year of months: a vendor's published calendar ends there, and a day past
+ * it would read as available because a day with no entry does. So a picker
+ * with a vendor behind it keeps this; a browse surface with none (the search
+ * bar) passes `MAX_EVENT_DATE_MONTHS_AHEAD` for the furthest a booking can be
+ * requested.
+ */
 const DEFAULT_MONTHS_AHEAD = 12;
+
+/**
+ * The title's disclosure glyph, authorised by the account holder for this one
+ * control (VEN-710): without it nothing says the month title is a button.
+ */
+const TITLE_CARET = '▾';
+
+const MONTHS_PER_YEAR = 12;
+/** Month buttons per row of the quick view, which is what ArrowUp/Down span. */
+const QUICK_COLUMNS = 3;
+
+const SHORT_MONTH_FORMATTER = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' });
+
+/** Every arrow key of the quick view's month grid, as a move of the focused month. */
+const QUICK_KEY_MOVES: Readonly<Record<string, number>> = {
+  ArrowLeft: -1,
+  ArrowRight: 1,
+  ArrowUp: -QUICK_COLUMNS,
+  ArrowDown: QUICK_COLUMNS,
+};
 
 interface Cursor {
   year: number;
@@ -221,11 +249,152 @@ export function DateDropdown({
   const canGoBack = firstOfMonth > firstAllowed;
   const canGoForward = firstOfMonth < lastAllowed;
 
+  /*
+   * The last day itself, which is finer than the last month: a booking request
+   * refuses a date past today plus `monthsAhead` months, so the days of the
+   * final month after that one read as unchoosable rather than being offered
+   * and refused a screen later. `null` before the viewer's day resolves.
+   */
+  const lastChoosable = shiftMonths(today, monthsAhead);
+
   function step(delta: number): void {
     setCursor((current) => {
       const moved = new Date(Date.UTC(current.year, current.month + delta, 1));
       return { year: moved.getUTCFullYear(), month: moved.getUTCMonth() };
     });
+  }
+
+  /*
+   * The quick view: a year row and twelve months, in place of the day grid.
+   *
+   * It lies over the day grid rather than replacing it, so the popover keeps
+   * the height of the month being viewed and nothing under it moves.
+   */
+  const [quick, setQuick] = useState(false);
+  const [quickYear, setQuickYear] = useState(cursor.year);
+  const [quickMonth, setQuickMonth] = useState(cursor.month);
+  const title = useRef<HTMLButtonElement>(null);
+  const quickGrid = useRef<HTMLDivElement>(null);
+  const quickTakesFocus = useRef(false);
+
+  const lastYear = new Date(Date.UTC(floor.year, floor.month + monthsAhead, 1)).getUTCFullYear();
+
+  // A closed popover reopens on the day grid, as it always did.
+  useEffect(() => {
+    if (!open) {
+      setQuick(false);
+    }
+  }, [open]);
+
+  function focusQuickMonth(monthIndex: number): void {
+    quickGrid.current?.querySelector<HTMLButtonElement>(`[data-month="${monthIndex}"]`)?.focus();
+  }
+
+  useEffect(() => {
+    if (quick && quickTakesFocus.current) {
+      quickTakesFocus.current = false;
+      focusQuickMonth(quickMonth);
+    }
+  }, [quick, quickMonth]);
+
+  function toggleQuick(): void {
+    if (quick) {
+      setQuick(false);
+      return;
+    }
+
+    setQuickYear(cursor.year);
+    setQuickMonth(cursor.month);
+    quickTakesFocus.current = true;
+    setQuick(true);
+  }
+
+  function leaveQuick(): void {
+    setQuick(false);
+    title.current?.focus();
+  }
+
+  function monthAllowed(year: number, monthIndex: number): boolean {
+    const first = toDateString(new Date(Date.UTC(year, monthIndex, 1)));
+
+    return first >= firstAllowed && first <= lastAllowed;
+  }
+
+  function monthCellStyle(viewed: boolean, allowed: boolean): string {
+    if (viewed) {
+      return CELL_SELECTED;
+    }
+
+    return allowed ? CELL_AVAILABLE : CELL_PAST;
+  }
+
+  function chooseMonth(monthIndex: number): void {
+    if (!monthAllowed(quickYear, monthIndex)) {
+      return;
+    }
+
+    setCursor({ year: quickYear, month: monthIndex });
+    leaveQuick();
+  }
+
+  function stepQuickYear(delta: number): void {
+    setQuickYear((year) => Math.min(lastYear, Math.max(floor.year, year + delta)));
+  }
+
+  function onQuickKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
+    if (event.key === 'PageUp' || event.key === 'PageDown') {
+      event.preventDefault();
+      stepQuickYear(event.key === 'PageUp' ? -1 : 1);
+      return;
+    }
+
+    const delta = QUICK_KEY_MOVES[event.key];
+    if (delta === undefined) {
+      return;
+    }
+
+    event.preventDefault();
+    const target = quickMonth + delta;
+    if (target < 0 || target >= MONTHS_PER_YEAR) {
+      return;
+    }
+
+    setQuickMonth(target);
+    focusQuickMonth(target);
+  }
+
+  /*
+   * Escape leaves the quick view before it closes the popover — wherever focus
+   * is. Both mounts dismiss from a `document` listener, so this one sits on
+   * `document` too, in the capture phase, rather than on the panel: a click on
+   * the year label or a gap between months leaves focus on an ancestor of the
+   * panel, and a panel handler would never hear that Escape. Stopping the event
+   * keeps the sheet's bubbling listener from closing it; Radix's is a capture
+   * listener registered first, so it is told to stand down below.
+   */
+  useEffect(() => {
+    if (!quick) {
+      return;
+    }
+
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setQuick(false);
+        title.current?.focus();
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown, true);
+
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [quick]);
+
+  function onEscapeKeyDown(event: Event): void {
+    if (quick) {
+      event.preventDefault();
+    }
   }
 
   /*
@@ -328,23 +497,34 @@ export function DateDropdown({
       width={width}
       padding="form"
       scrim={scrim}
+      onEscapeKeyDown={onEscapeKeyDown}
     >
       <div className="mb-2.5 flex items-center justify-between">
         <button
           type="button"
-          disabled={!canGoBack}
+          disabled={!canGoBack || quick}
           onClick={() => step(-1)}
           aria-label="Previous month"
           className="px-1 text-stone-600 disabled:opacity-40"
         >
           ‹
         </button>
-        <span aria-live="polite" className="font-display text-[17px] text-stone-900">
-          {month.label}
-        </span>
+        <button
+          ref={title}
+          type="button"
+          aria-expanded={quick}
+          aria-label={`Choose month and year, ${month.label}`}
+          onClick={toggleQuick}
+          className="font-display text-[17px] text-stone-900"
+        >
+          <span aria-live={quick ? undefined : 'polite'}>{month.label}</span>{' '}
+          <span aria-hidden="true" className="text-stone-600">
+            {TITLE_CARET}
+          </span>
+        </button>
         <button
           type="button"
-          disabled={!canGoForward}
+          disabled={!canGoForward || quick}
           onClick={() => step(1)}
           aria-label="Next month"
           className="px-1 text-stone-600 disabled:opacity-40"
@@ -353,16 +533,18 @@ export function DateDropdown({
         </button>
       </div>
 
-      <div
-        aria-hidden="true"
-        className="mb-[5px] grid grid-cols-7 gap-1 text-center text-[9.5px] font-semibold text-stone-600"
-      >
-        {WEEKDAY_LABELS.map((day, index) => (
-          <span key={`${day}-${index}`}>{day}</span>
-        ))}
-      </div>
+      <div className="relative">
+        <div aria-hidden={quick} className={quick ? 'invisible' : undefined}>
+          <div
+            aria-hidden="true"
+            className="mb-[5px] grid grid-cols-7 gap-1 text-center text-[9.5px] font-semibold text-stone-600"
+          >
+            {WEEKDAY_LABELS.map((day, index) => (
+              <span key={`${day}-${index}`}>{day}</span>
+            ))}
+          </div>
 
-      {/*
+          {/*
         A grid with rows in it.
 
         `role="grid"` over a flat run of `gridcell`s is a malformed grid: the
@@ -371,91 +553,164 @@ export function DateDropdown({
         column gap and the outer column carries the row gap, so the geometry is
         the single `grid-cols-7 gap-1` this replaces, to the pixel.
       */}
-      <div
-        ref={grid}
-        role="grid"
-        aria-label={label}
-        onKeyDown={onGridKeyDown}
-        className="flex flex-col gap-1 text-center text-[11.5px]"
-      >
-        {month.weeks.map((week, weekIndex) => (
           <div
-            // A week is identified by the days in it; the leading and trailing
-            // rows are all-padding only in the degenerate case of an empty
-            // month, which `buildMonth` cannot produce.
-            key={week.find((date) => date !== null) ?? `pad-week-${weekIndex}`}
-            role="row"
-            className="grid grid-cols-7 gap-1"
+            ref={grid}
+            role="grid"
+            aria-label={label}
+            onKeyDown={onGridKeyDown}
+            className="flex flex-col gap-1 text-center text-[11.5px]"
           >
-            {week.map((date, index) => {
-              if (date === null) {
-                return <span key={`pad-${index}`} role="gridcell" aria-hidden="true" />;
-              }
+            {month.weeks.map((week, weekIndex) => (
+              <div
+                // A week is identified by the days in it; the leading and trailing
+                // rows are all-padding only in the degenerate case of an empty
+                // month, which `buildMonth` cannot produce.
+                key={week.find((date) => date !== null) ?? `pad-week-${weekIndex}`}
+                role="row"
+                className="grid grid-cols-7 gap-1"
+              >
+                {week.map((date, index) => {
+                  if (date === null) {
+                    return <span key={`pad-${index}`} role="gridcell" aria-hidden="true" />;
+                  }
 
-              const past = isPastDate(date, today);
-              const state: DayState = past ? 'past' : dayStateOf(calendar[date]);
-              const selected = date === value;
-              const isToday = date === today;
-              const choosable = state === 'available' || state === 'held';
+                  const past = isPastDate(date, today);
+                  const beyond = lastChoosable !== null && date > lastChoosable;
+                  const state: DayState = past
+                    ? 'past'
+                    : beyond
+                      ? 'beyond'
+                      : dayStateOf(calendar[date]);
+                  const selected = date === value;
+                  const isToday = date === today;
+                  const choosable = state === 'available' || state === 'held';
 
-              return (
-                <button
-                  key={date}
-                  type="button"
-                  role="gridcell"
-                  data-date={date}
-                  /*
-                   * `aria-disabled`, not `disabled`.
-                   *
-                   * A `disabled` button is out of the tab order *and* skipped
-                   * by the arrow keys, so a day that cannot be booked could not
-                   * be reached to find out why: the grid silently jumped over
-                   * every past, booked and blocked day and told nobody. It
-                   * announces its state instead, and the click is refused here.
-                   */
-                  aria-disabled={!choosable}
-                  aria-current={isToday ? 'date' : undefined}
-                  /* `aria-selected`, not `aria-pressed`: a gridcell supports the
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      role="gridcell"
+                      data-date={date}
+                      /*
+                       * `aria-disabled`, not `disabled`.
+                       *
+                       * A `disabled` button is out of the tab order *and* skipped
+                       * by the arrow keys, so a day that cannot be booked could not
+                       * be reached to find out why: the grid silently jumped over
+                       * every past, booked and blocked day and told nobody. It
+                       * announces its state instead, and the click is refused here.
+                       */
+                      aria-disabled={!choosable}
+                      aria-current={isToday ? 'date' : undefined}
+                      /* `aria-selected`, not `aria-pressed`: a gridcell supports the
                      first and not the second, and this is a cell, not a toggle. */
-                  aria-selected={selected}
-                  /*
-                   * The grid's one tab stop. Everything else is reachable with
-                   * the arrows, which is what the `grid` role promises.
-                   */
-                  tabIndex={date === roving ? 0 : -1}
-                  /*
-                   * The stop follows focus wherever it actually lands, rather
-                   * than only where the arrows put it. Without this the two can
-                   * disagree — the browser restoring focus, or assistive
-                   * technology moving it — and the next arrow press would then
-                   * jump relative to a cell the viewer is no longer on.
-                   */
-                  onFocus={() => setRovingDate(date)}
-                  aria-label={describeCell(date, selected ? 'selected' : DAY_LABELS[state])}
-                  onClick={() => {
-                    if (!choosable) {
-                      return;
-                    }
-                    onChange(date);
-                    onOpenChange(false);
-                  }}
-                  className={cn(
-                    'rounded-md',
-                    // The outlined states carry 1.5px of border, so they lose it
-                    // from their padding rather than growing the row.
-                    selected || isToday || state === 'held' ? 'py-[4.5px]' : 'py-1.5',
-                    selected ? CELL_SELECTED : DAY_STYLES[state],
-                    !selected && isToday ? CELL_TODAY : '',
-                    choosable && !selected ? 'hover:bg-clay-50' : '',
-                    choosable ? '' : 'cursor-not-allowed',
-                  )}
-                >
-                  {Number(date.slice(8, 10))}
-                </button>
-              );
-            })}
+                      aria-selected={selected}
+                      /*
+                       * The grid's one tab stop. Everything else is reachable with
+                       * the arrows, which is what the `grid` role promises.
+                       */
+                      tabIndex={date === roving ? 0 : -1}
+                      /*
+                       * The stop follows focus wherever it actually lands, rather
+                       * than only where the arrows put it. Without this the two can
+                       * disagree — the browser restoring focus, or assistive
+                       * technology moving it — and the next arrow press would then
+                       * jump relative to a cell the viewer is no longer on.
+                       */
+                      onFocus={() => setRovingDate(date)}
+                      aria-label={describeCell(date, selected ? 'selected' : DAY_LABELS[state])}
+                      onClick={() => {
+                        if (!choosable) {
+                          return;
+                        }
+                        onChange(date);
+                        onOpenChange(false);
+                      }}
+                      className={cn(
+                        'rounded-md',
+                        // The outlined states carry 1.5px of border, so they lose it
+                        // from their padding rather than growing the row.
+                        selected || isToday || state === 'held' ? 'py-[4.5px]' : 'py-1.5',
+                        selected ? CELL_SELECTED : DAY_STYLES[state],
+                        !selected && isToday ? CELL_TODAY : '',
+                        choosable && !selected ? 'hover:bg-clay-50' : '',
+                        choosable ? '' : 'cursor-not-allowed',
+                      )}
+                    >
+                      {Number(date.slice(8, 10))}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+
+        {quick ? (
+          <div
+            className="absolute inset-0 flex flex-col gap-1.5 bg-stone-0"
+            onKeyDown={onQuickKeyDown}
+          >
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                disabled={quickYear <= floor.year}
+                onClick={() => stepQuickYear(-1)}
+                aria-label="Previous year"
+                className="px-1 text-stone-600 disabled:opacity-40"
+              >
+                ‹
+              </button>
+              <span aria-live="polite" className="text-[13px] font-semibold text-stone-900">
+                {quickYear}
+              </span>
+              <button
+                type="button"
+                disabled={quickYear >= lastYear}
+                onClick={() => stepQuickYear(1)}
+                aria-label="Next year"
+                className="px-1 text-stone-600 disabled:opacity-40"
+              >
+                ›
+              </button>
+            </div>
+            <div
+              ref={quickGrid}
+              className="grid flex-1 grid-cols-3 grid-rows-4 gap-1 text-[11.5px]"
+            >
+              {Array.from({ length: MONTHS_PER_YEAR }, (_, monthIndex) => {
+                const allowed = monthAllowed(quickYear, monthIndex);
+                const viewed = quickYear === cursor.year && monthIndex === cursor.month;
+                const current = quickYear === floor.year && monthIndex === floor.month;
+
+                return (
+                  <button
+                    key={monthIndex}
+                    type="button"
+                    data-month={monthIndex}
+                    // Reachable and refused on click, like a past day in the grid.
+                    aria-disabled={!allowed}
+                    aria-current={current ? 'date' : undefined}
+                    aria-pressed={viewed}
+                    aria-label={buildMonth(quickYear, monthIndex).label}
+                    tabIndex={monthIndex === quickMonth ? 0 : -1}
+                    onFocus={() => setQuickMonth(monthIndex)}
+                    onClick={() => chooseMonth(monthIndex)}
+                    className={cn(
+                      'rounded-md',
+                      monthCellStyle(viewed, allowed),
+                      !viewed && current ? CELL_TODAY : '',
+                      allowed && !viewed ? 'hover:bg-clay-50' : '',
+                      allowed ? '' : 'cursor-not-allowed',
+                    )}
+                  >
+                    {SHORT_MONTH_FORMATTER.format(new Date(Date.UTC(quickYear, monthIndex, 1)))}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/*
