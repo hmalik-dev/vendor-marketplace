@@ -1,4 +1,4 @@
-import { LEGAL_ACCEPTANCE_LABELS } from '@vendor-marketplace/shared';
+import { LEGAL_ACCEPTANCE_LABELS, uuidSchema } from '@vendor-marketplace/shared';
 import { notFound } from 'next/navigation';
 import {
   Absent,
@@ -81,6 +81,16 @@ export default async function AdminUserDataRightsPage({
   params: Promise<{ userId: string }>;
 }): Promise<React.ReactElement> {
   const { userId } = await params;
+
+  /*
+   * `params` is attacker-controlled (`.claude/rules/web-route-boundaries.md`): a
+   * 1000-character id comes back from the API as a 414, which is not a 404 and
+   * rendered the 500 page. An id that is not a uuid cannot name an account.
+   */
+  if (!uuidSchema.safeParse(userId).success) {
+    notFound();
+  }
+
   /*
    * Who is looking, so the page can refuse what the API refuses. `close`
    * answers 403 to an operator closing their own account — they would take

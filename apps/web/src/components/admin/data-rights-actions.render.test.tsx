@@ -446,6 +446,61 @@ describe('Finish on an unfinished unwind needs the step-up (VEN-500)', () => {
   });
 });
 
+describe('Export data needs the step-up (VEN-684)', () => {
+  const exportPath = '/admin/users/33333333-3333-4333-8333-333333333333/export';
+
+  it('opens the code step instead of downloading, and Cancel leaves nothing downloaded', async () => {
+    const createObjectURL = vi.fn(() => 'blob:archive');
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }));
+    stepUpOnce.add(exportPath);
+    renderActions({});
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
+    });
+
+    expect(requests).toEqual([[exportPath, 'POST']]);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Email me a code' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('button', { name: 'Email me a code' })).toBeNull();
+    expect(createObjectURL).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('retries the export once the code is accepted, and downloads then', async () => {
+    const createObjectURL = vi.fn(() => 'blob:archive');
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }));
+    stepUpOnce.add(exportPath);
+    renderActions({});
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Email me a code' }));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Six-digit code'), { target: { value: '123456' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm code' }));
+    });
+
+    expect(requests).toEqual([
+      [exportPath, 'POST'],
+      ['/admin/step-up/challenge', 'POST'],
+      ['/admin/step-up/verify', 'POST'],
+      [exportPath, 'POST'],
+    ]);
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Confirm code' })).toBeNull();
+    vi.unstubAllGlobals();
+  });
+});
+
 describe('an operator closure', () => {
   function typedField(dialog: HTMLElement): HTMLInputElement {
     return within(dialog).getByLabelText(`Type ${OPERATOR_EMAIL} to confirm`) as HTMLInputElement;
