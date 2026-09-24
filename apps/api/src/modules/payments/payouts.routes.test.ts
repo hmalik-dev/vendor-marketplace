@@ -449,7 +449,7 @@ describe('payouts', () => {
           clockNow,
         );
       const adminMail = (): EmailMessage[] =>
-        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL);
+        harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL);
 
       await sweepWithPager();
       await sweepWithPager();

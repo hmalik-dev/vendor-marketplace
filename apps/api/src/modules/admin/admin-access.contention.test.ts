@@ -109,7 +109,7 @@ describe('admin grant and revoke against a competing change to the live set', ()
       .insert(adminActions)
       .values({
         actorId: oneId,
-        action: 'operator_granted',
+        action: 'admin_granted',
         subjectType: 'user',
         subjectId: twoId,
         detail: { previousRole: 'customer' },

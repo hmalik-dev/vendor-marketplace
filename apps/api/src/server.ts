@@ -560,9 +560,9 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     ...(options.auth?.directory ? { directory: options.auth.directory } : {}),
   });
   await app.register(adminAlertsPlugin, {
-    to: env.OPERATOR_ALERT_EMAIL,
+    to: env.ADMIN_ALERT_EMAIL,
     webOrigin: canonicalWebOrigin(env),
-    timeZone: env.OPERATOR_TIMEZONE,
+    timeZone: env.ADMIN_TIMEZONE,
     digestIntervalMs: options.adminDigestIntervalMs ?? ADMIN_DIGEST_POLL_INTERVAL_MS,
     reporter: errorReporter,
     ...(options.adminAlertWait ? { wait: options.adminAlertWait } : {}),

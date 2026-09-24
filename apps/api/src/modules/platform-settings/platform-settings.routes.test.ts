@@ -203,7 +203,7 @@ describe('launch switches', () => {
   async function adminMail(): Promise<{ subject: string; text: string }[]> {
     await harness.flushEmail();
 
-    return harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL);
+    return harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL);
   }
 
   function sweep(): ReturnType<typeof releaseDuePayouts> {

@@ -67,7 +67,7 @@ export const OPTIONAL_PLACEHOLDER_KEYS = [
   'RESEND_WEBHOOK_SECRET',
   // The second Stripe endpoint's key: locally one listener secret covers both streams.
   'STRIPE_CONNECT_WEBHOOK_SECRET',
-  'OPERATOR_ALERT_EMAIL',
+  'ADMIN_ALERT_EMAIL',
   // Error reporting (VEN-397). Optional off a deployment — a laptop reports
   // nothing rather than into the production project — and required on one.
   'SENTRY_DSN',

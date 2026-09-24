@@ -50,7 +50,7 @@ export type ImmediateAdminAlertKind = Exclude<AdminAlertKind, 'daily_digest'>;
 /**
  * What became of a recorded alert.
  *
- * `logged` is a deployment with no `OPERATOR_ALERT_EMAIL` — development only,
+ * `logged` is a deployment with no `ADMIN_ALERT_EMAIL` — development only,
  * because a deployment refuses to boot without one. `skipped` is a digest day
  * with nothing to report, recorded so the day is not re-examined every tick.
  */

@@ -145,7 +145,7 @@ Names below are the keys in `packages/shared/src/env/registry.ts`; run
 | `SENTRY_DSN`                                                                               | a Node project per environment; required to boot a deployment                                                                                             |
 | `RESEND_WEBHOOK_SECRET`                                                                    | signing secret of that environment's Resend webhook endpoint at `<api host>/webhooks/resend`; required to boot a deployment                               |
 | `WEB_TIER_KEY`                                                                             | `openssl rand -hex 32`, the same value on the API and web of one environment and a different one per environment (VEN-649); required to boot a deployment |
-| `OPERATOR_ALERT_EMAIL`, `SUPPORT_EMAIL_TO`                                                 | real inboxes for production, your own test inbox elsewhere                                                                                                |
+| `ADMIN_ALERT_EMAIL`, `SUPPORT_EMAIL_TO`                                                    | real inboxes for production, your own test inbox elsewhere                                                                                                |
 
 Never reuse a value across environments: not the database URLs, the storage
 credentials, either webhook secret, the Resend key or the Sentry DSN. Stripe

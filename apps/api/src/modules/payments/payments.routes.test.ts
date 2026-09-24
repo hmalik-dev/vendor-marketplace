@@ -919,7 +919,7 @@ describe('payments', () => {
         new RegExp(`^${stray.id}_duplicate_intent_\\d+$`),
       );
       const [mail] = harness.email.sent.filter(
-        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+        (message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL,
       );
       expect(mail?.subject).toContain('second payment');
       expect(mail?.text).toContain(requestId);
@@ -1110,7 +1110,7 @@ describe('payments', () => {
         new RegExp(`^${intentId}_declined_request_\\d+$`),
       );
       const [mail] = harness.email.sent.filter(
-        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+        (message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL,
       );
       expect(mail?.subject).toContain('declined request');
       expect(mail?.text).toContain(requestId);
@@ -1219,7 +1219,7 @@ describe('payments', () => {
       expect(response.statusCode).toBe(500);
       expect(await harness.database.db.select().from(bookings)).toEqual([]);
       const [mail] = harness.email.sent.filter(
-        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+        (message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL,
       );
       expect(mail?.text).toContain('has not been refunded');
 
@@ -1231,7 +1231,7 @@ describe('payments', () => {
       expect(retried.statusCode).toBe(200);
       expect(harness.stripe.refunds).toHaveLength(1);
       expect(
-        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL),
+        harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL),
       ).toHaveLength(2);
     });
 
@@ -1762,7 +1762,7 @@ describe('payments', () => {
       expect(row?.status).toBe('cancelled');
       await harness.flushEmail();
       expect(
-        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL),
+        harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL),
       ).toEqual([]);
     });
 
@@ -1793,7 +1793,7 @@ describe('payments', () => {
       expect(response.statusCode).toBe(409);
       expect(harness.stripe.refunds).toHaveLength(1);
       const alerts = harness.email.sent.filter(
-        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+        (message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL,
       );
       expect(alerts).toHaveLength(1);
       expect(alerts[0]?.text).toContain(booking!.id);
@@ -1838,7 +1838,7 @@ describe('payments', () => {
       expect(response.json().error).toBe('SERVICE_BUSY');
       expect(harness.stripe.refunds).toHaveLength(1);
       const alerts = harness.email.sent.filter(
-        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+        (message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL,
       );
       expect(alerts).toHaveLength(1);
       expect(alerts[0]?.text).toContain(booking!.id);
@@ -1866,7 +1866,7 @@ describe('payments', () => {
 
       expect(response.statusCode).toBe(409);
       expect(
-        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL),
+        harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL),
       ).toHaveLength(1);
     });
 

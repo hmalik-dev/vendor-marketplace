@@ -38,6 +38,9 @@ acquiring opposite meanings under one subject id.
 **How to apply:** for any new work the webhook's failure hook performs, ask what
 it costs at 10k rejected req/min, not at Stripe's delivery rate. Settled on these
 lanes: alert bodies carry no customer PII, `renderOperatorEmail` escapes every
-line, dedupe SQL is parameterised, `OPERATOR_ALERT_EMAIL` throws on a deployment.
+line, dedupe SQL is parameterised, `ADMIN_ALERT_EMAIL` (was `OPERATOR_ALERT_EMAIL`
+before VEN-697; no fallback to the old name) throws on a deployment. VEN-697
+also renamed the table `admin_alerts`, the GUCs `app.admin` /
+`app.admin_role_grant`, and `app_is_admin()`; the RLS predicate and role guard are unchanged.
 `stripe_webhook_failures` growth is **bounded** (cleared at threshold, pruned to
 24h) — that half is fine. Related: [[idempotency-guards-orphan-side-effects]].

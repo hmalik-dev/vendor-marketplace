@@ -9,7 +9,7 @@ import {
   type Probe,
 } from './types.js';
 
-const NON_PLACEHOLDER_KEYS = ['SENTRY_DSN', 'OPERATOR_ALERT_EMAIL', 'SUPPORT_EMAIL_TO'] as const;
+const NON_PLACEHOLDER_KEYS = ['SENTRY_DSN', 'ADMIN_ALERT_EMAIL', 'SUPPORT_EMAIL_TO'] as const;
 /**
  * Requests per minute per IP. Below the floor a page load that fans out to a
  * dozen API calls trips it; above the ceiling it no longer limits anything.
