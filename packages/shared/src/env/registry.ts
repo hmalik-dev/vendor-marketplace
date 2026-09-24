@@ -161,7 +161,7 @@ const RESEND_WEBHOOK_SETUP: EnvSetup = {
   url: 'https://resend.com/webhooks',
   steps: [
     'Open Resend → Webhooks → Add Webhook, pointing at <API origin>/webhooks/resend',
-    'Subscribe to email.delivered, email.bounced and email.complained — the three #439 records',
+    'Subscribe to email.delivered, email.bounced, email.complained, email.failed and email.suppressed — the five events the delivery record maps',
     'Copy the printed `whsec_...` into RESEND_WEBHOOK_SECRET',
     'Optional everywhere: without it the endpoint refuses every delivery and the attempt rows still stand',
   ],

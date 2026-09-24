@@ -47,6 +47,11 @@ ticket was probed through `request.url`, breadcrumb and span `url.full`,
   run of `?` is quadratic (2 s at 64 KB); exclude `?` from it. `PHONE`, `IPV4`,
   `IPV6` probed linear. `extra`/span strings are not capped by `maxValueLength`.
 
+Background captures (VEN-608, audited clean): a lost email or unsent operator
+alert is reported as `new Error(\`...: ${type|kind}\`)` with empty context —
+server-written type/kind only; recipient, summary and details stay out on
+purpose. A capture that interpolates any of those is the regression.
+
 Settled, do not re-report: `beforeSendTransaction` is registered beside
 `beforeSend` in both apps; `sendDefaultPii: false` everywhere; `user` is reduced
 to a bare id.

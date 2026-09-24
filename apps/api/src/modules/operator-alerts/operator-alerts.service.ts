@@ -14,6 +14,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { BackgroundWork } from '../../lib/background.js';
 import type { AppDatabase } from '../../lib/database.js';
 import type { EmailGateway } from '../../lib/email.js';
+import type { ErrorReporter } from '../../lib/error-reporting.js';
 import { EmailSendingClosedError } from '../../lib/email-send-cap.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import type { Clock } from '../../plugins/clock.js';
@@ -58,6 +59,12 @@ export interface OperatorAlertDeps {
   webOrigin: string;
   /** Pauses between send retries; the suites pass one that resolves at once. */
   wait: (ms: number) => Promise<void>;
+  /**
+   * Where an alert that could not be sent is reported (VEN-608). Sentry does not
+   * ride on Resend, so this is the channel that still reaches a human when the
+   * alert email cannot.
+   */
+  reporter?: ErrorReporter;
 }
 
 /** Waits before each retry of a failed alert send — two retries, then give up. */
@@ -193,6 +200,8 @@ export async function alertNow(
       { kind: alert.kind, subjectId: alert.subjectId, err: error },
       'An operator alert could not be sent after every retry',
     );
+    // The kind names what was lost; the summary and details can carry a person's name, so they stay out.
+    deps.reporter?.capture(new Error(`Operator alert could not be sent: ${alert.kind}`), {});
     if (recorded) {
       await releaseAlert(deps.db, id).catch((releaseError: unknown) => {
         deps.log.error(
