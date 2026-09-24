@@ -43,12 +43,6 @@ const EXAMPLE_PRICE_CENTS = 260_000;
 /** Same gutter ladder as the landing page and the header. */
 const CONTAINER = 'mx-auto w-full max-w-[1440px] px-5 lg:px-7 min-[90rem]:px-10';
 
-/**
- * "an <brand> balance", with the article following the brand rather than typed
- * beside it — the name is read from `BRAND_NAME`, so the article must be too.
- */
-const BRAND_BALANCE = `${/^[aeiou]/i.test(BRAND_NAME) ? 'an' : 'a'} ${BRAND_NAME} balance`;
-
 const EYEBROW = 'text-xs font-semibold tracking-[0.11em] text-clay-600 uppercase';
 
 /** A config figure. Gold, because each one names a wait (40-states.md). */
@@ -77,12 +71,12 @@ function payoutSteps(): readonly { key: string; title: React.ReactNode; body: st
     {
       key: 'pay',
       title: 'The customer pays in full',
-      body: 'At the moment they book, not on the day. The date is held as soon as it clears.',
+      body: 'At the moment they book.',
     },
     {
       key: 'hold',
-      title: 'Stripe holds it until the event',
-      body: 'You can see it sitting there the whole time.',
+      title: 'Held until the event',
+      body: 'Your dashboard shows what you are owed.',
     },
     {
       key: 'release',
@@ -103,11 +97,7 @@ function payoutSteps(): readonly { key: string; title: React.ReactNode; body: st
 const PAYOUT_FACTS = [
   {
     lead: 'Canceled by the customer?',
-    body: 'They are refunded and our fee is refunded with it.',
-  },
-  {
-    lead: 'Payout failed?',
-    body: 'You are told which detail Stripe rejected, not just that it failed.',
+    body: 'They are refunded under the schedule shown at checkout, and the rest is released to you.',
   },
   {
     lead: 'You cannot be booked on a day you did not open.',
@@ -258,8 +248,7 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
               </h2>
             </div>
             <p className="max-w-85 text-action leading-[1.7] text-stone-600 max-lg:hidden">
-              Nothing is invoiced and nothing is chased. Stripe holds the money in <em>your</em>{' '}
-              account — not {BRAND_BALANCE} — the whole time.
+              Nothing is invoiced and nothing is chased.
             </p>
           </div>
 
@@ -295,7 +284,7 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
             ))}
           </ul>
           <p className="mt-4 text-sm leading-[1.7] text-stone-700 lg:hidden">
-            You cannot be booked on a day you did not open. Cancellations refund our fee too.
+            You cannot be booked on a day you did not open.
           </p>
         </div>
       </section>

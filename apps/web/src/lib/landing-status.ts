@@ -53,7 +53,7 @@ export const GENERIC_TRUST_COPY: readonly TrustCopy[] = [
   },
   {
     title: 'Payment held until the event',
-    body: 'Stripe holds your payment until your event is complete, then releases it to the vendor.',
+    body: 'Your payment is held until your event is complete, then released to the vendor.',
   },
   {
     title: 'No service fee',

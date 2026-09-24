@@ -1,4 +1,4 @@
-import { BRAND_NAME, PAYOUT_RELEASE_HOURS, LEGAL_PATHS } from '@vendor-marketplace/shared';
+import { PAYOUT_RELEASE_HOURS, LEGAL_PATHS } from '@vendor-marketplace/shared';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -191,14 +191,34 @@ describe('/for-vendors', () => {
     ).toBe(true);
   });
 
-  it('puts the right article before the brand in the payouts note', async () => {
+  it('says what is true about the money: step 2 and step 3 strings, and none of the retired claims', async () => {
     await renderPage();
 
-    const article = /^[aeiou]/i.test(BRAND_NAME) ? 'an' : 'a';
-    expect(document.getElementById('payouts')?.textContent).toContain(
-      `not ${article} ${BRAND_NAME} balance`,
-    );
-    expect(document.body.textContent).not.toMatch(/\ba [AEIOU]\w* balance/);
+    const steps = [...document.querySelectorAll('[data-slot="payout-step"]')];
+    const text = (index: number): string[] =>
+      [...(steps[index]?.querySelectorAll('h3, p') ?? [])]
+        .slice(1) // the numeral
+        .map((node) => node.textContent ?? '');
+
+    expect(text(1)).toEqual(['The customer pays in full', 'At the moment they book.']);
+    expect(text(2)).toEqual(['Held until the event', 'Your dashboard shows what you are owed.']);
+
+    const page = document.body.textContent ?? '';
+    for (const retired of [
+      'not on the day',
+      'sitting there',
+      'in your account',
+      'Orla balance',
+      'an Orla',
+    ]) {
+      expect(page, retired).not.toContain(retired);
+    }
+    expect(page).toContain('Nothing is invoiced and nothing is chased.');
+    // The vendor agreement says a customer cancellation follows the checkout schedule, and a failed payout alerts the admin, not the vendor.
+    expect(page).not.toContain('our fee is refunded');
+    expect(page).not.toContain('Cancellations refund our fee');
+    expect(page).not.toContain('which detail Stripe rejected');
+    expect(page).not.toContain('as soon as it clears');
   });
 
   it('links the vendor agreement from the closing band', async () => {
