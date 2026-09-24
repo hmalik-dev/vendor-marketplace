@@ -1,3 +1,4 @@
+import 'server-only';
 import { getServerSession } from './auth/server';
 import { redirect } from 'next/navigation';
 import { ApiClientError, apiRequest } from './api-client';
