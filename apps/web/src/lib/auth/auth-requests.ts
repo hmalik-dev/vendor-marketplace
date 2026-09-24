@@ -174,7 +174,10 @@ export async function requestPasswordReset(email: string): Promise<AuthOutcome> 
     const body = (await response
       .clone()
       .json()
-      .catch(() => null)) as { code?: unknown } | null;
+      .catch((error: unknown) => {
+        reportSwallowedError('auth-requests: could not read a 429 body', error);
+        return null;
+      })) as { code?: unknown } | null;
 
     if (body?.code === 'RESET_MAIL_PACED') {
       return 'mailPaced';
