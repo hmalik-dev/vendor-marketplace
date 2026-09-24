@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin';
+import { runTick } from '../lib/sweep.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { reconcileAuthUsers } from '../modules/auth-sync/auth-sync.reconcile.js';
 import { bookingContextFor } from '../modules/payments/payments.service.js';
@@ -51,14 +52,20 @@ export const authReconcilePlugin = fp<AuthReconcilePluginOptions>(
       running = true;
 
       try {
-        const summary = await reconcileAuthUsers(
-          bookingContextFor(app, app.log, options.webOrigin),
-          directory,
-          {},
-          app.clock(),
-        );
+        await runTick(
+          'auth-reconcile',
+          async () => {
+            const summary = await reconcileAuthUsers(
+              bookingContextFor(app, app.log, options.webOrigin),
+              directory,
+              {},
+              app.clock(),
+            );
 
-        app.log.info({ ...summary }, 'Reconciled accounts against Neon Auth');
+            app.log.info({ ...summary }, 'Reconciled accounts against Neon Auth');
+          },
+          { intervalMs: options.intervalMs, reporter: options.reporter, log: app.log },
+        );
       } catch (error) {
         // Logged and swallowed: the next tick repairs it, and a rejection would end the process.
         app.log.error({ err: error }, 'Neon Auth reconcile failed');

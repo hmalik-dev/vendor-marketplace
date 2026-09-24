@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin';
+import { runTick } from '../lib/sweep.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { reconcilePlatformBalance } from '../modules/payments/platform-balance.service.js';
 
@@ -41,9 +42,15 @@ export const platformBalancePlugin = fp<PlatformBalancePluginOptions>(
       running = true;
 
       try {
-        await reconcilePlatformBalance(
-          { db: app.db, stripe: app.stripe, alerts: app.operatorAlerts, log: app.log },
-          app.clock(),
+        await runTick(
+          'platform-balance',
+          async () => {
+            await reconcilePlatformBalance(
+              { db: app.db, stripe: app.stripe, alerts: app.operatorAlerts, log: app.log },
+              app.clock(),
+            );
+          },
+          { intervalMs: options.intervalMs, reporter: options.reporter, log: app.log },
         );
       } catch (error) {
         // Logged and swallowed: the next run repeats the whole read.
