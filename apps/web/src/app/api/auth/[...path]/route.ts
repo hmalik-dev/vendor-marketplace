@@ -439,17 +439,22 @@ async function endEverySession(request: NextRequest, email: string, body: string
       throw new Error('Signing in to end the other sessions set no session cookie');
     }
 
-    // Before the provider revoke, so a failure there cannot leave an already
-    // issued JWT valid at the API (VEN-670); a failure here is reported inside.
-    await invalidateSessionsAtApi(userId);
-
     headers.set('cookie', cookie);
     const revoke = segments('revoke-sessions');
-    const revoked = await neonAuth()
-      .handler()
-      .POST(authCall(request, revoke, headers, '{}') as NextRequest, {
-        params: Promise.resolve({ path: revoke }),
-      });
+    let revoked: Response;
+
+    try {
+      revoked = await neonAuth()
+        .handler()
+        .POST(authCall(request, revoke, headers, '{}') as NextRequest, {
+          params: Promise.resolve({ path: revoke }),
+        });
+    } finally {
+      // After the provider revoke, so no session is left to mint a JWT past the
+      // bump, and whether or not it threw, so an issued one is bounded anyway
+      // (VEN-670); a failure here is reported inside.
+      await invalidateSessionsAtApi(userId);
+    }
 
     if (!revoked.ok) {
       throw new Error(`Other sessions were not ended (${revoked.status})`);

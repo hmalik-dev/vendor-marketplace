@@ -35,8 +35,9 @@ export const sessionGenerationRoutes: FastifyPluginAsyncZod<
     async (request) => {
       const userId = await invalidateSessionsFor(app.db, request.body.authUserId);
 
-      // Every token before now is dead, so every stream opened under one is too (VEN-670).
+      // Every token before now is dead, so every ticket it minted and every stream opened under one is too (VEN-670).
       if (userId !== null) {
+        await app.streamTickets.revokeFor(userId);
         app.events.closeFor(userId);
       }
 

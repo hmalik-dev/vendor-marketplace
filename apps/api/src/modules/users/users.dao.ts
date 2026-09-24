@@ -136,8 +136,9 @@ export async function findSessionSubject(
  * fails the auth hook's `iat` comparison even though it is still signed and
  * unexpired (VEN-628). A no-op for an auth subject with no row yet — nothing
  * to invalidate, and the acceptance gate handles that subject on its own path.
+ * Returns the account's row id (what live streams are keyed by), or `null` when
+ * there is no such account.
  */
-/** Bumps the account's invalidation timestamp; returns its row id, or `null` when there is no such account. */
 export async function invalidateSessionsFor(
   db: AppDatabase,
   authUserId: string,

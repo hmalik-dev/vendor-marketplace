@@ -104,6 +104,15 @@ export class StreamTicketStore {
   }
 
   /**
+   * Voids every ticket one user holds, unspent or not: a session generation
+   * bump kills the JWTs that could have minted them, so a ticket exchanged
+   * before it must not open a stream after (VEN-670).
+   */
+  async revokeFor(userId: string): Promise<void> {
+    await this.#db.delete(streamTickets).where(eq(streamTickets.userId, userId));
+  }
+
+  /**
    * Drops what has expired. Run by the expiry timer rather than on every issue:
    * an unindexed delete per page load would scan the table each time, and the
    * cap below already ignores expired rows.

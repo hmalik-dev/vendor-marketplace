@@ -30,6 +30,16 @@ accident:
   open, stays open forever — there is no re-authentication after connect, for a
   ticket or for the JWT before it.
 
+**VEN-670 (audited 2026-09-23):** `/internal/session-generation` now calls
+`closeFor(users.id)` after the `sessions_invalidated_at` bump (auth id → row id
+via `RETURNING`, sound; web-tier-key-gated, so only the account's own sign-out
+or reset can force a close — no third-party DoS). The gap: `stream_tickets` are
+not cleared by the bump, and neither admission nor the heartbeat reads
+`sessionsInvalidatedAt`, so a stolen session's up-to-10 pre-minted tickets
+(60s each) open streams _after_ the close that never end. Fix: delete the
+user's tickets in the bump and have the heartbeat refuse a stream opened
+before `sessions_invalidated_at`.
+
 **Why:** a reviewer scanning for route guards, or a refactor that "restores
 consistency" by adding `requireAuth`, breaks live updates outright and looks
 like a security improvement while doing it.

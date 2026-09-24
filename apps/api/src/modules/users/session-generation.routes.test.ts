@@ -8,6 +8,7 @@ import {
   signInAs,
   type TestHarness,
 } from '../../testing/test-server.js';
+import { resolveStreamSubject } from './users.service.js';
 
 const KEY = 'k'.repeat(40);
 
@@ -96,6 +97,54 @@ describe('POST /internal/session-generation (VEN-628)', () => {
     await Promise.all(streams.map((stream) => stream.pending));
     harness.app.events.closeFor(otherId);
     await bystander.pending;
+  });
+
+  it('voids a stream ticket issued before the bump, so it opens nothing after it (VEN-670)', async () => {
+    harness.authUsers.set('auth-ticket-1', {
+      authUserId: 'auth-ticket-1',
+      email: 'auth-ticket-1@example.com',
+      firstName: 'Ticket',
+      lastName: 'Holder',
+      roleHint: 'customer',
+      avatarUrl: null,
+    });
+    await signInAs(harness, 'auth-ticket-1');
+    const issued = await harness.app.inject({
+      method: 'POST',
+      url: '/v1/events/stream-ticket',
+      headers: bearer('auth-ticket-1'),
+    });
+
+    expect((await bump('auth-ticket-1')).statusCode).toBe(200);
+
+    const opened = await harness.app.inject({
+      method: 'GET',
+      url: `/v1/events/stream?ticket=${issued.json().ticket}`,
+    });
+    expect(opened.statusCode).toBe(401);
+  });
+
+  it('refuses a stream opened before the account’s sessions were invalidated (VEN-670)', async () => {
+    harness.authUsers.set('auth-stale-1', {
+      authUserId: 'auth-stale-1',
+      email: 'auth-stale-1@example.com',
+      firstName: 'Stale',
+      lastName: 'Reader',
+      roleHint: 'customer',
+      avatarUrl: null,
+    });
+    const id = await signInAs(harness, 'auth-stale-1');
+    const openedAt = new Date(Date.now() - 5_000);
+    await bump('auth-stale-1');
+
+    await expect(resolveStreamSubject(harness.database.db, id, openedAt)).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    await expect(
+      resolveStreamSubject(harness.database.db, id, new Date(Date.now() + 5_000)),
+    ).resolves.toEqual({
+      id,
+    });
   });
 
   it('answers 200 for an auth subject with no row, and writes nothing', async () => {

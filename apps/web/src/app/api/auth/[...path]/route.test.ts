@@ -294,6 +294,27 @@ describe('password reset through the auth proxy', () => {
       );
     });
 
+    it('still bounds the JWTs at the API when the provider revoke throws (VEN-670)', async () => {
+      vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+      upstreamPost.mockImplementation(async (_request, context) => {
+        const path = await route(context);
+        if (path === 'sign-in/email') return sessionResponse();
+        if (path === 'revoke-sessions') throw new Error('provider down');
+        return Response.json({ success: true });
+      });
+      const fetchMock = vi.fn().mockResolvedValue(Response.json({ invalidated: true }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const response = await call(RESET, reset);
+
+      expect(response.status).toBe(200);
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/internal/session-generation'),
+        expect.objectContaining({ body: JSON.stringify({ authUserId: 'user-9' }) }),
+      );
+      expect(captureException).toHaveBeenCalledWith(new Error('provider down'));
+    });
+
     it('reports a failed session-generation call after a reset, and still answers the reset', async () => {
       vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
       answers(sessionResponse());
