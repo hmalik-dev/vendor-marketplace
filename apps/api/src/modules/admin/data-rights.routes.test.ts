@@ -1715,7 +1715,7 @@ describe('data rights', () => {
       });
       expect(threads.statusCode).toBe(200);
       expect(
-        threads.json().map((thread: { otherPartyName: string }) => thread.otherPartyName),
+        threads.json().items.map((thread: { otherPartyName: string }) => thread.otherPartyName),
       ).toEqual(['Former customer']);
     });
 

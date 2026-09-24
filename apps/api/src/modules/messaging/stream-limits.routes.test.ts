@@ -25,7 +25,11 @@ describe('an open event stream, across instances and abuse', () => {
   let harness: TestHarness;
 
   beforeAll(async () => {
-    harness = await createTestHarness({ streamHeartbeatMs: HEARTBEAT_MS });
+    // Re-read on every beat, so "within a heartbeat" below is still what is measured.
+    harness = await createTestHarness({
+      streamHeartbeatMs: HEARTBEAT_MS,
+      streamSubjectRecheckMs: HEARTBEAT_MS,
+    });
     register(harness, CUSTOMER);
     register(harness, OTHER);
   });

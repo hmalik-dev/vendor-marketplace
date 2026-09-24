@@ -6,7 +6,7 @@ import { reportSwallowedError } from './report-error';
 import { signInPathReturningHere } from './requested-path';
 import { redirectIfTermsRequired } from './terms-gate';
 import {
-  wireConversationListSchema,
+  wireConversationPageSchema,
   wireNotificationPageSchema,
   type WireConversation,
   type WireNotification,
@@ -64,22 +64,31 @@ async function redirectIfSignedOut(error: unknown): Promise<void> {
  */
 export async function loadOwnConversations(): Promise<{
   conversations: WireConversation[];
+  /** The cursor for the next (older) page, or `null` when this is the last. */
+  nextBefore: string | null;
+  /** Whether any conversation, on any page, has an unread message. */
+  hasUnread: boolean;
   failed: boolean;
 }> {
   const token = await sessionToken();
 
   try {
-    const conversations = await apiRequest('/conversations', {
-      schema: wireConversationListSchema,
+    const page = await apiRequest('/conversations', {
+      schema: wireConversationPageSchema,
       token,
     });
 
-    return { conversations, failed: false };
+    return {
+      conversations: page.items,
+      nextBefore: page.nextBefore,
+      hasUnread: page.hasUnread,
+      failed: false,
+    };
   } catch (error) {
     await redirectIfSignedOut(error);
     reportSwallowedError('messages: loading the conversation list failed', error);
 
-    return { conversations: [], failed: true };
+    return { conversations: [], nextBefore: null, hasUnread: false, failed: true };
   }
 }
 
@@ -94,6 +103,19 @@ export async function getOwnConversations(): Promise<WireConversation[]> {
   const { conversations } = await loadOwnConversations();
 
   return conversations;
+}
+
+/**
+ * The rail's threads and the sidebar's unread dot, for the two pages that draw
+ * both: the dot answers for every conversation, the rail shows the newest.
+ */
+export async function getOwnConversationBand(): Promise<{
+  conversations: WireConversation[];
+  hasUnread: boolean;
+}> {
+  const { conversations, hasUnread } = await loadOwnConversations();
+
+  return { conversations, hasUnread };
 }
 
 /** The first page of notifications, for the bell's initial badge and panel. */

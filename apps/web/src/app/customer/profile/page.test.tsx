@@ -12,7 +12,9 @@ vi.mock('@/lib/customer-data', () => ({
   getOwnBookings: async () => [],
   getOwnCustomerReviews: async () => [],
 }));
-vi.mock('@/lib/messaging-data', () => ({ getOwnConversations: async () => [] }));
+vi.mock('@/lib/messaging-data', () => ({
+  getOwnConversationBand: async () => ({ conversations: [], hasUnread: false }),
+}));
 vi.mock('@/components/bookings/bookings-sidebar', () => ({
   BookingsSidebar: (): ReactNode => null,
 }));
