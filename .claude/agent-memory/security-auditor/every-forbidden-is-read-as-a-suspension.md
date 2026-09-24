@@ -1,32 +1,27 @@
 ---
 name: every-forbidden-is-read-as-a-suspension
-description: terminalRefusal maps every 403 FORBIDDEN to 'suspended', and the API throws that code at ~25 ordinary tenancy and state refusals — widening its reach routes an account in good standing to /suspended
+description: terminalRefusal still maps every 403 but TERMS_REQUIRED/VENDOR_NOT_INVITED to 'suspended'; useApi narrows it to ACCOUNT_SUSPENDED, the server twin does not
 metadata:
   type: project
 ---
 
-`terminalRefusal` (`apps/web/src/lib/terms-gate-paths.ts:45`) answers
+`terminalRefusal` (`apps/web/src/lib/terms-gate-paths.ts:47`) answers
 `'suspended'` for **any** 403 whose code is not `TERMS_REQUIRED` or
-`VENDOR_NOT_INVITED`. `ERROR_CODES` has no suspension-specific code: the API's
-`forbidden()` helper carries `FORBIDDEN` at the two real suspension sites
-(`plugins/neon-auth.ts`, `modules/users/users.service.ts`) **and** at ~25
-tenancy and state refusals — "Only the customer can cancel", "The customer
-accepts the quote", the moderation hold, "You cannot ban your own account",
-"That image belongs to another account".
+`VENDOR_NOT_INVITED` — including VEN-701's `NAME_REQUIRED`. `/suspended` is a
+static page with no verification.
 
-`/suspended` is a **static page with no verification**: whoever lands there
-reads "Your account is suspended".
+**Current state (checked 2026-09-24, VEN-701):** `useRefusalRedirect`
+(`apps/web/src/lib/use-api.ts:65`) now treats only `ERROR_CODES.ACCOUNT_SUSPENDED`
+as terminal, so the client funnel is safe for new 403 codes (`NAME_REQUIRED` is
+tested there). The unfixed reach is the **server** twin
+(`signedInFailurePath`) and `accept-terms-screen`.
 
-**Why:** the classifier was written for one screen (`accept-terms-screen`),
-where the only 403s really are the gate's. VEN-540 wired it into `useApi`, so
-it now judges every client call in the app and every stale-tab action becomes a
-false suspension.
+**Why:** the classifier was written for one screen where the only 403s were the
+gate's; `forbidden()` carries `FORBIDDEN` at ~25 ordinary tenancy/state refusals.
 
-**How to apply:** the blast radius is the caller set, not the function. Any
-change that moves `terminalRefusal` (or `signedInFailurePath`, its server twin)
-to a wider funnel needs a suspension-specific error code first — the two throw
-sites are the whole change. Treat a new `forbidden()` in a service as a new way
-to tell a good account it is banned until that code exists.
+**How to apply:** a new 403 code is safe on `useApi`; check whether any server
+read (RSC) can receive it before it reaches `terminalRefusal`. Only writes are
+gated by `NAME_REQUIRED`, so no server read hits it today.
 
 Related: [[terms-gate-is-a-five-state-session]],
 [[role-bounce-self-loop-admin-bookings]],

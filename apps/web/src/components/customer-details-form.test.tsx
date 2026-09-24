@@ -8,6 +8,9 @@ const hardReplace = vi.fn((url: string) => replace(url));
 const requestMock = vi.fn();
 
 vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
+const signOut = vi.fn<() => Promise<void>>();
+vi.mock('@/lib/auth/auth-requests', () => ({ signOut: () => signOut() }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 const { CustomerDetailsForm } = await import('./customer-details-form');
 
@@ -29,6 +32,21 @@ describe('CustomerDetailsForm', () => {
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('What should we call you?');
     expect(screen.queryByText(/last step/i)).toBeNull();
+  });
+
+  /* VEN-701: a mandatory step is not a trap, so it carries its own way out. */
+  it('signs the customer out and lands them on the home page', async () => {
+    signOut.mockResolvedValue(undefined);
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    const user = userEvent.setup();
+    render(<CustomerDetailsForm returnTo="/bookings" />);
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(assign).toHaveBeenCalledWith('/');
+    expect(requestMock).not.toHaveBeenCalled();
   });
 
   it('refuses an empty submission client-side, without calling the API', async () => {
