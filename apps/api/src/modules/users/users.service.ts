@@ -170,7 +170,7 @@ export async function resolveStreamSubject(
   }
 
   if (openedAt && account.sessionsInvalidatedAt && account.sessionsInvalidatedAt > openedAt) {
-    throw unauthorized('This stream was opened before the account’s sessions were ended');
+    throw unauthorized('This stream was opened before the sessions of this account were ended');
   }
 
   return { id: account.id };
