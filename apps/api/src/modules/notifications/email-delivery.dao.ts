@@ -14,6 +14,7 @@ import {
   inArray,
   isNull,
   lte,
+  min,
   ne,
   notExists,
   notInArray,
@@ -202,15 +203,18 @@ export async function applyDeliveryEvent(
   return existing ? 'superseded' : 'unknown';
 }
 
-/** How many attempt rows a notification already has, whatever their outcome. */
-export async function countEmailAttempts(db: AppDatabase, notificationId: string): Promise<number> {
+/** How many attempt rows a notification already has, whatever their outcome, and when the first was made. */
+export async function emailAttemptHistory(
+  db: AppDatabase,
+  notificationId: string,
+): Promise<{ attempts: number; firstSentAt: Date | null }> {
   const [row] = await db
-    .select({ attempts: count() })
+    .select({ attempts: count(), firstSentAt: min(emailDeliveries.sentAt) })
     .from(emailDeliveries)
     .where(eq(emailDeliveries.notificationId, notificationId))
     .limit(1);
 
-  return row?.attempts ?? 0;
+  return { attempts: row?.attempts ?? 0, firstSentAt: row?.firstSentAt ?? null };
 }
 
 export interface RetryableDeliveryQuery {

@@ -306,6 +306,22 @@ describe('the email retry sweep', () => {
       });
     });
 
+    it('reports a failure whose next wait would end after the 24-hour window, with attempts to spare (VEN-608)', async () => {
+      const id = await failedNotification(EMAIL_RETRY_WINDOW_MS - 10 * 60_000);
+      const capture = vi.fn();
+
+      await withFailingGateway(async (attempts) => {
+        await sweep(undefined, { capture });
+        expect(attempts()).toBe(1);
+      });
+
+      // Two attempts of six, and the schedule's thirty-minute wait would outlive the window.
+      const rows = await attemptRows(id);
+      expect(rows).toHaveLength(2);
+      expect(rows[1]!.nextAttemptAt).toBeNull();
+      expect(capture).toHaveBeenCalledTimes(1);
+    });
+
     it('re-sends a failed row whose next_attempt_at is NULL at once, and holds one dated in the future (VEN-608)', async () => {
       expect(emailDeliveries.nextAttemptAt.notNull).toBe(false);
       const legacy = await failedNotification(HOUR_MS);

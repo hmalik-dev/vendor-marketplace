@@ -1,6 +1,7 @@
 import {
   BRAND_NAME,
   EMAIL_RETRY_BACKOFF_MS,
+  EMAIL_RETRY_WINDOW_MS,
   uuidSchema,
   type EmailDeliveryEntity,
   type EmailDeliveryOutcome,
@@ -14,7 +15,7 @@ import type { EmailGateway, EmailSendResult } from '../../lib/email.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import type { BackgroundWork } from '../../lib/background.js';
 import type { ErrorReporter } from '../../lib/error-reporting.js';
-import { countEmailAttempts, insertEmailDelivery } from './email-delivery.dao.js';
+import { emailAttemptHistory, insertEmailDelivery } from './email-delivery.dao.js';
 import { findNotificationRecipient } from './notification-email.dao.js';
 
 /**
@@ -279,7 +280,21 @@ async function recordFailedAttempt(
 
   try {
     // Attempts made before this one, which is also this attempt's index in the schedule.
-    retryDelayMs = EMAIL_RETRY_BACKOFF_MS[await countEmailAttempts(deps.db, row.id)] ?? null;
+    const { attempts, firstSentAt } = await emailAttemptHistory(deps.db, row.id);
+    const delay = EMAIL_RETRY_BACKOFF_MS[attempts] ?? null;
+    /*
+     * A wait that would end after the window is no wait: the sweep drops a
+     * message whose first attempt is older than `EMAIL_RETRY_WINDOW_MS`, so a
+     * row dated past it is lost exactly as one with no attempts left is, and has
+     * to be reported the same way (a closed send day or a sweep outage can push
+     * the schedule that far).
+     */
+    const windowEndsAt =
+      firstSentAt === null ? null : firstSentAt.getTime() + EMAIL_RETRY_WINDOW_MS;
+    retryDelayMs =
+      delay !== null && (windowEndsAt === null || Date.now() + delay <= windowEndsAt)
+        ? delay
+        : null;
   } catch (error) {
     // Unknown count: the row is written due, so the next sweep decides from what it can see.
     deps.log.error(
@@ -299,7 +314,7 @@ async function recordFailedAttempt(
   if (retryDelayMs === null) {
     deps.log.error(
       { notificationId: row.id, type: row.type },
-      'A transactional email used its last attempt and was not delivered',
+      'A transactional email has no attempt left inside its window and was not delivered',
     );
     deps.reporter?.capture(
       new Error(`Transactional email undeliverable after every attempt: ${row.type}`),
