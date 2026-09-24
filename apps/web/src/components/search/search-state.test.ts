@@ -209,6 +209,9 @@ describe('parseSearchState', () => {
     ['?page=0 — pages are one-based', { page: 0 }, 'page'],
     ['?category=NOT A SLUG', { category: 'NOT A SLUG' }, 'category'],
     ['?city= a 300-character paste', { city: 'A'.repeat(300) }, 'city'],
+    ['?city=%00 — a NUL byte (VEN-689)', { city: '\u0000' }, 'city'],
+    ['?city= a zero-width space (VEN-689)', { city: 'Austin​' }, 'city'],
+    ['?state=%00 — a NUL byte (VEN-689)', { state: '\u0000' }, 'state'],
   ] as const)('clears %s and keeps the rest of the query', (_url, hostile, field) => {
     const { state, dropped } = parseSearchState({ ...EMPTY, city: 'Austin', ...hostile });
 
