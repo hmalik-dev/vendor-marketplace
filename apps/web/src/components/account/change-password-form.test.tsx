@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PASSWORD_MIN_LENGTH } from '@vendor-marketplace/shared';
 import { AUTH_COPY } from '@/app/auth-copy';
 
 const refresh = vi.fn();
@@ -43,17 +44,17 @@ describe('ChangePasswordForm (VEN-677)', () => {
 
     const field = screen.getByLabelText(AUTH_COPY.resetPasswordLabel);
 
-    expect(field.getAttribute('minlength')).toBe('10');
+    expect(field.getAttribute('minlength')).toBe(String(PASSWORD_MIN_LENGTH));
     expect(field.getAttribute('autocomplete')).toBe('new-password');
     expect(screen.getByText(AUTH_COPY.passwordHelper)).toBeDefined();
   });
 
   it.each([
     [
-      'a new password under 10 characters',
+      `a new password of ${PASSWORD_MIN_LENGTH - 1} characters`,
       'old-password',
-      'short-pw1',
-      'short-pw1',
+      'x'.repeat(PASSWORD_MIN_LENGTH - 1),
+      'x'.repeat(PASSWORD_MIN_LENGTH - 1),
       'changeTooShort',
     ],
     [

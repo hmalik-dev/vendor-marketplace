@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { PASSWORD_MIN_LENGTH } from '@vendor-marketplace/shared';
 import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { ACCOUNT_SETTINGS_PATH } from '@/components/account-menu';
 import { AuthField } from '@/components/auth/auth-field';
@@ -12,14 +13,12 @@ import { signInPathReturningTo } from '@/lib/return-path';
 
 type Message = { status: 'failed' | 'informational'; text: string };
 
-/** Sign-up's rule, so a new password is held to what the first one was. */
-const MIN_LENGTH = 10;
 /** Better Auth's own ceiling, refused here so it never reads as a wrong current password. */
 const MAX_LENGTH = 128;
 
 /** The copy for a change the form refuses on its own, or `null` when it may be sent. */
 function refusal(current: string, next: string, confirm: string): string | null {
-  if (next.length < MIN_LENGTH) {
+  if (next.length < PASSWORD_MIN_LENGTH) {
     return AUTH_COPY.changeTooShort;
   }
 
@@ -110,7 +109,7 @@ export function ChangePasswordForm(): React.ReactElement {
         type="password"
         name="new-password"
         autoComplete="new-password"
-        minLength={MIN_LENGTH}
+        minLength={PASSWORD_MIN_LENGTH}
         required
         value={next}
         onChange={(event) => setNext(event.target.value)}
@@ -120,7 +119,7 @@ export function ChangePasswordForm(): React.ReactElement {
         type="password"
         name="confirm-password"
         autoComplete="new-password"
-        minLength={MIN_LENGTH}
+        minLength={PASSWORD_MIN_LENGTH}
         required
         value={confirm}
         onChange={(event) => setConfirm(event.target.value)}
