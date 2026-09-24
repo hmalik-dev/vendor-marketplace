@@ -42,6 +42,7 @@ import {
   wireVendorPayoutStatusSchema,
   type WireVendorAgreementStatus,
   wireVendorAgreementStatusSchema,
+  wireVendorTaxYearsSchema,
 } from './wire-schemas';
 
 /**
@@ -626,6 +627,22 @@ export async function getPayoutStatus(): Promise<WireVendorPayoutStatus | null> 
       return null;
     }
 
+    throw await rethrowUnlessSessionFailure(error, signInPath);
+  }
+}
+
+/** Calendar years the vendor has settled bookings in, newest first (VEN-725). */
+export async function getTaxStatementYears(): Promise<number[]> {
+  const { token, signInPath } = await vendorSession();
+
+  try {
+    const { years } = await apiRequest('/vendor/tax/years', {
+      schema: wireVendorTaxYearsSchema,
+      token,
+    });
+
+    return years;
+  } catch (error) {
     throw await rethrowUnlessSessionFailure(error, signInPath);
   }
 }

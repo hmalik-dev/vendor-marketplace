@@ -738,6 +738,10 @@ function createFakeStripe(deployEnv: string): FakeStripe {
       return { url: `https://connect.stripe.test/setup/${input.accountId}/${createdLinks.length}` };
     },
 
+    createDashboardLink: async (accountId) => ({
+      url: `https://connect.stripe.com/express/test/${accountId}`,
+    }),
+
     readAccountStatus: async (accountId) => {
       const status = accountStatuses.get(accountId);
 

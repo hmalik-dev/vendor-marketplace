@@ -3,7 +3,14 @@ import { and, asc, eq, gt, gte, isNotNull, lt, sql } from 'drizzle-orm';
 import type { AppDatabase } from '../../lib/database.js';
 
 export interface SettledBookingRow {
+  bookingId: string;
   vendorId: string;
+  /** The event's calendar date, `YYYY-MM-DD`. */
+  eventDate: string;
+  /** Refunded to the customer by Orla or in the Stripe Dashboard: the two columns the payout code subtracts. */
+  refundedCents: number;
+  vendorPayoutCents: number;
+  debtNettedCents: number;
   stripeAccountId: string;
   totalAmountCents: number;
   /** When the vendor's share moved: the transfer for `separate`, the charge for `destination`. */
@@ -34,7 +41,12 @@ export async function settledBookings(
 ): Promise<SettledBookingRow[]> {
   const rows = await db
     .select({
+      bookingId: bookings.id,
       vendorId: bookings.vendorId,
+      eventDate: bookings.eventDate,
+      refundedCents: sql<number>`coalesce(${bookings.refundAmountCents}, 0) + ${bookings.externalRefundCents}`,
+      vendorPayoutCents: bookings.vendorPayoutCents,
+      debtNettedCents: bookings.debtNettedCents,
       stripeAccountId: vendorProfiles.stripeAccountId,
       totalAmountCents: bookings.totalAmountCents,
       settledAt: sql<Date | string>`${settledAtExpr}`.as('settled_at'),
@@ -59,8 +71,11 @@ export async function settledBookings(
   }));
 }
 
-/** The calendar years (UTC) that have at least one settled booking, newest first. */
-export async function taxYearsWithSettledBookings(db: AppDatabase): Promise<number[]> {
+/** The calendar years (UTC) that have at least one settled booking, newest first; one vendor's when given. */
+export async function taxYearsWithSettledBookings(
+  db: AppDatabase,
+  vendorId?: string,
+): Promise<number[]> {
   const year = sql<number>`extract(year from ${settledAtExpr} at time zone 'UTC')::int`;
   const rows = await db
     .selectDistinct({ year })
@@ -71,6 +86,7 @@ export async function taxYearsWithSettledBookings(db: AppDatabase): Promise<numb
         isNotNull(settledAtExpr),
         gt(bookings.vendorPayoutCents, 0),
         isNotNull(vendorProfiles.stripeAccountId),
+        vendorId ? eq(bookings.vendorId, vendorId) : undefined,
       ),
     );
 

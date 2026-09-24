@@ -153,6 +153,38 @@ export async function startPayoutOnboarding(
   });
 }
 
+/** The hosts a Stripe Express login link is served from. */
+const DASHBOARD_LINK_HOSTS: ReadonlySet<string> = new Set([
+  'connect.stripe.com',
+  'express.stripe.com',
+]);
+
+/**
+ * A single-use link into the vendor's own Stripe Express dashboard (VEN-725).
+ * The account is read from the caller's profile, never from the request. The
+ * URL is checked to be on a Stripe host before it is handed to a browser that
+ * will navigate to it.
+ */
+export async function createDashboardLink(
+  deps: StripeConnectDeps,
+  userId: string,
+): Promise<{ url: string }> {
+  const vendor = await findVendorProfileByUserId(deps.db, userId);
+
+  if (!vendor?.stripeAccountId) {
+    throw notFound('Payouts are not connected yet');
+  }
+
+  const link = await deps.stripe.createDashboardLink(vendor.stripeAccountId);
+  const { protocol, hostname } = new URL(link.url);
+
+  if (protocol !== 'https:' || !DASHBOARD_LINK_HOSTS.has(hostname)) {
+    throw new Error('Stripe returned a dashboard link on an unexpected host');
+  }
+
+  return link;
+}
+
 /**
  * The vendor's payout state as this database understands it. Deliberately no
  * Stripe call: the dashboard banner and the return page both read this, and a

@@ -93,6 +93,8 @@ describe('GET /admin/tax/1099-k.csv', () => {
       vendorPayoutCents: number;
       paidAt: string | null;
       refundCents?: number;
+      /** A refund made in the Stripe Dashboard, which never touches `refund_amount_cents`. */
+      externalRefundCents?: number;
       debtNettedCents?: number;
       payoutModel?: 'destination' | 'separate';
       /** Defaults to `paidAt` for `separate` rows; `null` is charged but not yet transferred. */
@@ -121,6 +123,7 @@ describe('GET /admin/tax/1099-k.csv', () => {
       platformFeeCents: 0,
       vendorPayoutCents: values.vendorPayoutCents,
       refundAmountCents: values.refundCents ?? null,
+      externalRefundCents: values.externalRefundCents ?? 0,
       debtNettedCents: values.debtNettedCents ?? 0,
       payoutModel: values.payoutModel ?? 'separate',
       status: 'confirmed',
@@ -159,7 +162,7 @@ describe('GET /admin/tax/1099-k.csv', () => {
     });
     await booking(customerId, vendor.id, {
       totalCents: usd(500),
-      vendorPayoutCents: usd(440),
+      vendorPayoutCents: usd(220),
       refundCents: usd(250),
       paidAt: '2026-03-20T10:00:00Z',
       payoutModel: 'destination',
@@ -208,9 +211,8 @@ describe('GET /admin/tax/1099-k.csv', () => {
     return { customerId, vendorId: vendor.id, userId: vendor.userId };
   }
 
-  beforeAll(async () => {
-    harness = await createTestHarness({ enforceStepUp: true, clock: () => NOW });
-
+  /** Closing a user removes their auth identity, so every test starts from all four again. */
+  function registerAuthUsers(): void {
     for (const [authUserId, role] of [
       [ADMIN, 'customer'],
       [VENDOR, 'vendor'],
@@ -226,6 +228,11 @@ describe('GET /admin/tax/1099-k.csv', () => {
         avatarUrl: null,
       });
     }
+  }
+
+  beforeAll(async () => {
+    harness = await createTestHarness({ enforceStepUp: true, clock: () => NOW });
+    registerAuthUsers();
 
     const [row] = await harness.database.db
       .select({ id: categories.id })
@@ -243,6 +250,8 @@ describe('GET /admin/tax/1099-k.csv', () => {
     await harness.database.db.delete(vendorProfiles);
     await harness.database.db.delete(users);
     harness.email.sent.length = 0;
+    harness.deletedAuthUsers.length = 0;
+    registerAuthUsers();
     // The admin's audit rows, step-up grants and codes go with the user row, by cascade.
   });
 
@@ -390,6 +399,180 @@ describe('GET /admin/tax/1099-k.csv', () => {
     expect(profile?.stripeAccountId).toBe('acct_tax_main');
     expect(after.body).toBe(before.body);
     expect(after.body).toContain('acct_tax_main,k,');
+  });
+
+  /** VEN-725: the vendor's own yearly statement, from the same rows as the 1099-K. */
+  describe('GET /vendor/tax/statement.csv', () => {
+    const statement = (authUserId: string, year: number | string) =>
+      harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendor/tax/statement.csv?year=${year}`,
+        headers: bearer(authUserId),
+      });
+
+    it('lists the three transfers and totals to the 1099-K gross and the sum transferred', async () => {
+      await seedFixture();
+
+      const response = await statement(VENDOR, 2026);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toBe('text/csv; charset=utf-8');
+      expect(response.headers['content-disposition']).toBe(
+        'attachment; filename="statement-2026.csv"',
+      );
+
+      const [header, ...rows] = response.body.trimEnd().split('\n');
+
+      expect(header).toBe(
+        'event_date,booking_reference,customer_charge,refunded_to_customer,commission,debt_netted,backup_withholding,transferred,transfer_date',
+      );
+      expect(rows).toHaveLength(4);
+      // Commission is what Orla kept: charge less refund less the vendor's share (A $120.00, B $30.00, C $500.00).
+      // A: $1,000.00 transferred $880.00 on 03/05/2026, for an event that year (its date is seeded per test).
+      expect(rows[0]).toMatch(
+        /^\d{2}\/\d{2}\/2026,[0-9a-f]{8},1000\.00,0\.00,120\.00,0\.00,0\.00,880\.00,03\/05\/2026$/,
+      );
+      // B: $250.00 refunded. C: $300.00 netted, $1,200.00 transferred on the last second of the year.
+      expect(rows[1]).toMatch(/,500\.00,250\.00,30\.00,0\.00,0\.00,220\.00,03\/20\/2026$/);
+      expect(rows[2]).toMatch(/,2000\.00,0\.00,500\.00,300\.00,0\.00,1200\.00,12\/31\/2026$/);
+      // The charge total is the 1099-K gross (3500.00); transferred is 880 + 220 + 1200, and
+      // 3500 - 250 refunded - 650 commission - 300 netted - 0 withheld is that same 2300.
+      expect(rows[3]).toBe('Total,,3500.00,250.00,650.00,300.00,0.00,2300.00,');
+    });
+
+    it('counts a Dashboard refund as refunded, so the row still reconciles', async () => {
+      const customerId = await signInAs(harness, CUSTOMER);
+      const vendor = await vendorProfile(VENDOR, 'acct_tax_main');
+      await booking(customerId, vendor.id, {
+        totalCents: usd(400),
+        vendorPayoutCents: usd(150),
+        externalRefundCents: usd(200),
+        paidAt: '2026-06-01T10:00:00Z',
+      });
+
+      const [row, total] = (await statement(VENDOR, 2026)).body.trimEnd().split('\n').slice(1);
+
+      // 400.00 charged - 200.00 refunded - 50.00 kept by Orla = the 150.00 transferred.
+      expect(row).toMatch(/,400\.00,200\.00,50\.00,0\.00,0\.00,150\.00,06\/01\/2026$/);
+      expect(total).toBe('Total,,400.00,200.00,50.00,0.00,0.00,150.00,');
+    });
+
+    it('carries the same gross as the admin 1099-K file for the same vendor and year', async () => {
+      await seedFixture();
+      await signInAs(harness, ADMIN, true);
+      await emailedStepUp(ADMIN);
+
+      const admin = await download(ADMIN, 2026);
+      const grossInFile = admin.body.trimEnd().split('\n')[1]!.split(',')[3];
+      const total = (await statement(VENDOR, 2026)).body.trimEnd().split('\n').at(-1)!;
+
+      expect(grossInFile).toBe('3500.00');
+      expect(total.split(',')[2]).toBe(grossInFile);
+    });
+
+    it("never returns another vendor's rows: the vendor is the caller, and a tampered id is ignored", async () => {
+      await seedFixture();
+
+      const other = await statement(REFUNDED_VENDOR, 2026);
+      const tampered = await harness.app.inject({
+        method: 'GET',
+        url: '/v1/vendor/tax/statement.csv?year=2026&vendorId=00000000-0000-0000-0000-000000000000',
+        headers: bearer(REFUNDED_VENDOR),
+      });
+
+      // The refunded vendor has no settled booking: a header and a zero total, none of the main vendor's rows.
+      for (const response of [other, tampered]) {
+        expect(response.statusCode).toBe(200);
+        expect(response.body.trimEnd().split('\n')).toHaveLength(2);
+        expect(response.body).toContain('Total,,0.00,0.00,0.00,0.00,0.00,0.00,');
+        expect(response.body).not.toContain('1000.00');
+      }
+    });
+
+    it('refuses an admin, a customer and a signed-out caller, with no rows', async () => {
+      await seedFixture();
+      await signInAs(harness, ADMIN, true);
+
+      for (const response of [
+        await statement(ADMIN, 2026),
+        await statement(CUSTOMER, 2026),
+        await harness.app.inject({ method: 'GET', url: '/v1/vendor/tax/statement.csv?year=2026' }),
+      ]) {
+        expect([401, 403]).toContain(response.statusCode);
+        expect(response.body).not.toContain('Total');
+      }
+    });
+
+    it('answers 404 to a vendor with no profile, and rejects a year that is not a year', async () => {
+      await signInAs(harness, VENDOR);
+
+      expect((await statement(VENDOR, 2026)).statusCode).toBe(404);
+      await vendorProfile(VENDOR, 'acct_tax_link');
+      expect((await statement(VENDOR, 'abc')).statusCode).toBe(400);
+    });
+
+    it('lists only the years the caller has settled bookings in', async () => {
+      await seedFixture();
+
+      const years = (authUserId: string) =>
+        harness.app.inject({
+          method: 'GET',
+          url: '/v1/vendor/tax/years',
+          headers: bearer(authUserId),
+        });
+
+      // 2027 holds F, transferred in February 2027; the refunded vendor has none.
+      expect((await years(VENDOR)).json()).toEqual({ years: [2027, 2026] });
+      expect((await years(REFUNDED_VENDOR)).json()).toEqual({ years: [] });
+    });
+  });
+
+  /** VEN-725: the single-use Express dashboard link. */
+  describe('POST /vendor/stripe/dashboard-link', () => {
+    const open = (authUserId: string) =>
+      harness.app.inject({
+        method: 'POST',
+        url: '/v1/vendor/stripe/dashboard-link',
+        headers: bearer(authUserId),
+      });
+
+    it('returns a Stripe-hosted URL for the onboarded vendor own account', async () => {
+      await vendorProfile(VENDOR, 'acct_tax_link');
+
+      const response = await open(VENDOR);
+      const { url } = response.json<{ url: string }>();
+
+      expect(response.statusCode).toBe(200);
+      expect(new URL(url).hostname).toBe('connect.stripe.com');
+      expect(url).toContain('acct_tax_link');
+    });
+
+    it('never hands the browser a link that is not on a Stripe host', async () => {
+      await vendorProfile(VENDOR, 'acct_tax_link');
+      const real = harness.stripe.createDashboardLink;
+      harness.stripe.createDashboardLink = async () => ({ url: 'https://evil.example/login' });
+
+      try {
+        const response = await open(VENDOR);
+
+        expect(response.statusCode).toBe(500);
+        expect(response.body).not.toContain('evil.example');
+      } finally {
+        harness.stripe.createDashboardLink = real;
+      }
+    });
+
+    it('answers 404 to a vendor without an account, and 403 to other roles', async () => {
+      const profile = await vendorProfile(VENDOR, 'acct_tax_link');
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ stripeAccountId: null })
+        .where(eq(vendorProfiles.id, profile.id));
+      await signInAs(harness, CUSTOMER);
+
+      expect((await open(VENDOR)).statusCode).toBe(404);
+      expect((await open(CUSTOMER)).statusCode).toBe(403);
+    });
   });
 });
 

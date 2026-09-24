@@ -1,7 +1,11 @@
 import { stripeOnboardingLinkSchema, vendorPayoutStatusSchema } from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole, requireRole, requireRoleBeforeValidation } from '../../lib/guards.js';
-import { readPayoutStatus, startPayoutOnboarding } from './stripe-connect.service.js';
+import {
+  createDashboardLink,
+  readPayoutStatus,
+  startPayoutOnboarding,
+} from './stripe-connect.service.js';
 
 export interface StripeConnectRoutesOptions {
   /**
@@ -37,6 +41,20 @@ export const stripeConnectRoutes: FastifyPluginAsyncZod<StripeConnectRoutesOptio
     async (request) =>
       startPayoutOnboarding(
         { db: app.db, stripe: app.stripe, log: request.log, returnOrigin: options.returnOrigin },
+        assertRole(request.auth, ['vendor']).id,
+      ),
+  );
+
+  /** A single-use Express dashboard link for the vendor's own account; 404 before one exists (VEN-725). */
+  app.post(
+    '/vendor/stripe/dashboard-link',
+    {
+      onRequest: requireRoleBeforeValidation('vendor'),
+      schema: { response: { 200: stripeOnboardingLinkSchema } },
+    },
+    async (request) =>
+      createDashboardLink(
+        { db: app.db, stripe: app.stripe, log: request.log },
         assertRole(request.auth, ['vendor']).id,
       ),
   );
