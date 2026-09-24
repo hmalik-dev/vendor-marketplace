@@ -11,6 +11,7 @@ import {
   centsToDollars,
   dollarsToCents,
   expiryCountdown,
+  feeRateToBps,
   formatDurationHours,
   formatPrice,
   generateSlug,
@@ -134,6 +135,20 @@ describe('price conversion', () => {
   it('groups thousands so a four-figure price is readable at a glance', () => {
     expect(formatPrice(100000)).toBe('$1,000');
     expect(formatPrice(999999)).toBe('$9,999.99');
+  });
+});
+
+describe('feeRateToBps', () => {
+  it('converts a fee rate to whole basis points', () => {
+    expect(feeRateToBps(0.12)).toBe(1200);
+    expect(feeRateToBps(0.125)).toBe(1250);
+    expect(feeRateToBps(0)).toBe(0);
+  });
+
+  it('prices a split identically from the stored bps and the rate', () => {
+    expect(calculateFees(145_000, feeRateToBps(0.12) / 10_000)).toEqual(
+      calculateFees(145_000, 0.12),
+    );
   });
 });
 

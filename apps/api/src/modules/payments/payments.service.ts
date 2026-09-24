@@ -4,7 +4,9 @@ import {
   EXPIRY_HOLD_MAX_ATTEMPTS,
   EXPIRY_HOLD_SPACING_MS,
   MIN_BOOKING_AMOUNT_CENTS,
+  BPS_PER_UNIT,
   calculateFees,
+  feeRateToBps,
   calculateRefund,
   formatPrice,
   isLegacyDestinationPayout,
@@ -594,9 +596,15 @@ export async function recordSuccessfulPayment(
    * not charged.
    */
   const totalAmountCents = intent.amountReceivedCents;
+  /*
+   * The rate the vendor accepted at, not the one in the env today (VEN-712). A
+   * request accepted before the column existed has none, and only that one
+   * falls back to the env rate, which boot already pins to the legal copy.
+   */
+  const platformFeeBps = row.platformFeeBps ?? feeRateToBps(context.platformFeeRate);
   const { platformFeeCents, vendorPayoutCents } = calculateFees(
     totalAmountCents,
-    context.platformFeeRate,
+    platformFeeBps / BPS_PER_UNIT,
   );
 
   const booking = await confirmBooking(context.db, {
@@ -608,6 +616,7 @@ export async function recordSuccessfulPayment(
       eventLocation: row.eventLocation,
       totalAmountCents,
       platformFeeCents,
+      platformFeeBps,
       vendorPayoutCents,
       status: 'confirmed',
       /*
