@@ -7,11 +7,12 @@ import { describe, expect, it } from 'vitest';
  * were kept out of the client bundle by convention only. `import 'server-only'`
  * makes the build refuse a `'use client'` file that reaches them.
  *
- * `api-client.ts` is shared with client code on purpose and is not listed.
+ * `api-client.ts` is shared with client code on purpose and is not listed, and
+ * neither is `visitor-address.ts`: `api-client` dynamically imports it, so the
+ * bundler follows it into the client graph and the fence fails the build.
  */
 const SERVER_ONLY_MODULES = [
   'auth/server.ts',
-  'visitor-address.ts',
   'admin-export.ts',
   'current-user.ts',
   'admin-data.ts',

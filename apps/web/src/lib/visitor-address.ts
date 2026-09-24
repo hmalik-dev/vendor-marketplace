@@ -1,4 +1,3 @@
-import 'server-only';
 import { deploymentPlatform } from '@vendor-marketplace/shared/env';
 
 const PLATFORM_ADDRESS_HEADER = 'x-real-ip';
