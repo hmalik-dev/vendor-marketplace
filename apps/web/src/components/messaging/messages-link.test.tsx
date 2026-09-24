@@ -1,21 +1,14 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let pathname = '/messages';
 const call = vi.fn();
-let onEvent: ((event: { type: string; conversationId?: string }) => void) | undefined;
 
 vi.mock('next/navigation', () => ({ usePathname: () => pathname }));
 vi.mock('@/lib/use-api', () => ({ useApi: () => call }));
 vi.mock('@/lib/report-error', () => ({ reportSwallowedError: vi.fn() }));
-vi.mock('@/lib/use-event-stream', () => ({
-  useEventStream: (options: { onEvent: typeof onEvent }) => {
-    onEvent = options.onEvent;
-    return { connected: true };
-  },
-}));
 
-const { MessagesLink, CONVERSATION_READ_EVENT } = await import('./messages-link');
+const { MessagesLink, CONVERSATIONS_CHANGED_EVENT } = await import('./messages-link');
 
 const page = (hasUnread: boolean): unknown => ({ items: [], nextBefore: null, hasUnread });
 
@@ -25,7 +18,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  onEvent = undefined;
   cleanup();
 });
 
@@ -44,20 +36,44 @@ describe('MessagesLink', () => {
     await screen.findByRole('link', { name: 'Messages, unread' });
 
     call.mockResolvedValue(page(false));
-    window.dispatchEvent(new Event(CONVERSATION_READ_EVENT));
+    window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
 
     await waitFor(() => expect(screen.queryByTestId('messages-unread-dot')).toBeNull());
     expect(screen.getByRole('link', { name: 'Messages' })).toBeDefined();
   });
 
-  it('lights the dot when a message arrives over the stream', async () => {
+  it('lights the dot when told the conversations changed', async () => {
     render(<MessagesLink />);
     await waitFor(() => expect(call).toHaveBeenCalledTimes(1));
 
     call.mockResolvedValue(page(true));
-    onEvent?.({ type: 'new_message', conversationId: 'c1' });
+    window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
 
     await screen.findByRole('link', { name: 'Messages, unread' });
+  });
+
+  it('lets the newest read win when an older one resolves after it', async () => {
+    let resolveStale: (value: unknown) => void = () => {};
+    call.mockReset();
+    call.mockImplementationOnce(() => Promise.resolve(page(false)));
+    render(<MessagesLink />);
+    await waitFor(() => expect(call).toHaveBeenCalledTimes(1));
+
+    call.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStale = resolve;
+        }),
+    );
+    window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
+    call.mockImplementationOnce(() => Promise.resolve(page(false)));
+    window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
+    await waitFor(() => expect(call).toHaveBeenCalledTimes(3));
+
+    await act(async () => resolveStale(page(true)));
+
+    expect(screen.getByRole('link', { name: 'Messages' })).toBeDefined();
+    expect(screen.queryByTestId('messages-unread-dot')).toBeNull();
   });
 
   it('keeps the last known state when the read fails', async () => {
@@ -66,7 +82,7 @@ describe('MessagesLink', () => {
     await screen.findByRole('link', { name: 'Messages, unread' });
 
     call.mockRejectedValue(new Error('offline'));
-    window.dispatchEvent(new Event(CONVERSATION_READ_EVENT));
+    window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
 
     await waitFor(() => expect(call).toHaveBeenCalledTimes(2));
     expect(screen.getByRole('link', { name: 'Messages, unread' })).toBeDefined();

@@ -63,12 +63,10 @@ vi.mock('@/components/messaging/notification-bell', () => ({
 }));
 
 /*
- * The `Messages` link asks the API whether any thread is unread (VEN-706); the
- * stream that would refresh it is `use-event-stream`'s own concern.
+ * The `Messages` link asks the API whether any thread is unread (VEN-706).
  */
 const apiCall = vi.fn();
 vi.mock('@/lib/use-api', () => ({ useApi: () => apiCall }));
-vi.mock('@/lib/use-event-stream', () => ({ useEventStream: () => ({ connected: true }) }));
 vi.mock('@/lib/report-error', () => ({ reportSwallowedError: vi.fn() }));
 
 /*
@@ -268,6 +266,77 @@ describe('SiteHeader', () => {
    * therefore the role's, and it is the same word in the bar and in the drawer
    * the bar hides it into below `sm`: two copies of that decision is how one
    * destination ends up called two things.
+   */
+  it.each([
+    ['customer' as const, 'Bookings'],
+    ['vendor' as const, 'Dashboard'],
+    ['admin' as const, 'Admin'],
+  ])('calls the dashboard link %s -> %s', async (role, label) => {
+    authState = 'signed-in';
+    currentRole = role;
+
+    render(await SiteHeader());
+
+    /*
+     * One link, not two: the drawer that holds the same control below `sm` is a
+     * Radix dialog and renders its content only while open, so it is not in the
+     * tree here. `header-drawer.test.tsx` covers the label it is handed.
+     */
+    expect(screen.getByRole('link', { name: label })).toHaveProperty(
+      'href',
+      'http://localhost:3000/dashboard',
+    );
+  });
+
+  /*
+   * VEN-413: frame `02` draws `Messages` and `Bookings` as nav links —
+   * `13.5px / 500 / #4A443C` — not as ghost buttons, whose `clay-500` and
+   * semibold `03-components.md` reserves for tertiary actions. Class-level
+   * facts on the split list, since a substring match lets
+   * `min-[90rem]:text-[13.5px]` stand in for a different step. jsdom computes
+   * no styles, so the rendered colour is the browser pass's to verify.
+   */
+  it.each(['Messages', 'Bookings'])('draws %s in the nav-link treatment', async (name) => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+
+    render(await SiteHeader());
+
+    const classes = screen.getByRole('link', { name }).className.split(/\s+/);
+
+    expect(classes).toEqual(
+      expect.arrayContaining(['text-stone-700', 'font-medium', 'min-[90rem]:text-[13.5px]']),
+    );
+    // The 44px target the ghost button carried survives the restyle.
+    expect(classes).toContain('min-h-11');
+    expect(classes).not.toContain('text-clay-500');
+    expect(classes).not.toContain('font-semibold');
+  });
+
+  /*
+   * The cluster gap is 16px at 1440. Frame `02` draws 14, but frames `03`, `04`
+   * and both vendor 1440 frames draw 16 for the same cluster — one frame
+   * against four siblings is transcription drift (D30). 1024 draws 14 in two of
+   * three frames. Below `lg` the one cluster serves both auth states and the
+   * 768 frames split — `14 Landing tablet` 12, `14 Search tablet` 14 — so it
+   * holds the signed-out value; this pin records the ladder, not a ruling there.
+   */
+  it('spaces the signed-in cluster 12 / 14 / 16px up the breakpoints', async () => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+
+    render(await SiteHeader());
+
+    const cluster = screen.getByRole('link', { name: 'Messages' }).parentElement;
+    const classes = cluster?.className.split(/\s+/) ?? [];
+
+    expect(classes).toEqual(expect.arrayContaining(['gap-3', 'lg:gap-3.5', 'min-[90rem]:gap-4']));
+  });
+
+  /*
+   * VEN-403: users never reach a provider-hosted panel. The avatar opens the app's own menu,
+   * and it holds exactly four rows — nothing that leads to a provider's profile.
+   * `Account settings` is the app's own page (VEN-677).
    */
   it.each([
     [

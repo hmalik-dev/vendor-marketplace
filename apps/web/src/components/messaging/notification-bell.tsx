@@ -4,6 +4,7 @@ import { Bell } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { CONVERSATIONS_CHANGED_EVENT } from '@/components/messaging/messages-link';
 import { EmptyStateGlyph } from '@/components/ui/empty-state';
 import { isHeaderReadSuppressed } from '@/lib/terms-gate-paths';
 import { useApi } from '@/lib/use-api';
@@ -111,13 +112,24 @@ function NotificationBellPanel({ initial = [] }: NotificationBellProps): React.R
     void refresh();
   }, [refresh]);
 
+  /*
+   * The header's `Messages` link reads the unread state off this stream rather
+   * than opening a second one: a message arriving, or a reconnect after a gap,
+   * is when that state may have changed.
+   */
   useEventStream({
     onEvent: (event) => {
       if (event.type === 'new_notification') {
         void refresh();
       }
+      if (event.type === 'new_message') {
+        window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
+      }
     },
-    onReconnect: () => void refresh(),
+    onReconnect: () => {
+      void refresh();
+      window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
+    },
   });
 
   // A click anywhere else closes the panel, which is what a panel does.

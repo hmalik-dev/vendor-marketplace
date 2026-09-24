@@ -2,20 +2,22 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 import { reportSwallowedError } from '@/lib/report-error';
 import { isHeaderReadSuppressed } from '@/lib/terms-gate-paths';
 import { useApi } from '@/lib/use-api';
-import { useEventStream } from '@/lib/use-event-stream';
 import { wireConversationPageSchema } from '@/lib/wire-schemas';
 
 /**
- * Dispatched on `window` once a thread is marked read, so the header's dot
- * clears without a reload. The header and the messages screen share no state,
- * and a read receipt is the one change the stream does not announce.
+ * Dispatched on `window` when the reader's unread state may have changed: the
+ * bell's stream saw a message arrive or reconnected, or the messages screen
+ * marked a thread read (which the stream does not announce).
+ *
+ * The link listens instead of opening a stream of its own — the API allows a
+ * user five, and the bell and the messages screen already hold two.
  */
-export const CONVERSATION_READ_EVENT = 'conversation-read';
+export const CONVERSATIONS_CHANGED_EVENT = 'conversations-changed';
 
 export interface MessagesLinkProps {
   /** Whether this session cannot clear the Terms gate, read on the server. */
@@ -45,10 +47,18 @@ function UnreadMessagesLink(): React.ReactElement {
   const pathname = usePathname();
   const [unread, setUnread] = useState(false);
 
+  // Only the newest read may set the dot: two in flight can resolve out of order.
+  const latest = useRef(0);
+
   const refresh = useCallback(async () => {
+    const request = ++latest.current;
+
     try {
       const page = await call('/conversations', { schema: wireConversationPageSchema });
-      setUnread(page.hasUnread);
+
+      if (request === latest.current) {
+        setUnread(page.hasUnread);
+      }
     } catch (error: unknown) {
       // The dot keeps its last known value: dropping it would read as "all read"
       // when it means "could not ask".
@@ -62,19 +72,10 @@ function UnreadMessagesLink(): React.ReactElement {
   }, [refresh, pathname]);
 
   useEffect(() => {
-    window.addEventListener(CONVERSATION_READ_EVENT, refresh);
+    window.addEventListener(CONVERSATIONS_CHANGED_EVENT, refresh);
 
-    return () => window.removeEventListener(CONVERSATION_READ_EVENT, refresh);
+    return () => window.removeEventListener(CONVERSATIONS_CHANGED_EVENT, refresh);
   }, [refresh]);
-
-  useEventStream({
-    onEvent: (event) => {
-      if (event.type === 'new_message') {
-        void refresh();
-      }
-    },
-    onReconnect: () => void refresh(),
-  });
 
   return <MessagesAnchor unread={unread} />;
 }

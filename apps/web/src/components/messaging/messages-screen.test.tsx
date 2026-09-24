@@ -172,7 +172,7 @@ describe('MessagesScreen', () => {
    */
   it('announces a read the API accepted so the header dot can clear', async () => {
     const heard = vi.fn();
-    window.addEventListener('conversation-read', heard);
+    window.addEventListener('conversations-changed', heard);
     respondWith([]);
     render(
       <MessagesScreen
@@ -185,7 +185,7 @@ describe('MessagesScreen', () => {
     );
 
     await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
-    window.removeEventListener('conversation-read', heard);
+    window.removeEventListener('conversations-changed', heard);
   });
 
   /* The line that makes a list of names navigable. */
