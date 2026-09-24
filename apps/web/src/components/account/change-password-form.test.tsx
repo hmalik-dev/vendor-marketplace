@@ -94,7 +94,7 @@ describe('ChangePasswordForm (VEN-677)', () => {
       newPassword: 'a-new-password',
     });
     expect(push).toHaveBeenCalledExactlyOnceWith('/vendor/dashboard');
-    expect(refresh).toHaveBeenCalledOnce();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it.each([

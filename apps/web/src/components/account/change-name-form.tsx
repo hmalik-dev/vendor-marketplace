@@ -1,7 +1,6 @@
 'use client';
 
 import { MAX_NAME_LENGTH, personalNameInputSchema } from '@vendor-marketplace/shared';
-import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 import { ACCOUNT_SETTINGS_PATH, SETTINGS_SAVED_PARAM } from '@/components/account/settings-paths';
 import { Banner } from '@/components/ui/banner';
@@ -22,10 +21,9 @@ export interface ChangeNameFormProps {
  * The name row's page (VEN-703): first and last name for every role, held to
  * the same shared schema the customer-details step uses and written through
  * the same `PUT /users/me`. Success goes back to the list, whose banner
- * confirms it; the refresh re-reads the layout so the header's initials follow.
+ * confirms it; the full load re-reads the layout so the header's initials follow.
  */
 export function ChangeNameForm(props: ChangeNameFormProps): React.ReactElement {
-  const router = useRouter();
   const call = useApi();
   const fieldId = useId();
   const [firstName, setFirstName] = useState(props.firstName);
@@ -56,8 +54,13 @@ export function ChangeNameForm(props: ChangeNameFormProps): React.ReactElement {
       return;
     }
 
-    router.push(`${ACCOUNT_SETTINGS_PATH}?${SETTINGS_SAVED_PARAM}=name`);
-    router.refresh();
+    /*
+     * A full load, not `router.push` + `router.refresh()`: the header's initials
+     * live in the root layout, which a soft navigation reuses, and the refresh
+     * raced the push — three of thirteen customer saves stayed on this page with
+     * no confirmation. Same reason `customer-details-form.tsx` gives.
+     */
+    window.location.assign(`${ACCOUNT_SETTINGS_PATH}?${SETTINGS_SAVED_PARAM}=name`);
   }
 
   return (

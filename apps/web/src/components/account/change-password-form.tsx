@@ -39,7 +39,8 @@ function refusal(current: string, next: string, confirm: string): string | null 
  * password, a new one and its confirmation, in frame `12`'s field and button
  * vocabulary as `/reset-password` uses it. The proxy ends every other session
  * and keeps this one, so success is a trip to the role's home rather than
- * through sign-in; `router.refresh()` re-renders it on the fresh session.
+ * through sign-in. No `router.refresh()` beside the push: the two race, and the
+ * destination is fetched with the fresh session cookie anyway.
  */
 export function ChangePasswordForm({ role }: { role: UserRole }): React.ReactElement {
   const router = useRouter();
@@ -68,7 +69,6 @@ export function ChangePasswordForm({ role }: { role: UserRole }): React.ReactEle
 
     if (outcome === 'ok') {
       router.push(DASHBOARD_PATH_BY_ROLE[role]);
-      router.refresh();
       return;
     }
 

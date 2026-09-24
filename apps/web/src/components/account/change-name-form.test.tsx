@@ -2,21 +2,22 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const refresh = vi.fn();
-const push = vi.fn();
 const call = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push }) }));
+const assign = vi.fn();
 vi.mock('@/lib/use-api', () => ({ useApi: () => call }));
 
 const { ChangeNameForm } = await import('./change-name-form');
 
 beforeEach(() => {
-  refresh.mockReset();
-  push.mockReset();
+  assign.mockReset();
   call.mockReset().mockResolvedValue({});
+  vi.stubGlobal('location', { ...window.location, assign });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 async function submitWith(first: string, last: string): Promise<void> {
   const user = userEvent.setup();
@@ -46,19 +47,18 @@ describe('ChangeNameForm (VEN-703)', () => {
     await submitWith(first, last);
 
     expect(call).not.toHaveBeenCalled();
-    expect(push).not.toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toContain('Enter your first and last name.');
   });
 
-  it('saves the trimmed name, returns to the list and refreshes the header', async () => {
+  it('saves the trimmed name, then loads the list afresh so the header follows', async () => {
     await submitWith('Ada', ' Byron ');
 
     expect(call).toHaveBeenCalledExactlyOnceWith(
       '/users/me',
       expect.objectContaining({ method: 'PUT', body: { firstName: 'Ada', lastName: 'Byron' } }),
     );
-    expect(push).toHaveBeenCalledExactlyOnceWith('/account/settings?saved=name');
-    expect(refresh).toHaveBeenCalledOnce();
+    expect(assign).toHaveBeenCalledExactlyOnceWith('/account/settings?saved=name');
   });
 
   it('stays on the page and says so when the save fails', async () => {
@@ -66,7 +66,7 @@ describe('ChangeNameForm (VEN-703)', () => {
 
     await submitWith('Ada', 'Byron');
 
-    expect(push).not.toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toContain('That did not save');
   });
 });
