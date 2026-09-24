@@ -673,6 +673,21 @@ describe('messaging', () => {
       ).toEqual(expect.arrayContaining([null, expect.stringMatching(/wedding$/)]));
     });
 
+    it('refuses a customer with no name opening a thread', async () => {
+      const slug = await publishedVendor();
+      await idOf(CUSTOMER);
+      await harness.database.db
+        .update(users)
+        .set({ firstName: '  ' })
+        .where(eq(users.authUserId, CUSTOMER));
+
+      const refused = await open(CUSTOMER, slug);
+
+      expect(refused.statusCode).toBe(403);
+      expect(refused.json().error).toBe('NAME_REQUIRED');
+      expect(await harness.database.db.select().from(conversations)).toHaveLength(0);
+    });
+
     /*
      * #402: under `requireAuth` any signed-in account could open a thread and
      * become its `customer_id`. A vendor could therefore message every
@@ -941,6 +956,34 @@ describe('messaging', () => {
 
       expect(new Set(previews).size).toBe(1);
       expect(['Tied one', 'Tied two']).toContain(previews[0]);
+    });
+
+    /*
+     * VEN-701: the vendor reads this customer's name on the thread, so a
+     * customer whose name was never entered may not write into it. The vendor's
+     * own reply is not gated.
+     */
+    it('refuses a customer with no name, and still lets the vendor reply', async () => {
+      const conversationId = await openConversation();
+      await harness.database.db
+        .update(users)
+        .set({ lastName: '' })
+        .where(eq(users.id, await idOf(CUSTOMER)));
+
+      const refused = await send(CUSTOMER, conversationId, 'Are you free that weekend?');
+
+      expect(refused.statusCode).toBe(403);
+      expect(refused.json().error).toBe('NAME_REQUIRED');
+      expect(await harness.database.db.select().from(messages)).toHaveLength(0);
+      expect((await send(VENDOR, conversationId, 'Yes, we are.')).statusCode).toBe(201);
+    });
+
+    it('sends a named customer’s message', async () => {
+      const conversationId = await openConversation();
+
+      expect((await send(CUSTOMER, conversationId, 'Are you free that weekend?')).statusCode).toBe(
+        201,
+      );
     });
 
     it('refuses a message past the length ceiling', async () => {

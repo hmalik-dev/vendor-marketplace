@@ -33,7 +33,7 @@
 - [safeReturnPath is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise, 894k-case fuzz clean; VEN-653's one-path loop exemption audited clean
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — the matcher skips dotted paths
 - [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — `roleCanReach` is a redirect hint and must never become a gate
-- [Every `FORBIDDEN` is read as a suspension](every-forbidden-is-read-as-a-suspension.md) — `terminalRefusal` has no suspension-specific code, so widening its funnel sends stale-tab and tenancy 403s to a static "you are suspended" page
+- [Every `FORBIDDEN` is read as a suspension](every-forbidden-is-read-as-a-suspension.md) — `useApi` now keys on `ACCOUNT_SUSPENDED` (VEN-701 `NAME_REQUIRED` safe there); the server twin still reads any 403 as banned
 
 ## Vendor visibility, moderation and PII
 

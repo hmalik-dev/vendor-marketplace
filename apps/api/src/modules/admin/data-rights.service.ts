@@ -338,7 +338,13 @@ async function recordExport(
   record: GatheredRecord,
   reviews: { written: ExportReviewRow[]; received: ExportReviewRow[] },
 ): Promise<void> {
-  await recordAdminActionBestEffort(context, {
+  /*
+   * Not best-effort (VEN-684). The row is what the hourly ceiling counts, and
+   * nothing irreversible has happened yet: the file has not been returned. So a
+   * log that cannot be written withholds the file — an export that could not be
+   * logged did not happen, as it does for the CSV exports (VEN-475).
+   */
+  await insertAdminAction(context.db, {
     actorId,
     action: 'user_data_exported',
     subjectType: 'user',

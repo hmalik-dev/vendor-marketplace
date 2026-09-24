@@ -11,6 +11,7 @@ import { useCallback } from 'react';
 import { apiBaseUrl } from '@/lib/api-base-url';
 import { clearSessionToken, getSessionToken } from './auth/client';
 import { ApiClientError, apiRequest, type ApiRequestOptions } from './api-client';
+import { isNameGateExemptPath, isNameRequired, nameStepPath } from './name-gate-paths';
 import { signInPathReturningTo } from './return-path';
 import {
   isGateExemptPath,
@@ -130,6 +131,15 @@ export function useApi(): BrowserRequest {
          */
         if (isTermsRequired(error) && !isGateExemptPath(window.location.pathname)) {
           router.push(termsAcceptancePath(window.location.pathname + window.location.search));
+        }
+
+        /*
+         * The name gate (VEN-701), the same way: a customer with no real name is
+         * refused every write that would show it to another user, and the name
+         * step is where they clear that. The pages it exempts keep the reader.
+         */
+        if (isNameRequired(error) && !isNameGateExemptPath(window.location.pathname)) {
+          router.push(nameStepPath(window.location.pathname + window.location.search));
         }
 
         redirectOnRefusal(error);

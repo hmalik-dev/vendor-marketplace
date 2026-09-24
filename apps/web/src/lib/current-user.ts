@@ -4,8 +4,9 @@ import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
+import { redirectIfNameRequired } from './name-gate';
 import { isNavigationSignal } from './navigation-signal';
-import { requestedPath } from './requested-path';
+import { requestedPath, requestedPathname } from './requested-path';
 import { RETURN_PATH_PARAM, safeReturnPath, signInPathReturningTo } from './return-path';
 import { isTermsRequired, redirectIfTermsRequired } from './terms-gate';
 /*
@@ -84,6 +85,8 @@ export async function requireCurrentUser(returnTo?: string): Promise<WireUser> {
      */
     redirect(signInPathReturningTo(returnTo ?? (await requestedPath())));
   }
+
+  await redirectIfNameRequired(user, returnTo);
 
   return user;
 }
@@ -336,7 +339,8 @@ export async function readIdentityForSupport(): Promise<WireUser | null> {
 /**
  * Guards the root page. `/` is the customer-facing browse surface, and a vendor
  * has no use for a catalogue of other vendors — their home is their own
- * dashboard. Signed-out visitors and customers fall through and see the page.
+ * dashboard. Signed-out visitors and customers fall through and see the page,
+ * except a customer with no name yet, who goes back to the name step (VEN-701).
  *
  * `/` is public, so an unreadable record skips the redirect rather than failing
  * the page — the visitor gets the marketplace with signed-out chrome.
@@ -346,5 +350,13 @@ export async function redirectVendorToDashboard(): Promise<void> {
 
   if (user?.role === 'vendor') {
     redirect(DASHBOARD_PATH_BY_ROLE.vendor);
+  }
+
+  /*
+   * `/for-vendors` shares this guard and is public browsing, which stays open to
+   * a nameless customer, so only the home page itself sends them to the step.
+   */
+  if (user && (await requestedPathname()) === '/') {
+    await redirectIfNameRequired(user);
   }
 }

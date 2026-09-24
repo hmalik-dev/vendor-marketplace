@@ -13,8 +13,8 @@ import {
   vendorCategories,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
-import { eq } from 'drizzle-orm';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { and, eq } from 'drizzle-orm';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   bearer,
   createTestHarness,
@@ -126,6 +126,23 @@ describe('admin step-up and destructive ceiling', () => {
       headers: bearer(authUserId),
     });
 
+  const exportData = (authUserId: string, userId: string) =>
+    harness.app.inject({
+      method: 'POST',
+      url: `/v1/admin/users/${userId}/export`,
+      headers: bearer(authUserId),
+    });
+
+  async function exportRows(subjectId: string): Promise<number> {
+    const rows = await harness.database.db
+      .select({ id: adminActions.id })
+      .from(adminActions)
+      .where(
+        and(eq(adminActions.action, 'user_data_exported'), eq(adminActions.subjectId, subjectId)),
+      );
+    return rows.length;
+  }
+
   async function isBanned(userId: string): Promise<boolean> {
     const [row] = await harness.database.db
       .select({ isBanned: users.isBanned })
@@ -221,6 +238,55 @@ describe('admin step-up and destructive ceiling', () => {
 
       expect(response.statusCode).toBe(403);
       expect(response.json().error).toBe(ERROR_CODES.STEP_UP_REQUIRED);
+    });
+
+    it('refuses an export without a fresh step-up, like a ban: 403, nothing handed over, no audit row', async () => {
+      await signIn(ADMIN, true);
+      const target = await vendorWithBooking();
+
+      const response = await exportData(ADMIN, target.userId);
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe(ERROR_CODES.STEP_UP_REQUIRED);
+      expect(response.body).not.toContain(`${VENDOR}@example.com`);
+      expect(await exportRows(target.userId)).toBe(0);
+    });
+
+    it('hands the file over once the emailed code is entered, and writes the audit row', async () => {
+      const adminId = await signIn(ADMIN, true);
+      const target = await vendorWithBooking();
+      await stepUp(ADMIN);
+
+      const response = await exportData(ADMIN, target.userId);
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().subject.email).toBe(`${VENDOR}@example.com`);
+      expect(await exportRows(target.userId)).toBe(1);
+      const [row] = await harness.database.db
+        .select({ actorId: adminActions.actorId })
+        .from(adminActions)
+        .where(eq(adminActions.action, 'user_data_exported'));
+      expect(row!.actorId).toBe(adminId);
+    });
+
+    it('withholds the file when the export cannot be logged: an unlogged export is uncounted', async () => {
+      await signIn(ADMIN, true);
+      const target = await vendorWithBooking();
+      await stepUp(ADMIN);
+      const insert = vi.spyOn(harness.database.db, 'insert').mockImplementation(() => {
+        throw new Error('admin_actions is unwritable');
+      });
+
+      let response: Awaited<ReturnType<typeof exportData>>;
+      try {
+        response = await exportData(ADMIN, target.userId);
+      } finally {
+        insert.mockRestore();
+      }
+
+      expect(response.statusCode).toBe(500);
+      expect(response.body).not.toContain(`${VENDOR}@example.com`);
+      expect(await exportRows(target.userId)).toBe(0);
     });
 
     it('does not tell a non-admin the route asks for more', async () => {
@@ -379,6 +445,40 @@ describe('admin step-up and destructive ceiling', () => {
       const alert = harness.email.sent.find((m) => m.to === 'operator@test.invalid');
       expect(alert?.subject).toContain('ban');
       expect(alert?.text).toContain(adminId);
+    });
+
+    it('refuses an export past the ceiling with 429 and hands nothing over', async () => {
+      const adminId = await signIn(ADMIN, true);
+      const target = await vendorWithBooking();
+      await stepUp(ADMIN);
+      await seedBans(adminId, ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR, now);
+
+      const response = await exportData(ADMIN, target.userId);
+
+      expect(response.statusCode).toBe(429);
+      expect(response.json().error).toBe(ERROR_CODES.ADMIN_CEILING_REACHED);
+      expect(response.body).not.toContain(`${VENDOR}@example.com`);
+      expect(await exportRows(target.userId)).toBe(0);
+    });
+
+    it('counts exports with bans and closures', async () => {
+      const adminId = await signIn(ADMIN, true);
+      const target = await vendorWithBooking();
+      await stepUp(ADMIN);
+      await harness.database.db.insert(adminActions).values(
+        Array.from({ length: ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR }, () => ({
+          actorId: adminId,
+          action: 'user_data_exported' as const,
+          subjectType: 'user' as const,
+          subjectId: NIL,
+          createdAt: now,
+        })),
+      );
+
+      const refused = await ban(ADMIN, target.userId);
+
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json().error).toBe(ERROR_CODES.ADMIN_CEILING_REACHED);
     });
 
     it('allows the Nth ban', async () => {

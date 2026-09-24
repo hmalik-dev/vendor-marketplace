@@ -16,6 +16,7 @@ import { identityOf, type AppDatabase } from '../../lib/database.js';
 import type { EventHub } from '../../lib/event-stream.js';
 import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
+import { requireCustomerName } from '../users/customer-name.js';
 import {
   countEarlierUnreadInConversation,
   countUnreadPerConversation,
@@ -258,6 +259,9 @@ export async function openConversation(
     throw forbidden('You cannot message your own listing');
   }
 
+  // The vendor sees this customer's name on the thread this opens (VEN-701).
+  await requireCustomerName(db, user.id);
+
   const { conversation, created } = await openUnattachedConversation(db, {
     customerId: user.id,
     vendorId: vendor.id,
@@ -343,6 +347,11 @@ export async function sendMessage(
    */
   if (!(side === 'customer' ? row.vendorReachable : row.customerReachable)) {
     throw conflict('That person can no longer receive messages');
+  }
+
+  // A customer's message reaches the vendor under their name (VEN-701).
+  if (side === 'customer') {
+    await requireCustomerName(db, user.id);
   }
 
   const inserted = await withRequestIdentity(db, identityOf(user), (tx) =>

@@ -15,6 +15,7 @@ import { DateDropdown } from '@/components/ui/dropdown-date';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { Label } from '@/components/ui/label';
 import { ApiClientError } from '@/lib/api-client';
+import { isNameRequired } from '@/lib/name-gate-paths';
 import { signInPathReturningTo } from '@/lib/return-path';
 import { useApi } from '@/lib/use-api';
 import { useViewerToday } from '@/lib/use-viewer-today';
@@ -141,6 +142,11 @@ export function BookingRail({
     } catch (error) {
       if (error instanceof ApiClientError && error.statusCode === 401) {
         router.push(signInPathReturningTo(`${window.location.pathname}${window.location.search}`));
+        return;
+      }
+
+      // `useApi` is already sending a nameless customer to the name step (VEN-701).
+      if (isNameRequired(error)) {
         return;
       }
 
