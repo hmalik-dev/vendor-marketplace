@@ -1,7 +1,7 @@
 import type { AvailabilityStatus } from '@vendor-marketplace/shared';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatAccessibleDate } from '@/lib/calendar';
 import { DateDropdown } from './dropdown-date';
 
@@ -250,5 +250,254 @@ describe('DateDropdown — arrow keys', () => {
     await user.keyboard('{ArrowRight}{Enter}');
 
     expect(onChange).toHaveBeenCalledWith('2026-06-15');
+  });
+});
+
+/*
+ * The month title opens a quick view of months and years (VEN-710), so a date
+ * a year and a half out is two clicks instead of eighteen.
+ */
+const SEPT_TODAY = '2026-09-23';
+
+function renderQuickPicker(
+  monthsAhead?: number,
+  onOpenChange: (open: boolean) => void = vi.fn(),
+): { onChange: ReturnType<typeof vi.fn> } {
+  const onChange = vi.fn();
+
+  render(
+    <DateDropdown
+      open
+      onOpenChange={onOpenChange}
+      trigger={<button type="button">Event date</button>}
+      label="Event date"
+      value={null}
+      onChange={onChange}
+      today={SEPT_TODAY}
+      {...(monthsAhead === undefined ? {} : { monthsAhead })}
+    />,
+  );
+
+  return { onChange };
+}
+
+function titleButton(): HTMLElement {
+  return screen.getByRole('button', { name: /^Choose month and year,/ });
+}
+
+function monthButton(label: string): HTMLElement {
+  return screen.getByRole('button', { name: label });
+}
+
+describe('DateDropdown — the month and year quick view', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('makes the title a button that opens twelve months and the year', async () => {
+    const user = userEvent.setup();
+    renderQuickPicker();
+
+    expect(titleButton().getAttribute('aria-label')).toBe('Choose month and year, September 2026');
+    expect(titleButton().getAttribute('aria-expanded')).toBe('false');
+
+    await user.click(titleButton());
+
+    expect(titleButton().getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('2026')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /^[A-Z][a-z]+ 20\d\d$/ })).toHaveLength(12);
+  });
+
+  it('returns to the day grid on the month and year chosen', async () => {
+    const user = userEvent.setup();
+    renderQuickPicker();
+
+    await user.click(titleButton());
+    await user.click(screen.getByRole('button', { name: 'Next year' }));
+    await user.click(monthButton('March 2027'));
+
+    expect(titleButton().getAttribute('aria-label')).toBe('Choose month and year, March 2027');
+    expect(titleButton().getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByRole('grid', { name: 'Event date' })).toBeTruthy();
+    expect(document.activeElement).toBe(titleButton());
+
+    // The chevrons continue from the month chosen.
+    await user.click(screen.getByRole('button', { name: 'Next month' }));
+    expect(titleButton().getAttribute('aria-label')).toBe('Choose month and year, April 2027');
+  });
+
+  it('refuses a click on a month out of range', async () => {
+    const user = userEvent.setup();
+    renderQuickPicker();
+
+    await user.click(titleButton());
+    await user.click(monthButton('January 2026'));
+
+    // Still the quick view: nothing was chosen.
+    expect(titleButton().getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Previous year' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+  });
+
+  describe.each([
+    [24, 'August 2028', 'September 2028', 'October 2028'],
+    [undefined, 'August 2027', 'September 2027', 'October 2027'],
+  ])('reach at monthsAhead=%s', (monthsAhead, before, last, after) => {
+    it('enables months from today’s to the horizon and no others', async () => {
+      const user = userEvent.setup();
+      renderQuickPicker(monthsAhead);
+
+      await user.click(titleButton());
+      const disabled = (label: string): string | null =>
+        monthButton(label).getAttribute('aria-disabled');
+
+      // Earlier than September 2026 are disabled; September 2026 is not.
+      expect(disabled('August 2026')).toBe('true');
+      expect(disabled('September 2026')).toBe('false');
+
+      while (Number(screen.getByText(/^20\d\d$/).textContent) < Number(last.slice(-4))) {
+        await user.click(screen.getByRole('button', { name: 'Next year' }));
+      }
+
+      expect(disabled(before)).toBe('false');
+      expect(disabled(last)).toBe('false');
+      expect(disabled(after)).toBe('true');
+    });
+  });
+
+  it('stops the year buttons at the ends of the range', async () => {
+    const user = userEvent.setup();
+    renderQuickPicker(24);
+
+    await user.click(titleButton());
+    await user.click(screen.getByRole('button', { name: 'Next year' }));
+    await user.click(screen.getByRole('button', { name: 'Next year' }));
+
+    expect(screen.getByText('2028')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Next year' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('toggles on Enter and Space from the title', async () => {
+    const user = userEvent.setup();
+    renderQuickPicker();
+
+    titleButton().focus();
+    await user.keyboard('{Enter}');
+    expect(titleButton().getAttribute('aria-expanded')).toBe('true');
+
+    titleButton().focus();
+    await user.keyboard(' ');
+    expect(titleButton().getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('moves between months on the arrows and between years on the page keys', async () => {
+    const user = userEvent.setup();
+    renderQuickPicker(24);
+
+    await user.click(titleButton());
+    // Opens with focus on the month being viewed.
+    expect(document.activeElement).toBe(monthButton('September 2026'));
+
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toBe(monthButton('October 2026'));
+
+    // A past month is reachable, like a past day: it is refused on click.
+    await user.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(monthButton('July 2026'));
+
+    await user.keyboard('{PageDown}');
+    expect(screen.getByText('2027')).toBeTruthy();
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('July 2027');
+  });
+
+  /*
+   * Both mounts dismiss from a `document` listener of their own — Radix's on
+   * the popover, `useModalSheet`'s on the sheet — so both are driven, and from
+   * a focus that is *not* inside a month button: a click on the year label
+   * leaves focus on an ancestor of the panel, where a handler on the panel
+   * never hears the key.
+   */
+  describe.each([
+    ['popover', true],
+    ['sheet', false],
+  ])('Escape on the %s mount', (_mount, anchored) => {
+    const original = window.matchMedia;
+
+    beforeEach(() => {
+      window.matchMedia = ((query: string) =>
+        ({
+          matches: anchored && query.includes('min-width: 640px'),
+          media: query,
+          addEventListener() {},
+          removeEventListener() {},
+        }) as unknown as MediaQueryList) as typeof window.matchMedia;
+    });
+
+    afterEach(() => {
+      window.matchMedia = original;
+    });
+
+    it('leaves the quick view first, then closes on the second', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      renderQuickPicker(undefined, onOpenChange);
+
+      await user.click(titleButton());
+      await user.keyboard('{Escape}');
+
+      expect(titleButton().getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(titleButton());
+      expect(screen.getByRole('grid', { name: 'Event date' })).toBeTruthy();
+      expect(onOpenChange).not.toHaveBeenCalled();
+
+      await user.keyboard('{Escape}');
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('leaves the quick view when focus is on the year label, not a month', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      renderQuickPicker(undefined, onOpenChange);
+
+      await user.click(titleButton());
+      await user.click(screen.getByText('2026'));
+      await user.keyboard('{Escape}');
+
+      expect(titleButton().getAttribute('aria-expanded')).toBe('false');
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('DateDropdown — the last choosable day', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  /*
+   * The picker's reach is a month, but a booking request refuses a date past
+   * today plus 24 months to the day. The days between are drawn unchoosable.
+   */
+  it('refuses the days of the final month past today’s date, 24 months on', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderQuickPicker(24);
+
+    await user.click(titleButton());
+    await user.click(screen.getByRole('button', { name: 'Next year' }));
+    await user.click(screen.getByRole('button', { name: 'Next year' }));
+    await user.click(monthButton('September 2028'));
+
+    const day = (date: string): HTMLElement =>
+      within(grid()).getByRole('gridcell', { name: new RegExp(`^${formatAccessibleDate(date)}`) });
+
+    expect(day('2028-09-23').getAttribute('aria-disabled')).toBe('false');
+    expect(day('2028-09-24').getAttribute('aria-disabled')).toBe('true');
+    expect(day('2028-09-24').getAttribute('aria-label')).toMatch(/too far ahead$/);
+
+    await user.click(day('2028-09-24'));
+    expect(onChange).not.toHaveBeenCalled();
+    await user.click(day('2028-09-23'));
+    expect(onChange).toHaveBeenCalledWith('2028-09-23');
   });
 });
