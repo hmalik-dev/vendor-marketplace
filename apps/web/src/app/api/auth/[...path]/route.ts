@@ -96,6 +96,18 @@ const forward =
       return forwardChangePassword(request, context, path);
     }
 
+    if (method === 'GET' && joined === LIST_SESSIONS) {
+      return forwardListSessions(request);
+    }
+
+    if (method === 'POST' && joined === REVOKE_SESSION) {
+      return forwardRevokeSession(request, path);
+    }
+
+    if (method === 'POST' && joined === REVOKE_OTHER_SESSIONS) {
+      return forwardRevokeOtherSessions(request, path);
+    }
+
     if (method === 'POST' && addressLimit(path) !== null) {
       return forwardBudgeted(request, context, path);
     }
@@ -169,16 +181,23 @@ async function resolveCallerId(): Promise<string | undefined> {
     return cached;
   }
 
-  const session = await Promise.race([
+  return (await readSession()).data?.user?.id;
+}
+
+/** The caller's session at the provider, bounded and never throwing: `data` is `null` when unknown. */
+async function readSession(): Promise<
+  Awaited<ReturnType<ReturnType<typeof neonAuth>['getSession']>>
+> {
+  const unknown = { data: null, error: null } as const;
+
+  return Promise.race([
     neonAuth()
       .getSession()
-      .catch(() => ({ data: null })),
-    new Promise<{ data: null }>((resolve) => {
-      setTimeout(() => resolve({ data: null }), CALLER_ID_TIMEOUT_MS);
+      .catch(() => unknown),
+    new Promise<typeof unknown>((resolve) => {
+      setTimeout(() => resolve(unknown), CALLER_ID_TIMEOUT_MS);
     }),
   ]);
-
-  return session.data?.user?.id;
 }
 
 /**
@@ -706,6 +725,265 @@ async function forwardChangePassword(
   }
 
   return response;
+}
+
+const LIST_SESSIONS = 'list-sessions';
+const REVOKE_SESSION = 'revoke-session';
+const REVOKE_OTHER_SESSIONS = 'revoke-other-sessions';
+
+/** A provider session, cut down to what the proxy may use. `token` never leaves this file. */
+interface ProviderSession {
+  id: string;
+  token: string;
+  userAgent: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** What the browser gets for one device: an opaque id and what helps recognise it, never a secret. */
+interface SessionRow {
+  id: string;
+  userAgent: string | null;
+  createdAt: string | null;
+  lastActiveAt: string | null;
+  current: boolean;
+}
+
+function isoOrNull(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    return null;
+  }
+
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) ? null : at.toISOString();
+}
+
+/** The sessions in Better Auth's `list-sessions` answer, or `null` when the body is not a list. */
+function providerSessionsIn(body: unknown): ProviderSession[] | null {
+  const list = Array.isArray(body) ? body : (body as { sessions?: unknown } | null)?.sessions;
+
+  if (!Array.isArray(list)) {
+    return null;
+  }
+
+  return list.flatMap((entry: unknown): ProviderSession[] => {
+    const row = entry as Record<string, unknown> | null;
+
+    if (typeof row?.id !== 'string' || typeof row.token !== 'string') {
+      return [];
+    }
+
+    return [
+      {
+        id: row.id,
+        token: row.token,
+        userAgent: typeof row.userAgent === 'string' ? row.userAgent : null,
+        createdAt: isoOrNull(row.createdAt),
+        updatedAt: isoOrNull(row.updatedAt),
+      },
+    ];
+  });
+}
+
+function callerHeaders(request: NextRequest): Headers {
+  const headers = new Headers(request.headers);
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  headers.set('content-type', 'application/json');
+  return headers;
+}
+
+/** Every session the caller's account holds at the provider, or the response to answer with instead. */
+async function providerSessions(request: NextRequest): Promise<ProviderSession[] | Response> {
+  try {
+    const headers = callerHeaders(request);
+    headers.delete('content-type');
+    const response = await neonAuth()
+      .handler()
+      .GET(
+        new Request(new URL(`/api/auth/${LIST_SESSIONS}`, request.url), {
+          method: 'GET',
+          headers,
+        }) as NextRequest,
+        { params: Promise.resolve({ path: segments(LIST_SESSIONS) }) },
+      );
+
+    if (response.status === 401) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+
+    const sessions = response.ok ? providerSessionsIn(await response.json()) : null;
+
+    return sessions ?? NextResponse.json({ message: 'Unavailable' }, { status: 502 });
+  } catch (error) {
+    Sentry.captureException(error);
+    return NextResponse.json({ message: 'Unavailable' }, { status: 502 });
+  }
+}
+
+/**
+ * The devices the caller's account is signed in on (VEN-681). Better Auth's
+ * answer carries each session's `token`, which is the credential itself, so it
+ * is rebuilt field by field: the browser gets an opaque id, the user agent,
+ * two times and whether the row is this device. No IP address (VEN-681's
+ * ruling: nothing that does not help recognise a device).
+ */
+async function forwardListSessions(request: NextRequest): Promise<Response> {
+  const [found, current] = await Promise.all([providerSessions(request), readSession()]);
+
+  if (found instanceof Response) {
+    return found;
+  }
+
+  const currentId = current.data?.session?.id;
+
+  // With no current session known, no row could be marked, and this device would offer to end itself.
+  if (currentId === undefined) {
+    return NextResponse.json({ message: 'Unavailable' }, { status: 502 });
+  }
+
+  const sessions: SessionRow[] = found
+    .map((session) => ({
+      id: session.id,
+      userAgent: session.userAgent,
+      createdAt: session.createdAt,
+      lastActiveAt: session.updatedAt ?? session.createdAt,
+      current: session.id === currentId,
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.current) - Number(a.current) ||
+        (b.lastActiveAt ?? '').localeCompare(a.lastActiveAt ?? ''),
+    );
+
+  return NextResponse.json({ sessions }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
+/**
+ * After sessions end at the provider: forget this process's minted tokens for
+ * the account and bound every JWT issued before now at the API, as sign-out
+ * does (VEN-628, VEN-670). This device re-mints on its next read, after the
+ * bump, so it stays signed in.
+ */
+async function afterSessionsEnded(userId: string): Promise<void> {
+  forgetSessionsFor(userId);
+  await invalidateSessionsAtApi(userId);
+}
+
+function sessionIdIn(body: string): string | null {
+  try {
+    const id = (JSON.parse(body) as { id?: unknown } | null)?.id;
+    return typeof id === 'string' && id !== '' ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ending sessions is budgeted per account, whichever address asks, and every
+ * attempt is charged: a guessed id spends the budget too.
+ */
+async function refuseOverRevokeBudget(userId: string, path: string[]): Promise<Response | null> {
+  if (!(await chargeAddress(userId, path))) {
+    return null;
+  }
+
+  return NextResponse.json(
+    { message: 'Too many attempts' },
+    { status: 429, headers: { 'Retry-After': '600' } },
+  );
+}
+
+/**
+ * Ends one other device. The browser names a session by the opaque id the list
+ * gave it; the token the provider wants is looked up here, in the caller's own
+ * list, so an id belonging to another account is simply not found (404) and the
+ * caller's own session is refused (400: that is sign-out).
+ */
+async function forwardRevokeSession(request: NextRequest, path: string[]): Promise<Response> {
+  const text = await readBounded(request);
+  const id = text === null ? null : sessionIdIn(text);
+
+  if (id === null) {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  const [userId, current] = await Promise.all([resolveCallerId(), readSession()]);
+  const currentId = current.data?.session?.id;
+
+  if (userId === undefined || currentId === undefined) {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
+  const refused = await refuseOverRevokeBudget(userId, path);
+
+  if (refused) {
+    return refused;
+  }
+
+  const found = await providerSessions(request);
+
+  if (found instanceof Response) {
+    return found;
+  }
+
+  const target = found.find((session) => session.id === id);
+
+  if (target === undefined) {
+    return NextResponse.json({ message: 'Not found' }, { status: 404 });
+  }
+
+  if (target.id === currentId) {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  const revoke = segments(REVOKE_SESSION);
+  const body = JSON.stringify({ token: target.token });
+  const response = await neonAuth()
+    .handler()
+    .POST(authCall(request, revoke, callerHeaders(request), body) as NextRequest, {
+      params: Promise.resolve({ path: revoke }),
+    });
+
+  return finishRevoke(response, userId);
+}
+
+/** Ends every device but this one. Better Auth keeps the caller's own session. */
+async function forwardRevokeOtherSessions(request: NextRequest, path: string[]): Promise<Response> {
+  // A live session is required before anything is charged, so a revoked cookie
+  // this instance still has cached cannot spend the owner's budget.
+  const [userId, current] = await Promise.all([resolveCallerId(), readSession()]);
+
+  if (userId === undefined || current.data?.session?.id === undefined) {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
+  const refused = await refuseOverRevokeBudget(userId, path);
+
+  if (refused) {
+    return refused;
+  }
+
+  const revoke = segments(REVOKE_OTHER_SESSIONS);
+  const response = await neonAuth()
+    .handler()
+    .POST(authCall(request, revoke, callerHeaders(request), '{}') as NextRequest, {
+      params: Promise.resolve({ path: revoke }),
+    });
+
+  return finishRevoke(response, userId);
+}
+
+async function finishRevoke(response: Response, userId: string): Promise<Response> {
+  if (!response.ok) {
+    return NextResponse.json(
+      { message: 'Not ended' },
+      { status: response.status === 401 ? 401 : 502 },
+    );
+  }
+
+  await afterSessionsEnded(userId);
+  return NextResponse.json({ success: true });
 }
 
 export const GET = forward('GET');
