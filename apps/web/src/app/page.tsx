@@ -19,7 +19,7 @@ import { VendorCard } from '@/components/vendors/vendor-card';
 import { siteOrigin } from '@/config/env';
 import { getServerSession } from '@/lib/auth/server';
 import { readRoleForChrome, redirectVendorToDashboard } from '@/lib/current-user';
-import { FOR_VENDORS_PATH, FOR_VENDORS_PAYOUTS_ANCHOR } from '@/lib/for-vendors';
+import { FOR_VENDORS_PATH } from '@/lib/for-vendors';
 import { GENERIC_TRUST_COPY } from '@/lib/landing-status';
 import type { TrustTitle } from '@/lib/landing-status';
 import { offeredJumpCategories } from '@/lib/jump-categories';
@@ -82,7 +82,7 @@ const HOW_IT_WORKS = [
  * the shield to the reviews line. The copy itself lives in `landing-status.ts`,
  * where the booking-resolved wording is derived — one list, two renderings.
  *
- * Mechanism, never adjective: "payment held by Stripe until the event", not
+ * Mechanism, never adjective: "payment held until the event", not
  * "secure and reliable". This section does the work the stats band would have
  * done, which is why there is no stats band.
  */
@@ -126,11 +126,10 @@ const VENDOR_STEPS = [
 /**
  * Where the closing band's two controls send a vendor: `/for-vendors`, which
  * states what a vendor keeps and when they are paid *before* asking them to
- * sign up. The headline CTA opens the page and the payouts link opens its
- * second section — one destination, so the two controls never disagree.
+ * sign up. Both the headline CTA and the payouts link open the page from
+ * the top — one destination, so the two controls never disagree.
  */
 const VENDOR_ENTRY_PATH = FOR_VENDORS_PATH;
-const VENDOR_PAYOUTS_PATH = `${FOR_VENDORS_PATH}#${FOR_VENDORS_PAYOUTS_ANCHOR}`;
 
 const DESCRIPTION = BRAND_DESCRIPTION;
 
@@ -803,9 +802,9 @@ export default async function HomePage(): Promise<React.ReactElement> {
               </div>
 
               {/*
-                Both controls, one destination — see `VENDOR_ENTRY_PATH`; the
-                payouts link lands on that page's second section. The
-                link comes first so the button is the outermost element in the
+                Both controls, one destination — see `VENDOR_ENTRY_PATH`, opened
+                from the top: the page's hero already states the payout fact.
+                The link comes first so the button is the outermost element in the
                 band and the strongest control sits at the page's gutter. The
                 button is the cream fill the frame draws rather than clay: clay
                 on this ink would be the largest clay area on the site and would
@@ -813,7 +812,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
               */}
               <div className="flex flex-none flex-wrap items-center gap-5 sm:pb-0.75">
                 <Link
-                  href={VENDOR_PAYOUTS_PATH}
+                  href={VENDOR_ENTRY_PATH}
                   className="text-base font-semibold text-stone-50 underline-offset-4 transition-colors duration-(--duration-fast) hover:underline"
                 >
                   See how payouts work
