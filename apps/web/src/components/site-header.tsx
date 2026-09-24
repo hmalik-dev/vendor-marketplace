@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SessionSync } from '@/components/auth/session-sync';
 import { Show } from '@/components/auth/show';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { AccountMenu } from '@/components/account-menu';
@@ -210,6 +211,7 @@ export async function SiteHeader(): Promise<React.ReactElement> {
           </Show>
 
           <Show when="signed-in">
+            <SessionSync />
             {/*
               Nav links, like "Sign in" above — frame `02` draws both in
               `stone-700` at 500, and ghost's `clay-500` is for tertiary

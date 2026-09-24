@@ -63,6 +63,15 @@ vi.mock('@/components/messaging/notification-bell', () => ({
 }));
 
 /*
+ * The cross-tab sign-out listener and focus probe (VEN-699) are
+ * `session-sync.test.tsx`'s; the header's job is to mount them for a signed-in
+ * visitor and for nobody else, so it is stubbed to whether it rendered.
+ */
+vi.mock('@/components/auth/session-sync', () => ({
+  SessionSync: () => <span data-testid="session-sync" />,
+}));
+
+/*
  * The `Messages` link asks the API whether any thread is unread (VEN-706).
  */
 const apiCall = vi.fn();
@@ -221,6 +230,17 @@ describe('SiteHeader', () => {
     const landing = render(await SiteHeader());
     expect(landing.queryByTestId('header-query')).toBeNull();
     expect(landing.getByRole('link', { name: 'Browse' })).toBeDefined();
+  });
+
+  it('mounts the session listener for a signed-in visitor and never for a signed-out one', async () => {
+    authState = 'signed-out';
+    const signedOut = render(await SiteHeader());
+    expect(screen.queryAllByTestId('session-sync')).toHaveLength(0);
+    signedOut.unmount();
+
+    authState = 'signed-in';
+    render(await SiteHeader());
+    expect(screen.getAllByTestId('session-sync')).toHaveLength(1);
   });
 
   it('hides the marketing nav from a signed-in visitor', async () => {

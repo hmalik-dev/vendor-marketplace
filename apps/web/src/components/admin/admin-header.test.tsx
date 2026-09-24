@@ -4,7 +4,20 @@ import { AdminHeader } from './admin-header';
 
 afterEach(cleanup);
 
+// The listener is `session-sync.test.tsx`'s (VEN-699); here only that it is mounted.
+vi.mock('@/components/auth/session-sync', () => ({
+  SessionSync: () => <span data-testid="session-sync" />,
+}));
+
 const EMAIL = 'admin+auth_test@example.com';
+
+describe('AdminHeader and a sign-out in another tab', () => {
+  it('mounts the session listener, since it replaces the site header on /admin', () => {
+    render(<AdminHeader email={EMAIL} name="Admin" />);
+
+    expect(screen.getAllByTestId('session-sync')).toHaveLength(1);
+  });
+});
 
 /*
  * jsdom performs no layout, so none of this measures a width — the 390px
