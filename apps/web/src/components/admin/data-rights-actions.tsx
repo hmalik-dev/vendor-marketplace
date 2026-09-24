@@ -118,6 +118,7 @@ export function DataRightsActions({
   const [refreshing, startRefresh] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [stepUpNeeded, setStepUpNeeded] = useState(false);
+  const [exportStepUpNeeded, setExportStepUpNeeded] = useState(false);
   /*
    * Set once a Finish came back with nothing left owed, so the note goes at once.
    * `router.refresh()` below reconciles it with the server, but a browser pass
@@ -169,7 +170,16 @@ export function DataRightsActions({
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(href), 0);
+      setExportStepUpNeeded(false);
     } catch (failure) {
+      /* The export is an irreversible hand-over (VEN-684): ask for the code, then retry this press. */
+      if (failure instanceof ApiClientError && failure.code === ERROR_CODES.STEP_UP_REQUIRED) {
+        setExportStepUpNeeded(true);
+        return;
+      }
+
+      /* The code was spent: a refusal now (the ceiling, say) is not one more code's to fix. */
+      setExportStepUpNeeded(false);
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
       setBusy(false);
@@ -262,8 +272,15 @@ export function DataRightsActions({
         </Button>
         <p className={CONSEQUENCE}>
           Downloads everything held about this account as one file, to send to the person who asked.
-          Nothing on the account changes.
+          Nothing on the account changes. Asks for an emailed code first.
         </p>
+        {exportStepUpNeeded ? (
+          <StepUpPanel
+            lead="This hands over everything held about this person, so confirm it is you first."
+            onVerified={exportRecord}
+            onCancel={() => setExportStepUpNeeded(false)}
+          />
+        ) : null}
       </div>
 
       {unwindPending > 0 && !finished && (isBanned || closedAt) ? (
