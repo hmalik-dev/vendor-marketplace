@@ -171,11 +171,17 @@ describe('HomePage', () => {
 
     expect(screen.queryByText(/^or jump\b/i)).toBeNull();
 
-    const hero = container.querySelector('h1')?.closest('section');
+    // The hero is the block that holds the headline and stops short of the
+    // category section, which shares its outer <section>.
+    const cards = container.querySelector('#categories-heading')?.closest('section');
+    let hero = container.querySelector('h1');
+    while (hero?.parentElement && !hero.parentElement.contains(cards ?? null)) {
+      hero = hero.parentElement;
+    }
     expect(hero).not.toBeNull();
     expect(hero!.querySelectorAll('a[href^="/search?category="]')).toHaveLength(0);
     // The cards below the hero are the one route to a category from the page.
-    expect(container.querySelectorAll('a[href^="/search?category="]').length).toBeGreaterThan(0);
+    expect(cards!.querySelectorAll('a[href^="/search?category="]')).toHaveLength(6);
   });
 
   it('features the six categories the frame draws, in displayOrder', async () => {
