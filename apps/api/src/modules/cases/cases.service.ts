@@ -345,8 +345,8 @@ function describeHoldRefusal(target: DisputedBookingProjection): string {
     target.vendorPayoutCents > 0
   ) {
     return (
-      'The booking is cancelled, so the payout was not frozen, but the vendor’s remaining share ' +
-      'is held by this case. It is released only once the card network rules in the platform’s favour.'
+      "The booking is cancelled, so the payout was not frozen, but the vendor's remaining share " +
+      "is held by this case. It is released only once the card network rules in the platform's favour."
     );
   }
 
@@ -808,8 +808,8 @@ export async function resolveCase(
   ) {
     throw conflict(
       state.networkOutcome === 'lost'
-        ? 'The card network ruled against the platform and has already taken this payment back, so the vendor’s remaining share cannot be paid out as well.'
-        : 'This case holds the vendor’s remaining share while the chargeback is with the card network. Close it once the network has ruled in the platform’s favour.',
+        ? "The card network ruled against the platform and has already taken this payment back, so the vendor's remaining share cannot be paid out as well."
+        : "This case holds the vendor's remaining share while the chargeback is with the card network. Close it once the network has ruled in the platform's favour.",
     );
   }
 
