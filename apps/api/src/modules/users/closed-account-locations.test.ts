@@ -11,6 +11,7 @@ import {
 import { CLOSED_ACCOUNT_PLACEHOLDER } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { confirmBooking } from '../payments/payments.dao.js';
 import { retireUserByAuthId } from './users.dao.js';
 
 /**
@@ -25,7 +26,7 @@ const EVENT_DATE = '2020-06-06';
 
 const BACKFILL = readFileSync(
   new URL(
-    '../../../../../packages/db/drizzle/0097_scrub_closed_account_locations_and_free_text.sql',
+    '../../../../../packages/db/drizzle/0098_scrub_closed_account_locations_and_free_text.sql',
     import.meta.url,
   ),
   'utf8',
@@ -131,6 +132,7 @@ async function state() {
   return {
     profile: await db
       .select({
+        address: vendorProfiles.address,
         latitude: vendorProfiles.latitude,
         longitude: vendorProfiles.longitude,
         bio: vendorProfiles.bio,
@@ -175,7 +177,7 @@ describe('closing an account (VEN-687)', () => {
     await retireUserByAuthId(harness.database.db, 'auth_ada');
 
     expect(await state()).toEqual({
-      profile: [{ latitude: null, longitude: null, bio: null, tagline: null }],
+      profile: [{ address: null, latitude: null, longitude: null, bio: null, tagline: null }],
       ...SCRUBBED_PARTY,
       applications: [{ businessName: null, city: null, message: null }],
       cases: [{ message: CLOSED_ACCOUNT_PLACEHOLDER }],
@@ -193,6 +195,7 @@ describe('closing an account (VEN-687)', () => {
     expect(after.bookings).toEqual(SCRUBBED_PARTY.bookings);
     expect(after.profile).toEqual([
       {
+        address: HOME,
         latitude: '30.26715000',
         longitude: '-97.74306000',
         bio: 'I run events out of my home studio.',
@@ -224,43 +227,77 @@ describe('closing an account (VEN-687)', () => {
 });
 
 describe('the backfill for accounts closed before VEN-687', () => {
-  it('cleans them, and a second run changes nothing', async () => {
-    const { vendorUserId } = await seed();
-    await harness.database.db
+  /** The closure as an account closed before this ticket left it: tombstone address, nothing else. */
+  async function closeEarlier(userId: string): Promise<void> {
+    const { db } = harness.database;
+    await db
       .update(users)
-      .set({ deletedAt: sql`now()`, email: `closed+${vendorUserId}@invalid` })
-      .where(eq(users.id, vendorUserId));
-    await harness.database.db
-      .update(supportCases)
-      .set({ senderEmail: `closed+${vendorUserId}@invalid` });
+      .set({ deletedAt: sql`now()`, email: `closed+${userId}@invalid` })
+      .where(eq(users.id, userId));
+    await db.update(supportCases).set({ senderEmail: `closed+${userId}@invalid` });
+  }
+
+  const untouchedProfile = {
+    address: HOME,
+    latitude: '30.26715000',
+    longitude: '-97.74306000',
+    bio: 'I run events out of my home studio.',
+    tagline: 'Home-grown florals',
+  };
+  const untouchedApplication = {
+    businessName: 'Ada Events',
+    city: 'Austin',
+    message: 'I work from home at 12 Harbour Street.',
+  };
+
+  it.each([
+    {
+      who: 'vendor',
+      closes: (ids: { vendorUserId: string; customerId: string }) => ids.vendorUserId,
+      profile: [{ ...untouchedProfile, bio: null, tagline: null }],
+    },
+    {
+      who: 'customer',
+      closes: (ids: { vendorUserId: string; customerId: string }) => ids.customerId,
+      profile: [untouchedProfile],
+    },
+  ])('cleans a closed $who, and a second run changes nothing', async ({ closes, profile }) => {
+    const ids = await seed();
+    const { db } = harness.database;
+    await closeEarlier(closes(ids));
+    if (closes(ids) === ids.customerId) {
+      // The vendor's own case is a live sender's: it must survive.
+      await db
+        .update(supportCases)
+        .set({ senderEmail: VENDOR_EMAIL, message: 'My address is 12 Harbour Street.' });
+    }
 
     await runBackfill();
 
     const expected = {
-      profile: [{ latitude: '30.26715000', longitude: '-97.74306000', bio: null, tagline: null }],
+      profile,
       ...SCRUBBED_PARTY,
-      applications: [
+      applications: [untouchedApplication],
+      cases: [
         {
-          businessName: 'Ada Events',
-          city: 'Austin',
-          message: 'I work from home at 12 Harbour Street.',
+          message:
+            closes(ids) === ids.customerId
+              ? 'My address is 12 Harbour Street.'
+              : CLOSED_ACCOUNT_PLACEHOLDER,
         },
       ],
-      cases: [{ message: CLOSED_ACCOUNT_PLACEHOLDER }],
     };
     expect(await state()).toEqual(expected);
 
-    const [before] = await harness.database.db
+    const [before] = await db
       .select({ updatedAt: bookingRequests.updatedAt })
       .from(bookingRequests);
     await runBackfill();
 
     expect(await state()).toEqual(expected);
-    expect(
-      await harness.database.db
-        .select({ updatedAt: bookingRequests.updatedAt })
-        .from(bookingRequests),
-    ).toEqual([before]);
+    expect(await db.select({ updatedAt: bookingRequests.updatedAt }).from(bookingRequests)).toEqual(
+      [before],
+    );
   });
 
   it('leaves live accounts alone', async () => {
@@ -272,11 +309,39 @@ describe('the backfill for accounts closed before VEN-687', () => {
 
     expect(after.requests).toEqual([{ eventLocation: HOME, customDetails: DETAILS }]);
     expect(after.bookings).toEqual([{ eventLocation: HOME }]);
-    expect(after.profile[0]?.bio).toBe('I run events out of my home studio.');
+    expect(after.profile).toEqual([untouchedProfile]);
+    expect(after.cases).toEqual([{ message: 'My address is 12 Harbour Street.' }]);
   });
 
   it('writes the same placeholder the closure does', () => {
     expect(BACKFILL).toContain(`'${CLOSED_ACCOUNT_PLACEHOLDER}'`);
     expect(BACKFILL.replaceAll(`'${CLOSED_ACCOUNT_PLACEHOLDER}'`, '')).not.toMatch(/Removed when/);
+  });
+});
+
+describe('a booking confirmed as the customer closes (VEN-687)', () => {
+  it('takes the request’s location as the closure left it, not the one the caller read earlier', async () => {
+    const { customerId } = await seed();
+    const { db } = harness.database;
+    await retireUserByAuthId(db, 'auth_priya');
+    const [request] = await db.select().from(bookingRequests);
+    await db.delete(bookings);
+
+    const booking = await confirmBooking(db, {
+      booking: {
+        requestId: request!.id,
+        customerId,
+        vendorId: request!.vendorId,
+        eventDate: EVENT_DATE,
+        eventLocation: HOME,
+        totalAmountCents: 100_000,
+        platformFeeCents: 12_000,
+        vendorPayoutCents: 88_000,
+        status: 'confirmed',
+      },
+    });
+
+    expect(booking?.eventLocation).toBe(CLOSED_ACCOUNT_PLACEHOLDER);
+    expect(await state().then((rows) => rows.bookings)).toEqual(SCRUBBED_PARTY.bookings);
   });
 });

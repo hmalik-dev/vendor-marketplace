@@ -1959,6 +1959,6 @@ export const VENDOR_PAYMENTS_RESUME_PATH = `${VENDOR_PAYMENTS_PATH}?resume=1`;
  * someone lives or what they wrote do not. Stored, not derived, so every
  * surface that prints the column prints this and none renders a blank.
  *
- * `packages/db/drizzle/0097_*.sql` repeats the literal, pinned by a test.
+ * `packages/db/drizzle/0098_*.sql` repeats the literal, pinned by a test.
  */
 export const CLOSED_ACCOUNT_PLACEHOLDER = 'Removed when the account was closed';
