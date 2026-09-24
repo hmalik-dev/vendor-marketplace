@@ -128,3 +128,57 @@ export const IMAGE_OPTIMIZER_PATTERN = /\/_next\/image\?/;
 export async function keepOffTheImageOptimizer(context) {
   await context.route(IMAGE_OPTIMIZER_PATTERN, (route) => route.abort());
 }
+
+/**
+ * How many other sessions an account may hold before a run ends the stalest of
+ * them (VEN-714). Every `pnpm e2e:auth` and `db:seed:e2e` signs in afresh and
+ * the persistent accounts are shared by every lane, so their session count only
+ * grows; the provider lists 100 at most, oldest first. Ending *all* the others
+ * would sign out the lanes that hold a session in their own `.auth/`, so only
+ * the least recently active go, and only a few per run: `revoke-session` is
+ * budgeted at five per account per ten minutes, and a run adds fewer than that.
+ */
+export const MAX_OTHER_SESSIONS = 20;
+export const MAX_PRUNED_PER_RUN = 3;
+
+/**
+ * The ids of the stalest other sessions in the proxy's `list-sessions` answer
+ * (`{ sessions: [{ id, current, lastActiveAt }] }`) beyond `MAX_OTHER_SESSIONS`,
+ * at most `limit` of them. An answer that is not a list names none: pruning is
+ * housekeeping and never fails a sign-in.
+ */
+export function sessionsToPrune(body, max = MAX_OTHER_SESSIONS, limit = MAX_PRUNED_PER_RUN) {
+  const sessions = Array.isArray(body?.sessions) ? body.sessions : [];
+  const others = sessions.filter(
+    (session) => session?.current !== true && typeof session?.id === 'string',
+  );
+  const stalestFirst = [...others].sort((a, b) =>
+    String(a.lastActiveAt ?? '').localeCompare(String(b.lastActiveAt ?? '')),
+  );
+
+  return stalestFirst.slice(0, Math.min(Math.max(others.length - max, 0), limit)).map((s) => s.id);
+}
+
+/**
+ * Ends the stalest other sessions when the account holds too many, with the
+ * session the browser context just signed in with (`request` is Playwright's
+ * `context.request`). Returns how many were ended; never throws.
+ */
+export async function pruneSessions(request, base) {
+  let ended = 0;
+  try {
+    const listed = await request.get(`${base}/api/auth/list-sessions`);
+    if (!listed.ok()) return 0;
+    for (const id of sessionsToPrune(await listed.json().catch(() => null))) {
+      const revoked = await request.post(`${base}/api/auth/revoke-session`, {
+        data: { id },
+        headers: { origin: base },
+      });
+      if (!revoked.ok()) break;
+      ended += 1;
+    }
+  } catch {
+    // Housekeeping: whatever was ended stays ended, and the next run tries again.
+  }
+  return ended;
+}
