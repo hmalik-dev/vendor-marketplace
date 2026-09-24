@@ -105,7 +105,12 @@ first. Both branches were empty of user rows and both held 0000–0009.
       (`proxy-allowlist.ts`), but a call made straight to the Neon Auth URL
       never passes the proxy; a deletion there is only caught by the daily
       reconcile, and an email change there bypasses the lowercase rule until
-      the reconcile mirrors it.
+      the reconcile mirrors it. Probed against the dev auth branch on
+      2026-09-24 (VEN-679): both `change-email` and `email-otp/request-email-change`
+      answer 400 "disabled", so the direct call is already off there. Neon Auth
+      must have a verified email change switched on before the in-app email
+      change can ship; that switch is a console action, and the in-app change
+      is blocked on it. Check staging and production the same way.
 - [ ] **Release sender check** (VEN-609). On both `staging` and `production`,
       add the variable `EMAIL_FROM` (the same value Railway's API has) and
       the secret `RESEND_API_KEY`, a full-access Resend key so it can list
