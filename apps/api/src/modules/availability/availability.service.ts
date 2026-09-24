@@ -220,8 +220,12 @@ export async function setOwnAvailability(
       );
     }
 
+    // A date already stored `blocked` reads blocked, not pending, so re-blocking it changes nothing.
+    const alreadyBlocked = new Set(
+      existing.filter((row) => row.status === 'blocked').map((row) => row.date),
+    );
     const blockDates = [...byDate.values()]
-      .filter((entry) => entry.status === 'blocked')
+      .filter((entry) => entry.status === 'blocked' && !alreadyBlocked.has(entry.date))
       .map((entry) => entry.date)
       .sort();
 
@@ -241,8 +245,8 @@ export async function setOwnAvailability(
       if (pending.length > 0) {
         throw conflict(
           pending.length === 1
-            ? `${pending[0]} has a request waiting on your answer, so it cannot be blocked. Reply to the request first.`
-            : `${pending.length} of those dates have a request waiting on your answer, so they cannot be blocked. Reply to those requests first.`,
+            ? `${pending[0]} has an open request, so it cannot be blocked until that request is answered or lapses.`
+            : `${pending.length} of those dates have an open request, so they cannot be blocked until those requests are answered or lapse.`,
           { pendingDates: pending },
         );
       }

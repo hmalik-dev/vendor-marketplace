@@ -310,6 +310,43 @@ describe('/vendor/availability', () => {
       expect(await calendar()).toEqual([{ date: TOMORROW, status: 'blocked' }]);
     });
 
+    it('lets the block through once the request has lapsed unread', async () => {
+      const requestId = await requestOn(TOMORROW);
+
+      expect((await put(VENDOR, [{ date: TOMORROW, status: 'blocked' }])).statusCode).toBe(409);
+
+      // Expiry is lazy: the row still reads `pending`, past its deadline.
+      await harness.database.db
+        .update(bookingRequests)
+        .set({ expiresAt: addDays(NOW, -1) })
+        .where(eq(bookingRequests.id, requestId));
+
+      const released = await put(VENDOR, [{ date: TOMORROW, status: 'blocked' }]);
+      expect(released.statusCode).toBe(200);
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'blocked' }]);
+    });
+
+    it('does not refuse a drag over a date the vendor had already blocked', async () => {
+      await requestOn(TOMORROW);
+      const [profile] = await harness.database.db
+        .select({ id: vendorProfiles.id })
+        .from(vendorProfiles);
+      await harness.database.db
+        .insert(availability)
+        .values({ vendorId: profile!.id, date: TOMORROW, status: 'blocked' });
+
+      const response = await put(VENDOR, [
+        { date: TOMORROW, status: 'blocked' },
+        { date: AFTER_TOMORROW, status: 'blocked' },
+      ]);
+
+      expect(response.statusCode).toBe(200);
+      expect(await calendar()).toEqual([
+        { date: TOMORROW, status: 'blocked' },
+        { date: AFTER_TOMORROW, status: 'blocked' },
+      ]);
+    });
+
     async function calendar(): Promise<{ date: string; status: string }[]> {
       const response = await harness.app.inject({
         method: 'GET',
