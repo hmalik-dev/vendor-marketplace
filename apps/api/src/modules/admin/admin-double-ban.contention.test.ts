@@ -1,4 +1,4 @@
-import { adminActions, users } from '@vendor-marketplace/db/schema';
+import { adminActions } from '@vendor-marketplace/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
