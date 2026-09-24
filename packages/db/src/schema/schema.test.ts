@@ -23,6 +23,7 @@ import {
 
 const EXPECTED_TABLES = [
   'admin_actions',
+  'admin_alerts',
   'availability',
   'booking_events',
   'booking_requests',
@@ -34,7 +35,6 @@ const EXPECTED_TABLES = [
   'legal_acceptances',
   'messages',
   'notifications',
-  'operator_alerts',
   'platform_settings',
   'portfolio_items',
   'rate_limit_counters',

@@ -374,7 +374,7 @@ describe('/users/me', () => {
         await signIn(authId);
         // Only the admin grant path may change a role; the test opens it for its own transaction.
         await harness.database.db.transaction(async (tx) => {
-          await tx.execute(sql`select set_config('app.operator_role_grant', 'on', true)`);
+          await tx.execute(sql`select set_config('app.admin_role_grant', 'on', true)`);
           await tx.update(users).set({ role }).where(eq(users.authUserId, authId));
         });
 

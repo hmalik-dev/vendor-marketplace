@@ -145,7 +145,7 @@ describe('admin grant and revoke', () => {
     const rows = await auditRows(customerId);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      action: 'operator_granted',
+      action: 'admin_granted',
       actorId: adminId,
       subjectType: 'user',
       subjectId: customerId,
@@ -189,8 +189,8 @@ describe('admin grant and revoke', () => {
     expect(response.json()).toEqual({ userId: vendorId, changed: true });
     expect(await roleOf(VENDOR)).toBe('vendor');
     expect((await auditRows(vendorId)).map((row) => row.action).sort()).toEqual([
-      'operator_granted',
-      'operator_revoked',
+      'admin_granted',
+      'admin_revoked',
     ]);
 
     const again = await revoke(ADMIN, vendorId);
