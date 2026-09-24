@@ -78,6 +78,16 @@ a shared CGNAT address, and the "reset instead" escape is itself an any-caller
 5/10-min address budget. Fix shape: /64 caller keys + a hard address ceiling that
 binds everyone; the canonical form is OWASP device cookies (trusted device exempt).
 
+**VEN-718 moved codes and mail onto the same shape** (`chargeRequest`, audit
+2026-09-24): per-route pair buckets, address budget binds a caller only once it has
+asked, ceiling 10x limit. For `email-otp/reset-password` (account takeover) the
+all-caller bound went 5 -> 50 guesses/10 min: 5 + one per fresh /64 or IPv4. Flagged;
+fix shape is a lower ceiling on the two code-check routes, mail routes may keep 10x.
+The "hard" ceiling is not hard under a burst: `chargeThrottle` is count-then-insert
+with no lock, and `chargeRequest` reads 3-4 buckets before recording and discards the
+record calls' results. No enumeration (request-reset still fixed 200, refusal is
+existence-independent); buckets are sha256'd, `*` as a caller only hurts the caller.
+
 Related: the request-reset path hides account existence with a fixed 200 and
 `after()`; its sibling `email-otp/reset-password` returns the upstream status
 verbatim, so existence can leak there instead. See [[fixed-response-sibling-leak]].

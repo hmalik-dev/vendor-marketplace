@@ -406,6 +406,23 @@ describe('reset and code requests per account address and caller (VEN-718)', () 
     expect(await ask('10.9.9.9', 1)).toEqual([true]);
   });
 
+  it('holds a code check to ten guesses per address however many callers ask', async () => {
+    for (let i = 0; i < 10; i++) await ask(`10.0.0.${i}`, 1, VERIFY);
+
+    expect(await ask('10.9.9.9', 1, VERIFY)).toEqual([true]);
+    expect(await ask('10.9.9.9', 1, ['email-otp', 'reset-password'])).toEqual([false]);
+  });
+
+  it('refuses a request whose own charge went over the ceiling, as a parallel burst would', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, i) =>
+        chargeRequest('owner@x.test', `10.1.0.${i}`, VERIFY, 1_000),
+      ),
+    );
+
+    expect(results.filter((refused) => !refused)).toHaveLength(10);
+  });
+
   it('counts an IPv6 /64 as one caller and forgives after ten minutes', async () => {
     for (let i = 1; i <= 5; i++)
       await chargeRequest('owner@x.test', `2001:db8::${i}`, RESET, 1_000);

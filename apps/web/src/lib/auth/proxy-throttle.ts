@@ -344,10 +344,17 @@ export async function recordSignInFailure(
  * a sign-in (`isSignInRefused`), but every request is a use of the budget, not
  * only a failure: a caller is refused when it spent its own budget for the
  * address, or the address budget is spent and it has already asked once itself,
- * or a hard ceiling of ten times the budget per address is spent by everyone.
+ * or a hard ceiling per address is spent by everyone: ten times the budget for mail, twice for
+ * a code check, where every extra caller is another guess at a six-digit code.
  * A stranger who spent the address budget therefore cannot stop the owner's
  * first request from another caller. A refused request records nothing.
  */
+/** Calls that check a six-digit code: past the address budget each fresh caller is another guess, so the ceiling stays low. */
+const CODE_CHECK_PATHS: ReadonlySet<string> = new Set([
+  'email-otp/verify-email',
+  'email-otp/reset-password',
+]);
+
 export async function chargeRequest(
   address: string,
   caller: string,
@@ -357,7 +364,7 @@ export async function chargeRequest(
   const route = path.join('/');
   const who = signInCaller(caller);
   const limit = addressLimit(path) ?? ADDRESS_LIMIT;
-  const ceiling = 10 * limit;
+  const ceiling = (CODE_CHECK_PATHS.has(route) ? 2 : 10) * limit;
 
   if (
     (await chargePair(route, address, who, limit, false, now)) ||
@@ -369,10 +376,12 @@ export async function chargeRequest(
   }
 
   await chargeAddress(address, path, now);
-  await chargePair(route, address, who, limit, true, now);
-  await chargePair(route, address, ALL_CALLERS, ceiling, true, now);
 
-  return false;
+  // The checks above are reads; a burst that passed them together is caught by the count of its own charge.
+  const own = await chargePair(route, address, who, limit, true, now);
+  const all = await chargePair(route, address, ALL_CALLERS, ceiling, true, now);
+
+  return own || all;
 }
 
 /** Test seam: forgets every recorded call. */
