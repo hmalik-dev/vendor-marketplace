@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { AccountMenu } from '@/components/account-menu';
 import { SessionSync } from '@/components/auth/session-sync';
-import { DASHBOARD_LABEL_BY_ROLE, DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { TierMarker } from '@/components/brand/tier-marker';
 
@@ -91,13 +90,7 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
           Logged in as {email}
         </span>
         <SessionSync />
-        <AccountMenu
-          name={name}
-          avatarUrl={null}
-          dashboardLabel={DASHBOARD_LABEL_BY_ROLE.admin}
-          dashboardHref={DASHBOARD_PATH_BY_ROLE.admin}
-          tone="dark"
-        />
+        <AccountMenu name={name} avatarUrl={null} role="admin" tone="dark" />
       </div>
     </header>
   );
