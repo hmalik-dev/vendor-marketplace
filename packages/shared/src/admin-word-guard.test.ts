@@ -61,7 +61,7 @@ const LEGACY_PATH_FILES: readonly string[] = [
 ];
 
 // Case-sensitive: the stored identifiers are lowercase and the env names uppercase,
-// so a renamed code name such as `OPERATOR_ALERT_KINDS` or `app.operatorAlerts` still fails.
+// so a renamed code name that merely starts like a stored identifier still fails.
 const TOKENS = new RegExp(PERSISTED_TOKENS.map(([pattern]) => pattern).join('|'), 'g');
 
 interface TrackedFile {
