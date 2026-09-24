@@ -4,14 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { PASSWORD_MIN_LENGTH } from '@vendor-marketplace/shared';
 import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
-import { ACCOUNT_SETTINGS_PATH } from '@/components/account-menu';
+import type { UserRole } from '@vendor-marketplace/shared';
+import { ACCOUNT_PASSWORD_PATH } from '@/components/account/settings-paths';
 import { AuthField } from '@/components/auth/auth-field';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { changePassword } from '@/lib/auth/auth-requests';
 import { signInPathReturningTo } from '@/lib/return-path';
-
-type Message = { status: 'failed' | 'informational'; text: string };
+import { DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
 
 /** Better Auth's own ceiling, refused here so it never reads as a wrong current password. */
 const MAX_LENGTH = 128;
@@ -37,16 +37,17 @@ function refusal(current: string, next: string, confirm: string): string | null 
  * The account settings page's password section (VEN-677): the current
  * password, a new one and its confirmation, in frame `12`'s field and button
  * vocabulary as `/reset-password` uses it. The proxy ends every other session
- * and keeps this one, so success is a banner here rather than a trip through
- * sign-in; `router.refresh()` re-renders the page on the fresh session.
+ * and keeps this one, so success is a trip to the role's home rather than
+ * through sign-in. No `router.refresh()` beside the push: the two race, and the
+ * destination is fetched with the fresh session cookie anyway.
  */
-export function ChangePasswordForm(): React.ReactElement {
+export function ChangePasswordForm({ role }: { role: UserRole }): React.ReactElement {
   const router = useRouter();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<Message | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -56,7 +57,7 @@ export function ChangePasswordForm(): React.ReactElement {
 
     const refused = refusal(current, next, confirm);
     if (refused !== null) {
-      setMessage({ status: 'failed', text: refused });
+      setMessage(refused);
       return;
     }
 
@@ -66,31 +67,23 @@ export function ChangePasswordForm(): React.ReactElement {
     setBusy(false);
 
     if (outcome === 'ok') {
-      setCurrent('');
-      setNext('');
-      setConfirm('');
-      setMessage({ status: 'informational', text: AUTH_COPY.changeDone });
-      router.refresh();
+      router.push(DASHBOARD_PATH_BY_ROLE[role]);
       return;
     }
 
     if (outcome === 'signedOut') {
-      router.push(signInPathReturningTo(ACCOUNT_SETTINGS_PATH));
+      router.push(signInPathReturningTo(ACCOUNT_PASSWORD_PATH));
       return;
     }
 
-    setMessage({ status: 'failed', text: failureCopy(outcome, AUTH_COPY.changeWrongCurrent) });
+    setMessage(failureCopy(outcome, AUTH_COPY.changeWrongCurrent));
   }
 
   return (
     <form onSubmit={submit} noValidate className="flex max-w-sm flex-col">
       {message ? (
-        <Banner
-          status={message.status}
-          role={message.status === 'failed' ? 'alert' : 'status'}
-          className="mb-4"
-        >
-          {message.text}
+        <Banner status="failed" role="alert" className="mb-4">
+          {message}
         </Banner>
       ) : null}
 

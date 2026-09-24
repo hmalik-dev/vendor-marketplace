@@ -93,6 +93,7 @@
 ## Input, output and logging
 
 - [URL params are validated in the nuqs hook](url-params-validated-in-the-nuqs-hook.md) — the hook is the boundary, not the screen
+- [Query-keyed literal maps need `Object.hasOwn`](query-keyed-literal-maps-need-hasown.md) — `?saved=__proto__` indexes `Object.prototype`; VEN-703 settings banner
 - [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — probe with the bucket-path base; `/_next/image`'s remote patterns are an anonymous fetcher and must derive from the storage env var; VEN-618 owner segment is a digest, raw id still accepted
 - [Every image-ref bypass is FIXED; the host is not](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — `https://evil.example/x.png` was never closed
 - [The image pipeline is one process-wide 2-slot queue](image-pipeline-is-one-process-wide-queue.md) — VEN-464: hand-off is sound, the unbounded FIFO of 12 MB buffers is the ceiling; WebP input audited clean (VEN-618)
