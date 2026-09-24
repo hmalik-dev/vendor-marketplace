@@ -520,6 +520,10 @@ export async function setUserBanned(
     const { profileUnpublished } = await context.db.transaction(async (tx) => {
       const result = await setBanned(tx, targetId, profile?.id ?? null, false, now);
 
+      if (!result) {
+        throw conflict('That account is not banned');
+      }
+
       await insertAdminAction(tx, {
         actorId,
         action: 'user_unbanned',
