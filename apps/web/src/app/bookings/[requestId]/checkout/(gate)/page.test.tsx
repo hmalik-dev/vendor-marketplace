@@ -14,7 +14,8 @@ vi.mock('next/navigation', () => ({
     throw new Error(`REDIRECT:${path}`);
   },
 }));
-vi.mock('@/lib/current-user', () => ({ requireRole: async () => undefined }));
+const requireRole = vi.fn(async () => undefined);
+vi.mock('@/lib/current-user', () => ({ requireRole: () => requireRole() }));
 vi.mock('@/lib/report-error', () => ({ reportSwallowedError: vi.fn() }));
 vi.mock('@/components/checkout/checkout-screen', () => ({ CheckoutScreen: () => null }));
 vi.mock('@/lib/customer-data', () => ({
@@ -28,6 +29,21 @@ const { default: CheckoutPage } = await import('./page');
 describe('CheckoutPage', () => {
   afterEach(() => {
     cleanup();
+    vi.clearAllMocks();
+  });
+
+  /*
+   * VEN-715: Next renders this page beside its layout, and opening checkout
+   * mints a payment intent. It must wait for the gate, so a role the gate turns
+   * away — a vendor or an admin — never reaches the payment call.
+   */
+  it('opens no checkout for a visitor the gate refuses', async () => {
+    requireRole.mockRejectedValueOnce(new Error('REDIRECT:/vendor/dashboard'));
+
+    await expect(
+      CheckoutPage({ params: Promise.resolve({ requestId: REQUEST_ID }) }),
+    ).rejects.toThrow('REDIRECT:/vendor/dashboard');
+    expect(openCheckout).not.toHaveBeenCalled();
   });
 
   /*

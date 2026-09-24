@@ -521,14 +521,26 @@ describe('the one report control the storefront still offers its own vendor', ()
  * (`lib/vendor-route.test.ts`), above the loading boundary, where they can still
  * be a status. The page draws a vendor it is given and answers nothing itself.
  */
-describe('a vendor the layout should have refused', () => {
-  it('is a bug rather than a 404 or a redirect the page could not send', async () => {
+describe('a vendor the layout refuses', () => {
+  /*
+   * Next renders the page beside its layout, so the page sees the same refusal
+   * — the 404 signal, not a plain error the server would report.
+   */
+  it('raises the gate’s not-found, not an error of its own', async () => {
     getPublicVendorProfile.mockResolvedValue(null);
 
     await expect(
       VendorProfilePage({ params: Promise.resolve({ slug: 'hostile-studio' }) }),
-    ).rejects.toThrow('Vendor vanished between its layout and its page');
-    expect(getVendorSlugSuccessor).not.toHaveBeenCalled();
+    ).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  it('raises the gate’s 308 for a slug the vendor gave up', async () => {
+    getPublicVendorProfile.mockResolvedValue(null);
+    getVendorSlugSuccessor.mockResolvedValue('moonlit-studio');
+
+    await expect(
+      VendorProfilePage({ params: Promise.resolve({ slug: 'hostile-studio' }) }),
+    ).rejects.toThrow('NEXT_REDIRECT 308 /vendors/moonlit-studio');
   });
 
   it('costs a live storefront no successor read', async () => {

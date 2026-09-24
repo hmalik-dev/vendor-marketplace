@@ -5,7 +5,8 @@ import {
   CheckoutUnavailable,
   type CheckoutUnavailableReason,
 } from '@/components/checkout/checkout-unavailable';
-import { acceptedRequestId, openCheckoutOnce, readBookingRequest } from '@/lib/booking-route';
+import { gateCheckout, readBookingRequest } from '@/lib/booking-route';
+import { openCheckout } from '@/lib/customer-data';
 import { reportSwallowedError } from '@/lib/report-error';
 
 export const metadata: Metadata = {
@@ -30,17 +31,18 @@ interface PageProps {
  */
 export default async function CheckoutPage({ params }: PageProps): Promise<React.ReactElement> {
   /*
-   * The customer gate, the 404 for an id that cannot exist or a request that
-   * does not (#387: every other failure is a screen below), and the redirect
-   * for an already-paid request live in `layout.tsx` beside this file, above the
-   * loading boundary (VEN-715). `openCheckoutOnce` is the layout's own call,
-   * cached, so the payment intent is opened once.
+   * The customer gate, the 404 for a request that does not exist (#387: every
+   * other failure is a screen below) and the redirect for an already-paid one
+   * are `layout.tsx`'s, above the loading boundary (VEN-715). This awaits the
+   * same per-request gate **before** opening checkout: opening it mints a
+   * payment intent, so it must never run for a visitor the gate refuses, nor
+   * from the layout, which a link prefetch renders.
    */
-  const requestId = await acceptedRequestId({ params });
-  const outcome = await openCheckoutOnce(requestId);
+  const requestId = await gateCheckout({ params });
+  const outcome = await openCheckout(requestId);
 
   if (outcome.state === 'not-found') {
-    throw new Error('Booking request vanished between its layout and its page');
+    throw new Error('Booking request vanished after the checkout gate read it');
   }
 
   return outcome.state === 'ready' ? (

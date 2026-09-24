@@ -43,8 +43,8 @@ describe('gateVendorSlug', () => {
     vi.clearAllMocks();
   });
 
-  it('lets a live storefront through without a successor read', async () => {
-    await expect(gateVendorSlug('sunlit-studio')).resolves.toBeUndefined();
+  it('returns a live storefront without a successor read', async () => {
+    await expect(gateVendorSlug('sunlit-studio')).resolves.toEqual({ slug: 'sunlit-studio' });
     expect(getVendorSlugSuccessor).not.toHaveBeenCalled();
   });
 

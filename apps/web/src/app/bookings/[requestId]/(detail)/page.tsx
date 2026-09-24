@@ -4,7 +4,7 @@ import { pageTitle } from '@vendor-marketplace/shared';
 import { AcceptedRequest } from '@/components/bookings/accepted-request';
 import { QuoteReview } from '@/components/bookings/quote-review';
 import { ReportProblem } from '@/components/bookings/report-problem';
-import { acceptedRequest, acceptedRequestId, readBookingForRequest } from '@/lib/booking-route';
+import { gateBookingRequest, readBookingForRequest } from '@/lib/booking-route';
 
 export const metadata: Metadata = {
   title: pageTitle('Your request'),
@@ -36,12 +36,11 @@ export default async function BookingRequestPage({
   params,
 }: PageProps): Promise<React.ReactElement> {
   /*
-   * The 404 for a malformed, missing or not-yours id and the customer gate live
-   * in `layout.tsx` beside this file, above the loading boundary (VEN-715); the
-   * request is read back from its per-request cache.
+   * The customer gate and the 404 for a malformed, missing or not-yours id are
+   * `layout.tsx`'s, above the loading boundary (VEN-715). This awaits the same
+   * per-request gate, so nothing below runs for a visitor it refuses.
    */
-  const requestId = await acceptedRequestId({ params });
-  const request = await acceptedRequest(requestId);
+  const { requestId, request } = await gateBookingRequest({ params });
 
   /*
    * Only for a request that has been accepted: every other status has nothing

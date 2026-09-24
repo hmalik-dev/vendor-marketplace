@@ -20,6 +20,7 @@ import { ReviewsPane } from '@/components/vendors/profile/reviews-pane';
 import { siteOrigin } from '@/config/env';
 import { SITE_OPEN_GRAPH } from '@/lib/canonical';
 import { readRoleForChrome } from '@/lib/current-user';
+import { gateVendorSlug } from '@/lib/vendor-route';
 import {
   getPublicVendorAvailability,
   getPublicVendorProfile,
@@ -158,11 +159,12 @@ export default async function VendorProfilePage({
     two.
 
     `Promise.all` rather than starting them and awaiting later, so that every
-    rejection has a handler. The profile itself is already resolved: `layout.tsx`
-    read it to decide the 404, and `getPublicVendorProfile` is `cache()`d.
+    rejection has a handler. The profile comes from `gateVendorSlug`, the gate
+    `layout.tsx` runs above the loading boundary (VEN-715): a missing, unpublished,
+    deleted or renamed slug is its 404 or 308, raised here as the same refusal.
   */
   const [vendor, availability, reviews, viewerRole] = await Promise.all([
-    getPublicVendorProfile(slug),
+    gateVendorSlug(slug),
     getPublicVendorAvailability(slug),
     getPublicVendorReviews(slug),
     /*
@@ -180,15 +182,6 @@ export default async function VendorProfilePage({
      */
     readRoleForChrome(),
   ]);
-
-  /*
-   * Missing, unpublished, deleted and renamed slugs are answered by `layout.tsx`
-   * beside this file, above the loading boundary (VEN-715), so a `null` here can
-   * only be a bug.
-   */
-  if (!vendor) {
-    throw new Error('Vendor vanished between its layout and its page');
-  }
 
   /*
    * Whether the reader is this storefront's own vendor (#458).

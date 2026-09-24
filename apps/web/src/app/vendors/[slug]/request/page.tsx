@@ -8,6 +8,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
 import { parseGuestCountParam } from '@/lib/guest-count';
+import { gateVendorSlug } from '@/lib/vendor-route';
 import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
 
 interface PageProps {
@@ -41,16 +42,15 @@ export default async function BookingRequestPage({
 }: PageProps): Promise<React.ReactElement> {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
 
-  const vendor = await getPublicVendorProfile(slug);
-
   /*
-   * The 404, the 308 for a renamed slug and the customer gate are answered by
-   * `layout.tsx` beside this file, above the loading boundary (VEN-715), so a
-   * `null` here can only be a bug.
+   * The 404, the 308 for a renamed slug and the customer gate are
+   * `layout.tsx`'s, above the loading boundary (VEN-715); the vendor comes from
+   * the same per-request gate, which raises the layout's own refusal here.
    */
-  if (!vendor) {
-    throw new Error('Vendor vanished between its layout and its page');
-  }
+  const [vendor, availability] = await Promise.all([
+    gateVendorSlug(slug),
+    getPublicVendorAvailability(slug),
+  ]);
 
   /*
    * The server's UTC day. It is only a seed: `BookingRequestScreen` re-anchors
@@ -58,7 +58,6 @@ export default async function BookingRequestPage({
    * component has no way to know it. #409.
    */
   const serverToday = toDateString(new Date());
-  const availability = await getPublicVendorAvailability(slug);
 
   const calendar: Record<string, AvailabilityStatus> = {};
   for (const entry of availability) {

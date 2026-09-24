@@ -57,7 +57,10 @@ describe('the /bookings/[requestId] gates', () => {
 
   describe('gateBookingRequest', () => {
     it('lets the customer’s own request through and returns its id', async () => {
-      await expect(gateBookingRequest(route(REQUEST_ID))).resolves.toBe(REQUEST_ID);
+      await expect(gateBookingRequest(route(REQUEST_ID))).resolves.toMatchObject({
+        requestId: REQUEST_ID,
+        request: { id: REQUEST_ID },
+      });
       expect(requireRole).toHaveBeenCalledWith('customer');
     });
 
@@ -90,7 +93,10 @@ describe('the /bookings/[requestId] gates', () => {
     it('lets a paid request through', async () => {
       getBookingForRequest.mockResolvedValue({ id: 'booking-1' });
 
-      await expect(gateConfirmedBooking(route(REQUEST_ID))).resolves.toBe(REQUEST_ID);
+      await expect(gateConfirmedBooking(route(REQUEST_ID))).resolves.toMatchObject({
+        requestId: REQUEST_ID,
+        booking: { id: 'booking-1' },
+      });
     });
 
     it('sends an unpaid request back to checkout', async () => {
@@ -108,37 +114,39 @@ describe('the /bookings/[requestId] gates', () => {
   });
 
   describe('gateCheckout', () => {
-    it('opens checkout for an unpaid request', async () => {
+    it('lets an unpaid request through, and opens nothing itself', async () => {
       await expect(gateCheckout(route(REQUEST_ID))).resolves.toBe(REQUEST_ID);
-      expect(openCheckout).toHaveBeenCalledWith(REQUEST_ID);
+      expect(openCheckout).not.toHaveBeenCalled();
     });
 
-    it('sends an already-paid request to its confirmation without opening checkout', async () => {
+    it('sends an already-paid request to its confirmation', async () => {
       getBookingForRequest.mockResolvedValue({ id: 'booking-1' });
 
       expect(await outcome(gateCheckout(route(REQUEST_ID)))).toBe(
         `NEXT_REDIRECT;replace;/bookings/${REQUEST_ID}/confirmed;307;`,
       );
-      expect(openCheckout).not.toHaveBeenCalled();
+      expect(getOwnBookingRequest).not.toHaveBeenCalled();
     });
 
-    it('is a 404 for a request checkout says does not exist', async () => {
-      openCheckout.mockResolvedValue({ state: 'not-found' });
+    it('is a 404 for a request that does not exist', async () => {
+      getOwnBookingRequest.mockResolvedValue(null);
 
       expect(await outcome(gateCheckout(route(REQUEST_ID)))).toBe(NOT_FOUND);
     });
 
-    it.each(['not-payable', 'vendor-paused', 'failed', 'over-cap'])(
-      'is not a 404 for %s: the page draws that screen (#387)',
-      async (state) => {
-        openCheckout.mockResolvedValue({ state });
-
-        await expect(gateCheckout(route(REQUEST_ID))).resolves.toBe(REQUEST_ID);
-      },
-    );
-
     it('is a 404 for a malformed id, before any read', async () => {
       expect(await outcome(gateCheckout(route('nope')))).toBe(NOT_FOUND);
+      expect(getBookingForRequest).not.toHaveBeenCalled();
+    });
+
+    it('sends a visitor the session gate refuses away before reading anything', async () => {
+      requireRole.mockRejectedValue(
+        Object.assign(new Error('NEXT_REDIRECT'), { digest: 'NEXT_REDIRECT;replace;/admin;307;' }),
+      );
+
+      expect(await outcome(gateCheckout(route(REQUEST_ID)))).toBe(
+        'NEXT_REDIRECT;replace;/admin;307;',
+      );
       expect(getBookingForRequest).not.toHaveBeenCalled();
     });
   });

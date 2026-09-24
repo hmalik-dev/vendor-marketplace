@@ -3,8 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getPublicVendorProfile = vi.fn();
 const getPublicVendorAvailability = vi.fn();
+const getVendorSlugSuccessor = vi.fn();
 
+vi.mock('next/navigation', () => ({
+  notFound: () => {
+    throw new Error('NEXT_NOT_FOUND');
+  },
+  permanentRedirect: (path: string) => {
+    throw new Error(`NEXT_REDIRECT 308 ${path}`);
+  },
+}));
 vi.mock('@/lib/vendor-data', () => ({
+  getVendorSlugSuccessor: (slug: string) => getVendorSlugSuccessor(slug),
   getPublicVendorProfile: (slug: string) => getPublicVendorProfile(slug),
   getPublicVendorAvailability: (slug: string) => getPublicVendorAvailability(slug),
 }));
@@ -52,15 +62,15 @@ describe('BookingRequestPage', () => {
     expect(getPublicVendorAvailability).toHaveBeenCalledWith('sunlit-studio');
   });
 
-  it('is a bug, not a 404, when the layout let a missing vendor through', async () => {
+  it('raises the gate’s not-found beside the layout, not an error of its own', async () => {
     getPublicVendorProfile.mockResolvedValue(null);
+    getVendorSlugSuccessor.mockResolvedValue(null);
 
     await expect(
       BookingRequestPage({
         params: Promise.resolve({ slug: 'gone' }),
         searchParams: Promise.resolve({}),
       }),
-    ).rejects.toThrow('Vendor vanished between its layout and its page');
-    expect(getPublicVendorAvailability).not.toHaveBeenCalled();
+    ).rejects.toThrow('NEXT_NOT_FOUND');
   });
 });
