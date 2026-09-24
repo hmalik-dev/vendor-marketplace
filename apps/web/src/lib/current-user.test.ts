@@ -793,6 +793,13 @@ describe('the name gate', () => {
     );
   });
 
+  it('leaves /for-vendors open to a nameless customer', async () => {
+    requestPath = '/for-vendors';
+
+    await expect(redirectVendorToDashboard()).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
   it('returns a named customer untouched', async () => {
     requestPath = '/bookings';
     apiRequest.mockResolvedValue(CUSTOMER);
