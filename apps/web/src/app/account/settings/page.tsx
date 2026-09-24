@@ -37,7 +37,11 @@ export default async function AccountSettingsPage({
 }): Promise<React.ReactElement> {
   const user = await requireCurrentUser(ACCOUNT_SETTINGS_PATH);
   const saved = (await searchParams)[SETTINGS_SAVED_PARAM];
-  const confirmation = typeof saved === 'string' ? SETTINGS_SAVED_COPY[saved] : undefined;
+  // `hasOwn`: a bare lookup would answer `?saved=__proto__` with an object React cannot render.
+  const confirmation =
+    typeof saved === 'string' && Object.hasOwn(SETTINGS_SAVED_COPY, saved)
+      ? SETTINGS_SAVED_COPY[saved]
+      : undefined;
 
   const rows: SettingsRowData[] = [
     {

@@ -12,8 +12,6 @@ import { changePassword } from '@/lib/auth/auth-requests';
 import { signInPathReturningTo } from '@/lib/return-path';
 import { DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
 
-type Message = { status: 'failed' | 'informational'; text: string };
-
 /** Sign-up's rule, so a new password is held to what the first one was. */
 const MIN_LENGTH = 10;
 /** Better Auth's own ceiling, refused here so it never reads as a wrong current password. */
@@ -49,7 +47,7 @@ export function ChangePasswordForm({ role }: { role: UserRole }): React.ReactEle
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<Message | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -59,7 +57,7 @@ export function ChangePasswordForm({ role }: { role: UserRole }): React.ReactEle
 
     const refused = refusal(current, next, confirm);
     if (refused !== null) {
-      setMessage({ status: 'failed', text: refused });
+      setMessage(refused);
       return;
     }
 
@@ -79,18 +77,14 @@ export function ChangePasswordForm({ role }: { role: UserRole }): React.ReactEle
       return;
     }
 
-    setMessage({ status: 'failed', text: failureCopy(outcome, AUTH_COPY.changeWrongCurrent) });
+    setMessage(failureCopy(outcome, AUTH_COPY.changeWrongCurrent));
   }
 
   return (
     <form onSubmit={submit} noValidate className="flex max-w-sm flex-col">
       {message ? (
-        <Banner
-          status={message.status}
-          role={message.status === 'failed' ? 'alert' : 'status'}
-          className="mb-4"
-        >
-          {message.text}
+        <Banner status="failed" role="alert" className="mb-4">
+          {message}
         </Banner>
       ) : null}
 

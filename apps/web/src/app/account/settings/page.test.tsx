@@ -44,13 +44,16 @@ describe('AccountSettingsPage (VEN-703)', () => {
     expect(screen.getByRole('status').textContent).toContain('Your name is saved.');
   });
 
-  it('ignores a saved value it has no copy for', async () => {
-    requireCurrentUser.mockResolvedValue({ role: 'customer', firstName: 'Ada', lastName: 'B' });
+  it.each(['nonsense', '__proto__', 'constructor', 'toString'])(
+    'ignores a saved value it has no copy for (%s)',
+    async (saved) => {
+      requireCurrentUser.mockResolvedValue({ role: 'customer', firstName: 'Ada', lastName: 'B' });
 
-    render(await AccountSettingsPage({ searchParams: Promise.resolve({ saved: 'nonsense' }) }));
+      render(await AccountSettingsPage({ searchParams: Promise.resolve({ saved }) }));
 
-    expect(screen.queryByRole('status')).toBeNull();
-  });
+      expect(screen.queryByRole('status')).toBeNull();
+    },
+  );
 
   it('sends a signed-out visitor to sign in and back here, rendering nothing', async () => {
     requireCurrentUser.mockRejectedValue(new Error('NEXT_REDIRECT'));
