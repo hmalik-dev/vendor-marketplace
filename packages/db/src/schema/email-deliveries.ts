@@ -111,6 +111,13 @@ export const emailDeliveries = pgTable(
     failureReason: varchar('failure_reason', { length: MAX_EMAIL_FAILURE_REASON_LENGTH }),
     /** When a provider event last moved `outcome`. Null while the row is as sent. */
     outcomeUpdatedAt: timestamp('outcome_updated_at', { withTimezone: true }),
+    /**
+     * When the retry sweep may next re-send a `failed` row (VEN-608), from the
+     * backoff schedule. Null on every other row, on a failure with no attempts
+     * left, and on a `failed` row written before the column — which the sweep
+     * treats as due at once, so the deploy strands nothing.
+     */
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
   },
   (table) => [
     /*

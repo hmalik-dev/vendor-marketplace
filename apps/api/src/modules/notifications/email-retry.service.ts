@@ -80,8 +80,8 @@ export interface EmailRetryDeps {
  *
  * Skipped outright while today's sending is closed (VEN-661): every send would
  * be refused without reaching Resend, so the sweep would only spend each
- * message's few attempts on refusals. The rows wait for tomorrow's budget,
- * still inside `EMAIL_RETRY_WINDOW_MS`.
+ * message's few attempts on refusals. The rows wait for tomorrow's budget; one
+ * whose window ends first is reported when its next failure is recorded.
  */
 export async function retryFailedEmails(
   deps: EmailRetryDeps,

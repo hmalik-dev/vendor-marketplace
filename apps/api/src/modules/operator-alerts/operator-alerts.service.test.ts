@@ -93,6 +93,37 @@ describe('alertNow', () => {
     expect(log.error).toHaveBeenCalledTimes(2);
   });
 
+  it('pages the error reporter once, with the kind and no summary, when every send fails (VEN-608)', async () => {
+    const capture = vi.fn();
+    const { all } = deps({
+      send: async () => {
+        throw new Error('resend down');
+      },
+    } as unknown as OperatorAlertDeps['email']);
+
+    const result = await alertNow(
+      { ...all, reporter: { capture } },
+      refundFailedAlert({ bookingId: 'b-paged', during: 'a test' }),
+    );
+
+    expect(result).toBe('failed');
+    expect(capture).toHaveBeenCalledTimes(1);
+    const [error] = capture.mock.calls[0] as [Error];
+    expect(error.message).toBe('Operator alert could not be sent: refund_failed');
+  });
+
+  it('does not page the error reporter when the alert is sent', async () => {
+    const capture = vi.fn();
+    const { all } = deps();
+
+    await alertNow(
+      { ...all, reporter: { capture } },
+      refundFailedAlert({ bookingId: 'b-quiet', during: 'a test' }),
+    );
+
+    expect(capture).not.toHaveBeenCalled();
+  });
+
   it('stops retrying at once when the day is closed, rather than waiting to be refused again (VEN-661)', async () => {
     let attempts = 0;
     const { all } = deps({
