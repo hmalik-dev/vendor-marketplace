@@ -130,4 +130,4 @@
 - [Admin category writes](admin-category-writes.md) — PASS; the toggle can double-write its audit row under a concurrent repeat
 - [RLS is enabled, never forced](rls-is-enabled-not-forced-owner-bypasses.md) — VEN-504: the owner bypasses, so a future non-owner role reads zero rows silently; the guard is `relkind='r'` in `public`
 
-- [Auth proxy parser differential](auth-proxy-parser-differential.md) — a body-derived rate-limit key must fail closed; sign-in tooling must not retry a credential refusal (10 failures/10 min locks a shared E2E identity); VEN-677 `change-password` budget and CSRF notes; VEN-685 form/JSON polyglot via the caller's content-type
+- [Auth proxy parser differential](auth-proxy-parser-differential.md) — a body-derived rate-limit key must fail closed; sign-in tooling must not retry a credential refusal (10 failures/10 min locks a shared E2E identity); VEN-677 `change-password` budget and CSRF notes; VEN-685 polyglot (now pinned); VEN-714 minted-session discard clean

@@ -649,7 +649,8 @@ describe('sign-in through the auth proxy', () => {
   });
 
   it('budgets a code check per address too', async () => {
-    upstreamPost.mockResolvedValue(Response.json({ status: true }));
+    // A fresh answer per call, as the provider gives: the proxy reads the body of a verification's.
+    upstreamPost.mockImplementation(async () => Response.json({ status: true }));
 
     const statuses: number[] = [];
     for (let i = 0; i < 6; i++) {
@@ -1168,6 +1169,171 @@ describe('the password floor and the body cap at the auth proxy (VEN-685)', () =
 
     expect(response.status).toBe(200);
     expect(await upstreamPost.mock.calls[0]?.[0].json()).toEqual({ email: EMAIL, password: 'p' });
+  });
+});
+
+describe('sessions the browser never keeps (VEN-714)', () => {
+  const SESSION_COOKIE = '__Secure-neon-auth.session_token=minted-1';
+  const EMAIL = 'fresh@example.com';
+
+  const minted = (body: unknown): Response =>
+    new Response(JSON.stringify(body), {
+      headers: [
+        ['content-type', 'application/json'],
+        ['set-cookie', `${SESSION_COOKIE}; Path=/; HttpOnly`],
+        ['set-cookie', '__Secure-neon-auth.session_data=d; Path=/'],
+      ],
+    });
+
+  const route = async (context: Context): Promise<string> => (await context.params).path.join('/');
+  const paths = (): Promise<string[]> =>
+    Promise.all(upstreamPost.mock.calls.map(([, context]) => route(context)));
+
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+    resetThrottle();
+    captureMessage.mockReset();
+    captureException.mockReset();
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.endsWith('/internal/throttle')
+          ? Response.json({ throttled: false })
+          : Response.json({ recorded: true }),
+      ),
+    );
+    upstreamPost.mockReset().mockImplementation(async (_request, context) => {
+      const path = await route(context);
+      return path === 'sign-out' ? Response.json({ success: true }) : minted(nextAnswer);
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  let nextAnswer: unknown = {};
+
+  it('ends the session a sign-up opens, with its own cookie, and hands the browser no cookie', async () => {
+    nextAnswer = { token: 't', user: { id: 'auth-1', email: EMAIL } };
+
+    const response = await call('sign-up/email', {
+      email: EMAIL,
+      password: 'correct horse',
+      name: 'fresh',
+      role: 'customer',
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ token: 't', user: { id: 'auth-1', email: EMAIL } });
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(await paths()).toEqual(['sign-up/email', 'sign-out']);
+    expect(upstreamPost.mock.calls[1]?.[0].headers.get('cookie')).toBe(
+      `${SESSION_COOKIE}; __Secure-neon-auth.session_data=d`,
+    );
+  });
+
+  it('ends the session of a sign-up whose role could not be recorded, and answers 503 with no cookie', async () => {
+    nextAnswer = { token: 't', user: { id: 'auth-1', email: EMAIL } };
+    vi.stubGlobal('fetch', (url: string) =>
+      Promise.resolve(
+        url.endsWith('/internal/throttle')
+          ? Response.json({ throttled: false })
+          : Response.json({}, { status: 500 }),
+      ),
+    );
+
+    const response = await call('sign-up/email', {
+      email: EMAIL,
+      password: 'correct horse',
+      name: 'fresh',
+      role: 'customer',
+    });
+
+    expect([response.status, await response.json()]).toEqual([503, { code: 'SIGN_UP_UNRECORDED' }]);
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(await paths()).toEqual(['sign-up/email', 'sign-out']);
+  });
+
+  it('ends the session an address verification opens', async () => {
+    nextAnswer = { status: true };
+
+    const response = await call('email-otp/verify-email', { email: EMAIL, otp: '123456' });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(await paths()).toEqual(['email-otp/verify-email', 'sign-out']);
+  });
+
+  it('ends the session of a sign-in the provider answers for an unverified address', async () => {
+    nextAnswer = { user: { id: 'auth-1', emailVerified: false } };
+
+    const response = await call('sign-in/email', { email: EMAIL, password: 'correct horse' });
+
+    expect(await response.json()).toEqual({ user: { id: 'auth-1', emailVerified: false } });
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(await paths()).toEqual(['sign-in/email', 'sign-out']);
+  });
+
+  it('keeps the session of a verified sign-in: it is the device’s own', async () => {
+    nextAnswer = { user: { id: 'auth-1', emailVerified: true } };
+
+    const response = await call('sign-in/email', { email: EMAIL, password: 'correct horse' });
+
+    expect(response.headers.getSetCookie()).toEqual([
+      `${SESSION_COOKIE}; Path=/; HttpOnly`,
+      '__Secure-neon-auth.session_data=d; Path=/',
+    ]);
+    expect(await paths()).toEqual(['sign-in/email']);
+  });
+
+  it('ends nothing when a refused sign-up opened no session', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ code: 'USER_EXISTS' }, { status: 422 }));
+
+    const response = await call('sign-up/email', {
+      email: EMAIL,
+      password: 'correct horse',
+      name: 'fresh',
+      role: 'customer',
+    });
+
+    expect(response.status).toBe(422);
+    expect(await paths()).toEqual(['sign-up/email']);
+  });
+
+  it('answers a sign-up that set no cookie unchanged, with no sign-out', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ token: null, user: { id: 'auth-1' } }));
+
+    const response = await call('sign-up/email', {
+      email: EMAIL,
+      password: 'correct horse',
+      name: 'fresh',
+      role: 'customer',
+    });
+
+    expect(await response.json()).toEqual({ token: null, user: { id: 'auth-1' } });
+    expect(await paths()).toEqual(['sign-up/email']);
+  });
+
+  it('still hands the browser no cookie, and reports it, when ending the session fails', async () => {
+    nextAnswer = { status: true };
+    upstreamPost.mockImplementation(async (_request, context) =>
+      (await route(context)) === 'sign-out'
+        ? Response.json({}, { status: 500 })
+        : minted(nextAnswer),
+    );
+
+    const response = await call('email-otp/verify-email', { email: EMAIL, otp: '123456' });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(captureMessage).toHaveBeenCalledWith(
+      'Could not end a session the browser will not keep',
+      {
+        level: 'warning',
+        extra: { status: 500 },
+      },
+    );
   });
 });
 
