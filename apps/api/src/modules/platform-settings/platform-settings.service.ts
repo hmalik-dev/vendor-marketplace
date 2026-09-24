@@ -2,13 +2,16 @@ import {
   BOOKINGS_PAUSED_NOTICE,
   ERROR_CODES,
   formatPrice,
+  PAUSED_DEFAULT_NOTICE,
   PLATFORM_SETTINGS_CACHE_MS,
   PLATFORM_SETTINGS_ID,
   type AdminPlatformSettings,
   type AdminVendorPayoutHoldResult,
   type PlatformSwitches,
+  type PublicPlatformNotice,
   type UpdatePlatformSettings,
 } from '@vendor-marketplace/shared';
+import type { PlatformSettingsRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { AppError, conflict, notFound } from '../../lib/errors.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
@@ -23,6 +26,10 @@ import {
   updatePlatformSettingsRow,
   updateVendorPayoutHold,
 } from './platform-settings.dao.js';
+
+/** Everything an admin can set here: the switches and the site-wide notice (VEN-616). */
+export type PlatformValues = PlatformSwitches &
+  Pick<PlatformSettingsRow, 'noticeMessage' | 'noticeTone'>;
 
 /** Every switch off and no cap: what a platform nobody has configured runs as. */
 const DEFAULT_SWITCHES: PlatformSwitches = {
@@ -41,7 +48,9 @@ const SWITCH_FIELDS = [
   'payoutReleasePaused',
   'maxBookingCents',
   'vendorInviteOnly',
-] as const satisfies readonly (keyof PlatformSwitches)[];
+  'noticeMessage',
+  'noticeTone',
+] as const satisfies readonly (keyof PlatformValues)[];
 
 /**
  * The last read per database handle, trusted for `PLATFORM_SETTINGS_CACHE_MS`.
@@ -51,7 +60,15 @@ const SWITCH_FIELDS = [
  * drops the entry, so the instance that flipped a switch obeys it at once and
  * every other instance within the window.
  */
-const cache = new WeakMap<AppDatabase, { switches: PlatformSwitches; expiresAt: number }>();
+const cache = new WeakMap<AppDatabase, { values: PlatformValues; expiresAt: number }>();
+
+function toValues(row: PlatformSettingsRow | null): PlatformValues {
+  return {
+    ...toSwitches(row),
+    noticeMessage: row?.noticeMessage ?? null,
+    noticeTone: row?.noticeTone ?? 'info',
+  };
+}
 
 function toSwitches(row: PlatformSwitches | null): PlatformSwitches {
   if (!row) {
@@ -67,18 +84,39 @@ function toSwitches(row: PlatformSwitches | null): PlatformSwitches {
   };
 }
 
-/** The switches as a guarded request should obey them — at most ten seconds old. */
-export async function readPlatformSwitches(db: AppDatabase): Promise<PlatformSwitches> {
+async function readPlatformValues(db: AppDatabase): Promise<PlatformValues> {
   const hit = cache.get(db);
 
   if (hit && hit.expiresAt > Date.now()) {
-    return hit.switches;
+    return hit.values;
   }
 
-  const switches = toSwitches(await findPlatformSettings(db));
-  cache.set(db, { switches, expiresAt: Date.now() + PLATFORM_SETTINGS_CACHE_MS });
+  const values = toValues(await findPlatformSettings(db));
+  cache.set(db, { values, expiresAt: Date.now() + PLATFORM_SETTINGS_CACHE_MS });
 
-  return switches;
+  return values;
+}
+
+/** The switches as a guarded request should obey them — at most ten seconds old. */
+export async function readPlatformSwitches(db: AppDatabase): Promise<PlatformSwitches> {
+  return toSwitches(await readPlatformValues(db));
+}
+
+/**
+ * `GET /platform/notice`: the admin's notice, else a default while checkout or
+ * booking requests are paused, else `null`. Every page reads it, so it rides
+ * the switches' cache rather than adding a query per render.
+ */
+export async function readPublicPlatformNotice(db: AppDatabase): Promise<PublicPlatformNotice> {
+  const values = await readPlatformValues(db);
+
+  if (values.noticeMessage !== null) {
+    return { message: values.noticeMessage, tone: values.noticeTone };
+  }
+
+  return values.checkoutPaused || values.bookingRequestsPaused
+    ? { message: PAUSED_DEFAULT_NOTICE, tone: 'info' }
+    : null;
 }
 
 /**
@@ -171,7 +209,7 @@ export async function readAdminPlatformSettings(db: AppDatabase): Promise<AdminP
   ]);
 
   return {
-    ...toSwitches(stored?.row ?? null),
+    ...toValues(stored?.row ?? null),
     updatedAt: stored?.row.updatedBy ? stored.row.updatedAt : null,
     updatedByName: stored?.updatedByName ?? null,
     heldVendors,
@@ -182,13 +220,21 @@ type SwitchField = (typeof SWITCH_FIELDS)[number];
 
 interface SwitchChange {
   field: SwitchField;
-  before: PlatformSwitches[SwitchField];
-  after: PlatformSwitches[SwitchField];
+  before: PlatformValues[SwitchField];
+  after: PlatformValues[SwitchField];
 }
 
-function describeValue(field: SwitchField, value: PlatformSwitches[SwitchField]): string {
+function describeValue(field: SwitchField, value: PlatformValues[SwitchField]): string {
   if (field === 'maxBookingCents') {
     return typeof value === 'number' ? formatPrice(value) : 'no cap';
+  }
+
+  if (field === 'noticeMessage') {
+    return typeof value === 'string' ? `"${value}"` : 'none';
+  }
+
+  if (field === 'noticeTone') {
+    return String(value);
   }
 
   return value === true ? 'on' : 'off';
@@ -220,7 +266,7 @@ export async function updatePlatformSettings(
   const changes = await context.db.transaction(async (tx) => {
     const before = await lockPlatformSettings(tx);
     const changed: SwitchChange[] = [];
-    const patch: Partial<PlatformSwitches> = {};
+    const patch: Partial<PlatformValues> = {};
 
     for (const field of SWITCH_FIELDS) {
       const next = input[field];

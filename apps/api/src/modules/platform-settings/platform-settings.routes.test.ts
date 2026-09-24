@@ -14,6 +14,7 @@ import {
 import {
   addDays,
   CURRENT_VENDOR_AGREEMENT_VERSION,
+  PAUSED_DEFAULT_NOTICE,
   PLATFORM_SETTINGS_ID,
   toDateString,
 } from '@vendor-marketplace/shared';
@@ -304,6 +305,8 @@ describe('launch switches', () => {
         payoutReleasePaused: false,
         maxBookingCents: null,
         vendorInviteOnly: false,
+        noticeMessage: null,
+        noticeTone: 'info',
         updatedAt: null,
         updatedByName: null,
         heldVendors: [],
@@ -394,6 +397,101 @@ describe('launch switches', () => {
       ]) {
         expect((await inject('PUT', '/v1/admin/settings', ADMIN, payload)).statusCode).toBe(400);
       }
+    });
+  });
+
+  describe('the site-wide notice (VEN-616)', () => {
+    const NOTICE = 'Payouts are delayed today. Nothing is lost.';
+
+    it('persists a notice, audits it, alerts the operator, and clears it again', async () => {
+      await signInAsAdmin();
+
+      const saved = await setSwitches({ noticeMessage: `  ${NOTICE}  `, noticeTone: 'warning' });
+      expect(saved.json()).toMatchObject({ noticeMessage: NOTICE, noticeTone: 'warning' });
+
+      const [row] = await harness.database.db.select().from(platformSettings);
+      expect(row).toMatchObject({ noticeMessage: NOTICE, noticeTone: 'warning' });
+
+      const activity = await inject(
+        'GET',
+        '/v1/admin/activity?action=platform_setting_changed',
+        ADMIN,
+      );
+      expect(
+        (activity.json().items as { detail: Record<string, unknown> }[])
+          .map((item) => item.detail)
+          .sort((a, b) => String(a.field).localeCompare(String(b.field))),
+      ).toEqual([
+        { field: 'noticeMessage', before: null, after: NOTICE },
+        { field: 'noticeTone', before: 'info', after: 'warning' },
+      ]);
+
+      const alerts = await operatorMail();
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]!.subject).toContain('A launch switch was changed');
+      expect(alerts[0]!.text).toContain(`noticeMessage: none → "${NOTICE}"`);
+
+      const cleared = await setSwitches({ noticeMessage: null });
+      expect(cleared.json()).toMatchObject({ noticeMessage: null });
+      expect((await harness.database.db.select().from(platformSettings))[0]!.noticeMessage).toBe(
+        null,
+      );
+      expect(await harness.database.db.select().from(adminActions)).toHaveLength(3);
+    });
+
+    it('serves a signed-out visitor the notice, or null, and caches it for 30 seconds', async () => {
+      await signInAsAdmin();
+
+      const empty = await inject('GET', '/v1/platform/notice', null);
+      expect(empty.statusCode).toBe(200);
+      expect(empty.json()).toBeNull();
+      expect(empty.headers['cache-control']).toBe('public, max-age=30');
+
+      await setSwitches({ noticeMessage: NOTICE });
+      const posted = await inject('GET', '/v1/platform/notice', null);
+      expect(posted.json()).toEqual({ message: NOTICE, tone: 'info' });
+
+      await setSwitches({ noticeMessage: null });
+      expect((await inject('GET', '/v1/platform/notice', null)).json()).toBeNull();
+    });
+
+    it('falls back to the paused default for either pause, and yields to a posted notice', async () => {
+      await signInAsAdmin();
+
+      for (const field of ['checkoutPaused', 'bookingRequestsPaused']) {
+        await setSwitches({ [field]: true });
+        expect((await inject('GET', '/v1/platform/notice', null)).json()).toEqual({
+          message: PAUSED_DEFAULT_NOTICE,
+          tone: 'info',
+        });
+        await setSwitches({ [field]: false });
+      }
+
+      await setSwitches({ checkoutPaused: true, noticeMessage: NOTICE, noticeTone: 'warning' });
+      expect((await inject('GET', '/v1/platform/notice', null)).json()).toEqual({
+        message: NOTICE,
+        tone: 'warning',
+      });
+    });
+
+    it('refuses markup, an empty or over-long message, and an unknown tone', async () => {
+      await signInAsAdmin();
+
+      for (const payload of [
+        { noticeMessage: '<b>down</b>' },
+        { noticeMessage: '   ' },
+        { noticeMessage: 'x'.repeat(281) },
+        { noticeMessage: '​' },
+        { noticeMessage: 'down\u0000' },
+        { noticeTone: 'danger' },
+      ]) {
+        expect((await inject('PUT', '/v1/admin/settings', ADMIN, payload)).statusCode).toBe(400);
+      }
+
+      expect(
+        (await inject('PUT', '/v1/admin/settings', ADMIN, { noticeMessage: 'x'.repeat(280) }))
+          .statusCode,
+      ).toBe(200);
     });
   });
 

@@ -1070,6 +1070,18 @@ export const PLATFORM_SETTINGS_CACHE_MS = 10_000;
 export const BOOKINGS_PAUSED_NOTICE =
   'Bookings are paused for a short while. Nothing has been charged.';
 
+/** The longest site-wide notice an admin can post (VEN-616). */
+export const PLATFORM_NOTICE_MAX_LENGTH = 280;
+
+export const PLATFORM_NOTICE_TONES = ['info', 'warning'] as const;
+
+/**
+ * What the site-wide banner says while checkout or booking requests are paused
+ * and no notice has been posted. Written to stay true for either pause.
+ */
+export const PAUSED_DEFAULT_NOTICE =
+  'Bookings and payments are paused for a moment. Nothing already booked is affected.';
+
 /** Platform commission when `STRIPE_PLATFORM_FEE_RATE` is unset. */
 export const DEFAULT_PLATFORM_FEE_RATE = 0.12;
 

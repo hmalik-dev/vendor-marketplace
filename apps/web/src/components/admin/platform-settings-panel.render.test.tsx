@@ -39,6 +39,8 @@ const SETTINGS: WireAdminPlatformSettings = {
   payoutReleasePaused: false,
   maxBookingCents: 50_000,
   vendorInviteOnly: false,
+  noticeMessage: null,
+  noticeTone: 'info',
   updatedAt: new Date('2026-09-14T09:05:00.000Z'),
   updatedByName: 'Ada Lovelace',
   heldVendors: [
@@ -86,6 +88,41 @@ describe('PlatformSettingsPanel', () => {
     expect(calls).toEqual([
       { path: '/admin/settings', method: 'PUT', body: { payoutReleasePaused: true } },
     ]);
+  });
+
+  it('posts a trimmed notice with its tone and clears it (VEN-616)', async () => {
+    render(<PlatformSettingsPanel settings={SETTINGS} />);
+
+    const post = screen.getByRole('button', { name: 'Post notice' }) as HTMLButtonElement;
+    expect(post.disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Clear notice' })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Notice text'), { target: { value: '  <b>x</b>  ' } });
+    expect(post.disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText('Notice text'), {
+      target: { value: '  Payouts are delayed today.  ' },
+    });
+    fireEvent.click(screen.getByRole('radio', { name: /Warning/ }));
+    await act(async () => {
+      fireEvent.click(post);
+    });
+    expect(calls).toEqual([
+      {
+        path: '/admin/settings',
+        method: 'PUT',
+        body: { noticeMessage: 'Payouts are delayed today.', noticeTone: 'warning' },
+      },
+    ]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Clear notice' }));
+    });
+    expect(calls[1]).toEqual({
+      path: '/admin/settings',
+      method: 'PUT',
+      body: { noticeMessage: null },
+    });
   });
 
   it('turns the vendor gate on from its own switch (VEN-406)', async () => {

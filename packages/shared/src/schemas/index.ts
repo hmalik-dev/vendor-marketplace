@@ -47,6 +47,8 @@ import {
   MAX_NOTIFICATION_TITLE_LENGTH,
   MAX_REVIEWER_DISPLAY_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
+  PLATFORM_NOTICE_MAX_LENGTH,
+  PLATFORM_NOTICE_TONES,
   MAX_REORDER_IDS,
   MAX_PAGE,
   MAX_PAGE_SIZE,
@@ -3325,6 +3327,21 @@ export const platformSwitchesSchema = z.object({
 });
 export type PlatformSwitches = z.infer<typeof platformSwitchesSchema>;
 
+/** The site-wide notice (VEN-616): plain text, never markup. */
+export const platformNoticeToneSchema = z.enum(PLATFORM_NOTICE_TONES);
+export type PlatformNoticeTone = z.infer<typeof platformNoticeToneSchema>;
+
+export const platformNoticeMessageSchema = freeText()
+  .min(1, 'Write a notice, or clear it')
+  .max(PLATFORM_NOTICE_MAX_LENGTH)
+  .regex(/^[^<>]*$/, 'A notice is plain text, without < or >');
+
+/** `GET /platform/notice`: what every visitor sees, or `null` when there is nothing to say. */
+export const publicPlatformNoticeSchema = z
+  .object({ message: z.string(), tone: platformNoticeToneSchema })
+  .nullable();
+export type PublicPlatformNotice = z.infer<typeof publicPlatformNoticeSchema>;
+
 /** A vendor whose automatic payouts an operator is holding. */
 export const adminHeldVendorSchema = z.object({
   id: uuidSchema,
@@ -3335,6 +3352,8 @@ export type AdminHeldVendor = z.infer<typeof adminHeldVendorSchema>;
 
 /** `GET /admin/settings`: the switches, who last changed them, and the held vendors. */
 export const adminPlatformSettingsSchema = platformSwitchesSchema.extend({
+  noticeMessage: z.string().nullable(),
+  noticeTone: platformNoticeToneSchema,
   updatedAt: z.date().nullable(),
   updatedByName: z.string().nullable(),
   heldVendors: z.array(adminHeldVendorSchema),
@@ -3344,6 +3363,11 @@ export type AdminPlatformSettings = z.infer<typeof adminPlatformSettingsSchema>;
 /** `PUT /admin/settings`: any subset of the switches, at least one. */
 export const updatePlatformSettingsSchema = platformSwitchesSchema
   .partial()
+  .extend({
+    /** `null` clears the notice. */
+    noticeMessage: platformNoticeMessageSchema.nullable().optional(),
+    noticeTone: platformNoticeToneSchema.optional(),
+  })
   .strict()
   .refine((value) => Object.keys(value).length > 0, { message: 'Change at least one setting' });
 export type UpdatePlatformSettings = z.infer<typeof updatePlatformSettingsSchema>;

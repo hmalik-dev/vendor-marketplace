@@ -393,3 +393,7 @@ drag-select across the Sep/Oct month boundary, `Block these` (rail recomputed li
 `Open these up` back to 0 blocked — final state identical to how it was found. No dead
 controls. Contrast: the only sub-4.5:1 node is the sanctioned `stone-500` on past days, which
 `19-availability.md` names as exactly that exception — **PASS**.
+
+## Site-wide notice banner (VEN-616): deliberately unframed
+
+No frame in `design/Orla - Screens.dc.html` draws the incident banner. It is built from the state-library tones (`40-states.md`: steel is information, gold is a warning) as a full-width bar above the header, and is the only chrome that sits above it. Recorded here rather than added to the design plan, per VEN-616. A parity pass finds no frame to compare against; while a notice is up, `/bookings` and `/messages` scroll by the banner height (about 40px) because their panes are sized from `--header-height`.
