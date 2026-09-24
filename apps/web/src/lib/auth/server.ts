@@ -152,6 +152,7 @@ export const getServerSession = cache(
 async function mintSession(
   cookieValue: string,
   marker: string | null,
+  refreshedFrom?: string,
 ): Promise<ServerSession | null> {
   if (!authConfigured()) {
     reportMissingConfig();
@@ -175,7 +176,7 @@ async function mintSession(
   const { token } = tokenResult.data;
 
   const minted: ServerSession = { userId: user.id, token };
-  remember(cookieValue, minted, marker);
+  remember(cookieValue, minted, marker, refreshedFrom);
 
   return minted;
 }
@@ -206,6 +207,8 @@ interface MintedSession extends ServerSession {
   expiresAtMs: number;
   /** The {@link REVOKE_MARKER_COOKIE} value the caller carried when this was minted. */
   marker: string | null;
+  /** The refused token whose refusal minted this entry (VEN-717), when one did. */
+  refreshedFrom?: string;
 }
 
 const mintedSessions = new Map<string, MintedSession>();
@@ -238,7 +241,12 @@ async function sessionCookieValue(): Promise<string | null> {
   return present.length === 0 ? null : present.join(';');
 }
 
-function remember(cookieValue: string, session: ServerSession, marker: string | null): void {
+function remember(
+  cookieValue: string,
+  session: ServerSession,
+  marker: string | null,
+  refreshedFrom?: string,
+): void {
   const expiresAtMs = tokenExpiryMs(session.token);
 
   if (expiresAtMs === null) {
@@ -255,7 +263,7 @@ function remember(cookieValue: string, session: ServerSession, marker: string | 
   }
 
   if (mintedSessions.has(cookieValue) || mintedSessions.size < MAX_REMEMBERED_SESSIONS) {
-    mintedSessions.set(cookieValue, { ...session, expiresAtMs, marker });
+    mintedSessions.set(cookieValue, { ...session, expiresAtMs, marker, refreshedFrom });
   }
 }
 
@@ -329,8 +337,9 @@ export function forgetSessionsFor(userId: string): void {
  * the API refuses. The refusal is the one signal every device gets, so it
  * drops every entry holding that token and mints again from the provider. A
  * session the provider has ended mints nothing, so a revoked device still gets
- * none. When the caller's entry was already replaced (the render's other calls
- * refused the same token), that newer token is returned without another mint.
+ * none. An entry this instance minted for a refusal of the same token (the
+ * render's other calls) is returned as is; any other entry, even one that differs
+ * from the refused token, may predate the revoke too and is replaced.
  */
 export async function refreshRefusedToken(refused: string): Promise<ServerSession | null> {
   const cookieValue = await sessionCookieValue();
@@ -342,7 +351,7 @@ export async function refreshRefusedToken(refused: string): Promise<ServerSessio
   const marker = await revokeMarkerValue();
   const remembered = mintedSessions.get(cookieValue);
 
-  if (remembered && remembered.token !== refused && remembered.expiresAtMs > Date.now()) {
+  if (remembered?.refreshedFrom === refused && remembered.expiresAtMs > Date.now()) {
     return { userId: remembered.userId, token: remembered.token };
   }
 
@@ -360,7 +369,7 @@ export async function refreshRefusedToken(refused: string): Promise<ServerSessio
     return inflight;
   }
 
-  const minting = mintSession(cookieValue, marker).finally(() => {
+  const minting = mintSession(cookieValue, marker, refused).finally(() => {
     refreshing.delete(refreshKey);
   });
   refreshing.set(refreshKey, minting);

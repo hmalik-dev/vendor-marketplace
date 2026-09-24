@@ -506,6 +506,38 @@ describe('a third device on an instance holding a pre-revoke token (VEN-717)', (
   });
 });
 
+describe('two web instances holding different pre-revoke tokens (VEN-717)', () => {
+  const sessionCookie = { name: '__Secure-neon-auth.session_token', value: 'cookie-third' };
+
+  it('never answers a refusal with the other instance’s pre-revoke token', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    vi.stubEnv('NEON_AUTH_BASE_URL', 'https://auth.example.test');
+    vi.stubEnv('NEON_AUTH_COOKIE_SECRET', 'x'.repeat(32));
+    getSession.mockReset().mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+    getAll.mockReset().mockReturnValue([sessionCookie]);
+    const onA = jwt(NOW / 1000 + 900);
+    const onB = jwt(NOW / 1000 + 901);
+    const fresh = jwt(NOW / 1000 + 902);
+    token
+      .mockReset()
+      .mockResolvedValueOnce({ data: { token: onA }, error: null })
+      .mockResolvedValueOnce({ data: { token: onB }, error: null })
+      .mockResolvedValueOnce({ data: { token: fresh }, error: null });
+
+    vi.resetModules();
+    const instanceA = await import('./server');
+    vi.resetModules();
+    const instanceB = await import('./server');
+    expect((await instanceA.getServerSession())?.token).toBe(onA);
+    expect((await instanceB.getServerSession())?.token).toBe(onB);
+
+    // The API refused `onA`; the retry lands on instance B, whose entry is refused too.
+    expect((await instanceB.refreshRefusedToken(onA))?.token).toBe(fresh);
+    expect((await instanceB.getServerSession())?.token).toBe(fresh);
+  });
+});
+
 describe('authConfigured', () => {
   it.each([
     ['https://auth.example.test', 'x'.repeat(32), true],

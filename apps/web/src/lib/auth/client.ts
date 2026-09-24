@@ -96,9 +96,19 @@ export function clearSessionToken(): void {
  * web instance that minted this token has no marker to tell it so. Ask the route
  * for a re-mint, once at a time, and hand the caller the new token.
  */
-setRefusedTokenHandler((refused) => {
+export async function refreshRefusedSessionToken(refused: string): Promise<string | null> {
   if (cached?.token === refused) {
     cached = null;
+  }
+
+  // A fetch already running carries no refused-token header and may hand back the cache's refused token.
+  const pending = inflight;
+  if (pending) {
+    const joined = await pending;
+
+    if (joined !== refused) {
+      return joined;
+    }
   }
 
   inflight ??= fetchToken(refused).finally(() => {
@@ -106,4 +116,6 @@ setRefusedTokenHandler((refused) => {
   });
 
   return inflight;
-});
+}
+
+setRefusedTokenHandler(refreshRefusedSessionToken);

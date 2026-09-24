@@ -168,4 +168,33 @@ describe('a token the API refuses (VEN-717)', () => {
     expect(result).toEqual({ ok: true });
     expect(await getSessionToken()).toBe(fresh);
   });
+
+  it('does not settle for a plain token fetch already in flight that returns the refused token', async () => {
+    const stale = jwt(nowSeconds + 900, 'stale');
+    const fresh = jwt(nowSeconds + 901, 'fresh');
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      const headers = (init.headers ?? {}) as Record<string, string>;
+
+      if (url === '/api/session/token') {
+        return headers['x-refused-token'] === stale ? answer(fresh) : answer(stale);
+      }
+
+      return new Response(
+        JSON.stringify({ statusCode: 401, error: 'UNAUTHORIZED', message: 'Session ended' }),
+        { status: 401 },
+      );
+    });
+    const refused = await getSessionToken();
+    clearSessionToken();
+    const plain = getSessionToken();
+
+    const retried = apiRequest('/users/me', {
+      schema: z.object({ ok: z.boolean() }),
+      token: refused,
+    });
+
+    await expect(plain).resolves.toBe(stale);
+    await expect(retried).rejects.toMatchObject({ statusCode: 401 });
+    expect(await getSessionToken()).toBe(fresh);
+  });
 });
