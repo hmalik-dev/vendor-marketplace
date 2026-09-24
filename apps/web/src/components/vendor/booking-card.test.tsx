@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { CLOSED_ACCOUNT_PLACEHOLDER } from '@vendor-marketplace/shared';
 import { viewerOn } from '@/testing/viewer-clock';
 import { BookingCard } from './booking-card';
 import type { WireBooking, WireBookingRequest } from '@/lib/wire-schemas';
@@ -128,6 +129,33 @@ describe('BookingCard', () => {
       screen.getByText(/Zilker Park Clubhouse · 120 guests · Full day coverage/),
     ).toBeDefined();
     expect(screen.getByText('$1,200')).toBeDefined();
+  });
+
+  /* A closed customer's past booking (VEN-687): the stored placeholder, not a blank. */
+  it('shows the placeholder where a closed customer’s event location was', () => {
+    render(
+      <BookingCard
+        request={accepted({
+          eventLocation: CLOSED_ACCOUNT_PLACEHOLDER,
+          customDetails: CLOSED_ACCOUNT_PLACEHOLDER,
+          customer: {
+            firstName: 'Former customer',
+            lastInitial: '',
+            lastName: '',
+            email: 'closed+cus-1@invalid',
+            phone: null,
+          },
+        })}
+        booking={paid({ eventLocation: CLOSED_ACCOUNT_PLACEHOLDER })}
+        serverToday={viewerOn(TODAY)}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        new RegExp(`${CLOSED_ACCOUNT_PLACEHOLDER} · 120 guests · Full day coverage`),
+      ),
+    ).toBeDefined();
   });
 
   /*
