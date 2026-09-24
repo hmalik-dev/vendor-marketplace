@@ -662,15 +662,11 @@ describe('SiteFooter', () => {
  * #420's regression guard, moved here whole when #421 absorbed that ticket.
  *
  * Measured 2026-09-06: the footer's Browse column and the landing hero's jump
- * chips **already agree**, because both derive from
- * `LANDING_JUMP_CATEGORY_SLUGS`. There is no drift to fix — what was missing is
- * anything holding them together, so an edit to either could silently diverge
- * them and nothing would say so. Both halves are asserted, because either one
- * alone passes on the broken version: rendering the footer against the constant
- * says nothing about what the hero reads, and reading the hero's source says
- * nothing about what the footer renders.
+ * chips agreed, because both derived from `LANDING_JUMP_CATEGORY_SLUGS`.
+ * VEN-709 removed the hero's row, so the footer is the only reader left; the
+ * source read below keeps the hero from growing a second copy of the list.
  */
-describe('the footer Browse column and the landing hero name the same categories', () => {
+describe('the footer Browse column names the ruled categories and the landing hero draws none', () => {
   afterEach(() => {
     cleanup();
   });
@@ -699,7 +695,7 @@ describe('the footer Browse column and the landing hero name the same categories
     );
   });
 
-  it('reads the landing hero off the same constant, not a second list', () => {
+  it('reads the footer off the shared constant, and the hero holds no category list', () => {
     /*
      * The hero's own source, at test time. A shadow copy of the four names
      * here would pass the exact silent-divergence case this exists to catch —
@@ -710,9 +706,10 @@ describe('the footer Browse column and the landing hero name the same categories
     const footer = readFileSync(join(process.cwd(), 'src/components/site-footer.tsx'), 'utf8');
     const helper = readFileSync(join(process.cwd(), 'src/lib/jump-categories.ts'), 'utf8');
 
-    // Both render their chips through the one helper (VEN-401 added the live
-    // taxonomy filter there), and the helper maps from the constant.
-    expect(hero).toMatch(/offeredJumpCategories\(categories\)\.map\(/);
+    // The footer renders its links through the helper (VEN-401 added the live
+    // taxonomy filter there), the helper maps from the constant, and the hero
+    // no longer draws a category row at all (VEN-709).
+    expect(hero).not.toMatch(/offeredJumpCategories/);
     expect(footer).toMatch(/offeredJumpCategories\(categories\)\.map\(/);
     expect(helper).toMatch(/LANDING_JUMP_CATEGORY_SLUGS\.filter\(/);
   });
