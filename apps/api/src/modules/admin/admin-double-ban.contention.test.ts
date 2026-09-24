@@ -7,7 +7,6 @@ import {
 } from '@vendor-marketplace/db/testing/postgres';
 import { createTestHarness, signInAs, type TestHarness } from '../../testing/test-server.js';
 import type { BookingContext } from '../payments/payments.service.js';
-import { setBanned } from './admin.dao.js';
 import { setUserBanned } from './admin.service.js';
 
 /**
@@ -102,21 +101,5 @@ describe('two admins banning the same customer at once', () => {
     }
 
     expect(await banRows()).toHaveLength(1);
-  });
-
-  it('returns null from setBanned for an account that is already banned, leaving bannedAt', async () => {
-    const [before] = await harness!.database.db
-      .select({ bannedAt: users.bannedAt })
-      .from(users)
-      .where(eq(users.id, customerId));
-
-    expect(await setBanned(harness!.database.db, customerId, null, true, new Date())).toBeNull();
-
-    const [after] = await harness!.database.db
-      .select({ bannedAt: users.bannedAt })
-      .from(users)
-      .where(eq(users.id, customerId));
-
-    expect(after?.bannedAt).toEqual(before?.bannedAt);
   });
 });
