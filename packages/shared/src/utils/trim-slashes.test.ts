@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { EXPLICIT_ORIGIN, deploymentOrigin } from '../env/deployment.js';
+import { expectLinearTime } from '../test-support/linear-time.js';
 import { toObjectKey, trimTrailingSlashes } from './index.js';
 
-const HOSTILE = `${'/'.repeat(64 * 1024)}x`;
-const BUDGET_MS = 50;
-
-function elapsed(run: () => unknown): number {
-  const start = performance.now();
-  run();
-  return performance.now() - start;
-}
+const hostile = (size: number) => `${'/'.repeat(size)}x`;
 
 describe('trimTrailingSlashes', () => {
   it.each([
@@ -23,20 +17,21 @@ describe('trimTrailingSlashes', () => {
     expect(trimTrailingSlashes(input)).toBe(expected);
   });
 
+  it('leaves a long run of slashes that does not end the string as it is', () => {
+    expect(trimTrailingSlashes(hostile(1024))).toBe(hostile(1024));
+    expect(toObjectKey(hostile(1024), 'k')).toBe('k');
+    expect(deploymentOrigin({ [EXPLICIT_ORIGIN]: hostile(1024) })).toBe(`https://${hostile(1024)}`);
+  });
+
   it('finishes in linear time on a long run of slashes that does not end the string', () => {
-    expect(trimTrailingSlashes(HOSTILE)).toBe(HOSTILE);
-    expect(elapsed(() => trimTrailingSlashes(HOSTILE))).toBeLessThan(BUDGET_MS);
+    expectLinearTime(hostile, trimTrailingSlashes);
   });
 
   it('keeps toObjectKey linear on a hostile base', () => {
-    expect(toObjectKey(HOSTILE, 'k')).toBe('k');
-    expect(elapsed(() => toObjectKey(HOSTILE, 'k'))).toBeLessThan(BUDGET_MS);
+    expectLinearTime(hostile, (base) => toObjectKey(base, 'k'));
   });
 
   it('keeps the deployment origin resolver linear on a hostile host', () => {
-    const source: NodeJS.ProcessEnv = { [EXPLICIT_ORIGIN]: HOSTILE };
-
-    expect(deploymentOrigin(source)).toBe(`https://${HOSTILE}`);
-    expect(elapsed(() => deploymentOrigin(source))).toBeLessThan(BUDGET_MS);
+    expectLinearTime(hostile, (host) => deploymentOrigin({ [EXPLICIT_ORIGIN]: host }));
   });
 });

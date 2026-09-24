@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { expectLinearTime } from '../test-support/linear-time.js';
 import { REDACTED, scrubErrorEvent } from './error-reporting.js';
 
 /*
@@ -211,7 +212,6 @@ describe('scrubErrorEvent: what the scrub fixture must never carry', () => {
 });
 
 describe('scrubErrorEvent: credential shapes and hostile input (VEN-674)', () => {
-  const HOSTILE_BUDGET_MS = 50;
   const scrubMessage = (message: string) => {
     const event = { user: { id: 'user_1' }, message };
 
@@ -255,17 +255,14 @@ describe('scrubErrorEvent: credential shapes and hostile input (VEN-674)', () =>
   });
 
   it.each([
-    ['a run of a', 'a'.repeat(64 * 1024)],
-    ['a run of ?', '?'.repeat(64 * 1024)],
-    ['a run of ?a', '?a'.repeat(32 * 1024)],
-    ['a run of eyJ', 'eyJ'.repeat(Math.ceil((64 * 1024) / 3))],
-    ['a run of -eyJ', '-eyJ'.repeat(Math.ceil((64 * 1024) / 4))],
-    ['a run of eyJa.', 'eyJa.'.repeat(Math.ceil((64 * 1024) / 5))],
+    ['a run of a', (size: number) => 'a'.repeat(size)],
+    ['a run of ?', (size: number) => '?'.repeat(size)],
+    ['a run of ?a', (size: number) => '?a'.repeat(size / 2)],
+    ['a run of eyJ', (size: number) => 'eyJ'.repeat(Math.ceil(size / 3))],
+    ['a run of -eyJ', (size: number) => '-eyJ'.repeat(Math.ceil(size / 4))],
+    ['a run of eyJa.', (size: number) => 'eyJa.'.repeat(Math.ceil(size / 5))],
   ])('scrubs %s in linear time', (_label, hostile) => {
-    const start = performance.now();
-    scrubMessage(hostile);
-
-    expect(performance.now() - start).toBeLessThan(HOSTILE_BUDGET_MS);
+    expectLinearTime(hostile, scrubMessage);
   });
 });
 
