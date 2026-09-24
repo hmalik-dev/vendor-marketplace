@@ -1,6 +1,7 @@
 import 'server-only';
 import { createNeonAuth } from '@neondatabase/auth/next/server';
 import * as Sentry from '@sentry/nextjs';
+import { SESSION_REVOKE_MARKER_MAX_AGE_SECONDS } from '@vendor-marketplace/shared';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
 import { API_REQUEST_TIMEOUT_MS, setRefusedTokenHandler } from '@/lib/api-client';
@@ -282,7 +283,6 @@ function remember(
  * token in circulation postdates the revoke anyway.
  */
 export const REVOKE_MARKER_COOKIE = 'session-revoke-marker';
-const REVOKE_MARKER_MAX_AGE_SECONDS = 20 * 60;
 
 async function revokeMarkerValue(): Promise<string | null> {
   const jar = await cookies();
@@ -298,7 +298,7 @@ export async function markSessionsRevoked(): Promise<void> {
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: REVOKE_MARKER_MAX_AGE_SECONDS,
+    maxAge: SESSION_REVOKE_MARKER_MAX_AGE_SECONDS,
   });
 }
 

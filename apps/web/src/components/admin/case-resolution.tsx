@@ -33,7 +33,7 @@ const SWEEP_DATE = new Intl.DateTimeFormat('en-US', {
  * A chargeback's refund is offered only once the network has closed it, since
  * refunding never withdraws a dispute.
  */
-const CUSTOMER_CAUTION = "Refunds settle to the customer's bank in 5–10 days.";
+const CUSTOMER_CAUTION = "Refunds reach the customer's bank on the card issuer's own schedule.";
 const VENDOR_CAUTION =
   "Stripe's dispute stays open until the bank closes it. Releasing the payout is the platform's ruling, not the network's — if the bank later finds for the customer, the money comes back out of the platform.";
 

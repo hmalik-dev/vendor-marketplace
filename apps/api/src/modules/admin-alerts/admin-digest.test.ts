@@ -143,12 +143,19 @@ describe('the admin digest (VEN-405)', () => {
       },
     );
 
-    // Accepted and unpaid: tomorrow counts, next week does not.
+    // Accepted and unpaid: the digest day and the two after it count (the label
+    // says so), the day after that and next week do not.
     const unpaidId = await request({
       eventDate: '2026-09-15',
       status: 'accepted',
       createdAt: LONG_AGO,
     });
+    lastDayId = await request({
+      eventDate: '2026-09-16',
+      status: 'accepted',
+      createdAt: LONG_AGO,
+    });
+    await request({ eventDate: '2026-09-17', status: 'accepted', createdAt: LONG_AGO });
     await request({ eventDate: '2026-09-21', status: 'accepted', createdAt: LONG_AGO });
 
     await db.insert(supportCases).values([
@@ -177,6 +184,7 @@ describe('the admin digest (VEN-405)', () => {
   }
 
   let expectedUnpaidId = '';
+  let lastDayId = '';
 
   beforeAll(async () => {
     harness = await createTestHarness({
@@ -240,7 +248,7 @@ describe('the admin digest (VEN-405)', () => {
       'Bounced emails: 0',
       'Open cases',
       'Under 1 day: 0; 1–3 days: 0; over 3 days: 0',
-      'Accepted but unpaid, event in the next 48 hours: 0',
+      'Accepted but unpaid, event today or in the next 2 days: 0',
       'Payouts overdue (due more than one sweep interval ago, still unreleased): 0',
       `Open: ${TEST_ENV.WEB_URL}/admin`,
     ]);
@@ -334,8 +342,9 @@ describe('the admin digest (VEN-405)', () => {
       'Bounced emails: 1',
       'Open cases',
       'Under 1 day: 1; 1–3 days: 1; over 3 days: 1',
-      'Accepted but unpaid, event in the next 48 hours: 1',
+      'Accepted but unpaid, event today or in the next 2 days: 2',
       `  Request ${expectedUnpaidId}, event 2026-09-15`,
+      `  Request ${lastDayId}, event 2026-09-16`,
       'Payouts overdue (due more than one sweep interval ago, still unreleased): 0',
       `Open: ${TEST_ENV.WEB_URL}/admin`,
     ]);

@@ -5,6 +5,7 @@ import {
   FULL_REFUND_CUTOFF_HOURS,
   LATE_CANCELLATION_REFUND_RATE,
   PAYOUT_RELEASE_HOURS,
+  SESSION_REVOKE_MARKER_MAX_AGE_SECONDS,
 } from './index.js';
 
 /**
@@ -125,6 +126,7 @@ export function legalFactTokens(): Record<string, string> {
     lateRefundShare: formatRate(LATE_CANCELLATION_REFUND_RATE),
     payoutReleaseHours: `${PAYOUT_RELEASE_HOURS} hours`,
     requestExpiryDays: `${BOOKING_REQUEST_EXPIRY_DAYS} days`,
+    revokeMarkerLifetime: `${SESSION_REVOKE_MARKER_MAX_AGE_SECONDS / 60} minutes`,
   };
 }
 

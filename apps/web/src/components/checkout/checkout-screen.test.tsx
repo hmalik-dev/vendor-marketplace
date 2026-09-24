@@ -93,7 +93,7 @@ describe('CheckoutScreen', () => {
     expect(screen.getByRole('heading', { name: 'Confirm and pay' })).toBeDefined();
     expect(
       screen.getByText(
-        'Kessler & Co. accepted your request on May 2. Paying now locks June 14 in their calendar.',
+        'Kessler & Co. accepted your request on May 2. Paying now confirms your booking for June 14.',
       ),
     ).toBeDefined();
   });
@@ -293,7 +293,9 @@ describe('CheckoutScreen', () => {
 
       const alert = await screen.findByRole('alert');
       expect(alert.textContent).toContain("Your card was declined — you haven't been charged");
-      expect(alert.textContent).toContain('June 14 stays held for you for 24 hours.');
+      expect(alert.textContent).toContain('June 14 is still held for you.');
+      // No deadline is promised: the hold ends at an instant no bare day states.
+      expect(alert.textContent).not.toMatch(/24 hours|until|\d+ days/);
       expect(alert.textContent).toContain('Try the same card again, use another card');
       // It stayed on the screen; a declined charge navigates nowhere.
       expect(pushMock).not.toHaveBeenCalled();
@@ -318,20 +320,14 @@ describe('CheckoutScreen', () => {
       ).toBeDefined();
     });
 
-    /*
-     * The no-third-attempt guidance, which is the one piece of advice on this
-     * screen the customer cannot work out for themselves: repeated attempts can
-     * extend the bank's hold.
-     */
-    it('warns against a third attempt only after the second failure', async () => {
+    it('promises no extension of the hold, however many attempts have failed', async () => {
       render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
 
       await userEvent.click(screen.getByRole('button', { name: /^Pay/ }));
-      expect(screen.queryByText(/don't try a third time/)).toBeNull();
-
       await userEvent.click(screen.getByRole('button', { name: /^Try this payment again/ }));
 
-      expect(await screen.findByText(/don't try a third time/)).toBeDefined();
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).not.toMatch(/extend|third time/);
     });
   });
 });

@@ -89,7 +89,7 @@ export function retryNotice(
   if (result.outcome === 'busy') {
     return {
       status: 'informational',
-      message: `The scheduled release is already working ${row.vendorName}'s payout. Check back in a few minutes.`,
+      message: `The scheduled release is already working ${row.vendorName}'s payout.`,
     };
   }
 

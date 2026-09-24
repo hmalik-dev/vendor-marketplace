@@ -204,9 +204,7 @@ describe('retryNotice', () => {
     const notice = retryNotice(FAILING, retryResult({ outcome: 'busy' }));
 
     expect(notice.status).toBe('informational');
-    expect(notice.message).toBe(
-      "The scheduled release is already working Sunlit Studio's payout. Check back in a few minutes.",
-    );
+    expect(notice.message).toBe("The scheduled release is already working Sunlit Studio's payout.");
   });
 
   it('reports the new reason and the new attempt when Stripe refuses again', () => {

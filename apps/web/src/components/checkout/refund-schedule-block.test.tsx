@@ -64,6 +64,17 @@ describe('the refund schedule block', () => {
     expect(container.textContent).not.toContain('30 days');
   });
 
+  /*
+   * A cancelled booking frees the date (`cancelBooking` releases the hold), so
+   * the late row must say what stays with the booking, which is the money.
+   */
+  it('says the unrefunded remainder is not refunded, and claims no hold on the date', () => {
+    const { container } = block();
+
+    expect(screen.getByText('$1,025 back — the rest is not refunded')).toBeDefined();
+    expect(container.textContent).not.toContain('holds the date');
+  });
+
   /** Acceptance 14, on the surface the design got wrong. */
   it('draws no non-refundable tier, because the code has none', () => {
     const { container } = block();
