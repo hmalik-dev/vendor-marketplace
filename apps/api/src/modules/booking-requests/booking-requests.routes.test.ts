@@ -257,8 +257,8 @@ describe('/v1/booking-requests', () => {
 
       const response = await createRequest(vendorId, { packageId }, NAMELESS_CUSTOMER);
 
-      expect(response.statusCode).toBe(400);
-      expect(response.json().error).toBe('VALIDATION_ERROR');
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('NAME_REQUIRED');
     });
 
     /**

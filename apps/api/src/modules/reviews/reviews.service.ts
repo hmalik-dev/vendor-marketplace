@@ -13,6 +13,7 @@ import {
 import type { EventHub } from '../../lib/event-stream.js';
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import { conflict, notFound, validationFailed } from '../../lib/errors.js';
+import { requireCustomerName } from '../users/customer-name.js';
 import { toNotification } from '../messaging/messaging.service.js';
 /*
  * The public lookup, not `vendors.dao`'s: it carries the published-and-not-
@@ -141,6 +142,11 @@ export async function createReview(
    */
   if (!booking || (booking.customerId !== reviewerId && booking.vendorUserId !== reviewerId)) {
     throw notFound('That booking could not be found');
+  }
+
+  // A customer's review is published under their name (VEN-701).
+  if (booking.customerId === reviewerId) {
+    await requireCustomerName(db, reviewerId);
   }
 
   if (!isBookingReviewable(booking)) {
