@@ -54,6 +54,14 @@ source (`node_modules/.pnpm/@fastify+rate-limit@11.2.0/.../index.js`):
   rotation mismatch never reports. Flagged low; fix is a time-windowed throttle,
   not a process latch. The capture carries a static message; Sentry's
   `CREDENTIAL_HEADER` already drops both headers.
+- **The web side of the visitor key is a swallowed dynamic import (VEN-673).**
+  `apps/web/src/lib/api-client.ts` `visitorHeaders` does
+  `await import('@/lib/visitor-address')` inside a `try/catch → {}`, and
+  api-client is bundled for the browser too. Fencing `visitor-address.ts` with
+  `import 'server-only'` puts a server-only module in the client graph: either
+  the Next build refuses it, or any client-layer execution throws, is swallowed,
+  and silently drops `x-visitor-ip` so the API keys on the egress address. Keep
+  that module unfenced, or move the dynamic import out of the shared client.
 
 Related: [[public-mail-endpoint-echoes-to-any-address]],
 [[operator-alert-dedupe-is-attacker-armable]].
