@@ -62,6 +62,7 @@
 - [The reply-window cap lives in five places](reply-deadline-cap-must-match-accept-guard.md) — VEN-433 gave `expires_at` a second meaning with no backfill
 - [Refund idempotency keys carry the already-refunded total](refund-idempotency-key-is-parameter-sensitive.md) — VEN-477: dedup holds only while two racers read the same Stripe state
 - [A refund with no durable record can happen twice](refund-before-row-move-can-double-refund.md) — past 24h a retry debits the vendor again
+- [API session timeouts vs Stripe-in-transaction](api-session-timeouts-vs-stripe-in-transaction.md) — VEN-607: 55P03 after a cancel refund skips the alert; a 30s idle kill after a sweep transfer abandons the batch
 - [D31's proportional split is now our arithmetic](refund-proportionality-is-now-ours-to-state.md) — the pre-release cancel path states nobody's retained half
 - [The payout sweep is a second money mover](payout-sweep-is-a-second-money-mover.md) — it takes a row lock the cancel and dispute paths do not
 - [`payoutOwedClauses` is shared with the sweep](payout-owed-clauses-is-shared-with-the-sweep.md) — widening the vendor's read widens the `FOR UPDATE` claim that transfers

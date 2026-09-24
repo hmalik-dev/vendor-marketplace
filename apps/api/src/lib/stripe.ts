@@ -991,6 +991,15 @@ export interface StripeCredentials {
 const STRIPE_REQUEST_TIMEOUT_MS = 10_000;
 
 /**
+ * stripe-node retries a network failure twice by default, so one call can take
+ * about thirty seconds. The payout claim and the dispute unwind make these
+ * calls holding a booking's row lock and a pool connection, and checkout makes
+ * two in a row, so one retry is what a single blip is worth (VEN-607). The
+ * idempotency keys keep the retry from acting twice.
+ */
+export const STRIPE_MAX_NETWORK_RETRIES = 1;
+
+/**
  * The API version every request is made at: the constant of the exact `stripe`
  * release pinned in package.json, so a dependency bump cannot move it silently.
  * `launch:check` compares the webhook endpoints' `api_version` against it.
@@ -1036,6 +1045,7 @@ export function createStripeClient(secretKey: string): Stripe {
   return new Stripe(secretKey, {
     apiVersion: STRIPE_API_VERSION,
     timeout: STRIPE_REQUEST_TIMEOUT_MS,
+    maxNetworkRetries: STRIPE_MAX_NETWORK_RETRIES,
   });
 }
 

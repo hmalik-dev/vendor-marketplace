@@ -1,4 +1,4 @@
-import { createDatabase, createListener } from '@vendor-marketplace/db';
+import { createApiDatabase, createListener } from '@vendor-marketplace/db';
 import { bootEnv } from './config/boot.js';
 import { createS3Storage } from './lib/storage.js';
 import { buildServer } from './server.js';
@@ -9,7 +9,7 @@ async function main(): Promise<void> {
   // explicitly (`bootEnv` does, and runs the same boot guards as the serverless
   // handler). Real process variables still win over anything in the file.
   const env = bootEnv();
-  const { db, client } = createDatabase();
+  const { db, client } = createApiDatabase();
   const listener = createListener(env.DATABASE_URL);
 
   const app = await buildServer({

@@ -235,11 +235,12 @@ describe('a review racing another review of the same booking', () => {
     }
 
     /*
-     * A cancelled statement is a fault, not a conflict: 500, logged, and the
-     * customer free to try again. 409 would tell them a review exists that
-     * nobody wrote.
+     * A cancelled statement is a fault, not a conflict: 503 (SQLSTATE 57014 is
+     * how a statement timeout arrives too, VEN-607), logged, and the customer
+     * free to try again. 409 would tell them a review exists that nobody wrote.
      */
-    expect(answered.statusCode).toBe(500);
+    expect(answered.statusCode).toBe(503);
+    expect(answered.json().error).toBe('SERVICE_BUSY');
     expect(await reviewsOf(bookingId)).toEqual([]);
   });
 });
